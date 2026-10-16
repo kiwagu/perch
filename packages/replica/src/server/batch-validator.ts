@@ -33,17 +33,23 @@ export interface ValidateBatchInput {
 
 const RECORDS = 'records'
 
+function writesOutside(container: string): BatchRejection {
+  return { reason: 'malformed', detail: `writes outside ${RECORDS}: ${container}` }
+}
+
 /**
  * The keys of the records a document changed between two versions: the keys the `records`
  * map itself changed, and the record that holds each changed container nested inside one.
  * A change to any other root container is refused: nothing projects it, so it would only
- * be stored and replicated.
+ * be stored and replicated. A root is a name and a type, while a path names only the root,
+ * so a root of another type under the name `records` is told apart by its container id.
  */
 function touchedRecordKeys(
   doc: LoroDoc,
   from: Frontiers,
   to: Frontiers,
 ): Result<Set<string>, BatchRejection> {
+  const records = doc.getMap(RECORDS).id
   const touched = new Set<string>()
 
   for (const [container, diff] of doc.diff(from, to, false)) {
@@ -54,7 +60,12 @@ function touchedRecordKeys(
     }
 
     if (path[0] !== RECORDS) {
-      return err({ reason: 'malformed', detail: `writes outside ${RECORDS}: ${String(path[0])}` })
+      return err(writesOutside(String(path[0])))
+    }
+
+    // No root other than the records map was ever accepted, so a write into one changes the root itself.
+    if (path.length === 1 && container !== records) {
+      return err(writesOutside(container))
     }
 
     if (path.length > 1) {

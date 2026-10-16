@@ -121,6 +121,37 @@ describe('batch validation', () => {
     expect(server.recordMap('profile/prf_1').get('name')).toBe('Ann')
   })
 
+  it('refuses a batch that writes a list root under the name of the records', () => {
+    const server = documentWithProfile('Ann')
+    const before = server.version().encode()
+    const client = forkOf(server)
+
+    client
+      .getList('records')
+      .insertContainer(0, new LoroMap())
+      .set('identity', 'identity:idn_other')
+
+    expect(validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr()).toEqual({
+      reason: 'malformed',
+      detail: 'writes outside records: cid:root-records:List',
+    })
+    expect(server.version().encode()).toEqual(before)
+  })
+
+  it('refuses a batch that writes a text root under the name of the records', () => {
+    const server = documentWithProfile('Ann')
+    const before = server.version().encode()
+    const client = forkOf(server)
+
+    client.getText('records').insert(0, 'x')
+
+    expect(validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr()).toEqual({
+      reason: 'malformed',
+      detail: 'writes outside records: cid:root-records:Text',
+    })
+    expect(server.version().encode()).toEqual(before)
+  })
+
   it('refuses bytes that are not a Loro update', () => {
     expect(
       validateBatch(
