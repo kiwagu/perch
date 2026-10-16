@@ -121,8 +121,11 @@ function parseTail(tokens: readonly Token[]): TailPath[] {
       break
     }
 
+    // FETCH is the last clause: every word after it is a field, `in` included.
     if (isKeyword(token, 'FETCH')) {
       fetching = true
+      index += 1
+      continue
     }
 
     if (isKeyword(token, 'SELECT')) {
@@ -164,7 +167,8 @@ function parseTail(tokens: readonly Token[]): TailPath[] {
 
     // `in` and `out` are operators and also the fields of a relation: a word
     // followed by a dot is always a field path.
-    const fieldLike = !TAIL_WORDS.has(token.text.toUpperCase()) || isPunct(tokens[index + 1], '.')
+    const fieldLike =
+      fetching || !TAIL_WORDS.has(token.text.toUpperCase()) || isPunct(tokens[index + 1], '.')
 
     if (token.kind === 'word' && fieldLike) {
       index += 1

@@ -110,6 +110,18 @@ describe('collect', () => {
     ])
   })
 
+  it('requires @server when only a FETCH reads a server-only table', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]: 'SELECT name, user FROM profile FETCH user;\n',
+    })
+
+    expect((await collect(root, schema)).problems).toEqual([
+      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+    ])
+  })
+
   it('requires @server on a shape that reads a server-only table', async () => {
     const root = project({
       'features/user/user.module.ts': '',

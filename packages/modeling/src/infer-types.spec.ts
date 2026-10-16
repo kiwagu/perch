@@ -118,6 +118,11 @@ describe('tablesOf', () => {
       'member_of',
       'org',
     ])
+    expect(tablesOf(parseShape('SELECT in FROM member_of FETCH in, out;'), [], schema)).toEqual([
+      'member_of',
+      'user',
+      'org',
+    ])
   })
 
   it('refuses a tail whose reads it cannot determine', () => {
