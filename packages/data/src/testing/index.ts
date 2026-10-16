@@ -14,6 +14,7 @@ import type { LocalDb } from '../types'
 export { readSchema } from '../schema-files'
 
 export { FakeShapeRunner } from './fake-runner'
+export { interceptQueries } from './intercept'
 
 export interface TestDbOptions {
   readonly schema?: string

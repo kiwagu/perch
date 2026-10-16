@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { type LocalDb, onChange, ShapeRunner, type TableChange } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import acceptProfileDeletes from './__fixtures__/accept-profile-deletes.surql'
 import {
@@ -148,28 +148,46 @@ describe('Projector', () => {
     failures = []
   })
 
-  it('repairs a deletion that failed before a reload, though the document no longer holds the record', async () => {
-    const path = new LoroWritePath(region, profileSchema)
+  it('repairs a deletion that failed before a reload, retrying the lookup of what it projected', async () => {
+    const ref = { kind: 'private', id: `user:${userId}` } as const
+    const before = (await RegionDoc.open(local, ref))._unsafeUnwrap()
+    const beforeProjector = new Projector(before, local, profileSchema, {
+      onError: (error) => failures.push(error.message),
+    })
+    const stopBefore = beforeProjector.start()
+    const path = new LoroWritePath(before, profileSchema)
 
     expect((await path.run(createProfile, ann)).isOk()).toBe(true)
-    expect((await projector.flush()).isOk()).toBe(true)
+    expect((await beforeProjector.flush()).isOk()).toBe(true)
 
     await local.db.query(refuseProfileDeletes)
 
     expect((await path.run(deleteProfile, { id: profileId })).isOk()).toBe(true)
-    expect((await projector.flush()).isErr()).toBe(true)
-    stop()
+    expect((await beforeProjector.flush()).isErr()).toBe(true)
+    stopBefore()
+    before.close()
     failures = []
 
     await local.db.query(acceptProfileDeletes)
 
-    const reloaded = new Projector(region, local, profileSchema, {
+    // After the reload the first lookup of what the region projected fails once.
+    let lookups = 0
+    const flaky = interceptQueries(local, (text) => {
+      if (text.includes('FROM _replica_projected') && lookups++ === 0) {
+        throw new Error('the lookup failed once')
+      }
+    })
+    const reopened = (await RegionDoc.open(local, ref))._unsafeUnwrap()
+    const reloaded = new Projector(reopened, flaky, profileSchema, {
       onError: (error) => failures.push(error.message),
     })
 
     stop = reloaded.start()
 
     expect((await reloaded.flush()).isOk()).toBe(true)
+    expect(lookups).toBe(2)
     expect(await readProfile()).toBeUndefined()
+    expect(failures).toEqual([`could not read what ${ref.id} projected`])
+    failures = []
   })
 })

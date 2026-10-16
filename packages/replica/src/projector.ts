@@ -48,6 +48,7 @@ function touchedKeys(batch: LoroEventBatch): Set<string> {
 export class Projector {
   #queue: Promise<void> = Promise.resolve()
   readonly #failed = new Set<string>()
+  #unreconciled = false
 
   constructor(
     private readonly region: RegionDoc,
@@ -72,22 +73,37 @@ export class Projector {
       await new Promise((resolve) => setTimeout(resolve, 0))
       await this.#queue
 
+      if (this.#unreconciled) {
+        this.#queue = this.#queue.then(() => this.#reconcile())
+        await this.#queue
+      }
+
       if (this.#failed.size > 0) {
         this.#enqueue(new Set(this.#failed))
         await this.#queue
       }
     }
 
-    return ResultAsync.fromSafePromise(settle()).andThen(() =>
-      this.#failed.size > 0
+    return ResultAsync.fromSafePromise(settle()).andThen(() => {
+      if (this.#unreconciled) {
+        return errAsync(
+          dataError('data:QUERY_FAILED', `could not read what ${this.region.ref.id} projected`),
+        )
+      }
+
+      return this.#failed.size > 0
         ? errAsync(
             dataError('data:WRITE_FAILED', `could not project ${[...this.#failed].join(', ')}`),
           )
-        : okAsync(undefined),
-    )
+        : okAsync(undefined)
+    })
   }
 
-  /** Projects every record the document holds, and deletes those the region projected earlier but no longer holds. */
+  /**
+   * Projects every record the document holds, and deletes those the region
+   * projected earlier but no longer holds. When what it projected cannot be read,
+   * the held records are still projected and the lookup stays pending for `flush`.
+   */
   async #reconcile(): Promise<void> {
     const held = new Set(this.region.records().keys() as string[])
     const stale: string[] = []
@@ -98,14 +114,19 @@ export class Projector {
       })) as [string[]]
 
       stale.push(...projected.filter((key) => !held.has(key)))
+      this.#unreconciled = false
     } catch (cause) {
-      this.options.onError(
-        dataError(
-          'data:QUERY_FAILED',
-          `could not read what ${this.region.ref.id} projected`,
-          cause,
-        ),
-      )
+      if (!this.#unreconciled) {
+        this.options.onError(
+          dataError(
+            'data:QUERY_FAILED',
+            `could not read what ${this.region.ref.id} projected`,
+            cause,
+          ),
+        )
+      }
+
+      this.#unreconciled = true
     }
 
     await this.#project(new Set([...held, ...stale]))
