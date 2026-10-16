@@ -7,11 +7,13 @@
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db": "bun scripts/smoke.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/kernel": "workspace:*",
     "@workspace/logger": "workspace:*",
     "@workspace/replica": "workspace:*",
     "@workspace/zod": "workspace:*",

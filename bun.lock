@@ -21,6 +21,7 @@
       "dependencies": {
         "@workspace/data": "workspace:*",
         "@workspace/database": "workspace:*",
+        "@workspace/kernel": "workspace:*",
         "@workspace/logger": "workspace:*",
         "@workspace/replica": "workspace:*",
         "@workspace/zod": "workspace:*",

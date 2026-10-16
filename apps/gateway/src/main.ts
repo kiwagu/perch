@@ -1,6 +1,7 @@
 /**
- * The gateway process behind `index.ts`: reads its configuration from the environment
- * and opens the central database as the gateway's namespace user.
+ * The gateway process behind `index.ts`: reads its configuration from the environment,
+ * opens the central database as the gateway's namespace user and serves devices on
+ * 127.0.0.1 until it is told to stop.
  */
 
 import { remoteEngines } from '@workspace/data/engines/remote'
@@ -9,6 +10,10 @@ import { systemClock } from '@workspace/replica'
 
 import { createGatewayRoot } from './composition/root'
 import { DIRECTORY, gatewayConfig, httpRpcUrl, NAMESPACE } from './config'
+import { startServer } from './server'
+
+/** The gateway listens on the loopback interface only. */
+const HOSTNAME = '127.0.0.1'
 
 export async function main(env: Readonly<Record<string, string | undefined>>): Promise<void> {
   const log = createLogger('gateway')
@@ -43,4 +48,19 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
   }
 
   log.info({ namespace: NAMESPACE, database: DIRECTORY }, 'gateway ready')
+
+  const server = startServer(root.value, { port: config.GATEWAY_PORT, hostname: HOSTNAME })
+
+  log.info({ hostname: HOSTNAME, port: server.port }, 'gateway listening')
+
+  const stop = async (signal: NodeJS.Signals): Promise<void> => {
+    log.info({ signal }, 'gateway stopping')
+    await server.stop()
+    await root.value.close()
+    process.exit(0)
+  }
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => void stop(signal))
+  }
 }
