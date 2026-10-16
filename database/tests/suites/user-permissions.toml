@@ -38,6 +38,17 @@ path = "0.count"
 equals = 2
 
 [[cases]]
+name = "accounts are keyed by workspace entity ids"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE string::matches(record::id(id), '^usr_[0-9a-z]{16}[.][0-9a-z]{10}$') FROM user;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
+
+[[cases]]
 name = "alice cannot read password hashes"
 kind = "sql_expect"
 actor = "alice"

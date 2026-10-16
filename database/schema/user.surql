@@ -26,7 +26,7 @@ DEFINE INDEX OVERWRITE user_email ON user FIELDS email UNIQUE;
 -- private region and are authored there.
 DEFINE ACCESS OVERWRITE user ON DATABASE TYPE RECORD
   SIGNUP (
-    CREATE user SET
+    CREATE type::record('user', fn::entity_id('usr')) SET
       email = $email,
       name = $name,
       password = crypto::argon2::generate($password)
