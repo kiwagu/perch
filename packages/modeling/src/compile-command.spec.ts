@@ -70,6 +70,16 @@ describe('compileCommand', () => {
     ])
   })
 
+  it('decodes escapes in string literals and refuses one it does not know', () => {
+    expect(
+      compile(String.raw`UPDATE $id SET locale = 'it\'s', bio = "line\nnext\t\\";`).ops,
+    ).toEqual([
+      { op: 'set', record: 'id', field: 'locale', value: { literal: "it's" } },
+      { op: 'text.update', record: 'id', field: 'bio', value: { literal: 'line\nnext\t\\' } },
+    ])
+    expect(() => compile(String.raw`UPDATE $id SET bio = 'a\qb';`)).toThrow(/\\q/)
+  })
+
   it('compiles CREATE with a client id and DELETE', () => {
     const params = [id, { name: 'user', type: 'record<user>' }, { name: 'name', type: 'string' }]
 

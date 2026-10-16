@@ -30,9 +30,32 @@ const notCompilable = (detail: string): ModelingException =>
 
 type Value = ValueRef | 'none'
 
+const ESCAPES: Readonly<Record<string, string>> = {
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  '0': '\0',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+}
+
+/** The value of a quoted SurrealQL string; an escape the replica cannot reproduce is refused. */
+function decodeString(quoted: string): string {
+  return quoted.slice(1, -1).replace(/\\(.)/gs, (_match, escaped: string) => {
+    const decoded = ESCAPES[escaped]
+
+    if (decoded === undefined) {
+      throw notCompilable(`the string escape \\${escaped} in ${quoted}`)
+    }
+
+    return decoded
+  })
+}
+
 function literalValue(token: Token): unknown {
   if (token.kind === 'string') {
-    return token.text.slice(1, -1)
+    return decodeString(token.text)
   }
 
   if (token.kind === 'number') {
