@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
-import { acceptEdits, countRows, nameIn, planFor, region, snapshotAt } from './__fixtures__/log'
+import {
+  acceptEdits,
+  countRows,
+  nameIn,
+  planFor,
+  region,
+  shallowSnapshotAt,
+  snapshotAt,
+} from './__fixtures__/log'
 import { RegionLog } from './region-log'
 import compactStatement from './surql/server-compact.surql'
 
@@ -132,6 +140,7 @@ describe('server region log', () => {
 
     await acceptEdits(log, doc, ['Ann', 'Ana', 'Anna'])
     expect((await log.compact(2, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('accepted')
+    expect(await countRows(local, '_replica_update')).toBe(1)
 
     const reloaded = (await RegionLog.load(local, region))._unsafeUnwrap()
 
@@ -149,6 +158,19 @@ describe('server region log', () => {
     expect((await log.compact(2, snapshotAt(doc, 1)))._unsafeUnwrap()).toBe('version-mismatch')
     expect((await log.compact(2, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('accepted')
     expect((await log.compact(1, snapshotAt(doc, 1)))._unsafeUnwrap()).toBe('stale')
+  })
+
+  it('refuses a shallow snapshot, which lacks the history older updates depend on', async () => {
+    const { log, doc } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    await acceptEdits(log, doc, ['Ann', 'Ana'])
+
+    const outcome = await log.compact(2, shallowSnapshotAt(doc, 2))
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(log.covers()).toBe(0)
+    expect(await countRows(local, '_replica_update')).toBe(2)
+    expect(await countRows(local, '_replica_snapshot')).toBe(0)
   })
 
   it('reports a compaction that another process carried out first as stale', async () => {

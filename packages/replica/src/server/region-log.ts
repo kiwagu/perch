@@ -192,7 +192,11 @@ export class RegionLog {
     })
   }
 
-  /** The version of the document the snapshot holds. */
+  /**
+   * The version of the document the snapshot holds. A shallow snapshot is refused: the region
+   * would be loaded from it, and a document without the earlier history refuses an update
+   * that a client made offline on top of a version before it.
+   */
   #snapshotVersion(snapshot: Uint8Array): Result<VersionVector, DataError> {
     return Result.fromThrowable(
       () => {
@@ -200,11 +204,20 @@ export class RegionLog {
 
         doc.import(snapshot)
 
-        return doc.version()
+        return doc
       },
       (cause) =>
         dataError('data:WRITE_REJECTED', `a snapshot of ${this.region} does not decode`, cause),
-    )()
+    )().andThen((doc) =>
+      doc.isShallow()
+        ? err(
+            dataError(
+              'data:WRITE_REJECTED',
+              `a snapshot of ${this.region} is shallow and lacks the region's history`,
+            ),
+          )
+        : ok(doc.version()),
+    )
   }
 
   /** The document version stored with the log row `seq`; undefined when the row is gone. */

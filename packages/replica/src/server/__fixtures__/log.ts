@@ -65,15 +65,26 @@ export async function acceptEdits(
   }
 }
 
-/** A snapshot of the document as it was right after the edit the log accepted as `seq`. */
-export function snapshotAt(doc: LoroDoc, seq: number): Uint8Array {
+function frontiersAt(doc: LoroDoc, seq: number): Frontiers {
   const frontiers = acceptedAt.get(doc)?.get(seq)
 
   if (!frontiers) {
     throw new Error(`no edit of this document was accepted as ${seq}`)
   }
 
-  return doc.forkAt(frontiers).export({ mode: 'snapshot' })
+  return frontiers
+}
+
+/** A snapshot of the document as it was right after the edit the log accepted as `seq`. */
+export function snapshotAt(doc: LoroDoc, seq: number): Uint8Array {
+  return doc.forkAt(frontiersAt(doc, seq)).export({ mode: 'snapshot' })
+}
+
+/** Like `snapshotAt`, but shallow: the history before that edit is left out. */
+export function shallowSnapshotAt(doc: LoroDoc, seq: number): Uint8Array {
+  const frontiers = frontiersAt(doc, seq)
+
+  return doc.forkAt(frontiers).export({ mode: 'shallow-snapshot', frontiers })
 }
 
 export async function countRows(local: LocalDb, table: string): Promise<number> {
