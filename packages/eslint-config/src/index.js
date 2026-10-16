@@ -48,6 +48,13 @@ const UI_MODULES = [
   '@workspace/ui',
   '@workspace/ui/*',
 ]
+const RAW_DRIVERS = ['surrealdb', '@surrealdb/*', 'loro-crdt']
+const DATA_PACKAGES = [
+  '@workspace/data',
+  '@workspace/data/*',
+  '@workspace/replica',
+  '@workspace/replica/*',
+]
 const DRIVER_MODULES = [
   'surrealdb',
   '@surrealdb/*',
@@ -150,12 +157,35 @@ export const base = [
     },
   },
   {
-    files: ['**/domain/**/*.{ts,tsx}', '**/application/**/*.{ts,tsx}'],
+    files: ['**/domain/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': restrictModules(
         [...UI_MODULES, ...DRIVER_MODULES],
-        'Domain and application code reach UI frameworks and drivers only through ports.',
+        'Domain code is free of IO: no UI frameworks, drivers or data packages.',
       ),
+    },
+  },
+  {
+    files: ['**/application/**/*.{ts,tsx}'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [...UI_MODULES, ...RAW_DRIVERS],
+              message: 'Application code reaches UI frameworks and drivers only through ports.',
+            },
+            {
+              group: DATA_PACKAGES,
+              allowTypeImports: true,
+              message:
+                'Application code uses the port types of the data packages; adapters are wired in the composition root.',
+            },
+          ],
+        },
+      ],
     },
   },
   {

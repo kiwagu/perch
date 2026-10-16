@@ -46,6 +46,13 @@ describe('workspace eslint config', () => {
     ])
   })
 
+  it('lets application code use data-layer port types but not its adapters', async () => {
+    expect(await rulesFiredIn('feature/application/port-types.ts')).toEqual([])
+    expect(await rulesFiredIn('feature/application/adapter-leak.ts')).toEqual([
+      '@typescript-eslint/no-restricted-imports',
+    ])
+  })
+
   it('lets tests of presentation code render literal content', async () => {
     expect(await rulesFiredIn('feature/presentation/greeting.view.spec.tsx')).toEqual([])
   })
