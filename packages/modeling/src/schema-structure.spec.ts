@@ -110,6 +110,7 @@ describe('loadSchemaModel', () => {
 
     expect(Object.keys(model.tables).sort()).toEqual([
       '_replica_outbox',
+      '_replica_projected',
       '_replica_snapshot',
       '_replica_update',
       'profile',

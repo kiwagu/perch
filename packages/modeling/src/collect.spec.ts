@@ -97,6 +97,19 @@ describe('collect', () => {
     ])
   })
 
+  it('requires @server when only the predicate reads a server-only table', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $name: string\nSELECT name FROM profile WHERE user.name = $name;\n',
+    })
+
+    expect((await collect(root, schema)).problems).toEqual([
+      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+    ])
+  })
+
   it('requires @server on a shape that reads a server-only table', async () => {
     const root = project({
       'features/user/user.module.ts': '',

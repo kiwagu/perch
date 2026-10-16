@@ -49,6 +49,12 @@ class Walker {
         return { type: { kind: 'record', tables: [context.table] }, owner: context.table }
       }
 
+      const relation = this.schema.tables[context.table]?.relation
+
+      if (relation && (name === 'in' || name === 'out')) {
+        return { type: { kind: 'record', tables: [...relation[name]] }, owner: context.table }
+      }
+
       const type = this.schema.tables[context.table]?.fields[name]
 
       if (!type) {
@@ -227,6 +233,30 @@ function walk(
   walker.touch(table)
 
   const body = `{ ${ast.projections.map((projection) => walker.projection(projection, { kind: 'table', table })).join('; ')} }`
+
+  for (const path of ast.tailPaths) {
+    const start = path.param
+      ? recordTableOf(params.find((param) => param.name === path.param)?.type ?? '')
+      : table
+
+    if (!start) {
+      throw new ModelingException(
+        `$${path.param ?? ''} is not a record parameter, so its fields cannot be read`,
+      )
+    }
+
+    walker.touch(start)
+
+    const { element } = walker.resolve(path.steps, { kind: 'table', table: start })
+    const linked =
+      element.kind === 'type' && element.type.kind === 'record' ? element.type.tables : []
+
+    if (path.fetch) {
+      for (const table of linked) {
+        walker.touch(table)
+      }
+    }
+  }
 
   return { walker, body }
 }

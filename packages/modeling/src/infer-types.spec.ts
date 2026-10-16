@@ -93,4 +93,40 @@ describe('tablesOf', () => {
 
     expect(tablesOf(ast, user, schema)).toEqual(['user', 'member_of', 'org'])
   })
+
+  it('counts the tables a predicate, an ordering or a FETCH reads through record links', () => {
+    const owner = [{ name: 'owner', type: 'record<user>' }]
+
+    expect(
+      tablesOf(parseShape('SELECT role FROM member_of WHERE in.manager.name = $name;'), [], schema),
+    ).toEqual(['member_of', 'user'])
+    expect(
+      tablesOf(
+        parseShape('SELECT role FROM member_of ORDER BY out.name DESC LIMIT 10;'),
+        [],
+        schema,
+      ),
+    ).toEqual(['member_of', 'org'])
+    expect(
+      tablesOf(
+        parseShape('SELECT role FROM member_of WHERE $owner.manager.name = "Ann";'),
+        owner,
+        schema,
+      ),
+    ).toEqual(['member_of', 'user'])
+    expect(tablesOf(parseShape('SELECT role FROM member_of FETCH out;'), [], schema)).toEqual([
+      'member_of',
+      'org',
+    ])
+  })
+
+  it('refuses a tail whose reads it cannot determine', () => {
+    const tail = (rest: string) => () =>
+      tablesOf(parseShape(`SELECT name FROM org ${rest};`), [], schema)
+
+    expect(tail('WHERE id IN (SELECT VALUE out FROM member_of)')).toThrow(/subquer/)
+    expect(tail('WHERE <-member_of<-user.name CONTAINS "Ann"')).toThrow(/graph/)
+    expect(tail('WHERE fn::visible(id)')).toThrow(/fn::visible/)
+    expect(tail('WHERE nmae = "x"')).toThrow('org has no field nmae')
+  })
 })
