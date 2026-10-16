@@ -1,0 +1,30 @@
+---
+description: 'Use when: creating a workspace package, or changing what a package is for, what it exports, or which scripts it runs.'
+alwaysApply: true
+---
+
+# Every package keeps a short, current README
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- A new workspace appears under `apps/`, `packages/`, `tests/`, `database/` or `seed/`.
+- A change alters a package's role, its key exports or its commands.
+
+## Stop Here If
+
+- The package's `README.md` matches the shape below and still describes the package as it is after your change.
+
+## Core rule
+
+- Every workspace has a `README.md` with exactly this skeleton, kept short:
+  - `# <Title> (\`<package name>\`)`
+  - `## Role in the architecture`: what the package is for and which layer it serves, in a few sentences.
+  - `## Key exports`: the public entry points and subpaths.
+  - `## Commands`: how to test and check it.
+- Update the README in the same change that alters the role, exports or commands. A missing README is created, not deferred.
+- Describe what exists, not plans.
+- `bun run readme:check` (part of `bun run check`) fails on a missing README, a title that does not name the package, or a missing section.

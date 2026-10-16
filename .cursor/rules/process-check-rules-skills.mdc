@@ -29,6 +29,7 @@ alwaysApply: true
 - New environment variables: `monorepo-env-minimalism.mdc`.
 - Compatibility switches, legacy paths, migrations: `poc-no-fallbacks.mdc`, `reset-mode-default.mdc`.
 - File and folder names: `entity-first-module-naming.mdc`.
+- A new package, or a change to a package's role, exports or scripts: `package-readme.mdc`.
 - Before any commit: `security-review-before-commit.mdc`.
 - SurrealQL, schema and SurrealKit: vendor skills `.agents/skills/surrealql/`, `.agents/skills/surrealkit/`, `.agents/skills/surrealdb-js/`.
 

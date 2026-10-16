@@ -13,18 +13,50 @@
     "LOG_FORMAT"
   ],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
-    "dev": { "cache": false, "persistent": true },
-    "typecheck": { "dependsOn": ["^build"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "lint": {},
-    "test": { "dependsOn": ["^build"] },
-    "model": { "dependsOn": ["^build"], "cache": false },
-    "model:check": { "dependsOn": ["^build"], "cache": false },
-    "i18n:check": { "cache": false },
-    "test:db": { "cache": false },
-    "test:e2e": { "dependsOn": ["^build"], "cache": false },
-    "//#typecheck:root": { "cache": false },
-    "//#lint:root": { "cache": false },
-    "//#refactor:ci": { "cache": false }
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "model": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "model:check": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "i18n:check": {
+      "cache": false
+    },
+    "test:db": {
+      "cache": false
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "//#typecheck:root": {
+      "cache": false
+    },
+    "//#lint:root": {
+      "cache": false
+    },
+    "//#refactor:ci": {
+      "cache": false
+    },
+    "//#readme:check": {
+      "cache": false
+    }
   }
 }

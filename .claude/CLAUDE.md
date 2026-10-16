@@ -16,6 +16,7 @@ that applies to the task, starting with the router.
 @.cursor/rules/poc-no-fallbacks.mdc
 @.cursor/rules/reset-mode-default.mdc
 @.cursor/rules/entity-first-module-naming.mdc
+@.cursor/rules/package-readme.mdc
 
 ## Architecture and contracts
 
