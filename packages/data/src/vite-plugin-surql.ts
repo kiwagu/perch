@@ -12,7 +12,8 @@ import { basename } from 'node:path'
 
 import type { Plugin } from 'vite'
 
-import { surqlComponentFile, surqlExportName } from './surql-names'
+// Explicit extension: vitest loads this file through Node, which needs it.
+import { surqlComponentFile, surqlExportName } from './surql-names.ts'
 
 export function surqlModuleSource(path: string, read: (path: string) => string): string {
   const component = surqlComponentFile(basename(path))
