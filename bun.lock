@@ -38,6 +38,25 @@
         "vitest": "catalog:",
       },
     },
+    "packages/data": {
+      "name": "@workspace/data",
+      "version": "0.1.0",
+      "dependencies": {
+        "@surrealdb/node": "catalog:",
+        "@surrealdb/node-native": "catalog:",
+        "@surrealdb/wasm": "catalog:",
+        "@surrealdb/wasm-native": "catalog:",
+        "@workspace/di": "workspace:*",
+        "@workspace/kernel": "workspace:*",
+        "neverthrow": "catalog:",
+        "surrealdb": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/di": {
       "name": "@workspace/di",
       "version": "0.1.0",
@@ -65,6 +84,18 @@
       },
       "peerDependencies": {
         "eslint": "catalog:",
+      },
+    },
+    "packages/ids": {
+      "name": "@workspace/ids",
+      "version": "0.1.0",
+      "dependencies": {
+        "entity-id": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/kernel": {
@@ -282,9 +313,37 @@
 
     "@stylistic/eslint-plugin": ["@stylistic/eslint-plugin@5.10.0", "", { "dependencies": { "@eslint-community/eslint-utils": "^4.9.1", "@typescript-eslint/types": "^8.56.0", "eslint-visitor-keys": "^4.2.1", "espree": "^10.4.0", "estraverse": "^5.3.0", "picomatch": "^4.0.3" }, "peerDependencies": { "eslint": "^9.0.0 || ^10.0.0" } }, "sha512-nPK52ZHvot8Ju/0A4ucSX1dcPV2/1clx0kLcH5wDmrE4naKso7TUC/voUyU1O9OTKTrR6MYip6LP0ogEMQ9jPQ=="],
 
+    "@surrealdb/cbor": ["@surrealdb/cbor@2.0.0-alpha.4", "", {}, "sha512-l/hNZ3ZCOJq8rzwx1y5ZV/8b2bYCWdhGqRVY33Pu50NAHyAW5qLsMn3ZBkZow77mAKwNCsbDsRGnyYEuU95mjw=="],
+
     "@surrealdb/lezer": ["@surrealdb/lezer@1.0.9", "", { "dependencies": { "@lezer/common": "^1.2.3", "@lezer/highlight": "^1.2.1", "@lezer/lr": "^1.4.2" } }, "sha512-g/+dZ5dyPhU/KcsdNq4favVJOxOG6kawFcBpTLHobskLyf5Tygiz90ItuyW+5bDTFQDBSBcQ0E4WvOgtfJhk8Q=="],
 
+    "@surrealdb/node": ["@surrealdb/node@3.1.0", "", { "peerDependencies": { "@surrealdb/node-native": "^3.3.0-beta.3", "surrealdb": "^2.0.1" } }, "sha512-q2dVTXU3D6dWyeg/SlOh95iQTaMcDBrNnfPIM9fS0hqlyYepf1Sg74h/3d1dboY88skZXsfuhBzFxC+dVX/Dyw=="],
+
+    "@surrealdb/node-native": ["@surrealdb/node-native@3.3.4", "", { "optionalDependencies": { "@surrealdb/node-native-darwin-arm64": "3.3.4", "@surrealdb/node-native-darwin-x64": "3.3.4", "@surrealdb/node-native-linux-arm64-gnu": "3.3.4", "@surrealdb/node-native-linux-arm64-musl": "3.3.4", "@surrealdb/node-native-linux-x64-gnu": "3.3.4", "@surrealdb/node-native-linux-x64-musl": "3.3.4", "@surrealdb/node-native-win32-arm64-msvc": "3.3.4", "@surrealdb/node-native-win32-x64-msvc": "3.3.4" } }, "sha512-E6pllLADS99HkVDpBPDc1RAjTlic8zW22QfFbrN0nakkOkYB+e+LtGIVY53EZCcMPLX2u/pN8HPiKBGSEw85SA=="],
+
+    "@surrealdb/node-native-darwin-arm64": ["@surrealdb/node-native-darwin-arm64@3.3.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ORUyoLNQPuhPjPeXOB5+XPTBjwlg18GjA4RoJeicTKULzFNpUMxgzulQtdWmmPl+oZo35Akn8Od0xGCOzMg/uw=="],
+
+    "@surrealdb/node-native-darwin-x64": ["@surrealdb/node-native-darwin-x64@3.3.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-G1oyllPTAivIkXq+9qyhNugR4jp8syPxyV4Dx1g474rVJ8sgYw2n/LK/7yUyRw7un/QwjMsz9Rx/ZGGQZtjFhg=="],
+
+    "@surrealdb/node-native-linux-arm64-gnu": ["@surrealdb/node-native-linux-arm64-gnu@3.3.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-5VW9wy46zgOvrzkJr3pN0SZO6L8b/FkGDXV6vloGpmZw8RM+ptpIbuVvikx9DOUJMW76oFVu/gaYrsegYGyW5Q=="],
+
+    "@surrealdb/node-native-linux-arm64-musl": ["@surrealdb/node-native-linux-arm64-musl@3.3.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-V1zi9hASACwW/Gd/XPap1HgBlTkwMqSad5F1DRDQZt2HEl5qZCPqXLKzFaHivNWUHQE0WzYsS9pzzkKtt0/sYA=="],
+
+    "@surrealdb/node-native-linux-x64-gnu": ["@surrealdb/node-native-linux-x64-gnu@3.3.4", "", { "os": "linux", "cpu": "x64" }, "sha512-FYWicR1VQyyJp0Z9yGhVkInvuvpZRA7bFlPN9YuMIOuDSeVR9qtelASJbeNM7uu88nFnQuAgvc5Rf2Xk3UvJwQ=="],
+
+    "@surrealdb/node-native-linux-x64-musl": ["@surrealdb/node-native-linux-x64-musl@3.3.4", "", { "os": "linux", "cpu": "x64" }, "sha512-kHlOYT0XYpNVNqXs6RImsybTHVSLCBy8Z6iEBqLO4dKsf617NcEkXaYKxkU0s5wn8o1nbJUtDHOZ/Mfob+7v+Q=="],
+
+    "@surrealdb/node-native-win32-arm64-msvc": ["@surrealdb/node-native-win32-arm64-msvc@3.3.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-3hLtbc4OFdQipqmRuxXhHRCG3VxsZH4/UEg/6DXXmkZRVR/Sh6I1cqblEbNnlbTPsSHR/mAUVXHIPLkRTLM2Qg=="],
+
+    "@surrealdb/node-native-win32-x64-msvc": ["@surrealdb/node-native-win32-x64-msvc@3.3.4", "", { "os": "win32", "cpu": "x64" }, "sha512-lE55nGBI34/EIHHQax5yYZzElMtW2Ehfl5X2Rg09Wzp1IqcJXrBk3A/cCOtVc7Etnrd9ajxqxQmsGaLEueHqoA=="],
+
+    "@surrealdb/sqon": ["@surrealdb/sqon@0.1.6", "", { "dependencies": { "@surrealdb/cbor": "2.0.0-alpha.4", "uuidv7": "^1.0.1" }, "peerDependencies": { "tslib": "^2.6.3", "typescript": "^5.0.0" } }, "sha512-rUUxuKYQJxsPy2ezYe2qy28Cd+LYUcYX7Qhi+eWl7d0KFnqBUGXyIkt6y7UgGhVlZjn0OBiGdJkM3fTzl8Qjjw=="],
+
     "@surrealdb/surql-fmt": ["@surrealdb/surql-fmt@0.1.0-beta.3", "", { "dependencies": { "@lezer/common": "^1.5.1", "@surrealdb/lezer": "^1.0.9" }, "peerDependencies": { "typescript": "^5.9.3" }, "bin": { "surqlfmt": "dist/surql-fmt-cli.js" } }, "sha512-LjJtiMtAau+yoRoyNYLbrRa0m1sVCQTvbCaNJjd/lobYDV1tawQmxUe6jnYq+hn+y7N86Wf1GS1CvQ0oIp74kA=="],
+
+    "@surrealdb/wasm": ["@surrealdb/wasm@3.1.0", "", { "peerDependencies": { "@surrealdb/wasm-native": "^3.3.0-beta.3", "surrealdb": "^2.0.1" } }, "sha512-7NsLFO48K0GQ+FnAdqkvjMUYUdhmN2UWciqgQdsVdLHhDf0QmResckg7sDsFDuOq38rKQMWRr0T7QDmMPC12CQ=="],
+
+    "@surrealdb/wasm-native": ["@surrealdb/wasm-native@3.3.4", "", {}, "sha512-amTace/Ez3wj/QA9re/wFIs5CcscO0OzWWg3bMkjujMpuhE898/1lf6gB02nOAq0Lv5Q+g7upo8ZB3rkO69K4w=="],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.11.8", "", { "os": "darwin", "cpu": "x64" }, "sha512-u+6s4C2hskRYx6MkW2uT7BCW6sESCL/+5bjHDDWUfQfQliCSJ7lAHAL6RQaw0an9WU6nJvwYgT786mEWul2kDw=="],
 
@@ -378,11 +437,15 @@
 
     "@workspace/cqrs": ["@workspace/cqrs@workspace:packages/cqrs"],
 
+    "@workspace/data": ["@workspace/data@workspace:packages/data"],
+
     "@workspace/database": ["@workspace/database@workspace:database"],
 
     "@workspace/di": ["@workspace/di@workspace:packages/di"],
 
     "@workspace/eslint-config": ["@workspace/eslint-config@workspace:packages/eslint-config"],
+
+    "@workspace/ids": ["@workspace/ids@workspace:packages/ids"],
 
     "@workspace/kernel": ["@workspace/kernel@workspace:packages/kernel"],
 
@@ -431,6 +494,8 @@
     "deepmerge-ts": ["deepmerge-ts@7.1.6", "", {}, "sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw=="],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
+
+    "entity-id": ["entity-id@1.2.0", "", { "dependencies": { "ulid": "^3.0.2", "zod": "^4.6.5" }, "peerDependencies": { "typescript": ">=5.4.0" }, "optionalPeers": ["typescript"], "bin": { "entity-id": "dist/cli.js" } }, "sha512-XIUl4RKX+t0+3J+bAg6gvwD9J/Cp50lHmIHjV3b9Pqab/BKKyp8RHiIX/Xvc5/Hai6Qlms/hFuu6Fra551I5QA=="],
 
     "es-errors": ["es-errors@1.3.0", "", {}, "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw=="],
 
@@ -660,6 +725,8 @@
 
     "supports-preserve-symlinks-flag": ["supports-preserve-symlinks-flag@1.0.0", "", {}, "sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w=="],
 
+    "surrealdb": ["surrealdb@2.1.1", "", { "dependencies": { "@surrealdb/sqon": "^0.1.6" }, "peerDependencies": { "tslib": "^2.6.3", "typescript": "^5.0.0 || ^6.0.0" } }, "sha512-FlJue1x8bH3gdLemHIwq3pQnxVLv7sKMFnMvAqlPtY/ePFjEylbWcQUORfD4S2V1RgABb9By8KRxOCA4QU5hgA=="],
+
     "thread-stream": ["thread-stream@4.2.0", "", { "dependencies": { "real-require": "^1.0.0" } }, "sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ=="],
 
     "tinybench": ["tinybench@6.2.2", "", {}, "sha512-nIZ2N2dFpjBsg2hgitKu7mA+FvsIJuGJOwysRngmVRRmWgR/UyPjwJj8c/fT/dhm8EkHnF5EOogRf+0Z2qrimA=="],
@@ -676,6 +743,8 @@
 
     "ts-pattern": ["ts-pattern@5.9.2", "", {}, "sha512-qAf+7M7Jjk7uebZeIo9uEzyintfuRtgHdzM9dqxRKcMi2dt76Ec+FH2wW3bnU9TuGLkZIJLoLs7cCQnU7Tu8ig=="],
 
+    "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
     "turbo": ["turbo@2.11.8", "", { "optionalDependencies": { "@turbo/darwin-64": "2.11.8", "@turbo/darwin-arm64": "2.11.8", "@turbo/linux-64": "2.11.8", "@turbo/linux-arm64": "2.11.8", "@turbo/windows-64": "2.11.8", "@turbo/windows-arm64": "2.11.8" }, "bin": { "turbo": "bin/turbo" } }, "sha512-OwiFs6xNO5c2XtPgYCgCXuSlkur4b5T/OeAbOKzgsHh5mmJ9Sh7m041fz2JchrvyQv8hmae+1n07HfBmvDLZRA=="],
 
     "type-check": ["type-check@0.4.0", "", { "dependencies": { "prelude-ls": "^1.2.1" } }, "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew=="],
@@ -686,9 +755,13 @@
 
     "uglify-js": ["uglify-js@3.19.3", "", { "bin": { "uglifyjs": "bin/uglifyjs" } }, "sha512-v3Xu+yuwBXisp6QYTcH4UbH+xYJXqnq2m/LtQVWKWzYc1iehYnLixoQDN9FH6/j9/oybfd6W9Ghwkl8+UMKTKQ=="],
 
+    "ulid": ["ulid@3.0.2", "", { "bin": { "ulid": "dist/cli.js" } }, "sha512-yu26mwteFYzBAot7KVMqFGCVpsF6g8wXfJzQUHvu1no3+rRRSFcSV2nKeYvNPLD2J4b08jYBDhHUjeH0ygIl9w=="],
+
     "undici-types": ["undici-types@8.12.2", "", {}, "sha512-VoMeD2O0KdHhcn+oPqOrpivN+7aDOklVSwOLD7JNjbzV1CboAFek9IFOXnreoufTUtAsCsOK0iETiERPNR/fDA=="],
 
     "uri-js": ["uri-js@4.4.1", "", { "dependencies": { "punycode": "^2.1.0" } }, "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg=="],
+
+    "uuidv7": ["uuidv7@1.2.1", "", { "bin": { "uuidv7": "cli.js" } }, "sha512-4kPkK3/XTQW9Hbm4CaqfICn+kY9LJtDVEOfgsRRra/+n2Ofg4NqzRFceAkxvQ/Ud/6BpHOPzj8cirqM7TzTN5Q=="],
 
     "vite": ["vite@8.3.4", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.7", "postcss": "^8.5.29", "rolldown": "~1.2.12", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.7.1", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-IftLE8phJhdNRIGNEV4JCCvfNScoZQVfcXaN8TQropWGJtOHcu+iAB9pHcuGvmEb/kddw0LBe/jS8ztdC6xdiQ=="],
 
