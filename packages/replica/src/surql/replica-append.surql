@@ -1,10 +1,19 @@
 BEGIN TRANSACTION;
+  LET $head = (
+    UPSERT type::record('_replica_head', $region) SET
+      region = $region,
+      head = (
+        head OR 0
+      ) + 1
+    RETURN VALUE head
+  )[0];
   CREATE _replica_update SET
     region = $region,
-    seq = $seq,
+    seq = $head,
     bytes = $bytes;
   CREATE _replica_outbox SET
     region = $region,
-    seq = $seq,
+    seq = $head,
     bytes = $bytes;
+  RETURN $head;
 COMMIT TRANSACTION;

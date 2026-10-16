@@ -172,21 +172,23 @@ export class LoroWritePath implements WritePathPort {
         }
       })
       .with({ op: 'set' }, ({ field, value }) =>
-        this.#write(this.#record(key), key, field, value, params),
+        this.#write(this.region.recordMap(key), key, field, value, params),
       )
-      .with({ op: 'unset' }, ({ field }) => this.#record(key).delete(field))
+      .with({ op: 'unset' }, ({ field }) => this.region.recordMap(key).delete(field))
       .with({ op: 'text.update' }, ({ field, value }) =>
-        this.#record(key)
+        this.region
+          .recordMap(key)
           .ensureMergeableText(field)
           .update(String(this.#value(value, params) ?? '')),
       )
       .with({ op: 'list.push' }, ({ field, value }) =>
-        this.#record(key)
+        this.region
+          .recordMap(key)
           .ensureMergeableMovableList(field)
           .push(this.#encode(key, field, this.#value(value, params))),
       )
       .with({ op: 'list.remove' }, ({ field, value }) => {
-        const list = this.#record(key).ensureMergeableMovableList(field)
+        const list = this.region.recordMap(key).ensureMergeableMovableList(field)
         const target = JSON.stringify(this.#encode(key, field, this.#value(value, params)))
         const index = (list.toJSON() as unknown[]).findIndex(
           (item) => JSON.stringify(item) === target,
@@ -198,10 +200,6 @@ export class LoroWritePath implements WritePathPort {
       })
       .with({ op: 'delete' }, () => records.delete(key))
       .exhaustive()
-  }
-
-  #record(key: string): LoroMap {
-    return this.region.records().get(key) as LoroMap
   }
 
   #value(ref: ValueRef, params: Readonly<Record<string, unknown>>): unknown {

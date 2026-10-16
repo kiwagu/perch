@@ -5,7 +5,13 @@ export type ReplicaOp = ChangeSpec
 
 export { recordKey, splitRecordKey } from './keys'
 export { Projector, type ProjectorOptions } from './projector'
-export { type OpenRegionOptions, RegionDoc, type RegionRef } from './region-doc'
+export {
+  type ImportOutcome,
+  type OpenRegionOptions,
+  type OutboxRow,
+  RegionDoc,
+  type RegionRef,
+} from './region-doc'
 export {
   fieldOf,
   type ReplicaField,

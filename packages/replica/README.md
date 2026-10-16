@@ -6,13 +6,20 @@ The only package that depends on Loro. Replicated data lives in one CRDT documen
 access region; the local SurrealDB is a materialized view of those documents. Commands
 compiled from `.surql` run here as document operations in one commit, the projector
 writes each touched record into the local database and announces the change, and every
-local update is stored durably in the local database before it counts as persisted.
+local update is stored durably in the local database before it counts as persisted. The
+local database numbers each region's update log, so tabs sharing it never reuse a number;
+updates from a server are stored before they are imported, and a cursor records how far
+the region has been pulled.
 
 ## Key exports
 
 - `RegionDoc`: `inMemory(kind)`, `open(local, ref)` with persistence, `records()`,
-  `recordJson(key)`, `flush()` (reports an update that could not be made durable; a failed
-  update is retried before later ones), `persistedSeq()`, `compact()`, `close()`.
+  `recordMap(key)`, `recordJson(key)`, `flush()` (reports an update that could not be made
+  durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`,
+  `close()`. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
+  the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
+  `outbox(limit)` of `OutboxRow`s, `acknowledge(seq)`, and `catchUpLocal()`, which imports
+  what other tabs appended to the update log.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
   once its update is durable.
 - `Projector`: `start()` projects current records, deletes those the region projected

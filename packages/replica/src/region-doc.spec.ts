@@ -1,3 +1,4 @@
+import { LoroMap } from 'loro-crdt'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
@@ -23,6 +24,16 @@ const key = `profile/${profileId}`
 let local: LocalDb
 
 const open = async () => (await RegionDoc.open(local, ref))._unsafeUnwrap()
+
+function writeName(region: RegionDoc, name: string): void {
+  const record =
+    region.recordJson(key) === undefined
+      ? region.records().setContainer(key, new LoroMap())
+      : region.recordMap(key)
+
+  record.set('name', name)
+  region.doc.commit()
+}
 
 async function counts(): Promise<{ snapshots: number; updates: number; outbox: number }> {
   const [snapshots, updates, outbox] = (await local.db.query(countsStatement, {
@@ -114,5 +125,92 @@ describe('RegionDoc persistence', () => {
 
     expect(reopened.persistedSeq()).toBe(3)
     expect(await counts()).toEqual({ snapshots: 1, updates: 1, outbox: 3 })
+  })
+})
+
+describe('RegionDoc sync state', () => {
+  it('persists a server update before importing it and moves the cursor', async () => {
+    const author = RegionDoc.inMemory('private', ref.id)
+
+    author.records().setContainer(key, new LoroMap()).set('name', 'Ann')
+    author.doc.commit()
+    const region = await open()
+
+    const outcome = await region.importRemote(author.doc.export({ mode: 'snapshot' }), 3)
+
+    expect(outcome._unsafeUnwrap().complete).toBe(true)
+    expect(region.pulled()).toBe(3)
+    region.close()
+    const reopened = await open()
+
+    expect(reopened.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(reopened.pulled()).toBe(3)
+  })
+
+  it('keeps the cursor when the update depends on history it lacks', async () => {
+    const author = RegionDoc.inMemory('private', ref.id)
+
+    author.records().setContainer(key, new LoroMap()).set('name', 'Ann')
+    author.doc.commit()
+    const before = author.doc.version()
+
+    author.recordMap(key).set('name', 'Ana')
+    author.doc.commit()
+    const region = await open()
+
+    const outcome = await region.importRemote(
+      author.doc.export({ mode: 'update', from: before }),
+      2,
+    )
+
+    expect(outcome._unsafeUnwrap().complete).toBe(false)
+    expect(region.pulled()).toBe(0)
+  })
+
+  it('numbers updates in the database, so two tabs on one database never share a number', async () => {
+    const first = await open()
+    const second = await open()
+
+    writeName(first, 'Ann')
+    writeName(second, 'Beto')
+    expect((await first.flush()).isOk()).toBe(true)
+    expect((await second.flush()).isOk()).toBe(true)
+
+    const rows = (await first.outbox(10))._unsafeUnwrap()
+
+    expect(rows.map((row) => row.seq)).toEqual([1, 2])
+  })
+
+  it('imports what another tab appended', async () => {
+    const first = await open()
+    const second = await open()
+
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+
+    expect((await second.catchUpLocal())._unsafeUnwrap()).toBe(1)
+    expect(second.recordJson(key)).toMatchObject({ name: 'Ann' })
+  })
+
+  it('moves the cursor forward only, and keeps it across a reopen', async () => {
+    const region = await open()
+
+    expect((await region.advanceCursor(4)).isOk()).toBe(true)
+    expect((await region.advanceCursor(2)).isOk()).toBe(true)
+    region.close()
+
+    expect((await open()).pulled()).toBe(4)
+  })
+
+  it('drops acknowledged outbox rows and keeps later ones', async () => {
+    const region = await open()
+
+    writeName(region, 'Ann')
+    writeName(region, 'Ana')
+    expect((await region.flush()).isOk()).toBe(true)
+
+    expect((await region.acknowledge(1)).isOk()).toBe(true)
+
+    expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([2])
   })
 })
