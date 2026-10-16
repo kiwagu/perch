@@ -15,6 +15,8 @@
     "i18n:check": "turbo run i18n:check",
     "test:db": "turbo run test:db",
     "test:e2e": "turbo run test:e2e",
+    "seed": "bun seed/src/cli.ts",
+    "seed:sweep": "bun seed/src/cli.ts sweep",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
     "check": "turbo run typecheck typecheck:root lint lint:root lint:surql test model:check i18n:check refactor:ci readme:check",
     "typecheck:root": "tsc -p scripts/tsconfig.json",
@@ -38,7 +40,8 @@
       "apps/*",
       "packages/*",
       "tests/*",
-      "database"
+      "database",
+      "seed"
     ],
     "catalog": {
       "@base-ui/react": "1.9.0",

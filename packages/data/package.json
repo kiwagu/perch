@@ -26,6 +26,14 @@
     "./surql": {
       "types": "./src/surql.d.ts"
     },
+    "./engines/remote": {
+      "types": "./src/engines/remote.ts",
+      "import": "./src/engines/remote.ts"
+    },
+    "./schema-files": {
+      "types": "./src/schema-files.ts",
+      "import": "./src/schema-files.ts"
+    },
     "./engines/wasm": {
       "types": "./src/engines/wasm.ts",
       "import": "./src/engines/wasm.ts"

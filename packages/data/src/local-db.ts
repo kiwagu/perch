@@ -14,6 +14,11 @@ export interface OpenLocalDbOptions {
   readonly database: string
   /** The schema as SurrealQL text, read by the caller from the schema files. */
   readonly schema: string
+  /**
+   * A system user to connect as. An embedded database needs none; a server stand is
+   * opened as one so the projector may write rows record users may not create.
+   */
+  readonly credentials?: { readonly username: string; readonly password: string }
 }
 
 /**
@@ -25,7 +30,10 @@ export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, D
   const db = new Surreal({ engines: options.engines })
 
   const open = async (): Promise<LocalDb> => {
-    await db.connect(options.url)
+    await db.connect(
+      options.url,
+      options.credentials ? { authentication: { ...options.credentials } } : undefined,
+    )
     await db.use({ namespace: options.namespace, database: options.database })
     const [applied] = await db.query<[string | undefined]>(appliedSchemaStatement)
 

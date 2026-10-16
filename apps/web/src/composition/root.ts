@@ -32,6 +32,10 @@ export type BootStep = 'open-db' | 'restore-session' | 'ready'
 export interface AppRootOptions {
   readonly engines: Engines
   readonly url: string
+  readonly namespace?: string
+  readonly database?: string
+  /** A system user, when the database is a server stand rather than embedded. */
+  readonly credentials?: { readonly username: string; readonly password: string }
   readonly schema: string
   readonly storage: KeyValueStorage
   readonly logger: CommandLogger
@@ -58,17 +62,21 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
 
   step('open-db')
 
+  const namespace = options.namespace ?? NAMESPACE
+  const database = options.database ?? DATABASE
+
   return openLocalDb({
     engines: options.engines,
     url: options.url,
-    namespace: NAMESPACE,
-    database: DATABASE,
+    namespace,
+    database,
     schema: options.schema,
+    ...(options.credentials ? { credentials: options.credentials } : {}),
   }).andThen((local) => {
     const session = new SessionService(local, {
       access: 'user',
-      namespace: NAMESPACE,
-      database: DATABASE,
+      namespace,
+      database,
       schema: replicaSchema,
       storage: options.storage,
       onError: options.onError,

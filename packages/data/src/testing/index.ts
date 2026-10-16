@@ -3,27 +3,17 @@
  * database with the real schema applied. Bun and Node only.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-
-export { FakeShapeRunner } from './fake-runner'
-
 import type { ResultAsync } from 'neverthrow'
 
 import { nodeEngines } from '../engines/node'
 import type { DataError } from '../errors'
 import { openLocalDb } from '../local-db'
+import { readSchema } from '../schema-files'
 import type { LocalDb } from '../types'
 
-const SCHEMA_DIR = new URL('../../../../database/schema/', import.meta.url)
+export { readSchema } from '../schema-files'
 
-/** The shared schema: every `database/schema/*.surql` file in name order. */
-export function readSchema(): string {
-  return readdirSync(SCHEMA_DIR)
-    .filter((name) => name.endsWith('.surql'))
-    .sort()
-    .map((name) => readFileSync(new URL(name, SCHEMA_DIR), 'utf8'))
-    .join('\n')
-}
+export { FakeShapeRunner } from './fake-runner'
 
 export interface TestDbOptions {
   readonly schema?: string

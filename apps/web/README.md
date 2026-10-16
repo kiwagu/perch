@@ -25,7 +25,8 @@ modeling stage.
 
 ## Key exports
 
-None; this is an application. Entry point `src/main.tsx`; `src/modules.ts` lists the feature
+`./seeding`: `openStand()`, the composition root for seeding a SurrealDB stand from Bun
+or Node with the application's own services. Entry point `src/main.tsx`; `src/modules.ts` lists the feature
 modules; `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands

@@ -274,6 +274,24 @@
         "vitest": "catalog:",
       },
     },
+    "seed": {
+      "name": "@workspace/seed",
+      "version": "0.1.0",
+      "bin": {
+        "seed": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@workspace/data": "workspace:*",
+        "@workspace/web": "workspace:*",
+        "@workspace/zod": "workspace:*",
+        "neverthrow": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
   },
   "catalog": {
     "@base-ui/react": "1.9.0",
@@ -796,6 +814,8 @@
     "@workspace/modeling": ["@workspace/modeling@workspace:packages/modeling"],
 
     "@workspace/replica": ["@workspace/replica@workspace:packages/replica"],
+
+    "@workspace/seed": ["@workspace/seed@workspace:seed"],
 
     "@workspace/ui": ["@workspace/ui@workspace:packages/ui"],
 

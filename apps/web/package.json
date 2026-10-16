@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./seeding": {
+      "types": "./src/composition/seeding.ts",
+      "import": "./src/composition/seeding.ts"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
