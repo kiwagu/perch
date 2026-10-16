@@ -53,7 +53,7 @@ describe('SessionService', () => {
       ).isOk(),
     ).toBe(true)
 
-    await service.flush()
+    expect((await service.flush()).isOk()).toBe(true)
 
     expect((await new ShapeRunner(local).read(profileById, { id }))._unsafeUnwrap()).toMatchObject({
       name: 'Ann',
@@ -106,7 +106,7 @@ describe('SessionService', () => {
         })
       ).isOk(),
     ).toBe(true)
-    await first.flush()
+    expect((await first.flush()).isOk()).toBe(true)
 
     const second = session(storage)
 

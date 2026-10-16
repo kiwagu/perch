@@ -10,8 +10,8 @@ export interface SessionPort {
   signOut(): ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
-  /** Resolves once every write so far is durable and projected into the database. */
-  flush(): Promise<void>
+  /** Resolves once every write so far is durable and projected; reports a write that is not durable. */
+  flush(): ResultAsync<void, DataError>
 }
 
 export const SESSION = token<SessionPort>('Session')

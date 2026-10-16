@@ -1,4 +1,4 @@
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -143,20 +143,21 @@ export class SessionService implements SessionPort {
       })
   }
 
-  /** Resolves once every local write so far is durable and projected. */
-  async flush(): Promise<void> {
-    await this.#open?.region.flush()
-    await this.#open?.projector.flush()
+  /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
+  flush(): ResultAsync<void, DataError> {
+    const open = this.#open
+
+    if (!open) {
+      return okAsync(undefined)
+    }
+
+    return open.region.flush().andThen(() => ResultAsync.fromSafePromise(open.projector.flush()))
   }
 
   #enter(user: AuthUser): ResultAsync<AuthUser, DataError> {
     this.#leave()
 
-    return RegionDoc.open(
-      this.local,
-      { kind: 'private', id: `user:${user.id}` },
-      { onError: this.options.onError },
-    ).map((region) => {
+    return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).map((region) => {
       const projector = new Projector(region, this.local, this.options.schema, {
         onError: this.options.onError,
       })

@@ -46,7 +46,7 @@ describe('UserModule', () => {
         .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
     )._unsafeUnwrap()
 
-    await session.flush()
+    expect((await session.flush()).isOk()).toBe(true)
 
     expect(
       (await container.get(PROFILE_SERVICE).read({ user: user.id }))._unsafeUnwrap(),

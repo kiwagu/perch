@@ -1,5 +1,5 @@
 import { LoroDoc, type LoroMap } from 'loro-crdt'
-import { ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb, type Region } from '@workspace/data'
 
@@ -15,8 +15,6 @@ export interface RegionRef {
 
 export interface OpenRegionOptions {
   readonly peerId?: bigint
-  /** Receives every failed write of a local update; a failure must not pass silently. */
-  readonly onError: (error: DataError) => void
 }
 
 function randomPeerId(): bigint {
@@ -37,10 +35,14 @@ function createDoc(peerId: bigint): LoroDoc {
 /**
  * Durable storage of a region document in the local database: every local
  * update is appended to the update log and the outbox in one transaction, in
- * commit order. The persisted watermark moves only after the write succeeded.
+ * commit order, under the sequence number it got when it was committed. A failed
+ * append stays first in line and is retried before any later update, so the log
+ * never has a gap; the durable watermark moves only after a write succeeded.
  */
 class RegionStore {
-  #queue: Promise<void> = Promise.resolve()
+  readonly #pending: Array<{ readonly seq: number; readonly bytes: Uint8Array }> = []
+  #draining: Promise<void> | undefined
+  #failure: DataError | undefined
   #nextSeq: number
   #persistedSeq: number
 
@@ -48,7 +50,6 @@ class RegionStore {
     private readonly local: LocalDb,
     private readonly region: string,
     lastSeq: number,
-    private readonly onError: (error: DataError) => void,
   ) {
     this.#nextSeq = lastSeq + 1
     this.#persistedSeq = lastSeq
@@ -59,36 +60,61 @@ class RegionStore {
   }
 
   append(bytes: Uint8Array): void {
-    const seq = this.#nextSeq++
+    this.#pending.push({ seq: this.#nextSeq++, bytes })
+    void this.#drain()
+  }
 
-    this.#queue = this.#queue.then(async () => {
+  /** Resolves once every update so far is durable, retrying a failed one first; reports one that still fails. */
+  flush(): ResultAsync<void, DataError> {
+    return ResultAsync.fromSafePromise(this.#drain()).andThen(() =>
+      this.#failure ? errAsync(this.#failure) : okAsync(undefined),
+    )
+  }
+
+  saveSnapshot(bytes: Uint8Array, version: Uint8Array): ResultAsync<void, DataError> {
+    return this.flush().andThen(() =>
+      ResultAsync.fromPromise(
+        this.local.db.query(saveSnapshotStatement, {
+          region: this.region,
+          bytes,
+          version,
+          covers: this.#persistedSeq,
+        }) as PromiseLike<unknown>,
+        (cause) => dataError('data:WRITE_FAILED', `could not compact region ${this.region}`, cause),
+      ).map(() => undefined),
+    )
+  }
+
+  #drain(): Promise<void> {
+    this.#draining ??= this.#writePending().finally(() => {
+      this.#draining = undefined
+    })
+
+    return this.#draining
+  }
+
+  async #writePending(): Promise<void> {
+    for (let next = this.#pending[0]; next; next = this.#pending[0]) {
       try {
-        await this.local.db.query(appendStatement, { region: this.region, seq, bytes })
-        this.#persistedSeq = seq
+        await this.local.db.query(appendStatement, {
+          region: this.region,
+          seq: next.seq,
+          bytes: next.bytes,
+        })
       } catch (cause) {
-        this.onError(
-          dataError(
-            'data:COMMAND_FAILED',
-            `could not persist update ${seq} of ${this.region}`,
-            cause,
-          ),
+        this.#failure = dataError(
+          'data:WRITE_FAILED',
+          `could not persist update ${next.seq} of ${this.region}`,
+          cause,
         )
+
+        return
       }
-    })
-  }
 
-  flush(): Promise<void> {
-    return this.#queue
-  }
-
-  async saveSnapshot(bytes: Uint8Array, version: Uint8Array): Promise<void> {
-    await this.flush()
-    await this.local.db.query(saveSnapshotStatement, {
-      region: this.region,
-      bytes,
-      version,
-      covers: this.#persistedSeq,
-    })
+      this.#pending.shift()
+      this.#persistedSeq = next.seq
+      this.#failure = undefined
+    }
   }
 }
 
@@ -115,7 +141,7 @@ export class RegionDoc {
   static open(
     local: LocalDb,
     ref: RegionRef,
-    options: OpenRegionOptions,
+    options: OpenRegionOptions = {},
   ): ResultAsync<RegionDoc, DataError> {
     const load = async (): Promise<RegionDoc> => {
       const [snapshots, updates, outbox] = (await local.db.query(loadStatement, {
@@ -129,7 +155,7 @@ export class RegionDoc {
       }
 
       const lastSeq = Math.max(0, ...updates.map((update) => update.seq), ...outbox)
-      const store = new RegionStore(local, ref.id, lastSeq, options.onError)
+      const store = new RegionStore(local, ref.id, lastSeq)
 
       return new RegionDoc(ref, doc, store)
     }
@@ -159,22 +185,18 @@ export class RegionDoc {
     return this.#store?.persistedSeq ?? 0
   }
 
-  /** Resolves once every local update so far is durable. */
-  flush(): Promise<void> {
-    return this.#store?.flush() ?? Promise.resolve()
+  /** Resolves once every local update so far is durable; reports an update that could not be made durable. */
+  flush(): ResultAsync<void, DataError> {
+    return this.#store?.flush() ?? okAsync(undefined)
   }
 
   /** Replaces the update log with one full snapshot of the document. */
   compact(): ResultAsync<void, DataError> {
-    const store = this.#store
-
-    if (!store) {
-      return ResultAsync.fromSafePromise(Promise.resolve())
-    }
-
-    return ResultAsync.fromPromise(
-      store.saveSnapshot(this.doc.export({ mode: 'snapshot' }), this.doc.version().encode()),
-      (cause) => dataError('data:COMMAND_FAILED', `could not compact region ${this.ref.id}`, cause),
+    return (
+      this.#store?.saveSnapshot(
+        this.doc.export({ mode: 'snapshot' }),
+        this.doc.version().encode(),
+      ) ?? okAsync(undefined)
     )
   }
 

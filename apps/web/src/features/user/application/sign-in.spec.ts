@@ -52,7 +52,7 @@ describe('sign-in', () => {
 
     expect(me?.email).toBe(ann.email)
 
-    await session.flush()
+    expect((await session.flush()).isOk()).toBe(true)
 
     const user = me?.id ?? expect.unreachable('signed in')
 

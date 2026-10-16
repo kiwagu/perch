@@ -10,9 +10,11 @@ local update is stored durably in the local database before it counts as persist
 
 ## Key exports
 
-- `RegionDoc`: `inMemory(kind)`, `open(local, ref, { onError })` with persistence,
-  `records()`, `recordJson(key)`, `flush()`, `persistedSeq()`, `compact()`, `close()`.
-- `LoroWritePath`: implements the data layer's `WritePathPort`.
+- `RegionDoc`: `inMemory(kind)`, `open(local, ref)` with persistence, `records()`,
+  `recordJson(key)`, `flush()` (reports an update that could not be made durable; a failed
+  update is retried before later ones), `persistedSeq()`, `compact()`, `close()`.
+- `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
+  once its update is durable.
 - `Projector`: `start()` projects current records and then every commit and import; `flush()`.
 - `ReplicaSchema`: which fields are text, list or counter containers, references or datetimes.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.

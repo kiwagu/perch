@@ -35,7 +35,7 @@ beforeEach(async () => {
     ).isOk(),
   ).toBe(true)
 
-  await session.flush()
+  expect((await session.flush()).isOk()).toBe(true)
 })
 
 afterEach(async () => {
@@ -71,7 +71,7 @@ describe('ProfileService', () => {
 
     expect(result._unsafeUnwrapErr().code).toBe('profile:NAME_REQUIRED')
 
-    await session.flush()
+    expect((await session.flush()).isOk()).toBe(true)
 
     expect((await service.read({ user: me.id }))._unsafeUnwrap()[0]?.name).toBe('Ann')
   })
@@ -80,7 +80,7 @@ describe('ProfileService', () => {
     expect((await service.updateBio({ id: profileId, bio: 'Hello' })).isOk()).toBe(true)
     expect((await service.updateLocale({ id: profileId, locale: 'es' })).isOk()).toBe(true)
 
-    await session.flush()
+    expect((await session.flush()).isOk()).toBe(true)
 
     expect((await service.read({ user: me.id }))._unsafeUnwrap()[0]).toMatchObject({
       bio: 'Hello',

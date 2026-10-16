@@ -6,7 +6,7 @@
  * bus, the Loro write path and the projector. Never part of the browser bundle.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { BusError } from '@workspace/cqrs'
 import {
@@ -101,7 +101,7 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
     const { session } = services
 
     const settled = (): ResultAsync<void, SeedError> =>
-      ResultAsync.fromSafePromise(session.flush()).andThen(() => {
+      session.flush().andThen(() => {
         const [failure] = failures.splice(0)
 
         return failure ? errAsync(failure) : okAsync(undefined)

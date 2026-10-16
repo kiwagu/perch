@@ -43,9 +43,13 @@ export class LoroWritePath implements WritePathPort {
     params: Params,
     meta: CommandMeta = {},
   ): ResultAsync<void, DataError> {
-    return ResultAsync.fromSafePromise(Promise.resolve()).andThen(() =>
-      this.#apply(command, (params ?? {}) as Readonly<Record<string, unknown>>, meta),
-    )
+    // A command succeeds only once its update is durable: the local database, not
+    // the in-memory document, is what survives a reload.
+    return ResultAsync.fromSafePromise(Promise.resolve())
+      .andThen(() =>
+        this.#apply(command, (params ?? {}) as Readonly<Record<string, unknown>>, meta),
+      )
+      .andThen(() => this.region.flush())
   }
 
   #apply(

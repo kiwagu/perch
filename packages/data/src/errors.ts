@@ -3,6 +3,7 @@ export type DataErrorCode =
   | 'data:QUERY_FAILED'
   | 'data:COMMAND_FAILED'
   | 'data:WRITE_REJECTED'
+  | 'data:WRITE_FAILED'
   | 'data:AUTH_FAILED'
   | 'data:INVALID_CREDENTIALS'
   | 'data:SIGN_UP_REJECTED'
