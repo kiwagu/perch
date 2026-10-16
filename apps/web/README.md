@@ -10,7 +10,8 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. It opens
-  the database, restores the session, opens the private region after sign-in, builds the
+  the database once per page, restores the session from the keys kept in local storage
+  (saving every renewed refresh key), opens the private region after sign-in, builds the
   command bus (logging, params validation, execution context with actor, device and
   correlation ids) and binds ports to tokens. `<html data-boot-step>` shows the boot step;
   `data-sync-leader` and `data-sync-channel` show the sync role.

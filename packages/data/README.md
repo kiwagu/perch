@@ -4,9 +4,11 @@
 
 The only package that depends on the SurrealDB driver. It opens the local database
 (applying the schema only when it changed since the last opening, so saved sessions
-stay valid across reloads), runs shapes and commands compiled from `.surql` files, announces table changes so
-watched shapes rerun, and handles accounts. Above this package ids are entity id
-strings and times are `Date`s; driver record ids and datetimes do not leave it.
+stay valid across reloads), runs shapes and commands compiled from `.surql` files,
+announces table changes so watched shapes rerun, and handles accounts: sign-up,
+sign-in, and sessions resumed from a saved access token or through a refresh key that
+is replaced on every use. Above this package ids are entity id strings and times are
+`Date`s; driver record ids and datetimes do not leave it.
 
 ## Key exports
 

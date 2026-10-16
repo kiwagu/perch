@@ -23,7 +23,9 @@ DEFINE INDEX OVERWRITE user_email ON user FIELDS email UNIQUE;
 
 -- Sign-up creates only the account. The replicated profile is written afterwards by
 -- the client through its own command, because profile rows live in the user's
--- private region and are authored there.
+-- private region and are authored there. Access tokens are short-lived; the refresh
+-- key that comes with them renews the session for up to 30 days, is replaced on every
+-- use and can be revoked with ACCESS ... REVOKE.
 DEFINE ACCESS OVERWRITE user ON DATABASE TYPE RECORD
   SIGNUP (
     CREATE type::record('user', fn::entity_id('usr')) SET
@@ -37,4 +39,6 @@ DEFINE ACCESS OVERWRITE user ON DATABASE TYPE RECORD
     WHERE
       email = $email
       AND crypto::argon2::compare(password, $password)
-  ) DURATION FOR TOKEN 15m, FOR SESSION 12h;
+  )
+  WITH REFRESH
+  DURATION FOR GRANT 30d, FOR TOKEN 15m, FOR SESSION 12h;

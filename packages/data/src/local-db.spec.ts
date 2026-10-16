@@ -168,14 +168,36 @@ describe('a device database that is closed and opened again', () => {
     const user = (
       await signedUp.signUp({ email: 'd@example.test', password: 'secret-d', name: 'Dee' })
     )._unsafeUnwrap()
-    const token = signedUp.token() ?? ''
+    const access = signedUp.tokens()?.access ?? ''
 
     await first.close()
     open.splice(open.indexOf(first), 1)
 
     const second = await reopen(full)
 
-    expect((await auth(second).resume(token))._unsafeUnwrap()).toEqual(user)
+    expect((await auth(second).resume({ access }))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('keeps a user signed in past the access token, through the refresh key', async () => {
+    const shortTokens = `${full}\n${read('./__fixtures__/short-tokens.surql')}`
+    const first = await reopen(shortTokens)
+    const signedUp = auth(first)
+    const user = (
+      await signedUp.signUp({ email: 'f@example.test', password: 'secret-f', name: 'Eff' })
+    )._unsafeUnwrap()
+    const saved = signedUp.tokens() ?? expect.unreachable('tokens after sign-up')
+
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+    // Token times are whole seconds and a token is valid through its last second.
+    await new Promise((resolve) => setTimeout(resolve, 2100))
+
+    const second = await reopen(shortTokens)
+
+    expect((await auth(second).resume({ access: saved.access }))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
+    expect((await auth(second).resume(saved))._unsafeUnwrap()).toEqual(user)
   })
 
   it('applies a schema that changed since the last opening', async () => {

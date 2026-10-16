@@ -4,6 +4,7 @@ export { type AuthOptions, createAuth } from './auth'
 export {
   AUTH,
   type AuthPort,
+  type AuthTokens,
   type AuthUser,
   type SignInInput,
   type SignUpInput,

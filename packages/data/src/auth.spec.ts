@@ -35,6 +35,8 @@ afterEach(async () => {
   await local.close()
 })
 
+const another = () => createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
+
 describe('createAuth', () => {
   it('signs up and reports the account as the current user', async () => {
     const user = (await auth.signUp(ann))._unsafeUnwrap()
@@ -43,7 +45,8 @@ describe('createAuth', () => {
     expect(user.id).toMatch(/^usr_/)
     expect(user).toEqual({ id: user.id, email: ann.email, name: ann.name })
     expect(current).toEqual(user)
-    expect(auth.token()).toEqual(expect.any(String))
+    expect(auth.tokens()?.access).toMatch(/^ey/)
+    expect(auth.tokens()?.refresh).toMatch(/\S/)
   })
 
   it('leaves the main session able to write after a sign-up', async () => {
@@ -61,7 +64,7 @@ describe('createAuth', () => {
 
     expect(signedOut.isOk()).toBe(true)
     expect((await auth.current())._unsafeUnwrap()).toBeUndefined()
-    expect(auth.token()).toBeUndefined()
+    expect(auth.tokens()).toBeUndefined()
   })
 
   it('signs in with the right password and refuses a wrong one', async () => {
@@ -84,23 +87,46 @@ describe('createAuth', () => {
     expect(again._unsafeUnwrapErr().code).toBe('data:SIGN_UP_REJECTED')
   })
 
-  it('resumes a session from its token', async () => {
+  it('resumes a session from its access token', async () => {
     const user = (await auth.signUp(ann))._unsafeUnwrap()
-    const token = auth.token() ?? ''
-    const other = createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
+    const access = auth.tokens()?.access ?? ''
 
-    expect((await other.resume(token))._unsafeUnwrap()).toEqual(user)
+    expect((await another().resume({ access }))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('resumes from the refresh key and swaps it for a new one, so a spent key stops working', async () => {
+    const user = (await auth.signUp(ann))._unsafeUnwrap()
+    const saved = auth.tokens() ?? expect.unreachable('tokens after sign-up')
+    const resumed = another()
+
+    expect((await resumed.resume(saved))._unsafeUnwrap()).toEqual(user)
+    expect(resumed.tokens()?.refresh).toMatch(/\S/)
+    expect(resumed.tokens()?.refresh).not.toBe(saved.refresh)
+    expect((await another().resume(saved))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+  })
+
+  it('tells listeners about every change of tokens', async () => {
+    const seen: Array<string | undefined> = []
+    const stop = auth.onTokens((tokens) => seen.push(tokens?.refresh))
+
+    expect((await auth.signUp(ann)).isOk()).toBe(true)
+    expect((await auth.signOut()).isOk()).toBe(true)
+
+    stop()
+
+    expect((await auth.signIn(ann)).isOk()).toBe(true)
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatch(/\S/)
+    expect(seen[1]).toBeUndefined()
   })
 
   it('loses its sessions when the access method is defined again, which is why a reopened database skips an unchanged schema', async () => {
     expect((await auth.signUp(ann)).isOk()).toBe(true)
 
-    const token = auth.token() ?? ''
+    const access = auth.tokens()?.access ?? ''
 
     await local.db.query(readSchema())
 
-    const other = createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
-
-    expect((await other.resume(token))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await another().resume({ access }))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
   })
 })

@@ -30,6 +30,8 @@ export interface SessionOptions {
 
 const TOKEN_KEY = 'perch.session.token'
 
+const REFRESH_KEY = 'perch.session.refresh'
+
 /** Writes into the private region of whoever is signed in; refuses while nobody is. */
 class RegionWritePath implements WritePathPort {
   #target: LoroWritePath | undefined
@@ -72,6 +74,22 @@ export class SessionService implements SessionPort {
     private readonly options: SessionOptions,
   ) {
     this.#auth = createAuth(local, options)
+    // Every new pair is kept, renewals included: a refresh key works once, so the
+    // next reload needs the latest one. A session the driver ends on its own keeps
+    // the stored keys, since the refresh key still resumes it.
+    this.#auth.onTokens((tokens) => {
+      if (!tokens) {
+        return
+      }
+
+      options.storage.set(TOKEN_KEY, tokens.access)
+
+      if (tokens.refresh) {
+        options.storage.set(REFRESH_KEY, tokens.refresh)
+      } else {
+        options.storage.remove(REFRESH_KEY)
+      }
+    })
   }
 
   current(): AuthUser | undefined {
@@ -98,25 +116,25 @@ export class SessionService implements SessionPort {
 
   signOut(): ResultAsync<void, DataError> {
     this.#leave()
-    this.options.storage.remove(TOKEN_KEY)
+    this.#forget()
 
     return this.#auth.signOut().map(() => this.#emit(undefined))
   }
 
   /** Continues the session saved by an earlier sign-in; an unusable token means signed out. */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
-    const saved = this.options.storage.get(TOKEN_KEY)
+    const access = this.options.storage.get(TOKEN_KEY)
 
-    if (!saved) {
+    if (!access) {
       return okAsync(undefined)
     }
 
     return this.#auth
-      .resume(saved)
+      .resume({ access, refresh: this.options.storage.get(REFRESH_KEY) })
       .orElse(() => okAsync(undefined))
       .andThen((user) => {
         if (!user) {
-          this.options.storage.remove(TOKEN_KEY)
+          this.#forget()
 
           return okAsync(undefined)
         }
@@ -145,17 +163,15 @@ export class SessionService implements SessionPort {
 
       this.#open = { region, projector, stop: projector.start() }
       this.writePath.attach(new LoroWritePath(region, this.options.schema))
-
-      const saved = this.#auth.token()
-
-      if (saved) {
-        this.options.storage.set(TOKEN_KEY, saved)
-      }
-
       this.#emit(user)
 
       return user
     })
+  }
+
+  #forget(): void {
+    this.options.storage.remove(TOKEN_KEY)
+    this.options.storage.remove(REFRESH_KEY)
   }
 
   #leave(): void {

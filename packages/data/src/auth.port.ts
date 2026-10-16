@@ -11,6 +11,12 @@ export interface AuthUser {
   readonly name: string
 }
 
+/** The keys of a signed-in session: a short-lived access token and the refresh key that renews it. */
+export interface AuthTokens {
+  readonly access: string
+  readonly refresh?: string | undefined
+}
+
 export interface SignUpInput {
   readonly email: string
   readonly password: string
@@ -28,10 +34,15 @@ export interface AuthPort {
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   signOut(): ResultAsync<void, DataError>
   current(): ResultAsync<AuthUser | undefined, DataError>
-  /** Continues a session from a token kept by the caller, e.g. after a page reload. */
-  resume(accessToken: string): ResultAsync<AuthUser | undefined, DataError>
-  /** The access token of the signed-in session, if any. */
-  token(): string | undefined
+  /**
+   * Continues a session from tokens kept by the caller, e.g. after a page reload. A
+   * refresh key is exchanged for a new pair, and the key it replaces stops working.
+   */
+  resume(tokens: AuthTokens): ResultAsync<AuthUser | undefined, DataError>
+  /** The tokens of the signed-in session, if any. */
+  tokens(): AuthTokens | undefined
+  /** Hears every change of tokens: sign-in, renewal (a new refresh key) and sign-out. */
+  onTokens(listener: (tokens: AuthTokens | undefined) => void): () => void
 }
 
 export const AUTH = token<AuthPort>('Auth')

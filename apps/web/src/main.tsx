@@ -34,26 +34,46 @@ function Layout() {
   )
 }
 
+// One page boots once. A second boot, such as React re-running effects in
+// development, would open a second engine on the same IndexedDB and present the
+// saved refresh key twice: the first use replaces it, the second is refused.
+let booting: Promise<Boot> | undefined
+
+function bootOnce(): Promise<Boot> {
+  // The database code and its WASM engine load after the first frame, so the
+  // shell paints without waiting for them.
+  booting ??= import('./composition/browser')
+    .then(({ bootBrowser }) => bootBrowser())
+    .then((result) =>
+      result.match<Boot>(
+        (services) => ({
+          status: 'ready',
+          services,
+          router: createAppRouter({ modules, session: services.session, layout: Layout }),
+        }),
+        () => ({ status: 'failed' }),
+      ),
+    )
+
+  return booting
+}
+
 function App() {
   const [boot, setBoot] = useState<Boot>({ status: 'opening' })
   const setLocale = useSetLocale()
 
   useEffect(() => {
-    // The database code and its WASM engine load after the first frame, so the
-    // shell paints without waiting for them.
-    void import('./composition/browser')
-      .then(({ bootBrowser }) => bootBrowser())
-      .then((result) =>
-        result.match(
-          (services) =>
-            setBoot({
-              status: 'ready',
-              services,
-              router: createAppRouter({ modules, session: services.session, layout: Layout }),
-            }),
-          () => setBoot({ status: 'failed' }),
-        ),
-      )
+    let mounted = true
+
+    void bootOnce().then((next) => {
+      if (mounted) {
+        setBoot(next)
+      }
+    })
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   if (boot.status !== 'ready') {

@@ -114,6 +114,28 @@ describe('SessionService', () => {
     expect(second.region()?.recordJson(`profile/${id}`)).toMatchObject({ name: 'Ann' })
   })
 
+  it('keeps the renewed refresh key, so every later reload resumes too', async () => {
+    const storage = memoryStorage()
+    const user = (await session(storage).signUp(ann))._unsafeUnwrap()
+    const spent = storage.get('perch.session.refresh')
+
+    expect(spent).toMatch(/\S/)
+    expect((await session(storage).restore())._unsafeUnwrap()).toEqual(user)
+    expect(storage.get('perch.session.refresh')).not.toBe(spent)
+    expect((await session(storage).restore())._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('forgets the keys on sign-out', async () => {
+    const storage = memoryStorage()
+    const service = session(storage)
+
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+    expect((await service.signOut()).isOk()).toBe(true)
+    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(storage.get('perch.session.refresh')).toBeUndefined()
+    expect((await session(storage).restore())._unsafeUnwrap()).toBeUndefined()
+  })
+
   it('tells subscribers when the signed-in user changes', async () => {
     const service = session()
     const seen: Array<string | undefined> = []
