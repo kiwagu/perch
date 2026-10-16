@@ -242,6 +242,45 @@ describe('SessionService', () => {
     expect((await session(storage).restore())._unsafeUnwrap()?.email).toBe(ann.email)
   })
 
+  it('attaches nothing after close, neither the transition running nor those waiting behind it', async () => {
+    const holding = holdingRegionLoads(local)
+    const service = session(memoryStorage(), holding.local)
+    const bob = { email: 'bob@example.test', password: 'secret-bob', name: 'Bob' }
+
+    expect((await service.signUp(bob)).isOk()).toBe(true)
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+
+    holding.hold()
+
+    const running = service.signIn(bob)
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
+    const waiting = service.signIn(ann)
+    const closing = service.close()
+
+    holding.release()
+    await closing
+
+    expect((await running).isErr()).toBe(true)
+    expect((await waiting).isErr()).toBe(true)
+    expect(service.current()).toBeUndefined()
+    expect(service.region()).toBeUndefined()
+  })
+
+  it('does not run a sign-in called just before close', async () => {
+    const service = session()
+
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+
+    const pending = service.signIn(ann)
+
+    await service.close()
+
+    expect((await pending).isErr()).toBe(true)
+    expect(service.region()).toBeUndefined()
+  })
+
   it('tells subscribers when the signed-in user changes', async () => {
     const service = session()
     const seen: Array<string | undefined> = []

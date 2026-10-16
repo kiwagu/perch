@@ -70,6 +70,7 @@ export class SessionService implements SessionPort {
   #open: OpenRegion | undefined
   #generation = 0
   #transitions: Promise<unknown> = Promise.resolve()
+  #closed = false
   #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(
@@ -176,8 +177,14 @@ export class SessionService implements SessionPort {
    * are persisted and projected, so the database can be closed after it.
    */
   async close(): Promise<void> {
+    this.#closed = true
     this.#begin()
     this.#leave()
+
+    if (this.#user) {
+      this.#emit(undefined)
+    }
+
     await this.#retiring
   }
 
@@ -191,11 +198,16 @@ export class SessionService implements SessionPort {
   /**
    * Runs session transitions one at a time, each when the previous one has
    * finished, so the shared auth session and the saved keys never serve two
-   * transitions at once. `close` does not wait: it starts a new generation, and
-   * a transition still running then attaches nothing.
+   * transitions at once. `close` does not wait: it starts a new generation, so a
+   * transition still running attaches nothing, and the queued ones do not run.
    */
   #serially<T>(run: (generation: number) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
-    const result = this.#transitions.then(() => run(this.#begin()))
+    // A closed session runs nothing more, transitions queued before the close included.
+    const result = this.#transitions.then(() =>
+      this.#closed
+        ? errAsync(dataError('data:AUTH_FAILED', 'the session is closed'))
+        : run(this.#begin()),
+    )
 
     this.#transitions = result.then(
       () => undefined,
@@ -210,7 +222,13 @@ export class SessionService implements SessionPort {
       return errAsync(dataError('data:AUTH_FAILED', 'the session was closed during this sign-in'))
     }
 
+    // The previous user leaves with their region: nobody is current until the
+    // new region is attached.
     this.#leave()
+
+    if (this.#user) {
+      this.#emit(undefined)
+    }
 
     return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).andThen(
       (region) => {
