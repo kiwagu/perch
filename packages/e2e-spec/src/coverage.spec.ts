@@ -80,6 +80,21 @@ describe('checkCoverage', () => {
     })
   })
 
+  it('does not count steps that are commented out', () => {
+    const dirs = project({
+      'specs/user/01-a.md': spec(4),
+      'src/user/01-a.e2e.spec.ts': [
+        test(2),
+        "// await test.step('3. x', fn)",
+        "/* await test.step('4. x', fn) */",
+      ].join('\n'),
+    })
+
+    expect(checkCoverage(dirs.specs, dirs.tests).stepMismatch).toEqual([
+      { spec: 'user/01-a', steps: 4, testSteps: 2 },
+    ])
+  })
+
   it('reports a spec it cannot read', () => {
     const dirs = project({
       'specs/user/01-a.md': '# Only a title',

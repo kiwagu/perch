@@ -18,7 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "neverthrow": "catalog:"
+    "neverthrow": "catalog:",
+    "oxc-parser": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

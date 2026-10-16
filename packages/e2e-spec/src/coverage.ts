@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
+import { parseSync, Visitor } from 'oxc-parser'
+
 import { parseSpec } from './parse'
 
 export interface StepMismatch {
@@ -33,6 +35,34 @@ function filesUnder(dir: string): string[] {
   })
 }
 
+/** The `test.step(...)` calls in a test file's code; comments and strings do not count. */
+function countSteps(path: string): number {
+  const { program } = parseSync(path, readFileSync(path, 'utf8'), {
+    lang: 'ts',
+    sourceType: 'module',
+  })
+  let steps = 0
+
+  new Visitor({
+    CallExpression(node) {
+      const callee = node.callee
+
+      if (
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.object.type === 'Identifier' &&
+        callee.object.name === 'test' &&
+        callee.property.type === 'Identifier' &&
+        callee.property.name === 'step'
+      ) {
+        steps += 1
+      }
+    },
+  }).visit(program)
+
+  return steps
+}
+
 /** Paired names (`user/01-sign-up`) of the files under `dir` that end in `suffix`. */
 function pairedNames(dir: string, suffix: string): Map<string, string> {
   return new Map(
@@ -55,7 +85,7 @@ export function checkCoverage(specsDir: string, testsDir: string): CoverageRepor
     if (parsed.isErr()) {
       invalidSpecs.push(name)
     } else if (testPath) {
-      const testSteps = readFileSync(testPath, 'utf8').split('test.step(').length - 1
+      const testSteps = countSteps(testPath)
 
       if (testSteps < parsed.value.steps.length) {
         stepMismatch.push({ spec: name, steps: parsed.value.steps.length, testSteps })
