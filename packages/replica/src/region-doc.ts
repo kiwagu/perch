@@ -1,4 +1,10 @@
-import { type ImportStatus, LoroDoc, type LoroMap, type PeerID } from 'loro-crdt'
+import {
+  decodeImportBlobMeta,
+  type ImportStatus,
+  LoroDoc,
+  type LoroMap,
+  type PeerID,
+} from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import {
@@ -323,26 +329,33 @@ export class RegionDoc {
     return this.#store?.flush() ?? okAsync(undefined)
   }
 
-  /** Persists a server update, imports it, then moves the cursor to `head` when nothing is left pending. */
+  /**
+   * Persists a server update, imports it, then moves the cursor to `head` when nothing is
+   * left pending. Bytes that do not decode as a Loro update are refused before they are
+   * stored, since a stored row that cannot be imported would fail every later load.
+   */
   importRemote(bytes: Uint8Array, head: number): ResultAsync<ImportOutcome, DataError> {
-    const imported = (this.#store?.appendRemote(bytes) ?? okAsync(undefined)).andThen(() =>
-      Result.fromThrowable(
-        () => this.doc.import(bytes),
-        (cause) =>
-          dataError(
-            'data:WRITE_FAILED',
-            `could not import a server update of ${this.ref.id}`,
-            cause,
-          ),
-      )(),
-    )
+    const id = this.ref.id
 
-    return imported.andThen(
-      (status): ResultAsync<ImportOutcome, DataError> =>
-        this.#settle(status)
-          ? this.advanceCursor(head).map(() => ({ complete: true }))
-          : okAsync({ complete: false }),
-    )
+    return Result.fromThrowable(
+      () => decodeImportBlobMeta(bytes, true),
+      (cause) =>
+        dataError('data:WRITE_REJECTED', `a server update of ${id} does not decode`, cause),
+    )()
+      .asyncAndThen(() => this.#store?.appendRemote(bytes) ?? okAsync(undefined))
+      .andThen(() =>
+        Result.fromThrowable(
+          () => this.doc.import(bytes),
+          (cause) =>
+            dataError('data:WRITE_FAILED', `could not import a server update of ${id}`, cause),
+        )(),
+      )
+      .andThen(
+        (status): ResultAsync<ImportOutcome, DataError> =>
+          this.#settle(status)
+            ? this.advanceCursor(head).map(() => ({ complete: true }))
+            : okAsync({ complete: false }),
+      )
   }
 
   /** Moves the cursor forward without new bytes: the server's head is this device's own acknowledged batch. */

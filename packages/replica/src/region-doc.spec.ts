@@ -201,6 +201,19 @@ describe('RegionDoc sync state', () => {
     expect(region.recordJson(key)).toMatchObject({ name: 'Ana' })
   })
 
+  it('refuses server bytes that are not a Loro update and stores nothing', async () => {
+    const region = await open()
+
+    const outcome = await region.importRemote(new Uint8Array([1, 2, 3, 4]), 1)
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(region.pulled()).toBe(0)
+    expect(await counts()).toEqual({ snapshots: 0, updates: 0, outbox: 0 })
+    region.close()
+
+    expect((await RegionDoc.open(local, ref)).isOk()).toBe(true)
+  })
+
   it('numbers updates in the database, so two tabs on one database never share a number', async () => {
     const first = await open()
     const second = await open()
