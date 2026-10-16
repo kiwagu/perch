@@ -20,6 +20,7 @@ describe('workspace eslint config', () => {
   it('accepts code that follows the conventions', async () => {
     expect(await rulesFiredIn('clean.ts')).toEqual([])
     expect(await rulesFiredIn('feature/domain/invariant.ts')).toEqual([])
+    expect(await rulesFiredIn('barrel.ts')).toEqual([])
   })
 
   it('requires a blank line after local variables and before return', async () => {

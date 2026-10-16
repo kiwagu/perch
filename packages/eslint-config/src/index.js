@@ -27,6 +27,8 @@ const paddingRules = [
   { blankLine: 'always', prev: '*', next: 'return' },
   { blankLine: 'always', prev: '*', next: ['function', 'class', 'export'] },
   { blankLine: 'always', prev: ['function', 'class'], next: '*' },
+  // Biome sorts consecutive exports into one block, the same way it treats imports.
+  { blankLine: 'any', prev: 'export', next: 'export' },
 ]
 
 /** Layers of a feature or package, recognised by folder name. */
