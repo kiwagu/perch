@@ -46,6 +46,10 @@ describe('workspace eslint config', () => {
     ])
   })
 
+  it('lets tests of presentation code render literal content', async () => {
+    expect(await rulesFiredIn('feature/presentation/greeting.view.spec.tsx')).toEqual([])
+  })
+
   it('forbids let and throwing plain errors in domain code', async () => {
     expect(await rulesFiredIn('feature/domain/mutable.ts')).toEqual(['functional/no-let'])
     expect(await rulesFiredIn('feature/domain/throws.ts')).toEqual(['no-restricted-syntax'])

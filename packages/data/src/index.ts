@@ -1,3 +1,5 @@
+export type { Engines } from 'surrealdb'
+
 export { type AuthOptions, createAuth } from './auth'
 export {
   AUTH,

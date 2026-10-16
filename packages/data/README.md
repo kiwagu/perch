@@ -15,7 +15,9 @@ strings and times are `Date`s; driver record ids and datetimes do not leave it.
 - `Shape`, `Command`, `TableChange`, `publishChange`, `onChange`, `DataError`.
 - `./engines/node`: embedded engines for Bun and Node.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
-- `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`.
+- `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`,
+  `FakeShapeRunner` (a runner without a database for component tests).
+- `./engines/wasm`: browser engines in a Web Worker (Vite builds only).
 - `./vite-plugin-surql`: `surqlPlugin()` loads plain `.surql` files as text; `./surql` types such imports.
 
 ## Commands

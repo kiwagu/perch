@@ -169,6 +169,7 @@ export const base = [
   },
   {
     files: ['**/presentation/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
     plugins: { react },
     settings: { react: { version: '19.3' } },
     rules: {

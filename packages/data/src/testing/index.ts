@@ -5,6 +5,8 @@
 
 import { readdirSync, readFileSync } from 'node:fs'
 
+export { FakeShapeRunner } from './fake-runner'
+
 import type { ResultAsync } from 'neverthrow'
 
 import { nodeEngines } from '../engines/node'
