@@ -38,6 +38,7 @@ export const profileCommands: {
     tables: ['profile'],
     region: 'private',
     ops: [{ op: 'text.update', record: 'id', field: 'bio', value: { param: 'bio' } }],
+    schema: UpdateBioParamsSchema,
   },
 }
 

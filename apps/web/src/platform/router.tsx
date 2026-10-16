@@ -1,7 +1,8 @@
 /**
  * Builds the application router from the module manifests. Each module route
- * becomes a page; `authenticated` pages send visitors to sign-in, `guest` pages
- * send a signed-in user to the profile, and `/` opens whichever applies.
+ * becomes a page inside its module's scope; `authenticated` pages send visitors
+ * to sign-in, `guest` pages send a signed-in user to the profile, and `/` opens
+ * whichever applies.
  */
 
 import {
@@ -15,7 +16,7 @@ import type { FunctionComponent } from 'react'
 
 import type { AuthUser } from '@workspace/data'
 
-import type { ModuleDef, RouteDef } from './module'
+import { type ModuleDef, ModuleScope, type RouteDef } from './module'
 
 export const SIGN_IN_PATH = '/sign-in'
 
@@ -26,6 +27,15 @@ export interface AppRouterOptions {
   readonly session: { current(): AuthUser | undefined }
   readonly layout: FunctionComponent
   readonly history?: RouterHistory
+}
+
+/** A page that resolves services from its own module before the application's. */
+function scopedPage(module: ModuleDef, route: RouteDef): FunctionComponent {
+  const Page = module.declarations[route.page]
+
+  return function ScopedPage() {
+    return <ModuleScope module={module}>{Page ? <Page /> : null}</ModuleScope>
+  }
 }
 
 function allModules(modules: readonly ModuleDef[]): ModuleDef[] {
@@ -56,7 +66,7 @@ export function createAppRouter(options: AppRouterOptions) {
       createRoute({
         getParentRoute: () => root,
         path: route.path,
-        component: module.declarations[route.page] ?? (() => null),
+        component: scopedPage(module, route),
         beforeLoad: guard(route),
       }),
     ),

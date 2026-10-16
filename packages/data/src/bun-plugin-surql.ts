@@ -1,7 +1,8 @@
 /**
  * Makes `.surql` files importable under the Bun runtime (scripts and CLIs), the
  * same way the Vite plugin does for bundles and vitest. Registered through
- * `preload` in the root bunfig.toml.
+ * `preload` in the root bunfig.toml, and imported first by CLIs that may start
+ * in another directory.
  */
 
 import { readFileSync } from 'node:fs'

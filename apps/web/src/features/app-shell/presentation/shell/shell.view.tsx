@@ -19,6 +19,8 @@ export interface ShellViewProps {
   readonly activePath: string
   readonly onLocaleChange: (locale: Locale) => void
   readonly link?: ComponentType<ShellLinkProps>
+  /** The latest message for the user, already translated. */
+  readonly notice?: { readonly testId: string; readonly text: string } | undefined
   readonly children?: ReactNode
 }
 
@@ -72,6 +74,15 @@ export function ShellView(props: ShellViewProps) {
       ))}
       status={status}
     >
+      {props.notice ? (
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+          data-testid={props.notice.testId}
+        >
+          {props.notice.text}
+        </p>
+      ) : null}
       {props.status === 'ready' ? props.children : null}
     </AppShell>
   )

@@ -90,6 +90,10 @@ describe('emitModel', () => {
     expect(files[2]?.text).toMatchSnapshot()
   })
 
+  it('gives every command the schema of its parameters', () => {
+    expect(files[0]?.text).toContain('    schema: UpdateBioParamsSchema,')
+  })
+
   it('is byte-for-byte stable', () => {
     expect(emitModel({ shape, commands }, schema)).toEqual(files)
   })

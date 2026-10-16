@@ -7,7 +7,6 @@ export {
   parseShapeFile,
   type ShapeHeader,
 } from './annotations'
-export { type ModelOptions, type ModelResult, main, runModel } from './cli'
 export {
   type Collected,
   type CommandEntry,
@@ -26,6 +25,7 @@ export { emitPagesModel, emitSurrealkitSuites } from './emit-reports'
 export { ModelingException } from './errors'
 export { checkIdRegistry } from './id-registry'
 export { idTypeOf, inferResultType, renderFieldType, tablesOf } from './infer-types'
+export { type ModelOptions, type ModelResult, main, runModel } from './run-model'
 export {
   type CrdtKind,
   loadSchemaModel,

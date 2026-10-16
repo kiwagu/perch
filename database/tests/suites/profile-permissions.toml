@@ -1,0 +1,92 @@
+name = "profile-permissions"
+tags = ["permissions", "profile"]
+
+# The server contract of the replicated profile table: clients write profiles through
+# their private region, so on the server a user may read and edit only their own row
+# and can neither create nor delete one. Refused writes return no rows; root then
+# confirms that nothing changed.
+
+[[cases]]
+name = "root seeds a profile for alice and for bob"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE profile:alice SET user = (SELECT VALUE id FROM user WHERE email = 'alice@example.test')[0], name = 'Alice', email = 'alice@example.test'; CREATE profile:bob SET user = (SELECT VALUE id FROM user WHERE email = 'bob@example.test')[0], name = 'Bob', email = 'bob@example.test';"
+allow = true
+
+[[cases]]
+name = "alice sees only her own profile"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE name FROM profile;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "Alice"
+
+[[cases.assertions]]
+path = "1"
+exists = false
+
+[[cases]]
+name = "alice renames her own profile"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE profile:alice SET name = 'Alice B' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0.name"
+equals = "Alice B"
+
+[[cases]]
+name = "alice cannot rename bob's profile"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE profile:bob SET name = 'Hacked' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create a profile"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE profile:extra SET user = $auth.id, name = 'Extra', email = 'extra@example.test';"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete her profile"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE profile:alice RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "only the seeded profiles exist and bob keeps his name"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE name FROM profile ORDER BY name;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "Alice B"
+
+[[cases.assertions]]
+path = "1"
+equals = "Bob"
+
+[[cases.assertions]]
+path = "2"
+exists = false

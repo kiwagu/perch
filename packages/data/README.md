@@ -2,8 +2,9 @@
 
 ## Role in the architecture
 
-The only package that depends on the SurrealDB driver. It opens the local database,
-runs shapes and commands compiled from `.surql` files, announces table changes so
+The only package that depends on the SurrealDB driver. It opens the local database
+(applying the schema only when it changed since the last opening, so saved sessions
+stay valid across reloads), runs shapes and commands compiled from `.surql` files, announces table changes so
 watched shapes rerun, and handles accounts. Above this package ids are entity id
 strings and times are `Date`s; driver record ids and datetimes do not leave it.
 
@@ -12,7 +13,8 @@ strings and times are `Date`s; driver record ids and datetimes do not leave it.
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `AuthPort` / `AUTH`, `LocalDbPort` / `LOCAL_DB`.
 - Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`.
-- `Shape`, `Command`, `TableChange`, `publishChange`, `onChange`, `DataError`.
+- `Shape`, `Command` (with an optional Standard Schema `schema` for its params),
+  `TableChange`, `publishChange`, `onChange`, `DataError`.
 - `./engines/node`: embedded engines for Bun and Node.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`,

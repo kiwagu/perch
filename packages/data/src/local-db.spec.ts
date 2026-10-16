@@ -1,12 +1,16 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
+import { createAuth } from './auth'
 import { onChange } from './changes'
 import { runCommand } from './commands'
 import { nodeEngines } from './engines/node'
 import { openLocalDb } from './local-db'
 import { ShapeRunner } from './shape-runner'
+import { readSchema } from './testing'
 import type { Command, LocalDb, Shape } from './types'
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -123,5 +127,60 @@ describe('local db, shape runner and commands', () => {
     })
 
     expect(opened._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+  })
+})
+
+describe('a device database that is closed and opened again', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'perch-local-db-'))
+  const open: LocalDb[] = []
+  const reopen = async (schemaText: string): Promise<LocalDb> => {
+    const opened = await openLocalDb({
+      engines: nodeEngines(),
+      url: `surrealkv://${dir}`,
+      namespace: 'app',
+      database: 'app',
+      schema: schemaText,
+    })
+
+    if (opened.isErr()) {
+      throw opened.error.cause
+    }
+
+    open.push(opened.value)
+
+    return opened.value
+  }
+  const auth = (db: LocalDb) =>
+    createAuth(db, { access: 'user', namespace: 'app', database: 'app' })
+  const full = readSchema()
+
+  // A file database stays locked until it is closed, also when a test fails.
+  afterEach(async () => {
+    await Promise.all(open.splice(0).map((db) => db.close()))
+  })
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('keeps earlier sessions valid when its schema has not changed', async () => {
+    const first = await reopen(full)
+    const signedUp = auth(first)
+    const user = (
+      await signedUp.signUp({ email: 'd@example.test', password: 'secret-d', name: 'Dee' })
+    )._unsafeUnwrap()
+    const token = signedUp.token() ?? ''
+
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+
+    const second = await reopen(full)
+
+    expect((await auth(second).resume(token))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('applies a schema that changed since the last opening', async () => {
+    const changed = await reopen(`${full}\n${read('./__fixtures__/longer-user-names.surql')}`)
+    const written = await runCommand(changed, createUser, { email: 'e@example.test', name: 'E' })
+
+    expect(written._unsafeUnwrapErr().code).toBe('data:COMMAND_FAILED')
   })
 })

@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ProfileService > reads the profile tree of the signed-in user 1`] = `
+{
+  "bio": undefined,
+  "created_at": Any<Date>,
+  "email": "ann@example.test",
+  "id": Any<String>,
+  "locale": undefined,
+  "name": "Ann",
+}
+`;

@@ -22,7 +22,17 @@ export {
   surqlComponentFile,
   surqlExportName,
 } from './surql-names'
-export type { ChangeOrigin, Command, LocalDb, ParamDecl, Region, Shape, TableChange } from './types'
+export type {
+  ChangeOrigin,
+  Command,
+  LocalDb,
+  ParamDecl,
+  ParamsSchema,
+  Region,
+  Shape,
+  TableChange,
+  ValidationOutcome,
+} from './types'
 export {
   fromDriverValue,
   type RecordRef,

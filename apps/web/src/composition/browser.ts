@@ -36,6 +36,10 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     url: 'indxdb://perch',
     schema,
     storage: browserStorage(window.localStorage),
+    logger: {
+      info: (fields) => logger.info(fields, 'command'),
+      warn: (fields) => logger.warn(fields, 'command'),
+    },
     onStep: (step) => {
       html.dataset['bootStep'] = step
     },

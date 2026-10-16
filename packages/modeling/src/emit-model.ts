@@ -4,12 +4,7 @@
  * file so imports of it are typed, and the replica schema of replicated tables.
  */
 
-import {
-  camelCase as camel,
-  type ParamDecl,
-  pascalCase as pascal,
-  surqlExportName,
-} from '@workspace/data'
+import { type ParamDecl, pascalCase as pascal, surqlExportName } from '@workspace/data'
 
 import type { CommandFile, ShapeFile } from './collect'
 import { idTypeOf, renderFieldType } from './infer-types'
@@ -174,6 +169,7 @@ function commandsSection(file: CommandFile, schema: SchemaModel): string[] {
       `    tables: ${literal(command.tables)},`,
       `    region: ${literal(command.region)},`,
       `    ops: ${literal(command.ops)},`,
+      `    schema: ${pascal(command.name)}ParamsSchema,`,
       '  },',
     ].join('\n'),
   )

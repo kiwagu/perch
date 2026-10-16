@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { runModel } from './cli'
+import { runModel } from './run-model'
 
 const schemaSource = new URL('../../../database/schema/', import.meta.url).pathname
 const page = 'features/user/presentation/pages/profile'

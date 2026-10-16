@@ -1,3 +1,88 @@
 {
-  "modules": []
+  "modules": [
+    {
+      "id": "user",
+      "dir": "features/user",
+      "shapes": [
+        {
+          "id": "user.profile",
+          "file": "features/user/presentation/pages/profile/profile.shape.surql",
+          "tables": [
+            "profile"
+          ],
+          "region": "private",
+          "fields": [
+            "id",
+            "name",
+            "email",
+            "bio",
+            "locale",
+            "created_at"
+          ]
+        }
+      ],
+      "commands": [
+        {
+          "id": "user.profile.createProfile",
+          "file": "features/user/presentation/pages/profile/profile.commands.surql",
+          "tables": [
+            "profile"
+          ],
+          "region": "private",
+          "ops": [
+            "create"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "user.profile.updateName",
+          "file": "features/user/presentation/pages/profile/profile.commands.surql",
+          "tables": [
+            "profile"
+          ],
+          "region": "private",
+          "ops": [
+            "set"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "user.profile.updateBio",
+          "file": "features/user/presentation/pages/profile/profile.commands.surql",
+          "tables": [
+            "profile"
+          ],
+          "region": "private",
+          "ops": [
+            "text.update"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "user.profile.updateLocale",
+          "file": "features/user/presentation/pages/profile/profile.commands.surql",
+          "tables": [
+            "profile"
+          ],
+          "region": "private",
+          "ops": [
+            "set"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        }
+      ]
+    }
+  ]
 }

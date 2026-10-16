@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-import { createMemoryHistory, Outlet } from '@tanstack/react-router'
+import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { AuthUser } from '@workspace/data'
+import { FakeShapeRunner } from '@workspace/data/testing'
+import { Container, token } from '@workspace/di'
 
-import { defineModule } from './module'
+import { defineModule, useService } from './module'
 import { createAppRouter } from './router'
+import { ServicesProvider } from './services'
 
 const me: AuthUser = {
   id: 'usr_0000000000000000.01m52pexcp' as AuthUser['id'],
@@ -37,7 +41,35 @@ async function landing(path: string, user: AuthUser | undefined): Promise<string
   return router.state.location.pathname
 }
 
+const GREETING = token<string>('Greeting')
+
+const Greeting = () => <p>{useService(GREETING)}</p>
+
+const GreetingModule = defineModule({
+  id: 'greeting',
+  providers: [{ provide: GREETING, useFactory: () => 'provided by the module' }],
+  declarations: { Greeting },
+  routes: [{ path: '/hello', page: 'Greeting' }],
+})
+
 describe('createAppRouter', () => {
+  it("renders a page inside its module's scope", async () => {
+    const router = createAppRouter({
+      modules: [GreetingModule],
+      session: { current: () => undefined },
+      layout: () => <Outlet />,
+      history: createMemoryHistory({ initialEntries: ['/hello'] }),
+    })
+
+    render(
+      <ServicesProvider services={{ container: new Container(), runner: new FakeShapeRunner() }}>
+        <RouterProvider router={router} />
+      </ServicesProvider>,
+    )
+
+    expect(await screen.findByText('provided by the module')).toBeTruthy()
+  })
+
   it('sends a visitor of a protected page to sign-in', async () => {
     expect(await landing('/me', undefined)).toBe('/sign-in')
   })

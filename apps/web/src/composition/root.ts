@@ -19,11 +19,13 @@ import {
 } from '@workspace/data'
 import { Container } from '@workspace/di'
 
+import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { replicaSchema } from '../replica.schema.gen'
 
+import { type CommandLogger, createCommandBus } from './commands'
 import { SessionService } from './session'
-import type { KeyValueStorage } from './storage'
+import { deviceIdFrom, type KeyValueStorage } from './storage'
 
 export type BootStep = 'open-db' | 'restore-session' | 'ready'
 
@@ -32,6 +34,7 @@ export interface AppRootOptions {
   readonly url: string
   readonly schema: string
   readonly storage: KeyValueStorage
+  readonly logger: CommandLogger
   readonly onStep?: (step: BootStep) => void
   readonly onError: (error: DataError) => void
 }
@@ -42,6 +45,7 @@ export interface AppServices {
   readonly runner: ShapeRunnerPort
   readonly writePath: WritePathPort
   readonly session: SessionPort
+  readonly commands: CommandsPort
   close(): Promise<void>
 }
 
@@ -70,11 +74,18 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
       onError: options.onError,
     })
     const runner = new ShapeRunner(local)
+    const commands = createCommandBus({
+      writePath: session.writePath,
+      session,
+      deviceId: deviceIdFrom(options.storage),
+      logger: options.logger,
+    })
     const container = new Container()
       .singleton(LOCAL_DB, () => local)
       .singleton(SHAPE_RUNNER, () => runner)
       .singleton(WRITE_PATH, () => session.writePath)
       .singleton(SESSION, () => session)
+      .singleton(COMMANDS, () => commands)
 
     step('restore-session')
 
@@ -86,6 +97,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
         runner,
         writePath: session.writePath,
         session,
+        commands,
         close: () => local.close(),
       }
     })

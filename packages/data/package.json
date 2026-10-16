@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "./src/bun-plugin-surql.ts"
+  ],
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -26,6 +29,10 @@
     "./engines/wasm": {
       "types": "./src/engines/wasm.ts",
       "import": "./src/engines/wasm.ts"
+    },
+    "./bun-plugin-surql": {
+      "types": "./src/bun-plugin-surql.ts",
+      "import": "./src/bun-plugin-surql.ts"
     },
     "./surql-names": {
       "types": "./src/surql-names.ts",

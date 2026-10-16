@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createAuth } from './auth'
 import type { AuthPort } from './auth.port'
 import { runCommand } from './commands'
-import { openTestDb } from './testing'
+import { openTestDb, readSchema } from './testing'
 import type { Command, LocalDb } from './types'
 
 const createUser: Command<{ email: string; name: string }> = {
@@ -89,5 +89,17 @@ describe('createAuth', () => {
     const other = createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
 
     expect((await other.resume(token))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('loses its sessions when the access method is defined again, which is why a reopened database skips an unchanged schema', async () => {
+    expect((await auth.signUp(ann)).isOk()).toBe(true)
+
+    const token = auth.token() ?? ''
+
+    await local.db.query(readSchema())
+
+    const other = createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
+
+    expect((await other.resume(token))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
   })
 })

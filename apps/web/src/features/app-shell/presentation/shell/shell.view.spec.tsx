@@ -57,6 +57,15 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.nav.sign-in')).toBeNull()
   })
 
+  it('announces the current notice', () => {
+    renderShell({ notice: { testId: 'user.profile.notice', text: 'Saved' } })
+
+    const notice = screen.getByTestId('user.profile.notice')
+
+    expect(notice.textContent).toBe('Saved')
+    expect(notice.getAttribute('role')).toBe('status')
+  })
+
   it('speaks Spanish when the Spanish catalog is chosen', () => {
     renderShell({ locale: 'es' })
 

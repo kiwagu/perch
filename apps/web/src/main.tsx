@@ -12,6 +12,7 @@ import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
+import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
 
@@ -25,9 +26,11 @@ type Boot =
 
 function Layout() {
   return (
-    <ShellContainer>
-      <Outlet />
-    </ShellContainer>
+    <NoticeProvider>
+      <ShellContainer>
+        <Outlet />
+      </ShellContainer>
+    </NoticeProvider>
   )
 }
 

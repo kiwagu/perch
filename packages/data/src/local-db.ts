@@ -2,6 +2,8 @@ import { ResultAsync } from 'neverthrow'
 import { type Engines, Surreal } from 'surrealdb'
 
 import { type DataError, dataError } from './errors'
+import appliedSchemaStatement from './surql/applied-schema.surql'
+import rememberSchemaStatement from './surql/remember-schema.surql'
 import type { LocalDb } from './types'
 
 export interface OpenLocalDbOptions {
@@ -14,14 +16,23 @@ export interface OpenLocalDbOptions {
   readonly schema: string
 }
 
-/** Connects to a local database and applies the schema before anything reads from it. */
+/**
+ * Connects to a local database and brings its schema up to date before anything
+ * reads from it. A schema the database already applied is left alone: defining
+ * the access method again would give it a new signing key and sign everyone out.
+ */
 export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, DataError> {
   const db = new Surreal({ engines: options.engines })
 
   const open = async (): Promise<LocalDb> => {
     await db.connect(options.url)
     await db.use({ namespace: options.namespace, database: options.database })
-    await db.query(options.schema)
+    const [applied] = await db.query<[string | undefined]>(appliedSchemaStatement)
+
+    if (applied !== options.schema) {
+      await db.query(options.schema)
+      await db.query(rememberSchemaStatement, { schema: options.schema })
+    }
 
     return {
       db,

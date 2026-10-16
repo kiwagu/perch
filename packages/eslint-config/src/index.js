@@ -48,6 +48,8 @@ const UI_MODULES = [
   '@workspace/ui',
   '@workspace/ui/*',
 ]
+const TESTS = '**/*.spec.{ts,tsx}'
+
 const RAW_DRIVERS = ['surrealdb', '@surrealdb/*', 'loro-crdt']
 const DATA_PACKAGES = [
   '@workspace/data',
@@ -144,6 +146,8 @@ export const base = [
   },
   {
     files: ['**/*.{ts,tsx}'],
+    // Tests compose real adapters and generated models, as the composition root does.
+    ignores: [TESTS],
     plugins: { boundaries },
     settings: {
       'boundaries/elements': elements,
@@ -167,6 +171,7 @@ export const base = [
   },
   {
     files: ['**/application/**/*.{ts,tsx}'],
+    ignores: [TESTS],
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
       '@typescript-eslint/no-restricted-imports': [
@@ -199,7 +204,7 @@ export const base = [
   },
   {
     files: ['**/presentation/**/*.{ts,tsx}'],
-    ignores: ['**/*.spec.{ts,tsx}'],
+    ignores: [TESTS],
     plugins: { react },
     settings: { react: { version: '19.3' } },
     rules: {
@@ -209,7 +214,7 @@ export const base = [
   },
   {
     files: ['**/domain/**/*.{ts,tsx}', '**/application/**/*.{ts,tsx}'],
-    ignores: ['**/*.spec.{ts,tsx}'],
+    ignores: [TESTS],
     plugins: { functional },
     rules: {
       'functional/no-let': ['error', { allowInForLoopInit: true }],

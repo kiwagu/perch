@@ -25,6 +25,23 @@ export interface Shape<Params, Result> {
   readonly __result?: Result
 }
 
+/** The outcome of validating a value: the parsed value, or the problems found. */
+export type ValidationOutcome<Output> =
+  | { readonly value: Output; readonly issues?: undefined }
+  | { readonly issues: ReadonlyArray<{ readonly message: string }> }
+
+/**
+ * A validator in the Standard Schema shape, which Zod and other libraries
+ * implement; the data layer depends on the shape, not on a library.
+ */
+export interface ParamsSchema<Output> {
+  readonly '~standard': {
+    readonly validate: (
+      value: unknown,
+    ) => ValidationOutcome<Output> | Promise<ValidationOutcome<Output>>
+  }
+}
+
 /** A write compiled from a `*.commands.surql` file: its SurrealQL and its replica operations. */
 export interface Command<Params> {
   readonly id: string
@@ -34,6 +51,8 @@ export interface Command<Params> {
   readonly tables: readonly string[]
   readonly region: Region
   readonly ops: readonly ChangeSpec[]
+  /** Validates the parameters before the command runs. */
+  readonly schema?: ParamsSchema<Params>
   readonly __params?: Params
 }
 

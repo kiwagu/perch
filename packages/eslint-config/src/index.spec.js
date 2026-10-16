@@ -53,6 +53,10 @@ describe('workspace eslint config', () => {
     ])
   })
 
+  it('lets tests wire adapters and generated models across layers', async () => {
+    expect(await rulesFiredIn('feature/application/wiring.spec.ts')).toEqual([])
+  })
+
   it('lets tests of presentation code render literal content', async () => {
     expect(await rulesFiredIn('feature/presentation/greeting.view.spec.tsx')).toEqual([])
   })

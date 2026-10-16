@@ -35,3 +35,20 @@ export function browserStorage(store: Storage): KeyValueStorage {
     remove: (key) => attempt(() => store.removeItem(key), undefined),
   }
 }
+
+const DEVICE_KEY = 'perch.device.id'
+
+/** This browser's stable name, minted on first use; commands carry it in their context. */
+export function deviceIdFrom(storage: KeyValueStorage): string {
+  const saved = storage.get(DEVICE_KEY)
+
+  if (saved) {
+    return saved
+  }
+
+  const minted = crypto.randomUUID()
+
+  storage.set(DEVICE_KEY, minted)
+
+  return minted
+}

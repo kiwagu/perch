@@ -28,6 +28,16 @@ apps:
     port: 8010
     # docker-proxy owns the published port, so readiness is checked over HTTP
     url: http://127.0.0.1:8010/health
+  web:
+    description: >-
+      The web application's Vite dev server on 127.0.0.1:5180. The database runs in
+      the browser (WASM on IndexedDB), so it needs no server to sign up and edit
+      the profile.
+    kind: server
+    run: bun run dev --host 127.0.0.1
+    cwd: apps/web
+    port: 5180
+    url: http://127.0.0.1:5180/
 profiles:
-  dev: [surrealdb-dev]
+  dev: [surrealdb-dev, web]
   e2e: [surrealdb-e2e]

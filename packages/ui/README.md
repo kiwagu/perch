@@ -13,7 +13,8 @@ knowledge; copy and data arrive through props. Dark colors follow the system set
   file then belongs to us and is edited in place.
 - `./components/platform/*`: props-driven building blocks of the application shell.
 - `./lib/utils`: `cn` for class names.
-- `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the app.
+- `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the
+  app. It points Tailwind at the kit's components, so their classes are generated in apps.
 
 ## Commands
 
