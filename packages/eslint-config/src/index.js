@@ -141,6 +141,9 @@ export const base = [
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/await-thenable': 'error',
+      // The compiler accepts a deprecated API silently; its replacement is named in the
+      // deprecation note.
+      '@typescript-eslint/no-deprecated': 'error',
       // No `any`: Biome refuses a written one; these stop one that leaks in from an
       // untyped API (JSON.parse, a driver result) from spreading through typed code.
       '@typescript-eslint/no-unsafe-argument': 'error',

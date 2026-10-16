@@ -1,4 +1,4 @@
-import { type FormEvent, useId, useState } from 'react'
+import { type SubmitEvent, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
@@ -49,7 +49,7 @@ export function SignInView(props: SignInViewProps) {
     onChange: (event: { readonly target: { readonly value: string } }) =>
       setValues((current) => ({ ...current, [name]: event.target.value })),
   })
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     props.onSubmit(values)
   }

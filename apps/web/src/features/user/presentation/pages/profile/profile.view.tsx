@@ -1,4 +1,4 @@
-import { type FormEvent, useId, useState } from 'react'
+import { type SubmitEvent, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -41,7 +41,7 @@ function NameForm(props: {
   const t = useT()
   const id = useId()
   const [draft, setDraft] = useState(props.name)
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     props.onSave(draft)
   }

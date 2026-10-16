@@ -38,6 +38,10 @@ describe('workspace eslint config', () => {
     ])
   })
 
+  it('reports a deprecated API', async () => {
+    expect(await rulesFiredIn('deprecated.ts')).toEqual(['@typescript-eslint/no-deprecated'])
+  })
+
   it('keeps domain code from importing outer layers and drivers', async () => {
     expect(await rulesFiredIn('feature/domain/layer-leak.ts')).toEqual(['boundaries/dependencies'])
     expect(await rulesFiredIn('feature/domain/driver-leak.ts')).toEqual(['no-restricted-imports'])
