@@ -10,8 +10,9 @@ local update is stored durably in the local database before it counts as persist
 local database numbers each region's update log, so tabs sharing it never reuse a number;
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
-log: a batch is accepted together with its projection in one transaction, under a number
-without gaps, and a compaction replaces rows with a snapshot only when it matches them.
+log: a pushed batch is first applied to a fork of the region's document and checked there,
+then accepted together with its projection in one transaction, under a number without
+gaps, and a compaction replaces rows with a snapshot only when it matches them.
 
 ## Key exports
 
@@ -36,7 +37,11 @@ without gaps, and a compaction replaces rows with a snapshot only when it matche
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)
   and its log row in one transaction and resolves to the batch's number, refusing a
   projection that breaks a schema rule with `data:WRITE_REJECTED`; `compact(covers, snapshot)`
-  resolves to a `CompactionOutcome`; `head()`, `covers()`.
+  resolves to a `CompactionOutcome`; `head()`, `covers()`. `validateBatch(input)` applies a
+  pushed batch to a fork of the authoritative document, which it never modifies, and returns
+  the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
+  its `RejectReason` (bytes that do not decode, missing history, a table outside the region,
+  a record that is not a map, a private record referencing another identity).
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold

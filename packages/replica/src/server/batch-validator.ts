@@ -1,0 +1,152 @@
+import { type Frontiers, type ImportStatus, type LoroDoc, LoroMap } from 'loro-crdt'
+import { err, ok, type Result } from 'neverthrow'
+
+import { splitRecordKey } from '../keys'
+import { toColumns } from '../projection-values'
+import type { RejectReason } from '../protocol'
+import type { RegionRef } from '../region-doc'
+import { fieldOf, type ReplicaSchema, tablesOf } from '../schema'
+
+import type { AcceptPlan, DeletedRow, ProjectedRow } from './region-log'
+
+/** Why the server refuses a pushed batch, with the record or the cause it refuses. */
+export interface BatchRejection {
+  readonly reason: RejectReason
+  readonly detail: string
+}
+
+/** A batch that passed validation: the document with the batch applied, and the plan the log accepts. */
+export interface ValidatedBatch {
+  readonly fork: LoroDoc
+  readonly plan: AcceptPlan
+}
+
+export interface ValidateBatchInput {
+  /** The authoritative document of the region; validation never modifies it. */
+  readonly doc: LoroDoc
+  readonly region: RegionRef
+  /** For a private region, the record id of the identity that owns it, `identity:<id>`. */
+  readonly owner: string | undefined
+  readonly schema: ReplicaSchema
+  readonly updates: readonly Uint8Array[]
+}
+
+const RECORDS = 'records'
+
+/**
+ * The keys of the records a document changed between two versions: the keys the `records`
+ * map itself changed, and the record that holds each changed container nested inside one.
+ */
+function touchedRecordKeys(doc: LoroDoc, from: Frontiers, to: Frontiers): Set<string> {
+  const touched = new Set<string>()
+
+  for (const [container, diff] of doc.diff(from, to, false)) {
+    const path = doc.getPathToContainer(container)
+
+    if (path?.[0] !== RECORDS) {
+      continue
+    }
+
+    if (path.length > 1) {
+      touched.add(String(path[1]))
+    } else if (diff.type === 'map') {
+      for (const key of Object.keys(diff.updated)) {
+        touched.add(key)
+      }
+    }
+  }
+
+  return touched
+}
+
+/** The first field of a private record that references an identity other than the region's owner. */
+function foreignOwner(
+  input: ValidateBatchInput,
+  table: string,
+  value: Readonly<Record<string, unknown>>,
+): string | undefined {
+  if (input.region.kind !== 'private') {
+    return undefined
+  }
+
+  return Object.keys(value).find((field) => {
+    const kind = fieldOf(input.schema, table, field)
+
+    return kind?.kind === 'record' && kind.table === 'identity' && value[field] !== input.owner
+  })
+}
+
+/**
+ * Applies a pushed batch to a fork of the authoritative document and checks what it changed:
+ * every record it touched belongs to a table of the region, is a map, and in a private region
+ * references no identity but the owner's. The result is the plan the region's log accepts:
+ * the projection of each touched record, the update bytes and the version after the batch.
+ * A record the batch creates and deletes again is no change. A refused batch is a value,
+ * never a throw, and the authoritative document stays as it was either way.
+ */
+export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch, BatchRejection> {
+  const fork = input.doc.fork()
+  const from = input.doc.frontiers()
+  let status: ImportStatus
+
+  try {
+    status = fork.importBatch([...input.updates])
+  } catch (cause) {
+    return err({ reason: 'malformed', detail: String(cause) })
+  }
+
+  if (status.pending && status.pending.size > 0) {
+    return err({
+      reason: 'pending-dependencies',
+      detail: 'the batch depends on changes the server does not have',
+    })
+  }
+
+  const before = input.doc.getMap(RECORDS)
+  const after = fork.getMap(RECORDS)
+  const allowed = new Set(tablesOf(input.schema, input.region.kind))
+  const upserts: ProjectedRow[] = []
+  const deletes: DeletedRow[] = []
+
+  for (const entry of touchedRecordKeys(fork, from, fork.frontiers())) {
+    const record: unknown = after.get(entry)
+
+    if (record === undefined && before.get(entry) === undefined) {
+      continue
+    }
+
+    const split = splitRecordKey(entry)
+
+    if (!split || !allowed.has(split.table)) {
+      return err({ reason: 'foreign-table', detail: entry })
+    }
+
+    if (record === undefined) {
+      deletes.push({ ...split, entry })
+      continue
+    }
+
+    if (!(record instanceof LoroMap)) {
+      return err({ reason: 'invalid-record', detail: `${entry} is not a map` })
+    }
+
+    const value = record.toJSON() as Record<string, unknown>
+    const foreign = foreignOwner(input, split.table, value)
+
+    if (foreign) {
+      return err({ reason: 'foreign-owner', detail: `${entry}.${foreign}` })
+    }
+
+    upserts.push({ ...split, entry, data: toColumns(input.schema, split.table, value) })
+  }
+
+  return ok({
+    fork,
+    plan: {
+      upserts,
+      deletes,
+      bytes: fork.export({ mode: 'update', from: input.doc.version() }),
+      version: fork.version().encode(),
+    },
+  })
+}
