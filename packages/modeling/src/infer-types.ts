@@ -5,7 +5,7 @@
  * layer hands record ids to application code as entity id strings.
  */
 
-import { type ParamDecl, recordTableOf } from '@workspace/data'
+import { type ParamDecl, pascalCase as pascal, recordTableOf } from '@workspace/data'
 
 import { ModelingException } from './errors'
 import type { SchemaModel } from './schema-structure'
@@ -21,13 +21,6 @@ interface Resolved {
   readonly many: boolean
   readonly optional: boolean
 }
-
-const pascal = (name: string): string =>
-  name
-    .split(/[_-]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')
 
 /** The TypeScript name of a table's id type: `UserId` for a table with an id prefix, else `string`. */
 export function idTypeOf(schema: SchemaModel, table: string): string {

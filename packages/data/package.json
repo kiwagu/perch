@@ -22,6 +22,14 @@
     },
     "./surql": {
       "types": "./src/surql.d.ts"
+    },
+    "./engines/wasm": {
+      "types": "./src/engines/wasm.ts",
+      "import": "./src/engines/wasm.ts"
+    },
+    "./surql-names": {
+      "types": "./src/surql-names.ts",
+      "import": "./src/surql-names.ts"
     }
   },
   "scripts": {
@@ -32,6 +40,8 @@
   "dependencies": {
     "@surrealdb/node": "catalog:",
     "@surrealdb/node-native": "catalog:",
+    "@surrealdb/wasm": "catalog:",
+    "@surrealdb/wasm-native": "catalog:",
     "@workspace/di": "workspace:*",
     "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",

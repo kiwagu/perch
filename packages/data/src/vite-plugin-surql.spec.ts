@@ -19,6 +19,17 @@ describe('surqlPlugin', () => {
     expect(load(file)).toBe(`export default ${JSON.stringify('RETURN 1;\n')}`)
   })
 
+  it('turns a shape or commands file into the object the modeling stage generated', () => {
+    const load = surqlPlugin().load as (id: string) => string | undefined
+
+    expect(load('/app/features/user/pages/profile/profile.shape.surql')).toBe(
+      "export { profileShape as default } from './profile.model.gen'",
+    )
+    expect(load('/app/features/user/pages/sign-in/sign-in.commands.surql?import')).toBe(
+      "export { signInCommands as default } from './sign-in.model.gen'",
+    )
+  })
+
   it('leaves other modules alone', () => {
     const load = surqlPlugin().load as (id: string) => string | undefined
 

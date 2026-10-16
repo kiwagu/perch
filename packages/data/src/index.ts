@@ -13,6 +13,13 @@ export { type OpenLocalDbOptions, openLocalDb } from './local-db'
 export { LOCAL_DB, type LocalDbPort } from './local-db.port'
 export { ShapeRunner, type WatchOptions } from './shape-runner'
 export { SHAPE_RUNNER, type ShapeRunnerPort } from './shape-runner.port'
+export {
+  camelCase,
+  pascalCase,
+  type SurqlRole,
+  surqlComponentFile,
+  surqlExportName,
+} from './surql-names'
 export type { ChangeOrigin, Command, LocalDb, ParamDecl, Region, Shape, TableChange } from './types'
 export {
   fromDriverValue,

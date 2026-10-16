@@ -44,6 +44,8 @@
       "dependencies": {
         "@surrealdb/node": "catalog:",
         "@surrealdb/node-native": "catalog:",
+        "@surrealdb/wasm": "catalog:",
+        "@surrealdb/wasm-native": "catalog:",
         "@workspace/di": "workspace:*",
         "@workspace/ids": "workspace:*",
         "@workspace/kernel": "workspace:*",
@@ -407,6 +409,10 @@
     "@surrealdb/sqon": ["@surrealdb/sqon@0.1.6", "", { "dependencies": { "@surrealdb/cbor": "2.0.0-alpha.4", "uuidv7": "^1.0.1" }, "peerDependencies": { "tslib": "^2.6.3", "typescript": "^5.0.0" } }, "sha512-rUUxuKYQJxsPy2ezYe2qy28Cd+LYUcYX7Qhi+eWl7d0KFnqBUGXyIkt6y7UgGhVlZjn0OBiGdJkM3fTzl8Qjjw=="],
 
     "@surrealdb/surql-fmt": ["@surrealdb/surql-fmt@0.1.0-beta.3", "", { "dependencies": { "@lezer/common": "^1.5.1", "@surrealdb/lezer": "^1.0.9" }, "peerDependencies": { "typescript": "^5.9.3" }, "bin": { "surqlfmt": "dist/surql-fmt-cli.js" } }, "sha512-LjJtiMtAau+yoRoyNYLbrRa0m1sVCQTvbCaNJjd/lobYDV1tawQmxUe6jnYq+hn+y7N86Wf1GS1CvQ0oIp74kA=="],
+
+    "@surrealdb/wasm": ["@surrealdb/wasm@3.1.0", "", { "peerDependencies": { "@surrealdb/wasm-native": "^3.3.0-beta.3", "surrealdb": "^2.0.1" } }, "sha512-7NsLFO48K0GQ+FnAdqkvjMUYUdhmN2UWciqgQdsVdLHhDf0QmResckg7sDsFDuOq38rKQMWRr0T7QDmMPC12CQ=="],
+
+    "@surrealdb/wasm-native": ["@surrealdb/wasm-native@3.3.4", "", {}, "sha512-amTace/Ez3wj/QA9re/wFIs5CcscO0OzWWg3bMkjujMpuhE898/1lf6gB02nOAq0Lv5Q+g7upo8ZB3rkO69K4w=="],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.11.8", "", { "os": "darwin", "cpu": "x64" }, "sha512-u+6s4C2hskRYx6MkW2uT7BCW6sESCL/+5bjHDDWUfQfQliCSJ7lAHAL6RQaw0an9WU6nJvwYgT786mEWul2kDw=="],
 

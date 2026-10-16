@@ -4,7 +4,12 @@
  * file so imports of it are typed, and the replica schema of replicated tables.
  */
 
-import type { ParamDecl } from '@workspace/data'
+import {
+  camelCase as camel,
+  type ParamDecl,
+  pascalCase as pascal,
+  surqlExportName,
+} from '@workspace/data'
 
 import type { CommandFile, ShapeFile } from './collect'
 import { idTypeOf, renderFieldType } from './infer-types'
@@ -19,19 +24,6 @@ export interface GeneratedFile {
 export interface ComponentBundle {
   readonly shape?: ShapeFile
   readonly commands?: CommandFile
-}
-
-const pascal = (name: string): string =>
-  name
-    .split(/[^A-Za-z0-9]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')
-
-const camel = (name: string): string => {
-  const value = pascal(name)
-
-  return value.charAt(0).toLowerCase() + value.slice(1)
 }
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
@@ -151,7 +143,7 @@ function shapeSection(shape: ShapeFile, schema: SchemaModel): string[] {
     `export type ${name}Result = ${shape.resultType}`,
     `export const ${name}ParamsSchema = ${paramsSchema(schema, shape.header.params)}`,
     [
-      `export const ${camel(shape.name)}Shape: Shape<${name}Params, ${name}Result> = {`,
+      `export const ${surqlExportName(shape.name, 'shape')}: Shape<${name}Params, ${name}Result> = {`,
       `  id: ${literal(shape.id)},`,
       "  kind: 'shape',",
       `  text: ${literal(shape.body.trim())},`,
@@ -159,7 +151,7 @@ function shapeSection(shape: ShapeFile, schema: SchemaModel): string[] {
       `  tables: ${literal(shape.tables)},`,
       '}',
     ].join('\n'),
-    `export type ${name}ShapeType = typeof ${camel(shape.name)}Shape`,
+    `export type ${name}ShapeType = typeof ${surqlExportName(shape.name, 'shape')}`,
   ]
 }
 
@@ -188,10 +180,14 @@ function commandsSection(file: CommandFile, schema: SchemaModel): string[] {
 
   return [
     ...perCommand,
-    [`export const ${camel(file.name)}Commands: {`, ...typeLines, '} = {', ...valueLines, '}'].join(
-      '\n',
-    ),
-    `export type ${name}CommandsType = typeof ${camel(file.name)}Commands`,
+    [
+      `export const ${surqlExportName(file.name, 'commands')}: {`,
+      ...typeLines,
+      '} = {',
+      ...valueLines,
+      '}',
+    ].join('\n'),
+    `export type ${name}CommandsType = typeof ${surqlExportName(file.name, 'commands')}`,
   ]
 }
 
