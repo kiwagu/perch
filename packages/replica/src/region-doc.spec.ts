@@ -2,7 +2,7 @@ import { LoroMap } from 'loro-crdt'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import acceptAppends from './__fixtures__/accept-appends.surql'
 import {
@@ -120,6 +120,22 @@ describe('RegionDoc persistence', () => {
     )
     expect(region.persistedSeq()).toBe(1)
     expect(await counts()).toEqual({ snapshots: 0, updates: 1, outbox: 1 })
+  })
+
+  it('reports an append a broken connection refuses through flush', async () => {
+    const refusal = new Error('the connection is gone')
+    const broken = interceptQueries(local, (text) => {
+      if (text.includes('_replica_outbox')) {
+        throw refusal
+      }
+    })
+    const region = (await RegionDoc.open(broken, ref))._unsafeUnwrap()
+
+    writeName(region, 'Ann')
+    const failure = (await region.flush())._unsafeUnwrapErr()
+
+    expect(failure.code).toBe('data:WRITE_FAILED')
+    expect(failure.cause).toBe(refusal)
   })
 
   it('compacts the log into one full snapshot and keeps numbering after a reopen', async () => {

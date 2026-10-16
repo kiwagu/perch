@@ -53,6 +53,42 @@ describe('interceptQueries', () => {
     expect(await held).toEqual([1])
   })
 
+  it('passes on the driver query itself, so it can be retried', async () => {
+    const watched = interceptQueries(local, () => {})
+
+    expect(await watched.db.query('RETURN 1;').retry()).toEqual([1])
+  })
+
+  it('answers a retry of a refused query with the same refusal', async () => {
+    const refusal = new Error('refused')
+    const broken = interceptQueries(local, () => {
+      throw refusal
+    })
+    const refused = broken.db.query('RETURN 1;')
+
+    await expect(refused).rejects.toBe(refusal)
+    await expect(refused.retry()).rejects.toBe(refusal)
+  })
+
+  it('holds a retried query while the hook waits', async () => {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const slow = interceptQueries(local, () => gate)
+    let answered = false
+    const held = Promise.resolve(slow.db.query('RETURN 1;').retry()).then((result) => {
+      answered = true
+
+      return result
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(answered).toBe(false)
+    release()
+    expect(await held).toEqual([1])
+  })
+
   it('leaves every other method of the database working', async () => {
     const watched = interceptQueries(local, () => {})
     const session = await watched.db.newSession()
