@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { LocalDb } from '@workspace/data'
+import { createAuth, type LocalDb } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 
 import { DIRECTORY, NAMESPACE } from '../config'
@@ -51,8 +51,18 @@ async function testDb(schema = readSchema()): Promise<LocalDb> {
   return local
 }
 
+/** Sessions over `local`, opening auth sessions as the composition root does. */
+function sessionsOver(local: LocalDb, http: typeof fetch = unreachable.fetch): IdentitySessions {
+  return new IdentitySessions({
+    openAuth: () =>
+      createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+    rpcUrl: RPC_URL,
+    fetch: http,
+  })
+}
+
 async function testSessions(http: typeof fetch = unreachable.fetch): Promise<IdentitySessions> {
-  return new IdentitySessions(await testDb(), { rpcUrl: RPC_URL, fetch: http })
+  return sessionsOver(await testDb(), http)
 }
 
 /** Sessions over a database that counts the driver sessions opened and closed on it. */
@@ -76,7 +86,7 @@ async function countingSessions() {
   }
 
   return {
-    sessions: new IdentitySessions(local, { rpcUrl: RPC_URL, fetch: unreachable.fetch }),
+    sessions: sessionsOver(local),
     opened: () => opened,
     closed: () => closed,
   }
@@ -161,10 +171,7 @@ describe('IdentitySessions', () => {
       new URL('./__fixtures__/identity-without-refresh.surql', import.meta.url),
       'utf8',
     )
-    const sessions = new IdentitySessions(await testDb(`${readSchema()}\n${withoutRefresh}`), {
-      rpcUrl: RPC_URL,
-      fetch: unreachable.fetch,
-    })
+    const sessions = sessionsOver(await testDb(`${readSchema()}\n${withoutRefresh}`))
 
     expect((await sessions.signUp(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     expect((await sessions.signIn(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')

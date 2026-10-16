@@ -4,16 +4,12 @@ import {
   type AuthPort,
   type AuthTokens,
   type AuthUser,
-  createAuth,
   type DataError,
   dataError,
-  type LocalDb,
   type SignInInput,
   type SignUpInput,
 } from '@workspace/data'
 import { z } from '@workspace/zod'
-
-import { DIRECTORY, NAMESPACE } from '../config'
 
 /** The keys a device keeps: the short-lived access token and the refresh key that renews it. */
 export interface DeviceTokens {
@@ -36,13 +32,12 @@ export type AuthenticatedDevice =
   | { readonly identity: AuthUser; readonly tokens: DeviceTokens; readonly renewed: true }
 
 export interface IdentitySessionsOptions {
+  /** Opens an auth session of its own on the central database, through its identity access method. */
+  readonly openAuth: () => AuthPort
   /** The database's RPC endpoint over HTTP, where `revoke` is sent. */
   readonly rpcUrl: string
   readonly fetch: typeof fetch
 }
-
-/** The record access method identities sign in through. */
-const ACCESS = 'identity'
 
 /** An answer of the database's RPC; a revoke needs only to know whether it failed. */
 const rpcAnswer = z.object({ error: z.object({ message: z.string() }).optional() })
@@ -109,12 +104,12 @@ function revoked(answer: unknown): Result<void, DataError> {
  * connection keeps no session per device. Nothing here logs, and no error carries a key.
  */
 export class IdentitySessions {
-  readonly #local: LocalDb
+  readonly #openAuth: () => AuthPort
   readonly #post: (url: string, init: RequestInit) => ResultAsync<Response, DataError>
   readonly #rpcUrl: string
 
-  constructor(local: LocalDb, options: IdentitySessionsOptions) {
-    this.#local = local
+  constructor(options: IdentitySessionsOptions) {
+    this.#openAuth = options.openAuth
     this.#rpcUrl = options.rpcUrl
     this.#post = ResultAsync.fromThrowable(options.fetch, (cause) =>
       refused('the database could not be reached to revoke the grant', cause),
@@ -176,11 +171,7 @@ export class IdentitySessions {
 
   /** Runs `run` on a fresh auth session and closes the session however `run` ends. */
   #withAuth<T>(run: (auth: AuthPort) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
-    const auth = createAuth(this.#local, {
-      access: ACCESS,
-      namespace: NAMESPACE,
-      database: DIRECTORY,
-    })
+    const auth = this.#openAuth()
     const settled = async (): Promise<Result<T, DataError>> => {
       try {
         return await run(auth)

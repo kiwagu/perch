@@ -5,7 +5,13 @@
 
 import type { ResultAsync } from 'neverthrow'
 
-import { type DataError, type Engines, type LocalDb, openLocalDb } from '@workspace/data'
+import {
+  createAuth,
+  type DataError,
+  type Engines,
+  type LocalDb,
+  openLocalDb,
+} from '@workspace/data'
 import { readSchema } from '@workspace/data/schema-files'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { createLogger } from '@workspace/logger'
@@ -59,7 +65,12 @@ export function createGatewayRoot(
     })
 
     return {
-      sessions: new IdentitySessions(local, { rpcUrl: options.rpcUrl, fetch }),
+      sessions: new IdentitySessions({
+        openAuth: () =>
+          createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+        rpcUrl: options.rpcUrl,
+        fetch,
+      }),
       hub,
       local,
       clock: options.clock,
