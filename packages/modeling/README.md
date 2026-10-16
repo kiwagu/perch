@@ -9,14 +9,18 @@ TypeScript or React code.
 
 ## Key exports
 
-- `parseShapeFile`, `parseCommandsFile`: header annotations (`@params`, `@command`,
-  `@allow`, `@deny`, `@tables`, `@server`) and the single statement under them.
-- `parseShape`: the shape dialect as an AST (projections with fields, destructuring,
-  aliases, graph traversals and inner queries; the source; the tail clauses).
-- `tokenize`, `statementCount`: the shared SurrealQL tokenizer.
-- `ModelingException`: thrown for a `.surql` file outside the dialect.
+- CLI `model --root <dir> [--schema <dir>] [--suites <dir>] [--check]` (`main`, `runModel`):
+  validates every `.surql` with `surreal db validate`, applies the schema to an embedded
+  database and reads its structure, cross-checks `-- @id` prefixes against the entity id
+  registry, then writes per component `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`,
+  plus `pages.model.json`, `replica.schema.gen.ts` and `generated-<module>.toml` suites.
+  `--check` writes nothing and fails on missing, different or stale output.
+- `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
+- `loadSchemaModel`, `parseStructure`: the schema model with its annotations
+  (`@region`, `@replicate none`, `@id`, `@crdt`) and their problems.
+- `inferResultType`, `tablesOf`, `compileCommand`, `checkIdRegistry`, `collect`, the emitters.
 
 ## Commands
 
-- `bun run test`: unit tests.
+- `bun run test`: unit tests, and CLI tests on a temporary module (needs the `surreal` CLI).
 - `bun run typecheck`, `bun run lint`.

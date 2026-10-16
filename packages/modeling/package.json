@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "model": "./src/cli.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -14,13 +17,15 @@
     "lint": "eslint .",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@workspace/data": "workspace:*",
+    "@workspace/ids": "workspace:*",
+    "@workspace/kernel": "workspace:*",
+    "neverthrow": "catalog:"
+  },
   "devDependencies": {
     "@types/bun": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "dependencies": {
-    "@workspace/data": "workspace:*",
-    "@workspace/kernel": "workspace:*"
   }
 }

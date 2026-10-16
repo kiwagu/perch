@@ -131,7 +131,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@workspace/data": "workspace:*",
+        "@workspace/ids": "workspace:*",
         "@workspace/kernel": "workspace:*",
+        "neverthrow": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",

@@ -1,0 +1,354 @@
+{
+  "db": {
+    "tables": [
+      {
+        "drop": false,
+        "id": 3,
+        "kind": {
+          "kind": "NORMAL"
+        },
+        "name": "_replica_outbox",
+        "permissions": {
+          "create": false,
+          "delete": false,
+          "select": false,
+          "update": false
+        },
+        "schemafull": true
+      },
+      {
+        "drop": false,
+        "id": 1,
+        "kind": {
+          "kind": "NORMAL"
+        },
+        "name": "_replica_snapshot",
+        "permissions": {
+          "create": false,
+          "delete": false,
+          "select": false,
+          "update": false
+        },
+        "schemafull": true
+      },
+      {
+        "drop": false,
+        "id": 2,
+        "kind": {
+          "kind": "NORMAL"
+        },
+        "name": "_replica_update",
+        "permissions": {
+          "create": false,
+          "delete": false,
+          "select": false,
+          "update": false
+        },
+        "schemafull": true
+      },
+      {
+        "drop": false,
+        "id": 0,
+        "kind": {
+          "kind": "NORMAL"
+        },
+        "name": "profile",
+        "permissions": {
+          "create": false,
+          "delete": false,
+          "select": "user = $auth.id",
+          "update": "user = $auth.id"
+        },
+        "schemafull": true
+      },
+      {
+        "drop": false,
+        "id": 4,
+        "kind": {
+          "kind": "NORMAL"
+        },
+        "name": "user",
+        "permissions": {
+          "create": false,
+          "delete": false,
+          "select": "id = $auth.id",
+          "update": "id = $auth.id"
+        },
+        "schemafull": true
+      }
+    ]
+  },
+  "tables": {
+    "_replica_outbox": {
+      "events": [],
+      "fields": [
+        {
+          "kind": "bytes",
+          "name": "bytes",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_outbox"
+        },
+        {
+          "kind": "string",
+          "name": "region",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_outbox"
+        },
+        {
+          "kind": "int",
+          "name": "seq",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_outbox"
+        }
+      ],
+      "indexes": [],
+      "lives": [],
+      "tables": []
+    },
+    "_replica_snapshot": {
+      "events": [],
+      "fields": [
+        {
+          "kind": "bytes",
+          "name": "bytes",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_snapshot"
+        },
+        {
+          "kind": "string",
+          "name": "region",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_snapshot"
+        },
+        {
+          "kind": "bytes",
+          "name": "version",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_snapshot"
+        }
+      ],
+      "indexes": [],
+      "lives": [],
+      "tables": []
+    },
+    "_replica_update": {
+      "events": [],
+      "fields": [
+        {
+          "kind": "bytes",
+          "name": "bytes",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_update"
+        },
+        {
+          "kind": "string",
+          "name": "region",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_update"
+        },
+        {
+          "kind": "int",
+          "name": "seq",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "_replica_update"
+        }
+      ],
+      "indexes": [],
+      "lives": [],
+      "tables": []
+    },
+    "profile": {
+      "events": [],
+      "fields": [
+        {
+          "kind": "none | string",
+          "name": "bio",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "profile"
+        },
+        {
+          "default": "time::now()",
+          "default_always": false,
+          "kind": "datetime",
+          "name": "created_at",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": true,
+          "table": "profile"
+        },
+        {
+          "kind": "string",
+          "name": "email",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "profile"
+        },
+        {
+          "assert": "$value = NONE OR $value INSIDE ['en', 'es']",
+          "kind": "none | string",
+          "name": "locale",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "profile"
+        },
+        {
+          "assert": "string::len($value) > 0",
+          "kind": "string",
+          "name": "name",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "profile"
+        },
+        {
+          "kind": "record<user>",
+          "name": "user",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "profile"
+        }
+      ],
+      "indexes": [
+        {
+          "cols": ["user"],
+          "index": "UNIQUE",
+          "name": "profile_user",
+          "table": "profile"
+        }
+      ],
+      "lives": [],
+      "tables": []
+    },
+    "user": {
+      "events": [],
+      "fields": [
+        {
+          "default": "time::now()",
+          "default_always": false,
+          "kind": "datetime",
+          "name": "created_at",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": true,
+          "table": "user"
+        },
+        {
+          "assert": "string::is_email($value)",
+          "kind": "string",
+          "name": "email",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "user"
+        },
+        {
+          "assert": "string::len($value) > 0",
+          "kind": "string",
+          "name": "name",
+          "permissions": {
+            "create": true,
+            "select": true,
+            "update": true
+          },
+          "readonly": false,
+          "table": "user"
+        },
+        {
+          "kind": "string",
+          "name": "password",
+          "permissions": {
+            "create": true,
+            "select": false,
+            "update": true
+          },
+          "readonly": false,
+          "table": "user"
+        }
+      ],
+      "indexes": [
+        {
+          "cols": ["email"],
+          "index": "UNIQUE",
+          "name": "user_email",
+          "table": "user"
+        }
+      ],
+      "lives": [],
+      "tables": []
+    }
+  }
+}

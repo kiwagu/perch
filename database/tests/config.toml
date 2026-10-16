@@ -15,3 +15,10 @@ kind = "record"
 access = "user"
 signup_params = { email = "bob@example.test", password = "secret-bob", name = "Bob" }
 signin_params = { email = "bob@example.test", password = "secret-bob" }
+
+# The signed-in user of the generated suites (`@allow record` in .surql headers).
+[actors.record]
+kind = "record"
+access = "user"
+signup_params = { email = "member@example.test", password = "secret-member", name = "Member" }
+signin_params = { email = "member@example.test", password = "secret-member" }
