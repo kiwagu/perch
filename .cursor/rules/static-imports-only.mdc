@@ -1,0 +1,23 @@
+---
+description: 'Use when: about to write a dynamic import(), a lazy route, or code that loads a module on demand.'
+alwaysApply: true
+---
+
+# Static imports by default
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- You are tempted to use `import()` or another form of lazy loading.
+
+## Stop Here If
+
+- The import is static, or the dynamic import carries a comment that states the measured reason.
+
+## Core rule
+
+- Imports are static so bundlers, type checking and dependency rules see the whole graph.
+- A dynamic import is allowed only with a comment that names its reason. Accepted reasons today: secondary language catalogs loaded when the language is chosen, and WASM engines loaded in a worker after the first frame.

@@ -1,0 +1,33 @@
+---
+description: 'Use when: building or changing a view, adding a control, or styling a component.'
+alwaysApply: false
+globs: '**/*.tsx'
+---
+
+# UI primitives from the kit, mobile first
+
+## Pyramid Layer
+
+- Layer: leaf (presentation).
+
+## Use This When
+
+- A view needs a button, input, card, menu, select, dialog or any other control.
+
+## Stop Here If
+
+- Every control comes from `@workspace/ui` and the layout works at 360 CSS px wide.
+
+## Descend To
+
+- Vendor skill: `.agents/skills/shadcn/SKILL.md` (this project uses the Base UI line).
+
+## Core rule
+
+- No raw `<button>`, `<input>` or `<select>` in views; use the `@workspace/ui` primitives. Raw elements are fine for layout only.
+- A class cluster that repeats becomes a `cva` variant of the primitive, not a copy.
+- One `Hint` wrapper for tooltips; the accessible name (`aria-label`) uses the same i18n key as the visible hint.
+- Mobile first: unprefixed utilities describe the 360x640 layout; widen with `sm:`, `md:`, `lg:`. No `max-*` variants without a comment that says why.
+- Touch targets are at least 44x44 CSS px with 8 px between them; inputs use at least 16 px text.
+- No horizontal scroll on any screen; e2e checks it after every step.
+- `@workspace/ui` holds no copy and no domain knowledge: text and data arrive through props.

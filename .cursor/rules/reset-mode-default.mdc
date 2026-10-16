@@ -1,0 +1,24 @@
+---
+description: 'Use when: changing a schema, a data format, a generated artifact or an established pattern.'
+alwaysApply: true
+---
+
+# Reset mode: replace instead of layering
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- A schema file, a stored format, or a pattern used in several places needs to change.
+
+## Stop Here If
+
+- The change rewrites the thing in place and every user of it moved in the same change.
+
+## Core rule
+
+- Before production, schema files are rewritten in place rather than accumulated as migrations; local stands are recreated from the schema.
+- Move every caller in the same change; do not leave adapters that translate between the old and the new shape.
+- Regenerate generated files (`bun run model`) and commit them with the source that produced them.

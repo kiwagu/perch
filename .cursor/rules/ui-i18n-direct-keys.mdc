@@ -1,0 +1,28 @@
+---
+description: 'Use when: adding or changing any user-visible text, label, aria-label, notification or error message.'
+alwaysApply: false
+globs: '**/presentation/**/*.tsx, **/i18n/*.json'
+---
+
+# User-visible text goes through t() with flat, greppable keys
+
+## Pyramid Layer
+
+- Layer: leaf (presentation).
+
+## Use This When
+
+- A view, container or notification shows text to a person.
+
+## Stop Here If
+
+- Every visible string is `t('<feature>.<component>.<element>')` with a static key present in the `en` catalog.
+
+## Core rule
+
+- Catalogs are flat JSON: `{ "user.profile.save": "Save" }`. No nested objects; the whole key is one string so a plain text search finds both the catalog entry and every use.
+- Key shape: `<feature>.<component>.<element>[.<state>]`, kebab-case segments, the same namespace as `data-testid`.
+- The argument of `t` is a literal. No concatenation, no template expressions, no variables; choose between two literal keys in code when the text depends on state.
+- Parameters use `{name}` in the value; plurals use `.one` / `.other` keys selected by `Intl.PluralRules`.
+- `en` is the base catalog and always complete. `es` may lag; `bun run i18n:check` lists the gap without failing, and fails on a key used in code but missing in `en`, on a dead `en` key, or on a non-literal key.
+- Domain and application code returns codes, never text; presentation maps codes to keys.

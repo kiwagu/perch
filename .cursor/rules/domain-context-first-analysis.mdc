@@ -1,0 +1,34 @@
+---
+description: 'Use when: starting feature or refactor work and deciding which layer (domain, application, presentation, adapters) and which bounded context a change belongs to.'
+alwaysApply: false
+---
+
+# Domain context first
+
+## Pyramid Layer
+
+- Layer: L1 architecture.
+
+## Use This When
+
+- A change touches more than one file, introduces a concept, or moves logic between layers.
+
+## Stop Here If
+
+- You can name the bounded context, the invariant being protected, and the one layer that owns the change.
+
+## Descend To
+
+- Contracts: `zod-schema-first-contracts.mdc`.
+- Naming of the files you are about to add: `entity-first-module-naming.mdc`.
+
+## Core rule
+
+- Name the bounded context and the invariant before touching adapters.
+- Dependencies point inwards: presentation and adapters depend on application, application depends on domain, domain depends on nothing with IO.
+- `domain/` holds entities, value objects, identifiers and pure rules: no IO, no React, no database or CRDT driver.
+- `application/` holds use cases, ports and state machines: no UI framework and no concrete driver.
+- `presentation/` holds views and containers: it reads through services and ports, never through `@workspace/data`, `surrealdb` or `loro-crdt`.
+- Adapters implement ports. Only the composition root imports adapters; everything below it receives ports.
+- Expected outcomes are values (`Result` from neverthrow); `throw` is reserved for broken programming invariants (`*Exception` subclasses of the kernel's `ExceptionBase`).
+- ESLint enforces the layer edges and the immutability rules in domain and application code.

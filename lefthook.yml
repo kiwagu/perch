@@ -1,0 +1,25 @@
+# Git hooks for this repository; `bun install` installs them via the root
+# `prepare` script. Every job first sources scripts/ensure-path.sh so the hooks
+# also work when git is driven by an IDE with a minimal PATH.
+# A gitignored lefthook-local.yml may add machine-specific checks.
+
+pre-commit:
+  piped: true
+  jobs:
+    - name: format staged files
+      glob: '*.{js,mjs,cjs,ts,tsx,json,jsonc,css}'
+      run: . scripts/ensure-path.sh && biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+    - name: regenerate models when SurrealQL is staged
+      glob: '*.surql'
+      run: . scripts/ensure-path.sh && bun run model && git add --update -- '*.model.gen.ts' '*.surql.d.ts' '*.model.json' 'database/tests/suites/generated-*.toml'
+
+    - name: i18n catalogs
+      run: . scripts/ensure-path.sh && bun run i18n:check
+
+    - name: typecheck
+      run: . scripts/ensure-path.sh && bun run typecheck
+
+    - name: lint
+      run: . scripts/ensure-path.sh && bun run lint

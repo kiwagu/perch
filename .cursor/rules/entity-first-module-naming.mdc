@@ -1,0 +1,26 @@
+---
+description: 'Use when: creating a file or a folder in a feature or a package.'
+alwaysApply: true
+---
+
+# Entity-first file names
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- You are about to create a file or folder.
+
+## Stop Here If
+
+- The name reads `<name>.<role>.<ext>` and sits in the layer folder that owns it.
+
+## Core rule
+
+- File names are `<name>.<role>.<ext>`, the entity or component first: `profile.service.ts`, `profile.view.tsx`, `profile.shape.surql`.
+- Fixed roles in a feature: `module`, `shape`, `commands`, `model.gen`, `service`, `machine`, `container`, `view`, `spec`, `view.spec`, `stories`, plus `entity` and `port`.
+- A component folder is kebab-case and has the component's name.
+- Feature layout: `<feature>/<feature>.module.ts`, `domain/`, `application/`, `presentation/pages/<page>/`, `presentation/components/<name>/`, `presentation/i18n/`.
+- Tests sit next to the code they test.

@@ -1,0 +1,29 @@
+{
+  "name": "@workspace/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stylistic/eslint-plugin": "catalog:",
+    "eslint-plugin-boundaries": "catalog:",
+    "eslint-plugin-functional": "catalog:",
+    "typescript-eslint": "catalog:",
+    "typescript": "catalog:lint"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "eslint": "catalog:",
+    "neverthrow": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "eslint": "catalog:"
+  }
+}

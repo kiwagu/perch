@@ -1,0 +1,31 @@
+---
+description: 'Use when: about to add any new artifact (component, hook, helper, type, constant, contract, port, adapter, config reader) at any layer; search for an existing one first.'
+alwaysApply: true
+---
+
+# Reuse first: search before you build
+
+## Pyramid Layer
+
+- Layer: L0 gate. Runs before new code exists.
+
+## Use This When
+
+- A task implies a new function, type, constant, component, Zod schema, port or adapter.
+
+## Stop Here If
+
+- You found an existing artifact to reuse or extend, or you searched and can name where the new one belongs and why nothing fits.
+
+## Descend To
+
+- UI: `packages/ui/src/components/` and `packages/ui/src/components/platform/`.
+- Identifiers: `packages/ids` (entity-id registry); never mint ids another way.
+- Domain building blocks: `packages/kernel` (entities, value objects, events, exceptions, specifications, text sorting).
+- Dependency wiring: `packages/di`; message buses: `packages/cqrs`.
+- Oversized files worth splitting before extending: `bun run refactor:scan`.
+
+## Core rule
+
+- Search the workspace (file names and symbols) before writing a helper, util, type or config reader. A second implementation of something that exists is a defect, not a style choice.
+- Extend the existing artifact when it is the same concept; create a new one only for a genuinely different concept, in the package that owns that concept.

@@ -1,0 +1,4 @@
+[install]
+# Isolated installs link only declared dependencies into each workspace, so a
+# missing dependency fails loudly instead of resolving through hoisting.
+linker = "isolated"
