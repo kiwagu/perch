@@ -9,6 +9,7 @@ import {
   openHub,
   owner,
   region,
+  snapshotIn,
   snapshotOf,
   subscriber,
 } from './__fixtures__/hub'
@@ -77,6 +78,22 @@ describe('region hub', () => {
     )
     expect(b.received.filter((m) => m.type === 'updates' && m.head > 0)).toEqual([])
     expect((await hub.heads([region.id]))._unsafeUnwrap()).toEqual([{ region: region.id, head: 0 }])
+
+    const fresh = subscriber('fresh')
+
+    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect(snapshotIn(fresh).getMap('records').toJSON()).toEqual({})
+  })
+
+  it('keeps the stored value of a record when a later edit of it is refused', async () => {
+    const { hub, a, fresh } = await hubWithHistory(['Ann'])
+
+    expect((await hub.push(region.id, a, 2, [editFrom(a.doc, '')])).isOk()).toBe(true)
+    expect(a.received.at(-1)).toEqual(expect.objectContaining({ type: 'reject', batch: 2 }))
+
+    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect(fresh.received).toEqual([expect.objectContaining({ type: 'updates', head: 1 })])
+    expect(nameInSnapshot(fresh)).toBe('Ann')
   })
 
   it('names the schema rule a refused projection broke, in at most 200 characters', async () => {
@@ -105,6 +122,11 @@ describe('region hub', () => {
     expect(a.received.filter((m) => m.type === 'ack' || m.type === 'reject')).toEqual([])
     expect(errors.map((error) => error.code)).toEqual(['data:WRITE_FAILED'])
     expect(b.received.filter((m) => m.type === 'updates' && m.head > 0)).toEqual([])
+
+    const fresh = subscriber('fresh')
+
+    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect(snapshotIn(fresh).getMap('records').toJSON()).toEqual({})
   })
 
   it('keeps answering and fanning out when one subscriber fails to take a message', async () => {
@@ -154,6 +176,20 @@ describe('region hub', () => {
     ])
     expect(await countRows(local, '_replica_update')).toBe(1)
     expect(b.received.filter((m) => m.type === 'updates' && m.head === 1)).toHaveLength(1)
+  })
+
+  it('stores a batch pushed twice at once only once, as the work of a region runs in turn', async () => {
+    const { hub, local, a } = await hubWithTwoSubscribers()
+    const update = editFrom(a.doc, 'Ann')
+
+    const outcomes = await Promise.all([
+      hub.push(region.id, a, 1, [update]),
+      hub.push(region.id, a, 1, [update]),
+    ])
+
+    expect(outcomes.every((outcome) => outcome.isOk())).toBe(true)
+    expect(a.received.filter((m) => m.type === 'ack').map((m) => m.head)).toEqual([1, 1])
+    expect(await countRows(local, '_replica_update')).toBe(1)
   })
 
   it('unloads a region nobody watches after the idle time and reloads it intact', async () => {

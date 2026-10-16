@@ -88,8 +88,8 @@ export function snapshotOf(doc: LoroDoc): Uint8Array {
   return doc.export({ mode: 'snapshot' })
 }
 
-/** The profile's name in the last full snapshot the subscriber received. */
-export function nameInSnapshot(device: TestSubscriber): unknown {
+/** The document the last full snapshot the subscriber received holds. */
+export function snapshotIn(device: TestSubscriber): LoroDoc {
   const snapshot = device.received.findLast((m) => m.type === 'updates' && m.snapshot)
 
   if (snapshot?.type !== 'updates') {
@@ -100,7 +100,12 @@ export function nameInSnapshot(device: TestSubscriber): unknown {
 
   doc.import(snapshot.bytes)
 
-  return nameIn(doc)
+  return doc
+}
+
+/** The profile's name in the last full snapshot the subscriber received. */
+export function nameInSnapshot(device: TestSubscriber): unknown {
+  return nameIn(snapshotIn(device))
 }
 
 /** A hub of the profile schema on a fresh embedded database, with a manual clock. */
