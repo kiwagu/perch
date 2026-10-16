@@ -15,7 +15,10 @@ import headsStatement from './surql/server-heads.surql'
 /** One device's end of its subscriptions. */
 export interface Subscriber {
   readonly id: string
-  /** Hands a message to the device; the hub never waits for it, and it must not throw. */
+  /**
+   * Hands a message to the device; the hub never waits for it. A send that throws is reported
+   * through `onError`, and the hub's work goes on.
+   */
   send(message: ServerMessage): void
 }
 
@@ -29,7 +32,7 @@ export interface RegionHubOptions {
   readonly compactionLogLimit?: number
   /**
    * Hears of each failure of a region's work: one the device was answered with an internal
-   * error for, and a compaction snapshot the log refused to read.
+   * error for, a compaction snapshot the log refused to read, and a send that threw.
    */
   readonly onError: (error: DataError) => void
 }
@@ -129,7 +132,7 @@ export class RegionHub {
     const from = vv === null ? ok(null) : decodeVersion(vv)
 
     if (from.isErr()) {
-      subscriber.send(from.error)
+      this.#send(subscriber, from.error)
 
       return okAsync(undefined)
     }
@@ -149,7 +152,7 @@ export class RegionHub {
           }
 
           state.subscribers.set(subscriber.id, subscriber)
-          subscriber.send({
+          this.#send(subscriber, {
             type: 'updates',
             region: region.id,
             bytes: exportFrom(doc, from.value),
@@ -187,13 +190,13 @@ export class RegionHub {
     const from = decodeVersion(vv)
 
     if (from.isErr()) {
-      subscriber.send(from.error)
+      this.#send(subscriber, from.error)
 
       return okAsync(undefined)
     }
 
     return this.#subscribed(regionId, subscriber, (_, { log, doc }) => {
-      subscriber.send({
+      this.#send(subscriber, {
         type: 'updates',
         region: regionId,
         bytes: exportFrom(doc, from.value),
@@ -218,7 +221,7 @@ export class RegionHub {
     updates: readonly Uint8Array[],
   ): ResultAsync<void, DataError> {
     const reject = (reason: RejectReason, detail: string) =>
-      subscriber.send({
+      this.#send(subscriber, {
         type: 'reject',
         region: regionId,
         batch,
@@ -246,7 +249,13 @@ export class RegionHub {
       // A batch delivered again brings nothing new: it is acknowledged under the current head,
       // without a log row that would move the head for nothing.
       if (fork.version().compare(doc.version()) === 0) {
-        subscriber.send({ type: 'ack', region: regionId, batch, head: log.head(), compact: false })
+        this.#send(subscriber, {
+          type: 'ack',
+          region: regionId,
+          batch,
+          head: log.head(),
+          compact: false,
+        })
 
         return okAsync(undefined)
       }
@@ -258,7 +267,7 @@ export class RegionHub {
           const bytes = new Uint8Array(plan.bytes)
 
           doc.import(bytes)
-          subscriber.send({
+          this.#send(subscriber, {
             type: 'ack',
             region: regionId,
             batch,
@@ -268,7 +277,7 @@ export class RegionHub {
 
           for (const other of state.subscribers.values()) {
             if (other.id !== subscriber.id) {
-              other.send({ type: 'updates', region: regionId, bytes, head, snapshot: false })
+              this.#send(other, { type: 'updates', region: regionId, bytes, head, snapshot: false })
             }
           }
 
@@ -333,7 +342,7 @@ export class RegionHub {
           return okAsync<CompactionOutcome, DataError>('version-mismatch')
         })
         .map((outcome) =>
-          subscriber.send({ type: 'compaction', region: regionId, covers, outcome }),
+          this.#send(subscriber, { type: 'compaction', region: regionId, covers, outcome }),
         ),
     )
   }
@@ -393,7 +402,7 @@ export class RegionHub {
     const state = this.#regions.get(regionId)
 
     if (!state) {
-      subscriber.send(notSubscribed(regionId))
+      this.#send(subscriber, notSubscribed(regionId))
 
       return okAsync(undefined)
     }
@@ -401,7 +410,7 @@ export class RegionHub {
     return this.#answer(state, subscriber, () => {
       // A subscribed device's region is loaded: a region unloads only after its last device left.
       if (!state.loaded || !state.subscribers.has(subscriber.id)) {
-        subscriber.send(notSubscribed(regionId))
+        this.#send(subscriber, notSubscribed(regionId))
 
         return okAsync(undefined)
       }
@@ -422,7 +431,7 @@ export class RegionHub {
     const run = state.queue.then(() =>
       work().orElse((error) => {
         this.#onError(error)
-        subscriber.send({ type: 'error', code: 'internal', message: error.message })
+        this.#send(subscriber, { type: 'error', code: 'internal', message: error.message })
 
         return ok(undefined)
       }),
@@ -435,6 +444,21 @@ export class RegionHub {
     )
 
     return new ResultAsync(run)
+  }
+
+  /** Hands a message to a device; a send that throws is reported, and the work goes on. */
+  #send(subscriber: Subscriber, message: ServerMessage): void {
+    try {
+      subscriber.send(message)
+    } catch (cause) {
+      this.#onError(
+        dataError(
+          'data:WRITE_FAILED',
+          `could not send ${message.type} to subscriber ${subscriber.id}`,
+          cause,
+        ),
+      )
+    }
   }
 
   /**

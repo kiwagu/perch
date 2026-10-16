@@ -13,6 +13,7 @@ import {
   subscriber,
 } from './__fixtures__/hub'
 import { countRows, nameIn } from './__fixtures__/log'
+import type { Subscriber } from './region-hub'
 import acceptStatement from './surql/server-accept.surql'
 import loadStatement from './surql/server-load.surql'
 
@@ -103,6 +104,38 @@ describe('region hub', () => {
     expect(a.received.filter((m) => m.type === 'ack' || m.type === 'reject')).toEqual([])
     expect(errors.map((error) => error.code)).toEqual(['data:WRITE_FAILED'])
     expect(b.received.filter((m) => m.type === 'updates' && m.head > 0)).toEqual([])
+  })
+
+  it('keeps answering and fanning out when one subscriber fails to take a message', async () => {
+    const { hub, a, b, errors } = await hubWithTwoSubscribers()
+    const broken = subscriber('broken')
+    const failing: Subscriber = {
+      id: broken.id,
+      send(message) {
+        if (message.type === 'updates' && !message.snapshot) {
+          throw new Error('the socket is closed')
+        }
+
+        broken.send(message)
+      },
+    }
+    const c = subscriber('c')
+
+    for (const device of [failing, c]) {
+      expect((await hub.subscribe(region, owner, device, null)).isOk()).toBe(true)
+    }
+
+    expect((await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')])).isOk()).toBe(true)
+
+    expect(a.received).toContainEqual(expect.objectContaining({ type: 'ack', batch: 1, head: 1 }))
+
+    for (const device of [b, c]) {
+      expect(device.received).toContainEqual(
+        expect.objectContaining({ type: 'updates', head: 1, snapshot: false }),
+      )
+    }
+
+    expect(errors.map((error) => error.code)).toEqual(['data:WRITE_FAILED'])
   })
 
   it('acknowledges a batch delivered again without storing it twice', async () => {
