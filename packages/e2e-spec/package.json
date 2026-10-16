@@ -1,0 +1,29 @@
+{
+  "name": "@workspace/e2e-spec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "e2e-spec": "./src/cli.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "neverthrow": "catalog:",
+    "oxc-parser": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

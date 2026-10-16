@@ -1,0 +1,72 @@
+{
+  "name": "@workspace/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./src/bun-plugin-surql.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./engines/node": {
+      "types": "./src/engines/node.ts",
+      "import": "./src/engines/node.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
+    },
+    "./vite-plugin-surql": {
+      "types": "./src/vite-plugin-surql.ts",
+      "import": "./src/vite-plugin-surql.ts"
+    },
+    "./surql": {
+      "types": "./src/surql.d.ts"
+    },
+    "./engines/remote": {
+      "types": "./src/engines/remote.ts",
+      "import": "./src/engines/remote.ts"
+    },
+    "./schema-files": {
+      "types": "./src/schema-files.ts",
+      "import": "./src/schema-files.ts"
+    },
+    "./engines/wasm": {
+      "types": "./src/engines/wasm.ts",
+      "import": "./src/engines/wasm.ts"
+    },
+    "./bun-plugin-surql": {
+      "types": "./src/bun-plugin-surql.ts",
+      "import": "./src/bun-plugin-surql.ts"
+    },
+    "./surql-names": {
+      "types": "./src/surql-names.ts",
+      "import": "./src/surql-names.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@surrealdb/node": "catalog:",
+    "@surrealdb/node-native": "catalog:",
+    "@surrealdb/wasm": "catalog:",
+    "@surrealdb/wasm-native": "catalog:",
+    "@workspace/di": "workspace:*",
+    "@workspace/ids": "workspace:*",
+    "@workspace/kernel": "workspace:*",
+    "neverthrow": "catalog:",
+    "surrealdb": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

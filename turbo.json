@@ -1,0 +1,69 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["database/schema/**", "tests/e2e/specs/**"],
+  "globalPassThroughEnv": [
+    "CI",
+    "SURREAL_URL",
+    "SURREAL_NS",
+    "SURREAL_DB",
+    "SURREAL_USER",
+    "SURREAL_PASS",
+    "E2E_WEB_PORT",
+    "E2E_DB_PORT",
+    "LOG_LEVEL",
+    "LOG_FORMAT"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "model": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "model:check": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "i18n:check": {
+      "cache": false
+    },
+    "test:db": {
+      "cache": false
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "//#typecheck:root": {
+      "cache": false
+    },
+    "//#lint:root": {
+      "cache": false
+    },
+    "//#refactor:ci": {
+      "cache": false
+    },
+    "//#readme:check": {
+      "cache": false
+    },
+    "//#lint:surql": {
+      "cache": false
+    },
+    "//#e2e:coverage": {
+      "cache": false
+    }
+  }
+}

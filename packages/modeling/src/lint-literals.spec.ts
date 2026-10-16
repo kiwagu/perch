@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+
+import { findSurqlLiterals } from './lint-literals'
+
+describe('findSurqlLiterals', () => {
+  it('reports string and template literals that hold SurrealQL statements', () => {
+    const source = [
+      "const q = 'SELECT * FROM user'",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
+      'const t = `UPDATE user SET name = ${name}`',
+      'const d = "  DEFINE TABLE x"',
+    ].join('\n')
+
+    expect(findSurqlLiterals('a.ts', source)).toEqual([
+      { path: 'a.ts', line: 1, rule: 'surrealql-literal', text: 'SELECT * FROM user' },
+      { path: 'a.ts', line: 2, rule: 'surrealql-literal', text: 'UPDATE user SET name = …' },
+      { path: 'a.ts', line: 3, rule: 'surrealql-literal', text: 'DEFINE TABLE x' },
+    ])
+  })
+
+  it('ignores comments, plain words and lower-case prose', () => {
+    const source = [
+      '// SELECT * FROM user in a comment',
+      '/* DELETE everything */',
+      "const label = 'SELECT'",
+      "const prose = 'select a profile to update it'",
+      "const pattern = /'SELECT x'/",
+    ].join('\n')
+
+    expect(findSurqlLiterals('b.tsx', source)).toEqual([])
+  })
+
+  it('reads TSX', () => {
+    expect(
+      findSurqlLiterals('c.tsx', "export const V = () => <p title={'DELETE user:x'}>hi</p>"),
+    ).toHaveLength(1)
+  })
+})

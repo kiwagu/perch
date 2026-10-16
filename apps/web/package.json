@@ -1,0 +1,58 @@
+{
+  "name": "@workspace/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./seeding": {
+      "types": "./src/composition/seeding.ts",
+      "import": "./src/composition/seeding.ts"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "model": "model --root src",
+    "model:check": "model --root src --check",
+    "i18n:check": "i18n-check --root src"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "catalog:",
+    "@workspace/cqrs": "workspace:*",
+    "@workspace/data": "workspace:*",
+    "@workspace/di": "workspace:*",
+    "@workspace/i18n": "workspace:*",
+    "@workspace/ids": "workspace:*",
+    "@workspace/kernel": "workspace:*",
+    "@workspace/logger": "workspace:*",
+    "@workspace/replica": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "@workspace/zod": "workspace:*",
+    "@xstate/react": "catalog:",
+    "entity-id": "catalog:",
+    "neverthrow": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "xstate": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@workspace/modeling": "workspace:*",
+    "jsdom": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-wasm": "catalog:",
+    "vitest": "catalog:"
+  }
+}

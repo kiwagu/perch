@@ -1,0 +1,23 @@
+---
+description: 'Use when: tempted to add a compatibility switch, a fallback path, a feature flag for old behaviour, or to keep a second version of something alive.'
+alwaysApply: true
+---
+
+# No fallbacks before production
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- A change could keep the old path "just in case", add a legacy toggle, or support two versions at once.
+
+## Stop Here If
+
+- There is exactly one active path.
+
+## Core rule
+
+- Until the first production release there is one active version of every mechanism. Replace, do not branch.
+- No silent fallbacks: when a required capability is missing, fail with a message that names it instead of degrading quietly.

@@ -1,0 +1,33 @@
+{
+  "name": "@workspace/modeling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "model": "./src/cli.ts",
+    "lint-surql": "./src/lint-surql.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@workspace/data": "workspace:*",
+    "@workspace/ids": "workspace:*",
+    "@workspace/kernel": "workspace:*",
+    "neverthrow": "catalog:",
+    "oxc-parser": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

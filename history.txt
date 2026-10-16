@@ -1,0 +1,2 @@
+#V2
+SELECT name, email, locale FROM profile ORDER BY name; SELECT region, count() AS updates FROM _replica_update GROUP BY region;

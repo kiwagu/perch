@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test:db": "surrealkit --folder . --host \"${SURREAL_URL:-http://127.0.0.1:8010}\" --user root --pass root test --no-seed && vitest run"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

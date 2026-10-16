@@ -1,0 +1,27 @@
+---
+description: 'Use when: about to commit, especially changes to schema, access methods, permissions, authentication, data import or anything that handles secrets.'
+alwaysApply: true
+---
+
+# Security review before commit
+
+## Pyramid Layer
+
+- Layer: L0 gate.
+
+## Use This When
+
+- A commit is about to be made.
+
+## Stop Here If
+
+- Every item below was checked for the staged change.
+
+## Core rule
+
+- No secrets, tokens, passwords or personal data in tracked files, fixtures or seed data; generated test data uses `@example.test` addresses.
+- Every table defines `PERMISSIONS`; a table without them is closed (`NONE`) until a reason to open it exists. Field-level secrets (password hashes) are hidden from `select`.
+- Server-only tables are marked `-- @replicate none` and never reach a client replica.
+- Queries never concatenate input into SurrealQL; values travel as parameters of declared shapes and commands.
+- Input from outside the trusted core is parsed with Zod before use.
+- New dependencies are pinned in the root catalog and come from a known publisher.

@@ -1,0 +1,4 @@
+playwright-report/
+test-results/
+# Screenshot baselines stay on each machine; images are kept out of the repository.
+*-snapshots/

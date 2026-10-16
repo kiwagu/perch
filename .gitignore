@@ -1,0 +1,20 @@
+# dependencies and build output
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# test artifacts
+test-results/
+playwright-report/
+coverage/
+
+# local state
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# machine-local git hook additions
+lefthook-local.yml

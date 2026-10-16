@@ -1,0 +1,12 @@
+{
+  "app.shell.title": "Perch",
+  "app.shell.opening-db": "Abriendo tus datos en este dispositivo…",
+  "app.shell.failed": "Este dispositivo no pudo abrir sus datos. Recarga la página para intentarlo de nuevo.",
+  "app.shell.nav.sign-in": "Iniciar sesión",
+  "app.shell.nav.profile": "Perfil",
+  "app.shell.navigation": "Navegación principal",
+  "app.shell.locale": "Idioma",
+  "app.shell.locale.en": "English",
+  "app.shell.locale.es": "Español",
+  "app.shell.sync.local": "Guardado en este dispositivo"
+}

@@ -1,0 +1,222 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!.agents",
+      "!**/dist",
+      "!**/*.gen.ts",
+      "!**/*.surql.d.ts",
+      "!**/pages.model.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "asNeeded"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+              "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+              "pino": "Log through @workspace/logger."
+            },
+            "patterns": [
+              {
+                "group": ["@surrealdb/*"],
+                "message": "Only @workspace/data talks to SurrealDB; use its ports."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [":BUN:", ":NODE:"],
+              ":BLANK_LINE:",
+              [":PACKAGE:", "!@workspace/**"],
+              ":BLANK_LINE:",
+              "@workspace/**",
+              ":BLANK_LINE:",
+              ":ALIAS:",
+              ":BLANK_LINE:",
+              "../**",
+              ":BLANK_LINE:",
+              "./**"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/replica/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "pino": "Log through @workspace/logger."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/logger/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.service.ts", "**/*.machine.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger.",
+                  "react": "Services and machines stay free of React; a container connects them to views.",
+                  "react-dom": "Services and machines stay free of React; a container connects them to views."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.view.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger.",
+                  "@workspace/data": "Views render props; data reaches them through a container and its service.",
+                  "@workspace/replica": "Views render props; data reaches them through a container and its service."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/__fixtures__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}

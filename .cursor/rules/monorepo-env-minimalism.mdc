@@ -1,0 +1,24 @@
+---
+description: 'Use when: about to add or read a new environment variable.'
+alwaysApply: false
+---
+
+# Environment variables only when two runtimes need them
+
+## Pyramid Layer
+
+- Layer: L1 configuration.
+
+## Use This When
+
+- Code needs a value that might differ between machines or environments.
+
+## Stop Here If
+
+- The value is a fixed contract (keep it in code as a constant) or it is read by at least two runtimes and declared once.
+
+## Core rule
+
+- Add an environment variable only when at least two runtimes read it or it truly differs per environment; otherwise it is a constant in code.
+- Parse environment once at startup with a Zod schema; the rest of the code receives typed values.
+- Every variable a turbo task reads is declared in `turbo.json` (`globalPassThroughEnv` or the task's `env`); turbo strips undeclared variables silently.

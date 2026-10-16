@@ -1,0 +1,32 @@
+{
+  "name": "@workspace/replica",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "measure": "bun run scripts/measure.ts"
+  },
+  "dependencies": {
+    "@workspace/data": "workspace:*",
+    "@workspace/kernel": "workspace:*",
+    "loro-crdt": "catalog:",
+    "neverthrow": "catalog:",
+    "ts-pattern": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@workspace/ids": "workspace:*",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
