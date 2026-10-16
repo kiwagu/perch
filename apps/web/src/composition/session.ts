@@ -1,4 +1,4 @@
-import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -69,6 +69,7 @@ export class SessionService implements SessionPort {
   #user: AuthUser | undefined
   #open: OpenRegion | undefined
   #generation = 0
+  #transitions: Promise<unknown> = Promise.resolve()
   #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(
@@ -109,52 +110,54 @@ export class SessionService implements SessionPort {
   }
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
-    const generation = this.#begin()
-
-    return this.#auth.signUp(input).andThen((user) => this.#enter(user, generation))
+    return this.#serially((generation) =>
+      this.#auth.signUp(input).andThen((user) => this.#enter(user, generation)),
+    )
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    const generation = this.#begin()
-
-    return this.#auth.signIn(input).andThen((user) => this.#enter(user, generation))
+    return this.#serially((generation) =>
+      this.#auth.signIn(input).andThen((user) => this.#enter(user, generation)),
+    )
   }
 
   /**
-   * Ends the session on this device at once: no region, no saved keys, nobody
-   * signed in. Ending the database session may still fail; that is reported,
-   * and the device stays signed out.
+   * Ends the session on this device once the transition in progress, if any, has
+   * finished: no region, no saved keys, nobody signed in. Ending the database
+   * session may still fail; that is reported, and the device stays signed out.
    */
   signOut(): ResultAsync<void, DataError> {
-    this.#begin()
-    this.#leave()
-    this.#forget()
-    this.#emit(undefined)
+    return this.#serially(() => {
+      this.#leave()
+      this.#forget()
+      this.#emit(undefined)
 
-    return this.#auth.signOut()
+      return this.#auth.signOut()
+    })
   }
 
   /** Continues the session saved by an earlier sign-in; an unusable token means signed out. */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
-    const generation = this.#begin()
-    const access = this.options.storage.get(TOKEN_KEY)
+    return this.#serially((generation) => {
+      const access = this.options.storage.get(TOKEN_KEY)
 
-    if (!access) {
-      return okAsync(undefined)
-    }
+      if (!access) {
+        return okAsync(undefined)
+      }
 
-    return this.#auth
-      .resume({ access, refresh: this.options.storage.get(REFRESH_KEY) })
-      .orElse(() => okAsync(undefined))
-      .andThen((user) => {
-        if (!user) {
-          this.#forget()
+      return this.#auth
+        .resume({ access, refresh: this.options.storage.get(REFRESH_KEY) })
+        .orElse(() => okAsync(undefined))
+        .andThen((user) => {
+          if (!user) {
+            this.#forget()
 
-          return okAsync(undefined)
-        }
+            return okAsync(undefined)
+          }
 
-        return this.#enter(user, generation)
-      })
+          return this.#enter(user, generation)
+        })
+    })
   }
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
@@ -185,7 +188,28 @@ export class SessionService implements SessionPort {
     return this.#generation
   }
 
+  /**
+   * Runs session transitions one at a time, each when the previous one has
+   * finished, so the shared auth session and the saved keys never serve two
+   * transitions at once. `close` does not wait: it starts a new generation, and
+   * a transition still running then attaches nothing.
+   */
+  #serially<T>(run: (generation: number) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
+    const result = this.#transitions.then(() => run(this.#begin()))
+
+    this.#transitions = result.then(
+      () => undefined,
+      () => undefined,
+    )
+
+    return new ResultAsync(result)
+  }
+
   #enter(user: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
+    if (generation !== this.#generation) {
+      return errAsync(dataError('data:AUTH_FAILED', 'the session was closed during this sign-in'))
+    }
+
     this.#leave()
 
     return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).andThen(
@@ -193,7 +217,7 @@ export class SessionService implements SessionPort {
         if (generation !== this.#generation) {
           region.close()
 
-          return err(dataError('data:AUTH_FAILED', 'a later sign-in or sign-out replaced this one'))
+          return err(dataError('data:AUTH_FAILED', 'the session was closed during this sign-in'))
         }
 
         const projector = new Projector(region, this.local, this.options.schema, {

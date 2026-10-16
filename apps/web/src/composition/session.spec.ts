@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
 
 import { replicaSchema } from '../replica.schema.gen'
@@ -40,28 +40,15 @@ function holdingRegionLoads(database: LocalDb) {
   let gate: Promise<void> | undefined
   let open = () => {}
   const state = { waiting: 0 }
-  const query = async (text: string, bindings?: Record<string, unknown>): Promise<unknown> => {
+  const local = interceptQueries(database, async (text) => {
     if (gate && text.includes('FROM _replica_snapshot')) {
       state.waiting++
       await gate
     }
-
-    return database.db.query(text, bindings)
-  }
-  const db = new Proxy(database.db, {
-    get(target, property) {
-      if (property === 'query') {
-        return query
-      }
-
-      const value: unknown = Reflect.get(target, property)
-
-      return typeof value === 'function' ? (value as () => unknown).bind(target) : value
-    },
   })
 
   return {
-    local: { ...database, db },
+    local,
     state,
     hold: () => {
       gate = new Promise((resolve) => {
@@ -202,7 +189,7 @@ describe('SessionService', () => {
     expect(seen).toEqual([undefined])
   })
 
-  it('does not let a sign-in that is still opening its region come back after a sign-out', async () => {
+  it('takes a sign-out made during a sign-in after it, leaving the device signed out', async () => {
     const holding = holdingRegionLoads(local)
     const service = session(memoryStorage(), holding.local)
 
@@ -214,17 +201,21 @@ describe('SessionService', () => {
     const signingIn = service.signIn(ann)
 
     await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
-    expect((await service.signOut()).isOk()).toBe(true)
+
+    const signingOut = service.signOut()
+
     holding.release()
 
-    expect((await signingIn).isErr()).toBe(true)
+    expect((await signingIn).isOk()).toBe(true)
+    expect((await signingOut).isOk()).toBe(true)
     expect(service.current()).toBeUndefined()
     expect(service.region()).toBeUndefined()
   })
 
-  it('keeps only the later of two overlapping sign-ins, with one region open', async () => {
+  it('runs overlapping sign-ins one after the other, so the later one owns the session and its keys', async () => {
+    const storage = memoryStorage()
     const holding = holdingRegionLoads(local)
-    const service = session(memoryStorage(), holding.local)
+    const service = session(storage, holding.local)
     const bob = { email: 'bob@example.test', password: 'secret-bob', name: 'Bob' }
 
     expect((await service.signUp(bob)).isOk()).toBe(true)
@@ -232,20 +223,23 @@ describe('SessionService', () => {
 
     holding.hold()
 
-    // Bob is authenticated and his region is opening when Ann signs in.
     const first = service.signIn(bob)
 
     await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
 
+    const bobsKey = storage.get('perch.session.refresh')
     const second = service.signIn(ann)
 
-    await vi.waitFor(() => expect(holding.state.waiting).toBe(2))
+    // Ann's sign-in waits for Bob's: it has not touched the shared session or the keys.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(storage.get('perch.session.refresh')).toBe(bobsKey)
     holding.release()
 
-    expect((await first).isErr()).toBe(true)
+    expect((await first)._unsafeUnwrap().email).toBe(bob.email)
     expect((await second)._unsafeUnwrap().email).toBe(ann.email)
     expect(service.current()?.email).toBe(ann.email)
     expect(service.region()?.ref.id).toBe(`user:${service.current()?.id}`)
+    expect((await session(storage).restore())._unsafeUnwrap()?.email).toBe(ann.email)
   })
 
   it('tells subscribers when the signed-in user changes', async () => {
