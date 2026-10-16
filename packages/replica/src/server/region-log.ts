@@ -48,11 +48,16 @@ interface StoredRow {
   readonly bytes: ArrayBuffer
 }
 
-/** How SurrealDB words a write that breaks a field's type, a field's ASSERT or a UNIQUE index. */
+/**
+ * How SurrealDB words a write that breaks a schema rule: a field's type, a field's ASSERT,
+ * a UNIQUE index, a READONLY field, or a field a SCHEMAFULL table does not define.
+ */
 const SCHEMA_VIOLATIONS: readonly RegExp[] = [
   /^Couldn't coerce value for field `/,
   /, but field must conform to: /,
   /^Database index `[^`]+` already contains /,
+  /^Found changed value for field `[^`]+`, with record `.+`, but field is readonly$/,
+  /^Found field '[^']+', but no such field exists for table /,
 ]
 
 /** What the compaction transaction throws when the stored head row refuses the proposal. */

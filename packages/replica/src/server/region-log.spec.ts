@@ -81,6 +81,52 @@ describe('server region log', () => {
     expect(await countRows(local, '_replica_update')).toBe(0)
   })
 
+  it('accepts nothing when the projection changes a read-only field', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+
+    const plan = planFor('Ana')
+    const upserts = plan.upserts.map((row) => ({
+      ...row,
+      data: { ...row.data, created_at: new Date(0) },
+    }))
+    const outcome = await log.accept({ ...plan, upserts })
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(log.head()).toBe(1)
+    expect(await countRows(local, '_replica_update')).toBe(1)
+  })
+
+  it('accepts nothing when the projection writes a field the table does not define', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+    const plan = planFor('Ann')
+    const upserts = plan.upserts.map((row) => ({
+      ...row,
+      data: { ...row.data, nickname: 'Annie' },
+    }))
+
+    const outcome = await log.accept({ ...plan, upserts })
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(log.head()).toBe(0)
+    expect(await countRows(local, '_replica_update')).toBe(0)
+  })
+
+  it('rolls back the records a refused batch wrote before the one that broke a rule', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+    const plan = planFor('Ann')
+    const upserts = [...plan.upserts, ...planFor('', 'prf_2').upserts]
+
+    const outcome = await log.accept({ ...plan, upserts })
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(await countRows(local, 'profile')).toBe(0)
+    expect(await countRows(local, '_replica_projected')).toBe(0)
+    expect(await countRows(local, '_replica_update')).toBe(0)
+    expect(await countRows(local, '_replica_head')).toBe(0)
+  })
+
   it('loads a region from its snapshot and the rows after it', async () => {
     const { log, doc } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
