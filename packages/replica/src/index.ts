@@ -4,6 +4,7 @@ import type { ChangeSpec } from '@workspace/kernel'
 export type ReplicaOp = ChangeSpec
 
 export { recordKey, splitRecordKey } from './keys'
+export { toColumns } from './projection-values'
 export { Projector, type ProjectorOptions } from './projector'
 export {
   type ImportOutcome,
