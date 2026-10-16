@@ -15,8 +15,10 @@ const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
 let local: LocalDb
 let failures: DataError[]
 
-const session = (storage = memoryStorage(), database: LocalDb = local) =>
-  new SessionService(database, {
+let opened: SessionService[]
+
+const session = (storage = memoryStorage(), database: LocalDb = local) => {
+  const service = new SessionService(database, {
     access: 'user',
     namespace: 'app',
     database: 'app',
@@ -24,6 +26,11 @@ const session = (storage = memoryStorage(), database: LocalDb = local) =>
     storage,
     onError: (error) => failures.push(error),
   })
+
+  opened.push(service)
+
+  return service
+}
 
 /**
  * The test database, with region loads held while `hold()` is in force, so a
@@ -71,9 +78,11 @@ function holdingRegionLoads(database: LocalDb) {
 beforeEach(async () => {
   local = (await openTestDb())._unsafeUnwrap()
   failures = []
+  opened = []
 })
 
 afterEach(async () => {
+  await Promise.all(opened.map((service) => service.close()))
   expect(failures).toEqual([])
   await local.close()
 })
@@ -214,19 +223,29 @@ describe('SessionService', () => {
   })
 
   it('keeps only the later of two overlapping sign-ins, with one region open', async () => {
-    const service = session()
+    const holding = holdingRegionLoads(local)
+    const service = session(memoryStorage(), holding.local)
     const bob = { email: 'bob@example.test', password: 'secret-bob', name: 'Bob' }
-    const bobUser = (await service.signUp(bob))._unsafeUnwrap()
 
+    expect((await service.signUp(bob)).isOk()).toBe(true)
     expect((await service.signUp(ann)).isOk()).toBe(true)
 
+    holding.hold()
+
+    // Bob is authenticated and his region is opening when Ann signs in.
     const first = service.signIn(bob)
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
     const second = service.signIn(ann)
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(2))
+    holding.release()
 
     expect((await first).isErr()).toBe(true)
     expect((await second)._unsafeUnwrap().email).toBe(ann.email)
     expect(service.current()?.email).toBe(ann.email)
-    expect(service.region()?.ref.id).not.toBe(`user:${bobUser.id}`)
+    expect(service.region()?.ref.id).toBe(`user:${service.current()?.id}`)
   })
 
   it('tells subscribers when the signed-in user changes', async () => {
