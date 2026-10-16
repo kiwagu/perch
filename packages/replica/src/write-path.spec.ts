@@ -91,6 +91,21 @@ describe('LoroWritePath', () => {
     expect(region.records().size).toBe(0)
   })
 
+  it('refuses to create a record that exists, keeping its later edits and its history', async () => {
+    const region = RegionDoc.inMemory('private')
+    const path = new LoroWritePath(region, profileSchema)
+
+    expect((await path.run(createProfile, ann)).isOk()).toBe(true)
+    expect((await path.run(updateBio, { id: profileId, bio: 'Hello' })).isOk()).toBe(true)
+
+    const version = region.doc.version().encode()
+    const retried = await path.run(createProfile, { ...ann, name: 'Ann again' })
+
+    expect(retried._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(region.recordJson(key)).toMatchObject({ name: 'Ann', bio: 'Hello' })
+    expect(region.doc.version().encode()).toEqual(version)
+  })
+
   it('refuses a command meant for another region', async () => {
     const region = RegionDoc.inMemory('public')
     const result = await new LoroWritePath(region, profileSchema).run(createProfile, ann)

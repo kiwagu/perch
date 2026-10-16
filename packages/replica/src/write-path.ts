@@ -130,6 +130,12 @@ export class LoroWritePath implements WritePathPort {
       const key = keys.get(op.record) ?? ''
 
       if (op.op === 'create') {
+        // Creating over an existing record would replace it and lose later edits,
+        // unlike SurrealQL CREATE, which fails on an existing id.
+        if (exists.has(key)) {
+          return err(reject(`${command.id}: ${key} already exists`))
+        }
+
         exists.add(key)
       } else if (op.op === 'delete') {
         exists.delete(key)
