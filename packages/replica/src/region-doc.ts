@@ -196,6 +196,11 @@ class RegionStore {
     })
   }
 
+  /**
+   * Runs one statement or one transaction of this store. Tabs on one database write the
+   * same head and cursor rows, so the database may refuse one of two concurrent
+   * transactions as a conflict; each of these is safe to replay, and the driver retries it.
+   */
   #query(
     statement: string,
     vars: Record<string, unknown>,
@@ -203,7 +208,7 @@ class RegionStore {
     message: string,
   ): ResultAsync<unknown[], DataError> {
     return ResultAsync.fromPromise(
-      this.local.db.query(statement, vars) as PromiseLike<unknown[]>,
+      this.local.db.query(statement, vars).retry() as PromiseLike<unknown[]>,
       (cause) => dataError(code, message, cause),
     )
   }
@@ -221,7 +226,10 @@ class RegionStore {
       let results: unknown[]
 
       try {
-        results = await this.local.db.query(appendStatement, { region: this.region, bytes: next })
+        // Replayed on a conflict with another tab's append, as in `#query`.
+        results = await this.local.db
+          .query(appendStatement, { region: this.region, bytes: next })
+          .retry()
       } catch (cause) {
         this.#failure = dataError(
           'data:WRITE_FAILED',
