@@ -1,0 +1,17 @@
+[defaults]
+timeout_ms = 10000
+
+[actors.root]
+kind = "root"
+
+[actors.alice]
+kind = "record"
+access = "user"
+signup_params = { email = "alice@example.test", password = "secret-alice", name = "Alice" }
+signin_params = { email = "alice@example.test", password = "secret-alice" }
+
+[actors.bob]
+kind = "record"
+access = "user"
+signup_params = { email = "bob@example.test", password = "secret-bob", name = "Bob" }
+signin_params = { email = "bob@example.test", password = "secret-bob" }

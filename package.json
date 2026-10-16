@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@surrealdb/surql-fmt": "catalog:",
     "@types/bun": "catalog:",
     "@workspace/eslint-config": "workspace:*",
     "eslint": "catalog:",
@@ -34,7 +35,8 @@
     "packages": [
       "apps/*",
       "packages/*",
-      "tests/*"
+      "tests/*",
+      "database"
     ],
     "catalog": {
       "@base-ui/react": "1.9.0",

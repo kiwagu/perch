@@ -1,0 +1,33 @@
+# Local stands for this repository, driven by mcproc (pm2 underneath).
+# Fields: kind build|server|worker|task; run = shell command; cwd relative to the
+# project root; port = declared listening port; profiles = named groups of apps.
+version: 1
+project: perch
+apps:
+  surrealdb-dev:
+    description: >-
+      SurrealDB 3.3.4 in memory for local development on 127.0.0.1:8000 (root/root).
+      Data is gone when it stops.
+    kind: server
+    run: >-
+      docker rm -f perch-surrealdb-dev >/dev/null 2>&1;
+      exec docker run --rm --name perch-surrealdb-dev -p 127.0.0.1:8000:8000
+      surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
+    port: 8000
+    # docker-proxy owns the published port, so readiness is checked over HTTP
+    url: http://127.0.0.1:8000/health
+  surrealdb-e2e:
+    description: >-
+      SurrealDB 3.3.4 in memory for the schema permission suites and e2e runs on
+      127.0.0.1:8010 (root/root). Every start begins with an empty database.
+    kind: server
+    run: >-
+      docker rm -f perch-surrealdb-e2e >/dev/null 2>&1;
+      exec docker run --rm --name perch-surrealdb-e2e -p 127.0.0.1:8010:8000
+      surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
+    port: 8010
+    # docker-proxy owns the published port, so readiness is checked over HTTP
+    url: http://127.0.0.1:8010/health
+profiles:
+  dev: [surrealdb-dev]
+  e2e: [surrealdb-e2e]

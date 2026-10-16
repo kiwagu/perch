@@ -1,0 +1,2 @@
+# SurrealKit project for the shared schema. Run its commands from this folder with
+# `--folder .`; the connection comes from flags or SURREALDB_* variables.
