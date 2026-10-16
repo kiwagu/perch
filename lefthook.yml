@@ -11,9 +11,11 @@ pre-commit:
       run: . scripts/ensure-path.sh && biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
       stage_fixed: true
 
+    # The formatter is a beta and cannot parse every statement; a file it rejects
+    # stays as written, and the validator below is the gate.
     - name: format staged SurrealQL
       glob: '*.surql'
-      run: . scripts/ensure-path.sh && surqlfmt --write {staged_files}
+      run: . scripts/ensure-path.sh && (surqlfmt --write {staged_files} || true)
       stage_fixed: true
 
     - name: validate staged SurrealQL

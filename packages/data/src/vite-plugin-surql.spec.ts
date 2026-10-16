@@ -1,0 +1,29 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import { surqlPlugin } from './vite-plugin-surql'
+
+describe('surqlPlugin', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'surql-plugin-'))
+  const file = join(dir, 'upsert.surql')
+
+  writeFileSync(file, 'UPSERT type::record($table, $key) CONTENT $data;\n')
+
+  it('loads a plain .surql file as its text', () => {
+    const plugin = surqlPlugin()
+    const load = plugin.load as (id: string) => string | undefined
+
+    expect(load(file)).toBe(
+      `export default ${JSON.stringify('UPSERT type::record($table, $key) CONTENT $data;\n')}`,
+    )
+  })
+
+  it('leaves other modules alone', () => {
+    const load = surqlPlugin().load as (id: string) => string | undefined
+
+    expect(load(join(dir, 'index.ts'))).toBeUndefined()
+  })
+})

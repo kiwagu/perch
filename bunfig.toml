@@ -1,3 +1,6 @@
+# Plain `.surql` files import as their text under the Bun runtime too.
+preload = ["./packages/data/src/bun-plugin-surql.ts"]
+
 [install]
 # Isolated installs link only declared dependencies into each workspace, so a
 # missing dependency fails loudly instead of resolving through hoisting.

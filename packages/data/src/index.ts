@@ -13,6 +13,14 @@ export { type OpenLocalDbOptions, openLocalDb } from './local-db'
 export { LOCAL_DB, type LocalDbPort } from './local-db.port'
 export { ShapeRunner, type WatchOptions } from './shape-runner'
 export { SHAPE_RUNNER, type ShapeRunnerPort } from './shape-runner.port'
-export type { ChangeOrigin, Command, LocalDb, Region, Shape, TableChange } from './types'
+export type { ChangeOrigin, Command, LocalDb, ParamDecl, Region, Shape, TableChange } from './types'
+export {
+  fromDriverValue,
+  type RecordRef,
+  recordId,
+  recordRef,
+  recordTableOf,
+  toDriverParams,
+} from './values'
 export { SurrealWritePath } from './write-path'
-export { WRITE_PATH, type WritePathPort } from './write-path.port'
+export { type CommandMeta, WRITE_PATH, type WritePathPort } from './write-path.port'

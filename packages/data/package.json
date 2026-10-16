@@ -15,6 +15,13 @@
     "./testing": {
       "types": "./src/testing/index.ts",
       "import": "./src/testing/index.ts"
+    },
+    "./vite-plugin-surql": {
+      "types": "./src/vite-plugin-surql.ts",
+      "import": "./src/vite-plugin-surql.ts"
+    },
+    "./surql": {
+      "types": "./src/surql.d.ts"
     }
   },
   "scripts": {
@@ -34,6 +41,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

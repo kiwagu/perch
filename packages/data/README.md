@@ -14,7 +14,9 @@ strings and times are `Date`s; driver record ids and datetimes do not leave it.
 - Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`.
 - `Shape`, `Command`, `TableChange`, `publishChange`, `onChange`, `DataError`.
 - `./engines/node`: embedded engines for Bun and Node.
+- Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`.
+- `./vite-plugin-surql`: `surqlPlugin()` loads plain `.surql` files as text; `./surql` types such imports.
 
 ## Commands
 
