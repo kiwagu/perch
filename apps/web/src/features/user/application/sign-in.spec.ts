@@ -31,6 +31,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await session.close()
   await local.close()
 })
 

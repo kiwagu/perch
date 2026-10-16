@@ -1,4 +1,4 @@
-import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -69,6 +69,7 @@ export class SessionService implements SessionPort {
   #user: AuthUser | undefined
   #open: OpenRegion | undefined
   #generation = 0
+  #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(
     private readonly local: LocalDb,
@@ -164,7 +165,17 @@ export class SessionService implements SessionPort {
       return okAsync(undefined)
     }
 
-    return open.region.flush().andThen(() => ResultAsync.fromSafePromise(open.projector.flush()))
+    return open.region.flush().andThen(() => open.projector.flush())
+  }
+
+  /**
+   * Leaves the region, keeping the saved keys, and resolves once its last writes
+   * are persisted and projected, so the database can be closed after it.
+   */
+  async close(): Promise<void> {
+    this.#begin()
+    this.#leave()
+    await this.#retiring
   }
 
   /** Starts a session transition; a transition that finishes after a later one began is dropped. */
@@ -204,10 +215,17 @@ export class SessionService implements SessionPort {
   }
 
   #leave(): void {
+    const open = this.#open
+
     this.writePath.attach(undefined)
-    this.#open?.stop()
-    this.#open?.region.close()
     this.#open = undefined
+
+    if (open) {
+      open.stop()
+      // The region's last writes still persist and project; `close` waits for them.
+      this.#retiring = Promise.all([this.#retiring, open.region.flush(), open.projector.flush()])
+      open.region.close()
+    }
   }
 
   #emit(user: AuthUser | undefined): void {

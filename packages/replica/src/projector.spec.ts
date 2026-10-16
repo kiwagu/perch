@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type LocalDb, onChange, ShapeRunner, type TableChange } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 
+import acceptProfileDeletes from './__fixtures__/accept-profile-deletes.surql'
 import {
   createProfile,
   deleteProfile,
@@ -12,6 +13,7 @@ import {
   updateBio,
   userId,
 } from './__fixtures__/profile'
+import refuseProfileDeletes from './__fixtures__/refuse-profile-deletes.surql'
 import { Projector } from './projector'
 import { RegionDoc } from './region-doc'
 import { LoroWritePath } from './write-path'
@@ -48,7 +50,7 @@ describe('Projector', () => {
     expect((await new LoroWritePath(region, profileSchema).run(createProfile, ann)).isOk()).toBe(
       true,
     )
-    await projector.flush()
+    expect((await projector.flush()).isOk()).toBe(true)
 
     expect(await readProfile()).toEqual({
       id: profileId,
@@ -63,12 +65,12 @@ describe('Projector', () => {
 
     expect((await path.run(createProfile, ann)).isOk()).toBe(true)
     expect((await path.run(updateBio, { id: profileId, bio: 'Hello' })).isOk()).toBe(true)
-    await projector.flush()
+    expect((await projector.flush()).isOk()).toBe(true)
 
     expect(await readProfile()).toMatchObject({ bio: 'Hello' })
 
     expect((await path.run(deleteProfile, { id: profileId })).isOk()).toBe(true)
-    await projector.flush()
+    expect((await projector.flush()).isOk()).toBe(true)
 
     expect(await readProfile()).toBeUndefined()
   })
@@ -80,7 +82,7 @@ describe('Projector', () => {
     expect((await new LoroWritePath(region, profileSchema).run(createProfile, ann)).isOk()).toBe(
       true,
     )
-    await projector.flush()
+    expect((await projector.flush()).isOk()).toBe(true)
     unsubscribe()
 
     expect(seen).toEqual([{ tables: ['profile'], origin: 'projector' }])
@@ -93,7 +95,7 @@ describe('Projector', () => {
       true,
     )
     region.doc.import(other.doc.export({ mode: 'update' }))
-    await projector.flush()
+    expect((await projector.flush()).isOk()).toBe(true)
 
     expect(await readProfile()).toMatchObject({ name: 'Ann' })
   })
@@ -102,7 +104,7 @@ describe('Projector', () => {
     const path = new LoroWritePath(region, profileSchema)
 
     expect((await path.run(createProfile, { ...ann, name: '' })).isOk()).toBe(true)
-    await projector.flush()
+    expect((await projector.flush()).isErr()).toBe(true)
 
     expect(failures).toEqual([`could not project profile/${profileId}`])
     failures = []
@@ -120,9 +122,54 @@ describe('Projector', () => {
     })
     const stopLate = late.start()
 
-    await late.flush()
+    expect((await late.flush()).isOk()).toBe(true)
     stopLate()
 
     expect(await readProfile()).toMatchObject({ name: 'Ann' })
+  })
+
+  it('reports a failed projection on flush and retries it there until it succeeds', async () => {
+    const path = new LoroWritePath(region, profileSchema)
+
+    expect((await path.run(createProfile, ann)).isOk()).toBe(true)
+    expect((await projector.flush()).isOk()).toBe(true)
+
+    await local.db.query(refuseProfileDeletes)
+
+    expect((await path.run(deleteProfile, { id: profileId })).isOk()).toBe(true)
+    expect((await projector.flush()).isErr()).toBe(true)
+    expect(await readProfile()).toMatchObject({ name: 'Ann' })
+
+    await local.db.query(acceptProfileDeletes)
+
+    expect((await projector.flush()).isOk()).toBe(true)
+    expect(await readProfile()).toBeUndefined()
+    expect(failures).toEqual([`could not project profile/${profileId}`])
+    failures = []
+  })
+
+  it('repairs a deletion that failed before a reload, though the document no longer holds the record', async () => {
+    const path = new LoroWritePath(region, profileSchema)
+
+    expect((await path.run(createProfile, ann)).isOk()).toBe(true)
+    expect((await projector.flush()).isOk()).toBe(true)
+
+    await local.db.query(refuseProfileDeletes)
+
+    expect((await path.run(deleteProfile, { id: profileId })).isOk()).toBe(true)
+    expect((await projector.flush()).isErr()).toBe(true)
+    stop()
+    failures = []
+
+    await local.db.query(acceptProfileDeletes)
+
+    const reloaded = new Projector(region, local, profileSchema, {
+      onError: (error) => failures.push(error.message),
+    })
+
+    stop = reloaded.start()
+
+    expect((await reloaded.flush()).isOk()).toBe(true)
+    expect(await readProfile()).toBeUndefined()
   })
 })

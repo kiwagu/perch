@@ -15,7 +15,9 @@ local update is stored durably in the local database before it counts as persist
   update is retried before later ones), `persistedSeq()`, `compact()`, `close()`.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
   once its update is durable.
-- `Projector`: `start()` projects current records and then every commit and import; `flush()`.
+- `Projector`: `start()` projects current records, deletes those the region projected
+  earlier but no longer holds (a deletion that failed before a reload), then follows
+  every commit and import; `flush()` retries failed records and reports those still failing.
 - `ReplicaSchema`: which fields are text, list or counter containers, references or datetimes.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 

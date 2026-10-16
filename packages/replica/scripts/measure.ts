@@ -90,8 +90,11 @@ async function projectMany(): Promise<Record<string, number>> {
   })
   const start = performance.now()
   const stop = projector.start()
+  const projected = await projector.flush()
 
-  await projector.flush()
+  if (projected.isErr()) {
+    throw new Error(projected.error.message)
+  }
 
   const projectMs = elapsed(start)
 

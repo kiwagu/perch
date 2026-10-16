@@ -106,7 +106,10 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
         writePath: session.writePath,
         session,
         commands,
-        close: () => local.close(),
+        close: async () => {
+          await session.close()
+          await local.close()
+        },
       }
     })
   })

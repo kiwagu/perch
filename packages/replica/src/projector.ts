@@ -1,4 +1,5 @@
 import type { LoroEventBatch, LoroMap } from 'loro-crdt'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb, publishChange, recordId } from '@workspace/data'
 
@@ -6,10 +7,11 @@ import { splitRecordKey } from './keys'
 import type { RegionDoc } from './region-doc'
 import { fieldOf, type ReplicaSchema } from './schema'
 import deleteStatement from './surql/delete.surql'
+import projectedKeysStatement from './surql/projected-keys.surql'
 import upsertStatement from './surql/upsert.surql'
 
 export interface ProjectorOptions {
-  /** Receives every failed projection; a failure must not pass silently. */
+  /** Hears about a record the moment its projection first fails; `flush` reports it too until it succeeds. */
   readonly onError: (error: DataError) => void
 }
 
@@ -38,10 +40,14 @@ function touchedKeys(batch: LoroEventBatch): Set<string> {
  * Keeps the local database a materialized view of a region document. Every
  * local commit and every import is projected as an UPSERT of the whole record or
  * a DELETE, and the written tables are announced so watched shapes rerun.
- * Time-travel checkouts are not projected.
+ * Time-travel checkouts are not projected. Each write also records, in the same
+ * transaction, that the region projected the record; on start the projector
+ * reconciles that record with the document, so a deletion that failed before a
+ * reload is still carried out. A failed record is retried by every `flush`.
  */
 export class Projector {
   #queue: Promise<void> = Promise.resolve()
+  readonly #failed = new Set<string>()
 
   constructor(
     private readonly region: RegionDoc,
@@ -51,7 +57,7 @@ export class Projector {
   ) {}
 
   start(): () => void {
-    this.#enqueue(new Set(this.region.records().keys() as string[]))
+    this.#queue = this.#queue.then(() => this.#reconcile())
 
     return this.region.doc.subscribe((batch) => {
       if (batch.by !== 'checkout') {
@@ -60,10 +66,49 @@ export class Projector {
     })
   }
 
-  /** Resolves once every event observed so far is projected. */
-  async flush(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await this.#queue
+  /** Resolves once every event observed so far is projected, retrying failed records; reports those still failing. */
+  flush(): ResultAsync<void, DataError> {
+    const settle = async (): Promise<void> => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await this.#queue
+
+      if (this.#failed.size > 0) {
+        this.#enqueue(new Set(this.#failed))
+        await this.#queue
+      }
+    }
+
+    return ResultAsync.fromSafePromise(settle()).andThen(() =>
+      this.#failed.size > 0
+        ? errAsync(
+            dataError('data:WRITE_FAILED', `could not project ${[...this.#failed].join(', ')}`),
+          )
+        : okAsync(undefined),
+    )
+  }
+
+  /** Projects every record the document holds, and deletes those the region projected earlier but no longer holds. */
+  async #reconcile(): Promise<void> {
+    const held = new Set(this.region.records().keys() as string[])
+    const stale: string[] = []
+
+    try {
+      const [projected] = (await this.local.db.query(projectedKeysStatement, {
+        region: this.region.ref.id,
+      })) as [string[]]
+
+      stale.push(...projected.filter((key) => !held.has(key)))
+    } catch (cause) {
+      this.options.onError(
+        dataError(
+          'data:QUERY_FAILED',
+          `could not read what ${this.region.ref.id} projected`,
+          cause,
+        ),
+      )
+    }
+
+    await this.#project(new Set([...held, ...stale]))
   }
 
   #enqueue(keys: ReadonlySet<string>): void {
@@ -86,11 +131,15 @@ export class Projector {
 
       try {
         await this.#projectOne(recordKeyValue, parts.table, parts.key)
+        this.#failed.delete(recordKeyValue)
         tables.add(parts.table)
       } catch (cause) {
-        this.options.onError(
-          dataError('data:COMMAND_FAILED', `could not project ${recordKeyValue}`, cause),
-        )
+        if (!this.#failed.has(recordKeyValue)) {
+          this.#failed.add(recordKeyValue)
+          this.options.onError(
+            dataError('data:WRITE_FAILED', `could not project ${recordKeyValue}`, cause),
+          )
+        }
       }
     }
 
@@ -102,8 +151,10 @@ export class Projector {
   async #projectOne(recordKeyValue: string, table: string, key: string): Promise<void> {
     const record = this.region.records().get(recordKeyValue) as LoroMap | undefined
 
+    const region = this.region.ref.id
+
     if (!record) {
-      await this.local.db.query(deleteStatement, { table, key })
+      await this.local.db.query(deleteStatement, { table, key, region, entry: recordKeyValue })
 
       return
     }
@@ -115,7 +166,7 @@ export class Projector {
       ]),
     )
 
-    await this.local.db.query(upsertStatement, { table, key, data })
+    await this.local.db.query(upsertStatement, { table, key, data, region, entry: recordKeyValue })
   }
 
   /** References stored as `table:key` become record ids, ISO strings of datetime fields become dates. */
