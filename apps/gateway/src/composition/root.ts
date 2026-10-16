@@ -45,7 +45,8 @@ export interface GatewayRootOptions {
 export function createGatewayRoot(
   options: GatewayRootOptions,
 ): ResultAsync<GatewayRoot, DataError> {
-  const log = createLogger('region-hub')
+  const hubLog = createLogger('region-hub')
+  const sessionsLog = createLogger('identity-sessions')
 
   return openLocalDb({
     engines: options.engines,
@@ -61,7 +62,7 @@ export function createGatewayRoot(
       local,
       schema: replicaSchema,
       clock: options.clock,
-      onError: (error) => log.error({ code: error.code }, error.message),
+      onError: (error) => hubLog.error({ code: error.code }, error.message),
     })
 
     return {
@@ -70,6 +71,7 @@ export function createGatewayRoot(
           createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
         rpcUrl: options.rpcUrl,
         fetch,
+        onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
       }),
       hub,
       local,

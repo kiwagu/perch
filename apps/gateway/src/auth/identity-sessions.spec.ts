@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createAuth, type LocalDb } from '@workspace/data'
+import { createAuth, type DataError, type LocalDb } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 
 import { DIRECTORY, NAMESPACE } from '../config'
@@ -37,8 +37,13 @@ const unreachable = fakeFetch(() => Promise.reject(new TypeError('no network in 
 
 const opened: LocalDb[] = []
 
+/** Failures to close an auth session that no test expected. */
+const closeFailures: DataError[] = []
+
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((local) => local.close()))
+
+  expect(closeFailures.splice(0)).toEqual([])
 })
 
 async function testDb(schema = readSchema()): Promise<LocalDb> {
@@ -52,17 +57,24 @@ async function testDb(schema = readSchema()): Promise<LocalDb> {
 }
 
 /** Sessions over `local`, opening auth sessions as the composition root does. */
-function sessionsOver(local: LocalDb, http: typeof fetch = unreachable.fetch): IdentitySessions {
+function sessionsOver(
+  local: LocalDb,
+  options: {
+    readonly fetch?: typeof fetch
+    readonly onCloseFailure?: (error: DataError) => void
+  } = {},
+): IdentitySessions {
   return new IdentitySessions({
     openAuth: () =>
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
     rpcUrl: RPC_URL,
-    fetch: http,
+    fetch: options.fetch ?? unreachable.fetch,
+    onCloseFailure: options.onCloseFailure ?? ((error) => closeFailures.push(error)),
   })
 }
 
 async function testSessions(http: typeof fetch = unreachable.fetch): Promise<IdentitySessions> {
-  return sessionsOver(await testDb(), http)
+  return sessionsOver(await testDb(), { fetch: http })
 }
 
 /** Sessions over a database that counts the driver sessions opened and closed on it. */
@@ -89,6 +101,24 @@ async function countingSessions() {
     sessions: sessionsOver(local),
     opened: () => opened,
     closed: () => closed,
+  }
+}
+
+/** Makes closing every driver session opened on `local` from now on fail once it has closed. */
+function failClosing(local: LocalDb): void {
+  const newSession = local.db.newSession.bind(local.db)
+
+  local.db.newSession = async () => {
+    const session = await newSession()
+    const closeSession = session.closeSession.bind(session)
+
+    session.closeSession = async () => {
+      await closeSession()
+
+      throw new Error('the connection to the database dropped')
+    }
+
+    return session
   }
 }
 
@@ -175,6 +205,33 @@ describe('IdentitySessions', () => {
 
     expect((await sessions.signUp(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     expect((await sessions.signIn(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+  })
+
+  it('keeps the result of a call whose database session fails to close, and reports the failure', async () => {
+    const local = await testDb()
+    const failures: DataError[] = []
+    const sessions = sessionsOver(local, { onCloseFailure: (error) => failures.push(error) })
+
+    failClosing(local)
+
+    // The identity exists once the sign-up answered, so its pair must reach the device.
+    const { identity, tokens } = (await sessions.signUp(ann))._unsafeUnwrap()
+    // The renewal spent the old key, so the new pair must reach the device too.
+    const device = (
+      await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+    )._unsafeUnwrap()
+    const renewed = device.renewed ? device.tokens : expect.unreachable('a renewed pair')
+    const again = await sessions.authenticate({
+      access: 'expired.or.garbage',
+      refresh: renewed.refresh,
+    })
+
+    expect(device.identity).toEqual(identity)
+    expect(renewed.refresh).not.toBe(tokens.refresh)
+    expect(again._unsafeUnwrap().identity).toEqual(identity)
+    expect(failures.map((failure) => [failure.code, failure.message])).toEqual(
+      Array.from({ length: 3 }, () => ['data:AUTH_FAILED', 'the auth session could not be closed']),
+    )
   })
 
   it('closes the database session of every call', async () => {

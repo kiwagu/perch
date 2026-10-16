@@ -37,6 +37,11 @@ export interface IdentitySessionsOptions {
   /** The database's RPC endpoint over HTTP, where `revoke` is sent. */
   readonly rpcUrl: string
   readonly fetch: typeof fetch
+  /**
+   * Hears that an auth session failed to close after its call. The call keeps its result:
+   * the identity it signed up exists, and the refresh key it renewed is spent.
+   */
+  readonly onCloseFailure: (error: DataError) => void
 }
 
 /** An answer of the database's RPC; a revoke needs only to know whether it failed. */
@@ -105,11 +110,13 @@ function revoked(answer: unknown): Result<void, DataError> {
  */
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
+  readonly #onCloseFailure: (error: DataError) => void
   readonly #post: (url: string, init: RequestInit) => ResultAsync<Response, DataError>
   readonly #rpcUrl: string
 
   constructor(options: IdentitySessionsOptions) {
     this.#openAuth = options.openAuth
+    this.#onCloseFailure = options.onCloseFailure
     this.#rpcUrl = options.rpcUrl
     this.#post = ResultAsync.fromThrowable(options.fetch, (cause) =>
       refused('the database could not be reached to revoke the grant', cause),
@@ -169,14 +176,20 @@ export class IdentitySessions {
       .andThen(revoked)
   }
 
-  /** Runs `run` on a fresh auth session and closes the session however `run` ends. */
+  /**
+   * Runs `run` on a fresh auth session and closes the session however `run` ends. A failure
+   * to close is reported, not returned: what `run` did in the database stands, so throwing
+   * its result away would lose a new identity's pair or a renewed one.
+   */
   #withAuth<T>(run: (auth: AuthPort) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
     const auth = this.#openAuth()
     const settled = async (): Promise<Result<T, DataError>> => {
       try {
         return await run(auth)
       } finally {
-        await auth.close()
+        await auth.close().catch((cause: unknown) => {
+          this.#onCloseFailure(refused('the auth session could not be closed', cause))
+        })
       }
     }
 
