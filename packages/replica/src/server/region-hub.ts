@@ -299,7 +299,10 @@ export class RegionHub {
   heads(
     regionIds: readonly string[],
   ): ResultAsync<ReadonlyArray<{ readonly region: string; readonly head: number }>, DataError> {
-    const unloaded = regionIds.filter((id) => !this.#regions.get(id)?.loaded)
+    const inMemory = (region: string) => this.#regions.get(region)?.loaded?.log.head()
+    // A region may unload while the others are read, so the heads in memory are taken now.
+    const held = new Map(regionIds.map((region) => [region, inMemory(region)]))
+    const unloaded = regionIds.filter((region) => held.get(region) === undefined)
     const stored =
       unloaded.length === 0
         ? okAsync<StoredHead[], DataError>([])
@@ -313,7 +316,7 @@ export class RegionHub {
 
       return regionIds.map((region) => ({
         region,
-        head: this.#regions.get(region)?.loaded?.log.head() ?? heads.get(region) ?? 0,
+        head: inMemory(region) ?? held.get(region) ?? heads.get(region) ?? 0,
       }))
     })
   }

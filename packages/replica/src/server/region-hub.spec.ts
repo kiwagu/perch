@@ -15,6 +15,7 @@ import {
 import { countRows, nameIn } from './__fixtures__/log'
 import type { Subscriber } from './region-hub'
 import acceptStatement from './surql/server-accept.surql'
+import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
 
 afterEach(closeHubs)
@@ -221,6 +222,40 @@ describe('region hub', () => {
     expect((await hub.heads([unknown, region.id]))._unsafeUnwrap()).toEqual([
       { region: unknown, head: 0 },
       { region: region.id, head: 2 },
+    ])
+  })
+
+  it('answers the head of a region that unloads while the database is asked for others', async () => {
+    let reached = () => {}
+    let release = () => {}
+    const atHeads = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { hub, clock, a } = await hubWithHistory(['Ann', 'Ana'], {
+      intercept: (text) => {
+        if (text === headsStatement) {
+          reached()
+
+          return gate
+        }
+      },
+    })
+    const unknown = 'identity:idn_b'
+
+    hub.unsubscribe(region.id, a.id)
+    const answer = hub.heads([region.id, unknown])
+
+    await atHeads
+    await clock.advance(60_000)
+    expect(hub.loadedRegions()).toBe(0)
+    release()
+
+    expect((await answer)._unsafeUnwrap()).toEqual([
+      { region: region.id, head: 2 },
+      { region: unknown, head: 0 },
     ])
   })
 
