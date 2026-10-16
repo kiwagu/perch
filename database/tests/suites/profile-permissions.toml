@@ -2,7 +2,7 @@ name = "profile-permissions"
 tags = ["permissions", "profile"]
 
 # The server contract of the replicated profile table: clients write profiles through
-# their private region, so on the server a user may read and edit only their own row
+# their private region, so on the server an identity may read and edit only its own row
 # and can neither create nor delete one. Refused writes return no rows; root then
 # confirms that nothing changed.
 
@@ -10,7 +10,7 @@ tags = ["permissions", "profile"]
 name = "root seeds a profile for alice and for bob"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE profile:alice SET user = (SELECT VALUE id FROM user WHERE email = 'alice@example.test')[0], name = 'Alice', email = 'alice@example.test'; CREATE profile:bob SET user = (SELECT VALUE id FROM user WHERE email = 'bob@example.test')[0], name = 'Bob', email = 'bob@example.test';"
+sql = "CREATE profile:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], name = 'Alice', email = 'alice@example.test'; CREATE profile:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], name = 'Bob', email = 'bob@example.test';"
 allow = true
 
 [[cases]]
@@ -54,7 +54,7 @@ exists = false
 name = "alice cannot create a profile"
 kind = "sql_expect"
 actor = "alice"
-sql = "CREATE profile:extra SET user = $auth.id, name = 'Extra', email = 'extra@example.test';"
+sql = "CREATE profile:extra SET identity = $auth.id, name = 'Extra', email = 'extra@example.test';"
 allow = true
 
 [[cases.assertions]]

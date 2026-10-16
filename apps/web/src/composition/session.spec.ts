@@ -2,15 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
+import { replicaSchema } from '@workspace/database/replica-schema'
 import { profileIdFactory } from '@workspace/ids'
-
-import { replicaSchema } from '../replica.schema.gen'
 
 import { createProfile, profileById } from './__fixtures__/profile'
 import { SessionService } from './session'
 import { memoryStorage } from './storage'
 
-const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
+const ann = { email: 'ann@example.test', password: 'secret-ann' }
 
 let local: LocalDb
 let failures: DataError[]
@@ -19,7 +18,7 @@ let opened: SessionService[]
 
 const session = (storage = memoryStorage(), database: LocalDb = local) => {
   const service = new SessionService(database, {
-    access: 'user',
+    access: 'identity',
     namespace: 'app',
     database: 'app',
     schema: replicaSchema,
@@ -85,7 +84,7 @@ describe('SessionService', () => {
       (
         await service.writePath.run(createProfile, {
           id,
-          user: user.id,
+          identity: user.id,
           name: 'Ann',
           email: ann.email,
         })
@@ -103,7 +102,7 @@ describe('SessionService', () => {
     const service = session()
     const written = await service.writePath.run(createProfile, {
       id: profileIdFactory.create(),
-      user: 'usr_0000000000000000.01m52pexcp',
+      identity: 'idn_0000000000000000.01m52pexcp',
       name: 'X',
       email: 'x@example.test',
     })
@@ -121,7 +120,7 @@ describe('SessionService', () => {
       (
         await service.writePath.run(createProfile, {
           id: profileIdFactory.create(),
-          user: 'usr_x',
+          identity: 'idn_x',
           name: 'X',
           email: 'x',
         })
@@ -139,7 +138,7 @@ describe('SessionService', () => {
       (
         await first.writePath.run(createProfile, {
           id,
-          user: user.id,
+          identity: user.id,
           name: 'Ann',
           email: ann.email,
         })
@@ -238,7 +237,7 @@ describe('SessionService', () => {
     expect((await first)._unsafeUnwrap().email).toBe(bob.email)
     expect((await second)._unsafeUnwrap().email).toBe(ann.email)
     expect(service.current()?.email).toBe(ann.email)
-    expect(service.region()?.ref.id).toBe(`user:${service.current()?.id}`)
+    expect(service.region()?.ref.id).toBe(`identity:${service.current()?.id}`)
     expect((await session(storage).restore())._unsafeUnwrap()?.email).toBe(ann.email)
   })
 

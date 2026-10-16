@@ -9,7 +9,7 @@ import saveSnapshotStatement from './surql/replica-save-snapshot.surql'
 
 export interface RegionRef {
   readonly kind: Region
-  /** The document id, e.g. `user:<user id>` for a private region. */
+  /** The document id, e.g. `identity:<identity id>` for a private region. */
   readonly id: string
 }
 

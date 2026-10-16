@@ -70,9 +70,9 @@ describe('parseShape', () => {
   })
 
   it('parses FROM table with tail clauses', () => {
-    const ast = parseShape('SELECT name FROM user WHERE email = $email ORDER BY name LIMIT 10;')
+    const ast = parseShape('SELECT name FROM identity WHERE email = $email ORDER BY name LIMIT 10;')
 
-    expect(ast.from).toEqual({ kind: 'table', table: 'user', only: false })
+    expect(ast.from).toEqual({ kind: 'table', table: 'identity', only: false })
     expect(ast.tail).toBe('WHERE email = $email ORDER BY name LIMIT 10')
   })
 
@@ -84,9 +84,9 @@ describe('parseShape', () => {
 
   it('rejects statements outside the dialect', () => {
     expect(() => parseShape('LET $x = 1;')).toThrow(/shape must be a SELECT/)
-    expect(() => parseShape('SELECT count() FROM user GROUP ALL;')).toThrow(
+    expect(() => parseShape('SELECT count() FROM identity GROUP ALL;')).toThrow(
       /GROUP is not allowed in a shape/,
     )
-    expect(() => parseShape('SELECT * FROM user;')).toThrow(/list the fields/)
+    expect(() => parseShape('SELECT * FROM identity;')).toThrow(/list the fields/)
   })
 })

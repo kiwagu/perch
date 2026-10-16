@@ -4,14 +4,20 @@ import type { LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 
 import acceptAppends from './__fixtures__/accept-appends.surql'
-import { createProfile, profileId, profileSchema, updateName, userId } from './__fixtures__/profile'
+import {
+  createProfile,
+  identityId,
+  profileId,
+  profileSchema,
+  updateName,
+} from './__fixtures__/profile'
 import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
 import { LoroWritePath } from './write-path'
 
-const ref: RegionRef = { kind: 'private', id: `user:${userId}` }
-const ann = { id: profileId, user: userId, name: 'Ann', email: 'ann@example.test' }
+const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
+const ann = { id: profileId, identity: identityId, name: 'Ann', email: 'ann@example.test' }
 const key = `profile/${profileId}`
 
 let local: LocalDb

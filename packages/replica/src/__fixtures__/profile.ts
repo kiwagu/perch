@@ -10,20 +10,28 @@ import updateNameText from './update-name.surql'
 
 export const profileSchema: ReplicaSchema = {
   profile: {
-    user: { kind: 'record', table: 'user' },
-    bio: { kind: 'text' },
+    region: 'private',
+    fields: {
+      identity: { kind: 'record', table: 'identity' },
+      bio: { kind: 'text' },
+    },
   },
 }
 
 const id = { name: 'id', type: 'record<profile>' } as const
 
-export const createProfile: Command<{ id: string; user: string; name: string; email: string }> = {
+export const createProfile: Command<{
+  id: string
+  identity: string
+  name: string
+  email: string
+}> = {
   id: 'user.profile.createProfile',
   kind: 'command',
   text: createProfileText,
   params: [
     id,
-    { name: 'user', type: 'record<user>' },
+    { name: 'identity', type: 'record<identity>' },
     { name: 'name', type: 'string' },
     { name: 'email', type: 'string' },
   ],
@@ -33,7 +41,11 @@ export const createProfile: Command<{ id: string; user: string; name: string; em
     {
       op: 'create',
       record: 'id',
-      fields: { user: { param: 'user' }, name: { param: 'name' }, email: { param: 'email' } },
+      fields: {
+        identity: { param: 'identity' },
+        name: { param: 'name' },
+        email: { param: 'email' },
+      },
     },
   ],
 }
@@ -70,7 +82,7 @@ export const deleteProfile: Command<{ id: string }> = {
 
 export interface ProfileRow {
   readonly id: string
-  readonly user: string
+  readonly identity: string
   readonly name: string
   readonly email: string
   readonly bio?: string
@@ -86,4 +98,4 @@ export const profileById: Shape<{ id: string }, ProfileRow | undefined> = {
 
 export const profileId = 'prf_0000000000000000.01m52pexcp'
 
-export const userId = 'usr_0000000000000000.01m52pexcp'
+export const identityId = 'idn_0000000000000000.01m52pexcp'

@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest'
 import {
   createProfile,
   deleteProfile,
+  identityId,
   profileId,
   profileSchema,
   updateBio,
   updateName,
-  userId,
 } from './__fixtures__/profile'
 import { RegionDoc } from './region-doc'
 import { LoroWritePath } from './write-path'
 
-const ann = { id: profileId, user: userId, name: 'Ann', email: 'ann@example.test' }
+const ann = { id: profileId, identity: identityId, name: 'Ann', email: 'ann@example.test' }
 const key = `profile/${profileId}`
 
 describe('LoroWritePath', () => {
@@ -23,7 +23,7 @@ describe('LoroWritePath', () => {
     expect(written.isOk()).toBe(true)
     expect(region.records().get(key)).toBeDefined()
     expect(region.recordJson(key)).toEqual({
-      user: `user:${userId}`,
+      identity: `identity:${identityId}`,
       name: 'Ann',
       email: 'ann@example.test',
     })
@@ -122,13 +122,13 @@ describe('LoroWritePath', () => {
     })
 
     const written = await new LoroWritePath(region, profileSchema).run(createProfile, ann, {
-      actorId: userId,
+      actorId: identityId,
       correlationId: 'cor_1',
     })
 
     expect(written.isOk()).toBe(true)
     expect(JSON.parse(String(messages[0]))).toEqual({
-      actor: userId,
+      actor: identityId,
       command: 'user.profile.createProfile',
       correlationId: 'cor_1',
     })

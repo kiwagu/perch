@@ -1,5 +1,5 @@
 -- The profile page reads the signed-in user's profile from the private region.
--- @params $user: record<user>
+-- @params $identity: record<identity>
 SELECT
   id,
   name,
@@ -8,5 +8,5 @@ SELECT
   locale,
   created_at
 FROM profile
-WHERE user = $user
+WHERE identity = $identity
 LIMIT 1;

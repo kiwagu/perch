@@ -105,7 +105,7 @@ function parseSingle(part: string): FieldType {
   return SCALARS.has(part) ? { kind: 'scalar', name: part as ScalarName } : ANY
 }
 
-/** Parses a SurrealQL type as the database reports it, e.g. `none | string` or `array<record<user>>`. */
+/** Parses a SurrealQL type as the database reports it, e.g. `none | string` or `array<record<identity>>`. */
 export function parseTypeString(text: string): FieldType {
   const parts = splitTopLevel(text.trim(), '|')
 

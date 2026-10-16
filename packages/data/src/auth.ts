@@ -1,7 +1,7 @@
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import type { RecordId, SurrealSession } from 'surrealdb'
 
-import { userIdFactory } from '@workspace/ids'
+import { identityIdFactory } from '@workspace/ids'
 
 import type { AuthPort, AuthTokens, AuthUser } from './auth.port'
 import { type DataError, type DataErrorCode, dataError } from './errors'
@@ -17,7 +17,6 @@ export interface AuthOptions {
 interface AccountRecord {
   readonly id: RecordId
   readonly email: string
-  readonly name: string
 }
 
 function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined, DataError> {
@@ -27,9 +26,9 @@ function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined,
 
   const key = String(record.id.id)
 
-  return userIdFactory.is(key)
-    ? ok({ id: key, email: record.email, name: record.name })
-    : err(dataError('data:AUTH_FAILED', `account key ${key} is not a user id`))
+  return identityIdFactory.is(key)
+    ? ok({ id: key, email: record.email })
+    : err(dataError('data:AUTH_FAILED', `account key ${key} is not an identity id`))
 }
 
 /**

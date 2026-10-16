@@ -1,14 +1,14 @@
 import type { ResultAsync } from 'neverthrow'
 
 import { token } from '@workspace/di'
-import type { UserId } from '@workspace/ids'
+import type { IdentityId } from '@workspace/ids'
 
 import type { DataError } from './errors'
 
+/** The signed-in identity: the account's id and the email it signs in with. */
 export interface AuthUser {
-  readonly id: UserId
+  readonly id: IdentityId
   readonly email: string
-  readonly name: string
 }
 
 /** The keys of a signed-in session: a short-lived access token and the refresh key that renews it. */
@@ -20,7 +20,6 @@ export interface AuthTokens {
 export interface SignUpInput {
   readonly email: string
   readonly password: string
-  readonly name: string
 }
 
 export interface SignInInput {

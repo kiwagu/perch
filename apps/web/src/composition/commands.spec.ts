@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AuthUser, LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
+import { replicaSchema } from '@workspace/database/replica-schema'
 import { profileIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
-import { replicaSchema } from '../replica.schema.gen'
 
 import { type CommandLogger, createCommandBus } from './commands'
 import { SessionService } from './session'
@@ -26,7 +26,7 @@ beforeEach(async () => {
   local = (await openTestDb())._unsafeUnwrap()
   logged = []
   session = new SessionService(local, {
-    access: 'user',
+    access: 'identity',
     namespace: 'app',
     database: 'app',
     schema: replicaSchema,
@@ -36,7 +36,7 @@ beforeEach(async () => {
     },
   })
   user = (
-    await session.signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
+    await session.signUp({ email: 'ann@example.test', password: 'secret-ann' })
   )._unsafeUnwrap()
 })
 
@@ -66,7 +66,7 @@ describe('createCommandBus', () => {
     const id = profileIdFactory.create()
     const result = await bus().execute(profileCommands.createProfile, {
       id,
-      user: user.id,
+      identity: user.id,
       name: 'Ann',
       email: 'ann@example.test',
     })
@@ -82,7 +82,7 @@ describe('createCommandBus', () => {
   it('refuses invalid parameters before anything is written', async () => {
     const result = await bus().execute(profileCommands.createProfile, {
       id: user.id as never,
-      user: user.id,
+      identity: user.id,
       name: 'Ann',
       email: 'ann@example.test',
     })

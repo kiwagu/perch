@@ -8,42 +8,39 @@ import { runCommand } from './commands'
 import { openTestDb, readSchema } from './testing'
 import type { Command, LocalDb } from './types'
 
-const createUser: Command<{ email: string; name: string }> = {
-  id: 'fixture.create-user',
+const createIdentity: Command<{ email: string }> = {
+  id: 'fixture.create-identity',
   kind: 'command',
-  text: readFileSync(new URL('./__fixtures__/create-user.surql', import.meta.url), 'utf8'),
-  params: [
-    { name: 'email', type: 'string' },
-    { name: 'name', type: 'string' },
-  ],
-  tables: ['user'],
+  text: readFileSync(new URL('./__fixtures__/create-identity.surql', import.meta.url), 'utf8'),
+  params: [{ name: 'email', type: 'string' }],
+  tables: ['identity'],
   region: 'server',
   ops: [],
 }
 
-const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
+const ann = { email: 'ann@example.test', password: 'secret-ann' }
 
 let local: LocalDb
 let auth: AuthPort
 
 beforeEach(async () => {
   local = (await openTestDb())._unsafeUnwrap()
-  auth = createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
+  auth = createAuth(local, { access: 'identity', namespace: 'app', database: 'app' })
 })
 
 afterEach(async () => {
   await local.close()
 })
 
-const another = () => createAuth(local, { access: 'user', namespace: 'app', database: 'app' })
+const another = () => createAuth(local, { access: 'identity', namespace: 'app', database: 'app' })
 
 describe('createAuth', () => {
   it('signs up and reports the account as the current user', async () => {
     const user = (await auth.signUp(ann))._unsafeUnwrap()
     const current = (await auth.current())._unsafeUnwrap()
 
-    expect(user.id).toMatch(/^usr_/)
-    expect(user).toEqual({ id: user.id, email: ann.email, name: ann.name })
+    expect(user.id).toMatch(/^idn_/)
+    expect(user).toEqual({ id: user.id, email: ann.email })
     expect(current).toEqual(user)
     expect(auth.tokens()?.access).toMatch(/^ey/)
     expect(auth.tokens()?.refresh).toMatch(/\S/)
@@ -52,7 +49,7 @@ describe('createAuth', () => {
   it('leaves the main session able to write after a sign-up', async () => {
     expect((await auth.signUp(ann)).isOk()).toBe(true)
 
-    const written = await runCommand(local, createUser, { email: 'b@example.test', name: 'B' })
+    const written = await runCommand(local, createIdentity, { email: 'b@example.test' })
 
     expect(written.isOk()).toBe(true)
   })

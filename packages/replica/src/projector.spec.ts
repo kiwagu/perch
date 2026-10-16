@@ -7,18 +7,18 @@ import acceptProfileDeletes from './__fixtures__/accept-profile-deletes.surql'
 import {
   createProfile,
   deleteProfile,
+  identityId,
   profileById,
   profileId,
   profileSchema,
   updateBio,
-  userId,
 } from './__fixtures__/profile'
 import refuseProfileDeletes from './__fixtures__/refuse-profile-deletes.surql'
 import { Projector } from './projector'
 import { RegionDoc } from './region-doc'
 import { LoroWritePath } from './write-path'
 
-const ann = { id: profileId, user: userId, name: 'Ann', email: 'ann@example.test' }
+const ann = { id: profileId, identity: identityId, name: 'Ann', email: 'ann@example.test' }
 
 let local: LocalDb
 let region: RegionDoc
@@ -54,7 +54,7 @@ describe('Projector', () => {
 
     expect(await readProfile()).toEqual({
       id: profileId,
-      user: userId,
+      identity: identityId,
       name: 'Ann',
       email: 'ann@example.test',
     })
@@ -149,7 +149,7 @@ describe('Projector', () => {
   })
 
   it('repairs a deletion that failed before a reload, retrying the lookup of what it projected', async () => {
-    const ref = { kind: 'private', id: `user:${userId}` } as const
+    const ref = { kind: 'private', id: `identity:${identityId}` } as const
     const before = (await RegionDoc.open(local, ref))._unsafeUnwrap()
     const beforeProjector = new Projector(before, local, profileSchema, {
       onError: (error) => failures.push(error.message),

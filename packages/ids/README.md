@@ -9,9 +9,9 @@ the application's composition root, never by this package.
 
 ## Key exports
 
-- `registry`: kinds `user` (`usr`) and `profile` (`prf`).
-- `UserId`, `ProfileId`, `EntityKind`: branded id types.
-- `userIdFactory`, `profileIdFactory`: `create()`, `is()`, `assert()`.
+- `registry`: kinds `identity` (`idn`) and `profile` (`prf`).
+- `IdentityId`, `ProfileId`, `EntityKind`: branded id types.
+- `identityIdFactory`, `profileIdFactory`: `create()`, `is()`, `assert()`.
 - `idSchemas`: Zod schemas per kind.
 
 ## Commands

@@ -10,7 +10,7 @@ const place = {
   moduleDir: 'features/user',
   componentDir: 'features/user/pages/profile',
 }
-const body = 'SELECT id, name FROM profile WHERE user = $user AND name != $name;'
+const body = 'SELECT id, name FROM profile WHERE identity = $identity AND name != $name;'
 
 const shape: ShapeFile = {
   ...place,
@@ -19,7 +19,7 @@ const shape: ShapeFile = {
   header: {
     kind: 'shape',
     params: [
-      { name: 'user', type: 'record<user>' },
+      { name: 'identity', type: 'record<identity>' },
       { name: 'name', type: 'string' },
     ],
     server: false,
@@ -89,7 +89,7 @@ describe('emitPagesModel', () => {
 
 describe('emitSurrealkitSuites', () => {
   it('checks that a signed-in user may run every shape of a module', () => {
-    expect(emitSurrealkitSuites([shape], 'user')).toEqual([
+    expect(emitSurrealkitSuites([shape], 'identity')).toEqual([
       {
         path: 'generated-user.toml',
         toml: [
@@ -104,7 +104,7 @@ describe('emitSurrealkitSuites', () => {
           'name = "a signed-in user can run the shape user.profile"',
           'kind = "sql_expect"',
           'actor = "record"',
-          `sql = "LET $user = $auth.id; LET $name = 'sample'; ${body}"`,
+          `sql = "LET $identity = $auth.id; LET $name = 'sample'; ${body}"`,
           'allow = true',
           '',
         ].join('\n'),

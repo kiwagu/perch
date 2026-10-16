@@ -109,7 +109,7 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
 
     const profileOf = (user: AuthUser, input: AccountInput) =>
       settled()
-        .andThen(() => profiles.read({ user: user.id }))
+        .andThen(() => profiles.read({ identity: user.id }))
         .andThen((rows): ResultAsync<{ id: ProfileId; locale: string | undefined }, SeedError> => {
           const [row] = rows
 
@@ -120,7 +120,7 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
           const id = profileIdFactory.create()
 
           return profiles
-            .createProfile({ id, user: user.id, name: input.name, email: input.email })
+            .createProfile({ id, identity: user.id, name: input.name, email: input.email })
             .map(() => ({ id, locale: undefined }))
         })
 

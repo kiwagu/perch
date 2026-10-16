@@ -225,7 +225,10 @@ export function emitModel(bundle: ComponentBundle, schema: SchemaModel): Generat
   return files
 }
 
-/** The field kinds the replica's write path and projector need, for every replicated table. */
+/**
+ * For every replicated table, the region whose documents hold its records and the
+ * field kinds the replica's write path and projector need.
+ */
 export function emitReplicaSchema(schema: SchemaModel): string {
   const tables = Object.entries(schema.tables)
     .filter(([, table]) => table.region !== undefined)
@@ -246,7 +249,7 @@ export function emitReplicaSchema(schema: SchemaModel): string {
         }
       }
 
-      return `  ${name}: ${literal(fields)},`
+      return `  ${name}: ${literal({ region: table.region, fields })},`
     })
 
   return [

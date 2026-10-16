@@ -24,14 +24,12 @@ beforeEach(async () => {
     shape: profileShape,
     commands: profileCommands,
   })
-  me = (
-    await session.signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
-  )._unsafeUnwrap()
+  me = (await session.signUp({ email: 'ann@example.test', password: 'secret-ann' }))._unsafeUnwrap()
   profileId = profileIdFactory.create()
 
   expect(
     (
-      await service.createProfile({ id: profileId, user: me.id, name: 'Ann', email: me.email })
+      await service.createProfile({ id: profileId, identity: me.id, name: 'Ann', email: me.email })
     ).isOk(),
   ).toBe(true)
 
@@ -45,7 +43,7 @@ afterEach(async () => {
 
 describe('ProfileService', () => {
   it('reads the profile tree of the signed-in user', async () => {
-    const tree = (await service.read({ user: me.id }))._unsafeUnwrap()
+    const tree = (await service.read({ identity: me.id }))._unsafeUnwrap()
 
     const [row, ...others] = tree
     const { id, created_at: createdAt, ...stable } = row ?? expect.unreachable('a profile row')
@@ -58,7 +56,7 @@ describe('ProfileService', () => {
 
   it('renames the profile and re-emits the tree', async () => {
     const seen: Array<string | undefined> = []
-    const stop = service.watch({ user: me.id }, (tree) => seen.push(tree[0]?.name))
+    const stop = service.watch({ identity: me.id }, (tree) => seen.push(tree[0]?.name))
 
     expect((await service.updateName({ id: profileId, name: '  Renamed ' })).isOk()).toBe(true)
 
@@ -74,7 +72,7 @@ describe('ProfileService', () => {
 
     expect((await session.flush()).isOk()).toBe(true)
 
-    expect((await service.read({ user: me.id }))._unsafeUnwrap()[0]?.name).toBe('Ann')
+    expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]?.name).toBe('Ann')
   })
 
   it('keeps the biography and the chosen language', async () => {
@@ -83,7 +81,7 @@ describe('ProfileService', () => {
 
     expect((await session.flush()).isOk()).toBe(true)
 
-    expect((await service.read({ user: me.id }))._unsafeUnwrap()[0]).toMatchObject({
+    expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]).toMatchObject({
       bio: 'Hello',
       locale: 'es',
     })

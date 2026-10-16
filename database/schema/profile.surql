@@ -7,10 +7,10 @@
 -- @id prf
 DEFINE TABLE OVERWRITE profile SCHEMAFULL
   PERMISSIONS
-    FOR select, update WHERE user = $auth.id
+    FOR select, update WHERE identity = $auth.id
     FOR create, delete NONE;
 
-DEFINE FIELD OVERWRITE user ON profile TYPE record<user>;
+DEFINE FIELD OVERWRITE identity ON profile TYPE record<identity>;
 DEFINE FIELD OVERWRITE name ON profile TYPE string
   ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE email ON profile TYPE string;
@@ -23,4 +23,4 @@ DEFINE FIELD OVERWRITE created_at ON profile TYPE datetime
   DEFAULT time::now()
   READONLY;
 
-DEFINE INDEX OVERWRITE profile_user ON profile FIELDS user UNIQUE;
+DEFINE INDEX OVERWRITE profile_identity ON profile FIELDS identity UNIQUE;

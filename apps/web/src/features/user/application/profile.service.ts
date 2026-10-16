@@ -4,7 +4,7 @@ import type { BusError } from '@workspace/cqrs'
 import type { Command, DataError, Shape, ShapeRunnerPort } from '@workspace/data'
 import { token } from '@workspace/di'
 import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n'
-import type { ProfileId, UserId } from '@workspace/ids'
+import type { IdentityId, ProfileId } from '@workspace/ids'
 
 import type { CommandsPort } from '../../../platform/commands.port'
 import { checkProfileName } from '../domain/profile.entity'
@@ -20,12 +20,12 @@ export interface ProfileRow {
 }
 
 export interface ProfileOwner {
-  readonly user: UserId
+  readonly identity: IdentityId
 }
 
 export interface NewProfile {
   readonly id: ProfileId
-  readonly user: UserId
+  readonly identity: IdentityId
   readonly name: string
   readonly email: string
 }

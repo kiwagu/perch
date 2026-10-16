@@ -9,42 +9,44 @@ const S = (name: 'string' | 'datetime' | 'int'): FieldType => ({ kind: 'scalar',
 
 const schema: SchemaModel = {
   tables: {
-    user: {
-      idPrefix: 'usr',
+    identity: {
+      idPrefix: 'idn',
       fields: {
         name: S('string'),
         email: S('string'),
         created_at: S('datetime'),
         avatar_url: { kind: 'option', inner: S('string') },
-        manager: { kind: 'record', tables: ['user'] },
+        manager: { kind: 'record', tables: ['identity'] },
       },
     },
     org: { idPrefix: 'org', fields: { name: S('string'), size: S('int') } },
-    member_of: { fields: { role: S('string') }, relation: { in: ['user'], out: ['org'] } },
+    member_of: { fields: { role: S('string') }, relation: { in: ['identity'], out: ['org'] } },
   },
 }
 
-const user = [{ name: 'id', type: 'record<user>' }]
+const identity = [{ name: 'id', type: 'record<identity>' }]
 
 describe('inferResultType', () => {
-  it('infers a flat projection on FROM ONLY $id: record<user>', () => {
+  it('infers a flat projection on FROM ONLY $id: record<identity>', () => {
     const ast = parseShape('SELECT name, email FROM ONLY $id;')
 
-    expect(inferResultType(ast, user, schema)).toBe('{ name: string; email: string } | undefined')
+    expect(inferResultType(ast, identity, schema)).toBe(
+      '{ name: string; email: string } | undefined',
+    )
   })
 
   it('types ids, datetimes and optional fields', () => {
     const ast = parseShape('SELECT id, created_at, avatar_url FROM ONLY $id;')
 
-    expect(inferResultType(ast, user, schema)).toBe(
-      '{ id: UserId; created_at: Date; avatar_url?: string | undefined } | undefined',
+    expect(inferResultType(ast, identity, schema)).toBe(
+      '{ id: IdentityId; created_at: Date; avatar_url?: string | undefined } | undefined',
     )
   })
 
   it('infers arrays for graph edges and nested destructuring', () => {
     const ast = parseShape('SELECT ->member_of->org.{ id, name } AS orgs FROM ONLY $id;')
 
-    expect(inferResultType(ast, user, schema)).toBe(
+    expect(inferResultType(ast, identity, schema)).toBe(
       '{ orgs: Array<{ id: OrgId; name: string }> } | undefined',
     )
   })
@@ -64,21 +66,21 @@ describe('inferResultType', () => {
       'SELECT manager, manager.name AS manager_name, manager.{ email } AS boss FROM ONLY $id;',
     )
 
-    expect(inferResultType(ast, user, schema)).toBe(
-      '{ manager: UserId; manager_name: string; boss: { email: string } } | undefined',
+    expect(inferResultType(ast, identity, schema)).toBe(
+      '{ manager: IdentityId; manager_name: string; boss: { email: string } } | undefined',
     )
   })
 
   it('wraps FROM table (not ONLY) into an array', () => {
-    const ast = parseShape('SELECT name FROM user;')
+    const ast = parseShape('SELECT name FROM identity;')
 
     expect(inferResultType(ast, [], schema)).toBe('Array<{ name: string }>')
   })
 
   it('fails on an unknown field or table', () => {
     expect(() =>
-      inferResultType(parseShape('SELECT nickname FROM ONLY $id;'), user, schema),
-    ).toThrow(/user has no field nickname/)
+      inferResultType(parseShape('SELECT nickname FROM ONLY $id;'), identity, schema),
+    ).toThrow(/identity has no field nickname/)
     expect(() => inferResultType(parseShape('SELECT name FROM team;'), [], schema)).toThrow(
       /unknown table team/,
     )
@@ -91,15 +93,15 @@ describe('tablesOf', () => {
       'SELECT name, email, ->member_of->org.{ id, name } AS orgs, manager.name AS m FROM ONLY $id;',
     )
 
-    expect(tablesOf(ast, user, schema)).toEqual(['user', 'member_of', 'org'])
+    expect(tablesOf(ast, identity, schema)).toEqual(['identity', 'member_of', 'org'])
   })
 
   it('counts the tables a predicate, an ordering or a FETCH reads through record links', () => {
-    const owner = [{ name: 'owner', type: 'record<user>' }]
+    const owner = [{ name: 'owner', type: 'record<identity>' }]
 
     expect(
       tablesOf(parseShape('SELECT role FROM member_of WHERE in.manager.name = $name;'), [], schema),
-    ).toEqual(['member_of', 'user'])
+    ).toEqual(['member_of', 'identity'])
     expect(
       tablesOf(
         parseShape('SELECT role FROM member_of ORDER BY out.name DESC LIMIT 10;'),
@@ -113,14 +115,14 @@ describe('tablesOf', () => {
         owner,
         schema,
       ),
-    ).toEqual(['member_of', 'user'])
+    ).toEqual(['member_of', 'identity'])
     expect(tablesOf(parseShape('SELECT role FROM member_of FETCH out;'), [], schema)).toEqual([
       'member_of',
       'org',
     ])
     expect(tablesOf(parseShape('SELECT in FROM member_of FETCH in, out;'), [], schema)).toEqual([
       'member_of',
-      'user',
+      'identity',
       'org',
     ])
   })
@@ -130,7 +132,7 @@ describe('tablesOf', () => {
       tablesOf(parseShape(`SELECT name FROM org ${rest};`), [], schema)
 
     expect(tail('WHERE id IN (SELECT VALUE out FROM member_of)')).toThrow(/subquer/)
-    expect(tail('WHERE <-member_of<-user.name CONTAINS "Ann"')).toThrow(/graph/)
+    expect(tail('WHERE <-member_of<-identity.name CONTAINS "Ann"')).toThrow(/graph/)
     expect(tail('WHERE fn::visible(id)')).toThrow(/fn::visible/)
     expect(tail('WHERE nmae = "x"')).toThrow('org has no field nmae')
   })

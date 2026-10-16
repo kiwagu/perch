@@ -12,9 +12,8 @@ import { createAppRouter } from './router'
 import { ServicesProvider } from './services'
 
 const me: AuthUser = {
-  id: 'usr_0000000000000000.01m52pexcp' as AuthUser['id'],
+  id: 'idn_0000000000000000.01m52pexcp' as AuthUser['id'],
   email: 'ann@example.test',
-  name: 'Ann',
 }
 
 const Page = () => null

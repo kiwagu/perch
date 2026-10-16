@@ -3,5 +3,5 @@
 import type { ReplicaSchema } from '@workspace/replica'
 
 export const replicaSchema: ReplicaSchema = {
-  profile: { bio: { kind: 'text' }, created_at: { kind: 'datetime' }, user: { kind: 'record', table: 'user' } },
+  profile: { region: 'private', fields: { bio: { kind: 'text' }, created_at: { kind: 'datetime' }, identity: { kind: 'record', table: 'identity' } } },
 }

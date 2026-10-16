@@ -19,14 +19,14 @@ const shape: Shape<{ id: string }, { name: string }> = {
   kind: 'shape',
   text: 'SELECT',
   params: [{ name: 'id', type: 'string' }],
-  tables: ['user', 'org'],
+  tables: ['identity', 'org'],
 }
 
 describe('ShapeRunner.read', () => {
   it('returns the first statement result as the tree', async () => {
     const runner = new ShapeRunner(fakeLocal([{ name: 'a' }]))
 
-    expect((await runner.read(shape, { id: 'user:1' }))._unsafeUnwrap()).toEqual({ name: 'a' })
+    expect((await runner.read(shape, { id: 'identity:1' }))._unsafeUnwrap()).toEqual({ name: 'a' })
   })
 })
 
@@ -37,7 +37,7 @@ describe('ShapeRunner.watch', () => {
     const local = fakeLocal([{ name: 'a' }, { name: 'b' }, { name: 'c' }])
     const runner = new ShapeRunner(local)
     const seen: unknown[] = []
-    const stop = runner.watch(shape, { id: 'user:1' }, (tree) => seen.push(tree), {
+    const stop = runner.watch(shape, { id: 'identity:1' }, (tree) => seen.push(tree), {
       debounceMs: 10,
     })
 
@@ -47,7 +47,7 @@ describe('ShapeRunner.watch', () => {
     publishChange(local, ['org'], 'command')
     await vi.runAllTimersAsync()
     stop()
-    publishChange(local, ['user'], 'command')
+    publishChange(local, ['identity'], 'command')
     await vi.runAllTimersAsync()
 
     expect(seen).toEqual([{ name: 'a' }, { name: 'b' }])
@@ -64,7 +64,7 @@ describe('ShapeRunner.watch', () => {
       close: () => Promise.resolve(),
     }
     const failures: string[] = []
-    const stop = new ShapeRunner(local).watch(shape, { id: 'user:1' }, () => {}, {
+    const stop = new ShapeRunner(local).watch(shape, { id: 'identity:1' }, () => {}, {
       onError: (error) => failures.push(error.code),
     })
 

@@ -20,7 +20,7 @@ export function ProfileContainer() {
     (onChange) => session.subscribe(onChange),
     () => session.current(),
   )
-  const { tree, status } = useShape(profileShape, user ? { user: user.id } : null)
+  const { tree, status } = useShape(profileShape, user ? { identity: user.id } : null)
   const row = tree?.[0]
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)

@@ -230,7 +230,7 @@ export class SessionService implements SessionPort {
       this.#emit(undefined)
     }
 
-    return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).andThen(
+    return RegionDoc.open(this.local, { kind: 'private', id: `identity:${user.id}` }).andThen(
       (region) => {
         if (generation !== this.#generation) {
           region.close()

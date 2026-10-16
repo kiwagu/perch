@@ -1,3 +1,5 @@
+import type { Region } from '@workspace/data'
+
 /**
  * What the replica needs to know about a table's fields beyond plain values:
  * which fields are mergeable CRDT containers, which hold references to other
@@ -11,12 +13,23 @@ export type ReplicaField =
   | { readonly kind: 'record'; readonly table: string }
   | { readonly kind: 'datetime' }
 
-export type ReplicaSchema = Readonly<Record<string, Readonly<Record<string, ReplicaField>>>>
+/** A replicated table: the region whose document holds its records, and its non-plain fields. */
+export interface ReplicaTable {
+  readonly region: Region
+  readonly fields: Readonly<Record<string, ReplicaField>>
+}
+
+export type ReplicaSchema = Readonly<Record<string, ReplicaTable>>
 
 export function fieldOf(
   schema: ReplicaSchema,
   table: string,
   field: string,
 ): ReplicaField | undefined {
-  return schema[table]?.[field]
+  return schema[table]?.fields[field]
+}
+
+/** The replicated tables whose records live in documents of this region. */
+export function tablesOf(schema: ReplicaSchema, region: Region): readonly string[] {
+  return Object.keys(schema).filter((table) => schema[table]?.region === region)
 }

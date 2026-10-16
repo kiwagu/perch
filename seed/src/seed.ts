@@ -37,7 +37,7 @@ const seededAccounts: Shape<{ domain: string }, readonly unknown[]> = {
   kind: 'shape',
   text: seededAccountsText,
   params: [{ name: 'domain', type: 'string' }],
-  tables: ['user'],
+  tables: ['identity'],
 }
 
 const sweepCommand: Command<{ domain: string }> = {
@@ -45,7 +45,7 @@ const sweepCommand: Command<{ domain: string }> = {
   kind: 'command',
   text: sweepText,
   params: [{ name: 'domain', type: 'string' }],
-  tables: ['user', 'profile', '_replica_snapshot', '_replica_update', '_replica_outbox'],
+  tables: ['identity', 'profile', '_replica_snapshot', '_replica_update', '_replica_outbox'],
   region: 'server',
   ops: [],
 }

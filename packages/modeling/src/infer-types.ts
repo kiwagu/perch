@@ -22,7 +22,7 @@ interface Resolved {
   readonly optional: boolean
 }
 
-/** The TypeScript name of a table's id type: `UserId` for a table with an id prefix, else `string`. */
+/** The TypeScript name of a table's id type: `ProfileId` for a table with an id prefix, else `string`. */
 export function idTypeOf(schema: SchemaModel, table: string): string {
   return schema.tables[table]?.idPrefix ? `${pascal(table)}Id` : 'string'
 }

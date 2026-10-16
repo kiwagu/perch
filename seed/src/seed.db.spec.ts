@@ -23,7 +23,7 @@ const standCounts: Shape<
   kind: 'shape',
   text: standCountsText,
   params: [],
-  tables: ['user', 'profile', '_replica_update'],
+  tables: ['identity', 'profile', '_replica_update'],
 }
 
 const counts = async () => {

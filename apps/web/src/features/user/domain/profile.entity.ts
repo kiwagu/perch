@@ -1,6 +1,6 @@
 /**
- * The profile of an account: what the user shows of themselves. Its identity is
- * a profile id; it belongs to exactly one user.
+ * The profile of an account: what the user shows of themselves. It is keyed by a
+ * profile id and belongs to exactly one identity.
  */
 
 import type { Result } from 'neverthrow'
@@ -13,7 +13,7 @@ export const PROFILE_NAME_MAX = 80
 
 export const ProfileSchema = z.object({
   id: idSchemas.profile.schema,
-  user: idSchemas.user.schema,
+  identity: idSchemas.identity.schema,
   name: z.string().trim().min(1).max(PROFILE_NAME_MAX),
   email: z.email(),
   bio: z.string().optional(),

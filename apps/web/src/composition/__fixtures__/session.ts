@@ -1,8 +1,8 @@
 import type { LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
+import { replicaSchema } from '@workspace/database/replica-schema'
 
 import type { CommandsPort } from '../../platform/commands.port'
-import { replicaSchema } from '../../replica.schema.gen'
 import { type CommandLogger, createCommandBus } from '../commands'
 import { SessionService } from '../session'
 import { memoryStorage } from '../storage'
@@ -19,7 +19,7 @@ const silent: CommandLogger = { info: () => {}, warn: () => {} }
 export async function openTestSession(logger: CommandLogger = silent): Promise<TestSession> {
   const local = (await openTestDb())._unsafeUnwrap()
   const session = new SessionService(local, {
-    access: 'user',
+    access: 'identity',
     namespace: 'app',
     database: 'app',
     schema: replicaSchema,

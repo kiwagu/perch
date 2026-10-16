@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { profileIdFactory, userIdFactory } from '@workspace/ids'
+import { identityIdFactory, profileIdFactory } from '@workspace/ids'
 
 import { checkProfileName, ProfileSchema } from './profile.entity'
 
 const valid = {
   id: profileIdFactory.create(),
-  user: userIdFactory.create(),
+  identity: identityIdFactory.create(),
   name: 'Ann',
   email: 'ann@example.test',
   createdAt: new Date('2026-01-01T00:00:00Z'),
@@ -21,7 +21,9 @@ describe('ProfileSchema', () => {
   it('rejects an empty name, a bad email and an id of another kind', () => {
     expect(ProfileSchema.safeParse({ ...valid, name: '' }).success).toBe(false)
     expect(ProfileSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false)
-    expect(ProfileSchema.safeParse({ ...valid, id: userIdFactory.create() }).success).toBe(false)
+    expect(ProfileSchema.safeParse({ ...valid, id: identityIdFactory.create() }).success).toBe(
+      false,
+    )
   })
 })
 

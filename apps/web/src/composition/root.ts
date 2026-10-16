@@ -17,11 +17,11 @@ import {
   WRITE_PATH,
   type WritePathPort,
 } from '@workspace/data'
+import { replicaSchema } from '@workspace/database/replica-schema'
 import { Container } from '@workspace/di'
 
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
-import { replicaSchema } from '../replica.schema.gen'
 
 import { type CommandLogger, createCommandBus } from './commands'
 import { SessionService } from './session'
@@ -74,7 +74,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     ...(options.credentials ? { credentials: options.credentials } : {}),
   }).andThen((local) => {
     const session = new SessionService(local, {
-      access: 'user',
+      access: 'identity',
       namespace,
       database,
       schema: replicaSchema,

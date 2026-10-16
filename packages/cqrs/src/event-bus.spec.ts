@@ -10,7 +10,7 @@ type Renamed = DomainEvent<'profile.renamed', { name: string }>
 const renamed: Renamed = {
   name: 'profile.renamed',
   payload: { name: 'Ann' },
-  actorId: 'usr_1',
+  actorId: 'idn_1',
   occurredAt: new Date(0),
 }
 

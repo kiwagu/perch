@@ -55,9 +55,9 @@ describe('sign-in', () => {
 
     expect((await session.flush()).isOk()).toBe(true)
 
-    const user = me?.id ?? expect.unreachable('signed in')
+    const identity = me?.id ?? expect.unreachable('signed in')
 
-    expect((await profiles.read({ user }))._unsafeUnwrap()).toMatchObject([
+    expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann', email: ann.email },
     ])
   })

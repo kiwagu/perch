@@ -11,7 +11,7 @@ type Rename = { readonly type: 'profile.rename'; readonly payload: { readonly na
 type Reset = { readonly type: 'profile.reset'; readonly payload: Record<string, never> }
 
 const context: ExecutionContext = {
-  actorId: 'usr_1',
+  actorId: 'idn_1',
   deviceId: 'dev_1',
   tenantId: null,
   correlationId: 'cor_1',

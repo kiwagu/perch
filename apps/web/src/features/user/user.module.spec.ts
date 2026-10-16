@@ -50,7 +50,7 @@ describe('UserModule', () => {
     expect((await session.flush()).isOk()).toBe(true)
 
     expect(
-      (await container.get(PROFILE_SERVICE).read({ user: user.id }))._unsafeUnwrap(),
+      (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
     ).toMatchObject([{ name: 'Ann' }])
   })
 

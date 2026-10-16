@@ -18,7 +18,9 @@ local update is stored durably in the local database before it counts as persist
 - `Projector`: `start()` projects current records, deletes those the region projected
   earlier but no longer holds (a deletion that failed before a reload), then follows
   every commit and import; `flush()` retries failed records and reports those still failing.
-- `ReplicaSchema`: which fields are text, list or counter containers, references or datetimes.
+- `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
+  its records and which fields are text, list or counter containers, references or
+  datetimes; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands

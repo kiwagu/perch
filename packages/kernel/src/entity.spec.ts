@@ -53,12 +53,12 @@ describe('AggregateRoot', () => {
   it('collects recorded events and hands them out once', () => {
     const profile = Profile.of('p1', 'Ann')
 
-    profile.rename('Anna', 'usr_1')
+    profile.rename('Anna', 'idn_1')
 
     const events = profile.pullEvents()
 
     expect(events.map((event) => [event.name, event.payload, event.actorId])).toEqual([
-      ['profile.renamed', { name: 'Anna' }, 'usr_1'],
+      ['profile.renamed', { name: 'Anna' }, 'idn_1'],
     ])
     expect(profile.pullEvents()).toEqual([])
   })
@@ -66,7 +66,7 @@ describe('AggregateRoot', () => {
 
 describe('defineEvent', () => {
   it('validates the payload with its schema', () => {
-    const invalid = Renamed.create({ name: '' }, { actorId: 'usr_1' })
+    const invalid = Renamed.create({ name: '' }, { actorId: 'idn_1' })
 
     expect(invalid.isErr()).toBe(true)
     expect(invalid._unsafeUnwrapErr().code).toBe('kernel:INVALID_EVENT_PAYLOAD')
@@ -74,12 +74,12 @@ describe('defineEvent', () => {
 
   it('stamps the actor and the time', () => {
     const at = new Date('2026-01-01T00:00:00Z')
-    const event = Renamed.create({ name: 'Ann' }, { actorId: 'usr_1', occurredAt: at })
+    const event = Renamed.create({ name: 'Ann' }, { actorId: 'idn_1', occurredAt: at })
 
     expect(event._unsafeUnwrap()).toEqual({
       name: 'profile.renamed',
       payload: { name: 'Ann' },
-      actorId: 'usr_1',
+      actorId: 'idn_1',
       occurredAt: at,
     })
   })
