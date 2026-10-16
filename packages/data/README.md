@@ -23,7 +23,8 @@ is replaced on every use. Above this package ids are entity id strings and times
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`,
-  `FakeShapeRunner` (a runner without a database for component tests).
+  `FakeShapeRunner` (a runner without a database for component tests),
+  `interceptQueries()` (holds or fails queries, as a slow or broken database would).
 - `./engines/wasm`: browser engines in a Web Worker (Vite builds only).
 - `./vite-plugin-surql`: `surqlPlugin()` loads plain `.surql` files as text; `./surql` types such imports.
 
