@@ -1,4 +1,4 @@
-import { LoroDoc, type LoroMap } from 'loro-crdt'
+import { type ImportStatus, LoroDoc, type LoroMap, type PeerID } from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import {
@@ -237,6 +237,8 @@ class RegionStore {
 export class RegionDoc {
   readonly #store: RegionStore | undefined
   readonly #unsubscribe: () => void
+  /** Per peer, the end of the furthest change an import left waiting for history this document lacks. */
+  readonly #waiting = new Map<PeerID, number>()
   #pulled: number
 
   private constructor(
@@ -267,15 +269,17 @@ export class RegionDoc {
       >(loadStatement, { region: ref.id })
       const doc = createDoc(options.peerId ?? randomPeerId())
       const batch = [...snapshots, ...updates.map((update) => update.bytes)]
-
-      if (batch.length > 0) {
-        doc.importBatch(batch.map((bytes) => new Uint8Array(bytes)))
-      }
-
+      const status =
+        batch.length > 0 ? doc.importBatch(batch.map((bytes) => new Uint8Array(bytes))) : undefined
       const loadedSeq = Math.max(0, ...updates.map((update) => update.seq))
       const store = new RegionStore(local, ref.id, loadedSeq)
+      const region = new RegionDoc(ref, doc, store, cursor[0] ?? 0)
 
-      return new RegionDoc(ref, doc, store, cursor[0] ?? 0)
+      if (status) {
+        region.#settle(status)
+      }
+
+      return region
     }
 
     return ResultAsync.fromPromise(load(), (cause) =>
@@ -333,10 +337,10 @@ export class RegionDoc {
     )
 
     return imported.andThen(
-      ({ pending }): ResultAsync<ImportOutcome, DataError> =>
-        pending && pending.size > 0
-          ? okAsync({ complete: false })
-          : this.advanceCursor(head).map(() => ({ complete: true })),
+      (status): ResultAsync<ImportOutcome, DataError> =>
+        this.#settle(status)
+          ? this.advanceCursor(head).map(() => ({ complete: true }))
+          : okAsync({ complete: false }),
     )
   }
 
@@ -359,7 +363,9 @@ export class RegionDoc {
 
   /** Imports update-log rows other tabs appended since this document last looked; resolves to how many. */
   catchUpLocal(): ResultAsync<number, DataError> {
-    return this.#store?.catchUp((updates) => this.doc.importBatch(updates)) ?? okAsync(0)
+    return (
+      this.#store?.catchUp((updates) => this.#settle(this.doc.importBatch(updates))) ?? okAsync(0)
+    )
   }
 
   /** Replaces the update log with one full snapshot of the document. */
@@ -374,5 +380,26 @@ export class RegionDoc {
 
   close(): void {
     this.#unsubscribe()
+  }
+
+  /**
+   * Remembers what an import left waiting for missing history and forgets what has
+   * arrived since; true when nothing waits. Loro reports pending changes per import,
+   * so a later import that completes on its own says nothing about earlier gaps.
+   */
+  #settle(status: ImportStatus): boolean {
+    for (const [peer, span] of status.pending ?? []) {
+      this.#waiting.set(peer, Math.max(this.#waiting.get(peer) ?? 0, span.end))
+    }
+
+    const known = this.doc.oplogVersion()
+
+    for (const [peer, end] of this.#waiting) {
+      if ((known.get(peer) ?? 0) >= end) {
+        this.#waiting.delete(peer)
+      }
+    }
+
+    return this.#waiting.size === 0
   }
 }

@@ -20,16 +20,17 @@ import { LoroWritePath } from './write-path'
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
 const ann = { id: profileId, identity: identityId, name: 'Ann', email: 'ann@example.test' }
 const key = `profile/${profileId}`
+const otherKey = 'profile/prf_0000000000000001.01m52pexcp'
 
 let local: LocalDb
 
 const open = async () => (await RegionDoc.open(local, ref))._unsafeUnwrap()
 
-function writeName(region: RegionDoc, name: string): void {
+function writeName(region: RegionDoc, name: string, recordKey: string = key): void {
   const record =
-    region.recordJson(key) === undefined
-      ? region.records().setContainer(key, new LoroMap())
-      : region.recordMap(key)
+    region.recordJson(recordKey) === undefined
+      ? region.records().setContainer(recordKey, new LoroMap())
+      : region.recordMap(recordKey)
 
   record.set('name', name)
   region.doc.commit()
@@ -165,6 +166,32 @@ describe('RegionDoc sync state', () => {
 
     expect(outcome._unsafeUnwrap().complete).toBe(false)
     expect(region.pulled()).toBe(0)
+  })
+
+  it('keeps the cursor until every update an import left waiting has its history', async () => {
+    const author = RegionDoc.inMemory('private', ref.id)
+
+    author.records().setContainer(key, new LoroMap()).set('name', 'Ann')
+    author.doc.commit()
+    const before = author.doc.version()
+    const fill = author.doc.export({ mode: 'update' })
+
+    author.recordMap(key).set('name', 'Ana')
+    author.doc.commit()
+    const gap = author.doc.export({ mode: 'update', from: before })
+    const other = RegionDoc.inMemory('private', ref.id)
+
+    writeName(other, 'Beto', otherKey)
+    const unrelated = other.doc.export({ mode: 'update' })
+    const region = await open()
+
+    expect((await region.importRemote(gap, 2))._unsafeUnwrap().complete).toBe(false)
+    expect((await region.importRemote(unrelated, 3))._unsafeUnwrap().complete).toBe(false)
+    expect(region.pulled()).toBe(0)
+
+    expect((await region.importRemote(fill, 4))._unsafeUnwrap().complete).toBe(true)
+    expect(region.pulled()).toBe(4)
+    expect(region.recordJson(key)).toMatchObject({ name: 'Ana' })
   })
 
   it('numbers updates in the database, so two tabs on one database never share a number', async () => {
