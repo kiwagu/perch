@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "model": "./src/cli.ts"
+    "model": "./src/cli.ts",
+    "lint-surql": "./src/lint-surql.ts"
   },
   "exports": {
     ".": {
@@ -21,7 +22,8 @@
     "@workspace/data": "workspace:*",
     "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",
-    "neverthrow": "catalog:"
+    "neverthrow": "catalog:",
+    "oxc-parser": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

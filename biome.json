@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "includes": [
       "**",
@@ -28,7 +32,27 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "complexity": { "useLiteralKeys": "off" }
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+              "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+              "pino": "Log through @workspace/logger."
+            },
+            "patterns": [
+              {
+                "group": ["@surrealdb/*"],
+                "message": "Only @workspace/data talks to SurrealDB; use its ports."
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "assist": {
@@ -54,5 +78,137 @@
         }
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/replica/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "pino": "Log through @workspace/logger."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/logger/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.service.ts", "**/*.machine.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger.",
+                  "react": "Services and machines stay free of React; a container connects them to views.",
+                  "react-dom": "Services and machines stay free of React; a container connects them to views."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.view.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "surrealdb": "Only @workspace/data talks to SurrealDB; use its ports.",
+                  "loro-crdt": "Only @workspace/replica uses Loro; go through the write path or the region document.",
+                  "pino": "Log through @workspace/logger.",
+                  "@workspace/data": "Views render props; data reaches them through a container and its service.",
+                  "@workspace/replica": "Views render props; data reaches them through a container and its service."
+                },
+                "patterns": [
+                  {
+                    "group": ["@surrealdb/*"],
+                    "message": "Only @workspace/data talks to SurrealDB; use its ports."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/__fixtures__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

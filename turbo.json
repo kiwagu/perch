@@ -57,6 +57,9 @@
     },
     "//#readme:check": {
       "cache": false
+    },
+    "//#lint:surql": {
+      "cache": false
     }
   }
 }

@@ -8,7 +8,7 @@
     "build": "bun run scripts/build-capped.ts",
     "dev": "bun run scripts/turbo-with-exclude.ts dev",
     "typecheck": "turbo run typecheck typecheck:root",
-    "lint": "turbo run lint lint:root",
+    "lint": "turbo run lint lint:root lint:surql",
     "test": "turbo run test",
     "model": "turbo run model",
     "model:check": "turbo run model:check",
@@ -16,11 +16,12 @@
     "test:db": "turbo run test:db",
     "test:e2e": "turbo run test:e2e",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
-    "check": "turbo run typecheck typecheck:root lint lint:root test model:check i18n:check refactor:ci readme:check",
+    "check": "turbo run typecheck typecheck:root lint lint:root lint:surql test model:check i18n:check refactor:ci readme:check",
     "typecheck:root": "tsc -p scripts/tsconfig.json",
     "lint:root": "biome ci . && eslint scripts",
     "refactor:ci": "bun run scripts/find-refactor-candidates.ts --ci",
-    "readme:check": "bun run scripts/check-readmes.ts"
+    "readme:check": "bun run scripts/check-readmes.ts",
+    "lint:surql": "bun run packages/modeling/src/lint-surql.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

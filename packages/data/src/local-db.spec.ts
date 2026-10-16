@@ -119,7 +119,7 @@ describe('local db, shape runner and commands', () => {
       url: 'mem://',
       namespace: 'app',
       database: 'app',
-      schema: 'DEFINE TABLE ;',
+      schema: ')) unbalanced',
     })
 
     expect(opened._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')

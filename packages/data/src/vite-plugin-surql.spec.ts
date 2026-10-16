@@ -10,15 +10,13 @@ describe('surqlPlugin', () => {
   const dir = mkdtempSync(join(tmpdir(), 'surql-plugin-'))
   const file = join(dir, 'upsert.surql')
 
-  writeFileSync(file, 'UPSERT type::record($table, $key) CONTENT $data;\n')
+  writeFileSync(file, 'RETURN 1;\n')
 
   it('loads a plain .surql file as its text', () => {
     const plugin = surqlPlugin()
     const load = plugin.load as (id: string) => string | undefined
 
-    expect(load(file)).toBe(
-      `export default ${JSON.stringify('UPSERT type::record($table, $key) CONTENT $data;\n')}`,
-    )
+    expect(load(file)).toBe(`export default ${JSON.stringify('RETURN 1;\n')}`)
   })
 
   it('leaves other modules alone', () => {

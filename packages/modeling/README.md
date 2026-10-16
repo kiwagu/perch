@@ -15,6 +15,10 @@ TypeScript or React code.
   registry, then writes per component `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`,
   plus `pages.model.json`, `replica.schema.gen.ts` and `generated-<module>.toml` suites.
   `--check` writes nothing and fails on missing, different or stale output.
+- CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a
+  string or template literal in TypeScript that holds a SurrealQL statement; reads the syntax
+  tree with oxc-parser. The modeling sources are exempt: their tests feed SurrealQL to the parsers.
+- `findSurqlLiterals`: the same check for one file.
 - `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
 - `loadSchemaModel`, `parseStructure`: the schema model with its annotations
   (`@region`, `@replicate none`, `@id`, `@crdt`) and their problems.
