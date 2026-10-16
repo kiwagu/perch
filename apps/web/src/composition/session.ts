@@ -1,4 +1,4 @@
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -68,6 +68,7 @@ export class SessionService implements SessionPort {
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
   #user: AuthUser | undefined
   #open: OpenRegion | undefined
+  #generation = 0
 
   constructor(
     private readonly local: LocalDb,
@@ -107,22 +108,34 @@ export class SessionService implements SessionPort {
   }
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
-    return this.#auth.signUp(input).andThen((user) => this.#enter(user))
+    const generation = this.#begin()
+
+    return this.#auth.signUp(input).andThen((user) => this.#enter(user, generation))
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    return this.#auth.signIn(input).andThen((user) => this.#enter(user))
+    const generation = this.#begin()
+
+    return this.#auth.signIn(input).andThen((user) => this.#enter(user, generation))
   }
 
+  /**
+   * Ends the session on this device at once: no region, no saved keys, nobody
+   * signed in. Ending the database session may still fail; that is reported,
+   * and the device stays signed out.
+   */
   signOut(): ResultAsync<void, DataError> {
+    this.#begin()
     this.#leave()
     this.#forget()
+    this.#emit(undefined)
 
-    return this.#auth.signOut().map(() => this.#emit(undefined))
+    return this.#auth.signOut()
   }
 
   /** Continues the session saved by an earlier sign-in; an unusable token means signed out. */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
+    const generation = this.#begin()
     const access = this.options.storage.get(TOKEN_KEY)
 
     if (!access) {
@@ -139,7 +152,7 @@ export class SessionService implements SessionPort {
           return okAsync(undefined)
         }
 
-        return this.#enter(user)
+        return this.#enter(user, generation)
       })
   }
 
@@ -154,20 +167,35 @@ export class SessionService implements SessionPort {
     return open.region.flush().andThen(() => ResultAsync.fromSafePromise(open.projector.flush()))
   }
 
-  #enter(user: AuthUser): ResultAsync<AuthUser, DataError> {
+  /** Starts a session transition; a transition that finishes after a later one began is dropped. */
+  #begin(): number {
+    this.#generation += 1
+
+    return this.#generation
+  }
+
+  #enter(user: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
     this.#leave()
 
-    return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).map((region) => {
-      const projector = new Projector(region, this.local, this.options.schema, {
-        onError: this.options.onError,
-      })
+    return RegionDoc.open(this.local, { kind: 'private', id: `user:${user.id}` }).andThen(
+      (region) => {
+        if (generation !== this.#generation) {
+          region.close()
 
-      this.#open = { region, projector, stop: projector.start() }
-      this.writePath.attach(new LoroWritePath(region, this.options.schema))
-      this.#emit(user)
+          return err(dataError('data:AUTH_FAILED', 'a later sign-in or sign-out replaced this one'))
+        }
 
-      return user
-    })
+        const projector = new Projector(region, this.local, this.options.schema, {
+          onError: this.options.onError,
+        })
+
+        this.#open = { region, projector, stop: projector.start() }
+        this.writePath.attach(new LoroWritePath(region, this.options.schema))
+        this.#emit(user)
+
+        return ok(user)
+      },
+    )
   }
 
   #forget(): void {

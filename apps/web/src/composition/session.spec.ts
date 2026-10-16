@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
@@ -15,8 +15,8 @@ const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
 let local: LocalDb
 let failures: DataError[]
 
-const session = (storage = memoryStorage()) =>
-  new SessionService(local, {
+const session = (storage = memoryStorage(), database: LocalDb = local) =>
+  new SessionService(database, {
     access: 'user',
     namespace: 'app',
     database: 'app',
@@ -24,6 +24,49 @@ const session = (storage = memoryStorage()) =>
     storage,
     onError: (error) => failures.push(error),
   })
+
+/**
+ * The test database, with region loads held while `hold()` is in force, so a
+ * region open stays in flight until `release()`.
+ */
+function holdingRegionLoads(database: LocalDb) {
+  let gate: Promise<void> | undefined
+  let open = () => {}
+  const state = { waiting: 0 }
+  const query = async (text: string, bindings?: Record<string, unknown>): Promise<unknown> => {
+    if (gate && text.includes('FROM _replica_snapshot')) {
+      state.waiting++
+      await gate
+    }
+
+    return database.db.query(text, bindings)
+  }
+  const db = new Proxy(database.db, {
+    get(target, property) {
+      if (property === 'query') {
+        return query
+      }
+
+      const value: unknown = Reflect.get(target, property)
+
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value
+    },
+  })
+
+  return {
+    local: { ...database, db },
+    state,
+    hold: () => {
+      gate = new Promise((resolve) => {
+        open = resolve
+      })
+    },
+    release: () => {
+      gate = undefined
+      open()
+    },
+  }
+}
 
 beforeEach(async () => {
   local = (await openTestDb())._unsafeUnwrap()
@@ -134,6 +177,56 @@ describe('SessionService', () => {
     expect(storage.get('perch.session.token')).toBeUndefined()
     expect(storage.get('perch.session.refresh')).toBeUndefined()
     expect((await session(storage).restore())._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it('signs out locally even when the database cannot end the session', async () => {
+    const service = session()
+    const seen: Array<string | undefined> = []
+
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+    service.subscribe((user) => seen.push(user?.email))
+    await local.close()
+
+    expect((await service.signOut()).isErr()).toBe(true)
+    expect(service.current()).toBeUndefined()
+    expect(service.region()).toBeUndefined()
+    expect(seen).toEqual([undefined])
+  })
+
+  it('does not let a sign-in that is still opening its region come back after a sign-out', async () => {
+    const holding = holdingRegionLoads(local)
+    const service = session(memoryStorage(), holding.local)
+
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+    expect((await service.signOut()).isOk()).toBe(true)
+
+    holding.hold()
+
+    const signingIn = service.signIn(ann)
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+    expect((await service.signOut()).isOk()).toBe(true)
+    holding.release()
+
+    expect((await signingIn).isErr()).toBe(true)
+    expect(service.current()).toBeUndefined()
+    expect(service.region()).toBeUndefined()
+  })
+
+  it('keeps only the later of two overlapping sign-ins, with one region open', async () => {
+    const service = session()
+    const bob = { email: 'bob@example.test', password: 'secret-bob', name: 'Bob' }
+    const bobUser = (await service.signUp(bob))._unsafeUnwrap()
+
+    expect((await service.signUp(ann)).isOk()).toBe(true)
+
+    const first = service.signIn(bob)
+    const second = service.signIn(ann)
+
+    expect((await first).isErr()).toBe(true)
+    expect((await second)._unsafeUnwrap().email).toBe(ann.email)
+    expect(service.current()?.email).toBe(ann.email)
+    expect(service.region()?.ref.id).not.toBe(`user:${bobUser.id}`)
   })
 
   it('tells subscribers when the signed-in user changes', async () => {
