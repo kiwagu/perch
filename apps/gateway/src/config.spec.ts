@@ -36,6 +36,24 @@ describe('gatewayConfig', () => {
   })
 })
 
+describe('gatewayConfig.SURREAL_URL', () => {
+  it('accepts a WebSocket address', () => {
+    const parsed = gatewayConfig.parse({ ...env, SURREAL_URL: 'wss://db.example.test/rpc' })
+
+    expect(parsed.SURREAL_URL).toBe('wss://db.example.test/rpc')
+  })
+
+  it('refuses an address that is not WebSocket, naming the rule', () => {
+    for (const url of ['http://127.0.0.1:8000/rpc', 'https://db.example.test/rpc']) {
+      const parsed = gatewayConfig.safeParse({ ...env, SURREAL_URL: url })
+
+      expect(parsed.error?.issues.map(({ path, message }) => [path.join('.'), message])).toEqual([
+        ['SURREAL_URL', 'must be a ws:// or wss:// address: auth sessions need a WebSocket'],
+      ])
+    }
+  })
+})
+
 describe('httpRpcUrl', () => {
   it('turns the WebSocket address of the database into its HTTP RPC endpoint', () => {
     expect(httpRpcUrl('ws://127.0.0.1:8000/rpc')).toBe('http://127.0.0.1:8000/rpc')

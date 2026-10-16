@@ -17,7 +17,8 @@ WebSocket is not served. Keys, tokens and grant ids never reach its logs.
 
 None: this is an application. Its entry point is `src/index.ts`, which registers the
 `.surql` loader and runs `src/main.ts`. The environment it reads is `GATEWAY_PORT`,
-`SURREAL_URL` (the database's WebSocket endpoint, such as `ws://127.0.0.1:8000/rpc`),
+`SURREAL_URL` (the database's WebSocket endpoint, `ws://` or `wss://`, such as
+`ws://127.0.0.1:8000/rpc`),
 `GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, and optionally the logger's `LOG_LEVEL`
 and `LOG_FORMAT`.
 
