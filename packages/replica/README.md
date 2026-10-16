@@ -12,7 +12,10 @@ updates from a server are stored before they are imported, and a cursor records 
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
 then accepted together with its projection in one transaction, under a number without
-gaps, and a compaction replaces rows with a snapshot only when it matches them.
+gaps, and a compaction replaces rows with a snapshot only when it matches them. A hub holds
+the authoritative document of every region a device subscribes to, handles one region's
+work at a time, sends each accepted batch to the region's other subscribers and drops a
+region from memory once nobody has subscribed for a while.
 
 ## Key exports
 
@@ -43,6 +46,15 @@ gaps, and a compaction replaces rows with a snapshot only when it matches them.
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
   history, a table outside the region, a record that is not a map, a private record
   referencing another identity).
+  `RegionHub` (`RegionHubOptions`: database, schema, `Clock`, idle time, log length that asks
+  for a compaction, `onError`): `subscribe(region, owner, subscriber, vv)` answers with the
+  updates after `vv` or a full snapshot, `push(region, subscriber, batch, updates)` answers
+  with an ack (asking for a compaction once the log outgrows its limit) or a reject and sends
+  the batch to the other subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`,
+  `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+- `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
+  tasks only when a test calls `advance(ms)`, and counts them with `pending()`.
+- `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
@@ -53,5 +65,5 @@ gaps, and a compaction replaces rows with a snapshot only when it matches them.
 ## Commands
 
 - `bun run test`: unit tests of the write path and functional tests of the projector,
-  persistence and the server log on an embedded in-memory database.
+  persistence, the server log and the region hub on an embedded in-memory database.
 - `bun run typecheck`, `bun run lint`.
