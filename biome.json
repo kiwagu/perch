@@ -35,6 +35,9 @@
       "complexity": {
         "useLiteralKeys": "off"
       },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
       "style": {
         "noRestrictedImports": {
           "level": "error",

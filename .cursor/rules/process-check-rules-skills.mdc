@@ -23,6 +23,7 @@ alwaysApply: true
 - New artifact of any kind (component, helper, type, contract): `reuse-first-discovery.mdc` first, always.
 - Where a change belongs (domain, application, presentation, adapters): `domain-context-first-analysis.mdc`.
 - Data contracts and validation at boundaries: `zod-schema-first-contracts.mdc`.
+- Untyped values, casts, `any`-typed library results: `no-any.mdc`.
 - User-visible text: `ui-i18n-direct-keys.mdc`.
 - UI controls and styling: `ui-primitive-hygiene.mdc`, then the vendor skill `.agents/skills/shadcn/SKILL.md`.
 - Imports that load code lazily: `static-imports-only.mdc`.

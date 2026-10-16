@@ -4,8 +4,9 @@
 
 The narrow ESLint layer next to Biome. Biome formats, orders imports and runs the base
 lint; this config adds only what Biome cannot check: blank lines between statements,
-hexagonal layer boundaries, type-aware promise rules, the must-use-Result rule and
-immutability rules for domain and application code. It never formats tokens. Tests
+hexagonal layer boundaries, type-aware promise rules, the type-aware rules that stop
+an untyped (`any`) value from spreading, the must-use-Result rule and immutability
+rules for domain and application code. It never formats tokens. Tests
 (`*.spec.*`) may cross layers: like the composition root, they wire real adapters and
 generated models.
 

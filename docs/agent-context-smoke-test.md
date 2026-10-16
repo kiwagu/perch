@@ -17,6 +17,7 @@ skill, to confirm that prompts still route to the narrowest relevant document.
 | Add a helper that formats a user's display name | process -> reuse-first-discovery |
 | Decide whether a profile rule belongs in the entity or in the service | process -> domain-context-first-analysis |
 | Validate the parameters of a new command | process -> zod-schema-first-contracts |
+| Read a JSON value from local storage and use its fields | process -> no-any, then zod-schema-first-contracts |
 | Add a "Saved" notice to the profile page | process -> ui-i18n-direct-keys |
 | Add a delete button with a confirmation menu | process -> ui-primitive-hygiene -> shadcn skill |
 | Load the Spanish catalog only when the user picks Spanish | process -> static-imports-only |

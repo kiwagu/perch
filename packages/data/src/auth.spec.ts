@@ -40,7 +40,8 @@ describe('createAuth', () => {
     const user = (await auth.signUp(ann))._unsafeUnwrap()
     const current = (await auth.current())._unsafeUnwrap()
 
-    expect(user).toEqual({ id: expect.stringMatching(/^usr_/), email: ann.email, name: ann.name })
+    expect(user.id).toMatch(/^usr_/)
+    expect(user).toEqual({ id: user.id, email: ann.email, name: ann.name })
     expect(current).toEqual(user)
     expect(auth.token()).toEqual(expect.any(String))
   })

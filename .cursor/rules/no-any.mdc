@@ -1,0 +1,26 @@
+---
+description: 'Use when: typing a value whose type is not obvious, reading untyped input (JSON.parse, a driver or library result), or reaching for a cast or a test matcher to quiet the type checker.'
+alwaysApply: true
+---
+
+# No `any`
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- A value's type is unknown, comes from an untyped API, or does not fit the type you have.
+
+## Stop Here If
+
+- Every value has a real type, and untyped input is held as `unknown` until it is parsed.
+
+## Core rule
+
+- `any` is never written, in production code, tests, fixtures or generated code. Biome refuses it (`noExplicitAny` at error level).
+- An `any` that arrives from an untyped API (`JSON.parse`, a driver result, `instanceof` on a generic class) must not spread: type-aware ESLint refuses assigning, returning, passing, calling or reading members of it (`no-unsafe-*`).
+- Untyped input is held as `unknown` and turned into a typed value by a schema (`zod-schema-first-contracts.mdc`) or by an explicit conversion such as `String(value)`.
+- In tests, assert with typed checks instead of `any`-typed matchers such as `expect.any(...)` inside objects: check the field on its own (`toBeInstanceOf(Date)`, `toMatch(...)`) or parse with a schema.
+- The modeling stage maps SurrealQL's own `any` type to `unknown` and `z.unknown()`.

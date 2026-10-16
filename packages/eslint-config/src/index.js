@@ -141,6 +141,13 @@ export const base = [
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/await-thenable': 'error',
+      // No `any`: Biome refuses a written one; these stop one that leaks in from an
+      // untyped API (JSON.parse, a driver result) from spreading through typed code.
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
       'workspace/must-use-result': 'error',
     },
   },

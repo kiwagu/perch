@@ -20,4 +20,4 @@ alwaysApply: true
 ## Core rule
 
 - Imports are static so bundlers, type checking and dependency rules see the whole graph.
-- A dynamic import is allowed only with a comment that names its reason. Accepted reasons today: secondary language catalogs loaded when the language is chosen, and WASM engines loaded in a worker after the first frame.
+- A dynamic import is allowed only with a comment that names its reason. Accepted reasons today: secondary language catalogs loaded when the language is chosen, WASM engines loaded in a worker after the first frame, and a Bun CLI entry that registers a module loader (such as the `.surql` loader) before loading the code that needs it.

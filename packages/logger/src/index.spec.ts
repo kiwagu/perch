@@ -15,7 +15,7 @@ describe('createLogger', () => {
 
     logger.info({ region: 'private' }, 'opened')
 
-    const entry = JSON.parse(sink.lines[0] ?? '{}')
+    const entry: unknown = JSON.parse(sink.lines[0] ?? '{}')
 
     expect(entry).toMatchObject({ module: 'replica', region: 'private', msg: 'opened', level: 30 })
   })

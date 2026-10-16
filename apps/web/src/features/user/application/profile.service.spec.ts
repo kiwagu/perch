@@ -46,9 +46,13 @@ describe('ProfileService', () => {
   it('reads the profile tree of the signed-in user', async () => {
     const tree = (await service.read({ user: me.id }))._unsafeUnwrap()
 
-    expect(tree).toHaveLength(1)
-    expect(tree[0]?.id).toBe(profileId)
-    expect(tree[0]).toMatchSnapshot({ id: expect.any(String), created_at: expect.any(Date) })
+    const [row, ...others] = tree
+    const { id, created_at: createdAt, ...stable } = row ?? expect.unreachable('a profile row')
+
+    expect(others).toEqual([])
+    expect(id).toBe(profileId)
+    expect(createdAt).toBeInstanceOf(Date)
+    expect(stable).toMatchSnapshot()
   })
 
   it('renames the profile and re-emits the tree', async () => {

@@ -31,6 +31,13 @@ describe('workspace eslint config', () => {
     expect(await rulesFiredIn('promise.ts')).toEqual(['@typescript-eslint/no-floating-promises'])
   })
 
+  it('stops an untyped value from flowing into typed code', async () => {
+    expect((await rulesFiredIn('leaked-any.ts')).sort()).toEqual([
+      '@typescript-eslint/no-unsafe-assignment',
+      '@typescript-eslint/no-unsafe-member-access',
+    ])
+  })
+
   it('keeps domain code from importing outer layers and drivers', async () => {
     expect(await rulesFiredIn('feature/domain/layer-leak.ts')).toEqual(['boundaries/dependencies'])
     expect(await rulesFiredIn('feature/domain/driver-leak.ts')).toEqual(['no-restricted-imports'])

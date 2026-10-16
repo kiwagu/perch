@@ -13,6 +13,7 @@ that applies to the task, starting with the router.
 ## Always-on conventions
 
 @.cursor/rules/static-imports-only.mdc
+@.cursor/rules/no-any.mdc
 @.cursor/rules/poc-no-fallbacks.mdc
 @.cursor/rules/reset-mode-default.mdc
 @.cursor/rules/entity-first-module-naming.mdc

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AuthUser, LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
+import { z } from '@workspace/zod'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
 import { replicaSchema } from '../replica.schema.gen'
@@ -46,6 +47,13 @@ afterEach(async () => {
 const bus = () =>
   createCommandBus({ writePath: session.writePath, session, deviceId: 'dev-test', logger })
 
+// What the write path records with each commit: who, which command, which flow.
+const CommitMessage = z.strictObject({
+  actor: z.string(),
+  command: z.string(),
+  correlationId: z.uuid(),
+})
+
 describe('createCommandBus', () => {
   it('runs a valid command as the signed-in user and records who wrote it', async () => {
     const messages: unknown[] = []
@@ -64,10 +72,9 @@ describe('createCommandBus', () => {
 
     expect(result.isOk()).toBe(true)
     expect(session.region()?.recordJson(`profile/${id}`)).toMatchObject({ name: 'Ann' })
-    expect(JSON.parse(String(messages[0]))).toEqual({
+    expect(CommitMessage.parse(JSON.parse(String(messages[0])))).toMatchObject({
       actor: user.id,
       command: 'user.profile.createProfile',
-      correlationId: expect.any(String),
     })
   })
 

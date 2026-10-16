@@ -114,7 +114,8 @@ describe('local db, shape runner and commands', () => {
     const tree = (await new ShapeRunner(local).read(userById, { id }))._unsafeUnwrap()
 
     expect(written.isOk()).toBe(true)
-    expect(tree).toEqual({ id, name: 'C', created_at: expect.any(Date) })
+    expect(tree.created_at).toBeInstanceOf(Date)
+    expect(tree).toEqual({ id, name: 'C', created_at: tree.created_at })
   })
 
   it('fails to open when the schema does not parse', async () => {

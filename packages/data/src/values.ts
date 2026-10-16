@@ -26,7 +26,10 @@ export interface RecordRef {
 
 /** Splits a driver record id; any other value gives undefined. */
 export function recordRef(value: unknown): RecordRef | undefined {
-  return value instanceof RecordId ? { table: value.table.name, key: String(value.id) } : undefined
+  // `instanceof` on a generic class narrows to its untyped form, so both parts are converted.
+  return value instanceof RecordId
+    ? { table: String(value.table.name), key: String(value.id) }
+    : undefined
 }
 
 /** Prepares parameters for the driver: entity ids of record parameters become record ids. */
