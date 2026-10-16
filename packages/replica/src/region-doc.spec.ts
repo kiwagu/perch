@@ -14,6 +14,7 @@ import {
 } from './__fixtures__/profile'
 import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
+import coversStatement from './__fixtures__/snapshot-covers.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
 import { LoroWritePath } from './write-path'
 
@@ -42,6 +43,12 @@ async function counts(): Promise<{ snapshots: number; updates: number; outbox: n
   })) as number[][]
 
   return { snapshots: snapshots?.[0] ?? 0, updates: updates?.[0] ?? 0, outbox: outbox?.[0] ?? 0 }
+}
+
+async function snapshotCovers(): Promise<number[]> {
+  const [covers] = (await local.db.query(coversStatement, { region: ref.id })) as number[][]
+
+  return covers ?? []
 }
 
 beforeEach(async () => {
@@ -217,6 +224,27 @@ describe('RegionDoc sync state', () => {
 
     expect((await second.catchUpLocal())._unsafeUnwrap()).toBe(1)
     expect(second.recordJson(key)).toMatchObject({ name: 'Ann' })
+  })
+
+  it('compacts only the log rows it has read, catching up with other tabs first', async () => {
+    const first = await open()
+    const second = await open()
+    const third = await open()
+
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+    writeName(second, 'Beto', otherKey)
+    expect((await second.flush()).isOk()).toBe(true)
+
+    expect((await third.catchUpLocal())._unsafeUnwrap()).toBe(2)
+    expect((await second.compact()).isOk()).toBe(true)
+    second.close()
+    const reopened = await open()
+
+    expect(reopened.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect(await snapshotCovers()).toEqual([2])
+    expect(await counts()).toEqual({ snapshots: 1, updates: 0, outbox: 2 })
   })
 
   it('moves the cursor forward only, and keeps it across a reopen', async () => {

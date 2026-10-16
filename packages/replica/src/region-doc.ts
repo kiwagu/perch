@@ -72,7 +72,8 @@ function createDoc(peerId: bigint): LoroDoc {
  * in line and is retried before any later update, so the log never has a gap; the
  * durable watermark moves only after a write succeeded. A separate watermark marks
  * how far this document has read the log; it moves only when the log is read, never
- * on this document's own writes, since another tab may hold a lower number.
+ * on this document's own writes, since another tab may hold a lower number. A compaction
+ * drops only the rows up to it.
  */
 class RegionStore {
   readonly #pending: Uint8Array[] = []
@@ -106,17 +107,17 @@ class RegionStore {
     )
   }
 
+  /**
+   * Stores a snapshot in place of the log rows this document has read. The caller exports
+   * it in the same synchronous step, so it holds every row up to the watermark read here.
+   */
   saveSnapshot(bytes: Uint8Array, version: Uint8Array): ResultAsync<void, DataError> {
-    return this.flush()
-      .andThen(() =>
-        this.#query(
-          saveSnapshotStatement,
-          { region: this.region, bytes, version, covers: this.#persistedSeq },
-          'data:WRITE_FAILED',
-          `could not compact region ${this.region}`,
-        ),
-      )
-      .map(() => undefined)
+    return this.#query(
+      saveSnapshotStatement,
+      { region: this.region, bytes, version, covers: this.#seenSeq },
+      'data:WRITE_FAILED',
+      `could not compact region ${this.region}`,
+    ).map(() => undefined)
   }
 
   /** Appends a server update to the update log, after every local update so far; the outbox does not take it. */
@@ -368,14 +369,23 @@ export class RegionDoc {
     )
   }
 
-  /** Replaces the update log with one full snapshot of the document. */
+  /**
+   * Replaces the update log with one full snapshot of the document, after making local
+   * updates durable and importing what other tabs appended, so the rows it drops are in it.
+   */
   compact(): ResultAsync<void, DataError> {
-    return (
-      this.#store?.saveSnapshot(
-        this.doc.export({ mode: 'snapshot' }),
-        this.doc.version().encode(),
-      ) ?? okAsync(undefined)
-    )
+    const store = this.#store
+
+    if (!store) {
+      return okAsync(undefined)
+    }
+
+    return store
+      .flush()
+      .andThen(() => this.catchUpLocal())
+      .andThen(() =>
+        store.saveSnapshot(this.doc.export({ mode: 'snapshot' }), this.doc.version().encode()),
+      )
   }
 
   close(): void {
