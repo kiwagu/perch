@@ -40,8 +40,9 @@ gaps, and a compaction replaces rows with a snapshot only when it matches them.
   resolves to a `CompactionOutcome`; `head()`, `covers()`. `validateBatch(input)` applies a
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
-  its `RejectReason` (bytes that do not decode, missing history, a table outside the region,
-  a record that is not a map, a private record referencing another identity).
+  its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
+  history, a table outside the region, a record that is not a map, a private record
+  referencing another identity).
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold

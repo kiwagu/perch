@@ -36,15 +36,25 @@ const RECORDS = 'records'
 /**
  * The keys of the records a document changed between two versions: the keys the `records`
  * map itself changed, and the record that holds each changed container nested inside one.
+ * A change to any other root container is refused: nothing projects it, so it would only
+ * be stored and replicated.
  */
-function touchedRecordKeys(doc: LoroDoc, from: Frontiers, to: Frontiers): Set<string> {
+function touchedRecordKeys(
+  doc: LoroDoc,
+  from: Frontiers,
+  to: Frontiers,
+): Result<Set<string>, BatchRejection> {
   const touched = new Set<string>()
 
   for (const [container, diff] of doc.diff(from, to, false)) {
     const path = doc.getPathToContainer(container)
 
-    if (path?.[0] !== RECORDS) {
+    if (!path) {
       continue
+    }
+
+    if (path[0] !== RECORDS) {
+      return err({ reason: 'malformed', detail: `writes outside ${RECORDS}: ${String(path[0])}` })
     }
 
     if (path.length > 1) {
@@ -56,7 +66,7 @@ function touchedRecordKeys(doc: LoroDoc, from: Frontiers, to: Frontiers): Set<st
     }
   }
 
-  return touched
+  return ok(touched)
 }
 
 /** The first field of a private record that references an identity other than the region's owner. */
@@ -78,11 +88,12 @@ function foreignOwner(
 
 /**
  * Applies a pushed batch to a fork of the authoritative document and checks what it changed:
- * every record it touched belongs to a table of the region, is a map, and in a private region
- * references no identity but the owner's. The result is the plan the region's log accepts:
- * the projection of each touched record, the update bytes and the version after the batch.
- * A record the batch creates and deletes again is no change. A refused batch is a value,
- * never a throw, and the authoritative document stays as it was either way.
+ * it writes nothing outside the `records` map, and every record it touched belongs to a table
+ * of the region, is a map, and in a private region references no identity but the owner's.
+ * The result is the plan the region's log accepts: the projection of each touched record,
+ * the update bytes and the version after the batch. A record the batch creates and deletes
+ * again is no change. A refused batch is a value, never a throw, and the authoritative
+ * document stays as it was either way.
  */
 export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch, BatchRejection> {
   const fork = input.doc.fork()
@@ -102,13 +113,19 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
     })
   }
 
+  const touched = touchedRecordKeys(fork, from, fork.frontiers())
+
+  if (touched.isErr()) {
+    return err(touched.error)
+  }
+
   const before = input.doc.getMap(RECORDS)
   const after = fork.getMap(RECORDS)
   const allowed = new Set(tablesOf(input.schema, input.region.kind))
   const upserts: ProjectedRow[] = []
   const deletes: DeletedRow[] = []
 
-  for (const entry of touchedRecordKeys(fork, from, fork.frontiers())) {
+  for (const entry of touched.value) {
     const record: unknown = after.get(entry)
 
     if (record === undefined && before.get(entry) === undefined) {
