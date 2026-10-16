@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test:e2e": "bun scripts/run-e2e.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/bun": "catalog:",
+    "@workspace/seed": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

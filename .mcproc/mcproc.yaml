@@ -38,6 +38,15 @@ apps:
     cwd: apps/web
     port: 5180
     url: http://127.0.0.1:5180/
+  web-e2e:
+    description: >-
+      The web application's Vite dev server for the e2e runs on 127.0.0.1:5190, apart
+      from the dev server so a test run never disturbs a manual session.
+    kind: server
+    run: bun run dev --host 127.0.0.1 --port 5190
+    cwd: apps/web
+    port: 5190
+    url: http://127.0.0.1:5190/
 profiles:
   dev: [surrealdb-dev, web]
-  e2e: [surrealdb-e2e]
+  e2e: [surrealdb-e2e, web-e2e]

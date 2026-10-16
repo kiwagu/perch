@@ -60,6 +60,9 @@
     },
     "//#lint:surql": {
       "cache": false
+    },
+    "//#e2e:coverage": {
+      "cache": false
     }
   }
 }
