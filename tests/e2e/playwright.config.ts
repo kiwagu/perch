@@ -13,6 +13,9 @@ export default defineConfig({
   // worker so its log reads in spec order.
   workers: process.env['CI'] ? 1 : 2,
   reporter: [['list'], ['html', { open: 'never' }]],
+  // Screenshot baselines are not committed (images stay out of the repository): the
+  // first run on a machine writes them, later runs compare against them.
+  updateSnapshots: 'missing',
   use: {
     baseURL: BASE_URL,
     testIdAttribute: 'data-testid',
