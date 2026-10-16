@@ -12,6 +12,10 @@ const createUser: Command<{ email: string; name: string }> = {
   id: 'fixture.create-user',
   kind: 'command',
   text: readFileSync(new URL('./__fixtures__/create-user.surql', import.meta.url), 'utf8'),
+  params: [
+    { name: 'email', type: 'string' },
+    { name: 'name', type: 'string' },
+  ],
   tables: ['user'],
   region: 'server',
   ops: [],

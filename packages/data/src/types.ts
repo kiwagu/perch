@@ -4,6 +4,12 @@ import type { ChangeSpec } from '@workspace/kernel'
 
 export type Region = 'private' | 'public' | 'org' | 'server'
 
+/** A declared parameter: `$id: record<user>` gives `{ name: 'id', type: 'record<user>' }`. */
+export interface ParamDecl {
+  readonly name: string
+  readonly type: string
+}
+
 /**
  * A read model compiled from a `*.shape.surql` file by the modeling stage. The
  * runner accepts only this object, never a query string, so every read is
@@ -13,6 +19,7 @@ export interface Shape<Params, Result> {
   readonly id: string
   readonly kind: 'shape'
   readonly text: string
+  readonly params: readonly ParamDecl[]
   readonly tables: readonly string[]
   readonly __params?: Params
   readonly __result?: Result
@@ -23,6 +30,7 @@ export interface Command<Params> {
   readonly id: string
   readonly kind: 'command'
   readonly text: string
+  readonly params: readonly ParamDecl[]
   readonly tables: readonly string[]
   readonly region: Region
   readonly ops: readonly ChangeSpec[]

@@ -3,6 +3,7 @@ import { ResultAsync } from 'neverthrow'
 import { publishChange } from './changes'
 import { type DataError, dataError } from './errors'
 import type { Command, LocalDb } from './types'
+import { toDriverParams } from './values'
 
 /**
  * Executes a command's SurrealQL directly against the local database and
@@ -16,7 +17,7 @@ export function runCommand<Params>(
 ): ResultAsync<void, DataError> {
   const query = local.db.query(
     command.text,
-    params as Record<string, unknown>,
+    toDriverParams(params, command.params),
   ) as PromiseLike<unknown>
 
   return ResultAsync.fromPromise(Promise.resolve(query), (cause) =>

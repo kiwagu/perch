@@ -18,6 +18,7 @@ const shape: Shape<{ id: string }, { name: string }> = {
   id: 'profile',
   kind: 'shape',
   text: 'SELECT',
+  params: [{ name: 'id', type: 'string' }],
   tables: ['user', 'org'],
 }
 

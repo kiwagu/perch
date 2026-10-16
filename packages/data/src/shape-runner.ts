@@ -3,6 +3,7 @@ import { ResultAsync } from 'neverthrow'
 import { onChange } from './changes'
 import { type DataError, dataError } from './errors'
 import type { LocalDb, Shape } from './types'
+import { fromDriverValue, toDriverParams } from './values'
 
 export interface WatchOptions {
   /** Changes arriving within this window cause one rerun. Defaults to one frame. */
@@ -22,13 +23,14 @@ export class ShapeRunner {
     shape: Shape<Params, Result>,
     params: Params,
   ): ResultAsync<Result, DataError> {
-    const query = this.local.db.query(shape.text, params as Record<string, unknown>) as PromiseLike<
-      unknown[]
-    >
+    const query = this.local.db.query(
+      shape.text,
+      toDriverParams(params, shape.params),
+    ) as PromiseLike<unknown[]>
 
     return ResultAsync.fromPromise(Promise.resolve(query), (cause) =>
       dataError('data:QUERY_FAILED', `shape ${shape.id} failed`, cause),
-    ).map((results) => results[0] as Result)
+    ).map((results) => fromDriverValue(results[0]) as Result)
   }
 
   watch<Params, Result>(
