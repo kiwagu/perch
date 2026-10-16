@@ -14,7 +14,8 @@ test skeleton and checks that specs and tests stay in step.
 - `scaffoldTest(spec, { specRelPath })`: a test with one `test.step` per spec step and
   one failing `expect.soft` per expected result; `testPathFor(specPath)` names its file.
 - `checkCoverage(specsDir, testsDir)`: specs without tests, tests without specs, specs
-  that do not parse, and tests with fewer steps than their spec.
+  that do not parse, and tests with fewer `test.step(...)` calls in their code than their
+  spec has steps (a static count: comments do not count, unreachable calls would).
 
 ## Commands
 

@@ -35,7 +35,10 @@ function filesUnder(dir: string): string[] {
   })
 }
 
-/** The `test.step(...)` calls in a test file's code; comments and strings do not count. */
+/**
+ * The `test.step(...)` calls in a test file's code; comments and strings do not
+ * count. A static count: it cannot tell a step that runs from one that never does.
+ */
 function countSteps(path: string): number {
   const { program } = parseSync(path, readFileSync(path, 'utf8'), {
     lang: 'ts',
