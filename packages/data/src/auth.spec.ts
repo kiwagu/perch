@@ -117,6 +117,35 @@ describe('createAuth', () => {
     expect(seen[1]).toBeUndefined()
   })
 
+  it('closes its session: later calls are refused and the main session keeps working', async () => {
+    const opened: Array<{ readonly isValid: boolean }> = []
+    const newSession = local.db.newSession.bind(local.db)
+
+    local.db.newSession = async () => {
+      const session = await newSession()
+
+      opened.push(session)
+
+      return session
+    }
+
+    expect((await auth.signUp(ann)).isOk()).toBe(true)
+
+    await auth.close()
+
+    expect(opened.map((session) => session.isValid)).toEqual([false])
+    expect((await auth.current())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await auth.signIn(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect(opened).toHaveLength(1)
+    expect((await runCommand(local, createIdentity, { email: 'b@example.test' })).isOk()).toBe(true)
+  })
+
+  it('closes without having opened a session, and stays closed', async () => {
+    await auth.close()
+
+    expect((await auth.signUp(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+  })
+
   it('loses its sessions when the access method is defined again, which is why a reopened database skips an unchanged schema', async () => {
     expect((await auth.signUp(ann)).isOk()).toBe(true)
 

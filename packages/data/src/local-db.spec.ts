@@ -192,6 +192,35 @@ describe('a device database that is closed and opened again', () => {
     expect((await auth(second).resume(saved))._unsafeUnwrap()).toEqual(user)
   })
 
+  it('connects as a namespace user when the credentials name the namespace', async () => {
+    const first = await reopen(full)
+
+    await first.db.query(read('./__fixtures__/namespace-user.surql'))
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+
+    const asUser = (credentials: { username: string; password: string; namespace?: string }) =>
+      openLocalDb({
+        engines: nodeEngines(),
+        url: `surrealkv://${dir}`,
+        namespace: 'app',
+        database: 'app',
+        schema: full,
+        credentials,
+      }).map((db) => {
+        open.push(db)
+
+        return db
+      })
+    const user = { username: 'gateway', password: 'gateway-pass' }
+    // Without the namespace the user is looked up among the root users, where it is not.
+    const asRoot = (await asUser(user))._unsafeUnwrapErr()
+
+    expect(asRoot.code).toBe('data:OPEN_FAILED')
+    expect(String(asRoot.cause)).toMatch(/authentication/)
+    expect((await asUser({ ...user, namespace: 'app' })).isOk()).toBe(true)
+  })
+
   it('applies a schema that changed since the last opening', async () => {
     const changed = await reopen(`${full}\n${read('./__fixtures__/longer-identity-emails.surql')}`)
     const written = await runCommand(changed, createIdentity, { email: 'e@example.test' })

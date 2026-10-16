@@ -16,9 +16,14 @@ export interface OpenLocalDbOptions {
   readonly schema: string
   /**
    * A system user to connect as. An embedded database needs none; a server stand is
-   * opened as one so the projector may write rows record users may not create.
+   * opened as one so the projector may write rows record users may not create. With a
+   * `namespace` the user is one defined on that namespace, otherwise a root user.
    */
-  readonly credentials?: { readonly username: string; readonly password: string }
+  readonly credentials?: {
+    readonly username: string
+    readonly password: string
+    readonly namespace?: string
+  }
 }
 
 /**

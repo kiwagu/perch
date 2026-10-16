@@ -15,6 +15,25 @@
         "typescript": "catalog:",
       },
     },
+    "apps/gateway": {
+      "name": "@workspace/gateway",
+      "version": "0.1.0",
+      "dependencies": {
+        "@workspace/data": "workspace:*",
+        "@workspace/database": "workspace:*",
+        "@workspace/logger": "workspace:*",
+        "@workspace/replica": "workspace:*",
+        "@workspace/zod": "workspace:*",
+        "neverthrow": "catalog:",
+        "ts-pattern": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@workspace/ids": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "apps/web": {
       "name": "@workspace/web",
       "version": "0.1.0",
@@ -840,6 +859,8 @@
     "@workspace/e2e-spec": ["@workspace/e2e-spec@workspace:packages/e2e-spec"],
 
     "@workspace/eslint-config": ["@workspace/eslint-config@workspace:packages/eslint-config"],
+
+    "@workspace/gateway": ["@workspace/gateway@workspace:apps/gateway"],
 
     "@workspace/i18n": ["@workspace/i18n@workspace:packages/i18n"],
 

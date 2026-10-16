@@ -18,7 +18,8 @@ is replaced on every use. Above this package ids are entity id strings and times
 - `Shape`, `Command` (with an optional Standard Schema `schema` for its params),
   `TableChange`, `publishChange`, `onChange`, `DataError`.
 - `./engines/node`: embedded engines for Bun and Node; `./engines/remote`: engines for a
-  SurrealDB server, opened as a system user through `openLocalDb({ credentials })`.
+  SurrealDB server, opened as a system user through `openLocalDb({ credentials })` (a root
+  user, or a namespace user when the credentials name the namespace).
 - `./schema-files`: `readSchema()`, the shared schema as one text (Bun and Node).
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.

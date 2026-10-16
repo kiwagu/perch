@@ -42,6 +42,11 @@ export interface AuthPort {
   tokens(): AuthTokens | undefined
   /** Hears every change of tokens: sign-in, renewal (a new refresh key) and sign-out. */
   onTokens(listener: (tokens: AuthTokens | undefined) => void): () => void
+  /**
+   * Closes the auth session; the auth object is unusable afterwards. The tokens it handed
+   * out stay valid: closing is not signing out.
+   */
+  close(): Promise<void>
 }
 
 export const AUTH = token<AuthPort>('Auth')
