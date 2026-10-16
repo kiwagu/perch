@@ -29,6 +29,7 @@ tester.run('must-use-result', mustUseResult, {
     { filename: 'fixture.ts', code: `${prelude}export const f = () => load()` },
     { filename: 'fixture.ts', code: `${prelude}save().match(() => 1, () => 2)` },
     { filename: 'fixture.ts', code: `${prelude}console.log(ok(1).isOk())` },
+    { filename: 'fixture.ts', code: `${prelude}void load().match(() => 1, () => 2)` },
   ],
   invalid: [
     {
@@ -54,6 +55,11 @@ tester.run('must-use-result', mustUseResult, {
     {
       filename: 'fixture.ts',
       code: `${prelude}async function f() {\n  await okAsync(1)\n}`,
+      errors: [{ messageId: 'unused' }],
+    },
+    {
+      filename: 'fixture.ts',
+      code: `${prelude}void load()`,
       errors: [{ messageId: 'unused' }],
     },
   ],

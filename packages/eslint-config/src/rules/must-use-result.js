@@ -1,7 +1,8 @@
 /**
  * Reports an expression statement whose value is a neverthrow `Result` or
- * `ResultAsync`. A dropped Result is a dropped error: the caller must match,
- * map, return or assign it. Needs type information (typescript-eslint
+ * `ResultAsync`, also behind `void`. A dropped Result is a dropped error: the
+ * caller must match, map, return or assign it (`void result.match(...)` is
+ * fine: the match handles the error and only its promise is dropped). Needs type information (typescript-eslint
  * `projectService`); without it the rule stays silent.
  */
 
@@ -51,7 +52,11 @@ export const mustUseResult = {
 
     return {
       ExpressionStatement(node) {
-        const tsNode = services.esTreeNodeToTSNodeMap.get(node.expression)
+        const expression =
+          node.expression.type === 'UnaryExpression' && node.expression.operator === 'void'
+            ? node.expression.argument
+            : node.expression
+        const tsNode = services.esTreeNodeToTSNodeMap.get(expression)
 
         if (isResult(checker.getTypeAtLocation(tsNode))) {
           context.report({ node, messageId: 'unused' })

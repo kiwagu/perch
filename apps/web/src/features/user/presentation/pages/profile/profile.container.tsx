@@ -48,7 +48,10 @@ export function ProfileContainer() {
     if (change && 'apply' in change) {
       setLocale(change.apply)
     } else if (change) {
-      void profiles.updateLocale({ id: row.id, locale: change.save })
+      void profiles.updateLocale({ id: row.id, locale: change.save }).match(
+        () => undefined,
+        (failure) => setError(failure.code),
+      )
     }
   }, [row, locale, setLocale, profiles])
 
