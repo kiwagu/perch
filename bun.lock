@@ -129,6 +129,10 @@
     "packages/modeling": {
       "name": "@workspace/modeling",
       "version": "0.1.0",
+      "dependencies": {
+        "@workspace/data": "workspace:*",
+        "@workspace/kernel": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "catalog:",
         "typescript": "catalog:",

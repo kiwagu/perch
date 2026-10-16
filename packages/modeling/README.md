@@ -9,8 +9,12 @@ TypeScript or React code.
 
 ## Key exports
 
-- `version`: the package version. The parser, inference and generators land with the
-  modeling CLI (`model`, `model --check`).
+- `parseShapeFile`, `parseCommandsFile`: header annotations (`@params`, `@command`,
+  `@allow`, `@deny`, `@tables`, `@server`) and the single statement under them.
+- `parseShape`: the shape dialect as an AST (projections with fields, destructuring,
+  aliases, graph traversals and inner queries; the source; the tail clauses).
+- `tokenize`, `statementCount`: the shared SurrealQL tokenizer.
+- `ModelingException`: thrown for a `.surql` file outside the dialect.
 
 ## Commands
 
