@@ -14,8 +14,9 @@
     "@stylistic/eslint-plugin": "catalog:",
     "eslint-plugin-boundaries": "catalog:",
     "eslint-plugin-functional": "catalog:",
-    "typescript-eslint": "catalog:",
-    "typescript": "catalog:lint"
+    "eslint-plugin-react": "catalog:",
+    "typescript": "catalog:lint",
+    "typescript-eslint": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

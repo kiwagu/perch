@@ -12,6 +12,7 @@
 import stylistic from '@stylistic/eslint-plugin'
 import boundaries from 'eslint-plugin-boundaries'
 import functional from 'eslint-plugin-functional'
+import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 
 import { mustUseResult } from './rules/must-use-result.js'
@@ -80,6 +81,14 @@ const throwOnlyExceptions = {
     "ThrowStatement:not([argument.type='NewExpression'][argument.callee.name=/Exception$/])",
   message:
     'Return a Result for expected outcomes; throw only an ExceptionBase subclass (named *Exception) for a broken invariant.',
+}
+
+/** A t() key must stay greppable: a literal, a template without expressions, or a choice of two literals. */
+const literalTranslationKeys = {
+  selector:
+    "CallExpression[callee.name='t'][arguments.length>0]:not([arguments.0.type='Literal']):not([arguments.0.type='TemplateLiteral'][arguments.0.expressions.length=0]):not([arguments.0.type='ConditionalExpression'][arguments.0.consequent.type='Literal'][arguments.0.alternate.type='Literal'])",
+  message:
+    'Pass t() a literal key, or a choice between two literal keys, so the key stays greppable and checkable.',
 }
 
 export const ignores = {
@@ -156,6 +165,15 @@ export const base = [
         DRIVER_MODULES,
         'Presentation reads data through services and ports, never through drivers.',
       ),
+    },
+  },
+  {
+    files: ['**/presentation/**/*.{ts,tsx}'],
+    plugins: { react },
+    settings: { react: { version: '19.3' } },
+    rules: {
+      'react/jsx-no-literals': 'error',
+      'no-restricted-syntax': ['error', literalTranslationKeys],
     },
   },
   {

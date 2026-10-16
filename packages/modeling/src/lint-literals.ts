@@ -6,7 +6,7 @@
  * never mistaken for strings.
  */
 
-import { parseSync } from 'oxc-parser'
+import { parseSync, Visitor } from 'oxc-parser'
 
 export interface LiteralViolation {
   readonly path: string
@@ -18,47 +18,6 @@ export interface LiteralViolation {
 const STATEMENT =
   /^\s*(SELECT|LIVE\s+SELECT|CREATE|UPDATE|UPSERT|DELETE|RELATE|DEFINE|REMOVE|INSERT|SHOW\s+CHANGES)\s+\S/
 
-interface Node {
-  readonly type?: string
-  readonly start?: number
-  readonly value?: unknown
-  readonly quasis?: ReadonlyArray<{
-    readonly value: { readonly cooked?: string | null; readonly raw: string }
-  }>
-}
-
-function* nodes(value: unknown): Generator<Node> {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      yield* nodes(item)
-    }
-  } else if (value !== null && typeof value === 'object') {
-    const node = value as Node
-
-    if (typeof node.type === 'string') {
-      yield node
-    }
-
-    for (const child of Object.values(value)) {
-      if (child !== null && typeof child === 'object') {
-        yield* nodes(child)
-      }
-    }
-  }
-}
-
-function literalText(node: Node): string | undefined {
-  if (node.type === 'Literal' && typeof node.value === 'string') {
-    return node.value
-  }
-
-  if (node.type === 'TemplateLiteral' && node.quasis) {
-    return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('…')
-  }
-
-  return undefined
-}
-
 const lineOf = (source: string, offset: number): number =>
   source.slice(0, offset).split('\n').length
 
@@ -68,19 +27,30 @@ export function findSurqlLiterals(path: string, source: string): LiteralViolatio
     sourceType: 'module',
   })
   const violations: LiteralViolation[] = []
-
-  for (const node of nodes(program)) {
-    const text = literalText(node)
-
-    if (text !== undefined && STATEMENT.test(text)) {
+  const report = (text: string, start: number): void => {
+    if (STATEMENT.test(text)) {
       violations.push({
         path,
-        line: lineOf(source, node.start ?? 0),
+        line: lineOf(source, start),
         rule: 'surrealql-literal',
         text: text.trim(),
       })
     }
   }
 
-  return violations
+  new Visitor({
+    Literal(node) {
+      if (typeof node.value === 'string') {
+        report(node.value, node.start)
+      }
+    },
+    TemplateLiteral(node) {
+      report(
+        node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('…'),
+        node.start,
+      )
+    },
+  }).visit(program)
+
+  return violations.sort((left, right) => left.line - right.line)
 }

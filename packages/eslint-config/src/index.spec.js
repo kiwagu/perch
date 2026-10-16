@@ -36,6 +36,16 @@ describe('workspace eslint config', () => {
     expect(await rulesFiredIn('feature/domain/driver-leak.ts')).toEqual(['no-restricted-imports'])
   })
 
+  it('keeps user-visible text in presentation code behind literal t() keys', async () => {
+    expect(await rulesFiredIn('feature/presentation/clean.view.tsx')).toEqual([])
+    expect(await rulesFiredIn('feature/presentation/raw-text.view.tsx')).toEqual([
+      'react/jsx-no-literals',
+    ])
+    expect(await rulesFiredIn('feature/presentation/dynamic-key.view.tsx')).toEqual([
+      'no-restricted-syntax',
+    ])
+  })
+
   it('forbids let and throwing plain errors in domain code', async () => {
     expect(await rulesFiredIn('feature/domain/mutable.ts')).toEqual(['functional/no-let'])
     expect(await rulesFiredIn('feature/domain/throws.ts')).toEqual(['no-restricted-syntax'])

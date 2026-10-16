@@ -16,3 +16,12 @@ TypeScript 6.0.x through the `lint` catalog, and typescript-eslint resolves that
 version as its peer. The two versions read the same `tsconfig` files.
 
 **When it goes away:** when typescript-eslint supports the TypeScript 7 API.
+
+## eslint-plugin-react peer warning
+
+**What you see:** `bun install` warns that `eslint-plugin-react` 7.37 expects ESLint 9 or older.
+
+**Why it is fine:** the workspace uses exactly one rule of that plugin, `react/jsx-no-literals`
+for presentation code, and the ESLint config tests run it on fixtures with ESLint 10.
+
+**When it goes away:** when the plugin declares ESLint 10 support.
