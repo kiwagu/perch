@@ -22,6 +22,12 @@ const schema: SchemaModel = {
         name: { kind: 'scalar', name: 'string' },
       },
     },
+    follows: {
+      region: 'private',
+      idPrefix: 'flw',
+      relation: { in: ['user'], out: ['profile'] },
+      fields: {},
+    },
   },
 }
 
@@ -115,6 +121,18 @@ describe('collect', () => {
       'features/user/user.module.ts': '',
       [`${page}/profile.container.tsx`]: '',
       [`${page}/profile.shape.surql`]: 'SELECT name, user FROM profile FETCH user;\n',
+    })
+
+    expect((await collect(root, schema)).problems).toEqual([
+      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+    ])
+  })
+
+  it('requires @server when FETCH follows the incoming endpoint of a relation to a server-only table', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]: 'SELECT in, out FROM follows FETCH in;\n',
     })
 
     expect((await collect(root, schema)).problems).toEqual([
