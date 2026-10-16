@@ -55,6 +55,20 @@ describe('server region log', () => {
     expect(await countRows(local, 'profile')).toBe(1)
   })
 
+  it('deletes before it upserts, so a batch can move a unique value to a new record', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+
+    const moved = planFor('Ann', 'prf_2') // the same identity under a new key
+    const deletes = [{ table: 'profile', key: 'prf_1', entry: 'profile/prf_1' }]
+    const outcome = await log.accept({ ...moved, deletes })
+
+    expect(outcome._unsafeUnwrap()).toBe(2)
+    expect(await countRows(local, 'profile')).toBe(1)
+    expect(await countRows(local, '_replica_projected')).toBe(1)
+  })
+
   it('accepts nothing when a projected value has the wrong type', async () => {
     const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
     const plan = planFor('Ann')
