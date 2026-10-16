@@ -30,7 +30,7 @@ equals = 1
 name = "both users exist"
 kind = "sql_expect"
 actor = "root"
-sql = "SELECT count() FROM user GROUP ALL;"
+sql = "SELECT count() FROM user WHERE email IN ['alice@example.test', 'bob@example.test'] GROUP ALL;"
 allow = true
 
 [[cases.assertions]]
