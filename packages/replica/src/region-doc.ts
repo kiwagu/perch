@@ -393,6 +393,8 @@ export class RegionDoc {
   /**
    * Replaces the update log with one full snapshot of the document, after making local
    * updates durable and importing what other tabs appended, so the rows it drops are in it.
+   * Refuses while an imported update still waits for its history: a snapshot leaves such
+   * updates out, so dropping their rows would lose them.
    */
   compact(): ResultAsync<void, DataError> {
     const store = this.#store
@@ -404,8 +406,19 @@ export class RegionDoc {
     return store
       .flush()
       .andThen(() => this.catchUpLocal())
-      .andThen(() =>
-        store.saveSnapshot(this.doc.export({ mode: 'snapshot' }), this.doc.version().encode()),
+      .andThen(
+        (): ResultAsync<void, DataError> =>
+          this.#waiting.size > 0
+            ? errAsync(
+                dataError(
+                  'data:WRITE_REJECTED',
+                  `cannot compact ${this.ref.id} while imported updates still wait for their history`,
+                ),
+              )
+            : store.saveSnapshot(
+                this.doc.export({ mode: 'snapshot' }),
+                this.doc.version().encode(),
+              ),
       )
   }
 

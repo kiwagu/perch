@@ -37,6 +37,21 @@ function writeName(region: RegionDoc, name: string, recordKey: string = key): vo
   region.doc.commit()
 }
 
+/** A server update that depends on an earlier one, and that earlier one. */
+function updateWithMissingHistory(): { gap: Uint8Array; fill: Uint8Array } {
+  const author = RegionDoc.inMemory('private', ref.id)
+
+  author.records().setContainer(key, new LoroMap()).set('name', 'Ann')
+  author.doc.commit()
+  const before = author.doc.version()
+  const fill = author.doc.export({ mode: 'update' })
+
+  author.recordMap(key).set('name', 'Ana')
+  author.doc.commit()
+
+  return { gap: author.doc.export({ mode: 'update', from: before }), fill }
+}
+
 async function counts(): Promise<{ snapshots: number; updates: number; outbox: number }> {
   const [snapshots, updates, outbox] = (await local.db.query(countsStatement, {
     region: ref.id,
@@ -176,16 +191,7 @@ describe('RegionDoc sync state', () => {
   })
 
   it('keeps the cursor until every update an import left waiting has its history', async () => {
-    const author = RegionDoc.inMemory('private', ref.id)
-
-    author.records().setContainer(key, new LoroMap()).set('name', 'Ann')
-    author.doc.commit()
-    const before = author.doc.version()
-    const fill = author.doc.export({ mode: 'update' })
-
-    author.recordMap(key).set('name', 'Ana')
-    author.doc.commit()
-    const gap = author.doc.export({ mode: 'update', from: before })
+    const { gap, fill } = updateWithMissingHistory()
     const other = RegionDoc.inMemory('private', ref.id)
 
     writeName(other, 'Beto', otherKey)
@@ -199,6 +205,20 @@ describe('RegionDoc sync state', () => {
     expect((await region.importRemote(fill, 4))._unsafeUnwrap().complete).toBe(true)
     expect(region.pulled()).toBe(4)
     expect(region.recordJson(key)).toMatchObject({ name: 'Ana' })
+  })
+
+  it('refuses to compact while an imported update still waits for its history', async () => {
+    const { gap, fill } = updateWithMissingHistory()
+    const region = await open()
+
+    expect((await region.importRemote(gap, 2))._unsafeUnwrap().complete).toBe(false)
+
+    expect((await region.compact())._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(await counts()).toEqual({ snapshots: 0, updates: 1, outbox: 0 })
+
+    expect((await region.importRemote(fill, 3))._unsafeUnwrap().complete).toBe(true)
+    expect((await region.compact()).isOk()).toBe(true)
+    expect(await counts()).toEqual({ snapshots: 1, updates: 0, outbox: 0 })
   })
 
   it('refuses server bytes that are not a Loro update and stores nothing', async () => {
