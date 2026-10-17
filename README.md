@@ -3,6 +3,22 @@
 A foundation for local-first applications on SurrealDB and Loro: each device keeps its own
 database, and a gateway keeps it in sync with the central SurrealDB.
 
+## Prerequisites
+
+- Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root.
+- Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
+  containers.
+- mcproc (`npm i -g mcproc`): it starts and stops the stands from `.mcproc/mcproc.yaml`. The
+  mcproc profiles are the working path: `bun run dev` alone starts the dev servers without the
+  gateway's environment and its database.
+- mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
+  self-signed certificate is made, and the browser asks to accept it once.
+- `bunx playwright install` for the browsers the e2e specs run in.
+- The SurrealDB CLI (`surreal`) for the git hooks that validate staged `.surql` files.
+- Screenshot baselines of the e2e specs are git-ignored and rebuilt per machine: the first run
+  writes them. A machine that kept baselines from an older layout rebuilds them with
+  `bun run test:e2e -- --update-snapshots=changed`.
+
 ## Local stands
 
 A stand is SurrealDB in memory, the gateway, the web app's Vite dev server and a Caddy front
