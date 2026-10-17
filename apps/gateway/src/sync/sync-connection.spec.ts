@@ -5,7 +5,8 @@ import { createAuth, type DataError, dataError, openLocalDb, tenantDatabase } fr
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { noteIdFactory, profileIdFactory } from '@workspace/ids'
+import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import { NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -15,6 +16,7 @@ import {
   decodeMessage,
   encodeMessage,
   MAX_PUSH_UPDATES,
+  type Membership,
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
@@ -34,7 +36,12 @@ import { TenantDatabases } from '../tenants/tenant-databases'
 import { noteCreate, noteUpdate } from './__fixtures__/note'
 import { profileCreate } from './__fixtures__/profile'
 import { ConnectionRegistry } from './connections'
-import { type SocketLike, SyncConnection, type SyncConnectionDeps } from './sync-connection'
+import {
+  regionsFor,
+  type SocketLike,
+  SyncConnection,
+  type SyncConnectionDeps,
+} from './sync-connection'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
@@ -1031,5 +1038,32 @@ describe('SyncConnection', () => {
 
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+  })
+})
+
+describe('regionsFor', () => {
+  const identity = identityIdFactory.create()
+  const other = identityIdFactory.create()
+  const membership = (key: string): Membership => ({
+    tenant: { id: tenantIdFactory.create(), key, name: key },
+    role: 'member',
+  })
+
+  it("makes the identity the owner of its private region and judges its organisation's region by its role", () => {
+    const regions = regionsFor(identity, [membership('acme')], replicaSchema)
+    const acme = regions.get('tenant:acme')?.actor.ability
+
+    expect(regions.get(`identity:${identity}`)?.actor).toEqual({
+      id: identity,
+      ability: OWNER_ABILITY,
+    })
+    expect(acme?.can('update', 'note', { author: `member:${identity}` })).toBe(true)
+    expect(acme?.can('update', 'note', { author: `member:${other}` })).toBe(false)
+  })
+
+  it('allows nothing in a tenant region whose membership names no organisation key', () => {
+    const regions = regionsFor(identity, [membership('Not A Key')], replicaSchema)
+
+    expect(regions.get('tenant:Not A Key')?.actor.ability).toBe(NO_ABILITY)
   })
 })

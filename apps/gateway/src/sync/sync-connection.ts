@@ -93,8 +93,11 @@ const REASON = {
   failed: 'the gateway failed to handle the message',
 } as const
 
-/** The regions an identity may name, by id, with what it may do in each. */
-function regionsFor(
+/**
+ * The regions an identity may name, by id, with what it may do in each: everything in its private
+ * region, what its role allows in each organisation's region, nothing in a region without a role.
+ */
+export function regionsFor(
   identity: string,
   memberships: readonly Membership[],
   schema: ReplicaSchema,

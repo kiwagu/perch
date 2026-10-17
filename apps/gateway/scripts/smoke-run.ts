@@ -138,6 +138,9 @@ const listedMembers = z.object({
   members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
 })
 
+/** The body of a route's refusal: the code that says why. */
+const refusal = z.object({ code: z.string() })
+
 /** Whether a welcome's regions name `region`. */
 function hasRegion(regions: readonly { readonly region: string }[], region: string): boolean {
   return regions.some((entry) => entry.region === region)
@@ -315,7 +318,10 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   await step('invited device asked for the members: 403 not-admin', async () => {
     const answer = await call(base, 'GET', `/organisations/${key}/members`, guest.tokens.access)
 
-    check(answer.status === 403, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(
+      answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
+      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+    )
   })
 
   await step("a note in the owner's name is rejected: foreign-owner", async () => {

@@ -9,8 +9,11 @@ import type { Ability } from '@workspace/kernel'
 import type { CommandsPort } from '../../../platform/commands.port'
 import { checkNoteText } from '../domain/note.entity'
 
-/** One note of the organisation page: what the page shows and edits. */
-export interface NoteRow {
+/**
+ * One note of the organisation page: what the page shows and edits. A type rather than an
+ * interface, so a row is a record an ability can judge as it is.
+ */
+export type NoteRow = {
   readonly id: NoteId
   /** The member who wrote it, by the key of the identity. */
   readonly author: string
@@ -114,7 +117,7 @@ export class NotesService {
   }
 
   #allowed(action: 'update' | 'delete', row: NoteRow): Result<NoteRow, BusError> {
-    return this.ability().can(action, 'note', { ...row }) ? ok(row) : err(forbidden)
+    return this.ability().can(action, 'note', row) ? ok(row) : err(forbidden)
   }
 }
 

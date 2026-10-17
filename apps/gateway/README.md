@@ -21,7 +21,8 @@ note names its own member as its author, and nobody changes the author of a note
 subscription carries the device's ability, built from its membership's role and the replica
 schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
 deletes only its own notes, an admin any, and the hub rejects any other write as
-`forbidden-action`.
+`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
+role applies to a device's subscriptions from its next subscribe or hello.
 A connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
 accepted; when an identity's memberships change, each of its connections leaves the regions it
 may no longer name at once, without waiting for the device's messages under way (one handled

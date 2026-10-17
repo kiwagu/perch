@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { BusError } from '@workspace/cqrs'
 import { useT } from '@workspace/i18n'
 import type { IdentityId, NoteId } from '@workspace/ids'
+import { ownerKeyOf } from '@workspace/kernel'
 
 import { useService, useShape } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
@@ -62,7 +63,7 @@ export function OrganisationContainer() {
   const items = tree?.map((note) => ({
     id: note.id,
     text: note.text,
-    mine: note.author === user?.id,
+    mine: user !== undefined && ownerKeyOf(note.author) === user.id,
     editable: ability.can('update', 'note', note),
     deletable: ability.can('delete', 'note', note),
   }))

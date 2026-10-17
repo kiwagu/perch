@@ -143,6 +143,14 @@ function isAbortError(cause: unknown): boolean {
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
 
+/** What a refused push carries as its cause, read as the port's `PushRejection`. */
+const pushRejection = z.object({
+  region: z.string(),
+  batch: z.number(),
+  reason: z.string(),
+  detail: z.string(),
+}) satisfies z.ZodType<PushRejection>
+
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, keeps the
  * identity and its keys in the browser's storage and opens the identity's space; restoring
@@ -155,13 +163,6 @@ const closedDuringSignIn = () =>
  * another tab signs it out, this one closes its space. While a sign-out runs, no tab of the
  * browser takes a write: a write landing after the final drain would go with the database.
  */
-const pushRejection = z.object({
-  region: z.string(),
-  batch: z.number(),
-  reason: z.string(),
-  detail: z.string(),
-})
-
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
   readonly writePath: CurrentSpaceWritePath
