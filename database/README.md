@@ -12,7 +12,8 @@ description of replicated tables that every runtime reads.
 ## Key exports
 
 - `schema/`: the schema, applied in file name order: `identity` (accounts and the `identity`
-  record access with its refresh keys), `profile`, and the replica's own tables
+  record access with its refresh keys), `profile` (its owner reads it; only the gateway writes
+  it, through replication; a bio holds at most 2000 characters), and the replica's own tables
   (`_replica_snapshot`, `_replica_update`, `_replica_outbox`, `_replica_projected`,
   `_replica_head`, `_replica_cursor`: snapshots, the update log numbered without gaps, the
   outbox, projected records, the pull cursor; a number is unique per region in the log and the

@@ -27,5 +27,6 @@
   "user.profile.sign-out-offline.cancel": "Stay signed in",
   "user.profile.error.name-required": "Enter a name.",
   "user.profile.error.name-too-long": "Use at most 80 characters.",
+  "user.profile.error.bio-too-long": "Use at most 2000 characters for the bio.",
   "user.profile.error.failed": "The change was not saved. Try again."
 }

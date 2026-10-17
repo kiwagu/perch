@@ -27,5 +27,6 @@
   "user.profile.sign-out-offline.cancel": "Seguir con la sesión",
   "user.profile.error.name-required": "Escribe un nombre.",
   "user.profile.error.name-too-long": "Usa como máximo 80 caracteres.",
+  "user.profile.error.bio-too-long": "Usa como máximo 2000 caracteres para la biografía.",
   "user.profile.error.failed": "El cambio no se guardó. Inténtalo de nuevo."
 }

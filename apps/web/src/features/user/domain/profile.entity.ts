@@ -11,12 +11,15 @@ import { z } from '@workspace/zod'
 
 export const PROFILE_NAME_MAX = 80
 
+/** The longest bio, in characters; the server's schema holds the same bound. */
+export const PROFILE_BIO_MAX = 2000
+
 export const ProfileSchema = z.object({
   id: idSchemas.profile.schema,
   identity: idSchemas.identity.schema,
   name: z.string().trim().min(1).max(PROFILE_NAME_MAX),
   email: z.email(),
-  bio: z.string().optional(),
+  bio: z.string().max(PROFILE_BIO_MAX).optional(),
   locale: z.enum(['en', 'es']).optional(),
   createdAt: z.date(),
 })
@@ -31,4 +34,13 @@ const nameRules: readonly DomainRule<string>[] = [
 /** A display name as the profile stores it: trimmed, present and not too long. */
 export function checkProfileName(name: string): Result<string, readonly RuleViolation[]> {
   return applyRules(name.trim(), nameRules)
+}
+
+const bioRules: readonly DomainRule<string>[] = [
+  { code: 'profile:BIO_TOO_LONG', isSatisfiedBy: (bio) => bio.length <= PROFILE_BIO_MAX },
+]
+
+/** A bio as the profile stores it: as written, empty or not too long. */
+export function checkProfileBio(bio: string): Result<string, readonly RuleViolation[]> {
+  return applyRules(bio, bioRules)
 }

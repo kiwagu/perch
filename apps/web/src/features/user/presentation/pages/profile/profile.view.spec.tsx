@@ -108,6 +108,17 @@ describe('ProfileView', () => {
     expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBe('true')
   })
 
+  it('takes at most 2000 characters of bio, and explains a bio the profile refuses', () => {
+    renderView({ error: 'profile:BIO_TOO_LONG' })
+
+    expect(field('user.profile.bio-input').maxLength).toBe(2000)
+    expect(screen.getByTestId('user.profile.error').textContent).toBe(
+      en['user.profile.error.bio-too-long'],
+    )
+    expect(field('user.profile.bio-input').getAttribute('aria-invalid')).toBe('true')
+    expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
+  })
+
   it('explains a change that was not saved without blaming the name', () => {
     renderView({ error: 'data:WRITE_FAILED' })
 

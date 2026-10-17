@@ -17,6 +17,8 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
+import { PROFILE_BIO_MAX } from '../../../domain/profile.entity'
+
 export interface ProfileViewData {
   readonly name: string
   readonly email: string
@@ -49,6 +51,8 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
       return t('user.profile.error.name-required')
     case 'profile:NAME_TOO_LONG':
       return t('user.profile.error.name-too-long')
+    case 'profile:BIO_TOO_LONG':
+      return t('user.profile.error.bio-too-long')
     default:
       return t('user.profile.error.failed')
   }
@@ -126,6 +130,7 @@ function ProfileForm(props: {
   const [name, setName] = useDraft(props.name)
   const [bio, setBio] = useDraft(props.bio)
   const nameRefused = props.error !== undefined && NAME_CODES.has(props.error)
+  const bioRefused = props.error === 'profile:BIO_TOO_LONG'
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     props.onSave({ name, bio })
@@ -145,12 +150,14 @@ function ProfileForm(props: {
             data-testid="user.profile.name-input"
           />
         </Field>
-        <Field>
+        <Field data-invalid={bioRefused ? true : undefined}>
           <FieldLabel htmlFor={bioId}>{t('user.profile.bio')}</FieldLabel>
           <Textarea
             id={bioId}
             value={bio}
             onChange={(event) => setBio(event.target.value)}
+            maxLength={PROFILE_BIO_MAX}
+            aria-invalid={bioRefused ? true : undefined}
             data-testid="user.profile.bio-input"
           />
         </Field>

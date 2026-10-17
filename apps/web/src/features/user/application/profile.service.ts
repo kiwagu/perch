@@ -7,7 +7,7 @@ import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n'
 import type { IdentityId, ProfileId } from '@workspace/ids'
 
 import type { CommandsPort } from '../../../platform/commands.port'
-import { checkProfileName } from '../domain/profile.entity'
+import { checkProfileBio, checkProfileName } from '../domain/profile.entity'
 
 /** One row of the profile page: what the page shows and edits. */
 export interface ProfileRow {
@@ -45,6 +45,14 @@ export interface ProfileModel {
 export function profileName(name: string): Result<string, BusError> {
   return checkProfileName(name).mapErr((violations) => ({
     code: violations[0]?.code ?? 'profile:INVALID_NAME',
+    causes: violations,
+  }))
+}
+
+/** A bio as the domain accepts it, or the rule it breaks. */
+export function profileBio(bio: string): Result<string, BusError> {
+  return checkProfileBio(bio).mapErr((violations) => ({
+    code: violations[0]?.code ?? 'profile:INVALID_BIO',
     causes: violations,
   }))
 }
@@ -100,7 +108,9 @@ export class ProfileService {
   }
 
   updateBio(input: { readonly id: ProfileId; readonly bio: string }): ResultAsync<void, BusError> {
-    return this.commands.execute(this.model.commands.updateBio, input)
+    return profileBio(input.bio).asyncAndThen((bio) =>
+      this.commands.execute(this.model.commands.updateBio, { id: input.id, bio }),
+    )
   }
 
   updateLocale(input: {
