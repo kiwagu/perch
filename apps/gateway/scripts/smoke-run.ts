@@ -9,7 +9,7 @@
 import type { Result } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
-import { remoteEngines } from '@workspace/data/engines/remote'
+import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { profileIdFactory } from '@workspace/ids'
 import { RegionDoc, systemClock } from '@workspace/replica'
 import { CLOSE, PROTOCOL_VERSION } from '@workspace/replica/protocol'
@@ -22,8 +22,12 @@ import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
 import { SmokeDevice } from './smoke-device'
 
-/** The e2e stand's WebSocket endpoint, used when `SURREAL_URL` is not set. */
-const E2E_STAND = 'ws://127.0.0.1:8010/rpc'
+/** The e2e stand and the gateway user its stand operator defines, for what env leaves out. */
+const E2E_STAND = {
+  url: 'ws://127.0.0.1:8010/rpc',
+  username: 'gateway',
+  password: 'gateway-stand-password',
+} as const
 
 const STEP_TIMEOUT_MS = 5_000
 
@@ -253,7 +257,13 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
 
 /** Runs the smoke test; resolves to the process's exit code. */
 export async function runSmoke(env: Readonly<Record<string, string | undefined>>): Promise<number> {
-  const parsed = smokeConfig.safeParse({ ...env, SURREAL_URL: env['SURREAL_URL'] ?? E2E_STAND })
+  // An http(s) address, as the database suites take it, becomes the WebSocket endpoint.
+  const url = env['SURREAL_URL'] ?? E2E_STAND.url
+  const parsed = smokeConfig.safeParse({
+    SURREAL_URL: URL.canParse(url) ? wsRpcUrl(url) : url,
+    GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? E2E_STAND.username,
+    GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? E2E_STAND.password,
+  })
 
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {

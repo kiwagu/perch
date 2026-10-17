@@ -15,11 +15,15 @@ is replaced on every use. Above this package ids are entity id strings and times
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `AuthPort` / `AUTH`, `LocalDbPort` / `LOCAL_DB`.
 - Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`.
+- `runAsOperator`: runs one SurrealQL text as a system user without applying the schema
+  (a stand's namespaces, databases and system users), failing at once when the server
+  does not answer.
 - `Shape`, `Command` (with an optional Standard Schema `schema` for its params),
   `TableChange`, `publishChange`, `onChange`, `DataError`.
 - `./engines/node`: embedded engines for Bun and Node; `./engines/remote`: engines for a
   SurrealDB server, opened as a system user through `openLocalDb({ credentials })` (a root
-  user, or a namespace user when the credentials name the namespace).
+  user, or a namespace user when the credentials name the namespace), and `wsRpcUrl`, the
+  server's WebSocket RPC endpoint for any of its `http(s)://` or `ws(s)://` addresses.
 - `./schema-files`: `readSchema()`, the shared schema as one text (Bun and Node).
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.

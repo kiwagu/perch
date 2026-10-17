@@ -17,7 +17,7 @@ import {
   SHAPE_RUNNER,
   type ShapeRunnerPort,
 } from '@workspace/data'
-import { remoteEngines } from '@workspace/data/engines/remote'
+import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { readSchema } from '@workspace/data/schema-files'
 import type { Locale } from '@workspace/i18n'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
@@ -65,23 +65,13 @@ export interface Stand {
 
 const silent: CommandLogger = { info: () => {}, warn: () => {} }
 
-function rpcUrl(url: string): string {
-  const parsed = new URL(url)
-  const secure = parsed.protocol === 'https:' || parsed.protocol === 'wss:'
-
-  parsed.protocol = secure ? 'wss:' : 'ws:'
-  parsed.pathname = '/rpc'
-
-  return parsed.toString()
-}
-
 export function openStand(options: StandOptions): ResultAsync<Stand, DataError> {
   // The projector reports asynchronously; a seed fails on the first such report.
   const failures: DataError[] = []
 
   return createAppRoot({
     engines: remoteEngines(),
-    url: rpcUrl(options.url),
+    url: wsRpcUrl(options.url),
     namespace: options.namespace,
     database: options.database,
     credentials: options.credentials,

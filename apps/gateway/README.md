@@ -33,8 +33,10 @@ stand.
 - `bun run dev`: runs the gateway and restarts it on changes.
 - `bun run test`: unit and functional tests on an embedded in-memory database.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
-  port in front of the stand at `SURREAL_URL` (by default the e2e stand,
-  `ws://127.0.0.1:8010/rpc`) as `GATEWAY_SURREAL_USER`, signs up a new `@example.test`
-  identity and drives two of its devices through sync and sign-out, one line per step.
-  The stand needs the gateway's namespace user.
+  port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
+  WebSocket endpoint; by default the e2e stand, `ws://127.0.0.1:8010/rpc`) as
+  `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
+  operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
+  `@example.test` identity and drives two of its devices through sync and sign-out, one
+  line per step.
 - `bun run typecheck`, `bun run lint`.

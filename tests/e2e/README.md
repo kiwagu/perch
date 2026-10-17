@@ -9,8 +9,10 @@ scrolls sideways. Each test signs up a fresh account in a fresh browser context,
 data generated from the seed catalog. Key pages are compared with screenshots on `mobile`;
 the baselines are not committed: the first run on a machine writes them, later runs
 compare against them.
-The stand is the mcproc `e2e` profile (`surrealdb-e2e` and the `web-e2e` dev server on
-127.0.0.1:5190), not Playwright's web server, so `mcproc logs e2e` shows what a run saw.
+The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e`, the `web-e2e` dev
+server and the `caddy-e2e` front), not Playwright's web server, so `mcproc logs e2e` shows
+what a run saw. Tests open the front, https://localhost:5493, which serves the app and,
+under `/backend/`, the gateway on one origin.
 
 ## Key exports
 

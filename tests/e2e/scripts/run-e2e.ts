@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 /**
  * The e2e launcher: builds what the tests depend on through turbo (a run never
- * meets a stale build), starts the mcproc `e2e` profile (the SurrealDB stand and
- * the `web-e2e` dev server), waits until both answer, runs Playwright with the
- * given arguments and exits with its code. `--down` stops the profile instead. The
- * stand stays up between runs, so `mcproc logs e2e` shows what the tests saw.
+ * meets a stale build), starts the mcproc `e2e` profile (the SurrealDB stand, the
+ * `gateway-e2e` gateway, the `web-e2e` dev server and the `caddy-e2e` front the
+ * tests open), waits for each in that order, runs Playwright with the given
+ * arguments and exits with its code. `--down` stops the profile instead. The stand
+ * stays up between runs, so `mcproc logs e2e` shows what the tests saw.
  *
  *   bun run test:e2e [<playwright args>]       CI=1 runs the specs one at a time
  *   bun run test:e2e --down
@@ -36,11 +37,15 @@ function main(): number {
     return mcproc('stop', 'e2e')
   }
 
+  const waitFor = (app: string, until: string) =>
+    mcproc('wait', app, '--until', until, '--timeout', '120') === 0
   const ready =
     run('bunx', ['turbo', 'run', 'build', '--filter=@workspace/e2e^...']) === 0 &&
     mcproc('start', 'e2e') === 0 &&
-    mcproc('wait', 'surrealdb-e2e', '--until', 'url-ok', '--timeout', '120') === 0 &&
-    mcproc('wait', 'web-e2e', '--until', 'url-ok', '--timeout', '120') === 0
+    waitFor('surrealdb-e2e', 'url-ok') &&
+    waitFor('gateway-e2e', 'url-ok') &&
+    waitFor('web-e2e', 'url-ok') &&
+    waitFor('caddy-e2e', 'url-ok')
 
   if (!ready) {
     console.error('run-e2e: the build failed or the e2e stand did not come up')

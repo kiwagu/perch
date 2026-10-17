@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// The `web-e2e` app of the mcproc manifest; the launcher starts it before the run.
-export const BASE_URL = 'http://127.0.0.1:5190'
+// The `caddy-e2e` front of the mcproc manifest: the `web-e2e` app and, under /backend/,
+// the `gateway-e2e` gateway on one origin; the launcher starts them before the run.
+export const BASE_URL = 'https://localhost:5493'
 
 export default defineConfig({
   testDir: './src',
@@ -18,6 +19,8 @@ export default defineConfig({
   updateSnapshots: 'missing',
   use: {
     baseURL: BASE_URL,
+    // The front's certificate is a local one (mkcert's, or self-signed without mkcert).
+    ignoreHTTPSErrors: true,
     testIdAttribute: 'data-testid',
     trace: 'retain-on-failure',
   },

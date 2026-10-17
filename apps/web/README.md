@@ -31,7 +31,9 @@ modules; `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands
 
-- `bun run dev`: Vite dev server (port `E2E_WEB_PORT`, default 5180).
+- `bun run dev`: Vite dev server (port `E2E_WEB_PORT`, default 5180). With `VITE_PUBLIC_PORT`
+  set, as the local stands set it, the HMR client dials that port over wss through their
+  Caddy front.
 - `bun run build`: production build into `dist/`.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
