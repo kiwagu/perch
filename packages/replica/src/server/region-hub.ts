@@ -493,8 +493,8 @@ export class RegionHub {
   }
 
   /**
-   * Runs `work` on the region once the device has subscribed to it, with the identity id its
-   * subscription named; any other device is refused.
+   * Runs `work` on the region once the device has subscribed to it, with the actor its
+   * subscription named (identity id and ability); any other device is refused.
    */
   #subscribed(
     regionId: string,

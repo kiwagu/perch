@@ -70,14 +70,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
   history, a table outside the region, a record that is not a map, `forbidden-action` for a
   create, update or delete that `ValidateBatchInput.ability` does not allow on the record, and
-  `foreign-owner` for a record that breaks the owner rule: in a private region an identity reference other than
-  the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
+  `foreign-owner` for a record that breaks the owner rule: in a private region an identity
+  reference other than the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
   member reference is not the pushing member, or an edit that changes the member a record
   references). The ability is judged on the record as it is, the one being updated or deleted
   as it was before the batch and a new one as the batch writes it; a table that declares no
   abilities refuses every client write. The check of the roots reads the operations of the
   batch, not its net effect: a write outside the `records` map that a later operation of the
   same batch undid is refused too, as the operations would still be stored and replicated.
+  The mergeable containers of a record's fields appear as roots in the operations and are
+  exempt from that refusal when their path leads into the `records` map or is gone.
   `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
   `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
   database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
@@ -86,8 +88,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
   (`Actor`: its identity id and its `Ability`); `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
-  (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's ability refuses) and sends the batch to the other
-  subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
+  ability refuses) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.

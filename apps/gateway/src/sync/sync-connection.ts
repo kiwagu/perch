@@ -2,7 +2,7 @@ import type { Result } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type AuthTokens, type AuthUser, type DataError, dataError } from '@workspace/data'
-import { type Ability, defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
+import { type Ability, defineAbilityFor, NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 import type { Logger } from '@workspace/logger'
 import {
   type Clock,
@@ -105,8 +105,13 @@ function regionsFor(
     identityRegions(identity, memberships).map((ref) => {
       const key = tenantKeyOf(ref)
       const role = key === undefined ? undefined : roles.get(key)
+      // Only the private region is the identity's own; a tenant region without a role allows nothing.
       const ability: Ability =
-        role === undefined ? OWNER_ABILITY : defineAbilityFor({ id: identity, role }, schema)
+        ref.kind === 'private'
+          ? OWNER_ABILITY
+          : role === undefined
+            ? NO_ABILITY
+            : defineAbilityFor({ id: identity, role }, schema)
 
       return [ref.id, { ref, actor: { id: identity, ability } }]
     }),

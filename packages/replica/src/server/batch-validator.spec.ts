@@ -213,6 +213,22 @@ describe('batch validation', () => {
     expect(server.version().encode()).toEqual(before)
     expect(server.recordMap('profile/prf_1').get('name')).toBe('Ann')
   })
+
+  it('refuses a batch whose write outside the records was undone in the same batch', () => {
+    const server = documentWithProfile('Ann')
+    const client = forkOf(server)
+
+    client.getMap('junk').set('k', 1)
+    client.getMap('junk').delete('k')
+    client.recordMap('profile/prf_1').set('name', 'Ana')
+
+    const validated = validateBatch(input(server, [exportSince(client, server)]))
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'malformed',
+      detail: 'writes outside records: cid:root-junk:Map',
+    })
+  })
 })
 
 describe('a tenant region', () => {
@@ -370,22 +386,6 @@ describe('a tenant region', () => {
     expect(validated.isErr() && validated.error).toEqual({
       reason: 'forbidden-action',
       detail: `note/${id}:create`,
-    })
-  })
-
-  it('refuses a batch whose write outside the records was undone in the same batch', () => {
-    const server = documentWithProfile('Ann')
-    const client = forkOf(server)
-
-    client.getMap('junk').set('k', 1)
-    client.getMap('junk').delete('k')
-    client.recordMap('profile/prf_1').set('name', 'Ana')
-
-    const validated = validateBatch(input(server, [exportSince(client, server)]))
-
-    expect(validated.isErr() && validated.error).toEqual({
-      reason: 'malformed',
-      detail: 'writes outside records: cid:root-junk:Map',
     })
   })
 

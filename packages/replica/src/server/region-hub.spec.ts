@@ -413,7 +413,8 @@ describe('region hub', () => {
     expect(boss.received.filter((m) => m.type === 'ack')).toEqual([
       expect.objectContaining({ type: 'ack', batch: 1 }),
     ])
-    expect(ann.received.filter((m) => m.type === 'updates').length).toBeGreaterThan(1)
+    // Her snapshot at the subscription, then the admin's edit.
+    expect(ann.received.filter((m) => m.type === 'updates')).toHaveLength(2)
   })
 
   it('answers the head of a region that unloads while the database is asked for others', async () => {

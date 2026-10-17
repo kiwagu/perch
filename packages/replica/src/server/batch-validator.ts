@@ -103,8 +103,8 @@ const forbidden = (entry: string, action: Action): BatchRejection => ({
  * the operations themselves: a write a later operation of the same batch undid is refused too,
  * because the operations would still be stored and replicated. The mergeable containers of a
  * record's fields are roots in the operations, and they are not foreign: one is told apart by
- * its name and by the path to it, which leads into the records. A mergeable container whose
- * record the batch removed has no path any more and is the removal's own.
+ * its name and by the path to it: one is accepted when the path leads into the records, or when
+ * it has no path, because its record is gone.
  */
 function foreignRoot(doc: LoroDoc, fork: LoroDoc): string | undefined {
   const records = fork.getMap(RECORDS).id
@@ -115,7 +115,7 @@ function foreignRoot(doc: LoroDoc, fork: LoroDoc): string | undefined {
         continue
       }
 
-      const path = fork.getPathToContainer(op.container as ContainerID)
+      const path = fork.getPathToContainer(op.container)
       const mergeable = op.container.startsWith(MERGEABLE_ROOT)
 
       if (mergeable ? path !== undefined && path[0] !== RECORDS : true) {
