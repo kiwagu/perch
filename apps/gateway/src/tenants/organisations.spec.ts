@@ -29,6 +29,8 @@ import tenantRows from './__fixtures__/tenant-rows.surql'
 import tenantSweep from './__fixtures__/tenant-sweep.surql'
 import { type OrganisationRefusalCode, Organisations } from './organisations'
 import memberRemoveStatement from './surql/member-remove.surql'
+import membershipRemoveStatement from './surql/membership-remove.surql'
+import membershipsOfStatement from './surql/memberships-of.surql'
 import { TenantDatabases } from './tenant-databases'
 
 const PASSWORD = 'pass-word-1'
@@ -69,7 +71,9 @@ async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
 /**
  * Organisations over an embedded directory, with each organisation's database on an embedded
  * engine of its own, and three identities: ann, bob and cat. A test can make one statement fail
- * on the organisations' databases, as a broken database would.
+ * on the organisations' databases, as a broken database would; it can watch and fail the
+ * directory's statements. The connections of the identities are a record of the regions taken
+ * from them; `steps` lists those revocations and the member-row deletes in order.
  */
 async function harness() {
   const directory = (
@@ -78,6 +82,9 @@ async function harness() {
   const opened: string[] = []
   /** The statement the organisations' databases refuse, if any. */
   let refusedStatement: string | undefined
+  /** Hears each statement sent to the directory; it may throw to make the statement fail. */
+  let directoryQueries: ((text: string) => void) | undefined
+  const steps: string[] = []
   const databases = new TenantDatabases({
     open: (key) => {
       opened.push(key)
@@ -90,6 +97,10 @@ async function harness() {
         schema: readSchema('tenant'),
       }).map((local) =>
         interceptQueries(local, (text) => {
+          if (text === memberRemoveStatement) {
+            steps.push('member-remove')
+          }
+
           if (text === refusedStatement) {
             throw new Error('the database refused the statement')
           }
@@ -105,10 +116,18 @@ async function harness() {
     () => databases.close(),
   )
 
-  const organisations = new Organisations({ directory, databases })
+  const organisations = new Organisations({
+    directory: interceptQueries(directory, (text) => directoryQueries?.(text)),
+    databases,
+    revoke: async (identity, region) => {
+      steps.push(`revoke ${identity} ${region}`)
+    },
+  })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 
-  organisations.onChange((identity, memberships) => heard.push([identity, memberships]))
+  organisations.onChange(async (identity, memberships) => {
+    heard.push([identity, memberships])
+  })
 
   const ann = await signUp(directory, 'ann@example.test')
   const bob = await signUp(directory, 'bob@example.test')
@@ -163,11 +182,17 @@ async function harness() {
     refusedStatement = statement
   }
 
+  /** Hears each statement sent to the directory from now on; `undefined` stops listening. */
+  const onDirectoryQuery = (listener: ((text: string) => void) | undefined) => {
+    directoryQueries = listener
+  }
+
   return {
     organisations,
     opened,
     directory,
     heard,
+    steps,
     ann,
     bob,
     cat,
@@ -177,6 +202,7 @@ async function harness() {
     founded,
     invited,
     refuseInTenants,
+    onDirectoryQuery,
   }
 }
 
@@ -411,8 +437,8 @@ describe('Organisations', () => {
     expect(heard).toEqual([[bob.id, []]])
   })
 
-  it('a removal whose member-row delete fails still tells the removed device', async () => {
-    const { organisations, ann, bob, heard, membersIn, founded, invited, refuseInTenants } =
+  it('a removal whose member-row delete fails still revokes the region and tells the removed device', async () => {
+    const { organisations, ann, bob, heard, steps, membersIn, founded, invited, refuseInTenants } =
       await harness()
 
     await founded()
@@ -423,8 +449,10 @@ describe('Organisations', () => {
     const failed = await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
 
     expect(failed._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
-    // The directory's membership is gone: bob's devices hear it now, not at their next reconnect.
+    // The directory's membership is gone: bob's devices lose the region and hear it now, not at
+    // their next reconnect.
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
+    expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
     expect(heard).toEqual([[bob.id, []]])
 
     // Asked again, the removal deletes the member row and tells bob's devices once more.
@@ -436,6 +464,44 @@ describe('Organisations', () => {
     )
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
     expect(heard).toEqual([[bob.id, []]])
+  })
+
+  it('a removal whose memberships reread fails still revokes the region on the live connection', async () => {
+    const { organisations, ann, bob, heard, steps, membersIn, founded, invited, onDirectoryQuery } =
+      await harness()
+
+    await founded()
+    await invited('bob@example.test')
+    heard.splice(0)
+
+    let removed = false
+
+    // The directory goes away for a moment once the membership is deleted.
+    onDirectoryQuery((text) => {
+      if (text === membershipRemoveStatement) {
+        removed = true
+      } else if (removed && text === membershipsOfStatement) {
+        throw new Error('the directory went away for a moment')
+      }
+    })
+
+    const failed = await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+
+    expect(failed._unsafeUnwrapErr()).toEqual(
+      expect.objectContaining({
+        code: 'data:QUERY_FAILED',
+        message: `could not read the memberships of ${bob.id}`,
+      }),
+    )
+    // Bob's connections lost the region before the member row went, though nobody could be
+    // told the memberships.
+    expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
+    expect(heard).toEqual([])
+
+    onDirectoryQuery(undefined)
+
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
   })
 
   it('removes an identity that is not a member: nothing changes, and its listener hears the memberships it has', async () => {

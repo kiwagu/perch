@@ -20,8 +20,11 @@ region in the directory and a tenant region in its organisation's database
 note names its own member as its author, and nobody changes the author of a note. A
 connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
 accepted; when an identity's memberships change, each of its connections leaves the regions it
-may no longer name and is sent a `memberships` message, and it subscribes to a new
-organisation's region itself. Text the protocol refuses (4400, a hello of protocol 1
+may no longer name at once, without waiting for the device's messages under way (one handled
+from then on that names such a region closes the socket with 4403, and the hub sends it nothing
+more there), and is sent a `memberships` message; it subscribes to a new organisation's region
+itself. A change told while a connection's hello is under way applies right after its welcome.
+Text the protocol refuses (4400, a hello of protocol 1
 included), refused keys (4401), a region the device may not name (4403) and a hello that did
 not come within 10 seconds (4408, after which the device connects again) close the socket
 with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
@@ -43,7 +46,12 @@ unfinished is completed when the creator asks again), lists an identity's member
 organisations by key, lets an admin invite an existing identity by email and remove a member
 other than itself, lists the members with their emails to any member, answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
-and tells its listeners an identity's new memberships whenever they change.
+and tells its listeners an identity's new memberships whenever they change, answering once they
+heard them: the composition root has the registry tell the identity's devices. A removal takes
+the organisation's region from the removed identity's open connections as soon as the
+directory's membership is gone, before the member row is deleted and before the memberships are
+read again to be told, so a removal that fails after the directory (500) has revoked the region
+all the same; asking again completes it.
 
 The organisation routes act for the identity a device's access token signs in, sent as
 `Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an

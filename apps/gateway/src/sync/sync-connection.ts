@@ -100,10 +100,13 @@ function regionsOf(message: ClientMessage): readonly string[] {
  * the hello time; once they are accepted it is welcomed with its identity's private region,
  * the region of each organisation the identity belongs to and those memberships, and may
  * subscribe, pull, push, probe and compact in those regions only, each handed to the region
- * hub, which answers the device itself and checks its batches against the identity. When the
- * identity's memberships change, the device leaves the regions it may no longer name, may
- * name the new ones, and is sent the memberships. Messages and changes of memberships are
- * handled one at a time, in the order they came. Text the protocol refuses closes the
+ * hub, which answers the device itself and checks its batches against the identity. Messages
+ * are handled one at a time, in the order they came. A change of the identity's memberships
+ * does not wait for them: the device leaves the regions it may no longer name at once, so a
+ * message handled from then on that names one is refused and the hub sends it nothing more
+ * there (what is under way finishes), may name the new ones, and is sent the memberships; a
+ * revocation takes one region away the same way without a message. A change told while the
+ * hello is under way applies right after the welcome. Text the protocol refuses closes the
  * socket; so does a region the device may not name and a sign-out, which also revokes the
  * device's refresh grant: the sign-out close (4000) means the grant is revoked, and a grant
  * that cannot be revoked closes the socket as a failed server (1011) instead.
@@ -121,10 +124,15 @@ export class SyncConnection {
   /** The regions the device subscribed to, to leave when the socket closes. */
   readonly #subscribed = new Set<string>()
   #state: State
-  /** Settles once every message and every change of memberships so far has been handled. */
+  /** Settles once every message so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
   /** Takes the connection out of the registry; nothing to take until the keys are accepted. */
   #unregister: () => void = () => {}
+  /** The changes of memberships told while the hello is under way, applied after the welcome. */
+  readonly #afterWelcome: Array<() => void> = []
+  /** Resolves once the hello settled: the device was welcomed, or the socket closed. */
+  readonly #helloSettled: Promise<void>
+  #settleHello: () => void = () => {}
 
   constructor(socket: SocketLike, deps: SyncConnectionDeps) {
     this.#socket = socket
@@ -139,6 +147,9 @@ export class SyncConnection {
       id: crypto.randomUUID(),
       send: (message) => this.#send(message),
     }
+    this.#helloSettled = new Promise((resolve) => {
+      this.#settleHello = resolve
+    })
     this.#state = {
       kind: 'waiting',
       // A late hello is no sign of bad keys: the device connects again and says it in time.
@@ -154,11 +165,25 @@ export class SyncConnection {
   }
 
   /**
-   * The identity's memberships changed: once what came before is handled, the device leaves
-   * the regions it may no longer name, may name the new ones, and is sent the memberships.
+   * The identity's memberships changed: at once, whatever message is being handled, the device
+   * leaves the regions it may no longer name, may name the new ones, and is sent the
+   * memberships. Resolves once they were sent, or the socket closed: right after the welcome
+   * while the hello is under way. Never rejects.
    */
-  memberships(next: readonly Membership[]): void {
-    void this.#enqueue(async () => this.#changeMemberships(next))
+  memberships(next: readonly Membership[]): Promise<void> {
+    return this.#change(() => this.#changeMemberships(next))
+  }
+
+  /**
+   * The identity left the organisation of `region`: at once, whatever message is being
+   * handled, the device may no longer name it and leaves it. Nothing is sent: the memberships
+   * follow. Resolves once that holds; while the hello is under way it applies right after the
+   * welcome, before any later message is handled. Never rejects.
+   */
+  revoke(region: string): Promise<void> {
+    void this.#change(() => this.#leave(region))
+
+    return Promise.resolve()
   }
 
   /** The socket closed: leaves every region, unregisters and ignores whatever comes later. */
@@ -169,6 +194,8 @@ export class SyncConnection {
 
     this.#state = { kind: 'closed' }
     this.#unregister()
+    this.#afterWelcome.length = 0
+    this.#settleHello()
 
     for (const region of this.#subscribed) {
       this.#hub.unsubscribe(region, this.#subscriber.id)
@@ -184,6 +211,31 @@ export class SyncConnection {
     this.#queue = handled
 
     return handled
+  }
+
+  /**
+   * Applies a change of the device's regions now, outside the queue of messages; while the
+   * hello is under way it waits for the welcome. Resolves once applied, or the socket closed.
+   */
+  #change(apply: () => void): Promise<void> {
+    if (this.#state.kind === 'waiting') {
+      this.#afterWelcome.push(apply)
+
+      return this.#helloSettled
+    }
+
+    this.#guarded(apply)
+
+    return Promise.resolve()
+  }
+
+  /** Runs `apply`; a send that throws fails the connection, as in the queue. */
+  #guarded(apply: () => void): void {
+    try {
+      apply()
+    } catch (cause) {
+      this.#fail(dataError('data:WRITE_FAILED', 'the sync connection failed to answer', cause))
+    }
   }
 
   async #handle(work: () => Promise<void>): Promise<void> {
@@ -294,14 +346,19 @@ export class SyncConnection {
       memberships: [...memberships.value],
       time: this.#clock.now(),
     })
+
+    // What changed since the memberships were read applies before any later message is handled.
+    for (const apply of this.#afterWelcome.splice(0)) {
+      this.#guarded(apply)
+    }
+
+    this.#settleHello()
   }
 
   /** Leaves the regions the device may no longer name, replaces its regions and tells it. */
   #changeMemberships(next: readonly Membership[]): void {
     const state = this.#state
 
-    // The connection registers during its hello, which comes first in turn: the device was
-    // welcomed by then, unless the hello failed and the socket closed.
     if (state.kind !== 'ready') {
       return
     }
@@ -310,13 +367,35 @@ export class SyncConnection {
 
     for (const region of [...this.#subscribed]) {
       if (!regions.has(region)) {
-        this.#hub.unsubscribe(region, this.#subscriber.id)
-        this.#subscribed.delete(region)
+        this.#unsubscribe(region)
       }
     }
 
     this.#state = { kind: 'ready', device: { ...state.device, regions } }
     this.#send({ type: 'memberships', memberships: [...next] })
+  }
+
+  /** Takes `region` from the regions the device may name, and leaves it at the hub. */
+  #leave(region: string): void {
+    const state = this.#state
+
+    if (state.kind !== 'ready') {
+      return
+    }
+
+    const regions = new Map(state.device.regions)
+
+    regions.delete(region)
+    this.#state = { kind: 'ready', device: { ...state.device, regions } }
+
+    if (this.#subscribed.has(region)) {
+      this.#unsubscribe(region)
+    }
+  }
+
+  #unsubscribe(region: string): void {
+    this.#hub.unsubscribe(region, this.#subscriber.id)
+    this.#subscribed.delete(region)
   }
 
   async #serve(device: Device, message: ClientMessage): Promise<void> {

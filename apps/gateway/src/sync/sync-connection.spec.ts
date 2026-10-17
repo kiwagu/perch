@@ -1,4 +1,4 @@
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createAuth, type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
@@ -27,6 +27,8 @@ import { DIRECTORY, NAMESPACE } from '../config'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import memberRemoveStatement from '../tenants/surql/member-remove.surql'
+import membershipRemoveStatement from '../tenants/surql/membership-remove.surql'
+import membershipsOfStatement from '../tenants/surql/memberships-of.surql'
 import { TenantDatabases } from '../tenants/tenant-databases'
 
 import { noteCreate } from './__fixtures__/note'
@@ -98,6 +100,8 @@ interface ConnectOptions {
 interface GatewayOptions {
   /** Runs before each query sent to an organisation's database; it may throw to make the query fail. */
   readonly tenantQueries?: (text: string) => void
+  /** Runs before each query the organisations send to the directory; it may throw to make the query fail. */
+  readonly directoryQueries?: (text: string) => void
 }
 
 /**
@@ -145,14 +149,14 @@ async function openGateway(options: GatewayOptions = {}) {
     }),
     onCloseFailure: (error) => reported.push(error),
   })
-  const organisations = new Organisations({ directory: local, databases })
   const connections = new ConnectionRegistry()
-
-  organisations.onChange((identity, memberships) => {
-    for (const connection of connections.forIdentity(identity)) {
-      connection.memberships(memberships)
-    }
+  const organisations = new Organisations({
+    directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,
+    databases,
+    revoke: (identity, region) => connections.revoke(identity, region),
   })
+
+  organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
   return {
     clock,
@@ -208,6 +212,59 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   })
 
   return { socket, connection, revoked, logLines, unsubscribed }
+}
+
+/**
+ * Holds the hub calls passed through it while held, as a slow hub would; `hold` answers a
+ * promise that resolves once a call waits.
+ */
+function holding() {
+  let gate: Promise<void> | undefined
+  let open = () => {}
+  let arrived = () => {}
+
+  return {
+    hold: (): Promise<void> => {
+      gate = new Promise((resolve) => {
+        open = resolve
+      })
+
+      return new Promise((resolve) => {
+        arrived = resolve
+      })
+    },
+    release: () => {
+      gate = undefined
+      open()
+    },
+    through: <T>(call: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> => {
+      if (!gate) {
+        return call()
+      }
+
+      arrived()
+
+      return ResultAsync.fromSafePromise(gate).andThen(call)
+    },
+  }
+}
+
+/** A connection whose probes and hello wait while `heads` holds them. */
+function openHolding(gateway: Gateway, heads: ReturnType<typeof holding>) {
+  return open(gateway, {
+    hub: { heads: (regions) => heads.through(() => gateway.hub.heads(regions)) },
+  })
+}
+
+/** The update that creates a note of `author` in a device's copy of the region of Acme. */
+async function acmeNote(author: string, text: string): Promise<Uint8Array<ArrayBuffer>> {
+  return (
+    await noteCreate(RegionDoc.inMemory('tenant', 'tenant:acme'), {
+      id: noteIdFactory.create(),
+      author,
+      text,
+    })
+  )._unsafeUnwrap()
 }
 
 /** Says hello with a pair the gateway gave at sign-up or sign-in. */
@@ -737,5 +794,176 @@ describe('SyncConnection', () => {
       memberships: [{ tenant: acme.tenant, role: 'member' }],
     })
     expect(socket.closedWith).toBeUndefined()
+  })
+
+  it('a removal takes effect while the connection is busy with another message', async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+    const heads = holding()
+    const annsDevice = open(gateway)
+    const bobsDevice = openHolding(gateway, heads)
+
+    for (const [device, signedUp] of [
+      [annsDevice, anns],
+      [bobsDevice, bobs],
+    ] as const) {
+      await hello(device.connection, signedUp.tokens)
+      await device.connection.receive(
+        encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+      )
+    }
+
+    const bobsNote = await acmeNote(bobs.identity.id, 'from bob')
+    const annsNote = await acmeNote(anns.identity.id, 'from ann')
+    const reached = heads.hold()
+    // Bob's device probes its private region; a push into Acme's waits behind the probe.
+    const probing = bobsDevice.connection.receive(
+      encode({ type: 'probe', regions: [`identity:${bobs.identity.id}`] }),
+    )
+    const pushing = bobsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 1, updates: [bobsNote] }),
+    )
+
+    await reached
+    ;(
+      await gateway.organisations.remove({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+      })
+    )._unsafeUnwrap()
+    // A note Ann pushes once the removal answered does not reach Bob's device.
+    await annsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 1, updates: [annsNote] }),
+    )
+    heads.release()
+    await probing
+    await pushing
+
+    expect(types(bobsDevice.socket.sent)).toEqual([
+      'welcome',
+      'updates',
+      'memberships',
+      'heads',
+      'error',
+    ])
+    expect(bobsDevice.socket.sent[4]).toEqual(
+      expect.objectContaining({ type: 'error', code: 'forbidden-region' }),
+    )
+    expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
+    expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+    // Bob's push queued before the removal took effect never reached the region.
+    expect((await gateway.hub.heads(['tenant:acme']))._unsafeUnwrap()).toEqual([
+      { region: 'tenant:acme', head: 1 },
+    ])
+  })
+
+  it('memberships(next) resolves after the message was sent, while the connection is busy with another message', async () => {
+    const { gateway, bobs } = await withAcme(true)
+    const heads = holding()
+    const { socket, connection, unsubscribed } = openHolding(gateway, heads)
+
+    await hello(connection, bobs.tokens)
+    await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+
+    const reached = heads.hold()
+    const probing = connection.receive(
+      encode({ type: 'probe', regions: [`identity:${bobs.identity.id}`] }),
+    )
+
+    await reached
+    await connection.memberships([])
+
+    expect(types(socket.sent)).toEqual(['welcome', 'updates', 'memberships'])
+    expect(socket.sent[2]).toEqual({ type: 'memberships', memberships: [] })
+    expect(unsubscribed).toEqual(['tenant:acme'])
+
+    heads.release()
+    await probing
+
+    expect(types(socket.sent)).toEqual(['welcome', 'updates', 'memberships', 'heads'])
+    expect(socket.closedWith).toBeUndefined()
+  })
+
+  it('a removal whose memberships reread fails still takes the region from the live connection', async () => {
+    let removed = false
+    const { gateway, anns, bobs } = await withAcme(true, {
+      // The directory goes away for a moment once the membership is deleted.
+      directoryQueries: (text) => {
+        if (text === membershipRemoveStatement) {
+          removed = true
+        } else if (removed && text === membershipsOfStatement) {
+          throw new Error('the directory went away for a moment')
+        }
+      },
+    })
+    const annsDevice = open(gateway)
+    const bobsDevice = open(gateway)
+
+    for (const [device, signedUp] of [
+      [annsDevice, anns],
+      [bobsDevice, bobs],
+    ] as const) {
+      await hello(device.connection, signedUp.tokens)
+      await device.connection.receive(
+        encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+      )
+    }
+
+    const removal = await gateway.organisations.remove({
+      actor: anns.identity.id,
+      key: 'acme',
+      identity: bobs.identity.id,
+    })
+
+    expect(removal._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    removed = false
+
+    await annsDevice.connection.receive(
+      encode({
+        type: 'push',
+        region: 'tenant:acme',
+        batch: 1,
+        updates: [await acmeNote(anns.identity.id, 'from ann')],
+      }),
+    )
+    await bobsDevice.connection.receive(
+      encode({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() }),
+    )
+
+    // Not told (the memberships could not be read), yet out of the region: no note of Ann's,
+    // and a pull is refused.
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'error'])
+    expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
+    expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+  })
+
+  it('a change of memberships told during the hello applies right after the welcome', async () => {
+    const { gateway, bobs } = await withAcme(true)
+    const heads = holding()
+    const { socket, connection } = openHolding(gateway, heads)
+    const reached = heads.hold()
+    const helloed = hello(connection, bobs.tokens)
+
+    // The hello read the memberships, Acme among them, and waits for the heads.
+    await reached
+    await gateway.connections.revoke(bobs.identity.id, 'tenant:acme')
+
+    let sentWhenTold: string[] | undefined
+    const told = gateway.connections.tell(bobs.identity.id, []).then(() => {
+      sentWhenTold = types(socket.sent)
+    })
+
+    heads.release()
+    await helloed
+    await told
+
+    expect(sentWhenTold).toEqual(['welcome', 'memberships'])
+
+    await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+
+    expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
+    expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
   })
 })

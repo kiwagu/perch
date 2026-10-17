@@ -454,7 +454,11 @@ describe('organisationRoutes', () => {
     // Organisations over a directory that is gone: the identity still signs in on the root's.
     const routes = organisationRoutes(
       root.sessions,
-      new Organisations({ directory, databases: root.databases }),
+      new Organisations({
+        directory,
+        databases: root.databases,
+        revoke: (identity, region) => root.connections.revoke(identity, region),
+      }),
       routeOptions,
     )
 

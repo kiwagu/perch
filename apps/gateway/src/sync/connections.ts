@@ -1,9 +1,18 @@
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-/** A device's open connection, as far as a change of its identity's memberships goes. */
+/** A device's open connection, as far as its identity's memberships go. */
 export interface MembershipsListener {
-  memberships(next: readonly Membership[]): void
+  /**
+   * The identity's memberships are now `next`: the device may name only their regions from now
+   * on. Resolves once the device was sent them; never rejects.
+   */
+  memberships(next: readonly Membership[]): Promise<void>
+  /**
+   * The identity left the organisation of `region`: the device may no longer name it and leaves
+   * it at once, whatever it is doing. Resolves once that holds; never rejects.
+   */
+  revoke(region: string): Promise<void>
 }
 
 /**
@@ -32,5 +41,18 @@ export class ConnectionRegistry {
   /** The connections of `identity` registered and not removed. */
   forIdentity(identity: IdentityId): readonly MembershipsListener[] {
     return [...(this.#byIdentity.get(identity) ?? [])]
+  }
+
+  /** Tells every live connection of `identity` its memberships; resolves once each was told. */
+  async tell(identity: IdentityId, memberships: readonly Membership[]): Promise<void> {
+    await Promise.all(this.forIdentity(identity).map((each) => each.memberships(memberships)))
+  }
+
+  /**
+   * Takes `region` from every live connection of `identity` at once; resolves once none of them
+   * may name it any more.
+   */
+  async revoke(identity: IdentityId, region: string): Promise<void> {
+    await Promise.all(this.forIdentity(identity).map((each) => each.revoke(region)))
   }
 }

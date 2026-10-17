@@ -7,6 +7,7 @@ import {
   type LocalDb,
   recordId,
   tenantDatabase,
+  tenantRegionId,
 } from '@workspace/data'
 import {
   type IdentityId,
@@ -61,6 +62,11 @@ export interface OrganisationsOptions {
   /** The directory database, opened as the gateway's namespace user. */
   readonly directory: LocalDb
   readonly databases: Pick<TenantDatabases, 'acquire' | 'evict'>
+  /**
+   * Takes the region of an organisation an identity was removed from from that identity's open
+   * connections at once; resolves once none of them may name it any more.
+   */
+  readonly revoke: (identity: IdentityId, region: string) => Promise<void>
 }
 
 /** The longest name an organisation may have, in characters. */
@@ -102,7 +108,8 @@ interface MemberRow {
   readonly role: TenantRole
 }
 
-type Listener = (identity: IdentityId, memberships: readonly Membership[]) => void
+/** Hears an identity's new memberships; the change it belongs to resolves once this does. */
+type Listener = (identity: IdentityId, memberships: readonly Membership[]) => Promise<void>
 
 function refused(code: OrganisationRefusalCode): OrganisationRefusal {
   return { kind: 'refused', code }
@@ -155,16 +162,19 @@ function toMembership(row: MembershipRow): Membership {
  * its database, adds the creator as its admin member there and marks it ready; until then it is
  * nobody's, and its creator may run the creation again to finish it. A command that fails with
  * a `DataError` after some of its rows were written leaves those rows in place, and asking again
- * completes it: a creation by its creator, an invite, a removal.
+ * completes it: a creation by its creator, an invite, a removal. Each change of memberships
+ * resolves once the listeners heard the identity's new memberships.
  */
 export class Organisations {
   readonly #directory: LocalDb
   readonly #databases: Pick<TenantDatabases, 'acquire' | 'evict'>
+  readonly #revoke: OrganisationsOptions['revoke']
   readonly #listeners = new Set<Listener>()
 
   constructor(options: OrganisationsOptions) {
     this.#directory = options.directory
     this.#databases = options.databases
+    this.#revoke = options.revoke
   }
 
   /** The ready organisations `identity` belongs to, with its role in each, by key. */
@@ -232,11 +242,12 @@ export class Organisations {
 
   /**
    * An admin of the organisation removes `identity` from it; an admin cannot remove itself.
-   * Once the directory's membership is gone the identity's listeners hear its memberships,
-   * before its member row leaves the organisation's database: a removal that fails after the
-   * directory still takes the organisation from the identity's open connections. They hear it
-   * at every removal, also of an identity that was no member: asking again after a failure
-   * tells them again, whichever step failed, and completes the removal.
+   * Once the directory's membership is gone the organisation's region is taken from the
+   * identity's open connections, before anything else can fail; then its member row leaves the
+   * organisation's database and its listeners hear its memberships, both tried whatever the
+   * other's outcome, the first failure answering. It happens at every removal, also of an
+   * identity that was no member: asking again after a failure revokes and tells again, and
+   * completes the removal.
    */
   remove(input: {
     actor: IdentityId
@@ -259,16 +270,16 @@ export class Organisations {
           `could not remove the membership of ${identity} in ${key}`,
         ),
       )
-      .andThen(() => this.#emit(identity))
       .andThen(() =>
-        this.#inTenant(key, (local) =>
-          writing(
-            local.db.query(memberRemoveStatement, { identity }).retry(),
-            `could not remove ${identity} from the members of ${key}`,
+        ResultAsync.fromPromise(this.#revoke(identity, tenantRegionId(key)), (cause) =>
+          dataError(
+            'data:WRITE_FAILED',
+            `could not take ${key} from the connections of ${identity}`,
+            cause,
           ),
         ),
       )
-      .map(() => undefined)
+      .andThen(() => this.#leaveTenant(key, identity))
   }
 
   /** The members of the organisation with their emails, for any of its members, the earliest first. */
@@ -484,15 +495,35 @@ export class Organisations {
       })
   }
 
-  /** Tells the listeners the memberships `identity` has now. */
-  #emit(identity: IdentityId): ResultAsync<void, DataError> {
-    return this.membershipsOf(identity).map((memberships) => {
-      for (const listener of this.#listeners) {
-        listener(identity, memberships)
-      }
+  /**
+   * The member row of `identity` leaves the organisation's database, and its listeners hear its
+   * memberships; each runs whatever the other's outcome, and the first failure answers.
+   */
+  #leaveTenant(key: string, identity: IdentityId): ResultAsync<void, DataError> {
+    const run = async (): Promise<Result<void, DataError>> => {
+      const deleted = await this.#inTenant(key, (local) =>
+        writing(
+          local.db.query(memberRemoveStatement, { identity }).retry(),
+          `could not remove ${identity} from the members of ${key}`,
+        ),
+      )
+      const told = await this.#emit(identity)
 
-      return undefined
-    })
+      return Result.combine([deleted.map(() => undefined), told]).map(() => undefined)
+    }
+
+    return new ResultAsync(run())
+  }
+
+  /** Tells the listeners the memberships `identity` has now; resolves once each heard them. */
+  #emit(identity: IdentityId): ResultAsync<void, DataError> {
+    return this.membershipsOf(identity).andThen((memberships) =>
+      ResultAsync.fromPromise(
+        Promise.all([...this.#listeners].map((listener) => listener(identity, memberships))),
+        (cause) =>
+          dataError('data:WRITE_FAILED', `could not tell the memberships of ${identity}`, cause),
+      ).map(() => undefined),
+    )
   }
 
   /** Runs `work` on the organisation's database, holding it until the work settles. */

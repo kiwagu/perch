@@ -36,7 +36,10 @@ export interface GatewayRoot {
    * organisation's database.
    */
   readonly hub: RegionHub
-  /** The open sync connections of each identity, told of every change of its memberships. */
+  /**
+   * The open sync connections of each identity: told of every change of its memberships, and a
+   * removed identity's lose the organisation's region at once.
+   */
   readonly connections: ConnectionRegistry
   /** The directory database. */
   readonly local: LocalDb
@@ -98,14 +101,16 @@ export function createGatewayRoot(
       clock: options.clock,
       onError: (error) => hubLog.error({ code: error.code }, error.message),
     })
-    const organisations = new Organisations({ directory: local, databases })
     const connections = new ConnectionRegistry()
-
-    organisations.onChange((identity, memberships) => {
-      for (const connection of connections.forIdentity(identity)) {
-        connection.memberships(memberships)
-      }
+    // A removal takes the organisation's region from the removed identity's connections before
+    // anything else can fail; every change of memberships resolves once its devices were told.
+    const organisations = new Organisations({
+      directory: local,
+      databases,
+      revoke: (identity, region) => connections.revoke(identity, region),
     })
+
+    organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
     return {
       sessions: new IdentitySessions({
