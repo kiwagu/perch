@@ -1,6 +1,7 @@
 // spec: tests/e2e/specs/organisation/03-membership-change.md
 import { generate } from '../support/data'
-import { appReady, expect, signUp, test } from '../support/fixtures'
+import { appReady, expect, pageLoads, signUp, test } from '../support/fixtures'
+import { databases, organisationDatabase } from '../support/storage'
 
 test.describe('Deliver an invitation and a removal to a signed-in device', { tag: '@full' }, () => {
   test('Device B gains the organisation when invited and loses it when removed, without a reload', async ({
@@ -12,23 +13,22 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
       name: generate.organisationName(),
       noteByA: generate.noteText(),
     }
-    const { account: userB, page: deviceB } = anotherAccount
-    // Full page loads of device B: the membership changes must reach it without one.
-    let loadsOfB = 0
+    const userB = anotherAccount.account
 
-    deviceB.on('load', () => {
-      loadsOfB += 1
-    })
+    const deviceB =
+      await test.step('1. On device B, sign up as user B and open "/org"', async () => {
+        const b = await anotherAccount.signUp()
 
-    await test.step('1. On device B, sign up as user B and open "/org"', async () => {
-      // The fixture signed user B up through the sign-in page in a browser of its own.
-      await expect(deviceB).toHaveURL(/\/me$/)
-      await deviceB.getByTestId('app-shell.nav.organisation').click()
-      // Expected: after step 1 device B shows "You are not a member of any organisation yet."
-      await expect(deviceB.getByTestId('organisation.none')).toHaveText(
-        'You are not a member of any organisation yet.',
-      )
-    })
+        await b.getByTestId('app-shell.nav.organisation').click()
+        // Expected: after step 1 device B shows "You are not a member of any organisation yet."
+        await expect(b.getByTestId('organisation.none')).toHaveText(
+          'You are not a member of any organisation yet.',
+        )
+
+        return b
+      })
+    // Full page loads of device B from here: the membership changes must reach it without one.
+    const loadsOfB = pageLoads(deviceB)
 
     const userA =
       await test.step('2. On device A, sign up as user A, create the organisation and add the note by A', async () => {
@@ -46,7 +46,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         return account
       })
 
-    await test.step('3. On device A, invite user B', async () => {
+    const database = await test.step('3. On device A, invite user B', async () => {
       // When device B shows the organisation and the note by A, read on the clock both
       // browsers share.
       const shownAt = deviceB
@@ -77,7 +77,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
       await expect(deviceB.getByTestId('organisation.notes.text')).toHaveText([data.noteByA], {
         timeout: 5_000,
       })
-      expect(loadsOfB, 'pages device B loaded since it signed up').toBe(0)
+      expect(loadsOfB(), 'pages device B loaded since it signed up').toBe(0)
 
       const shown = await shownAt
       const latency = typeof shown === 'number' ? shown - clickedAt : Number.NaN
@@ -89,6 +89,13 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
       await expect(
         page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),
       ).toBeVisible()
+
+      // Device B keeps the organisation in a database of its own, which the removal must delete.
+      const name = await organisationDatabase(deviceB, data.key)
+
+      await expect.poll(() => databases(deviceB)).toContain(name)
+
+      return name
     })
 
     await test.step('4. On device A, click "Remove" next to user B', async () => {
@@ -101,11 +108,19 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
 
     // Expected:
     // - Within 5 seconds of step 4 device B shows "You are not a member of any organisation yet." again, without a reload, and its organisation data is gone from the device: a reload of "/org" still shows no organisation
-    await expect(deviceB.getByTestId('organisation.none')).toHaveText(
-      'You are not a member of any organisation yet.',
-      { timeout: 5_000 },
-    )
-    expect(loadsOfB, 'pages device B loaded since it signed up').toBe(0)
+    await Promise.all([
+      expect(deviceB.getByTestId('organisation.none')).toHaveText(
+        'You are not a member of any organisation yet.',
+        { timeout: 5_000 },
+      ),
+      expect
+        .poll(() => databases(deviceB), {
+          message: "device B's database of the organisation",
+          timeout: 5_000,
+        })
+        .not.toContain(database),
+    ])
+    expect(loadsOfB(), 'pages device B loaded since it signed up').toBe(0)
     await deviceB.reload()
     await appReady(deviceB)
     // Once the sync channel is up the gateway has told the device its memberships again.
@@ -117,6 +132,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
       'You are not a member of any organisation yet.',
     )
     await expect(deviceB.getByTestId('organisation.heading')).toHaveCount(0)
+    expect(await databases(deviceB)).not.toContain(database)
     // - Device A shows the members list without user B
     await expect(
       page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),

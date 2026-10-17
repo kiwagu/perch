@@ -1,6 +1,6 @@
 // spec: tests/e2e/specs/organisation/01-shared-notes.md
 import { generate } from '../support/data'
-import { expect, signUp, test } from '../support/fixtures'
+import { expect, pageLoads, signUp, test } from '../support/fixtures'
 
 test.describe('Share notes inside an organisation and keep private data private', {
   tag: '@full',
@@ -16,23 +16,24 @@ test.describe('Share notes inside an organisation and keep private data private'
       noteByB: generate.noteText(),
       bioOfA: generate.bio(),
     }
-    const { account: userB, page: deviceB } = anotherAccount
-    // Full page loads of device B: the organisation must reach it without one.
-    let loadsOfB = 0
+    const userB = anotherAccount.account
 
-    deviceB.on('load', () => {
-      loadsOfB += 1
-    })
+    const deviceB =
+      await test.step('1. On device B, sign up as user B and wait for "/me"', async () => {
+        const b = await anotherAccount.signUp()
 
-    await test.step('1. On device B, sign up as user B and wait for "/me"', async () => {
-      // The fixture signed user B up through the sign-in page in a browser of its own.
-      await expect(deviceB).toHaveURL(/\/me$/)
-      await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(userB.name)
-    })
+        await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
 
-    const userA =
+        return b
+      })
+    // Full page loads of device B from here: the organisation must reach it without one.
+    const loadsOfB = pageLoads(deviceB)
+
+    const { userA, loadsOfA } =
       await test.step('2. On device A, sign up as user A, open "/org", enter the key and the name and click "Create"', async () => {
         const account = await signUp(page)
+        // Full page loads of device A from here: B's note must reach it without one.
+        const loads = pageLoads(page)
 
         await page.getByTestId('app-shell.nav.organisation').click()
         await page.getByTestId('organisation.create.key').fill(data.key)
@@ -43,7 +44,7 @@ test.describe('Share notes inside an organisation and keep private data private'
         await expect(page.getByTestId('organisation.heading')).toHaveText(data.name)
         await expect(page.getByTestId('organisation.role')).toHaveText('Administrator')
 
-        return account
+        return { userA: account, loadsOfA: loads }
       })
 
     await test.step('3. On device A, enter the email of user B and click "Invite"', async () => {
@@ -63,12 +64,14 @@ test.describe('Share notes inside an organisation and keep private data private'
       await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
     })
 
-    await test.step('5. On device A, open "/me", enter the bio of A and click "Save"', async () => {
+    await test.step('5. On device A, open "/me", enter the bio of A, click "Save" and open "/org" again', async () => {
       await page.getByTestId('app-shell.nav.profile').click()
       await expect(page.getByTestId('user.profile.heading')).toHaveText(userA.name)
       await page.getByTestId('user.profile.bio-input').fill(data.bioOfA)
       await page.getByTestId('user.profile.save').click()
       await expect(page.getByTestId('user.profile.notice')).toHaveText('Saved')
+      await page.getByTestId('app-shell.nav.organisation').click()
+      await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
     })
 
     await test.step('6. On device B, open "/org"', async () => {
@@ -83,16 +86,11 @@ test.describe('Share notes inside an organisation and keep private data private'
       await expect(deviceB.getByTestId('organisation.notes.text')).toHaveText([data.noteByA], {
         timeout: 10_000,
       })
-      expect(loadsOfB, 'pages device B loaded since it signed up').toBe(0)
+      expect(loadsOfB(), 'pages device B loaded since it signed up').toBe(0)
     })
 
     const measure =
       await test.step('7. On device B, enter the note by B and click "Add note"', async () => {
-        // Device A left the organisation for "/me" in step 5: it comes back through the
-        // navigation, not a reload, to show what arrives.
-        await page.getByTestId('app-shell.nav.organisation').click()
-        await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
-
         // When device A shows the note by B, read on the clock both browsers share.
         const shownAt = page
           .waitForFunction(
@@ -131,6 +129,7 @@ test.describe('Share notes inside an organisation and keep private data private'
 
     expect(latency, 'the delay from the click to the note on device A').toBeGreaterThanOrEqual(0)
     expect(latency, 'the delay from the click to the note on device A').toBeLessThanOrEqual(5_000)
+    expect(loadsOfA(), 'pages device A loaded since it signed up').toBe(0)
     testInfo.annotations.push({ type: 'note-sync-latency-ms', description: String(latency) })
     // - Device B shows no members list and no invite form
     await expect(deviceB.getByTestId('organisation.role')).toHaveText('Member')

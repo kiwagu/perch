@@ -14,7 +14,6 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
       keyOfC: generate.tenantKey(),
       nameOfC: generate.organisationName(),
     }
-    const deviceC = anotherAccount.page
 
     await test.step('1. On device A, sign up as user A, open "/org", create the organisation and add the note by A', async () => {
       await signUp(page)
@@ -28,17 +27,25 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
       await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
     })
 
-    await test.step('2. On device C, sign up as user C and open "/org"', async () => {
-      // The fixture signed user C up through the sign-in page in a browser of its own.
-      await expect(deviceC).toHaveURL(/\/me$/)
-      await deviceC.getByTestId('app-shell.nav.organisation').click()
-      // Expected: after step 2 device C shows "You are not a member of any organisation yet."
-      // and no notes
-      await expect(deviceC.getByTestId('organisation.none')).toHaveText(
-        'You are not a member of any organisation yet.',
-      )
-      await expect(deviceC.getByTestId('organisation.notes.item')).toHaveCount(0)
-    })
+    const deviceC =
+      await test.step('2. On device C, sign up as user C and open "/org"', async () => {
+        const c = await anotherAccount.signUp()
+
+        await c.getByTestId('app-shell.nav.organisation').click()
+        // The gateway's welcome, with the memberships it gives user C, has arrived once the
+        // sync channel is up.
+        await expect(c.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
+          timeout: 10_000,
+        })
+        // Expected: after step 2 device C shows "You are not a member of any organisation yet."
+        // and no notes
+        await expect(c.getByTestId('organisation.none')).toHaveText(
+          'You are not a member of any organisation yet.',
+        )
+        await expect(c.getByTestId('organisation.notes.item')).toHaveCount(0)
+
+        return c
+      })
 
     await test.step("3. On device C, create C's own organisation", async () => {
       await deviceC.getByTestId('organisation.create.key').fill(data.keyOfC)

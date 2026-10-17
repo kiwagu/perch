@@ -36,7 +36,8 @@ own):
 - `organisation/02-outsider`: an account that was not invited sees no organisation and no
   notes, and its own organisation shows none of the other's.
 - `organisation/03-membership-change`: an invitation reaches B's open page within 5 seconds;
-  a removal takes the organisation away within 5 seconds and deletes it from the device.
+  a removal takes the organisation away within 5 seconds, and its IndexedDB database is gone
+  from B's browser within 5 seconds; after a reload B still shows no organisation.
 
 Four specs write measurements into the test's annotations, shown in the HTML report:
 `sync-latency-ms` (from the click on device B to the new name on device A),
@@ -50,11 +51,14 @@ None; tests only. `specs/<feature>/*.md` are the specs, `src/<feature>/*.e2e.spe
 the tests. `src/support/fixtures.ts`: the `test` with the step check and its fixtures,
 `signedIn` (device A, signed up on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks) and `anotherAccount`
-(another user: a fresh account signed up in a browser context of its own, on `/me`),
-`appReady`, `signIn` and `signUp`. `src/support/network.ts`: `SyncNetwork`, which routes a
-page's sync socket through the test so it can go offline and back (Playwright's offline mode
-leaves an open WebSocket up). `src/support/data.ts`: the generators (accounts, names, bios,
-organisation keys and names, note texts).
+(another user: a fresh account and a browser context of its own that opens and signs up when
+a test asks), `appReady`, `signIn`, `signUp` and `pageLoads` (counts a page's full loads, for
+"without a reload"). `src/support/network.ts`: `SyncNetwork`, which routes a page's sync
+socket through the test so it can go offline and back (Playwright's offline mode leaves an
+open WebSocket up). `src/support/storage.ts`: the IndexedDB databases a page's browser keeps
+and the names the app gives them (`databases`, `identityDatabase`, `organisationDatabase`).
+`src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
+note texts).
 
 ## Commands
 

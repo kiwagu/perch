@@ -17,7 +17,7 @@ Where: "/org" on device A (user A) and "/org" on device B (user B, another brows
 2. On device A, sign up as user A, open "/org", enter the key and the name and click "Create"
 3. On device A, enter the email of user B and click "Invite"
 4. On device A, enter the note by A and click "Add note"
-5. On device A, open "/me", enter the bio of A and click "Save"
+5. On device A, open "/me", enter the bio of A, click "Save" and open "/org" again
 6. On device B, open "/org"
 7. On device B, enter the note by B and click "Add note"
 
