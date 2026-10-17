@@ -1,7 +1,7 @@
 import { match, P } from 'ts-pattern'
 
 import { type IdentityId, idSchemas } from '@workspace/ids'
-import { isTenantKey } from '@workspace/kernel'
+import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { readBody } from '../auth/auth.routes'
@@ -18,8 +18,14 @@ const createBody = z.object({
 /** What an admin sends to invite an identity into an organisation. */
 const inviteBody = z.object({ email: z.email() })
 
-/** The organisation paths: every organisation, an organisation's members, one of its members. */
-const PATH = /^\/organisations(?:\/([a-z][a-z0-9_]{1,31})(?:\/members(?:\/([^/]+))?)?)?$/
+/** An organisation's key in a path: the kernel's key rule without its anchors. */
+const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
+
+/**
+ * The organisation paths: every organisation, an organisation's members, one of its members. A
+ * key outside the rule makes a path that is not the organisations' own.
+ */
+const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/members(?:/([^/]+))?)?)?$`)
 
 /** The access token in an `Authorization` header. */
 const BEARER = /^Bearer +(\S+)$/i

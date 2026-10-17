@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
+import { isTenantKey } from '@workspace/kernel'
 import { membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
@@ -451,6 +452,17 @@ describe('organisationRoutes', () => {
         body: { code: 'method-not-allowed' },
       })
       expect(response?.headers.get('allow')).toBe(allow)
+    }
+  })
+
+  it("takes a key in the path exactly when the kernel's key rule accepts it", async () => {
+    const { ann, routes } = await harness()
+    const keys = ['ab', 'acme_2026', 'a'.repeat(32), 'a', '1acme', 'Acme', 'acme-corp']
+
+    for (const key of [...keys, 'a'.repeat(33), 'a'.repeat(40), 'a'.repeat(41)]) {
+      const response = await routes(request('GET', `/organisations/${key}/members`, { as: ann }))
+
+      expect({ key, matched: response !== undefined }).toEqual({ key, matched: isTenantKey(key) })
     }
   })
 
