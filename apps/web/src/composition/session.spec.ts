@@ -1151,6 +1151,20 @@ describe('SessionService memberships', () => {
     expect(storage.get('perch.session.refresh')).toBe('refresh-2')
   })
 
+  it('renewKeys asked again while a renewal is under way joins it: the leader connects again once', async () => {
+    const { session, storage, gateway, transports } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+
+    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+
+    // Two routes refused the access token at once: one hello renews the pair for both.
+    expect(await Promise.all([session.renewKeys(), session.renewKeys()])).toEqual([true, true])
+    expect(transports().map((transport) => transport.reconnects())).toEqual([1])
+    expect(storage.get('perch.session.token')).toBe('access-2')
+  })
+
   it('renewKeys in a following tab asks the leader and resolves once the access key changed in storage', async () => {
     const { a, b, storage } = await twoTabs({ online: true, hints: true })
 

@@ -51,6 +51,8 @@ export class SessionOrganisations {
   readonly #listeners = new Set<() => void>()
   /** Renewals waiting for the next keys this tab's channel takes. */
   readonly #renewals = new Set<() => void>()
+  /** The renewal under way and the space it renews for; a renewal asked meanwhile joins it. */
+  #renewing: { readonly space: IdentitySpace; readonly renewed: Promise<boolean> } | undefined
 
   constructor(options: SessionOrganisationsOptions) {
     this.#options = options
@@ -138,7 +140,9 @@ export class SessionOrganisations {
    * Has the gateway renew the device's keys, as a route that refused the access token asks: the
    * leading tab connects again, and the gateway answers a token that no longer works with a new
    * pair; another tab asks the leader with the `renew` hint. True once new keys came within 10
-   * seconds, to this tab's channel or, kept by the leader, into the storage.
+   * seconds, to this tab's channel or, kept by the leader, into the storage. A renewal asked
+   * while one is under way joins it: a second hello would present the refresh key the first one
+   * spent, and the gateway would refuse the device.
    */
   renewKeys(): Promise<boolean> {
     const open = this.#options.open()
@@ -147,6 +151,24 @@ export class SessionOrganisations {
       return Promise.resolve(false)
     }
 
+    if (this.#renewing?.space === open.space) {
+      return this.#renewing.renewed
+    }
+
+    const renewing = { space: open.space, renewed: this.#renew(open) }
+
+    this.#renewing = renewing
+    void renewing.renewed.then(() => {
+      if (this.#renewing === renewing) {
+        this.#renewing = undefined
+      }
+    })
+
+    return renewing.renewed
+  }
+
+  /** Connects the leader again, or asks it to, and waits up to 10 seconds for the new keys. */
+  #renew(open: OpenIdentity): Promise<boolean> {
     return new Promise((resolve) => {
       const stops: Array<() => void> = []
       const finish = (renewed: boolean) => {

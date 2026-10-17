@@ -13,6 +13,7 @@ import {
   gatewayStub,
   type ManualClock,
   manualClock,
+  type StubTransport,
 } from '@workspace/replica/testing'
 
 import type { CommandsPort } from '../../platform/commands.port'
@@ -123,6 +124,8 @@ export interface TestWorld {
   tenantsDestroyed(): string[]
   /** The transport contexts the session handed out, newest last. */
   contexts(): readonly TransportContext[]
+  /** The channels to the gateway stub the session opened, newest last. */
+  transports(): readonly StubTransport[]
   /** Tells the session the tab went to the background or came back. */
   setVisibility(state: Visibility): void
   /** Moves the clock on until the promise settles, for waits the gateway does not end. */
@@ -157,6 +160,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const tenantsOpened: string[] = []
   const tenantsDestroyed: string[] = []
   const contexts: TransportContext[] = []
+  const transports: StubTransport[] = []
   const visibilityListeners = new Set<(state: Visibility) => void>()
   let visibility: Visibility = 'visible'
   const session = new SessionService({
@@ -194,6 +198,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       const transport = stub.transport(context.identity)
 
       contexts.push(context)
+      transports.push(transport)
       // The browser's WebSocket transport hands renewed keys and memberships to the context
       // and calls `onEnded` itself; the stub tells its listeners.
       transport.onMessage((message) => {
@@ -251,6 +256,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     tenantsOpened: () => [...tenantsOpened],
     tenantsDestroyed: () => [...tenantsDestroyed],
     contexts: () => [...contexts],
+    transports: () => [...transports],
     setVisibility: (state) => {
       visibility = state
 
