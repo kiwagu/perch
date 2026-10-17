@@ -1,6 +1,6 @@
 /**
- * The gateway's HTTP and WebSocket server: health, sign-up and sign-in over HTTP, and the
- * sync connection of each device over a WebSocket at `/sync`.
+ * The gateway's HTTP and WebSocket server: health, sign-up, sign-in and the organisation routes
+ * over HTTP, and the sync connection of each device over a WebSocket at `/sync`.
  */
 
 import { ExceptionBase } from '@workspace/kernel'
@@ -9,6 +9,7 @@ import { createLogger } from '@workspace/logger'
 import { authRoutes } from './auth/auth.routes'
 import type { GatewayRoot } from './composition/root'
 import { SyncConnection } from './sync/sync-connection'
+import { organisationRoutes } from './tenants/organisation.routes'
 
 export interface ServerOptions {
   /** The port to listen on; 0 lets the system choose a free one. */
@@ -28,11 +29,33 @@ interface SocketData {
   connection?: SyncConnection
 }
 
-/** The largest request body the server reads: an auth body is an email and a password. */
+/**
+ * The largest request body the server reads: a body is an email and a password, an
+ * organisation's key and name, or an email.
+ */
 const MAX_REQUEST_BODY = 16 * 1024
 
 /** The largest WebSocket message: a push of the most updates a push may carry, of ordinary size. */
 const MAX_MESSAGE = 4 * 1024 * 1024
+
+/** An HTTP route: its answer to a request, or `undefined` for a path that is not its own. */
+type Route = (request: Request) => Promise<Response | undefined>
+
+/** The answer of the first route that answers the request. */
+async function firstAnswer(
+  routes: readonly Route[],
+  request: Request,
+): Promise<Response | undefined> {
+  for (const route of routes) {
+    const response = await route(request)
+
+    if (response) {
+      return response
+    }
+  }
+
+  return undefined
+}
 
 /** A server bound to a host and a port that reports no port. */
 class ServerPortException extends ExceptionBase {
@@ -40,7 +63,10 @@ class ServerPortException extends ExceptionBase {
 }
 
 export function startServer(root: GatewayRoot, options: ServerOptions): RunningServer {
-  const routes = authRoutes(root.sessions)
+  const routes = [
+    authRoutes(root.sessions, root.organisations),
+    organisationRoutes(root.sessions, root.organisations),
+  ]
   const httpLog = createLogger('http')
   const syncLog = createLogger('sync')
   const server = Bun.serve<SocketData, never>({
@@ -60,7 +86,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           : new Response('upgrade required', { status: 426 })
       }
 
-      const response = await routes(request)
+      const response = await firstAnswer(routes, request)
 
       if (!response) {
         return new Response('not found', { status: 404 })

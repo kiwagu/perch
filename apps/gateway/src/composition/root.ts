@@ -1,6 +1,6 @@
 /**
  * The gateway's composition root: the only module of the gateway that opens the central
- * database and builds the services over it.
+ * database and the organisations' databases, and builds the services over them.
  */
 
 import type { ResultAsync } from 'neverthrow'
@@ -11,6 +11,7 @@ import {
   type Engines,
   type LocalDb,
   openLocalDb,
+  tenantDatabase,
 } from '@workspace/data'
 import { readSchema } from '@workspace/data/schema-files'
 import { replicaSchema } from '@workspace/database/replica-schema'
@@ -20,13 +21,22 @@ import { RegionHub } from '@workspace/replica/server'
 
 import { IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Organisations } from '../tenants/organisations'
+import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
   readonly sessions: IdentitySessions
+  readonly organisations: Organisations
+  /** The organisations' databases, each opened on first use. */
+  readonly databases: TenantDatabases
   readonly hub: RegionHub
+  /** The directory database. */
   readonly local: LocalDb
   readonly clock: Clock
-  /** Drops the hub's regions once their work is done, then closes the database. */
+  /**
+   * Drops the hub's regions once their work is done, closes the organisations' databases, then
+   * the directory.
+   */
   close(): Promise<void>
 }
 
@@ -47,6 +57,11 @@ export function createGatewayRoot(
 ): ResultAsync<GatewayRoot, DataError> {
   const hubLog = createLogger('region-hub')
   const sessionsLog = createLogger('identity-sessions')
+  const tenantsLog = createLogger('tenant-databases')
+  const credentials = options.credentials
+    ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
+    : {}
+  const tenantSchema = readSchema('tenant')
 
   return openLocalDb({
     engines: options.engines,
@@ -54,15 +69,26 @@ export function createGatewayRoot(
     namespace: NAMESPACE,
     database: DIRECTORY,
     schema: readSchema('directory'),
-    ...(options.credentials
-      ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
-      : {}),
+    ...credentials,
   }).map((local): GatewayRoot => {
     const hub = new RegionHub({
       local,
       schema: replicaSchema,
       clock: options.clock,
       onError: (error) => hubLog.error({ code: error.code }, error.message),
+    })
+    const databases = new TenantDatabases({
+      open: (key) =>
+        openLocalDb({
+          engines: options.engines,
+          url: options.url,
+          namespace: NAMESPACE,
+          database: tenantDatabase(key),
+          schema: tenantSchema,
+          ...credentials,
+        }),
+      clock: options.clock,
+      onError: (error) => tenantsLog.error({ code: error.code }, error.message),
     })
 
     return {
@@ -73,11 +99,14 @@ export function createGatewayRoot(
         fetch,
         onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
       }),
+      organisations: new Organisations({ directory: local, databases }),
+      databases,
       hub,
       local,
       clock: options.clock,
       close: async () => {
         await hub.close()
+        await databases.close()
         await local.close()
       },
     }

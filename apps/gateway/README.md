@@ -6,8 +6,9 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
 routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in`, answering
-`{ identity, tokens }`), each call on a database session of its own that is closed when
-the call ends; `GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
+`{ identity, tokens, memberships }`, the memberships being the organisations the identity
+belongs to), each call on a database session of its own that is closed when the call ends;
+`GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
 device says hello with its keys (the pair is renewed with the refresh key when the access
 token no longer works, and the new pair is sent first), is welcomed with its identity's
 private region, the only region it may name, and subscribes, pulls, pushes, probes and
@@ -25,15 +26,28 @@ grant ids never reach its logs.
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
 the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
 (`membership`), and the organisation's database holds its `member` rows. Two services in
-`src/tenants` serve them, and no route calls them so far. `TenantDatabases` keeps one
-connection per organisation database in use, shared by every holder and closed once nobody has
-held it for five minutes. `Organisations` creates an organisation (its directory rows, its
-database, its creator as admin member there, then ready; a creation its creator left unfinished
-is completed when the creator asks again), lists an identity's memberships in ready
+`src/tenants`, built by the composition root over the directory, serve them; on shutdown the
+organisations' databases close after the region hub and before the directory. `TenantDatabases`
+keeps one connection per organisation database in use, shared by every holder and closed once
+nobody has held it for five minutes. `Organisations` creates an organisation (its directory
+rows, its database, its creator as admin member there, then ready; a creation its creator left
+unfinished is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin invite an existing identity by email and remove a member
 other than itself, lists the members with their emails to any member, answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like), and
-tells its listeners an identity's new memberships whenever they change.
+with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
+and tells its listeners an identity's new memberships whenever they change.
+
+The organisation routes act for the identity a device's access token signs in, sent as
+`Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
+access token that works answers 401 (`unauthorized`). `GET /organisations` lists the caller's
+memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
+as its admin (201); `GET /organisations/:key/members` lists the members to a member;
+`POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
+`DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
+an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
+code, with 400 for `invalid-key` and `invalid-name`, 403 for `not-a-member` and `not-admin`, 404
+for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-member` and
+`self`; a failure of the gateway answers 500 (`internal`).
 
 ## Key exports
 
@@ -49,7 +63,7 @@ stand.
 
 - `bun run dev`: runs the gateway and restarts it on changes.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
-  one per organisation for the organisation services.
+  one per organisation for the organisation services and routes.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; by default the e2e stand, `ws://127.0.0.1:8010/rpc`) as
