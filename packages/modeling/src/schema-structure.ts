@@ -7,7 +7,7 @@ import { nodeEngines } from '@workspace/data/engines/node'
 
 import { type FieldType, parseTypeString } from './type-string'
 
-export type RegionName = 'private' | 'public' | 'org'
+export type RegionName = 'private' | 'public' | 'tenant'
 
 export type CrdtKind = 'text' | 'list' | 'counter'
 
@@ -49,7 +49,7 @@ export interface SchemaResult {
   readonly problems: readonly string[]
 }
 
-const REGIONS: ReadonlySet<string> = new Set(['private', 'public', 'org'])
+const REGIONS: ReadonlySet<string> = new Set(['private', 'public', 'tenant'])
 
 const CRDT_KINDS: ReadonlySet<string> = new Set(['text', 'list', 'counter'])
 
@@ -171,7 +171,7 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
       (replicate !== undefined && replicate !== 'none')
     ) {
       problems.push(
-        `table ${name}: declare exactly one of -- @region <private|public|org> or -- @replicate none`,
+        `table ${name}: declare exactly one of -- @region <private|public|tenant> or -- @replicate none`,
       )
     } else if (region !== undefined && !REGIONS.has(region)) {
       problems.push(`table ${name}: unknown region ${region}`)

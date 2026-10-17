@@ -20,15 +20,26 @@ import { type AppServices, createAppRoot } from './root'
 import type { VisibilitySource } from './session'
 import { browserStorage } from './storage'
 
-const schemaFiles = import.meta.glob<string>('../../../../database/schema/*.surql', {
+const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
+  eager: true,
+  import: 'default',
+})
+const directoryFiles = import.meta.glob<string>('../../../../database/schema/directory/*.surql', {
   eager: true,
   import: 'default',
 })
 
-const schema = Object.keys(schemaFiles)
-  .sort()
-  .map((path) => schemaFiles[path])
-  .join('\n')
+/** One database's schema: the common files, then its own, each set in name order. */
+const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): string =>
+  sets
+    .flatMap((files) =>
+      Object.keys(files)
+        .sort()
+        .map((path) => files[path]),
+    )
+    .join('\n')
+
+const directorySchema = schemaOf(commonFiles, directoryFiles)
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -65,7 +76,7 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
         url: `indxdb://app-identity-${identity}`,
         namespace: 'app',
         database: 'identity',
-        schema,
+        schema: directorySchema,
       }),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     transport: (context) =>

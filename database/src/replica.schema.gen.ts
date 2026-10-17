@@ -3,5 +3,6 @@
 import type { ReplicaSchema } from '@workspace/replica'
 
 export const replicaSchema: ReplicaSchema = {
+  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, created_at: { kind: 'datetime' }, text: { kind: 'text' } } },
   profile: { region: 'private', fields: { bio: { kind: 'text' }, created_at: { kind: 'datetime' }, identity: { kind: 'record', table: 'identity' } } },
 }

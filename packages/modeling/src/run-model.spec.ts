@@ -97,7 +97,7 @@ describe('runModel', () => {
   })
 
   it('reports a schema whose id prefixes disagree with the registry', async () => {
-    const identitySchema = join(options.schemaDir, 'identity.surql')
+    const identitySchema = join(options.schemaDir, 'directory/identity.surql')
 
     writeFileSync(
       identitySchema,

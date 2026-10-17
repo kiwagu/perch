@@ -15,7 +15,7 @@ import type { Command, LocalDb, Shape } from './types'
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-const schema = read('../../../database/schema/identity.surql')
+const schema = read('../../../database/schema/directory/identity.surql')
 
 const createIdentity: Command<{ email: string }> = {
   id: 'fixture.create-identity',
@@ -180,7 +180,7 @@ describe('a device database that is closed and opened again', () => {
   }
   const auth = (db: LocalDb) =>
     createAuth(db, { access: 'identity', namespace: 'app', database: 'app' })
-  const full = readSchema()
+  const full = readSchema('directory')
 
   // A file database stays locked until it is closed, also when a test fails.
   afterEach(async () => {

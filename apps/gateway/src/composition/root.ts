@@ -53,7 +53,7 @@ export function createGatewayRoot(
     url: options.url,
     namespace: NAMESPACE,
     database: DIRECTORY,
-    schema: readSchema(),
+    schema: readSchema('directory'),
     ...(options.credentials
       ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
       : {}),

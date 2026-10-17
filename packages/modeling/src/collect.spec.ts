@@ -28,6 +28,11 @@ const schema: SchemaModel = {
       relation: { in: ['identity'], out: ['profile'] },
       fields: {},
     },
+    note: {
+      region: 'tenant',
+      idPrefix: 'nte',
+      fields: { text: { kind: 'scalar', name: 'string' } },
+    },
   },
 }
 
@@ -137,6 +142,19 @@ describe('collect', () => {
 
     expect((await collect(root, schema)).problems).toEqual([
       `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
+    ])
+  })
+
+  it('refuses a shape that reads tables of two databases', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $note: record<note>\nSELECT name FROM profile WHERE name = $note.text;\n',
+    })
+
+    expect((await collect(root, schema)).problems).toEqual([
+      `${page}/profile.shape.surql: reads tables of two databases: profile (private), note (tenant)`,
     ])
   })
 

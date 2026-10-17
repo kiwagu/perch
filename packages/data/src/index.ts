@@ -24,6 +24,7 @@ export {
   surqlComponentFile,
   surqlExportName,
 } from './surql-names'
+export { isTenantKey, TENANT_KEY_PATTERN, tenantDatabase, tenantRegionId } from './tenant'
 export type {
   ChangeOrigin,
   Command,

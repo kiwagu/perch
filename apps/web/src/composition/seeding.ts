@@ -218,7 +218,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
  * identity's sync, has no other tab to hint, and stays in the foreground.
  */
 export function openClient(options: ClientOptions): ResultAsync<SeedClient, DataError> {
-  const schema = readSchema()
+  const schema = readSchema('directory')
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
 
@@ -252,7 +252,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
 }
 
 /**
- * Connects to a stand as its operator. The shared schema is applied as the gateway applies
+ * Connects to a stand as its operator. The directory schema is applied as the gateway applies
  * it, which leaves a database that already has it alone.
  */
 export function openStand(options: StandOptions): ResultAsync<Stand, DataError> {
@@ -262,6 +262,6 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
     namespace: options.namespace,
     database: options.database,
     credentials: options.credentials,
-    schema: readSchema(),
+    schema: readSchema('directory'),
   }).map((local) => ({ local, runner: new ShapeRunner(local), close: () => local.close() }))
 }

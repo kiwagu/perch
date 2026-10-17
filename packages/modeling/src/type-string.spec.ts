@@ -10,9 +10,9 @@ describe('parseTypeString', () => {
     expect(parseTypeString('none | string')).toEqual({ kind: 'option', inner: S('string') })
     expect(parseTypeString('option<int>')).toEqual({ kind: 'option', inner: S('int') })
     expect(parseTypeString('record<identity>')).toEqual({ kind: 'record', tables: ['identity'] })
-    expect(parseTypeString('record<identity | org>')).toEqual({
+    expect(parseTypeString('record<identity | tenant>')).toEqual({
       kind: 'record',
-      tables: ['identity', 'org'],
+      tables: ['identity', 'tenant'],
     })
     expect(parseTypeString('array<record<identity>>')).toEqual({
       kind: 'array',

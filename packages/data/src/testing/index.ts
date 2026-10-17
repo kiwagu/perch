@@ -22,13 +22,13 @@ export interface TestDbOptions {
   readonly database?: string
 }
 
-/** A fresh `mem://` database with the schema applied; each call is isolated. */
+/** A fresh `mem://` database with the directory schema applied; each call is isolated. */
 export function openTestDb(options: TestDbOptions = {}): ResultAsync<LocalDb, DataError> {
   return openLocalDb({
     engines: nodeEngines(),
     url: 'mem://',
     namespace: options.namespace ?? 'app',
     database: options.database ?? 'app',
-    schema: options.schema ?? readSchema(),
+    schema: options.schema ?? readSchema('directory'),
   })
 }

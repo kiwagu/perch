@@ -1,0 +1,40 @@
+name = "tenant-structure"
+tags = ["structure", "tenant"]
+
+# The organisation database's tables as the gateway writes them: a member keyed by an
+# identity id with a role, a note with its author and a text of at most 500 characters.
+# Record users have no access to either table.
+
+[[cases]]
+name = "root adds a member and a note"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE member:idn_test SET role = 'admin'; CREATE note:one SET author = member:idn_test, text = 'hello';"
+allow = true
+
+[[cases]]
+name = "a note longer than 500 characters is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE note:long SET author = member:idn_test, text = string::repeat('x', 501);"
+allow = false
+error_contains = "string::len($value) <= 500"
+
+[[cases]]
+name = "a member role outside member and admin is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE member:idn_other SET role = 'owner';"
+allow = false
+error_contains = "$value IN"
+
+[[cases]]
+name = "alice cannot read notes or members"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE text FROM note; SELECT VALUE role FROM member;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
