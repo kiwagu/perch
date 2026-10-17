@@ -53,7 +53,10 @@ export interface SyncEngine {
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
    */
   channelStopped(): boolean
-  /** Connects again at once: the gateway welcomes the device anew and hands it fresh keys. */
+  /**
+   * Connects again at once: the gateway welcomes the device anew and hands it fresh keys. A
+   * connection the gateway has not welcomed yet is left to the hello it says.
+   */
   reconnect(): void
 }
 

@@ -340,10 +340,10 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
-  it('closes and connects again on reconnect(), from the first delay of the backoff', async () => {
+  it('closes a welcomed socket on reconnect() and connects again after the first delay of the backoff', async () => {
     const { clock, sockets, transport, socket, events } = harness()
 
-    // Three closes in a row have grown the next delay to 8 seconds.
+    // Three closes in a row grew the next delay to 8 seconds; the welcome that came starts it over.
     transport.start()
 
     for (const delay of [1_000, 2_000, 4_000]) {
@@ -351,23 +351,6 @@ describe('WebSocket transport', () => {
       await clock.advance(delay)
     }
 
-    socket().open()
-
-    const silent = socket()
-
-    transport.reconnect()
-
-    expect(silent.closedWith).toBe(1000)
-
-    await clock.advance(999)
-
-    expect(sockets.length).toBe(4)
-
-    await clock.advance(1)
-
-    expect(sockets.length).toBe(5)
-
-    // A welcomed socket goes down at once, and comes back after the first delay too.
     socket().open()
     socket().receive(welcome)
 
@@ -379,16 +362,64 @@ describe('WebSocket transport', () => {
     expect(events).toEqual(['up', 'down'])
     expect(transport.send(probe)).toBe(false)
 
-    await clock.advance(1_000)
+    await clock.advance(999)
 
-    expect(sockets.length).toBe(6)
+    expect(sockets.length).toBe(4)
 
-    // The closes the old sockets report afterwards change nothing.
-    silent.drop(1006)
+    await clock.advance(1)
+
+    expect(sockets.length).toBe(5)
+
+    // The close the old socket reports afterwards changes nothing.
     dead.drop(1006)
     await clock.advance(60_000)
 
-    expect(sockets.length).toBe(6)
+    expect(sockets.length).toBe(5)
+  })
+
+  it('leaves a socket whose hello is under way alone on reconnect(): its hello renews the keys', async () => {
+    const { clock, sockets, transport, socket, events, tokens } = harness()
+
+    transport.start()
+    // Still opening: the hello goes once it opens, with the keys held then.
+    transport.reconnect()
+    socket().open()
+    // The hello is out: closing the socket now would spend the refresh key with no pair to show.
+    transport.reconnect()
+
+    expect(sockets).toHaveLength(1)
+    expect(socket().closedWith).toBeUndefined()
+    expect(socket().sent).toEqual([
+      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
+    ])
+
+    socket().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
+    socket().receive(welcome)
+    await clock.advance(60_000)
+
+    expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
+    expect(events).toEqual(['up'])
+    expect(sockets).toHaveLength(1)
+  })
+
+  it('still gives up a socket whose hello stays unanswered after reconnect() left it alone', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
+
+    transport.start()
+    socket().open()
+    transport.reconnect()
+    await clock.advance(9_999)
+
+    expect(socket().closedWith).toBeUndefined()
+
+    await clock.advance(1)
+
+    expect(socket().closedWith).toBe(1000)
+
+    await clock.advance(1_000)
+
+    expect(sockets).toHaveLength(2)
+    expect(events).toEqual([])
   })
 
   it('closes the socket on stop and connects no more', async () => {

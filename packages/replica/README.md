@@ -99,8 +99,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
-  opening, and on `reconnect()`, which gives the connection up and connects again from the
-  first delay; renewed keys to `onTokens`, the memberships of the welcome and of each
+  opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
+  the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`, the memberships of the welcome and of each
   `memberships` message to `onMemberships`, `onEnded` with an `EndReason` when the keys
   (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out; the
   engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port;

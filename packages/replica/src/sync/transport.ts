@@ -29,8 +29,10 @@ export interface SyncTransport {
   start(): void
   stop(): void
   /**
-   * Gives up on the current connection, which stopped answering, and connects again after the
-   * first delay of the backoff; nothing happens unless a connection is open or opening.
+   * Gives up on the current connection, which stopped answering or must present the keys again,
+   * and connects again after the first delay of the backoff. Nothing happens unless the gateway
+   * has welcomed the connection: one still opening or waiting for its welcome says hello with the
+   * keys anyway, and is given up by the welcome wait if no welcome comes.
    */
   reconnect(): void
   /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
@@ -97,7 +99,7 @@ type State =
  * `onTokens`, and the memberships of the welcome and of every later change to `onMemberships`,
  * before the listeners of messages hear the message. A socket that closes, or is not welcomed
  * within 10 seconds, is opened again after a growing delay, which starts over at the next
- * welcome or when the engine gives a connection up (`reconnect`). A
+ * welcome or when the engine gives a welcomed connection up (`reconnect`). A
  * close that refuses the keys or the protocol, or signs the device out, ends the channel for
  * good. Text the protocol refuses closes the socket as a breach and connects again.
  */
@@ -148,19 +150,20 @@ export class WebSocketTransport implements SyncTransport {
   reconnect(): void {
     const state = this.#state
 
-    if (state.kind !== 'connected') {
+    // A socket not welcomed yet is left alone. Its hello presents the keys, so the gateway
+    // renews a pair whose access token no longer works: closing it with that hello out would
+    // spend the refresh key on a pair the gateway can no longer deliver, and the next hello would
+    // be refused. The engine's answer timeouts never land here: they are cancelled when the
+    // channel goes down, so they only fire on a welcomed connection, and a socket that is never
+    // welcomed is given up by the welcome wait.
+    if (state.kind !== 'connected' || !state.up) {
       return
     }
-
-    const wasUp = state.up
 
     state.socket.close(NORMAL_CLOSE)
     this.#attempt = 0
     this.#reconnect()
-
-    if (wasUp) {
-      this.#emitChannel('down')
-    }
+    this.#emitChannel('down')
   }
 
   send(message: ClientMessage): boolean {
