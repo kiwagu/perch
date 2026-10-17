@@ -123,6 +123,41 @@ describe('local db, shape runner and commands', () => {
   })
 })
 
+describe('destroying a database', () => {
+  const openMemory = async (): Promise<LocalDb> =>
+    (
+      await openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: 'app',
+        database: 'app',
+        schema,
+      })
+    )._unsafeUnwrap()
+
+  it('closes an in-memory database, which leaves nothing behind', async () => {
+    const memory = await openMemory()
+
+    expect((await runCommand(memory, createIdentity, { email: 'g@example.test' })).isOk()).toBe(
+      true,
+    )
+
+    await memory.destroy()
+
+    expect(
+      (await new ShapeRunner(memory).read(identityByEmail, { email: 'g@example.test' })).isErr(),
+    ).toBe(true)
+  })
+
+  it('may follow a close, and closing twice is harmless', async () => {
+    const memory = await openMemory()
+
+    await memory.close()
+    await memory.close()
+    await expect(memory.destroy()).resolves.toBeUndefined()
+  })
+})
+
 describe('a device database that is closed and opened again', () => {
   const dir = mkdtempSync(join(tmpdir(), 'perch-local-db-'))
   const open: LocalDb[] = []

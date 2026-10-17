@@ -67,5 +67,11 @@ export interface TableChange {
 export interface LocalDb {
   readonly db: Surreal
   readonly changes: EventTarget
+  /** Closes the connection; closing again does nothing. */
   close(): Promise<void>
+  /**
+   * Closes the database and deletes what it stored: for `indxdb://<name>` the browser's
+   * IndexedDB database `<name>`; an in-memory database is gone once closed.
+   */
+  destroy(): Promise<void>
 }

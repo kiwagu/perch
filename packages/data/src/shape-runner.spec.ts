@@ -11,6 +11,7 @@ function fakeLocal(results: unknown[]): LocalDb {
     db: { query } as never,
     changes: new EventTarget(),
     close: () => Promise.resolve(),
+    destroy: () => Promise.resolve(),
   }
 }
 
@@ -62,6 +63,7 @@ describe('ShapeRunner.watch', () => {
       db: { query: () => Promise.reject(new Error('boom')) } as never,
       changes: new EventTarget(),
       close: () => Promise.resolve(),
+      destroy: () => Promise.resolve(),
     }
     const failures: string[] = []
     const stop = new ShapeRunner(local).watch(shape, { id: 'identity:1' }, () => {}, {

@@ -14,7 +14,10 @@ is replaced on every use. Above this package ids are entity id strings and times
 
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `AuthPort` / `AUTH`, `LocalDbPort` / `LOCAL_DB`.
-- Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`.
+- Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`. A
+  `LocalDb` closes once however often `close()` is called; `destroy()` closes it and deletes
+  what it stored (the browser's IndexedDB database of an `indxdb://` address; an in-memory
+  database is gone once closed).
 - `runAsOperator`: runs one SurrealQL text as a system user without applying the schema
   (a stand's namespaces, databases and system users), failing at once when the server
   does not answer.

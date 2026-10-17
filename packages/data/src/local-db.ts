@@ -26,6 +26,65 @@ export interface OpenLocalDbOptions {
   }
 }
 
+const INDEXED_DB = 'indxdb://'
+
+/** The part of an IndexedDB delete request that deleting a store waits on. */
+interface DeleteRequest {
+  onsuccess: (() => void) | null
+  onerror: (() => void) | null
+  readonly error: unknown
+}
+
+/** The part of the browser's `indexedDB` that deleting a store uses. */
+interface StoreFactory {
+  deleteDatabase(name: string): DeleteRequest
+}
+
+function isStoreFactory(value: unknown): value is StoreFactory {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'deleteDatabase' in value &&
+    typeof value.deleteDatabase === 'function'
+  )
+}
+
+/**
+ * Deletes the browser's IndexedDB database `name`, which the engine named after the part of
+ * its `indxdb://` address that follows the scheme. A delete that an open connection blocks
+ * (the engine's worker still letting go of it, or another tab that has not closed its own
+ * yet) is not refused: IndexedDB runs it once the last connection closes, and this waits.
+ */
+function deleteStore(name: string): Promise<void> {
+  const factory: unknown = Reflect.get(globalThis, 'indexedDB')
+
+  if (!isStoreFactory(factory)) {
+    return Promise.reject(new Error(`IndexedDB is not available here, so ${name} stays`))
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = factory.deleteDatabase(name)
+
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+  })
+}
+
+/** Deletes what a closed database stored, by the kind of its address. */
+function deleteStored(url: string): Promise<void> {
+  if (url.startsWith(INDEXED_DB)) {
+    return deleteStore(url.slice(INDEXED_DB.length))
+  }
+
+  if (url.startsWith('mem://')) {
+    return Promise.resolve()
+  }
+
+  return Promise.reject(
+    new Error(`cannot delete the database at ${url}: only indxdb:// and mem://`),
+  )
+}
+
 /**
  * Connects to a local database and brings its schema up to date before anything
  * reads from it. A schema the database already applied is left alone: defining
@@ -47,11 +106,20 @@ export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, D
       await db.query(rememberSchemaStatement, { schema: options.schema })
     }
 
+    let closing: Promise<void> | undefined
+    const close = (): Promise<void> => {
+      closing ??= db.close().then(() => undefined)
+
+      return closing
+    }
+
     return {
       db,
       changes: new EventTarget(),
-      close: async () => {
-        await db.close()
+      close,
+      destroy: async () => {
+        await close()
+        await deleteStored(options.url)
       },
     }
   }
