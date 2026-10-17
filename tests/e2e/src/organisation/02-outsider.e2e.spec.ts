@@ -1,6 +1,6 @@
 // spec: tests/e2e/specs/organisation/02-outsider.md
 import { generate } from '../support/data'
-import { expect, signUp, test } from '../support/fixtures'
+import { appReady, expect, signUp, test } from '../support/fixtures'
 
 test.describe('Keep an organisation invisible to accounts outside it', { tag: '@full' }, () => {
   test('An account that was not invited sees no organisation and no notes', async ({
@@ -62,6 +62,14 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
 
     // Expected:
     // - Device A still shows only its own organisation and the note by A
+    // Device A reads its memberships from the gateway again, after C's organisation exists: once
+    // its sync channel is up it was welcomed with them, and a leak would show here.
+    await page.reload()
+    await appReady(page)
+    await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
+      timeout: 10_000,
+    })
+    await expect(page).toHaveURL(/\/org$/)
     await expect(page.getByTestId('organisation.heading')).toHaveText(data.name)
     await expect(page.getByTestId('organisation.select')).toHaveCount(0)
     await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
