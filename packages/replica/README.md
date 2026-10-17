@@ -81,7 +81,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out; the
   engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
-  compaction proposals; a push or pull answered with an error or unanswered for 30 seconds is
+  compaction proposals; before each push, and on every full pass, `catchUpLocal()` imports the
+  rows other tabs appended, and nothing is pushed while that fails, so an ack never moves the
+  cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
   import that fails pulls at once and on every full pass until an answer imports in full; only

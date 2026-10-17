@@ -1,5 +1,5 @@
 import { decodeImportBlobMeta, type LoroDoc, VersionVector } from 'loro-crdt'
-import { okAsync, Result, type ResultAsync } from 'neverthrow'
+import { Result, type ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -148,6 +148,8 @@ export class RegionSync implements DrainTarget {
   /** The last outbox row a rollback covered: a batch rejected again from there stops the region. */
   #revertedThrough = 0
   #stopped = false
+  /** The last import of the rows other tabs appended failed; reported once until one succeeds. */
+  #behindLocally = false
 
   constructor(options: RegionSyncOptions) {
     const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
@@ -241,11 +243,17 @@ export class RegionSync implements DrainTarget {
       return 'down'
     }
 
-    const rows = await this.#region
-      .flush()
-      // An update whose append failed is the write path's to report; what is durable goes out.
-      .orElse(() => okAsync(undefined))
-      .andThen(() => this.#region.outbox(this.#batchRows))
+    // An update whose append failed is the write path's to report; what is durable goes out.
+    await this.#region.flush().unwrapOr(undefined)
+
+    // The outbox holds the rows of every tab, and an ack may move the cursor past them: this
+    // document imports them before any goes out. Nothing goes out when that fails; the next
+    // write, full pass or reconnect tries again.
+    if (!(await this.catchUpLocal())) {
+      return 'down'
+    }
+
+    const rows = await this.#region.outbox(this.#batchRows)
 
     if (rows.isErr()) {
       this.#onError(rows.error)
@@ -305,6 +313,27 @@ export class RegionSync implements DrainTarget {
     })
 
     return landed
+  }
+
+  /**
+   * Imports the rows other tabs appended to the local log; resolves false when that failed,
+   * which is reported once until an import succeeds again. Every push and full pass asks for it.
+   */
+  async catchUpLocal(): Promise<boolean> {
+    const caught = await this.#region.catchUpLocal()
+
+    if (caught.isOk()) {
+      this.#behindLocally = false
+
+      return true
+    }
+
+    if (!this.#behindLocally) {
+      this.#behindLocally = true
+      this.#onError(caught.error)
+    }
+
+    return false
   }
 
   /** Pulls when the server's head is ahead of the cursor. */

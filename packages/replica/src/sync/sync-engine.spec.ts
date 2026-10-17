@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 
+import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
 import appendStatement from '../surql/replica-append.surql'
@@ -253,6 +254,24 @@ describe('sync engine', () => {
         message: `could not persist an update of ${regionId}`,
       }),
     ])
+  })
+
+  it('imports what another tab wrote on a full pass, also while the channel is down', async () => {
+    const { a } = await twoDevices()
+    const follower = (
+      await RegionDoc.open(a.local, { kind: 'private', id: regionId })
+    )._unsafeUnwrap()
+
+    a.transport.goOffline()
+    writeName(follower, 'Bea')
+    expect((await follower.flush()).isOk()).toBe(true)
+
+    // The tab comes back into view: a full pass.
+    a.engine.visibility('hidden')
+    a.engine.visibility('visible')
+
+    await vi.waitFor(() => expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Bea' }))
+    follower.close()
   })
 
   it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {

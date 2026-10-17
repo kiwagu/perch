@@ -6,6 +6,7 @@ import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import type { ClientMessage, ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
+import localTailStatement from '../surql/local-tail.surql'
 import importStatement from '../surql/replica-import.surql'
 import { manualClock } from '../testing/manual-clock'
 
@@ -57,9 +58,10 @@ async function alone(
     onEnded: () => () => {},
   }
   let region = RegionDoc.inMemory('private', regionId)
+  let local: LocalDb | undefined
 
   if (options.persisted) {
-    const local = (await openTestDb())._unsafeUnwrap()
+    local = (await openTestDb())._unsafeUnwrap()
 
     databases.push(local)
     region = (
@@ -85,7 +87,25 @@ async function alone(
     return push?.type === 'push' ? push.batch : expect.unreachable('a push was sent')
   }
 
-  return { clock, errors, region, sync, count, lastBatch, reconnects: () => recycled.count }
+  /** Another tab's document of the region, on the same database as this one's. */
+  const otherTab = async (): Promise<RegionDoc> =>
+    (
+      await RegionDoc.open(local ?? expect.unreachable('a persisted region'), {
+        kind: 'private',
+        id: regionId,
+      })
+    )._unsafeUnwrap()
+
+  return {
+    clock,
+    errors,
+    region,
+    sync,
+    count,
+    lastBatch,
+    otherTab,
+    reconnects: () => recycled.count,
+  }
 }
 
 /** Server updates of the profile: a later one that needs an earlier one, and all of it. */
@@ -293,6 +313,59 @@ describe('region sync on its own', () => {
     expect(await retried).toBe('sent')
     expect(again.region.pulled()).toBe(0)
     expect((await again.region.outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('imports what another tab wrote before pushing it, and pushes nothing while that fails', async () => {
+    let failTail = false
+    const { sync, count, region, errors, lastBatch, otherTab } = await alone({
+      persisted: true,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failTail && text === localTailStatement) {
+            failTail = false
+            throw new Error('the store is busy')
+          }
+        }),
+    })
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+
+    // A follower tab writes into the shared database; this leader has not read it yet.
+    const follower = await otherTab()
+
+    writeName(follower, 'Bea')
+    expect((await follower.flush()).isOk()).toBe(true)
+
+    // Reading the follower's row fails once: the round ends, and nothing goes out.
+    failTail = true
+
+    const first = sync.pushNext()
+
+    await vi.waitFor(() => expect(errors).toHaveLength(1))
+    expect(await first).toBe('down')
+    expect(count('push')).toBe(0)
+    expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+    expect(region.recordJson(profileKey)).toMatchObject({ name: 'Bea' })
+
+    // The server took nothing from others before the batch: the ack moves the cursor.
+    await sync.handle({
+      type: 'ack',
+      region: regionId,
+      batch: lastBatch(),
+      head: 1,
+      compact: false,
+    })
+
+    expect(await pushed).toBe('sent')
+    expect(region.pulled()).toBe(1)
+    expect((await region.outbox(10))._unsafeUnwrap()).toEqual([])
+    expect(errors).toHaveLength(1)
+    follower.close()
   })
 
   it('releases a push whose answer never comes after 30 seconds, reports it once and reconnects', async () => {

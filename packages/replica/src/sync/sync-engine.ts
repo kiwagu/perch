@@ -324,6 +324,8 @@ class Engine implements SyncEngine {
           sync.retryPull()
         }
 
+        // What other tabs wrote reaches this document even while the channel is down.
+        await Promise.all([...this.#regions.values()].map(({ sync }) => sync.catchUpLocal()))
         this.#drain.request()
         await this.#drain.idle()
       }
