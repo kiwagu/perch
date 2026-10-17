@@ -32,7 +32,7 @@ export interface SyncTransport {
    * Gives up on the current connection, which stopped answering or must present the keys again,
    * and connects again after the first delay of the backoff. Nothing happens unless the gateway
    * has welcomed the connection: one still opening or waiting for its welcome says hello with the
-   * keys anyway, and is given up by the welcome wait if no welcome comes.
+   * keys anyway, and is given up as any other is: by its close, or by the welcome wait once open.
    */
   reconnect(): void
   /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
@@ -154,8 +154,8 @@ export class WebSocketTransport implements SyncTransport {
     // renews a pair whose access token no longer works: closing it with that hello out would
     // spend the refresh key on a pair the gateway can no longer deliver, and the next hello would
     // be refused. The engine's answer timeouts never land here: they are cancelled when the
-    // channel goes down, so they only fire on a welcomed connection, and a socket that is never
-    // welcomed is given up by the welcome wait.
+    // channel goes down, so they only fire on a welcomed connection. A socket left alone is given
+    // up as any other: by its close, or by the welcome wait once it opened.
     if (state.kind !== 'connected' || !state.up) {
       return
     }
