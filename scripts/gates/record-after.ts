@@ -5,8 +5,7 @@
  * directory and is keyed by the working tree's id, so any later change to a
  * tracked file needs a fresh run.
  *
- * The command's arguments pass through untouched. A run that only stops a stand
- * (`--down`) records nothing.
+ * The command's arguments pass through untouched.
  *
  * Usage: bun run scripts/gates/record-after.ts <db|e2e> -- <command> [args...]
  */
@@ -39,10 +38,6 @@ function main(argv: readonly string[]): number {
 
   if (run.status !== 0) {
     return run.status ?? 1
-  }
-
-  if (args.includes('--down')) {
-    return 0
   }
 
   const treeId = workingTreeId()

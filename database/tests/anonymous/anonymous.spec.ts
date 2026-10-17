@@ -2,11 +2,21 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
+import { z } from '@workspace/zod'
+
 // SurrealKit cannot act as an unauthenticated SQL client (its header-only actor runs
 // with the runner's own credentials), so the guest stance is checked here with a raw
 // HTTP request that carries no Authorization header at all.
 
-const endpoint = process.env['SURREAL_URL'] ?? 'http://127.0.0.1:8010'
+// The e2e stand: `bun run test:db` runs the suite through `mcproc exec`, which sets SURREAL_URL
+// from the manifest's vars.
+const endpoint = z
+  .url({
+    protocol: /^https?$/,
+    error:
+      'SURREAL_URL must be the http(s):// address of the surrealdb-e2e stand; run the suite with bun run test:db',
+  })
+  .parse(process.env['SURREAL_URL'])
 const query = readFileSync(new URL('./select-identities.surql', import.meta.url), 'utf8')
 
 describe('an anonymous client', () => {

@@ -38,10 +38,12 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 
 ## Commands
 
-- `mcproc start dev && bun run seed` (from the repository root): seeds through the dev
-  gateway (`http://127.0.0.1:5181`; `--gateway=<url>` or `GATEWAY_URL` for another one).
+- `mcproc start dev && bun run seed` (from the repository root): seeds through this
+  checkout's dev gateway. `bun run seed` runs the command through `mcproc exec`, which sets
+  `GATEWAY_DEV_URL` and `SURREAL_DEV_URL` from the mcproc manifest (`http://127.0.0.1:5181`
+  and `http://127.0.0.1:8000` in the main checkout); `--gateway=<url>` names another gateway.
   Flags: `--fresh`, `--reset` (sweep first), `--manifest=<file>`. The stand behind the
-  gateway is reached only by the sweep: `--url=` (default `http://127.0.0.1:8000`),
+  gateway is reached only by the sweep: `--url=` (else `SURREAL_DEV_URL`),
   `--namespace=` and `--database=` (default `app` and `directory`, the gateway's
   database), `--user=` and `--pass=` (default the stand's root). Demo accounts sign in
   with the password `<ref>-seed-password`.
@@ -49,6 +51,7 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 - `bun run test`: the offline catalog check.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
-  `GATEWAY_URL` (default `http://127.0.0.1:5191`) and its SurrealDB at `SURREAL_URL`
-  (default `http://127.0.0.1:8010`). It sweeps only the demo accounts (and one outsider
+  `GATEWAY_URL` and its SurrealDB at `SURREAL_URL`, both set by `bun run test:db` through
+  `mcproc exec` from the mcproc manifest (`http://127.0.0.1:5191` and `http://127.0.0.1:8010`
+  in the main checkout). It sweeps only the demo accounts (and one outsider
   account) it seeds, so the other suites on the stand keep theirs.

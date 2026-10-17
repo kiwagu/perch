@@ -12,6 +12,7 @@
     "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
     "@workspace/seed": "workspace:*",
+    "@workspace/zod": "workspace:*",
     "typescript": "catalog:"
   }
 }

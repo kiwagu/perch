@@ -1,9 +1,19 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// The `caddy-e2e` front of the mcproc manifest: the web app's production build and, under
-// /backend/, the `gateway-e2e` gateway on one origin; the launcher builds the app and starts
-// them before the run.
-export const BASE_URL = 'https://localhost:5493'
+import { z } from '@workspace/zod'
+
+// The `caddy-e2e` front of this checkout's mcproc manifest: the web app's production build
+// and, under /backend/, the `gateway-e2e` gateway on one origin. `bun run test:e2e` runs the
+// launcher through `mcproc exec`, which sets E2E_BASE_URL from the manifest's vars
+// (https://localhost:5493 in the main checkout, shifted by 100 per worktree slot); the
+// launcher builds the app and starts the stand before the run.
+export const BASE_URL = z
+  .url({
+    protocol: /^https$/,
+    error:
+      'E2E_BASE_URL must be the https:// address of the caddy-e2e front; run the suite with bun run test:e2e',
+  })
+  .parse(process.env['E2E_BASE_URL'])
 
 export default defineConfig({
   testDir: './src',

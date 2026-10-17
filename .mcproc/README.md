@@ -1,5 +1,11 @@
 # Local stands
 
+The addresses below are the main checkout's: the manifest's `vars` derive every port from
+`slot` (0 here). A worktree made with `mcproc worktree add` gets its own slot through this
+folder's gitignored `mcproc.local.yaml`, every port shifted by 100 per slot, and its project
+slug (`perch-w1`) on its containers and pm2 names; `mcproc describe` prints the resolved values
+of the checkout it runs in.
+
 - `surrealdb-dev` (profile `dev`): in-memory SurrealDB on 127.0.0.1:8000 for development.
 - `surrealdb-e2e` (profile `e2e`): in-memory SurrealDB on 127.0.0.1:8010 for `bun run test:db`
   and the e2e launcher. Restart it to get an empty database, then restart `gateway-e2e`, which
@@ -29,7 +35,16 @@ no persistence. Apps in containers (SurrealDB, Caddy) declare only a url: their 
 outside the app's processes, so wait until `url-ok`. `surreal sql --endpoint
 http://127.0.0.1:8010 --user root --pass root` opens a shell against the e2e stand.
 
+Every app declares the memory it takes (`memory:`; `containers:` names the docker containers
+counted with it) and `resources` keeps 4G for the host: a start that does not fit waits its
+turn in the host's queue (`mcproc leases`). `mcproc exec -- <command>` runs a command with
+this checkout's stand addresses in its environment (`exec.env`): `bun run test:db`, `bun run
+test:e2e`, `bun run seed` and `bun run seed:sweep` go through it, the e2e run under a 4G lease
+of its own. The `worktree` section names what a new worktree copies from the main checkout
+(the certificates, the local hook file, the screenshot baselines) and how it installs.
+
 `mcproc start <profile> --reload` restarts the apps already online (a restarted Caddy reads the
 current Caddyfile; a restarted SurrealDB stand is empty). An app removed from the manifest is
-unknown to mcproc afterwards; the pm2 process it leaves (`perch-<app>` in `pm2 ls`) goes with
-`pm2 delete perch-<app>`, as `web-e2e`, the old e2e dev server, did.
+unknown to mcproc afterwards; the pm2 process it leaves (`<project>-<app>` in `pm2 ls`,
+`perch-<app>` in the main checkout) goes with `pm2 delete perch-<app>`, as `web-e2e`, the old
+e2e dev server, did.
