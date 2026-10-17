@@ -114,6 +114,26 @@ describe('sync engine', () => {
     expect(a.transport.online()).toBe(false)
   })
 
+  it('keeps the device signed in when a region stops syncing with rows left in its outbox', async () => {
+    const { a, stub } = await twoDevices()
+
+    stub.rejectEverything()
+    a.transport.goOffline()
+    writeName(a.region, 'Ana')
+
+    const outcome = a.engine.signOut()
+
+    // The channel comes back during the sign-out; the drain's batch is rejected, rolled back
+    // and rejected again, so the region stops with the rows and their inverse unsent.
+    a.transport.goOnline()
+
+    expect(await outcome).toBe('offline')
+    expect(stub.signOuts()).toBe(0)
+    expect(a.transport.online()).toBe(true)
+    expect(a.errors.map((error) => error.code)).toContain('data:SYNC_STOPPED')
+    expect((await a.region.outbox(10))._unsafeUnwrap().length).toBeGreaterThan(0)
+  })
+
   it('reports offline when the channel stays down for 5 seconds', async () => {
     const { a, clock } = await twoDevices()
 

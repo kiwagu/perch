@@ -59,7 +59,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty and every region has its first answer on the current connection, `signOut()` that
-  drains and has the gateway sign the device out, or answers `offline`; it never rejects).
+  drains and has the gateway sign the device out, or answers `offline` while anything stays
+  unsent, rows of a region that stopped syncing included; it never rejects).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, renewed keys to `onTokens`, `onEnded` when the keys are refused or the

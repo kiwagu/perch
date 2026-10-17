@@ -40,8 +40,9 @@ export interface SyncEngine {
   /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
    * sign this device out; resolves `signed-out` when the gateway ended the channel or, its close
-   * not coming within 10 seconds, once the transport is stopped. Resolves `offline` when the
-   * channel stayed down, fell, or the outbox did not drain in time. Never rejects.
+   * not coming within 10 seconds, once the transport is stopped. Resolves `offline`, without
+   * asking the gateway, when the channel stayed down, fell, the outbox did not drain in time, or a
+   * region that stopped syncing still holds outbox rows. Never rejects.
    */
   signOut(): Promise<'signed-out' | 'offline'>
 }
@@ -201,6 +202,12 @@ class Engine implements SyncEngine {
       return 'offline'
     }
 
+    // A region that stopped syncing counts as settled, yet what its outbox holds never reaches
+    // the gateway: the device stays signed in, as when it is offline.
+    if (await this.#stoppedWithUnsent()) {
+      return 'offline'
+    }
+
     const ended = this.#untilEnded()
 
     if (!this.#options.transport.send({ type: 'sign-out', scope: 'device' })) {
@@ -346,6 +353,26 @@ class Engine implements SyncEngine {
       outboxes.every((rows) => rows.isOk() && rows.value.length === 0) &&
       [...this.#regions.values()].every(({ sync }) => sync.quiet())
     )
+  }
+
+  /** Whether a region that stopped syncing still holds outbox rows; an outbox it cannot read counts. */
+  async #stoppedWithUnsent(): Promise<boolean> {
+    const stopped = [...this.#regions.values()].filter(({ sync }) => sync.stopped())
+    const unsent = await Promise.all(
+      stopped.map(({ region }) =>
+        region
+          .flush()
+          // A failed append is the write path's to report; the outbox is what counts here.
+          .orElse(() => okAsync(undefined))
+          .andThen(() => region.outbox(1))
+          .match(
+            (rows) => rows.length > 0,
+            () => true,
+          ),
+      ),
+    )
+
+    return unsent.some(Boolean)
   }
 
   /** Resolves true once the channel is up, or false after `ms` on the clock. */
