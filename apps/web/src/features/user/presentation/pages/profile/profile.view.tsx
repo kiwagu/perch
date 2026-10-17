@@ -1,6 +1,16 @@
 import { type SubmitEvent, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@workspace/ui/components/ui/alert-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
@@ -18,7 +28,11 @@ export interface ProfileViewProps {
   /** The code of the last refused change. */
   readonly error?: string | undefined
   readonly onSaveName: (name: string) => void
-  readonly onSignOut: () => void
+  /** Signs out; `forgetUnsent` once the person confirmed losing changes this device could not send. */
+  readonly onSignOut: (options?: { readonly forgetUnsent: true }) => void
+  /** Signing out would lose changes this device could not send: the person confirms or cancels. */
+  readonly confirmSignOut?: boolean
+  readonly onCancelSignOut?: () => void
 }
 
 function errorText(t: ReturnType<typeof useT>, code: string): string {
@@ -30,6 +44,45 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
     default:
       return t('user.profile.error.failed')
   }
+}
+
+function SignOutConfirmation(props: {
+  readonly open: boolean
+  readonly onConfirm: () => void
+  readonly onCancel: () => void
+}) {
+  const t = useT()
+
+  return (
+    <AlertDialog
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) {
+          props.onCancel()
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('user.profile.sign-out-offline.title')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('user.profile.sign-out-offline.body')}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="user.profile.sign-out-offline.cancel">
+            {t('user.profile.sign-out-offline.cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            type="button"
+            variant="destructive"
+            onClick={props.onConfirm}
+            data-testid="user.profile.sign-out-offline.confirm"
+          >
+            {t('user.profile.sign-out-offline.confirm')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 function NameForm(props: {
@@ -106,12 +159,17 @@ export function ProfileView(props: ProfileViewProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={props.onSignOut}
+            onClick={() => props.onSignOut()}
             data-testid="user.profile.sign-out"
           >
             {t('user.profile.sign-out')}
           </Button>
         </FieldGroup>
+        <SignOutConfirmation
+          open={props.confirmSignOut ?? false}
+          onConfirm={() => props.onSignOut({ forgetUnsent: true })}
+          onCancel={() => props.onCancelSignOut?.()}
+        />
       </CardContent>
     </Card>
   )

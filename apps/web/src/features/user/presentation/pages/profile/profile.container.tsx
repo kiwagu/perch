@@ -24,6 +24,7 @@ export function ProfileContainer() {
   const row = tree?.[0]
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
   const notify = useNotify()
   const navigate = useNavigate()
   const t = useT()
@@ -73,9 +74,14 @@ export function ProfileContainer() {
       .then(() => setSaving(false))
   }
 
-  const signOut = () => {
-    void session.signOut().match(
-      () => navigate({ to: SIGN_IN_PATH }),
+  // Changes this device could not send are lost by signing out: that waits for a confirmation.
+  const signOut = (options?: { readonly forgetUnsent: true }) => {
+    setConfirmSignOut(false)
+    void session.signOut(options).match(
+      (outcome) =>
+        outcome === 'needs-confirmation'
+          ? setConfirmSignOut(true)
+          : void navigate({ to: SIGN_IN_PATH }),
       () => navigate({ to: SIGN_IN_PATH }),
     )
   }
@@ -88,6 +94,8 @@ export function ProfileContainer() {
       error={error}
       onSaveName={saveName}
       onSignOut={signOut}
+      confirmSignOut={confirmSignOut}
+      onCancelSignOut={() => setConfirmSignOut(false)}
     />
   )
 }

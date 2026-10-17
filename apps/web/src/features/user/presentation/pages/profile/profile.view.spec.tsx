@@ -24,7 +24,7 @@ const tree: ProfileResult = [
 ]
 
 function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSaveName: vi.fn(), onSignOut: vi.fn() }
+  const handlers = { onSaveName: vi.fn(), onSignOut: vi.fn(), onCancelSignOut: vi.fn() }
 
   renderWithProviders(<ProfileView status="ready" profile={tree[0]} {...handlers} {...props} />, {
     locale,
@@ -77,6 +77,36 @@ describe('ProfileView', () => {
     fireEvent.click(screen.getByTestId('user.profile.sign-out'))
 
     expect(onSignOut).toHaveBeenCalledOnce()
+    expect(onSignOut).toHaveBeenCalledWith()
+  })
+
+  it('asks before signing out with changes this device has not sent', async () => {
+    const { onSignOut, onCancelSignOut } = renderView({ confirmSignOut: true })
+
+    expect((await screen.findByRole('alertdialog')).textContent).toContain(
+      en['user.profile.sign-out-offline.title'],
+    )
+    expect(screen.getByRole('alertdialog').textContent).toContain(
+      en['user.profile.sign-out-offline.body'],
+    )
+    expect(screen.getByTestId('user.profile.sign-out-offline.confirm').textContent).toBe(
+      en['user.profile.sign-out-offline.confirm'],
+    )
+
+    fireEvent.click(screen.getByTestId('user.profile.sign-out-offline.confirm'))
+
+    expect(onSignOut).toHaveBeenCalledWith({ forgetUnsent: true })
+
+    fireEvent.click(screen.getByTestId('user.profile.sign-out-offline.cancel'))
+
+    expect(onCancelSignOut).toHaveBeenCalledOnce()
+  })
+
+  it('shows no confirmation until signing out needs one', () => {
+    renderView()
+
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.queryByTestId('user.profile.sign-out-offline.confirm')).toBeNull()
   })
 
   it('speaks Spanish', () => {

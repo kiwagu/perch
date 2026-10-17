@@ -19,6 +19,10 @@
   "user.profile.save": "Save",
   "user.profile.saved": "Saved",
   "user.profile.sign-out": "Sign out",
+  "user.profile.sign-out-offline.title": "Sign out and lose unsent changes?",
+  "user.profile.sign-out-offline.body": "Some changes made on this device have not reached the server yet. Signing out now deletes them from this device for good.",
+  "user.profile.sign-out-offline.confirm": "Sign out anyway",
+  "user.profile.sign-out-offline.cancel": "Stay signed in",
   "user.profile.error.name-required": "Enter a name.",
   "user.profile.error.name-too-long": "Use at most 80 characters.",
   "user.profile.error.failed": "The change was not saved. Try again."
