@@ -63,12 +63,15 @@ class ServerPortException extends ExceptionBase {
 }
 
 export function startServer(root: GatewayRoot, options: ServerOptions): RunningServer {
-  const routes = [
-    authRoutes(root.sessions, root.organisations),
-    organisationRoutes(root.sessions, root.organisations),
-  ]
   const httpLog = createLogger('http')
   const syncLog = createLogger('sync')
+  const routes = [
+    authRoutes(root.sessions, root.organisations),
+    organisationRoutes(root.sessions, root.organisations, {
+      // The code and the gateway's own message, never the cause: a database's text may hold anything.
+      onFailure: (error) => httpLog.error({ code: error.code }, error.message),
+    }),
+  ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,
     hostname: options.hostname,

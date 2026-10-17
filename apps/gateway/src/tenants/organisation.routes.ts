@@ -1,5 +1,6 @@
 import { match, P } from 'ts-pattern'
 
+import type { DataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
@@ -69,15 +70,16 @@ function statusOf(code: OrganisationRefusalCode): number {
     .exhaustive()
 }
 
-/** A refusal answers its code; a failure of the gateway answers without its cause. */
-function errorResponse(error: OrganisationError): Response {
-  return 'kind' in error
-    ? Response.json({ code: error.code }, { status: statusOf(error.code) })
-    : Response.json({ code: 'internal' }, { status: 500 })
-}
-
 function badRequest(): Response {
   return Response.json({ code: 'bad-request' }, { status: 400 })
+}
+
+export interface OrganisationRoutesOptions {
+  /**
+   * Hears each failure of the gateway a request was answered 500 for: the answer leaves the
+   * failure out, so this is where it is told.
+   */
+  readonly onFailure: (error: DataError) => void
 }
 
 /**
@@ -94,13 +96,25 @@ function badRequest(): Response {
  * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
  * token signs nobody in, 401 `unauthorized`; a body or an identity that does not follow its
  * schema, 400 `bad-request`; a refusal, its code with 400, 403, 404 or 409; a failure of the
- * gateway, 500 `internal`. A request for another path is not answered here (`undefined`), so
- * the server can try its other routes.
+ * gateway, 500 `internal`, the failure itself handed to `onFailure`. A request for another path
+ * is not answered here (`undefined`), so the server can try its other routes.
  */
 export function organisationRoutes(
   sessions: Pick<IdentitySessions, 'authenticate'>,
   organisations: Organisations,
+  options: OrganisationRoutesOptions,
 ): (request: Request) => Promise<Response | undefined> {
+  /** A refusal answers its code; a failure of the gateway answers without its cause, which `onFailure` hears. */
+  function errorResponse(error: OrganisationError): Response {
+    if ('kind' in error) {
+      return Response.json({ code: error.code }, { status: statusOf(error.code) })
+    }
+
+    options.onFailure(error)
+
+    return Response.json({ code: 'internal' }, { status: 500 })
+  }
+
   /** The identity the request's access token signs in, if it does. */
   async function bearerIdentity(request: Request): Promise<IdentityId | undefined> {
     const access = BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
@@ -127,7 +141,8 @@ export function organisationRoutes(
       return badRequest()
     }
 
-    return (await organisations.create({ identity, ...body.data })).match(
+    // The identity goes last: it is the one the access token signs in, whatever the body holds.
+    return (await organisations.create({ ...body.data, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
       errorResponse,
     )

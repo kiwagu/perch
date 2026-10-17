@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { DataError } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
@@ -23,11 +24,19 @@ const created = z.object({ membership })
 /** Closes what a test opened. */
 const cleanups: Array<() => Promise<void>> = []
 
+/** Failures the routes answered 500 for; a test that expects one takes it. */
+const failures: DataError[] = []
+
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) {
     await cleanup()
   }
+
+  expect(failures.splice(0)).toEqual([])
 })
+
+/** What the routes are given besides the services: they hand each failure to `failures`. */
+const routeOptions = { onFailure: (error: DataError) => failures.push(error) }
 
 interface Ask {
   /** The identity whose access token goes as `Authorization: Bearer <access>`. */
@@ -91,7 +100,7 @@ async function openRoot(): Promise<GatewayRoot> {
  */
 async function harness() {
   const root = await openRoot()
-  const routes = organisationRoutes(root.sessions, root.organisations)
+  const routes = organisationRoutes(root.sessions, root.organisations, routeOptions)
   const signUp = async (email: string) =>
     (await root.sessions.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
   const ann = await signUp('ann@example.test')
@@ -180,6 +189,25 @@ describe('organisationRoutes', () => {
     }
 
     expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+      status: 200,
+      body: { memberships: [] },
+    })
+  })
+
+  it('creates the organisation for the caller, whatever identity the body names', async () => {
+    const { ann, bob, ask } = await harness()
+    const { status, body } = await ask('POST', '/organisations', {
+      as: ann,
+      body: { key: 'acme', name: 'Acme', identity: bob.identity.id },
+    })
+    const answered = created.parse(body).membership
+
+    expect(status).toBe(201)
+    expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+      status: 200,
+      body: { memberships: [answered] },
+    })
+    expect(await ask('GET', '/organisations', { as: bob })).toEqual({
       status: 200,
       body: { memberships: [] },
     })
@@ -411,7 +439,7 @@ describe('organisationRoutes', () => {
     })
   })
 
-  it("answers 500 to a failure that is not the caller's fault", async () => {
+  it("answers 500 to a failure that is not the caller's fault, and hands the failure to onFailure", async () => {
     const { root, ann } = await harness()
     const directory = (
       await openTestDb({
@@ -427,12 +455,14 @@ describe('organisationRoutes', () => {
     const routes = organisationRoutes(
       root.sessions,
       new Organisations({ directory, databases: root.databases }),
+      routeOptions,
     )
 
     expect(await answer(await routes(request('GET', '/organisations', { as: ann })))).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
   })
 
   it('answers 405 with the methods a path takes to any other method', async () => {
