@@ -30,9 +30,8 @@ suffixes the run id, `acme_<run>`) and invites the members by email.
   rows), their profiles and the server's copy of their regions (`_replica_head`,
   `_replica_snapshot`, `_replica_update`, `_replica_projected`). Of a region the gateway
   keeps in memory only what a connected device subscribed to, unloaded 60 s after the last
-  device left, and it keeps the connection to an organisation's database open for minutes
-  after its last use: an organisation swept and created again under the same key within that
-  time fails with a 500 until the gateway restarts or the connection idles out. Sweep only once the seed clients have left (`runSeed` closes its client
+  device left. Re-creating an organisation under the key of a swept one works: the gateway
+  opens a new connection to its database. Sweep only once the seed clients have left (`runSeed` closes its client
   before it returns), or a device still connected keeps the swept region in the gateway.
 - `openStand(target)`: the operator's connection to a stand that the sweep runs on.
 
@@ -50,5 +49,5 @@ suffixes the run id, `acme_<run>`) and invites the members by email.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
   `GATEWAY_URL` (default `http://127.0.0.1:5191`) and its SurrealDB at `SURREAL_URL`
-  (default `http://127.0.0.1:8010`). It seeds a fresh run for each case and sweeps only
-  those accounts, so the other suites on the stand keep theirs.
+  (default `http://127.0.0.1:8010`). It sweeps only the demo accounts (and one outsider
+  account) it seeds, so the other suites on the stand keep theirs.

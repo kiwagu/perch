@@ -60,7 +60,7 @@ export interface Member {
 export interface OrganisationsOptions {
   /** The directory database, opened as the gateway's namespace user. */
   readonly directory: LocalDb
-  readonly databases: Pick<TenantDatabases, 'acquire'>
+  readonly databases: Pick<TenantDatabases, 'acquire' | 'evict'>
 }
 
 /** The longest name an organisation may have, in characters. */
@@ -159,7 +159,7 @@ function toMembership(row: MembershipRow): Membership {
  */
 export class Organisations {
   readonly #directory: LocalDb
-  readonly #databases: Pick<TenantDatabases, 'acquire'>
+  readonly #databases: Pick<TenantDatabases, 'acquire' | 'evict'>
   readonly #listeners = new Set<Listener>()
 
   constructor(options: OrganisationsOptions) {
@@ -342,7 +342,13 @@ export class Organisations {
       this.#directory.db.query(tenantDefineStatement, { database: tenantDatabase(key) }).retry(),
       `could not define the database of ${key}`,
     )
-      .andThen(() => this.#addMember(key, identity, 'admin'))
+      .andThen(() => {
+        // The database was just (re)defined: a connection cached from before it was removed
+        // would not have the schema applied.
+        this.#databases.evict(key)
+
+        return this.#addMember(key, identity, 'admin')
+      })
       .andThen(() =>
         writing(
           this.#directory.db.query(tenantReadyStatement, { id: tenant.id }).retry(),

@@ -10,11 +10,9 @@ RETURN {
   memberships: array::len(
     SELECT VALUE id
     FROM membership
-    WHERE tenant.created_by IN (
-      SELECT VALUE created_by
-      FROM tenant
-      WHERE record::id(created_by) IN $ids
-    )
+    WHERE
+      record::id(identity) IN $ids
+      OR record::id(tenant) IN $tenantIds
   ),
   databases: array::len(
     array::intersect(

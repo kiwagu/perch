@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { readOrganisation, signInAndRead } from './__fixtures__/device'
+import { inviteInto, readOrganisation, signInAndRead } from './__fixtures__/device'
 import { leftOnStand } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
 import { runSeed, type StandTarget, sweep } from './seed'
@@ -16,30 +16,30 @@ const target: StandTarget = {
   credentials: { username: 'root', password: 'root' },
 }
 
-// Each case seeds a run of its own. The gateway keeps the connection to an organisation's
-// database open for minutes after its last use, so an organisation swept and then created
-// again under the same key within that time would meet a connection to the removed database.
-const used: string[] = []
+const demo: SeedMode = { kind: 'demo' }
 
-function runMode(name: string): SeedMode {
-  const mode: SeedMode = { kind: 'fresh', run: `${name}${Date.now().toString(36)}` }
+const emails = catalog.accounts.map((preset) => accountFor(preset, demo).email)
 
-  used.push(...emailsOf(mode))
-
-  return mode
-}
-
-function emailsOf(mode: SeedMode): string[] {
-  return catalog.accounts.map((preset) => accountFor(preset, mode).email)
-}
+// An account that is no seed account of the demo, and the organisation it creates: swept at the end.
+const run = Date.now().toString(36)
+const outsider = {
+  run,
+  email: `outsider.${run}@example.test`,
+  password: 'outsider-seed-password',
+  name: 'Outsider Example',
+  bio: 'Creates an organisation that the seed does not.',
+  locale: 'en',
+} as const
 
 afterAll(async () => {
-  expect((await sweep(target, { emails: used })).isOk()).toBe(true)
+  expect((await sweep(target, { emails })).isOk()).toBe(true)
+  expect((await sweep(target, { emails: [outsider.email] })).isOk()).toBe(true)
 })
 
 describe('seeding through the gateway', () => {
   it('seeds the accounts through the gateway, and a second device sees them', async () => {
-    const mode = runMode('a')
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const mode = demo
     const manifest = (await runSeed({ ...target, mode }))._unsafeUnwrap()
 
     for (const preset of catalog.accounts) {
@@ -62,7 +62,8 @@ describe('seeding through the gateway', () => {
   })
 
   it('seeds acme with its administrator and member, and a second device of the member sees it', async () => {
-    const mode = runMode('b')
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const mode = demo
     const manifest = (await runSeed({ ...target, mode }))._unsafeUnwrap()
     const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
     const [ann, beto] = ['ann', 'beto'].map((ref) => {
@@ -71,7 +72,7 @@ describe('seeding through the gateway', () => {
       return accountFor(preset ?? expect.unreachable(`a preset ${ref}`), mode)
     })
 
-    expect(acme.key).toMatch(/^acme_/)
+    expect(acme.key).toBe('acme')
     expect(acme.name).toBe('Acme Corp')
 
     const seenByBeto = (
@@ -92,7 +93,8 @@ describe('seeding through the gateway', () => {
   })
 
   it('runs twice without duplicating anything', async () => {
-    const mode = runMode('c')
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const mode = demo
     const first = (await runSeed({ ...target, mode }))._unsafeUnwrap()
     const before = await leftOnStand(target, first)
     const second = (await runSeed({ ...target, mode }))._unsafeUnwrap()
@@ -110,20 +112,34 @@ describe('seeding through the gateway', () => {
     expect(await leftOnStand(target, second)).toEqual(before)
   })
 
-  it('sweeps seeded identities with their profiles, region rows and organisation databases', async () => {
-    const mode = runMode('d')
-    const manifest = (await runSeed({ ...target, mode }))._unsafeUnwrap()
+  it('sweeps seeded identities with their profiles, region rows, memberships and organisation databases', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const manifest = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
+    const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
+
+    // An organisation of someone else that ann belongs to: only the sweep of ann's own memberships reaches it.
+    expect(
+      (
+        await inviteInto(
+          target.gatewayUrl,
+          outsider,
+          { key: `out_${outsider.run}`, name: 'Outside' },
+          accountFor(ann ?? expect.unreachable('a preset ann'), demo).email,
+        )
+      ).isOk(),
+    ).toBe(true)
     const before = await leftOnStand(target, manifest)
 
     expect(before).toMatchObject({
       identities: 2,
       profiles: 2,
       tenants: 1,
-      memberships: 2,
+      // Ann and beto in acme, and ann in the outsider's organisation.
+      memberships: 3,
       databases: 1,
     })
     expect(before.regionRows).toBeGreaterThan(0)
-    expect((await sweep(target, { emails: emailsOf(mode) }))._unsafeUnwrap()).toEqual({
+    expect((await sweep(target, { emails }))._unsafeUnwrap()).toEqual({
       accounts: 2,
       organisations: 1,
     })

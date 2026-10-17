@@ -2,6 +2,7 @@ import { ResultAsync } from 'neverthrow'
 
 import type { SignInInput } from '@workspace/data'
 import {
+  type AccountInput,
   type AccountView,
   type OrganisationView,
   openClient,
@@ -45,5 +46,28 @@ export function readOrganisation(
     }
 
     return new ResultAsync(read())
+  })
+}
+
+/** Another account creates an organisation and invites the existing account at `email` into it, then leaves. */
+export function inviteInto(
+  gatewayUrl: string,
+  founder: AccountInput,
+  organisation: { readonly key: string; readonly name: string },
+  email: string,
+): ResultAsync<void, SeedError> {
+  return openClient({ gatewayUrl }).andThen((device) => {
+    const invite = async () => {
+      const result = await device
+        .ensureAccount(founder)
+        .andThen(() => device.ensureOrganisation(organisation))
+        .andThen(() => device.ensureMember(organisation.key, email))
+
+      await device.close()
+
+      return result
+    }
+
+    return new ResultAsync(invite())
   })
 }

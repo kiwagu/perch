@@ -26,6 +26,7 @@ import membershipRows from './__fixtures__/membership-rows.surql'
 import namespaceInfo from './__fixtures__/namespace-info.surql'
 import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import tenantRows from './__fixtures__/tenant-rows.surql'
+import tenantSweep from './__fixtures__/tenant-sweep.surql'
 import { type OrganisationRefusalCode, Organisations } from './organisations'
 import { TenantDatabases } from './tenant-databases'
 
@@ -72,15 +73,19 @@ async function harness() {
   const directory = (
     await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema: readSchema('directory') })
   )._unsafeUnwrap()
+  const opened: string[] = []
   const databases = new TenantDatabases({
-    open: (key) =>
-      openLocalDb({
+    open: (key) => {
+      opened.push(key)
+
+      return openLocalDb({
         engines: nodeEngines(),
         url: 'mem://',
         namespace: NAMESPACE,
         database: tenantDatabase(key),
         schema: readSchema('tenant'),
-      }),
+      })
+    },
     clock: manualClock(),
     onError: (error) => failures.push(error),
   })
@@ -145,6 +150,7 @@ async function harness() {
 
   return {
     organisations,
+    opened,
     directory,
     heard,
     ann,
@@ -183,6 +189,25 @@ describe('Organisations', () => {
     expect(namespace.databases.t_acme).toMatch(/^DEFINE DATABASE t_acme STRICT\b/)
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
     expect(heard).toEqual([[ann.id, [created]]])
+  })
+
+  it('creates an organisation again under the key of one removed with its database, on a connection opened anew', async () => {
+    const { organisations, ann, directory, opened, membersIn } = await harness()
+    const first = (
+      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
+    )._unsafeUnwrap()
+
+    await directory.db.query(tenantSweep, { key: 'acme', database: 't_acme' })
+    expect(opened).toEqual(['acme'])
+
+    const again = (
+      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
+    )._unsafeUnwrap()
+
+    expect(again.tenant.id).not.toBe(first.tenant.id)
+    expect(opened).toEqual(['acme', 'acme'])
+    expect(await organisations.membershipsOf(ann.id)).toEqual(ok([again]))
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
   })
 
   it('refuses a key another identity took', async () => {

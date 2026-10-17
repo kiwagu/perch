@@ -132,4 +132,48 @@ describe('TenantDatabases', () => {
     acme.release()
     expect(clock.pending()).toBe(0)
   })
+
+  it('forgets a cached database on evict, opens a new one on the next acquire and closes the old one once released', async () => {
+    const closed: LocalDb[] = []
+    const open = recordingOpen(closed)
+    const clock = manualClock()
+    const databases = new TenantDatabases({ open, clock, idleCloseMs: 1_000, onError: () => {} })
+    const held = (await databases.acquire('acme'))._unsafeUnwrap()
+
+    databases.evict('acme')
+    databases.evict('acme')
+    databases.evict('globex')
+    // Held by someone: still open.
+    expect(closed).toEqual([])
+
+    const fresh = (await databases.acquire('acme'))._unsafeUnwrap()
+
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(fresh.local).not.toBe(held.local)
+    held.release()
+    await vi.waitFor(() => expect(closed).toEqual([held.local]))
+    fresh.release()
+    await databases.close()
+    expect(closed).toHaveLength(2)
+  })
+
+  it('evicts a database waiting out its idle time without closing it twice', async () => {
+    const closed: LocalDb[] = []
+    const clock = manualClock()
+    const databases = new TenantDatabases({
+      open: recordingOpen(closed),
+      clock,
+      idleCloseMs: 1_000,
+      onError: () => {},
+    })
+    const handle = (await databases.acquire('acme'))._unsafeUnwrap()
+
+    handle.release()
+    databases.evict('acme')
+    await vi.waitFor(() => expect(closed).toEqual([handle.local]))
+    expect(clock.pending()).toBe(0)
+    await clock.advance(5_000)
+    await databases.close()
+    expect(closed).toHaveLength(1)
+  })
 })

@@ -27,6 +27,8 @@ interface Entry {
   holders: number
   /** Cancels the close scheduled when the last holder released the database. */
   cancelClose: (() => void) | undefined
+  /** Taken out of the map by `evict`: closes once its last holder releases it. */
+  evicted: boolean
 }
 
 const FIVE_MINUTES = 5 * 60_000
@@ -69,6 +71,25 @@ export class TenantDatabases {
       })
   }
 
+  /**
+   * Forgets the cached connection to the organisation's database, which the caller has just
+   * (re)defined: the next acquire opens a new one and applies the schema. The old connection
+   * closes once its holders release it. Does nothing when none is cached.
+   */
+  evict(key: string): void {
+    const entry = this.#entries.get(key)
+
+    if (!entry) {
+      return
+    }
+
+    this.#entries.delete(key)
+    entry.cancelClose?.()
+    entry.cancelClose = undefined
+    entry.evicted = true
+    this.#closeEvicted(key, entry)
+  }
+
   /** Closes every database and waits for it. */
   async close(): Promise<void> {
     const entries = [...this.#entries.entries()]
@@ -100,6 +121,7 @@ export class TenantDatabases {
       }),
       holders: 0,
       cancelClose: undefined,
+      evicted: false,
     }
 
     this.#entries.set(key, entry)
@@ -120,8 +142,23 @@ export class TenantDatabases {
         released = true
         entry.holders -= 1
         this.#closeWhenIdle(key, entry)
+        this.#closeEvicted(key, entry)
       },
     }
+  }
+
+  /** Closes an evicted entry once nobody holds it. */
+  #closeEvicted(key: string, entry: Entry): void {
+    if (!entry.evicted || entry.holders > 0) {
+      return
+    }
+
+    entry.evicted = false
+
+    const closing = this.#closeOpened(key, entry)
+
+    this.#closing.add(closing)
+    void closing.finally(() => this.#closing.delete(closing))
   }
 
   /** Schedules the close once nobody holds the database, unless `close` already took it. */

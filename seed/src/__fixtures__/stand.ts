@@ -8,7 +8,7 @@ export interface LeftOnStand {
   readonly identities: number
   /** The organisations the accounts created. */
   readonly tenants: number
-  /** The memberships in those organisations. */
+  /** The memberships of the accounts and the memberships in the manifest's organisations. */
   readonly memberships: number
   /** How many of the manifest's organisation databases `t_<key>` exist. */
   readonly databases: number
@@ -23,6 +23,7 @@ interface StandCountsParams {
   readonly ids: readonly string[]
   readonly regions: readonly string[]
   readonly databases: readonly string[]
+  readonly tenantIds: readonly string[]
 }
 
 const standCounts: Shape<StandCountsParams, LeftOnStand> = {
@@ -34,6 +35,7 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     { name: 'ids', type: 'array<string>' },
     { name: 'regions', type: 'array<string>' },
     { name: 'databases', type: 'array<string>' },
+    { name: 'tenantIds', type: 'array<string>' },
   ],
   tables: [
     'identity',
@@ -62,6 +64,7 @@ export async function leftOnStand(
         emails: accounts.map((account) => account.email),
         ids,
         regions: ids.map((id) => `identity:${id}`),
+        tenantIds: Object.values(manifest.organisations).map((organisation) => organisation.id),
         databases: Object.values(manifest.organisations).map(
           (organisation) => `t_${organisation.key}`,
         ),
