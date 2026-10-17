@@ -597,9 +597,10 @@ export class SessionService implements SessionPort {
 
   /**
    * The gateway refused the identity's keys, which will not work again: the device signs out
-   * here, without the gateway. Its data for the identity goes with the keys only when nothing
-   * in it waits to be sent; otherwise (or when that cannot be read) the database stays, and the
-   * sign-in page says that signing in again as the identity sends the changes.
+   * here, without the gateway, behind the same write barrier as a sign-out. Its data for the
+   * identity goes with the keys only when nothing in it waits to be sent; otherwise (or when
+   * that cannot be read) the database stays, and the sign-in page says that signing in again
+   * as the identity sends the changes.
    */
   #refused(identity: IdentityId): ResultAsync<void, DataError> {
     const open = this.#open
@@ -616,7 +617,12 @@ export class SessionService implements SessionPort {
       return okAsync(undefined)
     }
 
-    // As in a sign-out, what is unsent is read, and the database deleted, once no tab writes.
+    // As in a sign-out, every tab's writes are held back, and what is unsent is read and the
+    // database deleted once no tab writes any more.
+    this.#holdWrites(open)
+
+    const release = () => this.#releaseWrites(open)
+
     return this.#exclusively(
       open,
       () =>
@@ -625,6 +631,8 @@ export class SessionService implements SessionPort {
         ),
       undefined,
     )
+      .andTee(release)
+      .orTee(release)
   }
 
   /** Whether the space holds changes not sent yet; an outbox that cannot be read is reported and counts. */

@@ -119,8 +119,9 @@ async function twoTabs(options: {
   readonly wrapB?: (local: LocalDb) => LocalDb
 }) {
   const storage = memoryStorage()
+  const locks = new FakeLocks()
   const shared = {
-    locks: new FakeLocks(),
+    locks,
     databases: browserDatabases(),
     online: options.online,
     ...(options.hints ? { hints: new Set<FakeHintChannel>() } : {}),
@@ -152,7 +153,19 @@ async function twoTabs(options: {
   await settle()
   expect(b.states.at(-1)).toEqual({ leader: false, channel: 'down' })
 
-  return { a, b, storage }
+  return { a, b, storage, locks }
+}
+
+/** Holds Ann's write lock exclusively, as another tab's sign-out does; the returned function lets go. */
+function holdWriteLock(locks: FakeLocks): () => void {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  void locks.request(writeLockName(ann.identity.id), { mode: 'exclusive' }, () => held)
+
+  return release
 }
 
 /** Region loads of every identity database held while `hold()` is in force. */
@@ -460,7 +473,7 @@ describe('SessionService', () => {
     const appendHeld = new Promise<void>((resolve) => {
       releaseAppend = resolve
     })
-    const { a, b } = await twoTabs({
+    const { a, b, locks } = await twoTabs({
       online: true,
       wrapB: (local) =>
         interceptQueries(local, (text) =>
@@ -474,9 +487,12 @@ describe('SessionService', () => {
     const writing = b.session.writePath.run(createProfile, aProfile())
     const signingOut = a.session.signOut()
 
-    // A drains an outbox without B's row, and the gateway signs A out and closes.
+    // A drains an outbox without B's row, the gateway signs A out and closes, and A asks for
+    // the write lock before it reads what is unsent: B's write holds it.
     await vi.waitFor(() => expect(a.stub.signOuts()).toBe(1))
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await vi.waitFor(() =>
+      expect(locks.waiting(writeLockName(ann.identity.id), 'exclusive')).toBe(true),
+    )
 
     // Only now is B's change durable.
     releaseAppend()
@@ -487,6 +503,108 @@ describe('SessionService', () => {
     expect(a.session.current()).toBeUndefined()
     expect(a.storage.get('perch.session.identity')).toBeUndefined()
     expect(a.session.notice()).toBe('resend-after-sign-in')
+  })
+
+  it('refuses every write while it cleans up after refused keys, the one made during its outbox check included', async () => {
+    let holding = false
+    let reached = () => {}
+    let releaseRead = () => {}
+    const atRead = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const readHeld = new Promise<void>((resolve) => {
+      releaseRead = resolve
+    })
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({
+      storage,
+      online: true,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (!holding || !text.includes('FROM _replica_outbox')) {
+            return undefined
+          }
+
+          holding = false
+          reached()
+
+          return readHeld
+        }),
+    })
+    const { session, stub, destroyed } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+
+    // The gateway refuses the keys; the cleanup holds the write lock and reads the outbox.
+    holding = true
+    stub.endWith('unauthorized')
+    await atRead
+
+    const barrier = storage.get('perch.session.signing-out')
+    const writing = session.writePath.run(createProfile, aProfile())
+
+    // Nothing is unsent: the cleanup deletes the database.
+    releaseRead()
+
+    expect((await writing)._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: 'signing out',
+    })
+    expect(barrier).toBeDefined()
+    await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
+    expect(session.current()).toBeUndefined()
+    await vi.waitFor(() => expect(storage.get('perch.session.signing-out')).toBeUndefined())
+  })
+
+  it('refuses a write that waited for the lock when a sign-out began or its space went meanwhile', async () => {
+    const locks = new FakeLocks()
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({ storage, locks, online: false })
+    const { session, clock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    const space = session.space() ?? expect.unreachable('a space')
+    const lock = writeLockName(ann.identity.id)
+
+    // Another tab's sign-out holds the write lock; a write admitted before its barrier waits.
+    const letGo = holdWriteLock(locks)
+    const waiting = session.writePath.run(createProfile, aProfile())
+
+    await vi.waitFor(() => expect(locks.waiting(lock, 'shared')).toBe(true))
+    storage.set('perch.session.signing-out', String(clock.now()))
+    letGo()
+
+    expect((await waiting)._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: 'signing out',
+    })
+    // Nothing reached the database.
+    expect((await space.unsent())._unsafeUnwrap()).toBe(false)
+
+    storage.remove('perch.session.signing-out')
+
+    // A write waits again, and another tab signs the identity out meanwhile.
+    const letGoAgain = holdWriteLock(locks)
+    const late = session.writePath.run(createProfile, aProfile())
+
+    await vi.waitFor(() => expect(locks.waiting(lock, 'shared')).toBe(true))
+    storage.changeElsewhere('perch.session.identity', undefined)
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    letGoAgain()
+
+    expect((await late)._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: 'signed out',
+    })
   })
 
   it('keeps the database for the next sign-in when another tab never lets its write go', async () => {

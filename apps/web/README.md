@@ -31,9 +31,11 @@ modeling stage.
   sign-out that asked the gateway in vain (no sign-out close) stops the engine's channel; when
   it leaves the person signed in, the leading tab syncs again on a new engine
   (`IdentitySpace.resumeSync()`), as a change of leader does. Keys
-  the gateway refuses sign the device out locally: the identity's database goes with them
-  unless it holds changes not sent yet, in which case it stays (as after such a sign-out)
-  and the sign-in page says to sign in again (as the same identity) to send them. A
+  the gateway refuses sign the device out locally, behind the same barrier and lock: the
+  identity's database goes with them unless it holds changes not sent yet, in which case it
+  stays (as after such a sign-out) and the sign-in page says to sign in again (as the same
+  identity) to send them. A write that waited for the lock goes on only into the space it was
+  admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses stops the sync and keeps everything. A tab follows another
   tab's sign-out by closing its space. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus

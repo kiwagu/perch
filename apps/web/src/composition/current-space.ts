@@ -85,7 +85,9 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
 
 /**
  * Writes into the current space's region; refuses while nobody is signed in or a sign-out runs.
- * A write it admits runs under the identity's write lock until its change is durable.
+ * A write it admits runs under the identity's write lock until its change is durable. The lock
+ * may come only after a sign-out or a refused-keys cleanup let it go: the write then goes on
+ * only into the space it was admitted for, still current, and while no sign-out runs.
  */
 export class CurrentSpaceWritePath implements WritePathPort {
   constructor(private readonly spaces: Pick<SpaceSource, 'current' | 'signingOut' | 'writing'>) {}
@@ -101,8 +103,19 @@ export class CurrentSpaceWritePath implements WritePathPort {
       return errAsync(dataError('data:WRITE_REJECTED', signedOut(`command ${command.id}`)))
     }
 
-    return this.spaces.signingOut()
-      ? errAsync(dataError('data:WRITE_REJECTED', 'signing out'))
-      : this.spaces.writing(space, () => space.writePath.run(command, params, meta))
+    if (this.spaces.signingOut()) {
+      return errAsync(dataError('data:WRITE_REJECTED', 'signing out'))
+    }
+
+    return this.spaces.writing(space, () => {
+      // A space closed meanwhile no longer persists what is written into it.
+      if (this.spaces.current() !== space) {
+        return errAsync(dataError('data:WRITE_REJECTED', 'signed out'))
+      }
+
+      return this.spaces.signingOut()
+        ? errAsync(dataError('data:WRITE_REJECTED', 'signing out'))
+        : space.writePath.run(command, params, meta)
+    })
   }
 }

@@ -80,6 +80,13 @@ export class FakeLocks implements LockManagerLike {
     })
   }
 
+  /** Whether a request of `name` (of `mode`, when one is given) waits for its grant. */
+  waiting(name: string, mode?: Mode): boolean {
+    return this.queue.some(
+      (request) => request.name === name && (mode === undefined || request.mode === mode),
+    )
+  }
+
   /** Grants the requests at the head of the name's queue for as long as they may be granted. */
   #process(name: string): void {
     for (let next = this.#first(name); next && this.#grantable(next); next = this.#first(name)) {

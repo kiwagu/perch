@@ -206,6 +206,9 @@ describe('the fake Web Locks', () => {
 
     await settle()
     expect(log).toEqual(['one granted', 'two granted'])
+    expect(locks.waiting('w', 'exclusive')).toBe(true)
+    expect(locks.waiting('w', 'shared')).toBe(true)
+    expect(locks.waiting('other')).toBe(false)
 
     one.release()
     await settle()
