@@ -31,8 +31,9 @@ apps:
   web:
     description: >-
       The web application's Vite dev server on 127.0.0.1:5180, opened through caddy-dev
-      at https://localhost:5443 (its HMR socket too). The database runs in the browser
-      (WASM on IndexedDB), so it needs no server to sign up and edit the profile.
+      at https://localhost:5443 (its HMR socket too). Each signed-in identity's database
+      runs in the browser (WASM on IndexedDB); signing up or in and syncing go through the
+      gateway under /backend/ of the same front.
     kind: server
     run: VITE_PUBLIC_PORT=5443 bun run dev --host 127.0.0.1
     cwd: apps/web

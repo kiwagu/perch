@@ -1,26 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { type AuthUser, type LocalDb, ShapeRunner } from '@workspace/data'
+import type { AuthUser } from '@workspace/data'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
 
-import { openTestSession } from '../../../composition/__fixtures__/session'
+import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
 import { localeChange, ProfileService } from './profile.service'
 
-let local: LocalDb
+let opened: TestSession
 let session: SessionService
 let service: ProfileService
 let me: AuthUser
 let profileId: ProfileId
 
 beforeEach(async () => {
-  const opened = await openTestSession()
-
-  local = opened.local
+  opened = await openTestSession()
   session = opened.session
-  service = new ProfileService(new ShapeRunner(local), opened.commands, {
+  service = new ProfileService(opened.runner, opened.commands, {
     shape: profileShape,
     commands: profileCommands,
   })
@@ -37,8 +35,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await session.close()
-  await local.close()
+  await opened.close()
 })
 
 describe('ProfileService', () => {

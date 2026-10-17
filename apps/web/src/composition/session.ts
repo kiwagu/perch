@@ -1,107 +1,139 @@
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 
 import {
-  type AuthPort,
   type AuthUser,
-  type Command,
-  type CommandMeta,
-  createAuth,
   type DataError,
   dataError,
   type LocalDb,
   type SignInInput,
   type SignUpInput,
-  type WritePathPort,
 } from '@workspace/data'
-import { LoroWritePath, Projector, RegionDoc, type ReplicaSchema } from '@workspace/replica'
+import type { IdentityId } from '@workspace/ids'
+import type { Clock, ReplicaSchema } from '@workspace/replica'
+import type {
+  DeviceCredentials,
+  EndReason,
+  Leadership,
+  SyncHints,
+  SyncTransport,
+} from '@workspace/replica/sync'
 
-import type { SessionPort } from '../platform/session.port'
+import type { SessionPort, SignOutOptions } from '../platform/session.port'
 
-import type { KeyValueStorage } from './storage'
+import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
+import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+import {
+  type IdentitySpace,
+  openIdentitySpace,
+  type SyncState,
+  type Visibility,
+} from './identity-space'
+import {
+  forgetDevice,
+  IDENTITY_KEY,
+  type KeyValueStorage,
+  saveDevice,
+  savedIdentity,
+  savedKeys,
+  saveKeys,
+} from './storage'
+
+/** What the channel of one identity needs: its keys, a place for renewed ones, word that it ended. */
+export interface TransportContext {
+  readonly identity: IdentityId
+  readonly credentials: () => DeviceCredentials | undefined
+  readonly onTokens: (tokens: SignedInDevice['tokens']) => void
+  readonly onEnded: (reason: EndReason) => void
+}
+
+/** Whether the tab is in the foreground, and how to hear that it changed. */
+export interface VisibilitySource {
+  current(): Visibility
+  onChange(listener: (state: Visibility) => void): () => void
+}
 
 export interface SessionOptions {
-  readonly access: string
-  readonly namespace: string
-  readonly database: string
+  readonly auth: GatewayAuth
+  readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   readonly schema: ReplicaSchema
+  readonly transport: (context: TransportContext) => SyncTransport
+  /** The Web Lock that makes one tab per browser the identity's sync leader; undefined without Web Locks. */
+  readonly leadership: (identity: IdentityId) => Leadership | undefined
+  readonly hints: (identity: IdentityId) => SyncHints
+  readonly clock: Clock
   readonly storage: KeyValueStorage
+  readonly visibility: VisibilitySource
+  /** An identity's space starts to open (`open-db`) or is open (`ready`). */
+  readonly onStep?: (step: 'open-db' | 'ready') => void
+  readonly onSyncState: (state: SyncState) => void
   readonly onError: (error: DataError) => void
 }
 
-const TOKEN_KEY = 'perch.session.token'
-
-const REFRESH_KEY = 'perch.session.refresh'
-
-/** Writes into the private region of whoever is signed in; refuses while nobody is. */
-class RegionWritePath implements WritePathPort {
-  #target: LoroWritePath | undefined
-
-  attach(target: LoroWritePath | undefined): void {
-    this.#target = target
-  }
-
-  run<Params>(
-    command: Command<Params>,
-    params: Params,
-    meta?: CommandMeta,
-  ): ResultAsync<void, DataError> {
-    return this.#target
-      ? this.#target.run(command, params, meta)
-      : errAsync(dataError('data:WRITE_REJECTED', `sign in before running ${command.id}`))
-  }
+/** What the session follows of an open space: whether it still speaks for the tab, and whether its sync stopped. */
+interface SpaceStatus {
+  live: boolean
+  syncStopped: boolean
 }
 
-interface OpenRegion {
-  readonly region: RegionDoc
-  readonly projector: Projector
-  readonly stop: () => void
+interface OpenSpace {
+  readonly space: IdentitySpace
+  readonly leadership: Leadership | undefined
+  readonly status: SpaceStatus
 }
+
+type SignOutOutcome = 'signed-out' | 'needs-confirmation'
+
+const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
+
+const closedDuringSignIn = () =>
+  dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
 
 /**
- * The signed-in user and their private region. Signing up, signing in or
- * restoring a saved session opens the user's region document from the local
- * database, starts projecting it and routes writes to it; signing out closes it.
+ * The signed-in identity and its space. Signing up or in goes through the gateway, keeps the
+ * identity and its keys in the browser's storage and opens the identity's space; restoring
+ * opens the saved identity's space without the network. Signing out drains and has the
+ * gateway sign the device out, then forgets the keys and deletes the identity's database;
+ * with changes that cannot be sent it asks first. The tabs of a browser follow the saved
+ * identity: when another tab signs it out, this one closes its space.
  */
 export class SessionService implements SessionPort {
-  readonly writePath = new RegionWritePath()
-  readonly #auth: AuthPort
+  readonly runner: CurrentSpaceRunner
+  readonly writePath: CurrentSpaceWritePath
+  readonly #options: SessionOptions
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
-  #user: AuthUser | undefined
-  #open: OpenRegion | undefined
+  readonly #unlisten: Array<() => void>
+  #open: OpenSpace | undefined
   #generation = 0
   #transitions: Promise<unknown> = Promise.resolve()
   #closed = false
   #retiring: Promise<unknown> = Promise.resolve()
 
-  constructor(
-    private readonly local: LocalDb,
-    private readonly options: SessionOptions,
-  ) {
-    this.#auth = createAuth(local, options)
-    // Every new pair is kept, renewals included: a refresh key works once, so the
-    // next reload needs the latest one. A session the driver ends on its own keeps
-    // the stored keys, since the refresh key still resumes it.
-    this.#auth.onTokens((tokens) => {
-      if (!tokens) {
-        return
-      }
+  constructor(options: SessionOptions) {
+    this.#options = options
 
-      options.storage.set(TOKEN_KEY, tokens.access)
+    const spaces: SpaceSource = {
+      current: () => this.#open?.space,
+      onSwitch: (listener) => this.subscribe(() => listener()),
+    }
 
-      if (tokens.refresh) {
-        options.storage.set(REFRESH_KEY, tokens.refresh)
-      } else {
-        options.storage.remove(REFRESH_KEY)
-      }
-    })
+    this.runner = new CurrentSpaceRunner(spaces)
+    this.writePath = new CurrentSpaceWritePath(spaces)
+    this.#unlisten = [
+      options.storage.onChangeElsewhere((key) => {
+        if (key === undefined || key === IDENTITY_KEY) {
+          this.#followElsewhere()
+        }
+      }),
+      options.visibility.onChange((state) => this.#open?.space.visibility(state)),
+    ]
   }
 
   current(): AuthUser | undefined {
-    return this.#user
+    return this.#open?.space.identity
   }
 
-  region(): RegionDoc | undefined {
-    return this.#open?.region
+  space(): IdentitySpace | undefined {
+    return this.#open?.space
   }
 
   subscribe(listener: (user: AuthUser | undefined) => void): () => void {
@@ -112,79 +144,57 @@ export class SessionService implements SessionPort {
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
     return this.#serially((generation) =>
-      this.#auth.signUp(input).andThen((user) => this.#enter(user, generation)),
+      this.#options.auth.signUp(input).andThen((device) => this.#enter(device, generation)),
     )
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
     return this.#serially((generation) =>
-      this.#auth.signIn(input).andThen((user) => this.#enter(user, generation)),
+      this.#options.auth.signIn(input).andThen((device) => this.#enter(device, generation)),
     )
   }
 
-  /**
-   * Ends the session on this device once the transition in progress, if any, has
-   * finished: no region, no saved keys, nobody signed in. Ending the database
-   * session may still fail; that is reported, and the device stays signed out.
-   */
-  signOut(): ResultAsync<void, DataError> {
-    return this.#serially(() => {
-      this.#leave()
-      this.#forget()
-      this.#emit(undefined)
-
-      return this.#auth.signOut()
-    })
+  signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
+    return this.#serially(() => this.#signOut(options.forgetUnsent ?? false))
   }
 
-  /** Continues the session saved by an earlier sign-in; an unusable token means signed out. */
+  /** Opens the space of the identity saved by an earlier sign-in; the network is not needed. */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
-    return this.#serially((generation) => {
-      const access = this.options.storage.get(TOKEN_KEY)
+    return this.#serially((generation): ResultAsync<AuthUser | undefined, DataError> => {
+      const storage = this.#options.storage
+      const identity = savedIdentity(storage)
 
-      if (!access) {
-        return okAsync(undefined)
+      if (identity) {
+        return this.#openSpace(identity, generation)
       }
 
-      return this.#auth
-        .resume({ access, refresh: this.options.storage.get(REFRESH_KEY) })
-        .orElse(() => okAsync(undefined))
-        .andThen((user) => {
-          if (!user) {
-            this.#forget()
+      // A kept value that names nobody is not a session.
+      if (storage.get(IDENTITY_KEY) !== undefined) {
+        forgetDevice(storage)
+      }
 
-            return okAsync(undefined)
-          }
-
-          return this.#enter(user, generation)
-        })
+      return okAsync(undefined)
     })
   }
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
   flush(): ResultAsync<void, DataError> {
-    const open = this.#open
-
-    if (!open) {
-      return okAsync(undefined)
-    }
-
-    return open.region.flush().andThen(() => open.projector.flush())
+    return this.#open?.space.flush() ?? okAsync(undefined)
   }
 
   /**
-   * Leaves the region, keeping the saved keys, and resolves once its last writes
-   * are persisted and projected, so the database can be closed after it.
+   * Closes the space, keeping the saved keys, and resolves once its last writes are persisted
+   * and projected and its database is closed (or deleted, by a sign-out under way).
    */
   async close(): Promise<void> {
     this.#closed = true
     this.#begin()
-    this.#leave()
 
-    if (this.#user) {
-      this.#emit(undefined)
+    for (const stop of this.#unlisten.splice(0)) {
+      stop()
     }
 
+    this.#leaveAndTell()
     await this.#retiring
   }
 
@@ -196,10 +206,10 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * Runs session transitions one at a time, each when the previous one has
-   * finished, so the shared auth session and the saved keys never serve two
-   * transitions at once. `close` does not wait: it starts a new generation, so a
-   * transition still running attaches nothing, and the queued ones do not run.
+   * Runs session transitions one at a time, each when the previous one has finished, so the
+   * saved keys and the space never serve two transitions at once. `close` does not wait: it
+   * starts a new generation, so a transition still running attaches nothing, and the queued
+   * ones do not run.
    */
   #serially<T>(run: (generation: number) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
     // A closed session runs nothing more, transitions queued before the close included.
@@ -217,62 +227,223 @@ export class SessionService implements SessionPort {
     return new ResultAsync(result)
   }
 
-  #enter(user: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
+  #enter(device: SignedInDevice, generation: number): ResultAsync<AuthUser, DataError> {
     if (generation !== this.#generation) {
-      return errAsync(dataError('data:AUTH_FAILED', 'the session was closed during this sign-in'))
+      return errAsync(closedDuringSignIn())
     }
 
-    // The previous user leaves with their region: nobody is current until the
-    // new region is attached.
-    this.#leave()
+    // The keys are kept first: the space's channel presents them as soon as this tab leads.
+    saveDevice(this.#options.storage, device)
 
-    if (this.#user) {
-      this.#emit(undefined)
-    }
+    return this.#openSpace(device.identity, generation).orElse((error) => {
+      if (generation === this.#generation) {
+        forgetDevice(this.#options.storage)
+      }
 
-    return RegionDoc.open(this.local, { kind: 'private', id: `identity:${user.id}` }).andThen(
-      (region) => {
-        if (generation !== this.#generation) {
-          region.close()
+      return errAsync(error)
+    })
+  }
 
-          return err(dataError('data:AUTH_FAILED', 'the session was closed during this sign-in'))
+  #openSpace(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
+    // The previous identity leaves with its space: nobody is current until the new one is open.
+    this.#leaveAndTell()
+    this.#options.onStep?.('open-db')
+
+    const status: SpaceStatus = { live: true, syncStopped: false }
+    const leadership = this.#options.leadership(identity.id)
+
+    return openIdentitySpace({
+      identity,
+      openLocal: this.#options.openLocal,
+      schema: this.#options.schema,
+      transport: () => this.#options.transport(this.#transportContext(identity.id)),
+      leadership,
+      hints: this.#options.hints(identity.id),
+      clock: this.#options.clock,
+      onState: (state) => {
+        if (status.live) {
+          this.#options.onSyncState(state)
+        }
+      },
+      onError: (error) => {
+        if (error.code === 'data:SYNC_STOPPED') {
+          status.syncStopped = true
         }
 
-        const projector = new Projector(region, this.local, this.options.schema, {
-          onError: this.options.onError,
-        })
-
-        this.#open = { region, projector, stop: projector.start() }
-        this.writePath.attach(new LoroWritePath(region, this.options.schema))
-        this.#emit(user)
-
-        return ok(user)
+        this.#options.onError(error)
       },
+    })
+      .mapErr((error) => {
+        status.live = false
+
+        return error
+      })
+      .andThen((space) => {
+        if (generation !== this.#generation) {
+          status.live = false
+          this.#retire(space.close())
+
+          return err(closedDuringSignIn())
+        }
+
+        this.#open = { space, leadership, status }
+        space.visibility(this.#options.visibility.current())
+        this.#options.onStep?.('ready')
+        this.#emit(identity)
+
+        return ok(identity)
+      })
+  }
+
+  #signOut(forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
+    const open = this.#open
+
+    if (!open) {
+      forgetDevice(this.#options.storage)
+
+      return okAsync('signed-out')
+    }
+
+    const { space, leadership, status } = open
+    const keepsUnsent = (): ResultAsync<boolean, DataError> =>
+      forgetUnsent ? okAsync(false) : space.unsent()
+    const ending = (asks: boolean): SignOutOutcome => (asks ? 'needs-confirmation' : 'signed-out')
+
+    // The sign-out runs where the person asked for it: this tab leads from here on.
+    return (
+      ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
+        // A region that stopped syncing counts as delivered for the sync engine, so its unsent
+        // changes are weighed before the gateway signs the device out.
+        .andThen(() => (status.syncStopped ? keepsUnsent() : okAsync(false)))
+        .andThen((stuck) =>
+          stuck
+            ? okAsync(ending(true))
+            : ResultAsync.fromSafePromise(
+                space.sync?.signOut() ?? Promise.resolve('offline' as const),
+              )
+                .andThen((outcome) => (outcome === 'signed-out' ? okAsync(false) : keepsUnsent()))
+                .map(ending),
+        )
+        .andThen((outcome) =>
+          outcome === 'signed-out' ? this.#forgetSpace(open).map(() => outcome) : okAsync(outcome),
+        )
     )
   }
 
-  #forget(): void {
-    this.options.storage.remove(TOKEN_KEY)
-    this.options.storage.remove(REFRESH_KEY)
+  /**
+   * Forgets the device's identity and keys, then deletes the identity's database. The other
+   * tabs hear the identity go and close their own spaces, which lets the store be deleted.
+   */
+  #forgetSpace(open: OpenSpace): ResultAsync<void, DataError> {
+    forgetDevice(this.#options.storage)
+
+    if (this.#open === open) {
+      this.#open = undefined
+      open.status.live = false
+      this.#options.onSyncState(NOT_SYNCING)
+      this.#emit(undefined)
+    }
+
+    const destroying = open.space.destroy()
+
+    this.#retire(destroying)
+
+    return ResultAsync.fromPromise(destroying, (cause) =>
+      dataError(
+        'data:WRITE_FAILED',
+        `could not delete the local data of ${open.space.identity.id}`,
+        cause,
+      ),
+    )
   }
 
-  #leave(): void {
-    const open = this.#open
+  #transportContext(identity: IdentityId): TransportContext {
+    const storage = this.#options.storage
+    const saved = () => savedIdentity(storage)?.id === identity
 
-    this.writePath.attach(undefined)
-    this.#open = undefined
-
-    if (open) {
-      open.stop()
-      // The region's last writes still persist and project; `close` waits for them.
-      this.#retiring = Promise.all([this.#retiring, open.region.flush(), open.projector.flush()])
-      open.region.close()
+    return {
+      identity,
+      // Keys saved for another identity are not this channel's to present.
+      credentials: () => (saved() ? savedKeys(storage) : undefined),
+      onTokens: (tokens) => {
+        if (saved()) {
+          saveKeys(storage, tokens)
+        }
+      },
+      // A sign-out this device asked for is heard by `signOut`, through the sync engine.
+      onEnded: (reason) => {
+        if (reason === 'unauthorized' && !this.#closed) {
+          void this.#serially(() => this.#refused(identity)).match(
+            () => undefined,
+            (error) => this.#options.onError(error),
+          )
+        }
+      },
     }
   }
 
-  #emit(user: AuthUser | undefined): void {
-    this.#user = user
+  /**
+   * The gateway refused the identity's keys, which will not work again: the device signs out
+   * here, without the gateway, and its data for the identity goes with the keys.
+   */
+  #refused(identity: IdentityId): ResultAsync<void, DataError> {
+    const open = this.#open
 
+    if (open?.space.identity.id !== identity) {
+      return okAsync(undefined)
+    }
+
+    // Another tab changed who is signed in: what happens to this identity's data is its call.
+    if (savedIdentity(this.#options.storage)?.id !== identity) {
+      this.#leaveAndTell()
+
+      return okAsync(undefined)
+    }
+
+    return this.#forgetSpace(open)
+  }
+
+  /** Another tab changed the saved identity: this tab follows, closing a space that is no longer it. */
+  #followElsewhere(): void {
+    if (this.#closed) {
+      return
+    }
+
+    void this.#serially(() => {
+      const open = this.#open
+
+      if (open && savedIdentity(this.#options.storage)?.id !== open.space.identity.id) {
+        this.#leaveAndTell()
+      }
+
+      return okAsync(undefined)
+    }).match(
+      () => undefined,
+      (error) => this.#options.onError(error),
+    )
+  }
+
+  /** Closes the open space, if any, and tells the subscribers that nobody is signed in. */
+  #leaveAndTell(): void {
+    const open = this.#open
+
+    if (!open) {
+      return
+    }
+
+    this.#open = undefined
+    open.status.live = false
+    this.#options.onSyncState(NOT_SYNCING)
+    this.#retire(open.space.close())
+    this.#emit(undefined)
+  }
+
+  /** Work that outlives the space it ends; `close` waits for it. */
+  #retire(work: Promise<void>): void {
+    this.#retiring = Promise.all([this.#retiring, work.catch(() => undefined)])
+  }
+
+  #emit(user: AuthUser | undefined): void {
     for (const listener of this.#listeners) {
       listener(user)
     }

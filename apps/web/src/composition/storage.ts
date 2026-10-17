@@ -1,12 +1,30 @@
-/** Small persistent key-value storage for session tokens. */
+import type { AuthUser } from '@workspace/data'
+import { idSchemas } from '@workspace/ids'
+import type { DeviceCredentials } from '@workspace/replica/sync'
+import { z } from '@workspace/zod'
+
+import type { SignedInDevice } from './gateway-auth'
+
+/** Small persistent key-value storage, shared by the tabs of one browser. */
 export interface KeyValueStorage {
   get(key: string): string | undefined
   set(key: string, value: string): void
   remove(key: string): void
+  /**
+   * Hears a key that another tab of this browser set or removed, `undefined` when it cleared
+   * every key; this tab's own changes are not told.
+   */
+  onChangeElsewhere(listener: (key: string | undefined) => void): () => void
 }
 
-export function memoryStorage(): KeyValueStorage {
+export interface MemoryStorage extends KeyValueStorage {
+  /** Sets a key, or removes it with `undefined`, as another tab would: the listeners hear it. */
+  changeElsewhere(key: string, value: string | undefined): void
+}
+
+export function memoryStorage(): MemoryStorage {
   const values = new Map<string, string>()
+  const listeners = new Set<(key: string | undefined) => void>()
 
   return {
     get: (key) => values.get(key),
@@ -16,11 +34,33 @@ export function memoryStorage(): KeyValueStorage {
     remove: (key) => {
       values.delete(key)
     },
+    onChangeElsewhere: (listener) => {
+      listeners.add(listener)
+
+      return () => listeners.delete(listener)
+    },
+    changeElsewhere: (key, value) => {
+      if (value === undefined) {
+        values.delete(key)
+      } else {
+        values.set(key, value)
+      }
+
+      for (const listener of listeners) {
+        listener(key)
+      }
+    },
   }
 }
 
+/** The part of `window` that tells a tab about storage changes made in the others. */
+export interface StorageEvents {
+  addEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
+  removeEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
+}
+
 /** The browser's localStorage; when it is unavailable (private mode, blocked), nothing is kept. */
-export function browserStorage(store: Storage): KeyValueStorage {
+export function browserStorage(store: Storage, events: StorageEvents): KeyValueStorage {
   const attempt = <T>(run: () => T, fallback: T): T => {
     try {
       return run()
@@ -33,6 +73,17 @@ export function browserStorage(store: Storage): KeyValueStorage {
     get: (key) => attempt(() => store.getItem(key) ?? undefined, undefined),
     set: (key, value) => attempt(() => store.setItem(key, value), undefined),
     remove: (key) => attempt(() => store.removeItem(key), undefined),
+    onChangeElsewhere: (listener) => {
+      const handler = (event: StorageEvent) => {
+        if (event.storageArea === store) {
+          listener(event.key ?? undefined)
+        }
+      }
+
+      events.addEventListener('storage', handler)
+
+      return () => events.removeEventListener('storage', handler)
+    },
   }
 }
 
@@ -51,4 +102,62 @@ export function deviceIdFrom(storage: KeyValueStorage): string {
   storage.set(DEVICE_KEY, minted)
 
   return minted
+}
+
+/** Who is signed in on this browser; the tabs follow it. */
+export const IDENTITY_KEY = 'perch.session.identity'
+
+const ACCESS_KEY = 'perch.session.token'
+
+const REFRESH_KEY = 'perch.session.refresh'
+
+const savedIdentitySchema = z.object({ id: idSchemas.identity.schema, email: z.string() })
+
+/** Keeps the identity signed in on this browser and its keys at the gateway. */
+export function saveDevice(storage: KeyValueStorage, device: SignedInDevice): void {
+  saveKeys(storage, device.tokens)
+  storage.set(
+    IDENTITY_KEY,
+    JSON.stringify({ id: device.identity.id, email: device.identity.email }),
+  )
+}
+
+/** Keeps a renewed pair of keys: a refresh key works once, so the next connection needs the latest. */
+export function saveKeys(storage: KeyValueStorage, tokens: SignedInDevice['tokens']): void {
+  storage.set(ACCESS_KEY, tokens.access)
+  storage.set(REFRESH_KEY, tokens.refresh)
+}
+
+/** The identity signed in on this browser; a kept value that does not describe one is none. */
+export function savedIdentity(storage: KeyValueStorage): AuthUser | undefined {
+  const text = storage.get(IDENTITY_KEY)
+
+  if (text === undefined) {
+    return undefined
+  }
+
+  try {
+    const parsed = savedIdentitySchema.safeParse(JSON.parse(text))
+
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The keys the device presents to the gateway, if it keeps a pair. */
+export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefined {
+  const access = storage.get(ACCESS_KEY)
+  const refresh = storage.get(REFRESH_KEY)
+
+  return access === undefined
+    ? undefined
+    : { access, ...(refresh === undefined ? {} : { refresh }) }
+}
+
+/** Forgets who is signed in and the keys; the other tabs hear the identity go. */
+export function forgetDevice(storage: KeyValueStorage): void {
+  storage.remove(ACCESS_KEY)
+  storage.remove(REFRESH_KEY)
+  storage.remove(IDENTITY_KEY)
 }

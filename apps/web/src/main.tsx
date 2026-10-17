@@ -35,13 +35,13 @@ function Layout() {
 }
 
 // One page boots once. A second boot, such as React re-running effects in
-// development, would open a second engine on the same IndexedDB and present the
-// saved refresh key twice: the first use replaces it, the second is refused.
+// development, would open the signed-in identity's space twice in one tab: two
+// engines on its database and two claims on the sync lead.
 let booting: Promise<Boot> | undefined
 
 function bootOnce(): Promise<Boot> {
   // The database code and its WASM engine load after the first frame, so the
-  // shell paints without waiting for them.
+  // shell paints without waiting for them; nothing opens until someone is signed in.
   booting ??= import('./composition/browser')
     .then(({ bootBrowser }) => bootBrowser())
     .then((result) =>
