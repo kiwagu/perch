@@ -16,6 +16,10 @@
       "types": "./src/server/index.ts",
       "import": "./src/server/index.ts"
     },
+    "./sync": {
+      "types": "./src/sync/index.ts",
+      "import": "./src/sync/index.ts"
+    },
     "./testing": {
       "types": "./src/testing/index.ts",
       "import": "./src/testing/index.ts"

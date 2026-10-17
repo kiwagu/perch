@@ -15,7 +15,10 @@ then accepted together with its projection in one transaction, under a number wi
 gaps, and a compaction replaces rows with a snapshot only when it matches them. A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
-region from memory once nobody has subscribed for a while.
+region from memory once nobody has subscribed for a while. On the device, a sync engine keeps
+each region in step with the gateway over one WebSocket: it pushes the outbox a batch at a
+time, imports what the gateway sends, pulls what is missing, rolls a rejected batch back with
+an inverse commit, and runs passes on a cadence that follows the tab and the channel.
 
 ## Key exports
 
@@ -52,8 +55,22 @@ region from memory once nobody has subscribed for a while.
   with an ack (asking for a compaction once the log outgrows its limit) or a reject and sends
   the batch to the other subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+- `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
+  `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
+  empty and every region has its first answer on the current connection, `signOut()` that
+  drains and has the gateway sign the device out, or answers `offline`). Its parts:
+  `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
+  `RECONNECT_DELAYS_MS`, renewed keys to `onTokens`, `onEnded` when the keys are refused or the
+  device is signed out) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
+  import and pull, push with acknowledgement or rollback, compaction proposals);
+  `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
+  `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
-  tasks only when a test calls `advance(ms)`, and counts them with `pending()`.
+  tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
+  `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given
+  database and, per device, a `StubTransport` that behaves like the gateway's connection without
+  a network and can go offline and come back; `dropNextFanOutTo`, `rejectEverything`,
+  `rejections`, `compactions` and `failures` steer and observe it in tests.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
@@ -64,6 +81,7 @@ region from memory once nobody has subscribed for a while.
 
 ## Commands
 
-- `bun run test`: unit tests of the write path and functional tests of the projector,
-  persistence, the server log and the region hub on an embedded in-memory database.
+- `bun run test`: unit tests of the write path, the transport, the cadence and the outbox
+  drain, and functional tests of the projector, persistence, the server log, the region hub and
+  the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
 - `bun run typecheck`, `bun run lint`.

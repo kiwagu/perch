@@ -1,0 +1,417 @@
+import type { Result, ResultAsync } from 'neverthrow'
+import { match } from 'ts-pattern'
+
+import type { DataError, LocalDb } from '@workspace/data'
+
+import type { Clock } from '../clock'
+import {
+  type ClientMessage,
+  type CompactionOutcome,
+  clientMessage,
+  decodeMessage,
+  encodeMessage,
+  type ProtocolError,
+  type ServerMessage,
+  serverMessage,
+} from '../protocol'
+import type { RegionRef } from '../region-doc'
+import type { ReplicaSchema } from '../schema'
+import { RegionHub, type Subscriber } from '../server/region-hub'
+import type { ChannelState, EndReason, SyncTransport } from '../sync/transport'
+
+export interface GatewayStubOptions {
+  /** The gateway's database: the hub keeps the regions' logs there. */
+  readonly local: LocalDb
+  readonly schema: ReplicaSchema
+  readonly clock: Clock
+  /** How many log rows after the snapshot make an ack ask for a compaction. */
+  readonly compactionLogLimit?: number
+}
+
+/** A device's channel to the stub, which the test can take offline and bring back. */
+export interface StubTransport extends SyncTransport {
+  /** The connection drops: the channel goes down and messages are lost both ways. */
+  goOffline(): void
+  /** The device connects again, as a reconnect would: a new welcome follows. */
+  goOnline(): void
+  /** Started, not offline and not signed out: the channel is meant to be up. */
+  online(): boolean
+}
+
+export interface CompactionAnswer {
+  readonly covers: number
+  readonly outcome: CompactionOutcome
+}
+
+export interface GatewayStub {
+  transport(identity: string): StubTransport
+  readonly hub: RegionHub
+  /** Loses the next batch of the others that the hub sends this device. */
+  dropNextFanOutTo(transport: SyncTransport): void
+  /** From now on every pushed batch is rejected as a table outside the region. */
+  rejectEverything(): void
+  /** How many rejects the devices were sent. */
+  rejections(): number
+  /** The outcomes of the compactions the devices proposed, in order. */
+  compactions(): readonly CompactionAnswer[]
+  /** What the hub reported through `onError`, and hub calls that failed. */
+  failures(): readonly DataError[]
+  /** Disconnects every device and closes the hub; the database stays open. */
+  close(): Promise<void>
+}
+
+/** What every device channel of one stub shares. */
+interface Gateway {
+  readonly hub: RegionHub
+  readonly clock: Clock
+  readonly failures: DataError[]
+  readonly compactions: CompactionAnswer[]
+  rejections: number
+  rejectAll: boolean
+}
+
+/** One connection of a device: its end at the hub, up once welcomed. */
+interface Connection {
+  readonly subscriber: Subscriber
+  up: boolean
+  /** Subscriptions and pulls sent on it that wait for their updates. */
+  asked: number
+}
+
+/** A message the protocol refuses here was built wrong by the engine or the hub. */
+function crossed<T>(decoded: Result<T, ProtocolError>, type: string): T {
+  if (decoded.isErr()) {
+    throw new Error(`the protocol refuses a ${type} message: ${decoded.error.message}`)
+  }
+
+  return decoded.value
+}
+
+/** A device's message as the gateway reads it: encoded, then decoded. */
+function sentByDevice(message: ClientMessage): ClientMessage {
+  return crossed(decodeMessage(clientMessage, encodeMessage(clientMessage, message)), message.type)
+}
+
+/** A gateway's message as the device reads it: encoded, then decoded. */
+function sentToDevice(message: ServerMessage): ServerMessage {
+  return crossed(decodeMessage(serverMessage, encodeMessage(serverMessage, message)), message.type)
+}
+
+/**
+ * A device's channel to the stub: like the gateway's sync connection, without a network. It
+ * is welcomed with the identity's own region, hands subscriptions, pulls, pushes and
+ * compactions in that region to the hub, answers probes with the hub's heads and delivers what
+ * the hub sends, each message through the protocol's encoding both ways.
+ */
+class DeviceChannel implements StubTransport {
+  readonly #gateway: Gateway
+  readonly #identity: string
+  readonly #region: RegionRef
+  readonly #messageListeners = new Set<(message: ServerMessage) => void>()
+  readonly #channelListeners = new Set<(state: ChannelState) => void>()
+  readonly #endedListeners = new Set<(reason: EndReason) => void>()
+  #started = false
+  #offline = false
+  #ended = false
+  #connection: Connection | undefined
+  #dropNextFanOut = false
+
+  constructor(gateway: Gateway, identity: string) {
+    this.#gateway = gateway
+    this.#identity = identity
+    this.#region = { kind: 'private', id: `identity:${identity}` }
+  }
+
+  start(): void {
+    this.#started = true
+    this.#connect()
+  }
+
+  stop(): void {
+    this.#started = false
+    this.#disconnect()
+  }
+
+  goOffline(): void {
+    this.#offline = true
+    this.#disconnect()
+  }
+
+  goOnline(): void {
+    this.#offline = false
+    this.#connect()
+  }
+
+  online(): boolean {
+    return this.#started && !this.#offline && !this.#ended
+  }
+
+  dropNextFanOut(): void {
+    this.#dropNextFanOut = true
+  }
+
+  send(message: ClientMessage): boolean {
+    const connection = this.#connection
+
+    if (!connection?.up) {
+      return false
+    }
+
+    this.#serve(connection, sentByDevice(message))
+
+    return true
+  }
+
+  onMessage(listener: (message: ServerMessage) => void): () => void {
+    this.#messageListeners.add(listener)
+
+    return () => this.#messageListeners.delete(listener)
+  }
+
+  onChannel(listener: (state: ChannelState) => void): () => void {
+    this.#channelListeners.add(listener)
+
+    return () => this.#channelListeners.delete(listener)
+  }
+
+  onEnded(listener: (reason: EndReason) => void): () => void {
+    this.#endedListeners.add(listener)
+
+    return () => this.#endedListeners.delete(listener)
+  }
+
+  #connect(): void {
+    if (!this.online() || this.#connection) {
+      return
+    }
+
+    const connection: Connection = {
+      subscriber: {
+        id: crypto.randomUUID(),
+        send: (message) => this.#deliver(connection, message),
+      },
+      up: false,
+      asked: 0,
+    }
+
+    this.#connection = connection
+    this.#settle(
+      this.#gateway.hub
+        .heads([this.#region.id])
+        .andTee((regions) => this.#welcome(connection, regions)),
+    )
+  }
+
+  /** The gateway took the device's keys: the channel is up once the device is welcomed. */
+  #welcome(
+    connection: Connection,
+    regions: ReadonlyArray<{ readonly region: string; readonly head: number }>,
+  ): void {
+    if (this.#connection !== connection) {
+      return
+    }
+
+    connection.up = true
+    this.#deliver(connection, {
+      type: 'welcome',
+      identity: this.#identity,
+      regions: [...regions],
+      time: this.#gateway.clock.now(),
+    })
+
+    for (const listener of this.#channelListeners) {
+      listener('up')
+    }
+  }
+
+  /** The connection is gone: the hub forgets the device and nothing more crosses it. */
+  #disconnect(): void {
+    const connection = this.#connection
+
+    if (!connection) {
+      return
+    }
+
+    this.#connection = undefined
+    this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
+
+    if (connection.up) {
+      for (const listener of this.#channelListeners) {
+        listener('down')
+      }
+    }
+  }
+
+  #serve(connection: Connection, message: ClientMessage): void {
+    const hub = this.#gateway.hub
+    const own = this.#region.id
+    const subscriber = connection.subscriber
+    const named =
+      'region' in message ? [message.region] : message.type === 'probe' ? message.regions : []
+
+    if (named.some((region) => region !== own)) {
+      this.#deliver(connection, {
+        type: 'error',
+        code: 'forbidden-region',
+        message: 'the region is not open to this device',
+      })
+
+      return
+    }
+
+    match(message)
+      .with({ type: 'hello' }, () => {})
+      .with({ type: 'subscribe' }, ({ vv }) => {
+        connection.asked += 1
+        this.#settle(hub.subscribe(this.#region, own, subscriber, vv))
+      })
+      .with({ type: 'pull' }, ({ vv }) => {
+        connection.asked += 1
+        this.#settle(hub.pull(own, subscriber, vv))
+      })
+      .with({ type: 'push' }, ({ batch, updates }) => {
+        if (this.#gateway.rejectAll) {
+          this.#deliver(connection, {
+            type: 'reject',
+            region: own,
+            batch,
+            reason: 'foreign-table',
+            detail: 'the test gateway rejects every batch',
+          })
+        } else {
+          this.#settle(hub.push(own, subscriber, batch, updates))
+        }
+      })
+      .with({ type: 'compact' }, ({ covers, snapshot }) => {
+        this.#settle(hub.compact(own, subscriber, covers, snapshot))
+      })
+      .with({ type: 'probe' }, ({ regions }) => {
+        this.#settle(
+          hub.heads(regions).andTee((heads) =>
+            this.#deliver(connection, {
+              type: 'heads',
+              regions: [...heads],
+              time: this.#gateway.clock.now(),
+            }),
+          ),
+        )
+      })
+      .with({ type: 'sign-out' }, () => this.#signOut(connection))
+      .exhaustive()
+  }
+
+  /** The gateway leaves the device's regions and closes the channel for good. */
+  #signOut(connection: Connection): void {
+    if (this.#connection !== connection) {
+      return
+    }
+
+    this.#ended = true
+
+    for (const listener of this.#endedListeners) {
+      listener('signed-out')
+    }
+
+    this.#disconnect()
+  }
+
+  /** Hands a message the hub or the stub sends to the device, unless its connection is gone. */
+  #deliver(connection: Connection, message: ServerMessage): void {
+    const received = sentToDevice(message)
+
+    if (received.type === 'reject') {
+      this.#gateway.rejections += 1
+    }
+
+    if (received.type === 'compaction') {
+      this.#gateway.compactions.push({ covers: received.covers, outcome: received.outcome })
+    }
+
+    if (this.#connection !== connection) {
+      return
+    }
+
+    if (received.type === 'updates' || received.type === 'error') {
+      if (connection.asked > 0) {
+        connection.asked -= 1
+      } else if (received.type === 'updates' && this.#dropNextFanOut) {
+        this.#dropNextFanOut = false
+
+        return
+      }
+    }
+
+    for (const listener of this.#messageListeners) {
+      listener(received)
+    }
+  }
+
+  /** The hub answers the device itself; a call that fails all the same is recorded. */
+  #settle(call: ResultAsync<unknown, DataError>): void {
+    void call.match(
+      () => {},
+      (error) => {
+        this.#gateway.failures.push(error)
+      },
+    )
+  }
+}
+
+/**
+ * A gateway without a network for tests of the sync engine: a region hub on the given database
+ * and, per device, a transport that behaves like the gateway's connection.
+ */
+export function gatewayStub(options: GatewayStubOptions): GatewayStub {
+  const failures: DataError[] = []
+  const hub = new RegionHub({
+    local: options.local,
+    schema: options.schema,
+    clock: options.clock,
+    onError: (error) => failures.push(error),
+    ...(options.compactionLogLimit === undefined
+      ? {}
+      : { compactionLogLimit: options.compactionLogLimit }),
+  })
+  const gateway: Gateway = {
+    hub,
+    clock: options.clock,
+    failures,
+    compactions: [],
+    rejections: 0,
+    rejectAll: false,
+  }
+  const channels: DeviceChannel[] = []
+
+  return {
+    hub,
+    transport(identity) {
+      const channel = new DeviceChannel(gateway, identity)
+
+      channels.push(channel)
+
+      return channel
+    },
+    dropNextFanOutTo(transport) {
+      const channel = channels.find((candidate) => candidate === transport)
+
+      if (!channel) {
+        throw new Error('the transport does not belong to this gateway stub')
+      }
+
+      channel.dropNextFanOut()
+    },
+    rejectEverything() {
+      gateway.rejectAll = true
+    },
+    rejections: () => gateway.rejections,
+    compactions: () => [...gateway.compactions],
+    failures: () => [...gateway.failures],
+    async close() {
+      for (const channel of channels) {
+        channel.stop()
+      }
+
+      await hub.close()
+    },
+  }
+}
