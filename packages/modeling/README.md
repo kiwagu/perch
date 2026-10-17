@@ -31,12 +31,13 @@ TypeScript or React code.
   their problems. `-- @owner <field>` names the `record<member>` field that holds a record's
   author; `-- @can <member|admin> <action>[:own], …` (one line per role, actions `create`,
   `update`, `delete`, `:own` limiting the role to the records it owns) declares who may write
-  a replicated table. The rules are emitted into the replica schema as `owner` and `can`.
+  a tenant table. The rules are emitted into the replica schema as `owner` and `can`.
   Problems: `-- @owner <field> must name a record<member> field`; `-- @can needs "<member|admin>
   <action>[:own], …", got "<line>"`; `-- @can <role>: unknown action "<item>"`; `-- @can <role>:
   create:own is not allowed, a created record is owned by its author`; `-- @can <role>: <item>
   needs -- @owner <field>`; `-- @can <role> is declared twice`; `@owner and @can belong to a
-  replicated table, not to -- @replicate none`.
+  replicated table, not to -- @replicate none`; `@owner and @can belong to a tenant table;
+  <private|public> tables declare none`.
 - `inferResultType`, `tablesOf`, `compileCommand`, `checkIdRegistry`, `collect`, the emitters.
 
 ## Commands

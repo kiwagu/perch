@@ -172,6 +172,7 @@ function parseAbilities(
   table: string,
   own: ReadonlyMap<string, readonly string[]>,
   rawFields: ReadonlyArray<{ readonly name: string; readonly kind: string }>,
+  region: string | undefined,
   serverOnly: boolean,
   problems: string[],
 ): TableAbilities | undefined {
@@ -185,6 +186,15 @@ function parseAbilities(
   if (serverOnly) {
     problems.push(
       `table ${table}: @owner and @can belong to a replicated table, not to -- @replicate none`,
+    )
+
+    return undefined
+  }
+
+  // Only an organisation's records are shared by members; a private or public table has none.
+  if (region !== undefined && REGIONS.has(region) && region !== 'tenant') {
+    problems.push(
+      `table ${table}: @owner and @can belong to a tenant table; ${region} tables declare none`,
     )
 
     return undefined
@@ -295,7 +305,7 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
       }
     }
 
-    const abilities = parseAbilities(name, own, rawFields, replicate === 'none', problems)
+    const abilities = parseAbilities(name, own, rawFields, region, replicate === 'none', problems)
 
     tables[name] = {
       fields: buildFields(rawFields),

@@ -201,6 +201,41 @@ describe('loadSchemaModel', () => {
     })
   })
 
+  it('refuses owner and can annotations on a table outside the tenant region', () => {
+    const info: StructureInfo = {
+      db: {
+        tables: [
+          { name: 'profile', kind: { kind: 'NORMAL' } },
+          { name: 'page', kind: { kind: 'NORMAL' } },
+        ],
+      },
+      tables: {
+        profile: { fields: [{ name: 'identity', kind: 'record<identity>' }] },
+        page: { fields: [{ name: 'author', kind: 'record<member>' }] },
+      },
+    }
+    const text = [
+      '-- @region private',
+      '-- @id prf',
+      '-- @can member update',
+      'DEFINE TABLE OVERWRITE profile SCHEMAFULL;',
+      '-- @region public',
+      '-- @id pag',
+      '-- @owner author',
+      '-- @can admin create',
+      'DEFINE TABLE OVERWRITE page SCHEMAFULL;',
+    ].join('\n')
+
+    const { model, problems } = parseStructure(info, text)
+
+    expect(problems).toEqual([
+      'table profile: @owner and @can belong to a tenant table; private tables declare none',
+      'table page: @owner and @can belong to a tenant table; public tables declare none',
+    ])
+    expect(model.tables['profile']?.abilities).toBeUndefined()
+    expect(model.tables['page']?.abilities).toBeUndefined()
+  })
+
   it('reports abilities that are wrong', () => {
     const info: StructureInfo = {
       db: {

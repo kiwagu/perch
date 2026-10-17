@@ -13,6 +13,7 @@ import {
   noteUpdate,
   replicaSchema,
 } from '../__fixtures__/note'
+import type { ReplicaSchema } from '../schema'
 import { invert } from '../sync/region-sync'
 
 import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
@@ -409,16 +410,16 @@ describe('a tenant region', () => {
   })
 
   it('refuses a client write to a tenant table that declares no abilities', () => {
-    const closed = {
+    const closed: ReplicaSchema = {
       ...replicaSchema,
       note: { region: 'tenant', fields: replicaSchema['note']?.fields ?? {} },
-    } as const
+    }
     const id = noteIdFactory.create()
     const validated = validateBatch({
       doc: new LoroDoc(),
       region,
       actor: ann,
-      ability: defineAbilityFor({ id: ann, role: 'admin' }, { note: {} }),
+      ability: defineAbilityFor({ id: ann, role: 'admin' }, closed),
       schema: closed,
       updates: [noteCreate(new LoroDoc(), { id, author: ann, text: 'hello' })],
     })
