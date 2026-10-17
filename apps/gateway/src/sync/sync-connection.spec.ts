@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { createAuth, type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { openTestDb, readSchema } from '@workspace/data/testing'
+import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { createLogger } from '@workspace/logger'
@@ -26,6 +26,7 @@ import { type DeviceTokens, IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
+import memberRemoveStatement from '../tenants/surql/member-remove.surql'
 import { TenantDatabases } from '../tenants/tenant-databases'
 
 import { noteCreate } from './__fixtures__/note'
@@ -94,13 +95,18 @@ interface ConnectOptions {
   readonly onAuthenticated?: () => void
 }
 
+interface GatewayOptions {
+  /** Runs before each query sent to an organisation's database; it may throw to make the query fail. */
+  readonly tenantQueries?: (text: string) => void
+}
+
 /**
  * The gateway's services on a fresh embedded directory, each organisation's database on an
  * embedded engine of its own: identity sessions, organisations, a real hub over both, and the
  * registry of connections, which hears every change of memberships as the composition root
  * wires it. Revoking a grant goes to the database's RPC over HTTP, so a connection only counts it.
  */
-async function openGateway() {
+async function openGateway(options: GatewayOptions = {}) {
   const local = (await openTestDb({ namespace: NAMESPACE, database: DIRECTORY }))._unsafeUnwrap()
   const clock = manualClock()
   const databases = new TenantDatabases({
@@ -111,7 +117,9 @@ async function openGateway() {
         namespace: NAMESPACE,
         database: tenantDatabase(key),
         schema: readSchema('tenant'),
-      }),
+      }).map((tenant) =>
+        options.tenantQueries ? interceptQueries(tenant, options.tenantQueries) : tenant,
+      ),
     clock: manualClock(),
     onError: (error) => reported.push(error),
   })
@@ -233,8 +241,8 @@ async function connectedAsAnn(options: ConnectOptions = {}) {
  * A gateway where Ann and Bob have signed up and Ann has created the organisation Acme;
  * Bob belongs to it when `bobInvited`.
  */
-async function withAcme(bobInvited: boolean) {
-  const gateway = await openGateway()
+async function withAcme(bobInvited: boolean, options: GatewayOptions = {}) {
+  const gateway = await openGateway(options)
   const anns = await gateway.signUp(ann)
   const bobs = await gateway.signUp(bob)
   const acme = (
@@ -680,6 +688,36 @@ describe('SyncConnection', () => {
     // Ann's memberships did not change: her connection hears nothing and keeps the region.
     expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates'])
     expect(annsDevice.unsubscribed).toEqual([])
+  })
+
+  it('tells the removed device and leaves the region when the removal fails to delete the member row', async () => {
+    let refusing = false
+    const { gateway, anns, bobs } = await withAcme(true, {
+      tenantQueries: (text) => {
+        if (refusing && text === memberRemoveStatement) {
+          throw new Error('the database refused the delete')
+        }
+      },
+    })
+    const { socket, connection, unsubscribed } = open(gateway)
+
+    await hello(connection, bobs.tokens)
+    await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+    refusing = true
+
+    const removal = await gateway.organisations.remove({
+      actor: anns.identity.id,
+      key: 'acme',
+      identity: bobs.identity.id,
+    })
+
+    expect(removal._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    await connection.receive(encode({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() }))
+
+    expect(types(socket.sent)).toEqual(['welcome', 'updates', 'memberships', 'error'])
+    expect(socket.sent[2]).toEqual({ type: 'memberships', memberships: [] })
+    expect(unsubscribed).toEqual(['tenant:acme'])
+    expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
   })
 
   it('sends memberships with the new organisation when the identity is invited while connected', async () => {

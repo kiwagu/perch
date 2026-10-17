@@ -1,6 +1,6 @@
--- Identity $identity leaves organisation $tenant; answers with the membership it had, if any.
+-- Identity $identity leaves organisation $tenant; nothing changes when it was no member.
 DELETE membership
 WHERE
   identity = $identity
   AND tenant = $tenant
-RETURN BEFORE;
+RETURN NONE;

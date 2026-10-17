@@ -11,7 +11,7 @@ import {
   tenantDatabase,
 } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { openTestDb, readSchema } from '@workspace/data/testing'
+import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
@@ -28,6 +28,7 @@ import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import tenantRows from './__fixtures__/tenant-rows.surql'
 import tenantSweep from './__fixtures__/tenant-sweep.surql'
 import { type OrganisationRefusalCode, Organisations } from './organisations'
+import memberRemoveStatement from './surql/member-remove.surql'
 import { TenantDatabases } from './tenant-databases'
 
 const PASSWORD = 'pass-word-1'
@@ -67,13 +68,16 @@ async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
 
 /**
  * Organisations over an embedded directory, with each organisation's database on an embedded
- * engine of its own, and three identities: ann, bob and cat.
+ * engine of its own, and three identities: ann, bob and cat. A test can make one statement fail
+ * on the organisations' databases, as a broken database would.
  */
 async function harness() {
   const directory = (
     await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema: readSchema('directory') })
   )._unsafeUnwrap()
   const opened: string[] = []
+  /** The statement the organisations' databases refuse, if any. */
+  let refusedStatement: string | undefined
   const databases = new TenantDatabases({
     open: (key) => {
       opened.push(key)
@@ -84,7 +88,13 @@ async function harness() {
         namespace: NAMESPACE,
         database: tenantDatabase(key),
         schema: readSchema('tenant'),
-      })
+      }).map((local) =>
+        interceptQueries(local, (text) => {
+          if (text === refusedStatement) {
+            throw new Error('the database refused the statement')
+          }
+        }),
+      )
     },
     clock: manualClock(),
     onError: (error) => failures.push(error),
@@ -148,6 +158,11 @@ async function harness() {
   const invited = async (email: string) =>
     (await organisations.invite({ actor: ann.id, key: 'acme', email }))._unsafeUnwrap()
 
+  /** The organisations' databases refuse `statement` from now on; `undefined` lets every one through. */
+  const refuseInTenants = (statement: string | undefined) => {
+    refusedStatement = statement
+  }
+
   return {
     organisations,
     opened,
@@ -161,6 +176,7 @@ async function harness() {
     forgetMember,
     founded,
     invited,
+    refuseInTenants,
   }
 }
 
@@ -395,7 +411,34 @@ describe('Organisations', () => {
     expect(heard).toEqual([[bob.id, []]])
   })
 
-  it('removes an identity that is not a member without telling anyone', async () => {
+  it('a removal whose member-row delete fails still tells the removed device', async () => {
+    const { organisations, ann, bob, heard, membersIn, founded, invited, refuseInTenants } =
+      await harness()
+
+    await founded()
+    await invited('bob@example.test')
+    heard.splice(0)
+    refuseInTenants(memberRemoveStatement)
+
+    const failed = await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+
+    expect(failed._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    // The directory's membership is gone: bob's devices hear it now, not at their next reconnect.
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
+    expect(heard).toEqual([[bob.id, []]])
+
+    // Asked again, the removal deletes the member row and tells bob's devices once more.
+    refuseInTenants(undefined)
+    heard.splice(0)
+
+    expect(await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })).toEqual(
+      ok(undefined),
+    )
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(heard).toEqual([[bob.id, []]])
+  })
+
+  it('removes an identity that is not a member: nothing changes, and its listener hears the memberships it has', async () => {
     const { organisations, ann, cat, heard, membersIn, founded } = await harness()
 
     await founded()
@@ -405,7 +448,9 @@ describe('Organisations', () => {
       ok(undefined),
     )
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
-    expect(heard).toEqual([])
+    expect(await organisations.membershipsOf(cat.id)).toEqual(ok([]))
+    // A removal cannot tell a first one from one asked again after a failure: it always tells.
+    expect(heard).toEqual([[cat.id, []]])
   })
 
   it('refuses removing yourself', async () => {

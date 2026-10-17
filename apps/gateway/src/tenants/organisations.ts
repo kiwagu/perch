@@ -232,7 +232,11 @@ export class Organisations {
 
   /**
    * An admin of the organisation removes `identity` from it; an admin cannot remove itself.
-   * Removing an identity that is not a member changes nothing and tells nobody.
+   * Once the directory's membership is gone the identity's listeners hear its memberships,
+   * before its member row leaves the organisation's database: a removal that fails after the
+   * directory still takes the organisation from the identity's open connections. They hear it
+   * at every removal, also of an identity that was no member: asking again after a failure
+   * tells them again, whichever step failed, and completes the removal.
    */
   remove(input: {
     actor: IdentityId
@@ -247,7 +251,7 @@ export class Organisations {
       .andThen((tenant) =>
         writing(
           this.#directory.db
-            .query<[unknown[]]>(membershipRemoveStatement, {
+            .query(membershipRemoveStatement, {
               identity: recordId('identity', identity),
               tenant: recordId('tenant', tenant.id),
             })
@@ -255,15 +259,16 @@ export class Organisations {
           `could not remove the membership of ${identity} in ${key}`,
         ),
       )
-      .andThen(([removed]) =>
+      .andThen(() => this.#emit(identity))
+      .andThen(() =>
         this.#inTenant(key, (local) =>
           writing(
             local.db.query(memberRemoveStatement, { identity }).retry(),
             `could not remove ${identity} from the members of ${key}`,
           ),
-        ).map(() => removed.length > 0),
+        ),
       )
-      .andThen((wasMember) => (wasMember ? this.#emit(identity) : okAsync(undefined)))
+      .map(() => undefined)
   }
 
   /** The members of the organisation with their emails, for any of its members, the earliest first. */
