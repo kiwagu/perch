@@ -17,6 +17,10 @@ LET $regions = $accounts.map(
 DELETE profile WHERE identity IN $accounts;
 DELETE _replica_head WHERE region IN $regions;
 DELETE _replica_snapshot WHERE region IN $regions;
-DELETE _replica_update WHERE region IN $regions;
+-- Region by region: SurrealDB 3.3.4 deletes nothing for `region IN $regions` on a table whose
+-- composite index starts with the region, though a SELECT finds the rows.
+FOR $region IN $regions {
+  DELETE _replica_update WHERE region = $region;
+};
 DELETE _replica_projected WHERE region IN $regions;
 DELETE identity WHERE id IN $accounts;
