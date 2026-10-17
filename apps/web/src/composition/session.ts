@@ -330,7 +330,9 @@ export class SessionService implements SessionPort {
 
   /**
    * Raises the barrier that holds every tab's writes back before the final drain, lowers it
-   * once the sign-out ends: after the database is deleted, or at once when it is kept.
+   * once the sign-out ends: after the database is deleted, or at once when it is kept. A
+   * sign-out that leaves the person signed in (it asks first, or failed) after asking the
+   * gateway in vain has the space sync again on a new engine: the old one stopped its channel.
    */
   #signOut(forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
     const open = this.#open
@@ -358,7 +360,13 @@ export class SessionService implements SessionPort {
           : this.#stillSignedIn(open, forgetUnsent),
       )
 
-    const release = () => this.#releaseWrites(open)
+    const release = () => {
+      this.#releaseWrites(open)
+
+      if (this.#open === open) {
+        open.space.resumeSync()
+      }
+    }
 
     return ended.andTee(release).orTee(release)
   }

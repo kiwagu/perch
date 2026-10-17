@@ -23,7 +23,10 @@ modeling stage.
   out, then forgets the keys and deletes the identity's database; with changes it could
   not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
   `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
-  hold them back); a change that still landed after the final drain keeps the database. Keys
+  hold them back); a change that still landed after the final drain keeps the database. A
+  sign-out that asked the gateway in vain (no sign-out close) stops the engine's channel; when
+  it leaves the person signed in, the leading tab syncs again on a new engine
+  (`IdentitySpace.resumeSync()`), as a change of leader does. Keys
   the gateway refuses sign the device out locally: the identity's database goes with them
   unless it holds changes not sent yet, in which case it stays (as after such a sign-out)
   and the sign-in page says to sign in again (as the same identity) to send them. A

@@ -6,6 +6,8 @@ import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
 import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
+import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
+
 import { createProfile, profileById } from './__fixtures__/profile'
 import {
   browserDatabases,
@@ -341,6 +343,42 @@ describe('SessionService', () => {
     expect(storage.get('perch.session.refresh')).toBe(ann.tokens.refresh)
     expect(session.notice()).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
+  })
+
+  it('syncs again on a new engine when a sent sign-out ended offline and the person stays signed in', async () => {
+    const { session, stub, storage, states, driveClock } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+    const received = stub.keepOpenOnSignOut()
+    const signingOut = session.signOut()
+
+    await received
+
+    // A write that passed the barrier just before it went up: the sign-out has to ask.
+    const below = session.space() ?? expect.unreachable('a space')
+    const profile = aProfile()
+
+    expect((await below.writePath.run(createProfile, profile)).isOk()).toBe(true)
+    expect((await driveClock(signingOut))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(storage.get('perch.session.signing-out')).toBeUndefined()
+
+    // The person stays signed in: nothing more is asked of the session. A later write goes
+    // through the lifted barrier, and the gateway, answering again, takes both changes.
+    const renamed = await session.writePath.run(profileCommands.updateName, {
+      id: profile.id,
+      name: 'Ana',
+    })
+
+    expect(renamed.isOk()).toBe(true)
+
+    const space = session.space() ?? expect.unreachable('a space')
+
+    await vi.waitFor(async () => expect((await space.unsent())._unsafeUnwrap()).toBe(false))
+    expect(states.at(-1)).toEqual({ leader: true, channel: 'up' })
+    expect(
+      (await stub.hub.heads([`identity:${ann.identity.id}`]))._unsafeUnwrap()[0]?.head,
+    ).toBeGreaterThan(0)
   })
 
   it('asks before signing out when the region stopped syncing with changes left in the outbox', async () => {

@@ -55,6 +55,13 @@ export interface IdentitySpace {
   unsent(): ResultAsync<boolean, DataError>
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
+  /**
+   * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
+   * engine's channel: as on a change of leader, a new engine over a new channel replaces it
+   * (an engine never starts twice). Nothing happens while another tab leads, or while the
+   * engine's channel was not stopped.
+   */
+  resumeSync(): void
   /** Stops syncing and leading, persists and projects the last writes, closes the database. */
   close(): Promise<void>
   /** Closes the space and deletes its database. */
@@ -137,6 +144,18 @@ class Space implements IdentitySpace {
     } else if (state === 'visible') {
       this.#options.hints.post('visible')
     }
+  }
+
+  resumeSync(): void {
+    const engine = this.#engine
+
+    if (!engine?.channelStopped() || this.#closing) {
+      return
+    }
+
+    this.#engine = undefined
+    engine.stop()
+    this.#lead()
   }
 
   close(): Promise<void> {

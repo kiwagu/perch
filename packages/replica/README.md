@@ -72,9 +72,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   settles) and every region has its first answer on the current connection, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
   other close after it asked, or none within 10 seconds, stops the transport and answers
-  `offline`), or answers `offline`
-  while anything stays unsent, rows of a region that stopped syncing and updates that failed to
-  persist included; it never rejects).
+  `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
+  syncing and updates that failed to persist included; it never rejects; `channelStopped()`
+  tells that such a sign-out stopped the channel, after which only a new engine syncs).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket

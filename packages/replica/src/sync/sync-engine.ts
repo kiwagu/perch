@@ -48,6 +48,11 @@ export interface SyncEngine {
    * sent. Never rejects.
    */
   signOut(): Promise<'signed-out' | 'offline'>
+  /**
+   * Whether a sign-out stopped this engine's channel: it asked the gateway, which then did not
+   * sign the device out. The engine syncs no more; a new engine over a new channel does.
+   */
+  channelStopped(): boolean
 }
 
 /** How long a sign-out waits for the channel to come up. */
@@ -98,6 +103,8 @@ class Engine implements SyncEngine {
    */
   #probes: Array<() => void> = []
   #passing = false
+  /** A sign-out the gateway did not carry out stopped the channel. */
+  #channelStopped = false
   /** Regions whose last flush failed, reported once until a flush succeeds again. */
   readonly #failingFlush = new Set<string>()
 
@@ -192,6 +199,10 @@ class Engine implements SyncEngine {
 
       void watch()
     })
+  }
+
+  channelStopped(): boolean {
+    return this.#channelStopped
   }
 
   async signOut(): Promise<'signed-out' | 'offline'> {
@@ -438,6 +449,12 @@ class Engine implements SyncEngine {
       )
   }
 
+  /** A sign-out asked for in vain: the channel stops, and no reconnect follows. */
+  #stopChannel(): void {
+    this.#channelStopped = true
+    this.#options.transport.stop()
+  }
+
   /** Resolves true once the channel is up, or false after `ms` on the clock. */
   #untilUp(ms: number): Promise<boolean> {
     if (this.#channel === 'up') {
@@ -491,7 +508,7 @@ class Engine implements SyncEngine {
         ),
         transport.onChannel((state) => {
           if (state === 'down') {
-            transport.stop()
+            this.#stopChannel()
             finish('offline')
           }
         }),
@@ -499,7 +516,7 @@ class Engine implements SyncEngine {
         // grant may stand, so the device leaves as when it is offline.
         this.#options.clock.schedule(SIGN_OUT_CLOSE_MS, () => {
           finish('offline')
-          transport.stop()
+          this.#stopChannel()
         }),
       ]
     })

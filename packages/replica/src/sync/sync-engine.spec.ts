@@ -186,6 +186,8 @@ describe('sync engine', () => {
     await clock.advance(1)
 
     expect(await outcome).toBe('offline')
+    // Nothing was asked of the gateway: the channel keeps trying.
+    expect(a.engine.channelStopped()).toBe(false)
   })
 
   it('signs out once the channel comes back within 5 seconds', async () => {
@@ -212,6 +214,7 @@ describe('sync engine', () => {
     expect(a.channel()).toBe('down')
     // Stopped: no reconnect brings the device back on keys the gateway could not revoke.
     expect(a.transport.online()).toBe(false)
+    expect(a.engine.channelStopped()).toBe(true)
   })
 
   it('resolves offline when the channel ends for any reason but a sign-out after it was asked for', async () => {
@@ -241,6 +244,7 @@ describe('sync engine', () => {
     expect(await outcome).toBe('offline')
     expect(a.channel()).toBe('down')
     expect(a.transport.online()).toBe(false)
+    expect(a.engine.channelStopped()).toBe(true)
   })
 
   it('does not settle while a local update fails to persist, reports it once and signs out offline', async () => {
