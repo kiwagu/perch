@@ -499,6 +499,14 @@ export class RegionSync implements DrainTarget {
       return
     }
 
+    this.#onError(
+      dataError(
+        'data:PUSH_REJECTED',
+        `the gateway rejected batch ${batch} of ${this.id} (${refusal}); the change is undone on this device`,
+        { region: this.id, batch, reason, detail },
+      ),
+    )
+
     const reverted = await this.#revert(flight)
 
     if (reverted.isErr()) {

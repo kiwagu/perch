@@ -1,9 +1,11 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { type ReactNode, useSyncExternalStore } from 'react'
+import { type ReactNode, useEffect, useSyncExternalStore } from 'react'
+
+import { useT } from '@workspace/i18n'
 
 import { useSetLocale } from '../../../../platform/i18n'
 import { useService } from '../../../../platform/module'
-import { useNotice } from '../../../../platform/notices'
+import { useNotice, useNotify } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
 
 import { type ShellLinkProps, ShellView } from './shell.view'
@@ -19,6 +21,16 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const setLocale = useSetLocale()
   const notice = useNotice()
+  const notify = useNotify()
+  const t = useT()
+
+  useEffect(
+    () =>
+      session.subscribeRejections(() =>
+        notify({ testId: 'app-shell.notice', text: t('app.shell.rejected') }),
+      ),
+    [session, notify, t],
+  )
 
   return (
     <ShellView

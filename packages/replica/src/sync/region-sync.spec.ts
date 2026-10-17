@@ -568,6 +568,26 @@ describe('region sync through the gateway', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
   })
 
+  it('reports a rejected batch as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoDevices()
+
+    a.region.records().setContainer('note/n_1', new LoroMap()).set('text', 'x')
+    a.region.doc.commit()
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: a.region.ref.id, reason: 'foreign-table', detail: 'note/n_1' },
+      },
+    ])
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+
   it('brings back the text of a field a rejected batch deleted, without doubling it', async () => {
     const { a, b, settle } = await twoDevices()
 
@@ -594,7 +614,7 @@ describe('region sync through the gateway', () => {
     a.engine.localWrite()
     await settle()
 
-    expect(errors()).toEqual([expect.objectContaining({ code: 'data:SYNC_STOPPED' })])
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED', 'data:SYNC_STOPPED'])
     expect(stub.rejections()).toBe(2)
     expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
   })

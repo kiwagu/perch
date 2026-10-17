@@ -76,7 +76,9 @@ modeling stage.
   and the current organisation), for commands and for organisations,
   notices the shell shows, the language state and the app-wide catalogs.
 - `src/features/app-shell/`: the page frame, painted before the database finishes opening,
-  with the navigation (sign-in, or the profile and the organisation page).
+  with the navigation (sign-in, or the profile and the organisation page). When the gateway
+  refuses a change and this device undoes it, the session tells its rejection listeners and the
+  shell raises a notice, so the change does not just vanish.
 - `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in
   user's profile (`/me`): name, email, a bio of at most 2000 characters saved with the name by
   one Save, and the chosen language, which follows the user across devices, and signing out,

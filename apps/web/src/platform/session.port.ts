@@ -16,6 +16,14 @@ export interface SignOutOptions {
  */
 export type SessionNotice = 'resend-after-sign-in'
 
+/** A change the gateway refused and this device undid: what the shell tells the user about. */
+export interface PushRejection {
+  readonly region: string
+  readonly batch: number
+  readonly reason: string
+  readonly detail: string
+}
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError>
@@ -44,6 +52,8 @@ export interface SessionPort {
   currentTenant(): Membership | undefined
   /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
   selectTenant(key: string): void
+  /** Hears each change the gateway refused and this device undid. */
+  subscribeRejections(listener: (rejection: PushRejection) => void): () => void
 }
 
 export const SESSION = token<SessionPort>('Session')

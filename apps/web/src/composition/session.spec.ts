@@ -9,6 +9,7 @@ import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
+import type { PushRejection } from '../platform/session.port'
 
 import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
@@ -450,6 +451,26 @@ describe('SessionService', () => {
     expect((await session.signOut({ forgetUnsent: true }))._unsafeUnwrap()).toBe('signed-out')
     expect(gateway.signOuts()).toBe(0)
     expect(destroyed()).toEqual([ann.identity.id])
+  })
+
+  it('tells the rejection listeners and the error log of a push the gateway rejects, with its region and reason', async () => {
+    const booted = await bootSession({ saved: ann, online: true })
+    const { session, gateway, failures, writeOffline } = booted
+    const heard: PushRejection[] = []
+    const unsubscribe = session.subscribeRejections((rejection) => heard.push(rejection))
+
+    gateway.rejectEverything()
+    await writeOffline()
+    await vi.waitFor(() => expect(heard).toHaveLength(1))
+
+    expect(heard[0]).toMatchObject({
+      region: `identity:${ann.identity.id}`,
+      reason: 'foreign-table',
+    })
+    expect(failures.map((failure) => failure.code)).toContain('data:PUSH_REJECTED')
+
+    unsubscribe()
+    failures.splice(0)
   })
 
   it('asks before signing out when the region stops syncing during the sign-out', async () => {
