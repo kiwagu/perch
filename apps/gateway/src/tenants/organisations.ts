@@ -164,12 +164,20 @@ function toMembership(row: MembershipRow): Membership {
  * a `DataError` after some of its rows were written leaves those rows in place, and asking again
  * completes it: a creation by its creator, an invite, a removal. Each change of memberships
  * resolves once the listeners heard the identity's new memberships.
+ *
+ * The changes of one identity's memberships (its creations, the invites of it and its
+ * removals) run one after the other, each once the one before it, its notification included,
+ * has settled: the directory and the organisation's database end as the last one left them,
+ * and the listeners hear the lists in that order. This orders them within one gateway process
+ * only; gateways running in several processes would need a durable revision of the memberships.
  */
 export class Organisations {
   readonly #directory: LocalDb
   readonly #databases: Pick<TenantDatabases, 'acquire' | 'evict'>
   readonly #revoke: OrganisationsOptions['revoke']
   readonly #listeners = new Set<Listener>()
+  /** Settles once the changes of an identity's memberships asked so far have; gone when idle. */
+  readonly #changes = new Map<IdentityId, Promise<void>>()
 
   constructor(options: OrganisationsOptions) {
     this.#directory = options.directory
@@ -209,9 +217,13 @@ export class Organisations {
       return errAsync(refused('invalid-name'))
     }
 
-    return this.#register(identity, key, name)
-      .andThen((tenant) => this.#provision(identity, tenant))
-      .andThen((tenant) => this.#emit(identity).map((): Membership => ({ tenant, role: 'admin' })))
+    return this.#serialize(identity, () =>
+      this.#register(identity, key, name)
+        .andThen((tenant) => this.#provision(identity, tenant))
+        .andThen((tenant) =>
+          this.#emit(identity).map((): Membership => ({ tenant, role: 'admin' })),
+        ),
+    )
   }
 
   /**
@@ -229,14 +241,14 @@ export class Organisations {
 
     return this.#tenantOf(key)
       .andThen((tenant) => this.#adminOf(actor, tenant))
-      .andThen((tenant) =>
-        this.#identityByEmail(email).andThen((identity) =>
-          this.#join(tenant, identity.id).map(() => identity),
+      .andThen((tenant) => this.#identityByEmail(email).map((identity) => ({ tenant, identity })))
+      .andThen(({ tenant, identity }) =>
+        this.#serialize(identity.id, () =>
+          this.#join(tenant, identity.id)
+            .andThen(() => this.#addMember(key, identity.id, 'member'))
+            .andThen(() => this.#emit(identity.id))
+            .map((): Member => ({ identity, role: 'member' })),
         ),
-      )
-      .andThen((identity) => this.#addMember(key, identity.id, 'member').map(() => identity))
-      .andThen((identity) =>
-        this.#emit(identity.id).map((): Member => ({ identity, role: 'member' })),
       )
   }
 
@@ -260,26 +272,28 @@ export class Organisations {
       .andThen((tenant) => this.#adminOf(actor, tenant))
       .andThen((tenant) => (identity === actor ? errAsync(refused('self')) : okAsync(tenant)))
       .andThen((tenant) =>
-        writing(
-          this.#directory.db
-            .query(membershipRemoveStatement, {
-              identity: recordId('identity', identity),
-              tenant: recordId('tenant', tenant.id),
-            })
-            .retry(),
-          `could not remove the membership of ${identity} in ${key}`,
+        this.#serialize(identity, () =>
+          writing(
+            this.#directory.db
+              .query(membershipRemoveStatement, {
+                identity: recordId('identity', identity),
+                tenant: recordId('tenant', tenant.id),
+              })
+              .retry(),
+            `could not remove the membership of ${identity} in ${key}`,
+          )
+            .andThen(() =>
+              ResultAsync.fromPromise(this.#revoke(identity, tenantRegionId(key)), (cause) =>
+                dataError(
+                  'data:WRITE_FAILED',
+                  `could not take ${key} from the connections of ${identity}`,
+                  cause,
+                ),
+              ),
+            )
+            .andThen(() => this.#leaveTenant(key, identity)),
         ),
       )
-      .andThen(() =>
-        ResultAsync.fromPromise(this.#revoke(identity, tenantRegionId(key)), (cause) =>
-          dataError(
-            'data:WRITE_FAILED',
-            `could not take ${key} from the connections of ${identity}`,
-            cause,
-          ),
-        ),
-      )
-      .andThen(() => this.#leaveTenant(key, identity))
   }
 
   /** The members of the organisation with their emails, for any of its members, the earliest first. */
@@ -524,6 +538,30 @@ export class Organisations {
           dataError('data:WRITE_FAILED', `could not tell the memberships of ${identity}`, cause),
       ).map(() => undefined),
     )
+  }
+
+  /**
+   * Runs `work`, a change of the memberships of `identity`, once the changes of that identity
+   * asked before it have settled; the next one waits for it, whatever its outcome.
+   */
+  #serialize<T>(
+    identity: IdentityId,
+    work: () => ResultAsync<T, OrganisationError>,
+  ): ResultAsync<T, OrganisationError> {
+    const run = (this.#changes.get(identity) ?? Promise.resolve()).then(() => work())
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    )
+
+    this.#changes.set(identity, settled)
+    void settled.then(() => {
+      if (this.#changes.get(identity) === settled) {
+        this.#changes.delete(identity)
+      }
+    })
+
+    return new ResultAsync(run)
   }
 
   /** Runs `work` on the organisation's database, holding it until the work settles. */

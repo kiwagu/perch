@@ -1,5 +1,5 @@
 import { ok } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AuthUser,
@@ -28,7 +28,9 @@ import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import tenantRows from './__fixtures__/tenant-rows.surql'
 import tenantSweep from './__fixtures__/tenant-sweep.surql'
 import { type OrganisationRefusalCode, Organisations } from './organisations'
+import identityByEmailStatement from './surql/identity-by-email.surql'
 import memberRemoveStatement from './surql/member-remove.surql'
+import membershipAddStatement from './surql/membership-add.surql'
 import membershipRemoveStatement from './surql/membership-remove.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import { TenantDatabases } from './tenant-databases'
@@ -68,12 +70,19 @@ async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
   }
 }
 
+/** A statement the organisations' databases hold until it is let go. */
+interface Held {
+  readonly text: string
+  readonly gate: Promise<void>
+  readonly reached: () => void
+}
+
 /**
  * Organisations over an embedded directory, with each organisation's database on an embedded
  * engine of its own, and three identities: ann, bob and cat. A test can make one statement fail
- * on the organisations' databases, as a broken database would; it can watch and fail the
- * directory's statements. The connections of the identities are a record of the regions taken
- * from them; `steps` lists those revocations and the member-row deletes in order.
+ * on the organisations' databases, as a broken database would, or hold one there; it can watch
+ * and fail the directory's statements. The connections of the identities are a record of the
+ * regions taken from them; `steps` lists those revocations and the member-row deletes in order.
  */
 async function harness() {
   const directory = (
@@ -82,6 +91,8 @@ async function harness() {
   const opened: string[] = []
   /** The statement the organisations' databases refuse, if any. */
   let refusedStatement: string | undefined
+  /** The statement the organisations' databases hold, if any. */
+  let held: Held | undefined
   /** Hears each statement sent to the directory; it may throw to make the statement fail. */
   let directoryQueries: ((text: string) => void) | undefined
   const steps: string[] = []
@@ -103,6 +114,12 @@ async function harness() {
 
           if (text === refusedStatement) {
             throw new Error('the database refused the statement')
+          }
+
+          if (text === held?.text) {
+            held.reached()
+
+            return held.gate
           }
         }),
       )
@@ -182,6 +199,31 @@ async function harness() {
     refusedStatement = statement
   }
 
+  /**
+   * The organisations' databases hold `statement` until `release` is called; `waiting` resolves
+   * once one is held.
+   */
+  const holdInTenants = (statement: string) => {
+    let release = () => {}
+    let reached = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const waiting = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+
+    held = { text: statement, gate, reached }
+
+    return {
+      waiting,
+      release: () => {
+        held = undefined
+        release()
+      },
+    }
+  }
+
   /** Hears each statement sent to the directory from now on; `undefined` stops listening. */
   const onDirectoryQuery = (listener: ((text: string) => void) | undefined) => {
     directoryQueries = listener
@@ -202,6 +244,7 @@ async function harness() {
     founded,
     invited,
     refuseInTenants,
+    holdInTenants,
     onDirectoryQuery,
   }
 }
@@ -502,6 +545,62 @@ describe('Organisations', () => {
 
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+  })
+
+  it('a removal paused before its tenant step and a concurrent invite of the same identity end in a consistent state', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      heard,
+      steps,
+      membersIn,
+      founded,
+      invited,
+      holdInTenants,
+      onDirectoryQuery,
+    } = await harness()
+    const acme = await founded()
+
+    await invited('bob@example.test')
+    heard.splice(0)
+
+    const held = holdInTenants(memberRemoveStatement)
+    const removal = organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+
+    await held.waiting
+
+    const directorySteps: string[] = []
+
+    onDirectoryQuery((text) => directorySteps.push(text))
+
+    const invite = organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
+
+    // The invite finds bob, then waits for the removal: it writes no membership meanwhile.
+    await vi.waitFor(() => expect(directorySteps).toContain(identityByEmailStatement))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(directorySteps).not.toContain(membershipAddStatement)
+
+    held.release()
+
+    expect(await removal).toEqual(ok(undefined))
+    expect(await invite).toEqual(
+      ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }),
+    )
+
+    const joined: Membership = { tenant: acme.tenant, role: 'member' }
+
+    // Removed, then invited again: the directory and the organisation's database agree.
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
+    expect(await membersIn('acme')).toEqual([
+      { identity: ann.id, role: 'admin' },
+      { identity: bob.id, role: 'member' },
+    ])
+    expect(heard).toEqual([
+      [bob.id, []],
+      [bob.id, [joined]],
+    ])
+    expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
   })
 
   it('removes an identity that is not a member: nothing changes, and its listener hears the memberships it has', async () => {

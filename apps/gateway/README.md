@@ -51,7 +51,11 @@ heard them: the composition root has the registry tell the identity's devices. A
 the organisation's region from the removed identity's open connections as soon as the
 directory's membership is gone, before the member row is deleted and before the memberships are
 read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it.
+all the same; asking again completes it. The changes of one identity's memberships (its
+creations, the invites of it, its removals) run one after the other, each once the one before
+it and its notification have settled, so the directory and the organisation's database end as
+the last change left them and its devices hear the lists in that order. This holds within one
+gateway process; gateways in several processes would need a durable revision of the memberships.
 
 The organisation routes act for the identity a device's access token signs in, sent as
 `Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
