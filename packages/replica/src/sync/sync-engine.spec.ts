@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { interceptQueries } from '@workspace/data/testing'
 
 import acceptStatement from '../server/surql/server-accept.surql'
+import loadStatement from '../server/surql/server-load.surql'
 
 import {
   closeDevices,
   openDevice,
   openGateway,
   profileKey,
+  regionId,
   settleAll,
   twoDevices,
   writeName,
@@ -124,6 +126,110 @@ describe('sync engine', () => {
     a.transport.goOnline()
 
     expect(await outcome).toBe('signed-out')
+  })
+
+  it('resolves signed-out 10 seconds after the sign-out when the gateway never closes the channel', async () => {
+    const { a, stub, clock } = await twoDevices()
+    const received = stub.keepOpenOnSignOut()
+    const outcome = a.engine.signOut()
+
+    await received
+    await clock.advance(9_999)
+
+    expect(await hasSettled(outcome)).toBe(false)
+
+    await clock.advance(1)
+
+    expect(await outcome).toBe('signed-out')
+    expect(a.channel()).toBe('down')
+  })
+
+  it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {
+    const { a, stub, clock } = await twoDevices()
+    const swallowed = stub.swallowNextPush()
+
+    writeName(a.region, 'Ana')
+    const outcome = a.engine.signOut()
+
+    await swallowed
+    await clock.advance(10_000)
+
+    expect(await outcome).toBe('offline')
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('releases a push whose answer never comes after 30 seconds, then settles once it goes again', async () => {
+    const { a, b, stub, clock, settle } = await twoDevices()
+    const swallowed = stub.swallowNextPush()
+
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await swallowed
+    await clock.advance(30_000)
+
+    expect(a.errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+
+    a.engine.localWrite()
+    await settle()
+
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+
+  it('subscribes again after the gateway failed to load the region, and pushes what waited', async () => {
+    let failLoad = true
+    const gateway = await openGateway({
+      wrap: (server) =>
+        interceptQueries(server, (text) => {
+          if (failLoad && text === loadStatement) {
+            failLoad = false
+            throw new Error('the database went away')
+          }
+        }),
+    })
+    const a = await openDevice(gateway)
+
+    a.engine.start()
+    await vi.waitFor(() => expect(a.errors).toHaveLength(1))
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a])
+
+    expect(a.errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
+    expect((await gateway.stub.hub.heads([regionId]))._unsafeUnwrap()).toEqual([
+      { region: regionId, head: 1 },
+    ])
+  })
+
+  it('keeps syncing after a protocol error, and repeats a refused pull on the next full pass', async () => {
+    const { a, b, stub, settle } = await twoDevices()
+
+    // b misses the batch naming the profile Ana, so the next one waits for it.
+    stub.dropNextFanOutTo(b.transport)
+    stub.refuseNextPull()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+    writeName(a.region, 'Anna')
+    a.engine.localWrite()
+    await settle()
+
+    expect(b.errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await settle()
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Anna' })
+
+    writeName(a.region, 'Anne')
+    a.engine.localWrite()
+    await settle()
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Anne' })
+    expect(b.errors).toHaveLength(1)
   })
 
   it('keeps a batch the gateway failed to store and pushes it again on the next write', async () => {

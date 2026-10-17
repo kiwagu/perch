@@ -50,6 +50,12 @@ export interface GatewayStub {
   dropNextFanOutTo(transport: SyncTransport): void
   /** From now on every pushed batch is rejected as a table outside the region. */
   rejectEverything(): void
+  /** The next pushed batch is never answered; resolves once it arrived. */
+  swallowNextPush(): Promise<void>
+  /** The next pull is answered with the protocol error a device that is not subscribed gets. */
+  refuseNextPull(): void
+  /** The next sign-out is taken in but the channel stays open; resolves once it arrived. */
+  keepOpenOnSignOut(): Promise<void>
   /** How many rejects the devices were sent. */
   rejections(): number
   /** The outcomes of the compactions the devices proposed, in order. */
@@ -68,6 +74,11 @@ interface Gateway {
   readonly compactions: CompactionAnswer[]
   rejections: number
   rejectAll: boolean
+  /** Set while the next push is to go unanswered: called when it arrives. */
+  swallowPush: (() => void) | undefined
+  refusePull: boolean
+  /** Set while the next sign-out is to leave the channel open: called when it arrives. */
+  keepOpen: (() => void) | undefined
 }
 
 /** One connection of a device: its end at the hub, up once welcomed. */
@@ -267,10 +278,25 @@ class DeviceChannel implements StubTransport {
       })
       .with({ type: 'pull' }, ({ vv }) => {
         connection.asked += 1
-        this.#settle(hub.pull(own, subscriber, vv))
+
+        if (this.#gateway.refusePull) {
+          this.#gateway.refusePull = false
+          this.#deliver(connection, {
+            type: 'error',
+            code: 'protocol',
+            message: `not subscribed to region ${own}`,
+          })
+        } else {
+          this.#settle(hub.pull(own, subscriber, vv))
+        }
       })
       .with({ type: 'push' }, ({ batch, updates }) => {
-        if (this.#gateway.rejectAll) {
+        const swallowed = this.#gateway.swallowPush
+
+        if (swallowed) {
+          this.#gateway.swallowPush = undefined
+          swallowed()
+        } else if (this.#gateway.rejectAll) {
           this.#deliver(connection, {
             type: 'reject',
             region: own,
@@ -302,6 +328,15 @@ class DeviceChannel implements StubTransport {
 
   /** The gateway leaves the device's regions and closes the channel for good. */
   #signOut(connection: Connection): void {
+    const keptOpen = this.#gateway.keepOpen
+
+    if (keptOpen) {
+      this.#gateway.keepOpen = undefined
+      keptOpen()
+
+      return
+    }
+
     if (this.#connection !== connection) {
       return
     }
@@ -379,6 +414,9 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     compactions: [],
     rejections: 0,
     rejectAll: false,
+    swallowPush: undefined,
+    refusePull: false,
+    keepOpen: undefined,
   }
   const channels: DeviceChannel[] = []
 
@@ -402,6 +440,19 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     },
     rejectEverything() {
       gateway.rejectAll = true
+    },
+    swallowNextPush() {
+      return new Promise((resolve) => {
+        gateway.swallowPush = resolve
+      })
+    },
+    refuseNextPull() {
+      gateway.refusePull = true
+    },
+    keepOpenOnSignOut() {
+      return new Promise((resolve) => {
+        gateway.keepOpen = resolve
+      })
     },
     rejections: () => gateway.rejections,
     compactions: () => [...gateway.compactions],

@@ -4,6 +4,7 @@ import { match } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
 
+import type { Clock } from '../clock'
 import {
   type CompactionOutcome,
   MAX_PUSH_UPDATES,
@@ -18,6 +19,8 @@ import type { SyncTransport } from './transport'
 export interface RegionSyncOptions {
   readonly region: RegionDoc
   readonly transport: SyncTransport
+  /** Times how long a push or a pull waits for its answer. */
+  readonly clock: Clock
   /** Who the inverse commit of a rejected batch is written as. */
   readonly actor: string
   /** Imported something from the server. */
@@ -28,6 +31,13 @@ export interface RegionSyncOptions {
 }
 
 type PushOutcome = 'sent' | 'empty' | 'down'
+
+type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
+
+/** How long a push or a pull waits for its answer before it is given up for now. */
+const ANSWER_TIMEOUT_MS = 30_000
+
+const NO_TIMEOUT = (): void => {}
 
 /** A pushed batch waiting for its answer. */
 interface Flight {
@@ -83,12 +93,15 @@ function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
  * waiting for history, until one completes. It pushes the outbox one batch at a time; an
  * acknowledged batch leaves the outbox, a rejected one is rolled back by an inverse commit
  * and pushed again together with it, and a batch rejected again after its rollback stops the
- * region's sync. Once the server asks for a compaction and the region is quiet, it proposes a
- * full snapshot.
+ * region's sync. A push or a pull answered with an error, or not answered within 30 seconds, is
+ * given up for now and goes out again later; a subscription the gateway failed is sent again on
+ * the next full pass or push. Once the server asks for a compaction and the region is quiet, it
+ * proposes a full snapshot.
  */
 export class RegionSync implements DrainTarget {
   readonly #region: RegionDoc
   readonly #transport: SyncTransport
+  readonly #clock: Clock
   readonly #actor: string
   readonly #onSettled: () => void
   readonly #onError: (error: DataError) => void
@@ -102,8 +115,12 @@ export class RegionSync implements DrainTarget {
   /** The server has answered the subscription of the current connection. */
   #answered = false
   #flight: Flight | undefined
+  /** Gives the push in flight up when its answer does not come in time. */
+  #cancelPushTimeout = NO_TIMEOUT
   /** A pull went out and no updates arrived since. */
   #pulling = false
+  /** Gives the pull up when its answer does not come in time. */
+  #cancelPullTimeout = NO_TIMEOUT
   /** An import left updates waiting for their history; pulls repeat until one completes. */
   #incomplete = false
   /** A compaction proposal went out and its outcome has not arrived. */
@@ -121,6 +138,7 @@ export class RegionSync implements DrainTarget {
 
     this.#region = options.region
     this.#transport = options.transport
+    this.#clock = options.clock
     this.#actor = options.actor
     this.#onSettled = options.onSettled
     this.#onError = options.onError
@@ -145,7 +163,7 @@ export class RegionSync implements DrainTarget {
 
     this.#epoch += 1
     this.#answered = false
-    this.#pulling = false
+    this.#endPull()
     this.#subscribed = this.#transport.send({
       type: 'subscribe',
       region: this.id,
@@ -153,11 +171,21 @@ export class RegionSync implements DrainTarget {
     })
   }
 
+  /**
+   * Subscribes again when the gateway failed the subscription of this connection; a full pass
+   * and every push ask for it. While the channel is down the subscription does not go out.
+   */
+  resubscribe(): void {
+    if (!this.#subscribed) {
+      this.subscribe()
+    }
+  }
+
   /** The channel fell: the subscription is gone, and a push in flight will not be answered. */
   channelDown(): void {
     this.#subscribed = false
     this.#answered = false
-    this.#pulling = false
+    this.#endPull()
     this.#compacting = false
     this.#land('down')
   }
@@ -186,6 +214,8 @@ export class RegionSync implements DrainTarget {
     if (this.#flight) {
       return this.#flight.landed
     }
+
+    this.resubscribe()
 
     if (!this.#subscribed) {
       return 'down'
@@ -234,6 +264,18 @@ export class RegionSync implements DrainTarget {
       return 'down'
     }
 
+    this.#cancelPushTimeout = this.#clock.schedule(ANSWER_TIMEOUT_MS, () => {
+      if (this.#flight === flight) {
+        this.#onError(
+          dataError(
+            'data:QUERY_FAILED',
+            `the gateway did not answer batch ${flight.batch} of ${this.id} within ${ANSWER_TIMEOUT_MS} ms`,
+          ),
+        )
+        this.#land('down')
+      }
+    })
+
     return landed
   }
 
@@ -275,7 +317,7 @@ export class RegionSync implements DrainTarget {
         this.#rejected(batch, reason, detail),
       )
       .with({ type: 'compaction' }, ({ covers, outcome }) => this.#compacted(covers, outcome))
-      .with({ type: 'error', code: 'internal' }, async () => this.#failed())
+      .with({ type: 'error' }, async ({ code }) => this.#failed(code, epoch))
       .otherwise(async () => {})
   }
 
@@ -284,7 +326,7 @@ export class RegionSync implements DrainTarget {
     // Updates that came over a connection since gone do not answer the current subscription.
     if (epoch === this.#epoch && this.#subscribed) {
       this.#answered = true
-      this.#pulling = false
+      this.#endPull()
     }
 
     const outcome = await this.#region.importRemote(bytes, head)
@@ -449,11 +491,24 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
-   * The gateway failed to handle a request: a push in flight stays in the outbox and goes out
-   * again on the next local write, full pass or reconnect.
+   * The gateway answered with an error. Errors name no request, so whatever waits for an answer
+   * is given up for now: a push in flight stays in the outbox and goes out again on the next
+   * local write, full pass or reconnect, and a pull goes out again when one is due. An internal
+   * or protocol error before the subscription was answered means the gateway did not subscribe
+   * the device: the region subscribes again on the next full pass or push.
    */
-  #failed(): void {
-    this.#pulling = false
+  #failed(code: ErrorCode, epoch: number): void {
+    const failedSubscription =
+      (code === 'internal' || code === 'protocol') &&
+      epoch === this.#epoch &&
+      this.#subscribed &&
+      !this.#answered
+
+    if (failedSubscription) {
+      this.#subscribed = false
+    }
+
+    this.#endPull()
     this.#compacting = false
     this.#land('down')
   }
@@ -468,6 +523,26 @@ export class RegionSync implements DrainTarget {
       region: this.id,
       vv: ownBytes(this.#region.doc.version().encode()),
     })
+
+    if (this.#pulling) {
+      this.#cancelPullTimeout = this.#clock.schedule(ANSWER_TIMEOUT_MS, () => {
+        this.#cancelPullTimeout = NO_TIMEOUT
+        this.#pulling = false
+        this.#onError(
+          dataError(
+            'data:QUERY_FAILED',
+            `the gateway did not answer a pull of ${this.id} within ${ANSWER_TIMEOUT_MS} ms`,
+          ),
+        )
+      })
+    }
+  }
+
+  /** The pull out was answered or given up. */
+  #endPull(): void {
+    this.#pulling = false
+    this.#cancelPullTimeout()
+    this.#cancelPullTimeout = NO_TIMEOUT
   }
 
   #landIf(batch: number, outcome: PushOutcome): void {
@@ -480,6 +555,8 @@ export class RegionSync implements DrainTarget {
     const flight = this.#flight
 
     this.#flight = undefined
+    this.#cancelPushTimeout()
+    this.#cancelPushTimeout = NO_TIMEOUT
     flight?.land(outcome)
   }
 

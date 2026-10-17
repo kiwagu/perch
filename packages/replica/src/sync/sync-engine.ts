@@ -38,9 +38,10 @@ export interface SyncEngine {
    */
   settled(timeoutMs: number): Promise<void>
   /**
-   * Waits up to 5 seconds for the channel, drains, then asks the gateway to sign this device
-   * out; resolves when the gateway ended the channel, or `offline` when the channel stayed
-   * down or fell.
+   * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
+   * sign this device out; resolves `signed-out` when the gateway ended the channel or, its close
+   * not coming within 10 seconds, once the transport is stopped. Resolves `offline` when the
+   * channel stayed down, fell, or the outbox did not drain in time. Never rejects.
    */
   signOut(): Promise<'signed-out' | 'offline'>
 }
@@ -50,6 +51,9 @@ const SIGN_OUT_CHANNEL_MS = 5_000
 
 /** How long a sign-out waits for the outbox to drain. */
 const SIGN_OUT_SETTLE_MS = 10_000
+
+/** How long a sign-out waits for the gateway to close the channel. */
+const SIGN_OUT_CLOSE_MS = 10_000
 
 interface SyncedRegion {
   readonly region: RegionDoc
@@ -98,6 +102,7 @@ class Engine implements SyncEngine {
           sync: new RegionSync({
             region,
             transport: options.transport,
+            clock: options.clock,
             actor: options.actor,
             onSettled: options.onSettled,
             onError: options.onError,
@@ -186,16 +191,14 @@ class Engine implements SyncEngine {
 
     this.#drain.request()
 
-    try {
-      await this.settled(SIGN_OUT_SETTLE_MS)
-    } catch (cause) {
-      // A channel that fell while draining leaves the device offline; a drain that stalls on
-      // an open channel is the caller's to hear about.
-      if (this.#channel !== 'up') {
-        return 'offline'
-      }
+    // What did not drain in time stays on the device, as when it is offline.
+    const drained = await this.settled(SIGN_OUT_SETTLE_MS).then(
+      () => true,
+      () => false,
+    )
 
-      throw cause
+    if (!drained) {
+      return 'offline'
     }
 
     const ended = this.#untilEnded()
@@ -235,11 +238,9 @@ class Engine implements SyncEngine {
           ),
         )
 
-        // An internal error may answer a push in flight; the regions settle it as failed for now.
-        if (error.code === 'internal') {
-          for (const { sync } of this.#regions.values()) {
-            this.#track(sync.handle(error))
-          }
+        // An error names no request: each region gives up what waits for an answer.
+        for (const { sync } of this.#regions.values()) {
+          this.#track(sync.handle(error))
         }
       })
       .with({ type: P.union('updates', 'ack', 'reject', 'compaction') }, (regional) => {
@@ -285,6 +286,7 @@ class Engine implements SyncEngine {
 
       if (kind === 'full') {
         for (const { sync } of this.#regions.values()) {
+          sync.resubscribe()
           sync.retryPull()
         }
 
@@ -369,14 +371,15 @@ class Engine implements SyncEngine {
 
   /**
    * Resolves `signed-out` once the transport reports the channel ended (the gateway closes it
-   * after the sign-out; keys it refuses end the device all the same), or `offline` when the
-   * channel falls without ending.
+   * after the sign-out; keys it refuses end the device all the same), or once the close has not
+   * come within 10 seconds on the clock, stopping the transport; `offline` when the channel
+   * falls without ending.
    */
   #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
     const transport = this.#options.transport
-    let unlisten: Array<() => void> = []
+    let release: Array<() => void> = []
     const cancel = () => {
-      for (const stop of unlisten.splice(0)) {
+      for (const stop of release.splice(0)) {
         stop()
       }
     }
@@ -386,12 +389,16 @@ class Engine implements SyncEngine {
         resolve(result)
       }
 
-      unlisten = [
+      release = [
         transport.onEnded(() => finish('signed-out')),
         transport.onChannel((state) => {
           if (state === 'down') {
             finish('offline')
           }
+        }),
+        this.#options.clock.schedule(SIGN_OUT_CLOSE_MS, () => {
+          finish('signed-out')
+          transport.stop()
         }),
       ]
     })

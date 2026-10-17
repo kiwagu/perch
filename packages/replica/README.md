@@ -58,11 +58,13 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty and every region has its first answer on the current connection, `signOut()` that
-  drains and has the gateway sign the device out, or answers `offline`). Its parts:
+  drains and has the gateway sign the device out, or answers `offline`; it never rejects).
+  Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, renewed keys to `onTokens`, `onEnded` when the keys are refused or the
   device is signed out) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
-  import and pull, push with acknowledgement or rollback, compaction proposals);
+  import and pull, push with acknowledgement or rollback, compaction proposals; a push or pull
+  answered with an error or unanswered for 30 seconds is given up for now and sent again);
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
@@ -70,7 +72,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given
   database and, per device, a `StubTransport` that behaves like the gateway's connection without
   a network and can go offline and come back; `dropNextFanOutTo`, `rejectEverything`,
-  `rejections`, `compactions` and `failures` steer and observe it in tests.
+  `swallowNextPush`, `refuseNextPull`, `keepOpenOnSignOut`, `rejections`, `compactions` and
+  `failures` steer and observe it in tests.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.

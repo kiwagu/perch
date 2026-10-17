@@ -1,10 +1,207 @@
-import { LoroMap } from 'loro-crdt'
-import { afterEach, describe, expect, it } from 'vitest'
+import { LoroDoc, LoroMap } from 'loro-crdt'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { closeDevices, profileKey, twoDevices, writeBio, writeName } from './__fixtures__/devices'
+import type { DataError, LocalDb } from '@workspace/data'
+import { openTestDb } from '@workspace/data/testing'
+
+import type { ClientMessage, ServerMessage } from '../protocol'
+import { RegionDoc } from '../region-doc'
+import { manualClock } from '../testing/manual-clock'
+
+import {
+  closeDevices,
+  profileKey,
+  regionId,
+  twoDevices,
+  writeBio,
+  writeName,
+} from './__fixtures__/devices'
+import { RegionSync } from './region-sync'
+import type { SyncTransport } from './transport'
+
+const databases: LocalDb[] = []
 
 afterEach(async () => {
+  for (const local of databases.splice(0)) {
+    await local.close()
+  }
+
   expect(await closeDevices()).toEqual([])
+})
+
+/** A region's sync over a transport that is always up and keeps what was sent. */
+async function alone(options: { readonly persisted?: boolean } = {}) {
+  const clock = manualClock()
+  const sent: ClientMessage[] = []
+  const errors: DataError[] = []
+  const transport: SyncTransport = {
+    start() {},
+    stop() {},
+    send(message) {
+      sent.push(message)
+
+      return true
+    },
+    onMessage: () => () => {},
+    onChannel: () => () => {},
+    onEnded: () => () => {},
+  }
+  let region = RegionDoc.inMemory('private', regionId)
+
+  if (options.persisted) {
+    const local = (await openTestDb())._unsafeUnwrap()
+
+    databases.push(local)
+    region = (await RegionDoc.open(local, { kind: 'private', id: regionId }))._unsafeUnwrap()
+  }
+
+  const sync = new RegionSync({
+    region,
+    transport,
+    clock,
+    actor: regionId,
+    onSettled: () => {},
+    onError: (error) => errors.push(error),
+  })
+  const count = (type: ClientMessage['type']) =>
+    sent.filter((message) => message.type === type).length
+
+  return { clock, errors, region, sync, count }
+}
+
+/** Server updates of the profile: a later one that needs an earlier one, and all of it. */
+function serverHistory() {
+  const author = new LoroDoc()
+
+  author.getMap('records').setContainer(profileKey, new LoroMap()).set('name', 'Ann')
+  author.commit()
+
+  const first = author.version()
+
+  ;(author.getMap('records').get(profileKey) as LoroMap).set('name', 'Ana')
+  author.commit()
+
+  return {
+    gap: new Uint8Array(author.export({ mode: 'update', from: first })),
+    all: new Uint8Array(author.export({ mode: 'update' })),
+  }
+}
+
+function updates(bytes: Uint8Array<ArrayBuffer>, head: number, snapshot = false): ServerMessage {
+  return { type: 'updates', region: regionId, bytes, head, snapshot }
+}
+
+const emptyRegion = new Uint8Array(new LoroDoc().export({ mode: 'snapshot' }))
+
+const notSubscribed: ServerMessage = {
+  type: 'error',
+  code: 'protocol',
+  message: `not subscribed to region ${regionId}`,
+}
+
+describe('region sync on its own', () => {
+  it('repeats an outstanding pull on every full pass until an import completes', async () => {
+    const { sync, count, errors } = await alone()
+    const { gap, all } = serverHistory()
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    await sync.handle(updates(gap, 2))
+
+    expect(count('pull')).toBe(1)
+
+    sync.retryPull()
+
+    expect(count('pull')).toBe(1)
+
+    // The pull is refused: it is no longer out, and the region keeps syncing.
+    await sync.handle(notSubscribed)
+
+    expect(sync.quiet()).toBe(true)
+    expect(sync.stopped()).toBe(false)
+
+    sync.retryPull()
+
+    expect(count('pull')).toBe(2)
+
+    await sync.handle(updates(all, 2))
+    sync.retryPull()
+
+    expect(count('pull')).toBe(2)
+    expect(errors).toEqual([])
+  })
+
+  it('gives up on a pull whose answer never comes after 30 seconds, and reports it once', async () => {
+    const { sync, count, errors, clock } = await alone()
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    await sync.handle(updates(serverHistory().gap, 2))
+    await clock.advance(29_999)
+
+    expect(sync.quiet()).toBe(false)
+
+    await clock.advance(1)
+
+    expect(sync.quiet()).toBe(true)
+    expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+
+    sync.retryPull()
+
+    expect(count('pull')).toBe(2)
+  })
+
+  it('subscribes again when the gateway failed the subscription', async () => {
+    const { sync, count } = await alone()
+
+    sync.subscribe()
+    await sync.handle({ type: 'error', code: 'internal', message: 'the region did not load' })
+
+    expect(sync.quiet()).toBe(false)
+
+    // What a full pass and every push ask for.
+    sync.resubscribe()
+
+    expect(count('subscribe')).toBe(2)
+
+    await sync.handle(updates(emptyRegion, 0, true))
+    sync.resubscribe()
+
+    expect(count('subscribe')).toBe(2)
+    expect(sync.quiet()).toBe(true)
+  })
+
+  it('releases a push the gateway answered with any error, keeping its batch', async () => {
+    const { sync, count, region } = await alone({ persisted: true })
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    writeName(region, 'Ann')
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+    await sync.handle(notSubscribed)
+
+    expect(await pushed).toBe('down')
+    expect((await region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+    expect(sync.stopped()).toBe(false)
+  })
+
+  it('releases a push whose answer never comes after 30 seconds, and reports it once', async () => {
+    const { sync, count, region, errors, clock } = await alone({ persisted: true })
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    writeName(region, 'Ann')
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+    await clock.advance(30_000)
+
+    expect(await pushed).toBe('down')
+    expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+    expect((await region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
 })
 
 describe('region sync through the gateway', () => {
