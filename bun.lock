@@ -327,6 +327,7 @@
       },
       "dependencies": {
         "@workspace/data": "workspace:*",
+        "@workspace/kernel": "workspace:*",
         "@workspace/web": "workspace:*",
         "@workspace/zod": "workspace:*",
         "neverthrow": "catalog:",

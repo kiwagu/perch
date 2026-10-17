@@ -87,9 +87,12 @@ modeling stage.
 composition root over an in-memory database, always leading its identity's sync) whose
 `ensureAccount` signs an account up or in through the gateway, writes its profile through
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
-reads the profile the gateway sends; it leaves each account without signing out.
+reads the profile the gateway sends; it leaves each account without signing out. As the
+signed-in account, `ensureOrganisation` creates an organisation (one that is already the
+account's is found), `ensureMember` invites an existing account by email, and
+`readOrganisation` signs in, makes the organisation current and reads its notes.
 `openStand()` is the operator's connection to a stand as a system user, where seeded
-accounts are swept, and `checkProfileName` the profile name rule the seed catalog is
+accounts and the organisations they created are swept, and `checkProfileName` the profile name rule the seed catalog is
 checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 

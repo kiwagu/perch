@@ -27,8 +27,15 @@ import { readSchema } from '@workspace/data/schema-files'
 import type { Locale } from '@workspace/i18n'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
 import { systemClock } from '@workspace/replica'
+import type { Membership } from '@workspace/replica/protocol'
 import { type LockManagerLike, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import {
+  NOTES_SERVICE,
+  type NoteRow,
+  type NotesService,
+} from '../features/organisation/application/notes.service'
+import { OrganisationModule } from '../features/organisation/organisation.module'
 import {
   PROFILE_SERVICE,
   type ProfileRow,
@@ -42,6 +49,7 @@ import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import { memoryStorage } from './storage'
 
+export type { NoteRow } from '../features/organisation/application/notes.service'
 export type { ProfileRow } from '../features/user/application/profile.service'
 export { checkProfileName } from '../features/user/domain/profile.entity'
 
@@ -70,6 +78,12 @@ export interface AccountView {
   readonly profile: ProfileRow | undefined
 }
 
+/** An organisation as a member's device sees it once it has caught up with the gateway. */
+export interface OrganisationView {
+  readonly membership: Membership
+  readonly notes: readonly NoteRow[]
+}
+
 export type SeedError = DataError | BusError
 
 /**
@@ -80,6 +94,21 @@ export type SeedError = DataError | BusError
 export interface SeedClient {
   /** Signs up (or in, when the account exists), writes the profile through commands and waits until the gateway acknowledged everything. */
   ensureAccount(input: AccountInput): ResultAsync<SeededAccount, SeedError>
+  /** Signs in as an existing account and waits for the first catch-up; the organisation calls act as it. */
+  signIn(input: SignInInput): ResultAsync<AuthUser, SeedError>
+  /**
+   * Creates the organisation as the signed-in account, its administrator. An organisation that
+   * exists and is already the account's (the gateway completes its creator's interrupted
+   * provisioning on a retry) is found; any other refusal is an error.
+   */
+  ensureOrganisation(input: {
+    readonly key: string
+    readonly name: string
+  }): ResultAsync<Membership, SeedError>
+  /** Invites the existing account at `email` into the organisation as the signed-in administrator; a member already in it is found. */
+  ensureMember(key: string, email: string): ResultAsync<void, SeedError>
+  /** Signs in, makes the organisation current and reads its notes once the gateway's copy has arrived; writes nothing. */
+  readOrganisation(key: string, input: SignInInput): ResultAsync<OrganisationView, SeedError>
   /** Signs in and reads the profile once the gateway's copy of the account's region has arrived; writes nothing. */
   readAccount(input: SignInInput): ResultAsync<AccountView, SeedError>
   close(): Promise<void>
@@ -124,6 +153,12 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
   }
 
   const profiles: ProfileService = scope.get(PROFILE_SERVICE)
+
+  for (const provider of OrganisationModule.providers) {
+    scope.singleton(provider.provide, provider.useFactory)
+  }
+
+  const notes: NotesService = scope.get(NOTES_SERVICE)
 
   /** The outcome of `work`, unless the space reported a failure meanwhile: that comes first. */
   const reported = <T>(work: ResultAsync<T, SeedError>): ResultAsync<T, SeedError> => {
@@ -192,7 +227,55 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
           .map(() => profile.id),
       )
 
+  const membershipOf = (key: string): Membership | undefined =>
+    services.session.memberships().find((membership) => membership.tenant.key === key)
+
+  const ensureOrganisation = (input: {
+    readonly key: string
+    readonly name: string
+  }): ResultAsync<Membership, SeedError> =>
+    services.organisations
+      .create(input)
+      .orElse((error) => {
+        const found = error.code === 'data:WRITE_REJECTED' && error.message === 'key-taken'
+        const existing = found ? membershipOf(input.key) : undefined
+
+        return existing ? okAsync(existing) : errAsync(error)
+      })
+      .andThen((membership) => settle().map(() => membership))
+
+  const ensureMember = (key: string, email: string): ResultAsync<void, SeedError> =>
+    services.organisations
+      .invite(key, email)
+      .map(() => undefined)
+      .orElse((error) =>
+        error.code === 'data:WRITE_REJECTED' && error.message === 'already-member'
+          ? okAsync(undefined)
+          : errAsync(error),
+      )
+
+  const readOrganisation = (
+    key: string,
+    input: SignInInput,
+  ): ResultAsync<OrganisationView, SeedError> =>
+    enter(services.session.signIn(input)).andThen(() => {
+      services.session.selectTenant(key)
+      const membership = services.session.currentTenant()
+
+      return membership?.tenant.key === key
+        ? settle()
+            .andThen(() => notes.read())
+            .map((rows) => ({ membership, notes: rows }))
+        : errAsync<OrganisationView, SeedError>(
+            dataError('data:AUTH_FAILED', `the account is no member of ${key}`),
+          )
+    })
+
   return {
+    signIn: (input) => enter(services.session.signIn(input)),
+    ensureOrganisation,
+    ensureMember,
+    readOrganisation,
     ensureAccount: (input) =>
       enter(
         services.session
