@@ -67,9 +67,9 @@ checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature 
 
 ## Commands
 
-- `bun run dev`: Vite dev server (port `E2E_WEB_PORT`, default 5180). With `VITE_PUBLIC_PORT`
-  set, as the local stands set it, the HMR client dials that port over wss through their
-  Caddy front.
+- `bun run dev`: the build watcher, `vite build --watch --mode development`: rewrites `dist/`
+  (source maps, no minifying) on every change. There is no dev server: the local stands'
+  Caddy front serves `dist/`, so reload the page after a rebuild.
 - `bun run build`: production build into `dist/`.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.

@@ -1,13 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// The `caddy-e2e` front of the mcproc manifest: the `web-e2e` app and, under /backend/,
-// the `gateway-e2e` gateway on one origin; the launcher starts them before the run.
+// The `caddy-e2e` front of the mcproc manifest: the web app's production build and, under
+// /backend/, the `gateway-e2e` gateway on one origin; the launcher builds the app and starts
+// them before the run.
 export const BASE_URL = 'https://localhost:5493'
 
 export default defineConfig({
   testDir: './src',
   testMatch: '**/*.e2e.spec.ts',
-  globalSetup: './src/support/warm-up.ts',
   // Measured 2026-10-16 on the dev host, 4 tests (2 specs x 2 projects): 1 worker
   // 28.3 s, 2 workers 18.4 s, both stable over repeated runs; every test signs up a
   // fresh account in a fresh browser context, so specs share no state. CI keeps one

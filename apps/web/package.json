@@ -10,9 +10,8 @@
     }
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite build --watch --mode development",
     "build": "vite build",
-    "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",

@@ -36,7 +36,7 @@ test.describe('Stay quiet while idle', { tag: '@full' }, () => {
       return still && answered()
     }
 
-    // Frames on the page's sync socket; the dev server's own socket does not count.
+    // Frames on the page's sync socket, and on no other socket the page may open.
     page.on('websocket', (socket) => {
       if (socket.url().endsWith('/backend/sync')) {
         socket.on('framesent', () => {
