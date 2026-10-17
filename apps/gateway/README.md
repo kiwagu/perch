@@ -95,7 +95,9 @@ stand.
   operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives, a
+  its device writing a note into the organisation's region that the owner's device receives,
+  the owner editing that note as an admin, the invited device deleting its own note, its edit of
+  the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
   note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
   4403), one line per step.
 - `bun run typecheck`, `bun run lint`.
