@@ -22,6 +22,19 @@ closes the socket with 1011 (`revoke failed`) instead. A renewed pair the socket
 before it could take is logged at warn as `renewed pair not delivered`. Keys, tokens and
 grant ids never reach its logs.
 
+Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
+the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
+(`membership`), and the organisation's database holds its `member` rows. Two services in
+`src/tenants` serve them, and no route calls them so far. `TenantDatabases` keeps one
+connection per organisation database in use, shared by every holder and closed once nobody has
+held it for five minutes. `Organisations` creates an organisation (its directory rows, its
+database, its creator as admin member there, then ready; a creation its creator left unfinished
+is completed when the creator asks again), lists an identity's memberships in ready
+organisations by key, lets an admin invite an existing identity by email and remove a member
+other than itself, lists the members with their emails to any member, answers what it refuses
+with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like), and
+tells its listeners an identity's new memberships whenever they change.
+
 ## Key exports
 
 None: this is an application. Its entry point is `src/index.ts`, which registers the
@@ -35,7 +48,8 @@ stand.
 ## Commands
 
 - `bun run dev`: runs the gateway and restarts it on changes.
-- `bun run test`: unit and functional tests on an embedded in-memory database.
+- `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
+  one per organisation for the organisation services.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; by default the e2e stand, `ws://127.0.0.1:8010/rpc`) as

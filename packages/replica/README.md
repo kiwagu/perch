@@ -43,7 +43,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
   (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION`, `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
-  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text.
+  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; and the
+  membership contract the gateway and devices share: `membership` (an organisation's `id`,
+  `key` and `name` with the identity's role there) and `tenantRole` (`member` or `admin`), with
+  their types `Membership` and `TenantRole`.
 - `@workspace/replica/server`: `RegionLog.load(local, region)` resolves to the log and the
   region's document built from its snapshot and later rows; `accept(plan)` writes an
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)

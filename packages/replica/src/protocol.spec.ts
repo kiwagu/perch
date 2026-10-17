@@ -4,6 +4,7 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  membership,
   type ServerMessage,
   serverMessage,
 } from './protocol'
@@ -73,5 +74,12 @@ describe('sync protocol', () => {
         decodeMessage(serverMessage, encodeMessage(serverMessage, message))._unsafeUnwrap(),
       ).toEqual(message)
     }
+  })
+
+  it('parses a membership and refuses a role it does not know', () => {
+    const acme = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'admin' }
+
+    expect(membership.parse(acme)).toEqual(acme)
+    expect(membership.safeParse({ ...acme, role: 'owner' }).success).toBe(false)
   })
 })

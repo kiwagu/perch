@@ -23,6 +23,7 @@
       "dependencies": {
         "@workspace/data": "workspace:*",
         "@workspace/database": "workspace:*",
+        "@workspace/ids": "workspace:*",
         "@workspace/kernel": "workspace:*",
         "@workspace/logger": "workspace:*",
         "@workspace/replica": "workspace:*",
@@ -32,7 +33,6 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@workspace/ids": "workspace:*",
         "typescript": "catalog:",
         "vitest": "catalog:",
       },

@@ -56,6 +56,15 @@ export const rejectReason = z.enum([
 
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])
 
+/** An identity's role in an organisation. */
+export const tenantRole = z.enum(['member', 'admin'])
+
+/** An organisation an identity belongs to, and its role there, as the gateway tells a device. */
+export const membership = z.object({
+  tenant: z.object({ id: z.string(), key: z.string(), name: z.string() }),
+  role: tenantRole,
+})
+
 const regionHead = z.object({ region, head })
 
 export const clientMessage = z.discriminatedUnion('type', [
@@ -105,6 +114,10 @@ export type ServerMessage = z.output<typeof serverMessage>
 export type RejectReason = z.output<typeof rejectReason>
 
 export type CompactionOutcome = z.output<typeof compactionOutcome>
+
+export type Membership = z.output<typeof membership>
+
+export type TenantRole = z.output<typeof tenantRole>
 
 export interface ProtocolError {
   readonly code: 'protocol'
