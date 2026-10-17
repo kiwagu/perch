@@ -13,8 +13,9 @@ import {
   snapshotOf,
   subscriber,
 } from './__fixtures__/hub'
-import { countRows, nameIn } from './__fixtures__/log'
+import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
 import type { Subscriber } from './region-hub'
+import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
 import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
@@ -340,6 +341,47 @@ describe('region hub', () => {
       covers: 2,
       outcome: 'accepted',
     })
+  })
+
+  it('compacts into a snapshot of its own document: a forged history under the head version changes nothing', async () => {
+    const { hub, a, doc, local } = await hubWithHistory(['Ann', 'Ana'])
+    // The author's peer id and counters, other names: the version vector matches the head row's.
+    const forged = forgedHistory(doc, ['Mallory', 'Eve'])
+
+    expect((await hub.compact(region.id, a, 2, snapshotOf(forged))).isOk()).toBe(true)
+
+    expect(a.received).toContainEqual({
+      type: 'compaction',
+      region: region.id,
+      covers: 2,
+      outcome: 'accepted',
+    })
+    expect(nameIn((await storedSnapshot(local)) ?? expect.unreachable('a snapshot'))).toBe('Ana')
+    expect(nameIn((await RegionLog.load(local, region.id))._unsafeUnwrap().doc)).toBe('Ana')
+  })
+
+  it('compacts below the head into its own document as it was at that row, refusing another version', async () => {
+    const { hub, a, doc, local } = await hubWithHistory(['Ann', 'Ana', 'Anna'])
+
+    expect((await hub.compact(region.id, a, 2, snapshotOf(doc))).isOk()).toBe(true)
+    expect(await storedSnapshot(local)).toBeUndefined()
+
+    expect(
+      (
+        await hub.compact(region.id, a, 2, snapshotOf(forgedHistory(doc, ['Mallory', 'Eve'])))
+      ).isOk(),
+    ).toBe(true)
+
+    expect(a.received.filter((m) => m.type === 'compaction')).toEqual([
+      { type: 'compaction', region: region.id, covers: 2, outcome: 'version-mismatch' },
+      { type: 'compaction', region: region.id, covers: 2, outcome: 'accepted' },
+    ])
+
+    const stored = (await storedSnapshot(local)) ?? expect.unreachable('a snapshot')
+
+    expect(nameIn(stored)).toBe('Ana')
+    expect(stored.version().compare(doc.version())).toBe(-1)
+    expect(nameIn((await RegionLog.load(local, region.id))._unsafeUnwrap().doc)).toBe('Anna')
   })
 
   it('answers a snapshot the log refuses to compact into as a version mismatch', async () => {

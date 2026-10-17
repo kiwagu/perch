@@ -93,8 +93,9 @@ function refusalOf(cause: unknown): CompactionOutcome | undefined {
  * holds only batches whose projection the schema accepted. Several processes may hold a log
  * of the same region: the database issues the numbers, and a transaction that conflicts with
  * another process's is replayed. Within a process, the accepts and compactions of one log run
- * one at a time. A compaction replaces the rows up to a point with a snapshot, and only when
- * that snapshot is the document exactly as it was after the row at that point.
+ * one at a time. A compaction replaces the rows up to a point with a snapshot of the server's
+ * own document as it was after the row at that point, once a device proposed a snapshot of
+ * that same version; the proposed bytes themselves are never stored.
  */
 export class RegionLog {
   #queue: Promise<unknown> = Promise.resolve()
@@ -190,8 +191,18 @@ export class RegionLog {
     )
   }
 
-  /** Replaces log rows up to `covers` with the snapshot when the proposal is valid. */
-  compact(covers: number, snapshot: Uint8Array): ResultAsync<CompactionOutcome, DataError> {
+  /**
+   * Replaces log rows up to `covers` with a snapshot when the proposal is valid. A device's
+   * `proposal` only asks: a version vector names peers and counters, not what their operations
+   * did, so a device reusing a peer id could match it with other contents. The proposal is
+   * checked against the version stored with row `covers`, and the snapshot stored is the one
+   * `snapshotOf` exports for that version from the server's own document.
+   */
+  compact(
+    covers: number,
+    proposal: Uint8Array,
+    snapshotOf: (version: VersionVector) => Uint8Array,
+  ): ResultAsync<CompactionOutcome, DataError> {
     return this.#serialize((): ResultAsync<CompactionOutcome, DataError> => {
       if (covers > this.#head) {
         return okAsync('beyond-head')
@@ -201,10 +212,12 @@ export class RegionLog {
         return okAsync('stale')
       }
 
-      return this.#snapshotVersion(snapshot).asyncAndThen((version) =>
+      return this.#proposalVersion(proposal).asyncAndThen((version) =>
         this.#rowVersion(covers).andThen((stored) =>
           stored?.compare(version) === 0
-            ? this.#replace(covers, snapshot, version)
+            ? this.#ownSnapshot(snapshotOf, stored).asyncAndThen((snapshot) =>
+                this.#replace(covers, snapshot, stored),
+              )
             : okAsync<CompactionOutcome, DataError>('version-mismatch'),
         ),
       )
@@ -212,11 +225,11 @@ export class RegionLog {
   }
 
   /**
-   * The version of the document the snapshot holds. A shallow snapshot is refused: the region
-   * would be loaded from it, and a document without the earlier history refuses an update
-   * that a client made offline on top of a version before it.
+   * The version of the document a proposal holds. A shallow one is refused: the region would
+   * be loaded from such a snapshot, and a document without the earlier history refuses an
+   * update that a client made offline on top of a version before it.
    */
-  #snapshotVersion(snapshot: Uint8Array): Result<VersionVector, DataError> {
+  #proposalVersion(snapshot: Uint8Array): Result<VersionVector, DataError> {
     return Result.fromThrowable(
       () => {
         const doc = new LoroDoc()
@@ -237,6 +250,18 @@ export class RegionLog {
           )
         : ok(doc.version()),
     )
+  }
+
+  /** The server's own snapshot of the region at `version`; a failure to export it is the server's. */
+  #ownSnapshot(
+    snapshotOf: (version: VersionVector) => Uint8Array,
+    version: VersionVector,
+  ): Result<Uint8Array, DataError> {
+    return Result.fromThrowable(
+      () => snapshotOf(version),
+      (cause) =>
+        dataError('data:WRITE_FAILED', `could not export a snapshot of ${this.region}`, cause),
+    )()
   }
 
   /** The document version stored with the log row `seq`; undefined when the row is gone. */

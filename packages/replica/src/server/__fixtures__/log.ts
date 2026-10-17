@@ -1,4 +1,4 @@
-import { type Frontiers, LoroDoc, LoroMap } from 'loro-crdt'
+import { type Frontiers, LoroDoc, LoroMap, type VersionVector } from 'loro-crdt'
 
 import type { LocalDb } from '@workspace/data'
 
@@ -8,6 +8,7 @@ import type { AcceptPlan, RegionLog } from '../region-log'
 
 import countRowsStatement from './count-rows.surql'
 import storedProfileStatement from './stored-profile.surql'
+import storedSnapshotStatement from './stored-snapshot.surql'
 
 export const region = 'identity:idn_a'
 
@@ -88,6 +89,44 @@ function frontiersAt(doc: LoroDoc, seq: number): Frontiers {
 /** A snapshot of the document as it was right after the edit the log accepted as `seq`. */
 export function snapshotAt(doc: LoroDoc, seq: number): Uint8Array {
   return doc.forkAt(frontiersAt(doc, seq)).export({ mode: 'snapshot' })
+}
+
+/** Exports the document at a version of its history as a full snapshot, as the hub does for the log. */
+export function snapshotsOf(doc: LoroDoc): (version: VersionVector) => Uint8Array {
+  return (version) => doc.forkAt(doc.vvToFrontiers(version)).export({ mode: 'snapshot' })
+}
+
+/**
+ * A history forged under the identity of `doc`'s author: a document of its own that reuses
+ * `doc`'s peer id and makes one edit per name exactly as the fixtures make them, so each edit
+ * takes the same counters as the original one and the version vectors match, while the
+ * names, the contents, differ.
+ */
+export function forgedHistory(doc: LoroDoc, names: readonly string[]): LoroDoc {
+  const forged = new LoroDoc()
+
+  forged.setPeerId(doc.peerIdStr)
+
+  for (const name of names) {
+    commitName(forged, name, 'prf_1', region)
+  }
+
+  return forged
+}
+
+/** The document the snapshot stored for the region holds; undefined while it has none. */
+export async function storedSnapshot(local: LocalDb): Promise<LoroDoc | undefined> {
+  const [[bytes]] = await local.db.query<[ArrayBuffer[]]>(storedSnapshotStatement, { region })
+
+  if (!bytes) {
+    return undefined
+  }
+
+  const doc = new LoroDoc()
+
+  doc.import(new Uint8Array(bytes))
+
+  return doc
 }
 
 /** Like `snapshotAt`, but shallow: the history before that edit is left out. */

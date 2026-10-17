@@ -7,11 +7,13 @@ import {
   acceptEdits,
   countRows,
   deletionOf,
+  forgedHistory,
   nameIn,
   planFor,
   region,
   shallowSnapshotAt,
   snapshotAt,
+  snapshotsOf,
   storedProfile,
 } from './__fixtures__/log'
 import { RegionLog } from './region-log'
@@ -141,7 +143,9 @@ describe('server region log', () => {
     const { log, doc } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
     await acceptEdits(log, doc, ['Ann', 'Ana', 'Anna'])
-    expect((await log.compact(2, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('accepted')
+    expect((await log.compact(2, snapshotAt(doc, 2), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'accepted',
+    )
     expect(await countRows(local, '_replica_update')).toBe(1)
 
     const reloaded = (await RegionLog.load(local, region))._unsafeUnwrap()
@@ -156,10 +160,66 @@ describe('server region log', () => {
 
     await acceptEdits(log, doc, ['Ann', 'Ana'])
 
-    expect((await log.compact(3, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('beyond-head')
-    expect((await log.compact(2, snapshotAt(doc, 1)))._unsafeUnwrap()).toBe('version-mismatch')
-    expect((await log.compact(2, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('accepted')
-    expect((await log.compact(1, snapshotAt(doc, 1)))._unsafeUnwrap()).toBe('stale')
+    expect((await log.compact(3, snapshotAt(doc, 2), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'beyond-head',
+    )
+    expect((await log.compact(2, snapshotAt(doc, 1), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'version-mismatch',
+    )
+    expect((await log.compact(2, snapshotAt(doc, 2), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'accepted',
+    )
+    expect((await log.compact(1, snapshotAt(doc, 1), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'stale',
+    )
+  })
+
+  it('stores the snapshot it is handed for the row, never the proposed bytes, which only have to match its version', async () => {
+    const { log, doc } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    await acceptEdits(log, doc, ['Ann', 'Ana'])
+
+    // Another device's history under the author's peer id and counters: the same version, other names.
+    const forged = forgedHistory(doc, ['Mallory', 'Eve'])
+    const asked: number[] = []
+
+    expect(forged.version().compare(doc.version())).toBe(0)
+
+    const outcome = await log.compact(2, forged.export({ mode: 'snapshot' }), (version) => {
+      asked.push(version.compare(doc.version()) ?? Number.NaN)
+
+      return snapshotAt(doc, 2)
+    })
+
+    expect(outcome._unsafeUnwrap()).toBe('accepted')
+    // The log asks for the snapshot of the version its row stores.
+    expect(asked).toEqual([0])
+
+    const reloaded = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect(nameIn(reloaded.doc)).toBe('Ana')
+    expect(reloaded.log.covers()).toBe(2)
+  })
+
+  it('asks for no snapshot when the proposal is refused', async () => {
+    const { log, doc } = (await RegionLog.load(local, region))._unsafeUnwrap()
+    let asked = 0
+    const snapshotOf = () => {
+      asked += 1
+
+      return snapshotAt(doc, 2)
+    }
+
+    await acceptEdits(log, doc, ['Ann', 'Ana'])
+
+    expect((await log.compact(2, snapshotAt(doc, 1), snapshotOf))._unsafeUnwrap()).toBe(
+      'version-mismatch',
+    )
+    expect(
+      (await log.compact(2, shallowSnapshotAt(doc, 2), snapshotOf))._unsafeUnwrapErr().code,
+    ).toBe('data:WRITE_REJECTED')
+    expect(asked).toBe(0)
+    expect(await countRows(local, '_replica_snapshot')).toBe(0)
   })
 
   it('refuses a shallow snapshot, which lacks the history older updates depend on', async () => {
@@ -167,7 +227,7 @@ describe('server region log', () => {
 
     await acceptEdits(log, doc, ['Ann', 'Ana'])
 
-    const outcome = await log.compact(2, shallowSnapshotAt(doc, 2))
+    const outcome = await log.compact(2, shallowSnapshotAt(doc, 2), snapshotsOf(doc))
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.covers()).toBe(0)
@@ -196,10 +256,12 @@ describe('server region log', () => {
     })
     const late = (await RegionLog.load(slow, region))._unsafeUnwrap().log
 
-    const outcome = late.compact(2, snapshotAt(doc, 2))
+    const outcome = late.compact(2, snapshotAt(doc, 2), snapshotsOf(doc))
 
     await atCompaction
-    expect((await log.compact(2, snapshotAt(doc, 2)))._unsafeUnwrap()).toBe('accepted')
+    expect((await log.compact(2, snapshotAt(doc, 2), snapshotsOf(doc)))._unsafeUnwrap()).toBe(
+      'accepted',
+    )
     release()
 
     expect((await outcome)._unsafeUnwrap()).toBe('stale')

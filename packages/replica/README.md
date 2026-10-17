@@ -14,7 +14,8 @@ updates from a server are stored before they are imported, and a cursor records 
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
 then accepted together with its projection in one transaction, under a number without
-gaps, and a compaction replaces rows with a snapshot only when it matches them. A hub holds
+gaps, and a compaction replaces rows with the server's own snapshot of the region at that
+row, once a device proposed one of the same version (the proposed bytes are never stored). A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
 region from memory once nobody has subscribed for a while. On the device, a sync engine keeps
@@ -48,8 +49,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   and its log row in one transaction and resolves to the batch's number, refusing a
   projection that breaks a schema rule, or that writes a record of another region (one that
   exists without this region's projection marker, or a deletion of one), with
-  `data:WRITE_REJECTED` (the latter's message starts with `ownership`); `compact(covers, snapshot)`
-  resolves to a `CompactionOutcome`; `head()`, `covers()`. `validateBatch(input)` applies a
+  `data:WRITE_REJECTED` (the latter's message starts with `ownership`); `compact(covers,
+  proposal, snapshotOf)` resolves to a `CompactionOutcome`: a proposal whose version matches the
+  version stored with row `covers` is accepted, and the log stores the snapshot `snapshotOf`
+  exports for that version, never the proposal; `head()`, `covers()`. `validateBatch(input)` applies a
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
@@ -60,7 +63,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   updates after `vv` or a full snapshot, `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region) and sends the batch to the other
-  subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`, `loadedRegions()`,
+  subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  `heads(regions)`, `unsubscribe`, `loadedRegions()`,
   `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
