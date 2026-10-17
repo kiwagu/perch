@@ -91,7 +91,8 @@ stand.
   one per organisation for the organisation services and routes.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
-  WebSocket endpoint; by default the e2e stand, `ws://127.0.0.1:8010/rpc`) as
+  WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
+  from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
   operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then

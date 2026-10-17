@@ -4,13 +4,19 @@ Caddy in front of a local stand, so the browser sees one https origin: the web a
 `/`, the gateway under `/backend/` (the prefix is stripped, WebSocket upgrades pass through for
 the gateway's `/sync`). No dev server runs behind it.
 
-- `compose.yaml`: one service per stand, run by the mcproc apps of the same names:
-  `caddy-dev` (https://localhost:5443, gateway 5181) and `caddy-e2e` (https://localhost:5493,
-  gateway-e2e 5191). Both mount `apps/web/dist` read-only at `/srv/web`: on the dev stand the
-  `web` watcher keeps it current, before an e2e run the launcher writes the production build
-  there. Host networking lets Caddy reach the gateways; each site binds 127.0.0.1 only.
-- `Caddyfile.dev`, `Caddyfile.e2e`: a file server for a single-page app over `/srv/web`, with
-  zstd or gzip encoding. A path that is not a file gets `index.html`, so a deep link such as
+- `compose.yaml`: one service, `caddy`, which the mcproc apps `caddy-dev` and `caddy-e2e` run as
+  `docker compose -p <project> run --rm --name <project>-caddy-<stand> caddy` with the stand's
+  ports in `FRONT_PORT` and `GATEWAY_PORT` (the main checkout: https://localhost:5443 with the
+  gateway on 5181, https://localhost:5493 with gateway-e2e on 5191; a worktree's slot shifts
+  each by 100). The compose project and the container name carry the checkout's project slug,
+  so two stands, or two checkouts, never share a container. The service mounts `apps/web/dist`
+  read-only at `/srv/web`: on the dev stand the `web` watcher keeps it current, before an e2e
+  run the launcher writes the production build there. Host networking lets Caddy reach the
+  gateways; the site binds 127.0.0.1 only.
+- `Caddyfile`: one site, `https://localhost:{$FRONT_PORT}`, with `/backend/*` proxied to
+  `127.0.0.1:{$GATEWAY_PORT}`, both read from the container's environment; a file server for a
+  single-page app over `/srv/web`, with zstd or gzip encoding. A path that is not a file gets
+  `index.html`, so a deep link such as
   `/me` opens the app. `/assets/*` (Vite's content-hashed files) are sent with
   `Cache-Control: public, max-age=31536000, immutable`; `index.html` (at `/`, by name or for
   a deep link) with `Cache-Control: no-cache`, so a reload after a rebuild loads the new build.

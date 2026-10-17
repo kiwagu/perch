@@ -11,9 +11,10 @@ the baselines are not committed: the first run on a machine writes them, later r
 compare against them.
 The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e` and the `caddy-e2e`
 front), not Playwright's web server, so `mcproc logs e2e` shows what a run saw. Tests open the
-front, https://localhost:5493, which serves the web app's production build (`apps/web/dist`,
-written by the launcher before each run; no dev server) and, under `/backend/`, the gateway
-on one origin.
+front at `E2E_BASE_URL` (https://localhost:5493 in the main checkout; a worktree's slot shifts
+the port), which `bun run test:e2e` sets from the mcproc manifest through `mcproc exec`; it
+serves the web app's production build (`apps/web/dist`, written by the launcher before each
+run; no dev server) and, under `/backend/`, the gateway on one origin.
 
 Specs are tagged `@smoke` (`user/`: sign up, rename) or `@full` (`sync/`: the slower specs
 of one account on several devices; `organisation/`: two accounts, each in a browser of its
@@ -66,11 +67,13 @@ note texts).
 
 ## Commands
 
-- `bun run test:e2e` (repository root): builds the dependencies and the web app's production
+- `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
+  memory lease (the run waits its turn when the host is short of memory) and with
+  `E2E_BASE_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,
   `--update-snapshots=missing`). `CI=1` runs one worker.
-- `bun run test:e2e --down`: stops the `e2e` profile.
+- `mcproc stop e2e`: stops the `e2e` profile.
 - `bun run typecheck`, `bun run lint`.

@@ -24,9 +24,8 @@ import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 import { SmokeDevice } from './smoke-device'
 import { call, postCredentials, type SignedIn } from './smoke-http'
 
-/** The e2e stand and the gateway user its stand operator defines, for what env leaves out. */
-const E2E_STAND = {
-  url: 'ws://127.0.0.1:8010/rpc',
+/** The gateway user the stand operator defines on a local stand, for what env leaves out. */
+const STAND_USER = {
   username: 'gateway',
   password: 'gateway-stand-password',
 } as const
@@ -513,12 +512,14 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
 
 /** Runs the smoke test; resolves to the process's exit code. */
 export async function runSmoke(env: Readonly<Record<string, string | undefined>>): Promise<number> {
-  // An http(s) address, as the database suites take it, becomes the WebSocket endpoint.
-  const url = env['SURREAL_URL'] ?? E2E_STAND.url
+  // The stand's address comes from `bun run test:db`, which runs the smoke through `mcproc
+  // exec` with SURREAL_URL from the manifest; an http(s) address, as the database suites take
+  // it, becomes the WebSocket endpoint.
+  const url = env['SURREAL_URL']
   const parsed = smokeConfig.safeParse({
-    SURREAL_URL: URL.canParse(url) ? wsRpcUrl(url) : url,
-    GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? E2E_STAND.username,
-    GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? E2E_STAND.password,
+    SURREAL_URL: url !== undefined && URL.canParse(url) ? wsRpcUrl(url) : url,
+    GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? STAND_USER.username,
+    GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? STAND_USER.password,
   })
 
   if (!parsed.success) {

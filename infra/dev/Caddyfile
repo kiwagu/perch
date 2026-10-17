@@ -3,7 +3,9 @@
 	auto_https off
 }
 
-https://localhost:5493 {
+# One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
+# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT).
+https://localhost:{$FRONT_PORT} {
 	bind 127.0.0.1
 	tls /certs/localhost.pem /certs/localhost-key.pem
 	root * /srv/web
@@ -12,7 +14,7 @@ https://localhost:5493 {
 	@shell path / /index.html
 
 	handle_path /backend/* {
-		reverse_proxy 127.0.0.1:5191
+		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
 	}
 	# The web app's build, a single-page app: any path that is not a file gets index.html.
 	# The route keeps the written order, so the headers see the path after try_files and a

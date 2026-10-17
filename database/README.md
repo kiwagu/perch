@@ -42,5 +42,6 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
 
 - `bun run typecheck`, `bun run lint`.
 - `bun run test:db`: SurrealKit suites and the anonymous check against the stand at
-  `SURREAL_URL` (default `http://127.0.0.1:8010`, the `surrealdb-e2e` app).
+  `SURREAL_URL`, which `bun run test:db` at the repository root sets through `mcproc exec` from
+  the mcproc manifest (the `surrealdb-e2e` app, `http://127.0.0.1:8010` in the main checkout).
 - `surreal db validate 'database/**/*.surql'`: syntax check without a database.

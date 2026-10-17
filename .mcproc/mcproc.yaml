@@ -1,103 +1,156 @@
 # Local stands for this repository, driven by mcproc (pm2 underneath).
 # Fields: kind build|server|worker|task; run = shell command; cwd relative to the
 # project root; port = declared listening port; profiles = named groups of apps.
+#
+# Ports and container names come from `vars` and `{{ project }}`: the main checkout is
+# slot 0 and keeps the values below; a worktree made by `mcproc worktree add` gets its own
+# slot and project slug through .mcproc/mcproc.local.yaml, so its ports are shifted by 100
+# per slot and its containers and pm2 names carry the slug (perch-w1-...). The stands of two
+# checkouts then run side by side, and `mcproc ls` in each shows only its own.
 version: 1
 project: perch
+vars:
+  slot: 0                                   # the main checkout; a worktree gets its own
+  surreal_dev: '{{ 8000 + slot * 100 }}'    # SurrealDB of the dev stand
+  surreal_e2e: '{{ 8010 + slot * 100 }}'    # SurrealDB of the e2e stand
+  gateway: '{{ 5181 + slot * 100 }}'        # the dev gateway
+  gateway_e2e: '{{ 5191 + slot * 100 }}'    # the e2e gateway
+  front: '{{ 5443 + slot * 100 }}'          # Caddy of the dev stand
+  front_e2e: '{{ 5493 + slot * 100 }}'      # Caddy of the e2e stand
+# A start asks for memory first: an app's estimate is its `memory` or what a running sibling
+# checkout's copy measures, plus the margin; what does not fit waits its turn in the host's queue.
+resources:
+  reserve: 4G
+  margin: 10%
+worktree:
+  dir: ../perch.worktrees
+  # machine-local files a fresh worktree gets from the main checkout
+  copy: [infra/dev/certs, lefthook-local.yml, 'tests/e2e/src/**/*-snapshots']
+  install: bun install
+exec:
+  # What `mcproc exec -- <command>` runs with (the test:db, test:e2e, seed and seed:sweep
+  # scripts): this checkout's stands. The e2e stand under the names the suites and Playwright
+  # read, the dev stand under its own names for the seed.
+  env:
+    SURREAL_URL: 'http://127.0.0.1:{{ surreal_e2e }}'
+    GATEWAY_URL: 'http://127.0.0.1:{{ gateway_e2e }}'
+    E2E_BASE_URL: 'https://localhost:{{ front_e2e }}'
+    SURREAL_DEV_URL: 'http://127.0.0.1:{{ surreal_dev }}'
+    GATEWAY_DEV_URL: 'http://127.0.0.1:{{ gateway }}'
 apps:
   surrealdb-dev:
     description: >-
-      SurrealDB 3.3.4 in memory for local development on 127.0.0.1:8000 (root/root).
-      Data is gone when it stops.
+      SurrealDB 3.3.4 in memory for local development on 127.0.0.1:{{ surreal_dev }}
+      (root/root). Data is gone when it stops.
     kind: server
     run: >-
-      docker rm -f perch-surrealdb-dev >/dev/null 2>&1;
-      exec docker run --rm --name perch-surrealdb-dev -p 127.0.0.1:8000:8000
+      docker rm -f {{ project }}-surrealdb-dev >/dev/null 2>&1;
+      exec docker run --rm --name {{ project }}-surrealdb-dev -p 127.0.0.1:{{ surreal_dev }}:8000
       surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
     # docker-proxy holds the published port outside the app's processes, so the app
     # declares only its url: `wait` and `depends_on: ready` check it over HTTP
-    url: http://127.0.0.1:8000/health
+    url: http://127.0.0.1:{{ surreal_dev }}/health
+    memory: 512M
+    containers: ['{{ project }}-surrealdb-dev']
   surrealdb-e2e:
     description: >-
       SurrealDB 3.3.4 in memory for the schema permission suites and e2e runs on
-      127.0.0.1:8010 (root/root). Every start begins with an empty database.
+      127.0.0.1:{{ surreal_e2e }} (root/root). Every start begins with an empty database.
     kind: server
     run: >-
-      docker rm -f perch-surrealdb-e2e >/dev/null 2>&1;
-      exec docker run --rm --name perch-surrealdb-e2e -p 127.0.0.1:8010:8000
+      docker rm -f {{ project }}-surrealdb-e2e >/dev/null 2>&1;
+      exec docker run --rm --name {{ project }}-surrealdb-e2e -p 127.0.0.1:{{ surreal_e2e }}:8000
       surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
     # docker-proxy holds the published port outside the app's processes, so the app
     # declares only its url: `wait` and `depends_on: ready` check it over HTTP
-    url: http://127.0.0.1:8010/health
+    url: http://127.0.0.1:{{ surreal_e2e }}/health
+    memory: 512M
+    containers: ['{{ project }}-surrealdb-e2e']
   web:
     description: >-
       The web application's build watcher: `vite build --watch` in development mode
       (source maps, no minifying) rewrites apps/web/dist on every source change, in 1-3 s,
-      and caddy-dev serves it at https://localhost:5443; reload the page to see a change.
+      and caddy-dev serves it at https://localhost:{{ front }}; reload the page to see a change.
       Each signed-in identity's database runs in the browser (WASM on IndexedDB); signing
       up or in and syncing go through the gateway under /backend/ of the same front.
     kind: build
     run: bun run dev
     cwd: apps/web
+    memory: 1.5G
   gateway:
     description: >-
-      The gateway on 127.0.0.1:5181 for local development: sign-in over HTTP and sync
-      over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
+      The gateway on 127.0.0.1:{{ gateway }} for local development: sign-in over HTTP and
+      sync over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
       account on the stand first, then reloads on every source change.
     kind: server
     run: >-
-      SURREAL_URL=ws://127.0.0.1:8000/rpc SURREAL_USER=root SURREAL_PASS=root
+      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc SURREAL_USER=root SURREAL_PASS=root
       bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:8000/rpc GATEWAY_PORT=5181
+      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc GATEWAY_PORT={{ gateway }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
       exec bun --watch apps/gateway/src/index.ts
-    port: 5181
-    url: http://127.0.0.1:5181/health
+    port: '{{ gateway }}'
+    url: http://127.0.0.1:{{ gateway }}/health
+    memory: 256M
     depends_on:
       - { app: surrealdb-dev, condition: ready, timeout: 120 }
   gateway-e2e:
     description: >-
-      The gateway on 127.0.0.1:5191 for the e2e runs, the only client of the e2e
-      SurrealDB. Sets up its namespace account on the stand first, then reloads on
+      The gateway on 127.0.0.1:{{ gateway_e2e }} for the e2e runs, the only client of the
+      e2e SurrealDB. Sets up its namespace account on the stand first, then reloads on
       every source change.
     kind: server
     run: >-
-      SURREAL_URL=ws://127.0.0.1:8010/rpc SURREAL_USER=root SURREAL_PASS=root
+      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc SURREAL_USER=root SURREAL_PASS=root
       bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:8010/rpc GATEWAY_PORT=5191
+      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc GATEWAY_PORT={{ gateway_e2e }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
       exec bun --watch apps/gateway/src/index.ts
-    port: 5191
-    url: http://127.0.0.1:5191/health
+    port: '{{ gateway_e2e }}'
+    url: http://127.0.0.1:{{ gateway_e2e }}/health
+    memory: 256M
     depends_on:
       - { app: surrealdb-e2e, condition: ready, timeout: 120 }
   caddy-dev:
     description: >-
-      Caddy on https://localhost:5443: the web app's build from apps/web/dist, kept fresh
-      by the web watcher (a 404 until its first build finishes), and, under /backend/, the
-      gateway; certificates from infra/dev/make-certs.sh.
+      Caddy on https://localhost:{{ front }}: the web app's build from apps/web/dist, kept
+      fresh by the web watcher (a 404 until its first build finishes), and, under /backend/,
+      the gateway; certificates from infra/dev/make-certs.sh.
     kind: server
-    # docker would create a missing apps/web/dist as root, which the watcher could not write
+    # docker would create a missing apps/web/dist as root, which the watcher could not write.
+    # The compose project is this checkout's slug and the container is named, so two stands
+    # or two checkouts never share one; the ports reach the Caddyfile through the environment.
     run: >-
+      docker rm -f {{ project }}-caddy-dev >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
-      exec docker compose -f infra/dev/compose.yaml up caddy-dev
+      FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }}
+      exec docker compose -p {{ project }} -f infra/dev/compose.yaml
+      run --rm --name {{ project }}-caddy-dev caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
     # only its url (checked without verifying the local certificate)
-    url: https://localhost:5443/
+    url: https://localhost:{{ front }}/
+    memory: 128M
+    containers: ['{{ project }}-caddy-dev']
     # start order only: Caddy serves whatever apps/web/dist holds
     depends_on: [web, gateway]
   caddy-e2e:
     description: >-
-      Caddy on https://localhost:5493: the web app's build from apps/web/dist (the e2e
-      launcher makes the production build first) and, under /backend/, the gateway-e2e;
+      Caddy on https://localhost:{{ front_e2e }}: the web app's build from apps/web/dist (the
+      e2e launcher makes the production build first) and, under /backend/, the gateway-e2e;
       certificates from infra/dev/make-certs.sh.
     kind: server
     # docker would create a missing apps/web/dist as root, which a build could not write
     run: >-
+      docker rm -f {{ project }}-caddy-e2e >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
-      exec docker compose -f infra/dev/compose.yaml up caddy-e2e
+      FRONT_PORT={{ front_e2e }} GATEWAY_PORT={{ gateway_e2e }}
+      exec docker compose -p {{ project }} -f infra/dev/compose.yaml
+      run --rm --name {{ project }}-caddy-e2e caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
     # only its url (checked without verifying the local certificate)
-    url: https://localhost:5493/
+    url: https://localhost:{{ front_e2e }}/
+    memory: 128M
+    containers: ['{{ project }}-caddy-e2e']
     depends_on: [gateway-e2e]
 profiles:
   dev: [surrealdb-dev, gateway, web, caddy-dev]

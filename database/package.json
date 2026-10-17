@@ -12,7 +12,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test:db": "surrealkit --folder . --host \"${SURREAL_URL:-http://127.0.0.1:8010}\" --user root --pass root test --no-seed && vitest run"
+    "test:db": "surrealkit --folder . --host \"${SURREAL_URL:?the surrealdb-e2e stand, set by bun run test:db}\" --user root --pass root test --no-seed && vitest run"
   },
   "dependencies": {
     "@workspace/replica": "workspace:*"
@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "@workspace/data": "workspace:*",
+    "@workspace/zod": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
