@@ -77,8 +77,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given
   database and, per device, a `StubTransport` that behaves like the gateway's connection without
   a network and can go offline and come back; `dropNextFanOutTo`, `rejectEverything`,
-  `swallowNextPush`, `refuseNextPull`, `keepOpenOnSignOut`, `rejections`, `compactions` and
-  `failures` steer and observe it in tests.
+  `swallowNextPush`, `refuseNextPull`, `keepOpenOnSignOut`, `endWith(reason)` (the gateway
+  refuses the keys or signs the devices out), `rejections`, `signOuts`, `compactions` and
+  `failures` steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
+  lock and `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.

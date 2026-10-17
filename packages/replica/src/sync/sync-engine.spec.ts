@@ -87,11 +87,12 @@ describe('sync engine', () => {
   })
 
   it('delivers what is left, then signs the device out through the gateway', async () => {
-    const { a, b, settle } = await twoDevices()
+    const { a, b, settle, stub } = await twoDevices()
 
     writeName(a.region, 'Ana')
 
     expect(await a.engine.signOut()).toBe('signed-out')
+    expect(stub.signOuts()).toBe(1)
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(a.channel()).toBe('down')
     expect(a.transport.online()).toBe(false)
@@ -99,6 +100,18 @@ describe('sync engine', () => {
     await settle()
 
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+
+  it('hears that the gateway refused the keys, then the channel falls for good', async () => {
+    const { a, stub } = await twoDevices()
+    const heard: string[] = []
+
+    a.transport.onEnded((reason) => heard.push(`${reason} while ${a.channel()}`))
+    stub.endWith('unauthorized')
+
+    expect(heard).toEqual(['unauthorized while up'])
+    expect(a.channel()).toBe('down')
+    expect(a.transport.online()).toBe(false)
   })
 
   it('reports offline when the channel stays down for 5 seconds', async () => {

@@ -56,6 +56,13 @@ export interface GatewayStub {
   refuseNextPull(): void
   /** The next sign-out is taken in but the channel stays open; resolves once it arrived. */
   keepOpenOnSignOut(): Promise<void>
+  /** How many sign-outs the devices sent. */
+  signOuts(): number
+  /**
+   * Ends the channel of every started device for good, as the gateway does when it refuses the
+   * keys (`unauthorized`) or signs the device out: the device hears why, then the channel falls.
+   */
+  endWith(reason: EndReason): void
   /** How many rejects the devices were sent. */
   rejections(): number
   /** The outcomes of the compactions the devices proposed, in order. */
@@ -73,6 +80,7 @@ interface Gateway {
   readonly failures: DataError[]
   readonly compactions: CompactionAnswer[]
   rejections: number
+  signOuts: number
   rejectAll: boolean
   /** Set while the next push is to go unanswered: called when it arrives. */
   swallowPush: (() => void) | undefined
@@ -159,6 +167,21 @@ class DeviceChannel implements StubTransport {
 
   dropNextFanOut(): void {
     this.#dropNextFanOut = true
+  }
+
+  /** The gateway ends the channel for good; a device that is not started has no channel. */
+  end(reason: EndReason): void {
+    if (!this.#started || this.#ended) {
+      return
+    }
+
+    this.#ended = true
+
+    for (const listener of this.#endedListeners) {
+      listener(reason)
+    }
+
+    this.#disconnect()
   }
 
   send(message: ClientMessage): boolean {
@@ -330,6 +353,8 @@ class DeviceChannel implements StubTransport {
   #signOut(connection: Connection): void {
     const keptOpen = this.#gateway.keepOpen
 
+    this.#gateway.signOuts += 1
+
     if (keptOpen) {
       this.#gateway.keepOpen = undefined
       keptOpen()
@@ -337,17 +362,9 @@ class DeviceChannel implements StubTransport {
       return
     }
 
-    if (this.#connection !== connection) {
-      return
+    if (this.#connection === connection) {
+      this.end('signed-out')
     }
-
-    this.#ended = true
-
-    for (const listener of this.#endedListeners) {
-      listener('signed-out')
-    }
-
-    this.#disconnect()
   }
 
   /** Hands a message the hub or the stub sends to the device, unless its connection is gone. */
@@ -413,6 +430,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     failures,
     compactions: [],
     rejections: 0,
+    signOuts: 0,
     rejectAll: false,
     swallowPush: undefined,
     refusePull: false,
@@ -453,6 +471,12 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
       return new Promise((resolve) => {
         gateway.keepOpen = resolve
       })
+    },
+    signOuts: () => gateway.signOuts,
+    endWith(reason) {
+      for (const channel of channels) {
+        channel.end(reason)
+      }
     },
     rejections: () => gateway.rejections,
     compactions: () => [...gateway.compactions],
