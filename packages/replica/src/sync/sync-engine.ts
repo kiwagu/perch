@@ -39,10 +39,13 @@ export interface SyncEngine {
   settled(timeoutMs: number): Promise<void>
   /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
-   * sign this device out; resolves `signed-out` when the gateway ended the channel or, its close
-   * not coming within 10 seconds, once the transport is stopped. Resolves `offline`, without
-   * asking the gateway, when the channel stayed down, fell, the outbox did not drain in time, or a
-   * region that stopped syncing still holds outbox rows. Never rejects.
+   * sign this device out; resolves `signed-out` when the gateway ended the channel with the
+   * sign-out close, which means the grant is revoked, or, its close not coming within 10
+   * seconds, once the transport is stopped. Any other close after the sign-out was asked for
+   * (a gateway that could not revoke the grant closes as failed) resolves `offline`, the
+   * transport stopped so that no reconnect follows. Resolves `offline`, without asking the
+   * gateway, when the channel stayed down, fell, the outbox did not drain in time, or a region
+   * that stopped syncing still holds what it has not sent. Never rejects.
    */
   signOut(): Promise<'signed-out' | 'offline'>
 }
@@ -457,10 +460,12 @@ class Engine implements SyncEngine {
   }
 
   /**
-   * Resolves `signed-out` once the transport reports the channel ended (the gateway closes it
-   * after the sign-out; keys it refuses end the device all the same), or once the close has not
-   * come within 10 seconds on the clock, stopping the transport; `offline` when the channel
-   * falls without ending or ends on a refused protocol, which signed nothing out.
+   * Resolves `signed-out` once the transport reports the channel ended with the sign-out (the
+   * gateway revoked the grant and closed it), or once the close has not come within 10 seconds
+   * on the clock, stopping the transport. Any other close signed nothing out for sure and
+   * resolves `offline`: a channel that ends otherwise (refused keys or protocol), or falls
+   * without ending (a gateway that failed to revoke the grant closes so), the transport stopped
+   * first so that it does not connect again.
    */
   #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
     const transport = this.#options.transport
@@ -480,13 +485,14 @@ class Engine implements SyncEngine {
         transport.onEnded((reason) =>
           finish(
             match(reason)
-              .with(P.union('signed-out', 'unauthorized'), () => 'signed-out' as const)
-              .with('protocol', () => 'offline' as const)
+              .with('signed-out', () => 'signed-out' as const)
+              .with(P.union('unauthorized', 'protocol'), () => 'offline' as const)
               .exhaustive(),
           ),
         ),
         transport.onChannel((state) => {
           if (state === 'down') {
+            transport.stop()
             finish('offline')
           }
         }),

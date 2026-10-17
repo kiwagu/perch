@@ -16,7 +16,9 @@ answers it and sends each accepted batch to the identity's other devices. Text t
 protocol refuses (4400), refused keys (4401), a foreign region (4403) and a hello that did
 not come within 10 seconds (4408, after which the device connects again) close the socket
 with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
-grant through the database's RPC and closes the socket. A renewed pair the socket closed
+grant through the database's RPC and closes the socket with 4000, which means the grant is
+revoked; a revoke that fails is tried once more, and a grant that still cannot be revoked
+closes the socket with 1011 (`revoke failed`) instead. A renewed pair the socket closed
 before it could take is logged at warn as `renewed pair not delivered`. Keys, tokens and
 grant ids never reach its logs.
 

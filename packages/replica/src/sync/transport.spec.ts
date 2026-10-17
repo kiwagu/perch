@@ -209,6 +209,16 @@ describe('WebSocket transport', () => {
     expect(events).toEqual([])
   })
 
+  it('connects again after 1011, a gateway that failed, as after any close that ends nothing', async () => {
+    const { clock, sockets, connect, events } = harness()
+
+    connect().drop(1011)
+    await clock.advance(1_000)
+
+    expect(events).toEqual(['up', 'down'])
+    expect(sockets.length).toBe(2)
+  })
+
   it('stops on 4000 and reports signed-out', async () => {
     const { clock, sockets, connect, events } = harness()
 

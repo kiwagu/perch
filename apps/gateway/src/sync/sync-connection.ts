@@ -64,6 +64,7 @@ const REASON = {
   refused: 'the keys were not accepted',
   forbidden: 'the region is not open to this device',
   signedOut: 'signed out',
+  revokeFailed: 'revoke failed',
   failed: 'the gateway failed to handle the message',
 } as const
 
@@ -82,7 +83,9 @@ function regionsOf(message: ClientMessage): readonly string[] {
  * and may subscribe, pull, push, probe and compact in that region only, each handed to the
  * region hub, which answers the device itself. Messages are handled one at a time, in the
  * order they came. Text the protocol refuses closes the socket; so does a region of
- * somebody else and a sign-out, which also revokes the device's refresh grant.
+ * somebody else and a sign-out, which also revokes the device's refresh grant: the sign-out
+ * close (4000) means the grant is revoked, and a grant that cannot be revoked closes the
+ * socket as a failed server (1011) instead.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
@@ -286,9 +289,10 @@ export class SyncConnection {
   }
 
   /**
-   * Leaves the device's regions, revokes its refresh grant and closes. A device that came
-   * with an access token only holds no grant; a grant that cannot be revoked is logged, and
-   * the socket closes all the same.
+   * Leaves the device's regions, revokes its refresh grant and closes as signed out. A device
+   * that came with an access token only holds no grant. A revoke that fails is tried once
+   * more; a grant that still cannot be revoked is logged, and the socket closes as a failed
+   * server: the device must not take the sign-out close for a revoked grant.
    */
   async #signOut(device: Device): Promise<void> {
     for (const region of this.#subscribed) {
@@ -305,13 +309,19 @@ export class SyncConnection {
         'device signed out with an access token only: no grant to revoke',
       )
     } else {
-      const revoked = await this.#sessions.revoke({ access, refresh })
+      const tokens = { access, refresh }
+      const revoked = await this.#sessions
+        .revoke(tokens)
+        .orElse(() => this.#sessions.revoke(tokens))
 
       if (revoked.isErr()) {
         this.#log.warn(
           { identity: device.identity.id, code: revoked.error.code },
           'the refresh grant of a device that signed out could not be revoked',
         )
+        this.#close(SERVER_ERROR, REASON.revokeFailed)
+
+        return
       }
     }
 

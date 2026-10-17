@@ -70,9 +70,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
-  drains and has the gateway sign the device out, or answers `offline` while anything stays
-  unsent, rows of a region that stopped syncing and updates that failed to persist included;
-  it never rejects).
+  drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
+  other close after it asked stops the transport and answers `offline`), or answers `offline`
+  while anything stays unsent, rows of a region that stopped syncing and updates that failed to
+  persist included; it never rejects).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
@@ -101,7 +102,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   database and, per device, a `StubTransport` that behaves like the gateway's connection
   without a network, can go offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `keepOpenOnSignOut`, `endWith(reason)` (the gateway refuses the keys or the
+  `refuseNextPull`, `keepOpenOnSignOut`, `failNextSignOut` (closes as a gateway that could not
+  revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
   steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
   lock and `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.

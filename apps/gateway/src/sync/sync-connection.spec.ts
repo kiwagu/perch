@@ -316,23 +316,42 @@ describe('SyncConnection', () => {
     expect(logLines.join('\n')).not.toContain(ann.tokens.access)
   })
 
-  it('still closes when the grant cannot be revoked, and logs the failure without keys', async () => {
-    const { socket, connection, ann, logLines } = await connectedAsAnn({
+  it('closes as a failed server, never as signed out, when the grant cannot be revoked twice', async () => {
+    const { socket, connection, ann, revoked, logLines } = await connectedAsAnn({
       revoke: () =>
         errAsync(dataError('data:AUTH_FAILED', 'the database refused to revoke the grant')),
     })
 
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
-    expect(socket.closes).toEqual([[CLOSE.signedOut, 'signed out']])
+    expect(revoked).toEqual([ann.tokens, ann.tokens])
+    expect(socket.closes).toEqual([[SERVER_ERROR, 'revoke failed']])
     expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
       expect.objectContaining({ level: 40, code: 'data:AUTH_FAILED' }),
     ])
 
-    const logged = logLines.join('\n')
+    const logged = [...logLines, ...socket.closes.map(([, reason]) => reason)].join('\n')
 
     expect(logged).not.toContain(ann.tokens.access)
     expect(logged).not.toContain(ann.tokens.refresh)
+  })
+
+  it('signs the device out when the revoke succeeds on its second try', async () => {
+    let tries = 0
+    const { socket, connection, ann, revoked } = await connectedAsAnn({
+      revoke: () => {
+        tries += 1
+
+        return tries === 1
+          ? errAsync(dataError('data:AUTH_FAILED', 'the database went away for a moment'))
+          : okAsync(undefined)
+      },
+    })
+
+    await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
+
+    expect(revoked).toEqual([ann.tokens, ann.tokens])
+    expect(socket.closes).toEqual([[CLOSE.signedOut, 'signed out']])
   })
 
   it('closes a socket that never says hello with the timeout code, not as refused keys', async () => {

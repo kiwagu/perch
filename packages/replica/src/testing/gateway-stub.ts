@@ -60,6 +60,11 @@ export interface GatewayStub {
   refuseNextPull(): void
   /** The next sign-out is taken in but the channel stays open; resolves once it arrived. */
   keepOpenOnSignOut(): Promise<void>
+  /**
+   * The next sign-out is taken in, but the grant cannot be revoked: the gateway closes the
+   * channel as a failed server (1011), which ends nothing; resolves once it arrived.
+   */
+  failNextSignOut(): Promise<void>
   /** How many sign-outs the devices sent. */
   signOuts(): number
   /**
@@ -93,6 +98,8 @@ interface Gateway {
   refusePull: boolean
   /** Set while the next sign-out is to leave the channel open: called when it arrives. */
   keepOpen: (() => void) | undefined
+  /** Set while the next sign-out is to fail its revoke: called when it arrives. */
+  failSignOut: (() => void) | undefined
 }
 
 /** One connection of a device: its end at the hub, up once welcomed. */
@@ -383,12 +390,22 @@ class DeviceChannel implements StubTransport {
   /** The gateway leaves the device's regions and closes the channel for good. */
   #signOut(connection: Connection): void {
     const keptOpen = this.#gateway.keepOpen
+    const failed = this.#gateway.failSignOut
 
     this.#gateway.signOuts += 1
 
     if (keptOpen) {
       this.#gateway.keepOpen = undefined
       keptOpen()
+
+      return
+    }
+
+    // A close that ends nothing: the connection is gone, the device may come back.
+    if (failed) {
+      this.#gateway.failSignOut = undefined
+      failed()
+      this.#disconnect()
 
       return
     }
@@ -467,6 +484,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     swallowProbe: undefined,
     refusePull: false,
     keepOpen: undefined,
+    failSignOut: undefined,
   }
   const channels: DeviceChannel[] = []
 
@@ -507,6 +525,11 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     keepOpenOnSignOut() {
       return new Promise((resolve) => {
         gateway.keepOpen = resolve
+      })
+    },
+    failNextSignOut() {
+      return new Promise((resolve) => {
+        gateway.failSignOut = resolve
       })
     },
     signOuts: () => gateway.signOuts,

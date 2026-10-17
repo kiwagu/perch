@@ -200,6 +200,31 @@ describe('sync engine', () => {
     expect(await outcome).toBe('signed-out')
   })
 
+  it('resolves offline, connecting no more, when the gateway closes as failed after the sign-out', async () => {
+    const { a, stub } = await twoDevices()
+    const received = stub.failNextSignOut()
+    const outcome = a.engine.signOut()
+
+    await received
+
+    expect(await outcome).toBe('offline')
+    expect(stub.signOuts()).toBe(1)
+    expect(a.channel()).toBe('down')
+    // Stopped: no reconnect brings the device back on keys the gateway could not revoke.
+    expect(a.transport.online()).toBe(false)
+  })
+
+  it('resolves offline when the channel ends for any reason but a sign-out after it was asked for', async () => {
+    const { a, stub } = await twoDevices()
+    const received = stub.keepOpenOnSignOut()
+    const outcome = a.engine.signOut()
+
+    await received
+    stub.endWith('unauthorized')
+
+    expect(await outcome).toBe('offline')
+  })
+
   it('resolves signed-out 10 seconds after the sign-out when the gateway never closes the channel', async () => {
     const { a, stub, clock } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
