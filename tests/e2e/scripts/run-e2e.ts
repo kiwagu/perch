@@ -8,7 +8,9 @@
  * starts empty, the gateway and the front load the current code and configuration),
  * waits for each in that order, runs Playwright with the given arguments and exits with
  * its code. `--down` stops the profile instead. The stand stays up between runs, so
- * `mcproc logs e2e` shows what the tests saw.
+ * `mcproc logs e2e` shows what the tests saw. `bun run test:e2e` runs this script through
+ * `mcproc exec` with a 4G memory lease (the build and the browsers wait their turn when the
+ * host is full) and with E2E_BASE_URL, which Playwright reads, set to this checkout's front.
  *
  *   bun run test:e2e [<playwright args>]       CI=1 runs the specs one at a time
  *   bun run test:e2e --down

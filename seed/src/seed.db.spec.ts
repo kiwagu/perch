@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest'
 
+import { z } from '@workspace/zod'
+
 import { inviteInto, readOrganisation, signInAndRead } from './__fixtures__/device'
 import { leftOnStand } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
@@ -8,9 +10,25 @@ import { runSeed, type StandTarget, sweep } from './seed'
 // The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
 // where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
 // share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
+// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses from the
+// manifest's vars.
+const stand = z
+  .object({
+    GATEWAY_URL: z.url({
+      protocol: /^https?$/,
+      error:
+        'must be the http(s):// address of the gateway-e2e gateway; run the suite with bun run test:db',
+    }),
+    SURREAL_URL: z.url({
+      protocol: /^https?$/,
+      error:
+        'must be the http(s):// address of the surrealdb-e2e stand; run the suite with bun run test:db',
+    }),
+  })
+  .parse(process.env)
 const target: StandTarget = {
-  gatewayUrl: process.env['GATEWAY_URL'] ?? 'http://127.0.0.1:5191',
-  url: process.env['SURREAL_URL'] ?? 'http://127.0.0.1:8010',
+  gatewayUrl: stand.GATEWAY_URL,
+  url: stand.SURREAL_URL,
   namespace: 'app',
   database: 'directory',
   credentials: { username: 'root', password: 'root' },
