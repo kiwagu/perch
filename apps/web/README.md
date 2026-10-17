@@ -89,7 +89,11 @@ modeling stage.
   at most 80 characters); the creator becomes its administrator and the new organisation the
   current one. With memberships it shows the current organisation's name and the role there, a
   choice between organisations when there are several, and the organisation's notes (at most
-  500 characters each), which every member reads, adds and edits in the tenant region; an
+  500 characters each), which every member reads and adds in the tenant region. The write
+  rules of the replica schema apply on the device before any command (`OrganisationService.ability()`,
+  the same rule the gateway applies): a member edits and deletes only its own notes and an
+  administrator any, so the page shows "Edit" and "Delete" only where allowed, marks the member's
+  own notes "Yours", and explains a change the rules forbid (`note:FORBIDDEN`). An
   administrator also sees the members, invites an existing account by email and removes a
   member. The page follows the memberships as they change, without a reload.
 

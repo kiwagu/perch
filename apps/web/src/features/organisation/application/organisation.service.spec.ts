@@ -1,7 +1,8 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { type DataError, dataError } from '@workspace/data'
+import { type AuthUser, type DataError, dataError } from '@workspace/data'
+import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
@@ -26,9 +27,14 @@ const bea: MemberView = {
 
 /** The session's memberships in memory: a selected key of no membership changes nothing. */
 class FakeSession implements OrganisationSession {
+  user: AuthUser | undefined = undefined
   list: readonly Membership[] = []
   selected: string | undefined = undefined
   readonly listeners = new Set<() => void>()
+
+  current(): AuthUser | undefined {
+    return this.user
+  }
 
   memberships(): readonly Membership[] {
     return this.list
@@ -109,7 +115,7 @@ let service: OrganisationService
 beforeEach(() => {
   session = new FakeSession()
   organisations = new FakeOrganisations(session)
-  service = new OrganisationService(session, organisations)
+  service = new OrganisationService(session, organisations, replicaSchema)
 })
 
 describe('OrganisationService', () => {
@@ -196,5 +202,24 @@ describe('OrganisationService', () => {
       ['invite', 'acme', 'bea@example.test'],
       ['remove', 'acme', bea.identity.id],
     ])
+  })
+
+  it('gives the current member its ability: a member edits only its own notes, an admin any, nobody without an organisation', () => {
+    const ann = identityIdFactory.create()
+    const bob = identityIdFactory.create()
+
+    session.user = { id: ann, email: 'ann@example.test' } as AuthUser
+    session.list = [globex]
+
+    expect(service.ability().can('update', 'note', { author: ann })).toBe(true)
+    expect(service.ability().can('update', 'note', { author: bob })).toBe(false)
+
+    session.list = [acme]
+
+    expect(service.ability().can('update', 'note', { author: bob })).toBe(true)
+
+    session.list = []
+
+    expect(service.ability().can('create', 'note')).toBe(false)
   })
 })

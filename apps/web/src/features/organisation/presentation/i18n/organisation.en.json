@@ -15,6 +15,8 @@
   "organisation.notes.add": "Add note",
   "organisation.notes.edit": "Edit",
   "organisation.notes.save": "Save",
+  "organisation.notes.delete": "Delete",
+  "organisation.notes.mine": "Yours",
   "organisation.members.title": "Members",
   "organisation.invite.email": "Email of an existing account",
   "organisation.invite.submit": "Invite",
@@ -27,6 +29,7 @@
   "organisation.error.no-such-identity": "No account has this email.",
   "organisation.error.already-member": "This account is already a member.",
   "organisation.error.not-admin": "Only an administrator can do this.",
+  "organisation.error.forbidden": "Only the author or an administrator can change this note.",
   "organisation.error.text-required": "Write the note first.",
   "organisation.error.text-too-long": "Use at most 500 characters.",
   "organisation.error.failed": "Something went wrong. Try again."

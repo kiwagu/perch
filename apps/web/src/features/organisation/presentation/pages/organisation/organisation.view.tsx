@@ -27,6 +27,12 @@ export interface OrganisationChoice {
 export interface NoteItem {
   readonly id: NoteId
   readonly text: string
+  /** The signed-in member wrote it. */
+  readonly mine: boolean
+  /** The rules let the signed-in member edit it. */
+  readonly editable: boolean
+  /** The rules let the signed-in member delete it. */
+  readonly deletable: boolean
 }
 
 export interface MemberItem {
@@ -57,6 +63,7 @@ export interface OrganisationViewProps {
   readonly onSelect: (key: string) => void
   readonly onAddNote: (text: string) => Promise<boolean>
   readonly onEditNote: (input: { readonly id: NoteId; readonly text: string }) => Promise<boolean>
+  readonly onDeleteNote: (id: NoteId) => Promise<boolean>
   readonly onInvite: (email: string) => Promise<boolean>
   readonly onRemoveMember: (id: IdentityId) => void
 }
@@ -78,6 +85,8 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
       return t('organisation.error.already-member')
     case 'not-admin':
       return t('organisation.error.not-admin')
+    case 'note:FORBIDDEN':
+      return t('organisation.error.forbidden')
     case 'note:TEXT_REQUIRED':
       return t('organisation.error.text-required')
     case 'note:TEXT_TOO_LONG':
@@ -219,6 +228,7 @@ function OrganisationHeader(props: {
 function NoteEntry(props: {
   readonly note: NoteItem
   readonly onEdit: OrganisationViewProps['onEditNote']
+  readonly onDelete: OrganisationViewProps['onDeleteNote']
 }) {
   const t = useT()
   const [draft, setDraft] = useState<string | undefined>(undefined)
@@ -242,14 +252,34 @@ function NoteEntry(props: {
           >
             {props.note.text}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setDraft(props.note.text)}
-            data-testid="organisation.notes.edit"
-          >
-            {t('organisation.notes.edit')}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {props.note.mine ? (
+              <span className="text-sm text-muted-foreground" data-testid="organisation.notes.mine">
+                {t('organisation.notes.mine')}
+              </span>
+            ) : null}
+            {props.note.editable ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDraft(props.note.text)}
+                data-testid="organisation.notes.edit"
+              >
+                {t('organisation.notes.edit')}
+              </Button>
+            ) : null}
+            {props.note.deletable ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => run(props.onDelete(props.note.id), () => {})}
+                data-testid="organisation.notes.delete"
+              >
+                {t('organisation.notes.delete')}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : (
         <form className="flex flex-col gap-2" onSubmit={save}>
@@ -274,6 +304,7 @@ function NotesCard(props: {
   readonly error: string | undefined
   readonly onAdd: OrganisationViewProps['onAddNote']
   readonly onEdit: OrganisationViewProps['onEditNote']
+  readonly onDelete: OrganisationViewProps['onDeleteNote']
 }) {
   const t = useT()
   const [text, setText] = useState('')
@@ -298,7 +329,12 @@ function NotesCard(props: {
         {props.notes && props.notes.length > 0 ? (
           <ul className="flex flex-col gap-4" data-testid="organisation.notes.list">
             {props.notes.map((note) => (
-              <NoteEntry key={note.id} note={note} onEdit={props.onEdit} />
+              <NoteEntry
+                key={note.id}
+                note={note}
+                onEdit={props.onEdit}
+                onDelete={props.onDelete}
+              />
             ))}
           </ul>
         ) : null}
@@ -425,6 +461,7 @@ export function OrganisationView(props: OrganisationViewProps) {
               error={props.errors?.notes}
               onAdd={props.onAddNote}
               onEdit={props.onEditNote}
+              onDelete={props.onDeleteNote}
             />
             {current.role === 'admin' ? (
               <MembersCard

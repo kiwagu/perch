@@ -21,8 +21,20 @@ const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: 'member' }
 const acmeAdmin: OrganisationChoice = { ...acme, role: 'admin' }
 const globex: OrganisationChoice = { key: 'globex', name: 'Globex', role: 'member' }
 
-const hello: NoteItem = { id: noteIdFactory.create(), text: 'Hello' }
-const plans: NoteItem = { id: noteIdFactory.create(), text: 'Plans' }
+const hello: NoteItem = {
+  id: noteIdFactory.create(),
+  text: 'Hello',
+  mine: true,
+  editable: true,
+  deletable: true,
+}
+const plans: NoteItem = {
+  id: noteIdFactory.create(),
+  text: 'Plans',
+  mine: false,
+  editable: false,
+  deletable: false,
+}
 
 const ann: MemberItem = {
   id: identityIdFactory.create(),
@@ -41,6 +53,7 @@ function renderView(props: Partial<OrganisationViewProps> = {}, locale: 'en' | '
     onSelect: vi.fn(),
     onAddNote: vi.fn(() => Promise.resolve(true)),
     onEditNote: vi.fn(() => Promise.resolve(true)),
+    onDeleteNote: vi.fn(() => Promise.resolve(true)),
     onInvite: vi.fn(() => Promise.resolve(true)),
     onRemoveMember: vi.fn(),
   }
@@ -187,6 +200,41 @@ describe('OrganisationView of a member', () => {
     expect(onEditNote).toHaveBeenCalledWith({ id: hello.id, text: 'Hello, all' })
     await waitFor(() =>
       expect(within(item).queryByTestId('organisation.notes.edit-input')).toBeNull(),
+    )
+  })
+
+  it('shows "Yours" and the edit and delete buttons only on the notes the member may change', () => {
+    renderView()
+
+    const [first, second] = screen.getAllByTestId('organisation.notes.item')
+    const mine = first ?? expect.unreachable('a note item')
+    const others = second ?? expect.unreachable('a second note item')
+
+    expect(within(mine).getByTestId('organisation.notes.mine').textContent).toBe(
+      en['organisation.notes.mine'],
+    )
+    expect(within(mine).getByTestId('organisation.notes.edit')).toBeTruthy()
+    expect(within(mine).getByTestId('organisation.notes.delete').textContent).toBe(
+      en['organisation.notes.delete'],
+    )
+    expect(within(others).queryByTestId('organisation.notes.mine')).toBeNull()
+    expect(within(others).queryByTestId('organisation.notes.edit')).toBeNull()
+    expect(within(others).queryByTestId('organisation.notes.delete')).toBeNull()
+  })
+
+  it('deletes a note', () => {
+    const { onDeleteNote } = renderView()
+
+    fireEvent.click(screen.getByTestId('organisation.notes.delete'))
+
+    expect(onDeleteNote).toHaveBeenCalledWith(hello.id)
+  })
+
+  it('explains a change the rules forbid', () => {
+    renderView({ errors: { notes: 'note:FORBIDDEN' } })
+
+    expect(screen.getByTestId('organisation.notes.error').textContent).toBe(
+      'Only the author or an administrator can change this note.',
     )
   })
 

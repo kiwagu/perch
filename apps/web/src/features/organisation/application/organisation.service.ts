@@ -4,17 +4,23 @@ import type { BusError } from '@workspace/cqrs'
 import type { DataError } from '@workspace/data'
 import { token } from '@workspace/di'
 import type { IdentityId } from '@workspace/ids'
-import type { RuleViolation } from '@workspace/kernel'
+import {
+  type Ability,
+  type AbilitySchema,
+  defineAbilityFor,
+  NO_ABILITY,
+  type RuleViolation,
+} from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { MemberView, OrganisationsPort } from '../../../platform/organisations.port'
 import type { SessionPort } from '../../../platform/session.port'
 import { checkOrganisationName, checkTenantKey } from '../domain/organisation.entity'
 
-/** What the service needs of the session: the memberships and the organisation chosen on this browser. */
+/** What the service needs of the session: who is signed in, the memberships and the organisation chosen on this browser. */
 export type OrganisationSession = Pick<
   SessionPort,
-  'memberships' | 'subscribeMemberships' | 'currentTenant' | 'selectTenant'
+  'current' | 'memberships' | 'subscribeMemberships' | 'currentTenant' | 'selectTenant'
 >
 
 /** No memberships: one list, so a component that reads them sees no change while there are none. */
@@ -46,6 +52,7 @@ export class OrganisationService {
   constructor(
     private readonly session: OrganisationSession,
     private readonly organisations: OrganisationsPort,
+    private readonly schema: AbilitySchema,
   ) {}
 
   memberships(): readonly Membership[] {
@@ -61,6 +68,16 @@ export class OrganisationService {
 
   current(): Membership | undefined {
     return this.session.currentTenant()
+  }
+
+  /** What the signed-in member may do in the current organisation; nothing without one. */
+  ability(): Ability {
+    const user = this.session.current()
+    const current = this.session.currentTenant()
+
+    return user && current
+      ? defineAbilityFor({ id: user.id, role: current.role }, this.schema)
+      : NO_ABILITY
   }
 
   select(key: string): void {
