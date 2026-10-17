@@ -88,8 +88,8 @@ function ownerTable(region: RegionRef): string {
 /**
  * The first field that breaks the owner rule. In a private region every identity reference is
  * the region's owner. In a tenant region a record created by the batch references the pushing
- * member only, and a record it updates keeps the member references it had: who wrote a note is
- * not something another member can change.
+ * member only, and a record it updates keeps the member references it had, none added, changed
+ * or removed: who wrote a note is not something another member can change.
  */
 function foreignOwner(
   input: ValidateBatchInput,
@@ -98,19 +98,21 @@ function foreignOwner(
   before: Readonly<Record<string, unknown>> | undefined,
 ): string | undefined {
   const owner = `${ownerTable(input.region)}:${input.actor}`
+  // Every reference names the pushing identity: any in a private region, or in a new record.
+  const actorOnly = input.region.kind === 'private' || before === undefined
+  // An updated record is checked on the fields it had too: a removed reference is gone from `value`.
+  const fields = actorOnly
+    ? Object.keys(value)
+    : [...new Set([...Object.keys(before), ...Object.keys(value)])]
 
-  return Object.keys(value).find((field) => {
+  return fields.find((field) => {
     const kind = fieldOf(input.schema, table, field)
 
     if (kind?.kind !== 'record' || kind.table !== ownerTable(input.region)) {
       return false
     }
 
-    if (input.region.kind === 'private' || before === undefined) {
-      return value[field] !== owner
-    }
-
-    return value[field] !== before[field]
+    return actorOnly ? value[field] !== owner : value[field] !== before[field]
   })
 }
 

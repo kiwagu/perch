@@ -66,3 +66,8 @@ export function noteSetAuthor(
 ): Uint8Array {
   return updateOf(doc, note.id, (record) => record.set('author', `member:${note.author}`))
 }
+
+/** Removes the author of a note the document holds; answers with the update to push. */
+export function noteRemoveAuthor(doc: LoroDoc, note: { readonly id: string }): Uint8Array {
+  return updateOf(doc, note.id, (record) => record.delete('author'))
+}

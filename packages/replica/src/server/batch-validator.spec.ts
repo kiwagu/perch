@@ -4,7 +4,13 @@ import { describe, expect, it } from 'vitest'
 import { recordRef } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
 
-import { noteCreate, noteSetAuthor, noteUpdate, replicaSchema } from '../__fixtures__/note'
+import {
+  noteCreate,
+  noteRemoveAuthor,
+  noteSetAuthor,
+  noteUpdate,
+  replicaSchema,
+} from '../__fixtures__/note'
 
 import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
 import { validateBatch } from './batch-validator'
@@ -267,6 +273,26 @@ describe('a tenant region', () => {
 
     expect(edited.isOk()).toBe(true)
     expect(reauthored.isErr() && reauthored.error.reason).toBe('foreign-owner')
+  })
+
+  it("refuses deleting the author of another member's note as foreign-owner", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      schema: replicaSchema,
+      updates: [noteRemoveAuthor(server.fork(), { id })],
+    })
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'foreign-owner',
+      detail: `note/${id}.author`,
+    })
   })
 
   it('refuses a profile pushed into a tenant region', () => {
