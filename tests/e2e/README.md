@@ -9,10 +9,11 @@ scrolls sideways. Each test signs up a fresh account in a fresh browser context,
 data generated from the seed catalog. Key pages are compared with screenshots on `mobile`;
 the baselines are not committed: the first run on a machine writes them, later runs
 compare against them.
-The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e`, the `web-e2e` dev
-server and the `caddy-e2e` front), not Playwright's web server, so `mcproc logs e2e` shows
-what a run saw. Tests open the front, https://localhost:5493, which serves the app and,
-under `/backend/`, the gateway on one origin.
+The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e` and the `caddy-e2e`
+front), not Playwright's web server, so `mcproc logs e2e` shows what a run saw. Tests open the
+front, https://localhost:5493, which serves the web app's production build (`apps/web/dist`,
+written by the launcher before each run; no dev server) and, under `/backend/`, the gateway
+on one origin.
 
 Specs are tagged `@smoke` (`user/`: sign up, rename) or `@full` (`sync/`: the slower specs
 of one account on several devices):
@@ -41,13 +42,15 @@ the tests. `src/support/fixtures.ts`: the `test` with the step check and its fix
 its own that opens and signs in with the same account when a test asks), `appReady` and
 `signIn`. `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through
 the test so it can go offline and back (Playwright's offline mode leaves an open WebSocket
-up). `src/support/data.ts`: the generators. `src/support/warm-up.ts`: the global setup, which
-opens the app once so a fresh Vite dev server optimises its dependencies before the first test.
+up). `src/support/data.ts`: the generators.
 
 ## Commands
 
-- `bun run test:e2e` (repository root): builds the dependencies through turbo, starts and
-  waits for the `e2e` profile, then runs Playwright; extra arguments go to Playwright
-  (`--grep @smoke`, `sync/`, `--update-snapshots=missing`). `CI=1` runs one worker.
+- `bun run test:e2e` (repository root): builds the dependencies and the web app's production
+  build through turbo (and stops when `apps/web/dist/index.html` is missing afterwards), starts
+  the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
+  gateway and the front run the current code and configuration) and waits for it, then runs
+  Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,
+  `--update-snapshots=missing`). `CI=1` runs one worker.
 - `bun run test:e2e --down`: stops the `e2e` profile.
 - `bun run typecheck`, `bun run lint`.

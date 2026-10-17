@@ -1,7 +1,7 @@
-# Same-origin front of the local stands: the app and, under /backend/, the gateway,
-# WebSocket upgrades included. Host networking lets Caddy reach the dev servers on
-# 127.0.0.1; each site binds 127.0.0.1 only. One service per stand, so stopping one
-# leaves the other running.
+# Same-origin front of the local stands: the web app's build (apps/web/dist, read-only) and,
+# under /backend/, the gateway, WebSocket upgrades included. Host networking lets Caddy reach
+# the gateways on 127.0.0.1; each site binds 127.0.0.1 only. One service per stand, so
+# stopping one leaves the other running.
 name: perch
 services:
   caddy-dev:
@@ -10,9 +10,11 @@ services:
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
+      - ../../apps/web/dist:/srv/web:ro
   caddy-e2e:
     image: caddy:2.10.2-alpine
     network_mode: host
     volumes:
       - ./Caddyfile.e2e:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
+      - ../../apps/web/dist:/srv/web:ro

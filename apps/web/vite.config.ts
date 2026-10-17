@@ -7,31 +7,23 @@ import wasm from 'vite-plugin-wasm'
 
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
 
-// Behind the local stands' Caddy front the page is served over https on the front's port,
-// so the HMR client dials that port over wss and Caddy hands the socket to this server.
-const publicPort = process.env['VITE_PUBLIC_PORT']
-
 export default defineConfig(({ mode }) => ({
   plugins: [surqlPlugin(), wasm(), react(), tailwindcss()],
   resolve: {
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       // Loro's default browser build loads its WASM by synchronous XHR on the main
-      // thread; the bundler build fetches it asynchronously, in dev and in builds.
+      // thread; the bundler build fetches it asynchronously, in every build.
       // Tests run under Node and keep Loro's Node build.
       ...(mode === 'test' ? [] : [{ find: /^loro-crdt$/, replacement: 'loro-crdt/bundler' }]),
     ],
   },
-  // WASM packages are served as they are: pre-bundling breaks their initialisation
-  // order, and they initialise with top-level await.
-  optimizeDeps: { exclude: ['@surrealdb/wasm', '@surrealdb/wasm-native', 'loro-crdt'] },
-  build: { target: 'esnext' },
-  worker: { format: 'es' },
-  server: {
-    port: Number(process.env['E2E_WEB_PORT'] ?? 5180),
-    strictPort: true,
-    ...(publicPort
-      ? { hmr: { protocol: 'wss', host: 'localhost', clientPort: Number(publicPort) } }
-      : {}),
+  // `bun run dev` rebuilds in development mode on every change (`vite build --watch`):
+  // readable output with source maps, served by the stands' Caddy front.
+  build: {
+    target: 'esnext',
+    sourcemap: mode === 'development',
+    minify: mode !== 'development',
   },
+  worker: { format: 'es' },
 }))

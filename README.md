@@ -9,8 +9,8 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
   containers.
 - mcproc (`npm i -g mcproc`): it starts and stops the stands from `.mcproc/mcproc.yaml`. The
-  mcproc profiles are the working path: `bun run dev` alone starts the dev servers without the
-  gateway's environment and its database.
+  mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
+  and the gateway without the gateway's environment, its database or the front.
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
   self-signed certificate is made, and the browser asks to accept it once.
 - `bunx playwright install` for the browsers the e2e specs run in.
@@ -21,23 +21,30 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 
 ## Local stands
 
-A stand is SurrealDB in memory, the gateway, the web app's Vite dev server and a Caddy front
-(`infra/dev/`) that serves the app and, under `/backend/`, the gateway on one https origin.
-The processes are declared in `.mcproc/mcproc.yaml` and driven by mcproc (pm2 underneath).
+A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves the
+web app's build (`apps/web/dist`) and, under `/backend/`, the gateway on one https origin; the
+browser talks to nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
+by mcproc (pm2 underneath).
 
-| Stand | Profile | Open | SurrealDB | Gateway | Web |
+| Stand | Profile | Open | SurrealDB | Gateway | Web app |
 |---|---|---|---|---|---|
-| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | 127.0.0.1:5180 |
-| tests | `e2e` | https://localhost:5493 | 127.0.0.1:8010 | 127.0.0.1:5191 | 127.0.0.1:5190 |
+| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | build watcher |
+| tests | `e2e` | https://localhost:5493 | 127.0.0.1:8010 | 127.0.0.1:5191 | production build |
 
 - `mcproc start dev`, then open https://localhost:5443; `mcproc stop dev` stops the stand. The
-  gateway waits for its database and defines its namespace user there before it starts.
+  gateway waits for its database and defines its namespace user there before it starts. The
+  `web` app is a build watcher (`vite build --watch` in development mode, with source maps), not
+  a dev server, so there is no hot module replacement: after a code change it rewrites
+  `apps/web/dist` in 1-3 s, then reload the page. Until its first build finishes the front
+  answers 404.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). `SURREAL_URL=http://<host>:<port>`
   points them at another stand, and `GATEWAY_URL=http://<host>:<port>` the seed at its gateway.
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
-- `CI=1 bun run test:e2e`: builds, starts the `e2e` profile, waits for each of its apps and runs
-  the Playwright specs through the front; `bun run test:e2e --down` stops the profile.
+- `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
+  profile, waits for each of its apps and runs the Playwright specs through the front;
+  `bun run test:e2e --down` stops the profile. Both fronts serve the one `apps/web/dist`, so
+  after an e2e run the dev stand serves the production build until the watcher's next rebuild.
 - A SurrealDB stand keeps nothing when it stops. After restarting one on its own, restart its
   gateway too (`mcproc restart gateway-e2e`), so the gateway's user is defined again.
 
