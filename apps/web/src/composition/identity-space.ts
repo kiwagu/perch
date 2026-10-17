@@ -1,28 +1,23 @@
 /**
- * The signed-in identity's space on this device: its own local database, its private region
- * as a CRDT document projected into that database, the write path into the region and, while
- * this tab leads the browser, the sync engine that keeps the region in step with the gateway.
+ * The signed-in identity's space on this device: its own local database with its private
+ * region as a CRDT document projected into it, a database and region of the same kind for each
+ * organisation it belongs to, reads and writes routed between them by region and, while this
+ * tab leads the browser, the sync engine that keeps every region in step with the gateway.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
   type DataError,
   dataError,
   type LocalDb,
-  ShapeRunner,
   type ShapeRunnerPort,
   type WritePathPort,
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import {
-  type Clock,
-  LoroWritePath,
-  Projector,
-  RegionDoc,
-  type ReplicaSchema,
-} from '@workspace/replica'
+import { type Clock, privateRegionId, type ReplicaSchema } from '@workspace/replica'
+import type { Membership } from '@workspace/replica/protocol'
 import {
   type ChannelState,
   createSyncEngine,
@@ -32,6 +27,9 @@ import {
   type SyncHints,
   type SyncTransport,
 } from '@workspace/replica/sync'
+
+import { RoutingShapeRunner, RoutingWritePath } from './routing'
+import { openRegionSpace, type RegionSpace, TenantSpaces } from './tenant-space'
 
 export type Visibility = 'visible' | 'hidden'
 
@@ -43,18 +41,37 @@ export interface SyncState {
 
 export interface IdentitySpace {
   readonly identity: AuthUser
+  /** Reads the current organisation's database for a shape over the tenant region, the identity's otherwise. */
   readonly runner: ShapeRunnerPort
+  /** Writes a command into the tenant region of the current organisation, any other into the private region. */
   readonly writePath: WritePathPort
   /** The sync engine while this tab leads; undefined while another tab does. */
   readonly sync: SyncEngine | undefined
+  /** Resolves once every local write so far, in every region, is durable and projected. */
   flush(): ResultAsync<void, DataError>
   /**
-   * Whether the region holds local changes the gateway has not acknowledged yet: outbox rows,
+   * Whether any region holds local changes the gateway has not acknowledged yet: outbox rows,
    * or a change whose append failed and so lives in memory only.
    */
   unsent(): ResultAsync<boolean, DataError>
+  /**
+   * The identity's organisations changed: the databases of new ones open, those of the ones it
+   * left close and are deleted, and a leading tab syncs the regions on a new engine. Changes run
+   * one after the other; one that leaves the databases as they are changes nothing.
+   */
+  setMemberships(next: readonly Membership[]): Promise<void>
+  /** Makes the open organisation `key` current, or none; a key whose database is not open changes nothing. */
+  selectTenant(key: string | undefined): void
+  /** The key of the current organisation: the one selected, or the first by key while that one is not open. */
+  currentTenant(): string | undefined
+  /** The organisations the identity belongs to, as the space was last told. */
+  memberships(): readonly Membership[]
+  /** The keys of the organisations whose databases are open, in order. */
+  tenants(): readonly string[]
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
+  /** Has the leading tab's engine connect again at once; nothing happens while another tab leads. */
+  reconnectSync(): void
   /**
    * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
    * engine's channel: as on a change of leader, a new engine over a new channel replaces it
@@ -62,15 +79,21 @@ export interface IdentitySpace {
    * engine's channel was not stopped.
    */
   resumeSync(): void
-  /** Stops syncing and leading, persists and projects the last writes, closes the database. */
+  /** Stops syncing and leading, persists and projects the last writes, closes every database. */
   close(): Promise<void>
-  /** Closes the space and deletes its database. */
+  /** Closes the space and deletes its databases, the identity's own and each organisation's. */
   destroy(): Promise<void>
 }
 
 export interface IdentitySpaceOptions {
   readonly identity: AuthUser
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
+  /** Opens the database of one organisation of the identity: each has its own on the device. */
+  readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
+  /** The organisations the identity belongs to, as the device last heard. */
+  readonly memberships: readonly Membership[]
+  /** The key of the organisation chosen last on this browser, if any. */
+  readonly tenant: string | undefined
   readonly schema: ReplicaSchema
   /** Builds the channel to the gateway when this tab starts to lead: a WebSocketTransport in the app, the gateway stub in tests. */
   readonly transport: () => SyncTransport
@@ -86,25 +109,27 @@ const FOLLOWING: SyncState = { leader: false, channel: 'down' }
 class Space implements IdentitySpace {
   readonly runner: ShapeRunnerPort
   readonly writePath: WritePathPort
-  readonly #local: LocalDb
-  readonly #region: RegionDoc
+  readonly #own: RegionSpace
+  readonly #tenants: TenantSpaces
   readonly #options: IdentitySpaceOptions
-  readonly #projector: Projector
-  readonly #stopProjecting: () => void
   readonly #listening: Array<() => void> = []
   #engine: SyncEngine | undefined
   #visibility: Visibility = 'visible'
   #closing: Promise<void> | undefined
+  /** The change of memberships under way, if any; the next one waits for it. */
+  #changing: Promise<void> = Promise.resolve()
 
-  constructor(local: LocalDb, region: RegionDoc, options: IdentitySpaceOptions) {
-    this.#local = local
-    this.#region = region
+  constructor(own: RegionSpace, tenants: TenantSpaces, options: IdentitySpaceOptions) {
+    this.#own = own
+    this.#tenants = tenants
     this.#options = options
-    this.#projector = new Projector(region, local, options.schema, { onError: options.onError })
-    this.#stopProjecting = this.#projector.start()
-    this.runner = new ShapeRunner(local)
+    this.runner = new RoutingShapeRunner(
+      own.runner,
+      () => tenants.currentSpace()?.runner,
+      options.schema,
+    )
 
-    const path = new LoroWritePath(region, options.schema)
+    const path = new RoutingWritePath(own.writePath, () => tenants.currentSpace()?.writePath)
 
     this.writePath = {
       run: (command, params, meta) => path.run(command, params, meta).andTee(() => this.#wrote()),
@@ -122,18 +147,35 @@ class Space implements IdentitySpace {
   }
 
   flush(): ResultAsync<void, DataError> {
-    return this.#region.flush().andThen(() => this.#projector.flush())
+    return ResultAsync.combine(this.#spaces().map((space) => space.flush())).map(() => undefined)
   }
 
   unsent(): ResultAsync<boolean, DataError> {
-    // A failed append was reported to the write that made it; its change is unsent all the same.
-    return this.#region
-      .flush()
-      .map(() => true)
-      .orElse(() => okAsync(false))
-      .andThen((durable) =>
-        durable ? this.#region.outbox(1).map((rows) => rows.length > 0) : okAsync(true),
-      )
+    return ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
+      regions.some(Boolean),
+    )
+  }
+
+  setMemberships(next: readonly Membership[]): Promise<void> {
+    this.#changing = this.#changing.then(() => this.#changeMemberships(next))
+
+    return this.#changing
+  }
+
+  selectTenant(key: string | undefined): void {
+    this.#tenants.select(key)
+  }
+
+  currentTenant(): string | undefined {
+    return this.#tenants.current()
+  }
+
+  memberships(): readonly Membership[] {
+    return this.#tenants.memberships()
+  }
+
+  tenants(): readonly string[] {
+    return this.#tenants.keys()
   }
 
   visibility(state: Visibility): void {
@@ -146,16 +188,14 @@ class Space implements IdentitySpace {
     }
   }
 
+  reconnectSync(): void {
+    this.#engine?.reconnect()
+  }
+
   resumeSync(): void {
-    const engine = this.#engine
-
-    if (!engine?.channelStopped() || this.#closing) {
-      return
+    if (this.#engine?.channelStopped()) {
+      this.#relead()
     }
-
-    this.#engine = undefined
-    engine.stop()
-    this.#lead()
   }
 
   close(): Promise<void> {
@@ -166,7 +206,27 @@ class Space implements IdentitySpace {
 
   async destroy(): Promise<void> {
     await this.close()
-    await this.#local.destroy()
+    await Promise.all(this.#spaces().map((space) => space.destroy()))
+  }
+
+  /** The identity's own region first, then each organisation's. */
+  #spaces(): readonly RegionSpace[] {
+    return [this.#own, ...this.#tenants.spaces()]
+  }
+
+  /** The engine stops before a database the identity left goes: the next one syncs only those still open. */
+  async #changeMemberships(next: readonly Membership[]): Promise<void> {
+    if (this.#closing) {
+      return
+    }
+
+    const { changed, left } = await this.#tenants.change(next)
+
+    if (changed) {
+      this.#relead()
+    }
+
+    await this.#tenants.delete(left)
   }
 
   #followLeadership(leadership: Leadership | undefined): void {
@@ -198,7 +258,7 @@ class Space implements IdentitySpace {
     }
 
     const engine = createSyncEngine({
-      regions: [this.#region],
+      regions: this.#spaces().map((space) => space.region),
       transport: this.#options.transport(),
       clock: this.#options.clock,
       actor: this.identity.id,
@@ -221,6 +281,19 @@ class Space implements IdentitySpace {
     engine.visibility(this.#visibility)
     this.#options.onState({ leader: true, channel: 'down' })
     engine.start()
+  }
+
+  /** A leading tab replaces its engine with a new one over a new channel; a follower has none. */
+  #relead(): void {
+    const engine = this.#engine
+
+    if (!engine) {
+      return
+    }
+
+    this.#engine = undefined
+    engine.stop()
+    this.#lead()
   }
 
   /** Another tab leads now: this one stops syncing. */
@@ -258,6 +331,10 @@ class Space implements IdentitySpace {
       // Another tab began a sign-out: the session holds this tab's writes back.
       case 'sign-out':
         break
+      // Another tab needs new keys: the gateway renews them when the leader connects again.
+      case 'renew':
+        this.#engine?.reconnect()
+        break
     }
   }
 
@@ -266,10 +343,12 @@ class Space implements IdentitySpace {
       return
     }
 
-    void this.#region.catchUpLocal().match(
-      () => undefined,
-      (error) => this.#options.onError(error),
-    )
+    for (const space of this.#spaces()) {
+      void space.catchUp().match(
+        () => undefined,
+        (error) => this.#options.onError(error),
+      )
+    }
   }
 
   async #shutDown(): Promise<void> {
@@ -283,16 +362,10 @@ class Space implements IdentitySpace {
     engine?.stop()
     this.#options.leadership?.stop()
     this.#options.hints.close()
-    this.#stopProjecting()
-    // The last writes still persist and project before the database closes; a failure there
-    // was already reported to the write that made it, or by the projector.
-    await this.#region
-      .flush()
-      .andThen(() => this.#projector.flush())
-      .unwrapOr(undefined)
-    this.#region.close()
+    // A change of memberships under way ends first: the databases it opens close with the others.
+    await this.#changing
+    await Promise.all(this.#spaces().map((space) => space.close()))
     this.#options.onState(FOLLOWING)
-    await this.#local.close()
   }
 }
 
@@ -303,29 +376,43 @@ function abandon(options: IdentitySpaceOptions): void {
 }
 
 /**
- * Opens the identity's database and its private region `identity:<id>`, projects the region
- * into the database and syncs it while this tab leads. The space owns the leadership and the
- * hints it is given: it stops them when it closes, or at once when it cannot open.
+ * Opens the identity's database and its private region `identity:<id>`, and the database and
+ * region `tenant:<key>` of each organisation it belongs to, projects each region into its
+ * database and syncs them while this tab leads. The space owns the leadership and the hints it
+ * is given: it stops them when it closes, or at once when it cannot open.
  */
 export function openIdentitySpace(
   options: IdentitySpaceOptions,
 ): ResultAsync<IdentitySpace, DataError> {
   const id = options.identity.id
 
-  return options
-    .openLocal(id)
+  return openRegionSpace({
+    openLocal: () => options.openLocal(id),
+    ref: { kind: 'private', id: privateRegionId(id) },
+    schema: options.schema,
+    onError: options.onError,
+  })
     .orElse((error) => {
       abandon(options)
 
       return errAsync(error)
     })
-    .andThen((local) =>
-      RegionDoc.open(local, { kind: 'private', id: `identity:${id}` })
-        .map((region): IdentitySpace => new Space(local, region, options))
+    .andThen((own) =>
+      TenantSpaces.open(
+        {
+          identity: id,
+          openLocal: options.openTenantLocal,
+          schema: options.schema,
+          onError: options.onError,
+        },
+        options.memberships,
+        options.tenant,
+      )
+        .map((tenants): IdentitySpace => new Space(own, tenants, options))
         .orElse((error) => {
           abandon(options)
 
-          return ResultAsync.fromSafePromise(local.close()).andThen(() => errAsync(error))
+          return ResultAsync.fromSafePromise(own.close()).andThen(() => errAsync(error))
         }),
     )
 }

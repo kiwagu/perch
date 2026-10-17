@@ -1,9 +1,10 @@
 import { okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError, LocalDb, ShapeRunnerPort } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
 import { syncHints } from '@workspace/replica/sync'
 import {
   FakeHintChannel,
@@ -39,6 +40,8 @@ export interface TestWorldOptions {
   readonly databases?: BrowserDatabases
   /** The browser's BroadcastChannel bus for sync hints; by default the tab hears no other tab. */
   readonly hints?: Set<FakeHintChannel>
+  /** The organisations every account belongs to: the gateway signs in and welcomes with them. */
+  readonly memberships?: readonly Membership[]
 }
 
 /** The identity databases of one browser: its tabs open the same database for an identity. */
@@ -114,6 +117,10 @@ export interface TestWorld {
   opened(): IdentityId[]
   /** The identities whose databases were deleted, in order. */
   destroyed(): IdentityId[]
+  /** The organisations whose databases were opened, by key, in order. */
+  tenantsOpened(): string[]
+  /** The organisations whose databases were deleted, by key, in order. */
+  tenantsDestroyed(): string[]
   /** The transport contexts the session handed out, newest last. */
   contexts(): readonly TransportContext[]
   /** Tells the session the tab went to the background or came back. */
@@ -125,22 +132,30 @@ export interface TestWorld {
 
 const silent: CommandLogger = { info: () => {}, warn: () => {} }
 
-async function openTestGateway(): Promise<TestGateway> {
+async function openTestGateway(memberships: readonly Membership[]): Promise<TestGateway> {
   const clock = manualClock()
-  const server = (await openTestDb())._unsafeUnwrap()
+  const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
+  const server = (await openTestDb({ schema }))._unsafeUnwrap()
 
-  return { stub: gatewayStub({ local: server, schema: replicaSchema, clock }), clock, server }
+  return {
+    stub: gatewayStub({ local: server, schema: replicaSchema, clock, memberships }),
+    clock,
+    server,
+  }
 }
 
 export async function openTestWorld(options: TestWorldOptions = {}): Promise<TestWorld> {
-  const gateway = options.gateway ?? (await openTestGateway())
+  const memberships = options.memberships ?? []
+  const gateway = options.gateway ?? (await openTestGateway(memberships))
   const { stub, clock } = gateway
   const storage = options.storage ?? memoryStorage()
-  const auth = fakeGatewayAuth()
+  const auth = fakeGatewayAuth(memberships)
   const failures: DataError[] = []
   const states: SyncState[] = []
   const opened: IdentityId[] = []
   const destroyed: IdentityId[] = []
+  const tenantsOpened: string[] = []
+  const tenantsDestroyed: string[] = []
   const contexts: TransportContext[] = []
   const visibilityListeners = new Set<(state: Visibility) => void>()
   let visibility: Visibility = 'visible'
@@ -162,12 +177,34 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
           }
         },
       ),
+    openTenantLocal: (_identity, key) =>
+      openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
+        tenantsOpened.push(key)
+
+        return {
+          ...local,
+          destroy: async () => {
+            tenantsDestroyed.push(key)
+            await local.destroy()
+          },
+        }
+      }),
     schema: replicaSchema,
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
       contexts.push(context)
-      // The browser's WebSocket transport calls `onEnded` itself; the stub tells its listeners.
+      // The browser's WebSocket transport hands renewed keys and memberships to the context
+      // and calls `onEnded` itself; the stub tells its listeners.
+      transport.onMessage((message) => {
+        if (message.type === 'tokens') {
+          context.onTokens({ access: message.access, refresh: message.refresh })
+        }
+
+        if (message.type === 'welcome' || message.type === 'memberships') {
+          context.onMemberships(message.memberships)
+        }
+      })
       transport.onEnded(context.onEnded)
 
       if (options.online === false) {
@@ -211,6 +248,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     states,
     opened: () => [...opened],
     destroyed: () => [...destroyed],
+    tenantsOpened: () => [...tenantsOpened],
+    tenantsDestroyed: () => [...tenantsDestroyed],
     contexts: () => [...contexts],
     setVisibility: (state) => {
       visibility = state

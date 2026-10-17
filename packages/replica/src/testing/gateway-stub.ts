@@ -74,6 +74,11 @@ export interface GatewayStub {
    * channel as a failed server (1011), which ends nothing; resolves once it arrived.
    */
   failNextSignOut(): Promise<void>
+  /**
+   * The next device to connect is handed these keys before its welcome, as the gateway does
+   * when the access token a device presents no longer works and it renews the pair.
+   */
+  renewAtNextHello(tokens: { readonly access: string; readonly refresh: string }): void
   /** How many sign-outs the devices sent. */
   signOuts(): number
   /**
@@ -110,6 +115,8 @@ interface Gateway {
   keepOpen: (() => void) | undefined
   /** Set while the next sign-out is to fail its revoke: called when it arrives. */
   failSignOut: (() => void) | undefined
+  /** The keys the next device to connect is handed before its welcome. */
+  renewal: { readonly access: string; readonly refresh: string } | undefined
 }
 
 /** One connection of a device: its end at the hub, up once welcomed. */
@@ -292,6 +299,14 @@ class DeviceChannel implements StubTransport {
     }
 
     connection.up = true
+
+    const renewed = this.#gateway.renewal
+
+    if (renewed) {
+      this.#gateway.renewal = undefined
+      this.#deliver(connection, { type: 'tokens', ...renewed })
+    }
+
     this.#deliver(connection, {
       type: 'welcome',
       identity: this.#identity,
@@ -521,6 +536,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     refusePull: false,
     keepOpen: undefined,
     failSignOut: undefined,
+    renewal: undefined,
   }
   const channels: DeviceChannel[] = []
 
@@ -567,6 +583,9 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
       return new Promise((resolve) => {
         gateway.failSignOut = resolve
       })
+    },
+    renewAtNextHello(tokens) {
+      gateway.renewal = tokens
     },
     signOuts: () => gateway.signOuts,
     endWith(reason) {

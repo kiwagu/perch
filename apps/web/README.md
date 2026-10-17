@@ -16,14 +16,29 @@ modeling stage.
   identity, its keys and its memberships (`perch.session.memberships`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
-  projector, write path). A reload opens the saved identity's space without the network.
-  `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations` routes with
-  the access token, renewing it once on a 401 and mapping refusals to `data:` errors. One tab per browser leads the identity's sync through a Web Lock and runs the sync
-  engine over the gateway's WebSocket (`/backend/sync`), keeping every renewed pair of
-  keys; the tabs hint each other over a BroadcastChannel, so each reads what the others
-  wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
-  out, then forgets the keys and deletes the identity's database; with changes it could
-  not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
+  projector, write path), with a database of its own for each organisation the identity
+  belongs to (`openTenantSpace`: `indxdb://app-identity-<id>-t_<key>`, region `tenant:<key>`;
+  `TenantSpaces` keeps them in step with the memberships). Reads and writes are routed by
+  region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
+  and a command into the tenant region go to the current organisation (the one selected on
+  this browser, otherwise the first by key; none refuses with `no organisation is selected`),
+  everything else to the identity's own database. A reload opens the saved identity's space
+  without the network. The session follows the memberships (`SessionOrganisations`): from the
+  sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
+  and from the other tabs through the storage; a new organisation's database opens, the
+  database of one the identity left is deleted, and a leading tab syncs the regions on a new
+  engine. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
+  routes with the access token, renewing it once on a 401 and mapping refusals to `data:`
+  errors; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
+  creates its membership on the device at once. A token is renewed through the leading tab:
+  it connects again and the gateway answers a token that no longer works with a new pair;
+  another tab asks the leader with the `renew` hint and waits for the new access key in
+  storage (10 seconds at most). One tab per browser leads the identity's sync through a Web
+  Lock and runs the sync engine over the gateway's WebSocket (`/backend/sync`) for the private
+  region and every organisation's, keeping every renewed pair of keys; the tabs hint each
+  other over a BroadcastChannel, so each reads what the others wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
+  out, then forgets the keys and the memberships and deletes the identity's database and
+  each organisation's; with changes it could not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
   `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
   hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that
@@ -46,7 +61,8 @@ modeling stage.
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
-  checked again when the user signs out), the ports for the session and for commands,
+  checked again when the user signs out), the ports for the session (with the memberships
+  and the current organisation), for commands and for organisations,
   notices the shell shows, the language state and the app-wide catalogs.
 - `src/features/app-shell/`: the page frame, painted before the database finishes opening.
 - `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in

@@ -11,6 +11,7 @@ import {
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
+import type { Membership } from '@workspace/replica/protocol'
 import {
   type DeviceCredentials,
   type EndReason,
@@ -34,12 +35,14 @@ import {
   type SyncState,
   type Visibility,
 } from './identity-space'
+import { SessionOrganisations } from './organisations'
 import {
   forgetDevice,
   forgetNotice,
   forgetSigningOut,
   IDENTITY_KEY,
   type KeyValueStorage,
+  MEMBERSHIPS_KEY,
   saveDevice,
   savedIdentity,
   savedKeys,
@@ -50,11 +53,12 @@ import {
   signingOutSince,
 } from './storage'
 
-/** What the channel of one identity needs: its keys, a place for renewed ones, word that it ended. */
+/** What the channel of one identity needs: its keys, where renewed keys and memberships go, its end. */
 export interface TransportContext {
   readonly identity: IdentityId
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: SignedInDevice['tokens']) => void
+  readonly onMemberships: (memberships: readonly Membership[]) => void
   readonly onEnded: (reason: EndReason) => void
 }
 
@@ -67,6 +71,8 @@ export interface VisibilitySource {
 export interface SessionOptions {
   readonly auth: GatewayAuth
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
+  /** Opens the database of one organisation of an identity: each has its own on the device. */
+  readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
   readonly schema: ReplicaSchema
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -145,6 +151,7 @@ export class SessionService implements SessionPort {
   readonly writePath: CurrentSpaceWritePath
   readonly #options: SessionOptions
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
+  readonly #organisations: SessionOrganisations
   readonly #unlisten: Array<() => void>
   #open: OpenSpace | undefined
   #generation = 0
@@ -154,6 +161,11 @@ export class SessionService implements SessionPort {
 
   constructor(options: SessionOptions) {
     this.#options = options
+    this.#organisations = new SessionOrganisations({
+      storage: options.storage,
+      clock: options.clock,
+      open: () => this.#open,
+    })
 
     const spaces: SpaceSource = {
       current: () => this.#open?.space,
@@ -168,6 +180,8 @@ export class SessionService implements SessionPort {
       options.storage.onChangeElsewhere((key) => {
         if (key === undefined || key === IDENTITY_KEY) {
           this.#followElsewhere()
+        } else if (key === MEMBERSHIPS_KEY) {
+          this.#organisations.followSaved()
         }
       }),
       options.visibility.onChange((state) => this.#open?.space.visibility(state)),
@@ -234,6 +248,32 @@ export class SessionService implements SessionPort {
 
   clearNotice(): void {
     forgetNotice(this.#options.storage)
+  }
+
+  memberships(): readonly Membership[] {
+    return this.#organisations.memberships()
+  }
+
+  subscribeMemberships(listener: () => void): () => void {
+    return this.#organisations.subscribe(listener)
+  }
+
+  currentTenant(): Membership | undefined {
+    return this.#organisations.current()
+  }
+
+  selectTenant(key: string): void {
+    this.#organisations.select(key)
+  }
+
+  /** Keeps the signed-in identity's new memberships and has its space follow them; see `SessionOrganisations.apply`. */
+  applyMemberships(next: readonly Membership[]): Promise<void> {
+    return this.#organisations.apply(next)
+  }
+
+  /** Has the gateway renew the device's keys, through the leading tab; see `SessionOrganisations.renewKeys`. */
+  renewKeys(): Promise<boolean> {
+    return this.#organisations.renewKeys()
   }
 
   /**
@@ -314,6 +354,8 @@ export class SessionService implements SessionPort {
     return openIdentitySpace({
       identity,
       openLocal: this.#options.openLocal,
+      openTenantLocal: this.#options.openTenantLocal,
+      ...this.#organisations.saved(identity.id),
       schema: this.#options.schema,
       transport: () => this.#options.transport(this.#transportContext(identity.id)),
       leadership: lead,
@@ -576,6 +618,12 @@ export class SessionService implements SessionPort {
       onTokens: (tokens) => {
         if (saved()) {
           saveKeys(storage, tokens)
+          this.#organisations.renewed()
+        }
+      },
+      onMemberships: (memberships) => {
+        if (this.#open?.space.identity.id === identity) {
+          void this.#organisations.apply(memberships)
         }
       },
       onEnded: (reason) =>
@@ -701,5 +749,7 @@ export class SessionService implements SessionPort {
     for (const listener of this.#listeners) {
       listener(user)
     }
+
+    this.#organisations.tell()
   }
 }

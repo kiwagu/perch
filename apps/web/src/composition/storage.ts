@@ -111,7 +111,8 @@ export function deviceIdFrom(storage: KeyValueStorage): string {
 /** Who is signed in on this browser; the tabs follow it. */
 export const IDENTITY_KEY = 'perch.session.identity'
 
-const ACCESS_KEY = 'perch.session.token'
+/** The access token the gateway issued the device last; renewing the keys changes it. */
+export const ACCESS_KEY = 'perch.session.token'
 
 const REFRESH_KEY = 'perch.session.refresh'
 
@@ -127,7 +128,8 @@ export function saveDevice(storage: KeyValueStorage, device: SignedInDevice): vo
   saveMemberships(storage, device.identity.id, device.memberships)
 }
 
-const MEMBERSHIPS_KEY = 'perch.session.memberships'
+/** The organisations the signed-in identity belongs to; the tabs follow them. */
+export const MEMBERSHIPS_KEY = 'perch.session.memberships'
 
 const TENANT_KEY = 'perch.session.tenant'
 

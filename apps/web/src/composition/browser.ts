@@ -8,7 +8,7 @@
 
 import type { ResultAsync } from 'neverthrow'
 
-import { type DataError, openLocalDb } from '@workspace/data'
+import { type DataError, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
@@ -16,6 +16,7 @@ import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync
 
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import type { VisibilitySource } from './session'
 import { browserStorage } from './storage'
@@ -25,6 +26,10 @@ const commonFiles = import.meta.glob<string>('../../../../database/schema/common
   import: 'default',
 })
 const directoryFiles = import.meta.glob<string>('../../../../database/schema/directory/*.surql', {
+  eager: true,
+  import: 'default',
+})
+const tenantFiles = import.meta.glob<string>('../../../../database/schema/tenant/*.surql', {
   eager: true,
   import: 'default',
 })
@@ -40,6 +45,7 @@ const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): str
     .join('\n')
 
 const directorySchema = schemaOf(commonFiles, directoryFiles)
+const tenantSchema = schemaOf(commonFiles, tenantFiles)
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -78,12 +84,22 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
         database: 'identity',
         schema: directorySchema,
       }),
+    openTenantLocal: (identity, key) =>
+      openLocalDb({
+        engines: wasmEngines(),
+        url: `indxdb://app-identity-${identity}-${tenantDatabase(key)}`,
+        namespace: 'app',
+        database: 'tenant',
+        schema: tenantSchema,
+      }),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
+    organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
         credentials: context.credentials,
         onTokens: context.onTokens,
+        onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
       }),

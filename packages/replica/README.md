@@ -129,7 +129,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `memberships`, none by default, the organisation's region, with those memberships), can go
   offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
+  `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next device to connect a renewed pair
+  before its welcome), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
   the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`

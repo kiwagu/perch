@@ -1,11 +1,18 @@
-import { okAsync } from 'neverthrow'
+import { okAsync, type ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { AuthUser, DataError, LocalDb } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { type AuthUser, type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
+import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { identityIdFactory, profileIdFactory } from '@workspace/ids'
-import { leadership, lockName, syncHints } from '@workspace/replica/sync'
+import {
+  type IdentityId,
+  identityIdFactory,
+  noteIdFactory,
+  profileIdFactory,
+  tenantIdFactory,
+} from '@workspace/ids'
+import type { ClientMessage, Membership } from '@workspace/replica/protocol'
+import { leadership, lockName, type SyncTransport, syncHints } from '@workspace/replica/sync'
 import {
   FakeHintChannel,
   FakeLocks,
@@ -13,14 +20,29 @@ import {
   gatewayStub,
   type ManualClock,
   manualClock,
+  type StubTransport,
 } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
 
+import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
 import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
+
+const acme: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+  role: 'admin',
+}
+
+const globex: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
+  role: 'member',
+}
+
+/** How long a test waits for the sync to settle; the manual clock never gets there on its own. */
+const SETTLE_MS = 60_000
 
 interface Gateway {
   readonly stub: GatewayStub
@@ -39,6 +61,15 @@ interface Tab {
   readonly space: IdentitySpace
   readonly states: SyncState[]
   readonly errors: DataError[]
+  /** The channels the tab's engines opened to the gateway, newest last. */
+  readonly transports: StubTransport[]
+}
+
+/** The organisation databases a space opened and deleted, by key. */
+interface TenantDatabases {
+  readonly open: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
+  readonly opened: string[]
+  readonly destroyed: string[]
 }
 
 const cleanups: Array<() => Promise<void>> = []
@@ -49,10 +80,12 @@ afterEach(async () => {
   }
 })
 
-async function openGateway(): Promise<Gateway> {
+/** The gateway stub, welcoming every device with `memberships`; its database projects both kinds of region. */
+async function openGateway(memberships: readonly Membership[] = []): Promise<Gateway> {
   const clock = manualClock()
-  const server = (await openTestDb())._unsafeUnwrap()
-  const stub = gatewayStub({ local: server, schema: replicaSchema, clock })
+  const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
+  const server = (await openTestDb({ schema }))._unsafeUnwrap()
+  const stub = gatewayStub({ local: server, schema: replicaSchema, clock, memberships })
 
   cleanups.push(async () => {
     await stub.close()
@@ -74,10 +107,56 @@ async function openBrowser(options: { readonly locks?: boolean } = {}): Promise<
   }
 }
 
+/** Each organisation's database on its own in-memory engine, with the tenant schema. */
+function tenantDatabases(): TenantDatabases {
+  const opened: string[] = []
+  const destroyed: string[] = []
+
+  return {
+    opened,
+    destroyed,
+    open: (_identity, key) =>
+      openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
+        opened.push(key)
+
+        return {
+          ...local,
+          destroy: async () => {
+            destroyed.push(key)
+            await local.destroy()
+          },
+        }
+      }),
+  }
+}
+
+/** Passes everything through to `transport`, keeping what the device sent. */
+function recording(transport: SyncTransport, sent: ClientMessage[]): SyncTransport {
+  return {
+    start: () => transport.start(),
+    stop: () => transport.stop(),
+    reconnect: () => transport.reconnect(),
+    send: (message) => {
+      sent.push(message)
+
+      return transport.send(message)
+    },
+    onMessage: (listener) => transport.onMessage(listener),
+    onChannel: (listener) => transport.onChannel(listener),
+    onEnded: (listener) => transport.onEnded(listener),
+  }
+}
+
+/** The regions a device subscribed to, in the order it asked. */
+function subscribed(sent: readonly ClientMessage[] | undefined): string[] {
+  return (sent ?? []).flatMap((message) => (message.type === 'subscribe' ? [message.region] : []))
+}
+
 /** A tab of the browser: its own view of the shared store, with its own change events, as each tab opens the store itself. */
 async function openTab(gateway: Gateway, browser: Browser): Promise<Tab> {
   const states: SyncState[] = []
   const errors: DataError[] = []
+  const transports: StubTransport[] = []
   const view: LocalDb = {
     ...browser.store,
     changes: new EventTarget(),
@@ -88,8 +167,17 @@ async function openTab(gateway: Gateway, browser: Browser): Promise<Tab> {
     await openIdentitySpace({
       identity: ann,
       openLocal: () => okAsync(view),
+      openTenantLocal: tenantDatabases().open,
+      memberships: [],
+      tenant: undefined,
       schema: replicaSchema,
-      transport: () => gateway.stub.transport(ann.id),
+      transport: () => {
+        const transport = gateway.stub.transport(ann.id)
+
+        transports.push(transport)
+
+        return transport
+      },
       leadership: browser.locks ? leadership(browser.locks, lockName(ann.id)) : undefined,
       hints: syncHints(new FakeHintChannel(browser.bus)),
       clock: gateway.clock,
@@ -100,7 +188,65 @@ async function openTab(gateway: Gateway, browser: Browser): Promise<Tab> {
 
   cleanups.push(() => space.close())
 
-  return { space, states, errors }
+  return { space, states, errors, transports }
+}
+
+/** A leading space of Ann's with `memberships`, the first by key current, its own store unless `local` is given. */
+async function openSpace(
+  gateway: Gateway,
+  options: {
+    readonly memberships: readonly Membership[]
+    readonly online?: boolean
+    readonly local?: LocalDb
+  },
+) {
+  const tenants = tenantDatabases()
+  const errors: DataError[] = []
+  const sent: ClientMessage[][] = []
+  const space = (
+    await openIdentitySpace({
+      identity: ann,
+      openLocal: () => (options.local ? okAsync(options.local) : openTestDb()),
+      openTenantLocal: tenants.open,
+      memberships: options.memberships,
+      tenant: undefined,
+      schema: replicaSchema,
+      transport: () => {
+        const transport = gateway.stub.transport(ann.id)
+        const mine: ClientMessage[] = []
+
+        sent.push(mine)
+
+        if (options.online === false) {
+          transport.goOffline()
+        }
+
+        return recording(transport, mine)
+      },
+      leadership: leadership(new FakeLocks(), lockName(ann.id)),
+      hints: syncHints(undefined),
+      clock: gateway.clock,
+      onState: () => {},
+      onError: (error) => errors.push(error),
+    })
+  )._unsafeUnwrap()
+
+  cleanups.push(() => space.close())
+  await vi.waitFor(() => expect(space.sync).toBeDefined())
+
+  return { space, tenants, errors, sent }
+}
+
+/** Waits until the leader's engine has nothing left to send or hear. */
+async function settled(space: IdentitySpace): Promise<void> {
+  await (space.sync ?? expect.unreachable('the space leads')).settled(SETTLE_MS)
+}
+
+const aNote = (text: string) => ({ id: noteIdFactory.create(), author: ann.id, text })
+
+/** The head of a region on the gateway: how many batches it accepted into it. */
+async function headOf(gateway: Gateway, region: string): Promise<number | undefined> {
+  return (await gateway.stub.hub.heads([region]))._unsafeUnwrap()[0]?.head
 }
 
 const leading = (tab: Tab) => vi.waitFor(() => expect(tab.space.sync).toBeDefined())
@@ -125,6 +271,9 @@ describe('openIdentitySpace', () => {
 
           return okAsync(local)
         },
+        openTenantLocal: tenantDatabases().open,
+        memberships: [],
+        tenant: undefined,
         schema: replicaSchema,
         transport: () => gateway.stub.transport(ann.id),
         leadership: leadership(new FakeLocks(), lockName(ann.id)),
@@ -251,6 +400,9 @@ describe('openIdentitySpace', () => {
       await openIdentitySpace({
         identity: ann,
         openLocal: () => okAsync(local),
+        openTenantLocal: tenantDatabases().open,
+        memberships: [],
+        tenant: undefined,
         schema: replicaSchema,
         transport: () => gateway.stub.transport(ann.id),
         leadership: leadership(new FakeLocks(), lockName(ann.id)),
@@ -268,5 +420,124 @@ describe('openIdentitySpace', () => {
     expect(destroy).toHaveBeenCalledOnce()
     expect(space.sync).toBeUndefined()
     expect((await space.runner.read(profileById, { id: profile('Ann').id })).isErr()).toBe(true)
+  })
+})
+
+describe('organisations in the identity space', () => {
+  it('opens a database per membership and syncs its region alongside the private one', async () => {
+    const gateway = await openGateway([acme])
+    const { space, tenants, errors, sent } = await openSpace(gateway, { memberships: [acme] })
+    const written = aNote('Hello')
+
+    await settled(space)
+
+    expect(tenants.opened).toEqual(['acme'])
+    expect(space.tenants()).toEqual(['acme'])
+    expect(space.currentTenant()).toBe('acme')
+    expect(subscribed(sent.at(-1))).toEqual([`identity:${ann.id}`, 'tenant:acme'])
+
+    expect((await space.writePath.run(createNote, written)).isOk()).toBe(true)
+    await settled(space)
+
+    expect((await space.runner.read(organisationShape, {}))._unsafeUnwrap()).toMatchObject([
+      { id: written.id, author: ann.id, text: 'Hello' },
+    ])
+    expect(await headOf(gateway, 'tenant:acme')).toBe(1)
+    expect(
+      (await new ShapeRunner(gateway.server).read(organisationShape, {}))._unsafeUnwrap(),
+    ).toMatchObject([{ id: written.id, author: ann.id, text: 'Hello' }])
+    expect(errors).toEqual([])
+  })
+
+  it('setMemberships with a new organisation opens its database and the engine syncs it', async () => {
+    const gateway = await openGateway([acme, globex])
+    const { space, tenants, errors, sent } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+
+    const before = space.sync
+
+    await space.setMemberships([acme, globex])
+
+    expect(tenants.opened).toEqual(['acme', 'globex'])
+    expect(space.tenants()).toEqual(['acme', 'globex'])
+    expect(space.currentTenant()).toBe('acme')
+    expect(space.sync).toBeDefined()
+    expect(space.sync).not.toBe(before)
+
+    space.selectTenant('globex')
+
+    expect(space.currentTenant()).toBe('globex')
+    expect((await space.writePath.run(createNote, aNote('Hi Globex'))).isOk()).toBe(true)
+    await settled(space)
+
+    expect(subscribed(sent.at(-1))).toEqual([`identity:${ann.id}`, 'tenant:acme', 'tenant:globex'])
+    expect(await headOf(gateway, 'tenant:globex')).toBe(1)
+    expect(await headOf(gateway, 'tenant:acme')).toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('setMemberships without an organisation closes and deletes its database and stops syncing it', async () => {
+    const gateway = await openGateway([acme])
+    const { space, tenants, errors, sent } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+    await space.setMemberships([])
+
+    expect(tenants.destroyed).toEqual(['acme'])
+    expect(space.tenants()).toEqual([])
+    expect(space.currentTenant()).toBeUndefined()
+
+    await settled(space)
+
+    expect(subscribed(sent.at(-1))).toEqual([`identity:${ann.id}`])
+    expect((await space.runner.read(organisationShape, {}))._unsafeUnwrapErr().message).toBe(
+      'no organisation is selected',
+    )
+    expect(errors).toEqual([])
+  })
+
+  it('destroy deletes the private database and every tenant database', async () => {
+    const gateway = await openGateway([acme, globex])
+    const local = (await openTestDb())._unsafeUnwrap()
+    const destroy = vi.spyOn(local, 'destroy')
+    const { space, tenants } = await openSpace(gateway, { memberships: [acme, globex], local })
+
+    await space.destroy()
+
+    expect(destroy).toHaveBeenCalledOnce()
+    expect([...tenants.destroyed].sort()).toEqual(['acme', 'globex'])
+    expect(space.sync).toBeUndefined()
+  })
+
+  it('unsent counts the outbox of every region', async () => {
+    const gateway = await openGateway([acme])
+    const { space } = await openSpace(gateway, { memberships: [acme], online: false })
+
+    expect((await space.unsent())._unsafeUnwrap()).toBe(false)
+    expect((await space.writePath.run(createNote, aNote('Offline'))).isOk()).toBe(true)
+    expect((await space.unsent())._unsafeUnwrap()).toBe(true)
+  })
+
+  it('reconnectSync has the leader connect again, and so does a renew hint from another tab', async () => {
+    const gateway = await openGateway()
+    const browser = await openBrowser()
+    const leader = await openTab(gateway, browser)
+    const follower = await openTab(gateway, browser)
+
+    await leading(leader)
+    await vi.waitFor(() => expect(leader.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+
+    leader.space.reconnectSync()
+    // A follower has no channel of its own to connect again.
+    follower.space.reconnectSync()
+
+    expect(leader.transports.map((transport) => transport.reconnects())).toEqual([1])
+    expect(follower.transports).toEqual([])
+
+    syncHints(new FakeHintChannel(browser.bus)).post('renew')
+
+    expect(leader.transports.map((transport) => transport.reconnects())).toEqual([2])
+    expect([...leader.errors, ...follower.errors]).toEqual([])
   })
 })

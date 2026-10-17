@@ -38,6 +38,7 @@ import { UserModule } from '../features/user/user.module'
 
 import type { CommandLogger } from './commands'
 import { gatewayAuth } from './gateway-auth'
+import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import { memoryStorage } from './storage'
 
@@ -219,6 +220,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
  */
 export function openClient(options: ClientOptions): ResultAsync<SeedClient, DataError> {
   const schema = readSchema('directory')
+  const tenantSchema = readSchema('tenant')
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
 
@@ -231,12 +233,22 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         database: 'identity',
         schema,
       }),
+    openTenantLocal: () =>
+      openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: 'app',
+        database: 'tenant',
+        schema: tenantSchema,
+      }),
     gatewayAuth: gatewayAuth(options.gatewayUrl),
+    organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),
         credentials: context.credentials,
         onTokens: context.onTokens,
+        onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
       }),

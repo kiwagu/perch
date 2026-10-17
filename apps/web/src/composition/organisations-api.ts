@@ -7,21 +7,12 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
-import {
-  type Membership,
-  membership,
-  type TenantRole,
-  tenantRole,
-} from '@workspace/replica/protocol'
+import { type Membership, membership, tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import type { Fetcher } from './gateway-auth'
+import type { MemberView } from '../platform/organisations.port'
 
-/** A member of an organisation, as the gateway lists and invites them. */
-export interface MemberView {
-  readonly identity: { readonly id: IdentityId; readonly email: string }
-  readonly role: TenantRole
-}
+import type { Fetcher } from './gateway-auth'
 
 export interface OrganisationsApi {
   list(): ResultAsync<readonly Membership[], DataError>
