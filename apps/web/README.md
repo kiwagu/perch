@@ -33,9 +33,9 @@ modeling stage.
   notices the shell shows, the language state and the app-wide catalogs.
 - `src/features/app-shell/`: the page frame, painted before the database finishes opening.
 - `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in
-  user's profile (`/me`): name, email and the chosen language, which follows the user
-  across devices, and signing out, which asks before losing changes this device could not
-  send.
+  user's profile (`/me`): name, email, a bio saved with the name by one Save, and the chosen
+  language, which follows the user across devices, and signing out, which asks before losing
+  changes this device could not send.
 
 ## Key exports
 

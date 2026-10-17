@@ -1,6 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
+import { okAsync } from 'neverthrow'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
+import type { BusError } from '@workspace/cqrs'
 import { useLocale, useT } from '@workspace/i18n'
 
 import { useSetLocale } from '../../../../../platform/i18n'
@@ -11,7 +13,7 @@ import { SESSION } from '../../../../../platform/session.port'
 import { localeChange, PROFILE_SERVICE } from '../../../application/profile.service'
 
 import { profileShape } from './profile.model.gen'
-import { ProfileView } from './profile.view'
+import { type ProfileDraft, ProfileView } from './profile.view'
 
 export function ProfileContainer() {
   const session = useService(SESSION)
@@ -56,14 +58,24 @@ export function ProfileContainer() {
     }
   }, [row, locale, setLocale, profiles])
 
-  const saveName = (name: string) => {
+  // One Save writes each field the person changed: the name first, then the bio.
+  const save = (draft: ProfileDraft) => {
     if (!row) {
       return
     }
 
+    const name = () =>
+      draft.name === row.name
+        ? okAsync<void, BusError>(undefined)
+        : profiles.updateName({ id: row.id, name: draft.name })
+    const bio = () =>
+      draft.bio === (row.bio ?? '')
+        ? okAsync<void, BusError>(undefined)
+        : profiles.updateBio({ id: row.id, bio: draft.bio })
+
     setSaving(true)
-    void profiles
-      .updateName({ id: row.id, name })
+    void name()
+      .andThen(bio)
       .match(
         () => {
           setError(undefined)
@@ -92,7 +104,7 @@ export function ProfileContainer() {
       profile={row}
       saving={saving}
       error={error}
-      onSaveName={saveName}
+      onSave={save}
       onSignOut={signOut}
       confirmSignOut={confirmSignOut}
       onCancelSignOut={() => setConfirmSignOut(false)}

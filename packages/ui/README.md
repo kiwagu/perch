@@ -8,7 +8,7 @@ knowledge; copy and data arrive through props. Dark colors follow the system set
 
 ## Key exports
 
-- `./components/ui/*`: shadcn primitives (button, card, input, label, field, alert,
+- `./components/ui/*`: shadcn primitives (button, card, input, textarea, label, field, alert,
   alert-dialog, separator, dropdown-menu, select, sheet). Add more with `bunx shadcn add <name>`
   in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
   alias; the file then belongs to us and is edited in place.

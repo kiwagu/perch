@@ -16,6 +16,7 @@
   "user.profile.missing": "This account has no profile yet.",
   "user.profile.email": "Email",
   "user.profile.name": "Name",
+  "user.profile.bio": "Bio",
   "user.profile.save": "Save",
   "user.profile.saved": "Saved",
   "user.profile.sign-out": "Sign out",

@@ -16,6 +16,7 @@
   "user.profile.missing": "Esta cuenta aún no tiene perfil.",
   "user.profile.email": "Correo electrónico",
   "user.profile.name": "Nombre",
+  "user.profile.bio": "Biografía",
   "user.profile.save": "Guardar",
   "user.profile.saved": "Guardado",
   "user.profile.sign-out": "Cerrar sesión",

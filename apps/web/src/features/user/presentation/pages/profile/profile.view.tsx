@@ -15,10 +15,18 @@ import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Input } from '@workspace/ui/components/ui/input'
+import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 export interface ProfileViewData {
   readonly name: string
   readonly email: string
+  readonly bio?: string | undefined
+}
+
+/** What the person typed into the profile form, saved together by one Save. */
+export interface ProfileDraft {
+  readonly name: string
+  readonly bio: string
 }
 
 export interface ProfileViewProps {
@@ -27,7 +35,7 @@ export interface ProfileViewProps {
   readonly saving?: boolean
   /** The code of the last refused change. */
   readonly error?: string | undefined
-  readonly onSaveName: (name: string) => void
+  readonly onSave: (draft: ProfileDraft) => void
   /** Signs out; `forgetUnsent` once the person confirmed losing changes this device could not send. */
   readonly onSignOut: (options?: { readonly forgetUnsent: true }) => void
   /** Signing out would lose changes this device could not send: the person confirms or cancels. */
@@ -85,39 +93,76 @@ function SignOutConfirmation(props: {
   )
 }
 
-function NameForm(props: {
+/**
+ * A draft of a stored value. It starts from the stored value and restarts from it whenever
+ * the stored value changes, saved here or on another device.
+ */
+function useDraft(stored: string): readonly [string, (value: string) => void] {
+  const [draft, setDraft] = useState({ from: stored, value: stored })
+
+  // Adjusting state while rendering: React renders again at once, before anything is shown.
+  if (draft.from !== stored) {
+    setDraft({ from: stored, value: stored })
+  }
+
+  return [
+    draft.from === stored ? draft.value : stored,
+    (value) => setDraft({ from: stored, value }),
+  ]
+}
+
+const NAME_CODES: ReadonlySet<string> = new Set(['profile:NAME_REQUIRED', 'profile:NAME_TOO_LONG'])
+
+function ProfileForm(props: {
   readonly name: string
+  readonly bio: string
   readonly saving: boolean
   readonly error: string | undefined
-  readonly onSave: (name: string) => void
+  readonly onSave: (draft: ProfileDraft) => void
 }) {
   const t = useT()
-  const id = useId()
-  const [draft, setDraft] = useState(props.name)
+  const nameId = useId()
+  const bioId = useId()
+  const [name, setName] = useDraft(props.name)
+  const [bio, setBio] = useDraft(props.bio)
+  const nameRefused = props.error !== undefined && NAME_CODES.has(props.error)
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
-    props.onSave(draft)
+    props.onSave({ name, bio })
   }
 
   return (
     <form onSubmit={submit}>
-      <Field data-invalid={props.error ? true : undefined}>
-        <FieldLabel htmlFor={id}>{t('user.profile.name')}</FieldLabel>
-        <Input
-          id={id}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          autoComplete="name"
-          aria-invalid={props.error ? true : undefined}
-          data-testid="user.profile.name-input"
-        />
-        {props.error ? (
-          <FieldError data-testid="user.profile.error">{errorText(t, props.error)}</FieldError>
-        ) : null}
-        <Button type="submit" disabled={props.saving} data-testid="user.profile.save">
-          {t('user.profile.save')}
-        </Button>
-      </Field>
+      <FieldGroup>
+        <Field data-invalid={nameRefused ? true : undefined}>
+          <FieldLabel htmlFor={nameId}>{t('user.profile.name')}</FieldLabel>
+          <Input
+            id={nameId}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoComplete="name"
+            aria-invalid={nameRefused ? true : undefined}
+            data-testid="user.profile.name-input"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={bioId}>{t('user.profile.bio')}</FieldLabel>
+          <Textarea
+            id={bioId}
+            value={bio}
+            onChange={(event) => setBio(event.target.value)}
+            data-testid="user.profile.bio-input"
+          />
+        </Field>
+        <Field data-invalid={props.error ? true : undefined}>
+          {props.error ? (
+            <FieldError data-testid="user.profile.error">{errorText(t, props.error)}</FieldError>
+          ) : null}
+          <Button type="submit" disabled={props.saving} data-testid="user.profile.save">
+            {t('user.profile.save')}
+          </Button>
+        </Field>
+      </FieldGroup>
     </form>
   )
 }
@@ -148,13 +193,12 @@ export function ProfileView(props: ProfileViewProps) {
             <FieldLabel htmlFor={emailId}>{t('user.profile.email')}</FieldLabel>
             <Input id={emailId} value={profile.email} readOnly data-testid="user.profile.email" />
           </Field>
-          {/* A new stored name, saved here or elsewhere, restarts the draft from it. */}
-          <NameForm
-            key={profile.name}
+          <ProfileForm
             name={profile.name}
+            bio={profile.bio ?? ''}
             saving={props.saving ?? false}
             error={props.error}
-            onSave={props.onSaveName}
+            onSave={props.onSave}
           />
           <Button
             type="button"

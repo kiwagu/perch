@@ -24,37 +24,79 @@ const tree: ProfileResult = [
 ]
 
 function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSaveName: vi.fn(), onSignOut: vi.fn(), onCancelSignOut: vi.fn() }
+  const handlers = { onSave: vi.fn(), onSignOut: vi.fn(), onCancelSignOut: vi.fn() }
+  const view = (more: Partial<ProfileViewProps>) => (
+    <ProfileView status="ready" profile={tree[0]} {...handlers} {...props} {...more} />
+  )
+  const { rerender } = renderWithProviders(view({}), { locale, es })
 
-  renderWithProviders(<ProfileView status="ready" profile={tree[0]} {...handlers} {...props} />, {
-    locale,
-    es,
-  })
-
-  return handlers
+  return { ...handlers, rerender: (more: Partial<ProfileViewProps>) => rerender(view(more)) }
 }
+
+const field = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
 describe('ProfileView', () => {
   it('shows the name and the email', () => {
     renderView()
 
     expect(screen.getByTestId('user.profile.heading').textContent).toBe('Ann')
-    expect((screen.getByTestId('user.profile.email') as HTMLInputElement).value).toBe(
-      'ann@example.test',
-    )
-    expect((screen.getByTestId('user.profile.name-input') as HTMLInputElement).value).toBe('Ann')
+    expect(field('user.profile.email').value).toBe('ann@example.test')
+    expect(field('user.profile.name-input').value).toBe('Ann')
+  })
+
+  it('shows the bio under its label, empty while the profile has none', () => {
+    renderView()
+
+    expect(field('user.profile.bio-input').value).toBe('')
+    expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-input'))
+  })
+
+  it('shows the stored bio', () => {
+    renderView({ profile: { name: 'Ann', email: 'ann@example.test', bio: 'Hello' } })
+
+    expect(field('user.profile.bio-input').value).toBe('Hello')
   })
 
   it('saves the new name', () => {
-    const { onSaveName } = renderView()
+    const { onSave } = renderView()
 
-    fireEvent.change(screen.getByTestId('user.profile.name-input'), {
-      target: { value: 'Renamed' },
-    })
+    fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
     fireEvent.click(screen.getByTestId('user.profile.save'))
 
     expect(screen.getByTestId('user.profile.save').textContent).toBe(en['user.profile.save'])
-    expect(onSaveName).toHaveBeenCalledWith('Renamed')
+    expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: '' })
+  })
+
+  it('saves the name and the bio with one Save', () => {
+    const { onSave } = renderView()
+
+    fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
+    fireEvent.change(field('user.profile.bio-input'), { target: { value: 'About me' } })
+    fireEvent.click(screen.getByTestId('user.profile.save'))
+
+    expect(onSave).toHaveBeenCalledOnce()
+    expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: 'About me' })
+  })
+
+  it('restarts a draft when its stored value changes, here or on another device', () => {
+    const profile = { name: 'Ann', email: 'ann@example.test', bio: 'Hello' }
+    const { rerender } = renderView({ profile })
+
+    fireEvent.change(field('user.profile.name-input'), { target: { value: 'Ann draft' } })
+    fireEvent.change(field('user.profile.bio-input'), { target: { value: 'Bio draft' } })
+    rerender({ profile: { ...profile, bio: 'Written elsewhere' } })
+
+    expect(field('user.profile.bio-input').value).toBe('Written elsewhere')
+    expect(field('user.profile.name-input').value).toBe('Ann draft')
+
+    rerender({ profile: { ...profile, name: 'Bea', bio: 'Written elsewhere' } })
+
+    expect(field('user.profile.name-input').value).toBe('Bea')
+
+    // A stored value that comes back to an earlier one does not bring back the old draft.
+    rerender({ profile: { ...profile, name: 'Bea' } })
+
+    expect(field('user.profile.bio-input').value).toBe('Hello')
   })
 
   it('explains a name the profile refuses', () => {
@@ -63,6 +105,16 @@ describe('ProfileView', () => {
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.name-required'],
     )
+    expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('explains a change that was not saved without blaming the name', () => {
+    renderView({ error: 'data:WRITE_FAILED' })
+
+    expect(screen.getByTestId('user.profile.error').textContent).toBe(
+      en['user.profile.error.failed'],
+    )
+    expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
   })
 
   it('says when the profile is still loading or missing', () => {
@@ -113,5 +165,6 @@ describe('ProfileView', () => {
     renderView({}, 'es')
 
     expect(screen.getByTestId('user.profile.save').textContent).toBe(es['user.profile.save'])
+    expect(screen.getByLabelText(es['user.profile.bio'])).toBe(field('user.profile.bio-input'))
   })
 })
