@@ -3,13 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { identityIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
 
+import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
 import {
   browserDatabases,
@@ -1113,6 +1114,31 @@ describe('SessionService memberships', () => {
     expect(storage.get('perch.session.memberships')).toBeUndefined()
     expect(storage.get('perch.session.tenant')).toBeUndefined()
     expect(heard).toBeGreaterThan(0)
+  })
+
+  it("a watch through the session's runner follows the organisation selected", async () => {
+    const { session } = await bootSession({ saved: annIn([acme, globex]) })
+    const trees: string[][] = []
+    const write = (text: string) =>
+      session.writePath.run(createNote, {
+        id: noteIdFactory.create(),
+        author: ann.identity.id,
+        text,
+      })
+
+    expect((await write('At Acme')).isOk()).toBe(true)
+    session.selectTenant('globex')
+    expect((await write('At Globex')).isOk()).toBe(true)
+    session.selectTenant('acme')
+
+    const stop = session.runner.watch(organisationShape, {}, (tree) =>
+      trees.push(tree.map(({ text }) => text)),
+    )
+
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Acme']))
+    session.selectTenant('globex')
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Globex']))
+    stop()
   })
 
   it('renewKeys in the leading tab connects again and resolves once the gateway handed new keys', async () => {

@@ -141,6 +141,36 @@ describe('TenantSpaces', () => {
     expect(other.tenants.currentSpace()).toBeUndefined()
   })
 
+  it('tells its listeners when another organisation becomes current, not while the current one stays', async () => {
+    const { tenants } = await openTenants([acme], 'acme')
+    let told = 0
+    const unlisten = tenants.onChange(() => {
+      told += 1
+    })
+
+    tenants.select('acme')
+    await tenants.change([acme, globex])
+    expect(told).toBe(0)
+
+    tenants.select('globex')
+    expect(told).toBe(1)
+
+    // The current organisation is left: the first by key becomes current, before the database goes.
+    const { left } = await tenants.change([acme])
+
+    expect(told).toBe(2)
+    expect(tenants.current()).toBe('acme')
+    await tenants.delete(left)
+
+    await tenants.change([])
+    expect(told).toBe(3)
+    expect(tenants.currentSpace()).toBeUndefined()
+
+    unlisten()
+    await tenants.change([acme])
+    expect(told).toBe(3)
+  })
+
   it('closes the databases it opened when one organisation does not open', async () => {
     const opened: LocalDb[] = []
     const result = await TenantSpaces.open(

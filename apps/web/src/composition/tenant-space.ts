@@ -175,11 +175,12 @@ export interface TenantSpacesOptions {
 /**
  * The databases of the organisations an identity belongs to, one per membership, and the one the
  * tenant region's reads and writes go to: the one selected while its database is open, otherwise
- * the first by key.
+ * the first by key. Its listeners hear when another one becomes current, or none.
  */
 export class TenantSpaces {
   readonly #options: TenantSpacesOptions
   readonly #open: Map<string, TenantSpace>
+  readonly #listeners = new Set<() => void>()
   #memberships: readonly Membership[]
   #current: string | undefined
 
@@ -240,8 +241,18 @@ export class TenantSpaces {
   /** Makes the open organisation `key` current, or none; a key whose database is not open changes nothing. */
   select(key: string | undefined): void {
     if (key === undefined || this.#open.has(key)) {
+      const before = this.currentSpace()
+
       this.#current = key
+      this.#tellIfMoved(before)
     }
+  }
+
+  /** Hears another organisation become current, or none; told before the database left is deleted. */
+  onChange(listener: () => void): () => void {
+    this.#listeners.add(listener)
+
+    return () => this.#listeners.delete(listener)
   }
 
   /**
@@ -253,6 +264,7 @@ export class TenantSpaces {
   async change(
     next: readonly Membership[],
   ): Promise<{ readonly changed: boolean; readonly left: readonly TenantSpace[] }> {
+    const before = this.currentSpace()
     const keys = new Set(next.map(({ tenant }) => tenant.key))
     const left = this.spaces().filter((tenant) => !keys.has(tenant.key))
     const coming = [...keys].filter((key) => !this.#open.has(key))
@@ -283,6 +295,7 @@ export class TenantSpaces {
     }
 
     this.#keepCurrent()
+    this.#tellIfMoved(before)
 
     return { changed: left.length > 0 || opened.some(Boolean), left }
   }
@@ -304,6 +317,14 @@ export class TenantSpaces {
     )
 
     return Promise.all(deleting).then(() => undefined)
+  }
+
+  #tellIfMoved(before: TenantSpace | undefined): void {
+    if (this.currentSpace() !== before) {
+      for (const listener of [...this.#listeners]) {
+        listener()
+      }
+    }
   }
 
   #keepCurrent(): void {

@@ -519,6 +519,70 @@ describe('organisations in the identity space', () => {
     expect((await space.unsent())._unsafeUnwrap()).toBe(true)
   })
 
+  it('a watch over the tenant region follows the current organisation and leaves one the identity left', async () => {
+    const gateway = await openGateway([acme, globex])
+    const { space, errors } = await openSpace(gateway, {
+      memberships: [acme, globex],
+      online: false,
+    })
+    const trees: string[][] = []
+    const reported: DataError[] = []
+
+    expect((await space.writePath.run(createNote, aNote('At Acme'))).isOk()).toBe(true)
+    space.selectTenant('globex')
+    expect((await space.writePath.run(createNote, aNote('At Globex'))).isOk()).toBe(true)
+    space.selectTenant('acme')
+
+    const stop = space.runner.watch(
+      organisationShape,
+      {},
+      (tree) => trees.push(tree.map(({ text }) => text)),
+      { onError: (error) => reported.push(error) },
+    )
+
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Acme']))
+
+    space.selectTenant('globex')
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Globex']))
+
+    // Globex, current, is left: the watch moves to Acme before Globex's database goes.
+    await space.setMemberships([acme])
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Acme']))
+
+    await space.setMemberships([])
+
+    expect(reported.map((error) => error.message)).toEqual(['no organisation is selected'])
+
+    stop()
+    expect(errors).toEqual([])
+  })
+
+  it('a watch started while no organisation is current reports it once and starts on the first one', async () => {
+    const gateway = await openGateway([acme])
+    const { space, errors } = await openSpace(gateway, { memberships: [], online: false })
+    const trees: string[][] = []
+    const reported: DataError[] = []
+    const stop = space.runner.watch(
+      organisationShape,
+      {},
+      (tree) => trees.push(tree.map(({ text }) => text)),
+      { onError: (error) => reported.push(error) },
+    )
+
+    expect(reported.map((error) => error.message)).toEqual(['no organisation is selected'])
+
+    await space.setMemberships([acme])
+
+    expect(space.currentTenant()).toBe('acme')
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual([]))
+    expect((await space.writePath.run(createNote, aNote('First'))).isOk()).toBe(true)
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['First']))
+    expect(reported).toHaveLength(1)
+
+    stop()
+    expect(errors).toEqual([])
+  })
+
   it('reconnectSync has the leader connect again, and so does a renew hint from another tab', async () => {
     const gateway = await openGateway()
     const browser = await openBrowser()

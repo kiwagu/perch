@@ -3,7 +3,9 @@
  * organisation's database, and a command into the tenant region writes that organisation's
  * document; every other shape and command goes to the identity's own database and private
  * region. While no organisation is current, the tenant region's reads and writes refuse,
- * saying so.
+ * saying so. A watch over the tenant region follows the current organisation: when another one
+ * becomes current it stops on the one it watched and starts on the new one, or reports that none
+ * is current.
  */
 
 import { err, errAsync, ok, type Result, type ResultAsync } from 'neverthrow'
@@ -28,6 +30,8 @@ export class RoutingShapeRunner implements ShapeRunnerPort {
     private readonly own: ShapeRunnerPort,
     private readonly tenant: () => ShapeRunnerPort | undefined,
     private readonly schema: ReplicaSchema,
+    /** Hears another organisation become current, or none. */
+    private readonly onTenantChange: (listener: () => void) => () => void,
   ) {}
 
   read<Params, Result>(
@@ -45,23 +49,42 @@ export class RoutingShapeRunner implements ShapeRunnerPort {
     onTree: (tree: Result) => void,
     options?: WatchOptions,
   ): () => void {
-    const runner = this.#runnerOf(shape)
-
-    if (runner.isErr()) {
-      options?.onError?.(runner.error)
-
-      return () => {}
+    if (!this.#inTenant(shape)) {
+      return this.own.watch(shape, params, onTree, options)
     }
 
-    return runner.value.watch(shape, params, onTree, options)
+    const start = (): (() => void) => {
+      const runner = this.#runnerOf(shape)
+
+      if (runner.isErr()) {
+        options?.onError?.(runner.error)
+
+        return () => {}
+      }
+
+      return runner.value.watch(shape, params, onTree, options)
+    }
+    let stop = start()
+    const unlisten = this.onTenantChange(() => {
+      stop()
+      stop = start()
+    })
+
+    return () => {
+      unlisten()
+      stop()
+    }
+  }
+
+  #inTenant<Params, Tree>(shape: Shape<Params, Tree>): boolean {
+    return (
+      shape.tables.length > 0 &&
+      shape.tables.every((table) => this.schema[table]?.region === 'tenant')
+    )
   }
 
   #runnerOf<Params, Tree>(shape: Shape<Params, Tree>): Result<ShapeRunnerPort, DataError> {
-    const tenantOnly =
-      shape.tables.length > 0 &&
-      shape.tables.every((table) => this.schema[table]?.region === 'tenant')
-
-    if (!tenantOnly) {
+    if (!this.#inTenant(shape)) {
       return ok(this.own)
     }
 

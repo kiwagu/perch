@@ -22,7 +22,8 @@ modeling stage.
   region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
   and a command into the tenant region go to the current organisation (the one selected on
   this browser, otherwise the first by key; none refuses with `no organisation is selected`),
-  everything else to the identity's own database. A reload opens the saved identity's space
+  everything else to the identity's own database; a watch over the tenant region moves to the
+  organisation that becomes current (or reports that none is). A reload opens the saved identity's space
   without the network. The session follows the memberships (`SessionOrganisations`): from the
   sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
   and from the other tabs through the storage; a new organisation's database opens, the

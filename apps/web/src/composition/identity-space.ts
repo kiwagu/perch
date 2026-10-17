@@ -41,7 +41,10 @@ export interface SyncState {
 
 export interface IdentitySpace {
   readonly identity: AuthUser
-  /** Reads the current organisation's database for a shape over the tenant region, the identity's otherwise. */
+  /**
+   * Reads the current organisation's database for a shape over the tenant region, the identity's
+   * otherwise; a watch over the tenant region moves when another organisation becomes current.
+   */
   readonly runner: ShapeRunnerPort
   /** Writes a command into the tenant region of the current organisation, any other into the private region. */
   readonly writePath: WritePathPort
@@ -127,6 +130,7 @@ class Space implements IdentitySpace {
       own.runner,
       () => tenants.currentSpace()?.runner,
       options.schema,
+      (listener) => tenants.onChange(listener),
     )
 
     const path = new RoutingWritePath(own.writePath, () => tenants.currentSpace()?.writePath)
