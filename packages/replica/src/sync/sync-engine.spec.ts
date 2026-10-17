@@ -229,6 +229,45 @@ describe('sync engine', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
 
+  it('connects again when a probe stays unanswered for 30 seconds, then settles', async () => {
+    const { b, stub, clock } = await twoDevices()
+    const swallowed = stub.swallowNextProbe()
+
+    // The tab comes back into view: the full pass probes, and the answer never comes.
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await swallowed
+
+    const settling = b.engine.settled(120_000)
+
+    expect(await hasSettled(settling)).toBe(false)
+
+    await clock.advance(60_000)
+    await settling
+
+    expect(b.transport.reconnects()).toBe(1)
+    expect(b.errors).toEqual([
+      expect.objectContaining({
+        code: 'data:QUERY_FAILED',
+        message: 'the gateway did not answer a probe within 30000 ms',
+      }),
+    ])
+  })
+
+  it('connects again when a push stays unanswered for 30 seconds', async () => {
+    const { a, stub, clock, settle } = await twoDevices()
+    const swallowed = stub.swallowNextPush()
+
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await swallowed
+    await clock.advance(30_000)
+    await settle()
+
+    expect(a.transport.reconnects()).toBe(1)
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
   it('subscribes again after the gateway failed to load the region, and pushes what waited', async () => {
     let failLoad = true
     const gateway = await openGateway({

@@ -11,6 +11,7 @@ export {
   RECONNECT_DELAYS_MS,
   type SocketLike,
   type SyncTransport,
+  WELCOME_TIMEOUT_MS,
   WebSocketTransport,
   type WebSocketTransportOptions,
 } from './transport'

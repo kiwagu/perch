@@ -36,6 +36,8 @@ export interface StubTransport extends SyncTransport {
   goOnline(): void
   /** Started, not offline and not signed out: the channel is meant to be up. */
   online(): boolean
+  /** How many times the engine gave a connection up with `reconnect`. */
+  reconnects(): number
 }
 
 export interface CompactionAnswer {
@@ -52,6 +54,8 @@ export interface GatewayStub {
   rejectEverything(): void
   /** The next pushed batch is never answered; resolves once it arrived. */
   swallowNextPush(): Promise<void>
+  /** The next probe is never answered; resolves once it arrived. */
+  swallowNextProbe(): Promise<void>
   /** The next pull is answered with the protocol error a device that is not subscribed gets. */
   refuseNextPull(): void
   /** The next sign-out is taken in but the channel stays open; resolves once it arrived. */
@@ -84,6 +88,8 @@ interface Gateway {
   rejectAll: boolean
   /** Set while the next push is to go unanswered: called when it arrives. */
   swallowPush: (() => void) | undefined
+  /** Set while the next probe is to go unanswered: called when it arrives. */
+  swallowProbe: (() => void) | undefined
   refusePull: boolean
   /** Set while the next sign-out is to leave the channel open: called when it arrives. */
   keepOpen: (() => void) | undefined
@@ -134,6 +140,7 @@ class DeviceChannel implements StubTransport {
   #ended = false
   #connection: Connection | undefined
   #dropNextFanOut = false
+  #reconnects = 0
 
   constructor(gateway: Gateway, identity: string) {
     this.#gateway = gateway
@@ -163,6 +170,21 @@ class DeviceChannel implements StubTransport {
 
   online(): boolean {
     return this.#started && !this.#offline && !this.#ended
+  }
+
+  /** The connection is given up and made again at once: the device is welcomed anew. */
+  reconnect(): void {
+    if (!this.#connection) {
+      return
+    }
+
+    this.#reconnects += 1
+    this.#disconnect()
+    this.#connect()
+  }
+
+  reconnects(): number {
+    return this.#reconnects
   }
 
   dropNextFanOut(): void {
@@ -335,6 +357,15 @@ class DeviceChannel implements StubTransport {
         this.#settle(hub.compact(own, subscriber, covers, snapshot))
       })
       .with({ type: 'probe' }, ({ regions }) => {
+        const swallowed = this.#gateway.swallowProbe
+
+        if (swallowed) {
+          this.#gateway.swallowProbe = undefined
+          swallowed()
+
+          return
+        }
+
         this.#settle(
           hub.heads(regions).andTee((heads) =>
             this.#deliver(connection, {
@@ -433,6 +464,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     signOuts: 0,
     rejectAll: false,
     swallowPush: undefined,
+    swallowProbe: undefined,
     refusePull: false,
     keepOpen: undefined,
   }
@@ -462,6 +494,11 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     swallowNextPush() {
       return new Promise((resolve) => {
         gateway.swallowPush = resolve
+      })
+    },
+    swallowNextProbe() {
+      return new Promise((resolve) => {
+        gateway.swallowProbe = resolve
       })
     },
     refuseNextPull() {

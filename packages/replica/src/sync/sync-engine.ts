@@ -9,7 +9,7 @@ import type { RegionDoc } from '../region-doc'
 
 import { type CadencePort, createCadence, type PassKind } from './cadence'
 import { createOutboxDrain, type OutboxDrainPort } from './outbox-drain'
-import { RegionSync } from './region-sync'
+import { ANSWER_TIMEOUT_MS, RegionSync } from './region-sync'
 import type { ChannelState, EndReason, SyncTransport } from './transport'
 
 export interface SyncEngineOptions {
@@ -89,8 +89,11 @@ class Engine implements SyncEngine {
   #channel: ChannelState = 'down'
   /** Server messages handed to a region and not yet handled. */
   #handling = 0
-  /** Probes sent on this connection whose heads have not arrived. */
-  #probing = 0
+  /**
+   * Probes sent on this connection whose heads have not arrived, oldest first, each as the
+   * cancel of its answer timeout. Heads name no probe, so each answer settles the oldest.
+   */
+  #probes: Array<() => void> = []
   #passing = false
 
   constructor(options: SyncEngineOptions) {
@@ -145,7 +148,7 @@ class Engine implements SyncEngine {
     }
 
     this.#channel = 'down'
-    this.#probing = 0
+    this.#forgetProbes()
     this.#change.fire()
   }
 
@@ -230,7 +233,7 @@ class Engine implements SyncEngine {
       // The transport hands renewed keys to the app.
       .with({ type: 'tokens' }, () => {})
       .with({ type: 'heads' }, ({ regions }) => {
-        this.#probing = Math.max(0, this.#probing - 1)
+        this.#probes.shift()?.()
 
         for (const { region, head } of regions) {
           this.#regions.get(region)?.sync.catchUp(head)
@@ -293,7 +296,7 @@ class Engine implements SyncEngine {
     this.#channel = state
 
     if (state === 'down') {
-      this.#probing = 0
+      this.#forgetProbes()
 
       for (const { sync } of this.#regions.values()) {
         sync.channelDown()
@@ -310,7 +313,7 @@ class Engine implements SyncEngine {
 
     try {
       if (this.#options.transport.send({ type: 'probe', regions: [...this.#regions.keys()] })) {
-        this.#probing += 1
+        this.#awaitHeads()
       }
 
       if (kind === 'full') {
@@ -345,6 +348,33 @@ class Engine implements SyncEngine {
     }
   }
 
+  /**
+   * Waits for the heads of a probe just sent; when none come within 30 seconds the probe is
+   * given up, reported, and the connection, which stopped answering, is made again.
+   */
+  #awaitHeads(): void {
+    const cancel = this.#options.clock.schedule(ANSWER_TIMEOUT_MS, () => {
+      this.#probes = this.#probes.filter((pending) => pending !== cancel)
+      this.#options.onError(
+        dataError(
+          'data:QUERY_FAILED',
+          `the gateway did not answer a probe within ${ANSWER_TIMEOUT_MS} ms`,
+        ),
+      )
+      this.#options.transport.reconnect()
+      this.#change.fire()
+    })
+
+    this.#probes.push(cancel)
+  }
+
+  /** The probes out will not be answered on this connection. */
+  #forgetProbes(): void {
+    for (const cancel of this.#probes.splice(0)) {
+      cancel()
+    }
+  }
+
   #track(handled: Promise<void>): void {
     this.#handling += 1
     void handled.finally(() => {
@@ -370,7 +400,7 @@ class Engine implements SyncEngine {
     return (
       this.#channel === 'up' &&
       !this.#passing &&
-      this.#probing === 0 &&
+      this.#probes.length === 0 &&
       this.#handling === 0 &&
       outboxes.every((rows) => rows.isOk() && rows.value.length === 0) &&
       [...this.#regions.values()].every(({ sync }) => sync.quiet())

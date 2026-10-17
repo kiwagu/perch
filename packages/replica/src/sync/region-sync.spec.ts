@@ -38,9 +38,13 @@ async function alone(options: { readonly persisted?: boolean } = {}) {
   const clock = manualClock()
   const sent: ClientMessage[] = []
   const errors: DataError[] = []
+  const recycled = { count: 0 }
   const transport: SyncTransport = {
     start() {},
     stop() {},
+    reconnect() {
+      recycled.count += 1
+    },
     send(message) {
       sent.push(message)
 
@@ -77,7 +81,7 @@ async function alone(options: { readonly persisted?: boolean } = {}) {
     return push?.type === 'push' ? push.batch : expect.unreachable('a push was sent')
   }
 
-  return { clock, errors, region, sync, count, lastBatch }
+  return { clock, errors, region, sync, count, lastBatch, reconnects: () => recycled.count }
 }
 
 /** Server updates of the profile: a later one that needs an earlier one, and all of it. */
@@ -142,8 +146,8 @@ describe('region sync on its own', () => {
     expect(errors).toEqual([])
   })
 
-  it('gives up on a pull whose answer never comes after 30 seconds, and reports it once', async () => {
-    const { sync, count, errors, clock } = await alone()
+  it('gives up on a pull whose answer never comes after 30 seconds, reports it once and reconnects', async () => {
+    const { sync, count, errors, clock, reconnects } = await alone()
 
     sync.subscribe()
     await sync.handle(updates(emptyRegion, 0, true))
@@ -156,6 +160,7 @@ describe('region sync on its own', () => {
 
     expect(sync.quiet()).toBe(true)
     expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+    expect(reconnects()).toBe(1)
 
     sync.retryPull()
 
@@ -244,8 +249,8 @@ describe('region sync on its own', () => {
     expect((await again.region.outbox(10))._unsafeUnwrap()).toEqual([])
   })
 
-  it('releases a push whose answer never comes after 30 seconds, and reports it once', async () => {
-    const { sync, count, region, errors, clock } = await alone({ persisted: true })
+  it('releases a push whose answer never comes after 30 seconds, reports it once and reconnects', async () => {
+    const { sync, count, region, errors, clock, reconnects } = await alone({ persisted: true })
 
     sync.subscribe()
     await sync.handle(updates(emptyRegion, 0, true))
@@ -257,6 +262,7 @@ describe('region sync on its own', () => {
 
     expect(await pushed).toBe('down')
     expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
+    expect(reconnects()).toBe(1)
     expect((await region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 })

@@ -27,6 +27,11 @@ export interface DeviceCredentials {
 export interface SyncTransport {
   start(): void
   stop(): void
+  /**
+   * Gives up on the current connection, which stopped answering, and connects again after the
+   * first delay of the backoff; nothing happens unless a connection is open or opening.
+   */
+  reconnect(): void
   /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
   send(message: ClientMessage): boolean
   onMessage(listener: (message: ServerMessage) => void): () => void
@@ -52,8 +57,16 @@ export interface WebSocketTransportOptions {
 /** How long the transport waits before each reconnect in a row; the last delay repeats. */
 export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
 
-/** The close code of an orderly close (RFC 6455). */
+/** How long an open socket waits for the gateway's welcome before it is given up. */
+export const WELCOME_TIMEOUT_MS = 10_000
+
+/**
+ * The close code of an orderly close (RFC 6455), also of a socket the device gives up on: a
+ * browser closes with 1000 or 3000–4999 only, and 4000 already means a sign-out here.
+ */
 const NORMAL_CLOSE = 1000
+
+const NO_TIMER = (): void => {}
 
 /**
  * Close codes after which the gateway will not take the device back, and what they mean. Any
@@ -78,7 +91,8 @@ type State =
 /**
  * The device's WebSocket to the gateway. On open it says hello with the stored keys; the
  * channel is up once the gateway welcomes it, and only then does it send. A socket that
- * closes is opened again after a growing delay, which starts over at the next welcome. A
+ * closes, or is not welcomed within 10 seconds, is opened again after a growing delay, which
+ * starts over at the next welcome or when the engine gives a connection up (`reconnect`). A
  * close that refuses the keys or the protocol, or signs the device out, ends the channel for
  * good. Text the protocol refuses closes the socket as a breach and connects again.
  */
@@ -90,6 +104,8 @@ export class WebSocketTransport implements SyncTransport {
   #state: State = { kind: 'idle' }
   /** How many reconnects in a row have failed to reach a welcome. */
   #attempt = 0
+  /** Gives up on the open socket when the welcome does not come in time. */
+  #cancelWelcome = NO_TIMER
 
   constructor(options: WebSocketTransportOptions) {
     this.#options = options
@@ -108,6 +124,7 @@ export class WebSocketTransport implements SyncTransport {
       return
     }
 
+    this.#endWelcomeWait()
     this.#state = { kind: 'idle' }
 
     if (state.kind === 'waiting') {
@@ -120,6 +137,24 @@ export class WebSocketTransport implements SyncTransport {
       if (state.up) {
         this.#emitChannel('down')
       }
+    }
+  }
+
+  reconnect(): void {
+    const state = this.#state
+
+    if (state.kind !== 'connected') {
+      return
+    }
+
+    const wasUp = state.up
+
+    state.socket.close(NORMAL_CLOSE)
+    this.#attempt = 0
+    this.#reconnect()
+
+    if (wasUp) {
+      this.#emitChannel('down')
     }
   }
 
@@ -189,6 +224,15 @@ export class WebSocketTransport implements SyncTransport {
       return
     }
 
+    // A gateway that takes the socket but never welcomes it is as gone as a closed one.
+    this.#cancelWelcome = this.#options.clock.schedule(WELCOME_TIMEOUT_MS, () => {
+      this.#cancelWelcome = NO_TIMER
+
+      if (this.#current(socket) && !this.#isUp()) {
+        socket.close(NORMAL_CLOSE)
+        this.#reconnect()
+      }
+    })
     socket.send(
       encodeMessage(clientMessage, {
         type: 'hello',
@@ -212,6 +256,7 @@ export class WebSocketTransport implements SyncTransport {
 
     if (message.type === 'welcome') {
       this.#attempt = 0
+      this.#endWelcomeWait()
       this.#state = { kind: 'connected', socket, up: true }
     }
 
@@ -262,6 +307,8 @@ export class WebSocketTransport implements SyncTransport {
   #reconnect(): void {
     const delay = RECONNECT_DELAYS_MS[Math.min(this.#attempt, RECONNECT_DELAYS_MS.length - 1)] ?? 0
 
+    this.#endWelcomeWait()
+
     this.#attempt += 1
     this.#state = {
       kind: 'waiting',
@@ -273,7 +320,13 @@ export class WebSocketTransport implements SyncTransport {
     return this.#state.kind === 'connected' && this.#state.up
   }
 
+  #endWelcomeWait(): void {
+    this.#cancelWelcome()
+    this.#cancelWelcome = NO_TIMER
+  }
+
   #end(reason: EndReason): void {
+    this.#endWelcomeWait()
     this.#state = { kind: 'ended' }
     this.#options.onEnded(reason)
 

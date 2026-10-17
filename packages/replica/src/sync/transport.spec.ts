@@ -268,6 +268,86 @@ describe('WebSocket transport', () => {
     expect(transport.send(probe)).toBe(false)
   })
 
+  it('closes a socket the gateway does not welcome within 10 seconds of opening, and connects again', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
+
+    transport.start()
+    socket().open()
+    await clock.advance(9_999)
+
+    expect(socket().closedWith).toBeUndefined()
+
+    await clock.advance(1)
+
+    expect(socket().closedWith).toBe(1000)
+
+    await clock.advance(1_000)
+
+    expect(sockets.length).toBe(2)
+    expect(events).toEqual([])
+  })
+
+  it('keeps a welcomed socket open past 10 seconds', async () => {
+    const { clock, sockets, connect } = harness()
+    const socket = connect()
+
+    await clock.advance(60_000)
+
+    expect(socket.closedWith).toBeUndefined()
+    expect(sockets.length).toBe(1)
+  })
+
+  it('closes and connects again on reconnect(), from the first delay of the backoff', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
+
+    // Three closes in a row have grown the next delay to 8 seconds.
+    transport.start()
+
+    for (const delay of [1_000, 2_000, 4_000]) {
+      socket().drop(1006)
+      await clock.advance(delay)
+    }
+
+    socket().open()
+
+    const silent = socket()
+
+    transport.reconnect()
+
+    expect(silent.closedWith).toBe(1000)
+
+    await clock.advance(999)
+
+    expect(sockets.length).toBe(4)
+
+    await clock.advance(1)
+
+    expect(sockets.length).toBe(5)
+
+    // A welcomed socket goes down at once, and comes back after the first delay too.
+    socket().open()
+    socket().receive(welcome)
+
+    const dead = socket()
+
+    transport.reconnect()
+
+    expect(dead.closedWith).toBe(1000)
+    expect(events).toEqual(['up', 'down'])
+    expect(transport.send(probe)).toBe(false)
+
+    await clock.advance(1_000)
+
+    expect(sockets.length).toBe(6)
+
+    // The closes the old sockets report afterwards change nothing.
+    silent.drop(1006)
+    dead.drop(1006)
+    await clock.advance(60_000)
+
+    expect(sockets.length).toBe(6)
+  })
+
   it('closes the socket on stop and connects no more', async () => {
     const { clock, sockets, connect, transport, events } = harness()
     const socket = connect()

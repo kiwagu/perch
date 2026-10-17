@@ -34,8 +34,11 @@ type PushOutcome = 'sent' | 'empty' | 'down'
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
 
-/** How long a push or a pull waits for its answer before it is given up for now. */
-const ANSWER_TIMEOUT_MS = 30_000
+/**
+ * How long a push, a pull or a probe waits for its answer before it is given up for now, and
+ * the connection with it: a connection that stopped answering is closed and made again.
+ */
+export const ANSWER_TIMEOUT_MS = 30_000
 
 const NO_TIMEOUT = (): void => {}
 
@@ -101,7 +104,8 @@ function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
  * acknowledged batch leaves the outbox, a rejected one is rolled back by an inverse commit
  * and pushed again together with it, and a batch rejected again after its rollback stops the
  * region's sync. A push or a pull answered with an error, or not answered within 30 seconds, is
- * given up for now and goes out again later; a subscription the gateway failed is sent again on
+ * given up for now and goes out again later (an unanswered one also has the transport connect
+ * again); a subscription the gateway failed is sent again on
  * the next full pass or push. Once the server asks for a compaction and the region is quiet, it
  * proposes a full snapshot.
  */
@@ -293,6 +297,7 @@ export class RegionSync implements DrainTarget {
           ),
         )
         this.#land('down')
+        this.#transport.reconnect()
       }
     })
 
@@ -570,6 +575,7 @@ export class RegionSync implements DrainTarget {
             `the gateway did not answer a pull of ${this.id} within ${ANSWER_TIMEOUT_MS} ms`,
           ),
         )
+        this.#transport.reconnect()
       })
     }
   }
