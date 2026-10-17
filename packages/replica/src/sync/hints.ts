@@ -37,9 +37,12 @@ const NO_HINTS: SyncHints = {
 export function syncHints(channel: HintChannel | undefined): SyncHints {
   if (channel === undefined) return NO_HINTS
   const handlers = new Set<MessageHandler>()
+  let closed = false
 
   return {
-    post: (hint) => channel.postMessage({ kind: 'perch-sync-hint', hint }),
+    post: (hint) => {
+      if (!closed) channel.postMessage({ kind: 'perch-sync-hint', hint })
+    },
     on: (listener) => {
       const handler: MessageHandler = (event) => {
         const parsed = hintMessage.safeParse(event.data)
@@ -56,6 +59,8 @@ export function syncHints(channel: HintChannel | undefined): SyncHints {
       }
     },
     close: () => {
+      if (closed) return
+      closed = true
       for (const handler of handlers) channel.removeEventListener('message', handler)
       handlers.clear()
       channel.close()

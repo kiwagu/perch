@@ -23,6 +23,8 @@ interface Attempt {
   readonly controller: AbortController
   readonly release: () => void
   readonly started: Promise<void>
+  /** Resolves `started` without leading: the attempt was superseded, stopped or failed. */
+  readonly finish: () => void
 }
 
 function isAbortError(error: unknown): boolean {
@@ -67,18 +69,24 @@ export function leadership(
     const running = new Promise<void>((resolve) => {
       started = resolve
     })
-    const self: Attempt = { controller, release, started: running }
+    const self: Attempt = { controller, release, started: running, finish: () => started() }
 
+    current?.finish()
     current = self
     manager
       .request(name, steal ? { steal } : { signal: controller.signal }, async () => {
-        if (current !== self || stopped) return
+        if (current !== self || stopped) {
+          started()
+
+          return
+        }
         set(true)
         started()
         await released
       })
       .then(
         () => {
+          started()
           if (current === self) set(false)
         },
         (error: unknown) => {
@@ -121,6 +129,7 @@ export function leadership(
       stopped = true
       current?.controller.abort()
       current?.release()
+      current?.finish()
       current = undefined
       set(false)
     },

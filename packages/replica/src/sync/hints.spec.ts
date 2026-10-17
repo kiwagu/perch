@@ -14,6 +14,7 @@ class FakeChannel implements HintChannel {
   }
 
   postMessage(message: unknown): void {
+    if (this.closed) throw new Error('InvalidStateError')
     for (const channel of this.bus) {
       if (channel === this) continue
       for (const handler of [...channel.handlers]) handler({ data: message })
@@ -74,15 +75,33 @@ describe('syncHints', () => {
     expect(received).toEqual([])
   })
 
-  it('close stops listening and closes the channel', () => {
+  it('close stops listening, closes the channel and makes posting a no-op', () => {
     const bus = new Set<FakeChannel>()
     const channel = new FakeChannel(bus)
     const receiver = syncHints(channel)
+    const sender = syncHints(new FakeChannel(bus))
     const received: SyncHint[] = []
 
     receiver.on((hint) => received.push(hint))
     receiver.close()
+    sender.post('kick')
+    expect(() => receiver.post('kick')).not.toThrow()
+    receiver.close()
     expect(channel.closed).toBe(true)
     expect(channel.handlers.size).toBe(0)
+    expect(received).toEqual([])
+  })
+
+  it('an unsubscribed listener hears nothing more', () => {
+    const bus = new Set<FakeChannel>()
+    const sender = syncHints(new FakeChannel(bus))
+    const receiver = syncHints(new FakeChannel(bus))
+    const received: SyncHint[] = []
+    const off = receiver.on((hint) => received.push(hint))
+
+    sender.post('kick')
+    off()
+    sender.post('journal')
+    expect(received).toEqual(['kick'])
   })
 })
