@@ -69,10 +69,9 @@ export interface SessionOptions {
   readonly onError: (error: DataError) => void
 }
 
-/** What the session follows of an open space: whether it still speaks for the tab, and whether its sync stopped. */
+/** Whether an open space still speaks for the tab: a space being closed reports nothing more. */
 interface SpaceStatus {
   live: boolean
-  syncStopped: boolean
 }
 
 interface OpenSpace {
@@ -249,7 +248,7 @@ export class SessionService implements SessionPort {
     this.#leaveAndTell()
     this.#options.onStep?.('open-db')
 
-    const status: SpaceStatus = { live: true, syncStopped: false }
+    const status: SpaceStatus = { live: true }
     const leadership = this.#options.leadership(identity.id)
 
     return openIdentitySpace({
@@ -265,13 +264,7 @@ export class SessionService implements SessionPort {
           this.#options.onSyncState(state)
         }
       },
-      onError: (error) => {
-        if (error.code === 'data:SYNC_STOPPED') {
-          status.syncStopped = true
-        }
-
-        this.#options.onError(error)
-      },
+      onError: this.#options.onError,
     })
       .mapErr((error) => {
         status.live = false
@@ -304,30 +297,23 @@ export class SessionService implements SessionPort {
       return okAsync('signed-out')
     }
 
-    const { space, leadership, status } = open
-    const keepsUnsent = (): ResultAsync<boolean, DataError> =>
-      forgetUnsent ? okAsync(false) : space.unsent()
-    const ending = (asks: boolean): SignOutOutcome => (asks ? 'needs-confirmation' : 'signed-out')
+    const { space, leadership } = open
 
-    // The sign-out runs where the person asked for it: this tab leads from here on.
-    return (
-      ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
-        // A region that stopped syncing counts as delivered for the sync engine, so its unsent
-        // changes are weighed before the gateway signs the device out.
-        .andThen(() => (status.syncStopped ? keepsUnsent() : okAsync(false)))
-        .andThen((stuck) =>
-          stuck
-            ? okAsync(ending(true))
-            : ResultAsync.fromSafePromise(
-                space.sync?.signOut() ?? Promise.resolve('offline' as const),
-              )
-                .andThen((outcome) => (outcome === 'signed-out' ? okAsync(false) : keepsUnsent()))
-                .map(ending),
-        )
-        .andThen((outcome) =>
-          outcome === 'signed-out' ? this.#forgetSpace(open).map(() => outcome) : okAsync(outcome),
-        )
-    )
+    // The sign-out runs where the person asked for it: this tab leads from here on. The sync
+    // engine answers `offline` without asking the gateway while anything stays unsent, a region
+    // that stopped syncing included; what is unsent is then weighed here.
+    return ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
+      .andThen(() =>
+        ResultAsync.fromSafePromise(space.sync?.signOut() ?? Promise.resolve('offline' as const)),
+      )
+      .andThen((outcome) =>
+        outcome === 'signed-out' || forgetUnsent ? okAsync(false) : space.unsent(),
+      )
+      .andThen((asks) =>
+        asks
+          ? okAsync<SignOutOutcome>('needs-confirmation')
+          : this.#forgetSpace(open).map((): SignOutOutcome => 'signed-out'),
+      )
   }
 
   /**

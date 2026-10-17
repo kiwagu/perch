@@ -28,6 +28,17 @@ export interface TestWorldOptions {
   /** Wraps each identity database as it opens, e.g. to hold its queries. */
   readonly wrap?: (local: LocalDb) => LocalDb
   readonly logger?: CommandLogger
+  /** The browser's Web Locks, shared by its tabs; by default the tab has a lock manager of its own. */
+  readonly locks?: FakeLocks
+  /** Another world's gateway, for a second tab or device of the same test; its owner closes it. */
+  readonly gateway?: TestGateway
+}
+
+/** The gateway stub, its database and the clock it shares with the devices. */
+export interface TestGateway {
+  readonly stub: GatewayStub
+  readonly clock: ManualClock
+  readonly server: LocalDb
 }
 
 /** A session as the root wires it, over embedded databases, the gateway stub and a manual clock. */
@@ -38,6 +49,7 @@ export interface TestWorld {
   readonly storage: MemoryStorage
   readonly stub: GatewayStub
   readonly clock: ManualClock
+  readonly gateway: TestGateway
   /** What the session reported through `onError`. */
   readonly failures: DataError[]
   /** The sync states the session reported, oldest first. */
@@ -57,10 +69,16 @@ export interface TestWorld {
 
 const silent: CommandLogger = { info: () => {}, warn: () => {} }
 
-export async function openTestWorld(options: TestWorldOptions = {}): Promise<TestWorld> {
+async function openTestGateway(): Promise<TestGateway> {
   const clock = manualClock()
   const server = (await openTestDb())._unsafeUnwrap()
-  const stub = gatewayStub({ local: server, schema: replicaSchema, clock })
+
+  return { stub: gatewayStub({ local: server, schema: replicaSchema, clock }), clock, server }
+}
+
+export async function openTestWorld(options: TestWorldOptions = {}): Promise<TestWorld> {
+  const gateway = options.gateway ?? (await openTestGateway())
+  const { stub, clock } = gateway
   const storage = options.storage ?? memoryStorage()
   const auth = fakeGatewayAuth()
   const failures: DataError[] = []
@@ -100,8 +118,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
 
       return transport
     },
-    // One tab: the lock is granted as soon as it is asked for.
-    leadership: (identity) => leadership(new FakeLocks(), lockName(identity)),
+    // Without shared locks the tab is alone: its lock is granted as soon as it is asked for.
+    leadership: (identity) => leadership(options.locks ?? new FakeLocks(), lockName(identity)),
     hints: () => syncHints(undefined),
     clock,
     storage,
@@ -130,6 +148,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     storage,
     stub,
     clock,
+    gateway,
     failures,
     states,
     opened: () => [...opened],
@@ -157,8 +176,11 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     },
     close: async () => {
       await session.close()
-      await stub.close()
-      await server.close()
+
+      if (!options.gateway) {
+        await stub.close()
+        await gateway.server.close()
+      }
     },
   }
 }

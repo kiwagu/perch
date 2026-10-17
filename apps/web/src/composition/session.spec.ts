@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
+import { FakeLocks } from '@workspace/replica/testing'
 
 import { createProfile, profileById } from './__fixtures__/profile'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from './__fixtures__/session'
@@ -236,11 +237,54 @@ describe('SessionService', () => {
     failures.splice(0)
 
     expect((await session.signOut())._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(destroyed()).toEqual([])
+
+    // The changes the gateway refused cannot be sent: they are given up, and the device
+    // leaves without a sign-out at the gateway, as when it is offline.
+    expect((await session.signOut({ forgetUnsent: true }))._unsafeUnwrap()).toBe('signed-out')
     expect(gateway.signOuts()).toBe(0)
+    expect(destroyed()).toEqual([ann.identity.id])
+  })
+
+  it('asks before signing out when the region stops syncing during the sign-out', async () => {
+    const booted = await bootSession({ saved: ann, online: true })
+    const { session, gateway, destroyed, failures, writeOffline } = booted
+
+    gateway.rejectEverything()
+    await writeOffline()
+
+    // No wait for the stop: the sign-out drains the rejected batch itself.
+    expect((await session.signOut())._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(gateway.signOuts()).toBe(0)
+    expect(destroyed()).toEqual([])
+    expect(session.current()?.id).toBe(ann.identity.id)
 
     expect((await session.signOut({ forgetUnsent: true }))._unsafeUnwrap()).toBe('signed-out')
-    expect(gateway.signOuts()).toBe(1)
     expect(destroyed()).toEqual([ann.identity.id])
+    expect(failures.map((failure) => failure.code)).toContain('data:SYNC_STOPPED')
+    failures.splice(0)
+  })
+
+  it('signs out from a tab that follows: it takes the lead and the gateway hears the sign-out', async () => {
+    const storage = memoryStorage()
+    const locks = new FakeLocks()
+
+    saveDevice(storage, ann)
+
+    const leading = await world({ storage, locks })
+
+    expect((await leading.session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(leading.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+
+    const following = await world({ storage, locks, gateway: leading.gateway })
+
+    expect((await following.session.restore()).isOk()).toBe(true)
+    await settle()
+    expect(following.states.at(-1)).toEqual({ leader: false, channel: 'down' })
+
+    expect((await following.session.signOut())._unsafeUnwrap()).toBe('signed-out')
+    expect(leading.stub.signOuts()).toBe(1)
+    expect(following.destroyed()).toEqual([ann.identity.id])
   })
 
   it('forgets the device when the gateway refuses its keys', async () => {
