@@ -7,6 +7,7 @@ import { toColumns } from '../../projection-values'
 import type { AcceptPlan, RegionLog } from '../region-log'
 
 import countRowsStatement from './count-rows.surql'
+import storedProfileStatement from './stored-profile.surql'
 
 export const region = 'identity:idn_a'
 
@@ -14,16 +15,16 @@ export const region = 'identity:idn_a'
 const acceptedAt = new WeakMap<LoroDoc, Map<number, Frontiers>>()
 
 /**
- * Commits one edit that names profile `key` in the document, creating the profile when it is
- * missing, and plans it as the server would: the edit's update bytes, the document version
- * after it and the profile's projection.
+ * Commits one edit that names profile `key` of `owner` in the document, creating the profile
+ * when it is missing, and plans it as the server would: the edit's update bytes, the document
+ * version after it and the profile's projection.
  */
-function commitName(doc: LoroDoc, name: string, key: string): AcceptPlan {
+function commitName(doc: LoroDoc, name: string, key: string, owner: string): AcceptPlan {
   const entry = `profile/${key}`
   const from = doc.version()
   const record = doc.getMap('records').getOrCreateContainer(entry, new LoroMap())
 
-  record.set('identity', region)
+  record.set('identity', owner)
   record.set('email', 'ann@example.test')
   record.set('name', name)
   doc.commit()
@@ -43,9 +44,18 @@ function commitName(doc: LoroDoc, name: string, key: string): AcceptPlan {
   }
 }
 
-/** The plan of one edit that names profile `key` in a document of its own. */
-export function planFor(name: string, key = 'prf_1'): AcceptPlan {
-  return commitName(new LoroDoc(), name, key)
+/** The plan of one edit that names profile `key` of `owner` in a document of its own. */
+export function planFor(name: string, key = 'prf_1', owner = region): AcceptPlan {
+  return commitName(new LoroDoc(), name, key, owner)
+}
+
+/** A plan that deletes profile `key` and writes nothing, as a batch of a region of `owner`. */
+export function deletionOf(key: string, owner: string): AcceptPlan {
+  return {
+    ...planFor('Gone', `${key}_unused`, owner),
+    upserts: [],
+    deletes: [{ table: 'profile', key, entry: `profile/${key}` }],
+  }
 }
 
 /** Commits each name into `doc` as one edit and has the log accept it, in order. */
@@ -59,7 +69,7 @@ export async function acceptEdits(
   acceptedAt.set(doc, frontiers)
 
   for (const name of names) {
-    const seq = (await log.accept(commitName(doc, name, 'prf_1')))._unsafeUnwrap()
+    const seq = (await log.accept(commitName(doc, name, 'prf_1', region)))._unsafeUnwrap()
 
     frontiers.set(seq, doc.frontiers())
   }
@@ -85,6 +95,19 @@ export function shallowSnapshotAt(doc: LoroDoc, seq: number): Uint8Array {
   const frontiers = frontiersAt(doc, seq)
 
   return doc.forkAt(frontiers).export({ mode: 'shallow-snapshot', frontiers })
+}
+
+/** The name and the owner of profile `key` as its table holds them; undefined when it is gone. */
+export async function storedProfile(
+  local: LocalDb,
+  key: string,
+): Promise<{ readonly name: string; readonly identity: string } | undefined> {
+  const [rows] = await local.db.query<[Array<{ name: string; identity: string }>]>(
+    storedProfileStatement,
+    { key },
+  )
+
+  return rows[0]
 }
 
 export async function countRows(local: LocalDb, table: string): Promise<number> {

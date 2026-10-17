@@ -63,11 +63,11 @@ export function subscriber(id: string): TestSubscriber {
 }
 
 /**
- * Names the profile in a subscriber's document, creating it for the owner when it is missing,
- * and exports every change made since the document last imported from the hub, as a device's
- * outbox would push them.
+ * Names the profile in a subscriber's document, creating it for `identity` (the owner by
+ * default) when it is missing, and exports every change made since the document last
+ * imported from the hub, as a device's outbox would push them.
  */
-export function editFrom(doc: LoroDoc, name: string): Uint8Array {
+export function editFrom(doc: LoroDoc, name: string, identity: string = owner): Uint8Array {
   const from = imported.get(doc)
 
   if (!from) {
@@ -76,7 +76,7 @@ export function editFrom(doc: LoroDoc, name: string): Uint8Array {
 
   const record = doc.getMap('records').getOrCreateContainer('profile/prf_1', new LoroMap())
 
-  record.set('identity', owner)
+  record.set('identity', identity)
   record.set('email', 'ann@example.test')
   record.set('name', name)
   doc.commit()

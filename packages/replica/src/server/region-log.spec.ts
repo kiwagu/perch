@@ -6,11 +6,13 @@ import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import {
   acceptEdits,
   countRows,
+  deletionOf,
   nameIn,
   planFor,
   region,
   shallowSnapshotAt,
   snapshotAt,
+  storedProfile,
 } from './__fixtures__/log'
 import { RegionLog } from './region-log'
 import compactStatement from './surql/server-compact.surql'
@@ -201,5 +203,51 @@ describe('server region log', () => {
     release()
 
     expect((await outcome)._unsafeUnwrap()).toBe('stale')
+  })
+})
+
+describe('record ownership across regions on one database', () => {
+  const other = 'identity:idn_b'
+
+  it('refuses a batch of another region that writes a record this region owns, keeping the record', async () => {
+    const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
+
+    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+
+    // The other region's own profile goes first, so no unique value stands in the way.
+    const outcome = await theirs.accept(planFor('Taken', 'prf_1', other))
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(outcome._unsafeUnwrapErr().message).toMatch(/^ownership: profile\/prf_1 /)
+    expect(theirs.head()).toBe(0)
+    expect(await storedProfile(local, 'prf_1')).toEqual({ name: 'Ann', identity: region })
+    expect(await countRows(local, '_replica_update')).toBe(1)
+  })
+
+  it('refuses a batch of another region that deletes a record this region owns', async () => {
+    const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
+
+    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+
+    const outcome = await theirs.accept(deletionOf('prf_1', other))
+
+    expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(outcome._unsafeUnwrapErr().message).toMatch(/^ownership: profile\/prf_1 /)
+    expect(await storedProfile(local, 'prf_1')).toEqual({ name: 'Ann', identity: region })
+    expect(await countRows(local, '_replica_projected')).toBe(1)
+  })
+
+  it('accepts a record under a key nobody holds yet, next to the records of another region', async () => {
+    const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
+
+    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await theirs.accept(planFor('Bea', 'prf_2', other)))._unsafeUnwrap()).toBe(1)
+    expect((await theirs.accept(planFor('Bee', 'prf_2', other)))._unsafeUnwrap()).toBe(2)
+
+    expect(await storedProfile(local, 'prf_1')).toEqual({ name: 'Ann', identity: region })
+    expect(await storedProfile(local, 'prf_2')).toEqual({ name: 'Bee', identity: other })
   })
 })

@@ -211,8 +211,9 @@ export class RegionHub {
   /**
    * Checks a batch a subscribed device pushed and, when the log accepts it, acknowledges it
    * with its number and sends it to the region's other subscribers. A refused batch is
-   * answered with a reject and changes nothing; a batch the region already holds, delivered
-   * again, is acknowledged without a new log row.
+   * answered with a reject and changes nothing (`foreign-owner` when it writes a record of
+   * another region); a batch the region already holds, delivered again, is acknowledged
+   * without a new log row.
    */
   push(
     regionId: string,
@@ -288,7 +289,12 @@ export class RegionHub {
             return errAsync(error)
           }
 
-          reject('invalid-record', messageOf(error.cause))
+          // A record of another region, or a projection that breaks a schema rule.
+          if (error.message.startsWith('ownership')) {
+            reject('foreign-owner', error.message)
+          } else {
+            reject('invalid-record', messageOf(error.cause))
+          }
 
           return okAsync(undefined)
         })

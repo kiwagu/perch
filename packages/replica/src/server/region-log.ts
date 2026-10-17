@@ -66,6 +66,9 @@ const COMPACTION_REFUSALS: ReadonlyArray<readonly [thrown: string, CompactionOut
   ['compaction:stale', 'stale'],
 ]
 
+/** What the accept transaction throws for a record of another region: `ownership:<entry>`. */
+const OWNERSHIP_REFUSAL = /ownership:(\S+)$/
+
 /** The text of a failure's cause, such as the message the database gave. */
 export function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
@@ -145,7 +148,12 @@ export class RegionLog {
     return this.#covers
   }
 
-  /** Writes the batch's projection and its log row in one transaction; resolves to the batch's seq. */
+  /**
+   * Writes the batch's projection and its log row in one transaction; resolves to the batch's
+   * seq. A record that belongs to another region (it exists without this region's marker, or a
+   * deletion names one this region never projected) refuses the batch with a
+   * `data:WRITE_REJECTED` whose message starts with `ownership`.
+   */
   accept(plan: AcceptPlan): ResultAsync<number, DataError> {
     const { region } = this
     const vars = {
@@ -158,11 +166,21 @@ export class RegionLog {
 
     return this.#serialize(() =>
       this.#transact(acceptStatement, vars)
-        .mapErr((cause) =>
-          breaksSchemaRule(cause)
+        .mapErr((cause) => {
+          const foreign = OWNERSHIP_REFUSAL.exec(messageOf(cause))?.[1]
+
+          if (foreign) {
+            return dataError(
+              'data:WRITE_REJECTED',
+              `ownership: ${foreign} is not a record of ${region}`,
+              cause,
+            )
+          }
+
+          return breaksSchemaRule(cause)
             ? dataError('data:WRITE_REJECTED', `a batch of ${region} breaks a schema rule`, cause)
-            : dataError('data:WRITE_FAILED', `could not accept a batch of ${region}`, cause),
-        )
+            : dataError('data:WRITE_FAILED', `could not accept a batch of ${region}`, cause)
+        })
         .map((results) => {
           // Every statement of the transaction yields a result: RETURN's is the one before COMMIT's.
           this.#head = Number(results.at(-2))

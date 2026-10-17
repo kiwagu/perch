@@ -43,7 +43,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   region's document built from its snapshot and later rows; `accept(plan)` writes an
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)
   and its log row in one transaction and resolves to the batch's number, refusing a
-  projection that breaks a schema rule with `data:WRITE_REJECTED`; `compact(covers, snapshot)`
+  projection that breaks a schema rule, or that writes a record of another region (one that
+  exists without this region's projection marker, or a deletion of one), with
+  `data:WRITE_REJECTED` (the latter's message starts with `ownership`); `compact(covers, snapshot)`
   resolves to a `CompactionOutcome`; `head()`, `covers()`. `validateBatch(input)` applies a
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
@@ -53,8 +55,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `RegionHub` (`RegionHubOptions`: database, schema, `Clock`, idle time, log length that asks
   for a compaction, `onError`): `subscribe(region, owner, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, `push(region, subscriber, batch, updates)` answers
-  with an ack (asking for a compaction once the log outgrows its limit) or a reject and sends
-  the batch to the other subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`,
+  with an ack (asking for a compaction once the log outgrows its limit) or a reject
+  (`foreign-owner` for a record of another region) and sends the batch to the other subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is

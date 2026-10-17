@@ -96,6 +96,24 @@ describe('region hub', () => {
     expect(nameInSnapshot(fresh)).toBe('Ann')
   })
 
+  it('rejects as foreign-owner a batch of another region that writes a record this region owns', async () => {
+    const { hub, fresh } = await hubWithHistory(['Ann'])
+    const theirs = { kind: 'private', id: 'identity:idn_b' } as const
+    const intruder = subscriber('intruder')
+
+    expect((await hub.subscribe(theirs, theirs.id, intruder, null)).isOk()).toBe(true)
+    expect(
+      (await hub.push(theirs.id, intruder, 1, [editFrom(intruder.doc, 'Taken', theirs.id)])).isOk(),
+    ).toBe(true)
+
+    expect(intruder.received.at(-1)).toEqual(
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'foreign-owner' }),
+    )
+    expect((await hub.heads([theirs.id]))._unsafeUnwrap()).toEqual([{ region: theirs.id, head: 0 }])
+    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect(nameInSnapshot(fresh)).toBe('Ann')
+  })
+
   it('names the schema rule a refused projection broke, in at most 200 characters', async () => {
     const { hub, a } = await hubWithTwoSubscribers()
 
