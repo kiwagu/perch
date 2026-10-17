@@ -11,7 +11,6 @@ import type { RegionDoc } from '@workspace/replica'
 
 import createNoteText from './create-note.surql'
 import { updateOf } from './profile'
-import updateNoteText from './update-note.surql'
 
 export interface NoteInput {
   /** The note's id, `nte_…`. */
@@ -39,28 +38,10 @@ const createNote: Command<NoteInput> = {
   ],
 }
 
-const updateNote: Command<{ readonly id: string; readonly text: string }> = {
-  id: 'gateway.fixture.updateNote',
-  kind: 'command',
-  text: updateNoteText,
-  params: [id, { name: 'text', type: 'string' }],
-  tables: ['note'],
-  region: 'tenant',
-  ops: [{ op: 'text.update', record: 'id', field: 'text', value: { param: 'text' } }],
-}
-
 /** Writes a note in the device's document of the tenant region; answers with the update to push. */
 export function noteCreate(
   doc: RegionDoc,
   note: NoteInput,
 ): ResultAsync<Uint8Array<ArrayBuffer>, DataError> {
   return updateOf(doc, createNote, note)
-}
-
-/** Rewrites the text of a note in the device's document; answers with the update to push. */
-export function noteUpdate(
-  doc: RegionDoc,
-  note: { readonly id: string; readonly text: string },
-): ResultAsync<Uint8Array<ArrayBuffer>, DataError> {
-  return updateOf(doc, updateNote, note)
 }
