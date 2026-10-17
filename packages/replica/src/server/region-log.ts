@@ -67,8 +67,12 @@ const COMPACTION_REFUSALS: ReadonlyArray<readonly [thrown: string, CompactionOut
   ['compaction:stale', 'stale'],
 ]
 
-/** What the accept transaction throws for a record of another region: `ownership:<entry>`. */
-const OWNERSHIP_REFUSAL = /ownership:(\S+)$/
+/**
+ * What the accept transaction throws for a record of another region, `ownership:<entry>`, as
+ * SurrealDB reports a THROW: `An error occurred: <text>`. Anchored, so a record key that looks
+ * like it, inside another error's message, is not taken for a refusal.
+ */
+const OWNERSHIP_REFUSAL = /^An error occurred: ownership:(.+)$/
 
 function breaksSchemaRule(cause: unknown): boolean {
   const message = messageOf(cause)

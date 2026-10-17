@@ -34,7 +34,9 @@ afterEach(async () => {
 })
 
 /** A region's sync over a transport that is always up and keeps what was sent. */
-async function alone(options: { readonly persisted?: boolean } = {}) {
+async function alone(
+  options: { readonly persisted?: boolean; readonly wrap?: (local: LocalDb) => LocalDb } = {},
+) {
   const clock = manualClock()
   const sent: ClientMessage[] = []
   const errors: DataError[] = []
@@ -60,7 +62,9 @@ async function alone(options: { readonly persisted?: boolean } = {}) {
     const local = (await openTestDb())._unsafeUnwrap()
 
     databases.push(local)
-    region = (await RegionDoc.open(local, { kind: 'private', id: regionId }))._unsafeUnwrap()
+    region = (
+      await RegionDoc.open(options.wrap?.(local) ?? local, { kind: 'private', id: regionId })
+    )._unsafeUnwrap()
   }
 
   const sync = new RegionSync({
@@ -144,6 +148,48 @@ describe('region sync on its own', () => {
 
     expect(count('pull')).toBe(2)
     expect(errors).toEqual([])
+  })
+
+  it('pulls once when an import first fails, and leaves the repeats to the full pass', async () => {
+    let failImport = false
+    const { sync, count, errors, region } = await alone({
+      persisted: true,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failImport && text === importStatement) {
+            throw new Error('the store refused the write')
+          }
+        }),
+    })
+    const { all } = serverHistory()
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+
+    failImport = true
+    await sync.handle(updates(all, 2))
+
+    expect(count('pull')).toBe(1)
+    expect(errors).toHaveLength(1)
+
+    // The pull's answer fails again: nothing is sent at network round-trip rate.
+    await sync.handle(updates(all, 2))
+
+    expect(count('pull')).toBe(1)
+    expect(errors).toHaveLength(2)
+
+    sync.retryPull()
+
+    expect(count('pull')).toBe(2)
+
+    failImport = false
+    await sync.handle(updates(all, 2))
+
+    expect(region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+
+    sync.retryPull()
+
+    expect(count('pull')).toBe(2)
   })
 
   it('gives up on a pull whose answer never comes after 30 seconds, reports it once and reconnects', async () => {

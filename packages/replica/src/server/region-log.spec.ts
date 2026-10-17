@@ -239,6 +239,21 @@ describe('record ownership across regions on one database', () => {
     expect(await countRows(local, '_replica_projected')).toBe(1)
   })
 
+  it('labels a unique-index refusal on a record key that looks like an ownership refusal as the index one', async () => {
+    const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
+
+    expect((await mine.accept(planFor('Ann', 'ownership:x')))._unsafeUnwrap()).toBe(1)
+
+    // One profile per identity: the second breaks the index, whose message ends with the record `ownership:x`.
+    const outcome = await mine.accept(planFor('Ann'))
+    const error = outcome._unsafeUnwrapErr()
+
+    expect(error.code).toBe('data:WRITE_REJECTED')
+    expect(error.message).not.toMatch(/^ownership/)
+    expect(error.message).toBe(`a batch of ${region} breaks a schema rule`)
+    expect(String(error.cause)).toMatch(/profile_identity.*ownership:x/)
+  })
+
   it('accepts a record under a key nobody holds yet, next to the records of another region', async () => {
     const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
     const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log

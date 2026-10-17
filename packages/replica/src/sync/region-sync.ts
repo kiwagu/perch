@@ -366,10 +366,17 @@ export class RegionSync implements DrainTarget {
     const outcome = await this.#region.importRemote(bytes, head)
 
     if (outcome.isErr()) {
-      // The region lacks what the server sent, whatever imports cleanly later: pull it now.
+      // The region lacks what the server sent, whatever imports cleanly later: pull it now, once.
+      // While it stays lost, a persistent failure would pull at round-trip rate: the full pass
+      // and a reconnect repeat the pull instead.
+      const first = !this.#lost
+
       this.#lost = true
       this.#onError(outcome.error)
-      this.#pull()
+
+      if (first) {
+        this.#pull()
+      }
 
       return
     }
