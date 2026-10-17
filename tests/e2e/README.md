@@ -48,7 +48,9 @@ up). `src/support/data.ts`: the generators.
 
 - `bun run test:e2e` (repository root): builds the dependencies and the web app's production
   build through turbo (and stops when `apps/web/dist/index.html` is missing afterwards), starts
-  and waits for the `e2e` profile, then runs Playwright; extra arguments go to Playwright
-  (`--grep @smoke`, `sync/`, `--update-snapshots=missing`). `CI=1` runs one worker.
+  the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
+  gateway and the front run the current code and configuration) and waits for it, then runs
+  Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,
+  `--update-snapshots=missing`). `CI=1` runs one worker.
 - `bun run test:e2e --down`: stops the `e2e` profile.
 - `bun run typecheck`, `bun run lint`.

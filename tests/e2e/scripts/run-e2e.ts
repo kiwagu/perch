@@ -3,10 +3,12 @@
  * The e2e launcher: builds what the tests depend on through turbo, the web app's
  * production build into apps/web/dist included (a run never meets a stale build),
  * starts the mcproc `e2e` profile (the SurrealDB stand, the `gateway-e2e` gateway and
- * the `caddy-e2e` front, which serves that build to the tests), waits for each in that
- * order, runs Playwright with the given arguments and exits with its code. `--down`
- * stops the profile instead. The stand stays up between runs, so `mcproc logs e2e`
- * shows what the tests saw.
+ * the `caddy-e2e` front, which serves that build to the tests) with `--reload`, so the
+ * apps already online restart too (a run never meets a stale stand either: the database
+ * starts empty, the gateway and the front load the current code and configuration),
+ * waits for each in that order, runs Playwright with the given arguments and exits with
+ * its code. `--down` stops the profile instead. The stand stays up between runs, so
+ * `mcproc logs e2e` shows what the tests saw.
  *
  *   bun run test:e2e [<playwright args>]       CI=1 runs the specs one at a time
  *   bun run test:e2e --down
@@ -66,7 +68,7 @@ function main(): number {
   const waitFor = (app: string, until: string) =>
     mcproc('wait', app, '--until', until, '--timeout', '120') === 0
   const ready =
-    mcproc('start', 'e2e') === 0 &&
+    mcproc('start', 'e2e', '--reload') === 0 &&
     waitFor('surrealdb-e2e', 'url-ok') &&
     waitFor('gateway-e2e', 'url-ok') &&
     waitFor('caddy-e2e', 'url-ok')

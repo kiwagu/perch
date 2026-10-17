@@ -21,9 +21,15 @@
   `/backend/`, the gateway on one origin (`infra/dev/`). Open the stands there. `caddy-dev`
   starts after `web` and `gateway` (start order only) and answers 404 until the watcher's first
   build; the `e2e` profile has no web app of its own: `bun run test:e2e` writes the production
-  build, then starts and waits for the profile.
+  build, then starts the profile with `--reload` (apps already online restart, so a run never
+  meets a stale stand) and waits for it.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
 no persistence. Apps in containers (SurrealDB, Caddy) declare only a url: their ports are held
 outside the app's processes, so wait until `url-ok`. `surreal sql --endpoint
 http://127.0.0.1:8010 --user root --pass root` opens a shell against the e2e stand.
+
+`mcproc start <profile> --reload` restarts the apps already online (a restarted Caddy reads the
+current Caddyfile; a restarted SurrealDB stand is empty). An app removed from the manifest is
+unknown to mcproc afterwards; the pm2 process it leaves (`perch-<app>` in `pm2 ls`) goes with
+`pm2 delete perch-<app>`, as `web-e2e`, the old e2e dev server, did.
