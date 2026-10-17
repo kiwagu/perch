@@ -43,6 +43,11 @@ const NO_TIMEOUT = (): void => {}
 interface Flight {
   readonly batch: number
   readonly rows: readonly OutboxRow[]
+  /**
+   * Rows of it went out before and were given up without an answer: the server may hold them
+   * already, and its ack then names the current head rather than this batch's.
+   */
+  readonly retried: boolean
   readonly landed: Promise<PushOutcome>
   readonly land: (outcome: PushOutcome) => void
 }
@@ -90,7 +95,9 @@ function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
  * Syncs one region document with the gateway over the transport. It subscribes with the
  * document's version once the gateway welcomes the device, imports what the server sends (one
  * message at a time, in the order they came) and pulls whenever an import leaves updates
- * waiting for history, until one completes. It pushes the outbox one batch at a time; an
+ * waiting for history, until one completes; an import that fails pulls at once and again on
+ * every full pass and reconnect, until the answer to a pull or a subscription imports in full.
+ * It pushes the outbox one batch at a time; an
  * acknowledged batch leaves the outbox, a rejected one is rolled back by an inverse commit
  * and pushed again together with it, and a batch rejected again after its rollback stops the
  * region's sync. A push or a pull answered with an error, or not answered within 30 seconds, is
@@ -123,6 +130,13 @@ export class RegionSync implements DrainTarget {
   #cancelPullTimeout = NO_TIMEOUT
   /** An import left updates waiting for their history; pulls repeat until one completes. */
   #incomplete = false
+  /**
+   * An import of what the server sent failed, so the document lacks it although the cursor may
+   * move past it: pulls repeat until the answer to a pull or a subscription imports in full.
+   */
+  #lost = false
+  /** The last batch given up without an answer: a push of rows up to it may be a redelivery. */
+  #givenUpThrough = 0
   /** A compaction proposal went out and its outcome has not arrived. */
   #compacting = false
   /** The last outbox row a rollback covered: a batch rejected again from there stops the region. */
@@ -247,7 +261,13 @@ export class RegionSync implements DrainTarget {
     const landed = new Promise<PushOutcome>((resolve) => {
       land = resolve
     })
-    const flight: Flight = { batch: last.seq, rows: rows.value, landed, land }
+    const flight: Flight = {
+      batch: last.seq,
+      rows: rows.value,
+      retried: (rows.value[0]?.seq ?? 0) <= this.#givenUpThrough,
+      landed,
+      land,
+    }
 
     this.#flight = flight
 
@@ -286,9 +306,9 @@ export class RegionSync implements DrainTarget {
     }
   }
 
-  /** Repeats the pull an incomplete import left outstanding; every full pass asks for it. */
+  /** Repeats the pull an incomplete or failed import left outstanding; every full pass asks for it. */
   retryPull(): void {
-    if (!this.#stopped && this.#incomplete) {
+    if (!this.#stopped && (this.#incomplete || this.#lost)) {
       this.#pull()
     }
   }
@@ -321,10 +341,16 @@ export class RegionSync implements DrainTarget {
       .otherwise(async () => {})
   }
 
-  /** Imports what the server sent under the subscription numbered `epoch`. */
+  /**
+   * Imports what the server sent under the subscription numbered `epoch`. The first updates
+   * after a subscription answer it; the first after a pull are taken as the pull's answer.
+   */
   async #imported(bytes: Uint8Array, head: number, epoch: number): Promise<void> {
     // Updates that came over a connection since gone do not answer the current subscription.
-    if (epoch === this.#epoch && this.#subscribed) {
+    const current = epoch === this.#epoch && this.#subscribed
+    const answering = current && (this.#pulling || !this.#answered)
+
+    if (current) {
       this.#answered = true
       this.#endPull()
     }
@@ -332,14 +358,19 @@ export class RegionSync implements DrainTarget {
     const outcome = await this.#region.importRemote(bytes, head)
 
     if (outcome.isErr()) {
-      // The region lacks what the server sent: the next full pass pulls it again.
-      this.#incomplete = true
+      // The region lacks what the server sent, whatever imports cleanly later: pull it now.
+      this.#lost = true
       this.#onError(outcome.error)
+      this.#pull()
 
       return
     }
 
     this.#incomplete = !outcome.value.complete
+
+    if (answering && outcome.value.complete) {
+      this.#lost = false
+    }
 
     if (this.#incomplete) {
       this.#pull()
@@ -363,8 +394,13 @@ export class RegionSync implements DrainTarget {
       return
     }
 
-    // The server took nothing from others between the cursor and this batch.
-    if (this.#region.pulled() === head - 1) {
+    // The server took nothing from others between the cursor and this batch. Only the ack of
+    // a first push names the batch's own head: a batch the server held already is acknowledged
+    // under its current head, which may hold batches of others this device never imported.
+    const flight = this.#flight
+    const firstPush = flight?.batch === batch && !flight.retried
+
+    if (firstPush && this.#region.pulled() === head - 1) {
       const moved = await this.#region.advanceCursor(head)
 
       if (moved.isErr()) {
@@ -553,6 +589,11 @@ export class RegionSync implements DrainTarget {
 
   #land(outcome: PushOutcome): void {
     const flight = this.#flight
+
+    // A push given up without an answer may have reached the server all the same.
+    if (flight && outcome === 'down') {
+      this.#givenUpThrough = Math.max(this.#givenUpThrough, flight.batch)
+    }
 
     this.#flight = undefined
     this.#cancelPushTimeout()

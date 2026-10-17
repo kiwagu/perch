@@ -75,6 +75,9 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
     },
     websocket: {
       maxPayloadLength: MAX_MESSAGE,
+      // A device too slow to take what it is sent is closed rather than silently skipped: it
+      // connects again and its subscription brings everything it lacks.
+      closeOnBackpressureLimit: true,
       open(socket) {
         socket.data.connection = new SyncConnection(socket, {
           sessions: root.sessions,

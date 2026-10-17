@@ -69,7 +69,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   keys (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out;
   the engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
   import and pull, push with acknowledgement or rollback, compaction proposals; a push or pull
-  answered with an error or unanswered for 30 seconds is given up for now and sent again);
+  answered with an error or unanswered for 30 seconds is given up for now and sent again; an
+  import that fails pulls at once and on every full pass until an answer imports in full; only
+  the ack of a first push moves the cursor);
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a

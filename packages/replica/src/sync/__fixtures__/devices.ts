@@ -43,6 +43,11 @@ export interface GatewayOptions {
   readonly wrap?: (server: LocalDb) => LocalDb
 }
 
+export interface DeviceOptions {
+  /** Wraps the device's database, e.g. to make a query fail. */
+  readonly wrap?: (local: LocalDb) => LocalDb
+}
+
 const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> = []
 
 /** Names the profile, creating it for the identity when the region does not hold it yet. */
@@ -83,9 +88,14 @@ export async function openGateway(options: GatewayOptions = {}): Promise<Gateway
 }
 
 /** A device with an empty database whose engine syncs the identity's region through the gateway; not started. */
-export async function openDevice(gateway: Gateway): Promise<Device> {
+export async function openDevice(gateway: Gateway, options: DeviceOptions = {}): Promise<Device> {
   const local = (await openTestDb())._unsafeUnwrap()
-  const region = (await RegionDoc.open(local, { kind: 'private', id: regionId }))._unsafeUnwrap()
+  const region = (
+    await RegionDoc.open(options.wrap ? options.wrap(local) : local, {
+      kind: 'private',
+      id: regionId,
+    })
+  )._unsafeUnwrap()
   const transport = gateway.stub.transport(identity)
   const errors: DataError[] = []
   let channel: ChannelState = 'down'

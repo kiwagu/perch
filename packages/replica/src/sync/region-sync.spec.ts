@@ -2,16 +2,20 @@ import { LoroDoc, LoroMap } from 'loro-crdt'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DataError, LocalDb } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import type { ClientMessage, ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
+import importStatement from '../surql/replica-import.surql'
 import { manualClock } from '../testing/manual-clock'
 
 import {
   closeDevices,
+  openDevice,
+  openGateway,
   profileKey,
   regionId,
+  settleAll,
   twoDevices,
   writeBio,
   writeName,
@@ -66,7 +70,14 @@ async function alone(options: { readonly persisted?: boolean } = {}) {
   const count = (type: ClientMessage['type']) =>
     sent.filter((message) => message.type === type).length
 
-  return { clock, errors, region, sync, count }
+  /** The batch number of the last push sent. */
+  const lastBatch = (): number => {
+    const push = sent.findLast((message) => message.type === 'push')
+
+    return push?.type === 'push' ? push.batch : expect.unreachable('a push was sent')
+  }
+
+  return { clock, errors, region, sync, count, lastBatch }
 }
 
 /** Server updates of the profile: a later one that needs an earlier one, and all of it. */
@@ -187,6 +198,52 @@ describe('region sync on its own', () => {
     expect(sync.stopped()).toBe(false)
   })
 
+  it('moves the cursor on the ack of a first push, never on the ack of a push sent again', async () => {
+    // The server took nothing from others before the batch: its head is the batch's own.
+    const ack = (batch: number): ServerMessage => ({
+      type: 'ack',
+      region: regionId,
+      batch,
+      head: 1,
+      compact: false,
+    })
+    const first = await alone({ persisted: true })
+
+    first.sync.subscribe()
+    await first.sync.handle(updates(emptyRegion, 0, true))
+    writeName(first.region, 'Ann')
+    const pushed = first.sync.pushNext()
+
+    await vi.waitFor(() => expect(first.count('push')).toBe(1))
+    await first.sync.handle(ack(first.lastBatch()))
+
+    expect(await pushed).toBe('sent')
+    expect(first.region.pulled()).toBe(1)
+
+    // The same batch, given up once and sent again: the server may have stored it before, and
+    // its ack then names a head that the cursor must not take on trust.
+    const again = await alone({ persisted: true })
+
+    again.sync.subscribe()
+    await again.sync.handle(updates(emptyRegion, 0, true))
+    writeName(again.region, 'Ann')
+    const givenUp = again.sync.pushNext()
+
+    await vi.waitFor(() => expect(again.count('push')).toBe(1))
+    await again.clock.advance(30_000)
+
+    expect(await givenUp).toBe('down')
+
+    const retried = again.sync.pushNext()
+
+    await vi.waitFor(() => expect(again.count('push')).toBe(2))
+    await again.sync.handle(ack(again.lastBatch()))
+
+    expect(await retried).toBe('sent')
+    expect(again.region.pulled()).toBe(0)
+    expect((await again.region.outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
   it('releases a push whose answer never comes after 30 seconds, and reports it once', async () => {
     const { sync, count, region, errors, clock } = await alone({ persisted: true })
 
@@ -247,6 +304,61 @@ describe('region sync through the gateway', () => {
 
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Anna' })
     expect(b.region.pulled()).toBe(a.region.pulled())
+  })
+
+  it('keeps pulling after an import failed until what it carried arrives, whatever imports cleanly meanwhile', async () => {
+    let failImport = false
+    const gateway = await openGateway()
+    const a = await openDevice(gateway)
+    const b = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failImport && text === importStatement) {
+            failImport = false
+            throw new Error('the store refused the write')
+          }
+        }),
+    })
+    const c = await openDevice(gateway)
+
+    for (const device of [a, b, c]) {
+      device.engine.start()
+    }
+
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a, b, c])
+
+    // c writes a bio offline, before it hears of the next name.
+    c.transport.goOffline()
+    writeBio(c.region, 'from c')
+
+    // b fails to store the batch that names the profile Ana, and the pull it sends at once is refused.
+    failImport = true
+    gateway.stub.refuseNextPull()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await vi.waitFor(() =>
+      expect(b.errors.map((error) => error.code)).toEqual([
+        'data:WRITE_FAILED',
+        'data:QUERY_FAILED',
+      ]),
+    )
+
+    // c's bio reaches b as a batch that does not depend on the lost one: it imports cleanly.
+    c.transport.goOnline()
+    await settleAll([a, c])
+    await vi.waitFor(() => expect(b.region.recordJson(profileKey)).toMatchObject({ bio: 'from c' }))
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+
+    // The next full pass pulls again, and the name arrives.
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await b.engine.settled(60_000)
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana', bio: 'from c' })
+    expect(b.errors).toHaveLength(2)
   })
 
   it('rolls a rejected batch back with its inverse and gets the pair accepted', async () => {
