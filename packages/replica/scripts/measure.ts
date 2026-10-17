@@ -6,7 +6,7 @@
  */
 
 import { openTestDb } from '@workspace/data/testing'
-import { profileIdFactory, userIdFactory } from '@workspace/ids'
+import { identityIdFactory, profileIdFactory } from '@workspace/ids'
 
 import { createProfile, profileSchema, updateName } from '../src/__fixtures__/profile'
 import { Projector } from '../src/projector'
@@ -27,7 +27,7 @@ async function writeMany(): Promise<Record<string, number>> {
   for (let index = 0; index < COUNT; index++) {
     const created = await path.run(createProfile, {
       id: profileIdFactory.create(),
-      user: userIdFactory.create(),
+      identity: identityIdFactory.create(),
       name: `Person ${index}`,
       email: `person${index}@example.test`,
     })
@@ -50,7 +50,7 @@ async function editOne(): Promise<Record<string, number>> {
   ;(
     await path.run(createProfile, {
       id,
-      user: userIdFactory.create(),
+      identity: identityIdFactory.create(),
       name: 'Ann',
       email: 'ann@example.test',
     })
@@ -76,7 +76,7 @@ async function projectMany(): Promise<Record<string, number>> {
     ;(
       await path.run(createProfile, {
         id: profileIdFactory.create(),
-        user: userIdFactory.create(),
+        identity: identityIdFactory.create(),
         name: `Person ${index}`,
         email: `person${index}@example.test`,
       })

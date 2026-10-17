@@ -1,4 +1,4 @@
 CREATE $id SET
-  user = $user,
+  identity = $identity,
   name = $name,
   email = $email;

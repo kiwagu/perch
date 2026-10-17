@@ -9,23 +9,23 @@ import type { SchemaModel } from './schema-structure'
 
 const schema: SchemaModel = {
   tables: {
-    user: {
+    identity: {
       replicate: 'none',
-      idPrefix: 'usr',
+      idPrefix: 'idn',
       fields: { name: { kind: 'scalar', name: 'string' } },
     },
     profile: {
       region: 'private',
       idPrefix: 'prf',
       fields: {
-        user: { kind: 'record', tables: ['user'] },
+        identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },
       },
     },
     follows: {
       region: 'private',
       idPrefix: 'flw',
-      relation: { in: ['user'], out: ['profile'] },
+      relation: { in: ['identity'], out: ['profile'] },
       fields: {},
     },
   },
@@ -50,7 +50,7 @@ describe('collect', () => {
       'features/user/user.module.ts': '',
       [`${page}/profile.container.tsx`]: '',
       [`${page}/profile.shape.surql`]:
-        '-- @params $user: record<user>\nSELECT id, name FROM profile WHERE user = $user;\n',
+        '-- @params $identity: record<identity>\nSELECT id, name FROM profile WHERE identity = $identity;\n',
       [`${page}/profile.commands.surql`]:
         '-- @command updateName($id: record<profile>, $name: string)\n-- @allow record\nUPDATE $id SET name = $name;\n',
     })
@@ -108,11 +108,11 @@ describe('collect', () => {
       'features/user/user.module.ts': '',
       [`${page}/profile.container.tsx`]: '',
       [`${page}/profile.shape.surql`]:
-        '-- @params $name: string\nSELECT name FROM profile WHERE user.name = $name;\n',
+        '-- @params $name: string\nSELECT name FROM profile WHERE identity.name = $name;\n',
     })
 
     expect((await collect(root, schema)).problems).toEqual([
-      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+      `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
 
@@ -120,11 +120,11 @@ describe('collect', () => {
     const root = project({
       'features/user/user.module.ts': '',
       [`${page}/profile.container.tsx`]: '',
-      [`${page}/profile.shape.surql`]: 'SELECT name, user FROM profile FETCH user;\n',
+      [`${page}/profile.shape.surql`]: 'SELECT name, identity FROM profile FETCH identity;\n',
     })
 
     expect((await collect(root, schema)).problems).toEqual([
-      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+      `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
 
@@ -136,7 +136,7 @@ describe('collect', () => {
     })
 
     expect((await collect(root, schema)).problems).toEqual([
-      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+      `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
 
@@ -144,11 +144,12 @@ describe('collect', () => {
     const root = project({
       'features/user/user.module.ts': '',
       [`${page}/profile.container.tsx`]: '',
-      [`${page}/profile.shape.surql`]: '-- @params $id: record<user>\nSELECT name FROM ONLY $id;\n',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $id: record<identity>\nSELECT name FROM ONLY $id;\n',
     })
 
     expect((await collect(root, schema)).problems).toEqual([
-      `${page}/profile.shape.surql: reads the server-only table user; mark the shape -- @server or read a replicated table`,
+      `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
 })

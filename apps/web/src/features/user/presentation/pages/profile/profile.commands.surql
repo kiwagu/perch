@@ -1,10 +1,10 @@
--- Profile changes. On the client each command becomes operations on the user's
+-- Profile changes. On the client each command becomes operations on the identity's
 -- private region; the statements declare what a command may touch.
 
--- @command createProfile($id: record<profile>, $user: record<user>, $name: string, $email: string)
+-- @command createProfile($id: record<profile>, $identity: record<identity>, $name: string, $email: string)
 -- @allow record
 CREATE $id SET
-  user = $user,
+  identity = $identity,
   name = $name,
   email = $email;
 

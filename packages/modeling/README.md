@@ -13,8 +13,10 @@ TypeScript or React code.
   validates every `.surql` with `surreal db validate`, applies the schema to an embedded
   database and reads its structure, cross-checks `-- @id` prefixes against the entity id
   registry, then writes per component `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`,
-  plus `pages.model.json`, `replica.schema.gen.ts` and `generated-<module>.toml` suites.
-  `--check` writes nothing and fails on missing, different or stale output.
+  plus `pages.model.json`, the `generated-<module>.toml` suites and the replica schema
+  (every replicated table with its region and field kinds) in the database workspace,
+  `<database>/src/replica.schema.gen.ts`. `--check` writes nothing and fails on missing,
+  different or stale output.
 - CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a
   string or template literal in TypeScript that holds a SurrealQL statement; reads the syntax
   tree with oxc-parser. The modeling sources are exempt: their tests feed SurrealQL to the parsers.

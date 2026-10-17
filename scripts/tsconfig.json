@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.base.json",
-  "compilerOptions": { "types": ["bun"] },
+  "compilerOptions": { "types": ["bun", "@workspace/data/surql"] },
   "include": ["**/*.ts"]
 }

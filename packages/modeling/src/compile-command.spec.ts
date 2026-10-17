@@ -5,9 +5,9 @@ import type { SchemaModel } from './schema-structure'
 
 const schema: SchemaModel = {
   tables: {
-    user: {
+    identity: {
       replicate: 'none',
-      idPrefix: 'usr',
+      idPrefix: 'idn',
       fields: { name: { kind: 'scalar', name: 'string' } },
     },
     profile: {
@@ -15,7 +15,7 @@ const schema: SchemaModel = {
       idPrefix: 'prf',
       crdt: { bio: 'text', tags: 'list' },
       fields: {
-        user: { kind: 'record', tables: ['user'] },
+        identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },
         bio: { kind: 'option', inner: { kind: 'scalar', name: 'string' } },
         tags: { kind: 'array', inner: { kind: 'scalar', name: 'string' } },
@@ -81,10 +81,18 @@ describe('compileCommand', () => {
   })
 
   it('compiles CREATE with a client id and DELETE', () => {
-    const params = [id, { name: 'user', type: 'record<user>' }, { name: 'name', type: 'string' }]
+    const params = [
+      id,
+      { name: 'identity', type: 'record<identity>' },
+      { name: 'name', type: 'string' },
+    ]
 
-    expect(compile('CREATE $id SET user = $user, name = $name;', params).ops).toEqual([
-      { op: 'create', record: 'id', fields: { user: { param: 'user' }, name: { param: 'name' } } },
+    expect(compile('CREATE $id SET identity = $identity, name = $name;', params).ops).toEqual([
+      {
+        op: 'create',
+        record: 'id',
+        fields: { identity: { param: 'identity' }, name: { param: 'name' } },
+      },
     ])
     expect(compile('DELETE $id;', [id]).ops).toEqual([{ op: 'delete', record: 'id' }])
   })
@@ -109,14 +117,14 @@ describe('compileCommand', () => {
         {
           name: 'rename',
           params: [
-            { name: 'id', type: 'record<user>' },
+            { name: 'id', type: 'record<identity>' },
             { name: 'name', type: 'string' },
           ],
         },
         'UPDATE $id SET name = $name;',
         schema,
       ),
-    ).toThrow(/user is server-only/)
+    ).toThrow(/identity is server-only/)
   })
 
   it('refuses a record target that is not a record parameter', () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { AuthUser } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
@@ -12,9 +12,8 @@ import { createAppRouter } from './router'
 import { ServicesProvider } from './services'
 
 const me: AuthUser = {
-  id: 'usr_0000000000000000.01m52pexcp' as AuthUser['id'],
+  id: 'idn_0000000000000000.01m52pexcp' as AuthUser['id'],
   email: 'ann@example.test',
-  name: 'Ann',
 }
 
 const Page = () => null
@@ -28,10 +27,13 @@ const TestModule = defineModule({
   ],
 })
 
+/** A session that only says who is signed in, as long as nobody signs in or out. */
+const fixed = (user: AuthUser | undefined) => ({ current: () => user, subscribe: () => () => {} })
+
 async function landing(path: string, user: AuthUser | undefined): Promise<string> {
   const router = createAppRouter({
     modules: [TestModule],
-    session: { current: () => user },
+    session: fixed(user),
     layout: () => <Outlet />,
     history: createMemoryHistory({ initialEntries: [path] }),
   })
@@ -56,7 +58,7 @@ describe('createAppRouter', () => {
   it("renders a page inside its module's scope", async () => {
     const router = createAppRouter({
       modules: [GreetingModule],
-      session: { current: () => undefined },
+      session: fixed(undefined),
       layout: () => <Outlet />,
       history: createMemoryHistory({ initialEntries: ['/hello'] }),
     })
@@ -77,6 +79,35 @@ describe('createAppRouter', () => {
   it('lets a signed-in user reach a protected page and keeps them away from sign-in', async () => {
     expect(await landing('/me', me)).toBe('/me')
     expect(await landing('/sign-in', me)).toBe('/me')
+  })
+
+  it('sends an open protected page to sign-in once the user signs out', async () => {
+    let user: AuthUser | undefined = me
+    const listeners = new Set<(next: AuthUser | undefined) => void>()
+    const router = createAppRouter({
+      modules: [TestModule],
+      session: {
+        current: () => user,
+        subscribe: (listener) => {
+          listeners.add(listener)
+
+          return () => listeners.delete(listener)
+        },
+      },
+      layout: () => <Outlet />,
+      history: createMemoryHistory({ initialEntries: ['/me'] }),
+    })
+
+    await router.load()
+    expect(router.state.location.pathname).toBe('/me')
+
+    user = undefined
+
+    for (const listener of listeners) {
+      listener(undefined)
+    }
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
   })
 
   it('opens the right start page', async () => {

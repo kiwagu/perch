@@ -15,10 +15,16 @@ describe('parseStructure', () => {
   const { model, problems } = parseStructure(fixture, schemaText)
 
   it('reads field types from the database structure', () => {
-    expect(model.tables['user']?.fields['email']).toEqual({ kind: 'scalar', name: 'string' })
-    expect(model.tables['user']?.fields['password']).toEqual({ kind: 'scalar', name: 'string' })
-    expect(model.tables['user']?.fields['created_at']).toEqual({ kind: 'scalar', name: 'datetime' })
-    expect(model.tables['profile']?.fields['user']).toEqual({ kind: 'record', tables: ['user'] })
+    expect(model.tables['identity']?.fields['email']).toEqual({ kind: 'scalar', name: 'string' })
+    expect(model.tables['identity']?.fields['password']).toEqual({ kind: 'scalar', name: 'string' })
+    expect(model.tables['identity']?.fields['created_at']).toEqual({
+      kind: 'scalar',
+      name: 'datetime',
+    })
+    expect(model.tables['profile']?.fields['identity']).toEqual({
+      kind: 'record',
+      tables: ['identity'],
+    })
     expect(model.tables['profile']?.fields['bio']).toEqual({
       kind: 'option',
       inner: { kind: 'scalar', name: 'string' },
@@ -31,7 +37,7 @@ describe('parseStructure', () => {
       idPrefix: 'prf',
       crdt: { bio: 'text' },
     })
-    expect(model.tables['user']).toMatchObject({ replicate: 'none', idPrefix: 'usr' })
+    expect(model.tables['identity']).toMatchObject({ replicate: 'none', idPrefix: 'idn' })
     expect(model.tables['_replica_update']).toMatchObject({ replicate: 'none' })
     expect(problems).toEqual([])
   })
@@ -41,7 +47,7 @@ describe('parseStructure', () => {
       db: {
         tables: [
           { name: 'org', kind: { kind: 'NORMAL' } },
-          { name: 'member_of', kind: { kind: 'RELATION', in: ['user'], out: ['org'] } },
+          { name: 'member_of', kind: { kind: 'RELATION', in: ['identity'], out: ['org'] } },
         ],
       },
       tables: {
@@ -60,7 +66,7 @@ describe('parseStructure', () => {
       '-- @region org\n-- @id org\nDEFINE TABLE org;\n-- @region org\n-- @id mbr\nDEFINE TABLE member_of TYPE RELATION;'
     const parsed = parseStructure(info, text).model
 
-    expect(parsed.tables['member_of']?.relation).toEqual({ in: ['user'], out: ['org'] })
+    expect(parsed.tables['member_of']?.relation).toEqual({ in: ['identity'], out: ['org'] })
     expect(parsed.tables['org']?.fields).toEqual({
       address: {
         kind: 'option',
@@ -109,12 +115,14 @@ describe('loadSchemaModel', () => {
     const { model, problems } = (await loadSchemaModel(schemaText))._unsafeUnwrap()
 
     expect(Object.keys(model.tables).sort()).toEqual([
+      '_replica_cursor',
+      '_replica_head',
       '_replica_outbox',
       '_replica_projected',
       '_replica_snapshot',
       '_replica_update',
+      'identity',
       'profile',
-      'user',
     ])
     expect(model.tables['profile']?.region).toBe('private')
     expect(problems).toEqual([])

@@ -7,17 +7,17 @@ import { parseShape } from './shape-dialect'
 
 const schema: SchemaModel = {
   tables: {
-    user: {
+    identity: {
       replicate: 'none',
-      idPrefix: 'usr',
-      fields: { name: { kind: 'scalar', name: 'string' } },
+      idPrefix: 'idn',
+      fields: { email: { kind: 'scalar', name: 'string' } },
     },
     profile: {
       region: 'private',
       idPrefix: 'prf',
       crdt: { bio: 'text' },
       fields: {
-        user: { kind: 'record', tables: ['user'] },
+        identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },
         bio: { kind: 'option', inner: { kind: 'scalar', name: 'string' } },
         created_at: { kind: 'scalar', name: 'datetime' },
@@ -33,13 +33,17 @@ const place = {
   componentDir: 'features/user/presentation/pages/profile',
 }
 
-const body = 'SELECT id, name, bio FROM profile WHERE user = $user LIMIT 1;\n'
+const body = 'SELECT id, name, bio FROM profile WHERE identity = $identity LIMIT 1;\n'
 
 const shape: ShapeFile = {
   ...place,
   path: `${place.componentDir}/profile.shape.surql`,
   id: 'user.profile',
-  header: { kind: 'shape', params: [{ name: 'user', type: 'record<user>' }], server: false },
+  header: {
+    kind: 'shape',
+    params: [{ name: 'identity', type: 'record<identity>' }],
+    server: false,
+  },
   body,
   ast: parseShape(body),
   tables: ['profile'],
@@ -102,5 +106,14 @@ describe('emitModel', () => {
 describe('emitReplicaSchema', () => {
   it('lists the CRDT, reference and datetime fields of replicated tables', () => {
     expect(emitReplicaSchema(schema)).toMatchSnapshot()
+  })
+
+  it('names the region whose documents hold each replicated table, and leaves server-only tables out', () => {
+    const text = emitReplicaSchema(schema)
+
+    expect(text).toContain(
+      "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },",
+    )
+    expect(text).not.toContain('  identity:')
   })
 })

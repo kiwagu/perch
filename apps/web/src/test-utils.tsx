@@ -1,5 +1,5 @@
 import { type RenderResult, render } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container } from '@workspace/di'
@@ -15,7 +15,10 @@ export interface RenderOptions {
   readonly container?: Container
 }
 
-/** Renders a component with the application's providers: English text, in-memory ports. */
+/**
+ * Renders a component with the application's providers: English text, in-memory ports. The
+ * providers wrap the component, so `rerender` with new props keeps them.
+ */
 export function renderWithProviders(ui: ReactElement, options: RenderOptions = {}): RenderResult {
   const services = {
     container: options.container ?? new Container(),
@@ -23,9 +26,11 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions = {
   }
   const catalogs = { en: englishCatalog, ...(options.es ? { es: options.es } : {}) }
 
-  return render(
-    <I18nProvider locale={options.locale ?? 'en'} catalogs={catalogs}>
-      <ServicesProvider services={services}>{ui}</ServicesProvider>
-    </I18nProvider>,
-  )
+  return render(ui, {
+    wrapper: ({ children }: { readonly children: ReactNode }) => (
+      <I18nProvider locale={options.locale ?? 'en'} catalogs={catalogs}>
+        <ServicesProvider services={services}>{children}</ServicesProvider>
+      </I18nProvider>
+    ),
+  })
 }

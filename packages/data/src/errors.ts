@@ -7,6 +7,8 @@ export type DataErrorCode =
   | 'data:AUTH_FAILED'
   | 'data:INVALID_CREDENTIALS'
   | 'data:SIGN_UP_REJECTED'
+  | 'data:SYNC_STOPPED'
+  | 'data:OFFLINE'
 
 export interface DataError {
   readonly code: DataErrorCode

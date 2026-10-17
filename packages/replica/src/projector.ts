@@ -1,11 +1,12 @@
 import type { LoroEventBatch, LoroMap } from 'loro-crdt'
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError, type LocalDb, publishChange, recordId } from '@workspace/data'
+import { type DataError, dataError, type LocalDb, publishChange } from '@workspace/data'
 
 import { splitRecordKey } from './keys'
+import { toColumns } from './projection-values'
 import type { RegionDoc } from './region-doc'
-import { fieldOf, type ReplicaSchema } from './schema'
+import type { ReplicaSchema } from './schema'
 import deleteStatement from './surql/delete.surql'
 import projectedKeysStatement from './surql/projected-keys.surql'
 import upsertStatement from './surql/upsert.surql'
@@ -180,30 +181,8 @@ export class Projector {
       return
     }
 
-    const data = Object.fromEntries(
-      Object.entries(record.toJSON() as Record<string, unknown>).map(([field, value]) => [
-        field,
-        this.#toColumn(table, field, value),
-      ]),
-    )
+    const data = toColumns(this.schema, table, record.toJSON() as Record<string, unknown>)
 
     await this.local.db.query(upsertStatement, { table, key, data, region, entry: recordKeyValue })
-  }
-
-  /** References stored as `table:key` become record ids, ISO strings of datetime fields become dates. */
-  #toColumn(table: string, field: string, value: unknown): unknown {
-    const kind = fieldOf(this.schema, table, field)
-
-    if (kind?.kind === 'record' && typeof value === 'string') {
-      const colon = value.indexOf(':')
-
-      return recordId(value.slice(0, colon), value.slice(colon + 1))
-    }
-
-    if (kind?.kind === 'datetime' && typeof value === 'string') {
-      return new Date(value)
-    }
-
-    return value
   }
 }

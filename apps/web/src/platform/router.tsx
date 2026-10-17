@@ -2,7 +2,8 @@
  * Builds the application router from the module manifests. Each module route
  * becomes a page inside its module's scope; `authenticated` pages send visitors
  * to sign-in, `guest` pages send a signed-in user to the profile, and `/` opens
- * whichever applies.
+ * whichever applies. A page left open when the user signs out (here or in another
+ * tab) is checked again, so a protected one sends the visitor to sign-in.
  */
 
 import {
@@ -24,7 +25,10 @@ export const HOME_PATH = '/me'
 
 export interface AppRouterOptions {
   readonly modules: readonly ModuleDef[]
-  readonly session: { current(): AuthUser | undefined }
+  readonly session: {
+    current(): AuthUser | undefined
+    subscribe(listener: (user: AuthUser | undefined) => void): () => void
+  }
   readonly layout: FunctionComponent
   readonly history?: RouterHistory
 }
@@ -72,8 +76,17 @@ export function createAppRouter(options: AppRouterOptions) {
     ),
   )
 
-  return createRouter({
+  const router = createRouter({
     routeTree: root.addChildren([start, ...pages]),
     ...(options.history ? { history: options.history } : {}),
   })
+
+  // The router lives as long as the page, so it never stops listening.
+  options.session.subscribe((user) => {
+    if (!user) {
+      void router.invalidate()
+    }
+  })
+
+  return router
 }

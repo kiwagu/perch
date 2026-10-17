@@ -3,13 +3,18 @@ import type { Command, Shape } from '@workspace/data'
 import createProfileText from './create-profile.surql'
 import profileByIdText from './profile-by-id.surql'
 
-export const createProfile: Command<{ id: string; user: string; name: string; email: string }> = {
+export const createProfile: Command<{
+  id: string
+  identity: string
+  name: string
+  email: string
+}> = {
   id: 'fixture.createProfile',
   kind: 'command',
   text: createProfileText,
   params: [
     { name: 'id', type: 'record<profile>' },
-    { name: 'user', type: 'record<user>' },
+    { name: 'identity', type: 'record<identity>' },
     { name: 'name', type: 'string' },
     { name: 'email', type: 'string' },
   ],
@@ -19,7 +24,11 @@ export const createProfile: Command<{ id: string; user: string; name: string; em
     {
       op: 'create',
       record: 'id',
-      fields: { user: { param: 'user' }, name: { param: 'name' }, email: { param: 'email' } },
+      fields: {
+        identity: { param: 'identity' },
+        name: { param: 'name' },
+        email: { param: 'email' },
+      },
     },
   ],
 }

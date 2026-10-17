@@ -1,0 +1,126 @@
+name = "identity-permissions"
+tags = ["permissions", "identity"]
+
+# The server contract of the server-only identity table: a signed-in identity reads only
+# its own record, never a password hash, and nobody writes the table except the access
+# method's sign-up. Cases run in order against one database; every actor signs up before
+# the first case. The guest (unauthenticated) stance is checked over raw HTTP in
+# tests/anonymous.
+
+[[cases]]
+name = "bob sees only himself"
+kind = "sql_expect"
+actor = "bob"
+sql = "SELECT count() FROM identity GROUP ALL;"
+allow = true
+
+[[cases.assertions]]
+path = "0.count"
+equals = 1
+
+[[cases]]
+name = "alice sees only herself"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT count() FROM identity GROUP ALL;"
+allow = true
+
+[[cases.assertions]]
+path = "0.count"
+equals = 1
+
+[[cases]]
+name = "both identities exist"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT count() FROM identity WHERE email IN ['alice@example.test', 'bob@example.test'] GROUP ALL;"
+allow = true
+
+[[cases.assertions]]
+path = "0.count"
+equals = 2
+
+[[cases]]
+name = "identities are keyed by workspace entity ids"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE string::matches(record::id(id), '^idn_[0-9a-z]{16}[.][0-9a-z]{10}$') FROM identity;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
+
+[[cases]]
+name = "alice cannot read password hashes"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE password != NONE FROM identity;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = false
+
+[[cases]]
+name = "alice cannot change her own email"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE $auth.id SET email = 'alice.b@example.test' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot change bob's email"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE identity SET email = 'hacked@example.test' WHERE email = 'bob@example.test' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create an identity"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE identity SET email = 'extra@example.test', password = 'x';"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete her identity"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE $auth.id RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "only the signed-up identities exist, with their emails unchanged"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE email FROM identity WHERE email IN ['alice@example.test', 'bob@example.test', 'alice.b@example.test', 'hacked@example.test', 'extra@example.test'] ORDER BY email;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "alice@example.test"
+
+[[cases.assertions]]
+path = "1"
+equals = "bob@example.test"
+
+[[cases.assertions]]
+path = "2"
+exists = false

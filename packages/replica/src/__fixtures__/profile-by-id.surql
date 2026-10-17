@@ -1,6 +1,6 @@
 SELECT
   id,
-  user,
+  identity,
   name,
   email,
   bio

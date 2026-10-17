@@ -5,7 +5,7 @@ import { fromDriverValue, recordId, recordRef, recordTableOf, toDriverParams } f
 
 describe('recordTableOf', () => {
   it('reads the table of a record type, also inside option', () => {
-    expect(recordTableOf('record<user>')).toBe('user')
+    expect(recordTableOf('record<identity>')).toBe('identity')
     expect(recordTableOf('option<record<profile>>')).toBe('profile')
     expect(recordTableOf('string')).toBeUndefined()
   })
@@ -13,18 +13,18 @@ describe('recordTableOf', () => {
 
 describe('toDriverParams', () => {
   it('turns entity id strings of record parameters into record ids', () => {
-    const params = toDriverParams({ user: 'usr_1', name: 'Ann' }, [
-      { name: 'user', type: 'record<user>' },
+    const params = toDriverParams({ identity: 'idn_1', name: 'Ann' }, [
+      { name: 'identity', type: 'record<identity>' },
       { name: 'name', type: 'string' },
     ])
 
-    expect(params['user']).toBeInstanceOf(RecordId)
-    expect(String(params['user'])).toBe('user:usr_1')
+    expect(params['identity']).toBeInstanceOf(RecordId)
+    expect(String(params['identity'])).toBe('identity:idn_1')
     expect(params['name']).toBe('Ann')
   })
 
   it('leaves an absent optional record parameter absent', () => {
-    expect(toDriverParams({}, [{ name: 'user', type: 'option<record<user>>' }])).toEqual({})
+    expect(toDriverParams({}, [{ name: 'identity', type: 'option<record<identity>>' }])).toEqual({})
   })
 })
 
@@ -35,19 +35,19 @@ describe('fromDriverValue', () => {
       {
         id: new RecordId('profile', 'prf_1'),
         at: new DateTime(at),
-        tags: [new RecordId('user', 'usr_1')],
+        tags: [new RecordId('identity', 'idn_1')],
       },
     ])
 
-    expect(value).toEqual([{ id: 'prf_1', at, tags: ['usr_1'] }])
+    expect(value).toEqual([{ id: 'prf_1', at, tags: ['idn_1'] }])
   })
 })
 
 describe('record helpers', () => {
   it('builds and splits record ids', () => {
-    const id = recordId('user', 'usr_1')
+    const id = recordId('identity', 'idn_1')
 
-    expect(recordRef(id)).toEqual({ table: 'user', key: 'usr_1' })
-    expect(recordRef('user:usr_1')).toBeUndefined()
+    expect(recordRef(id)).toEqual({ table: 'identity', key: 'idn_1' })
+    expect(recordRef('identity:idn_1')).toBeUndefined()
   })
 })

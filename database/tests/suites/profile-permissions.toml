@@ -2,15 +2,16 @@ name = "profile-permissions"
 tags = ["permissions", "profile"]
 
 # The server contract of the replicated profile table: clients write profiles through
-# their private region, so on the server a user may read and edit only their own row
-# and can neither create nor delete one. Refused writes return no rows; root then
-# confirms that nothing changed.
+# their private region, which the gateway checks and stores, so on the server an identity
+# may only read its own row and can neither create, edit nor delete one. Refused writes
+# return no rows; root then confirms that nothing changed. A bio holds at most 2000
+# characters, whoever writes it.
 
 [[cases]]
 name = "root seeds a profile for alice and for bob"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE profile:alice SET user = (SELECT VALUE id FROM user WHERE email = 'alice@example.test')[0], name = 'Alice', email = 'alice@example.test'; CREATE profile:bob SET user = (SELECT VALUE id FROM user WHERE email = 'bob@example.test')[0], name = 'Bob', email = 'bob@example.test';"
+sql = "CREATE profile:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], name = 'Alice', email = 'alice@example.test'; CREATE profile:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], name = 'Bob', email = 'bob@example.test';"
 allow = true
 
 [[cases]]
@@ -29,15 +30,15 @@ path = "1"
 exists = false
 
 [[cases]]
-name = "alice renames her own profile"
+name = "alice cannot rename her own profile"
 kind = "sql_expect"
 actor = "alice"
 sql = "UPDATE profile:alice SET name = 'Alice B' RETURN AFTER;"
 allow = true
 
 [[cases.assertions]]
-path = "0.name"
-equals = "Alice B"
+path = "0"
+exists = false
 
 [[cases]]
 name = "alice cannot rename bob's profile"
@@ -54,7 +55,7 @@ exists = false
 name = "alice cannot create a profile"
 kind = "sql_expect"
 actor = "alice"
-sql = "CREATE profile:extra SET user = $auth.id, name = 'Extra', email = 'extra@example.test';"
+sql = "CREATE profile:extra SET identity = $auth.id, name = 'Extra', email = 'extra@example.test';"
 allow = true
 
 [[cases.assertions]]
@@ -73,7 +74,26 @@ path = "0"
 exists = false
 
 [[cases]]
-name = "only the seeded profiles exist and bob keeps his name"
+name = "a bio of 2000 characters is stored"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE profile:bob SET bio = string::repeat('x', 2000) RETURN VALUE string::len(bio);"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = 2000
+
+[[cases]]
+name = "a bio of 2001 characters is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE profile:bob SET bio = string::repeat('x', 2001);"
+allow = false
+error_contains = "string::len($value) <= 2000"
+
+[[cases]]
+name = "only the seeded profiles exist and keep their names"
 kind = "sql_expect"
 actor = "root"
 sql = "SELECT VALUE name FROM profile ORDER BY name;"
@@ -81,7 +101,7 @@ allow = true
 
 [[cases.assertions]]
 path = "0"
-equals = "Alice B"
+equals = "Alice"
 
 [[cases.assertions]]
 path = "1"

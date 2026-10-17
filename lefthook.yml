@@ -27,7 +27,8 @@ pre-commit:
       run: >-
         . scripts/ensure-path.sh && bun run model &&
         git ls-files -z --modified --others --exclude-standard --
-        '*.model.gen.ts' '*.surql.d.ts' '*.model.json' 'database/tests/suites/generated-*.toml'
+        '*.model.gen.ts' '*.surql.d.ts' '*.model.json' 'database/src/replica.schema.gen.ts'
+        'database/tests/suites/generated-*.toml'
         | xargs -0 -r git add --
 
     - name: i18n catalogs

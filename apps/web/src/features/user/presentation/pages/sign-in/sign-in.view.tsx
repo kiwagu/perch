@@ -18,6 +18,11 @@ export interface SignInViewProps {
   readonly submitting: boolean
   /** The code of the last failure. */
   readonly error?: string | undefined
+  /**
+   * Why the last session ended, when the person should know: `resend-after-sign-in` once the
+   * device was signed out while it held changes it had not sent.
+   */
+  readonly notice?: 'resend-after-sign-in' | undefined
   readonly onSubmit: (values: SignInValues) => void
   readonly onToggleMode: () => void
 }
@@ -64,6 +69,13 @@ export function SignInView(props: SignInViewProps) {
       <CardContent>
         <form onSubmit={submit}>
           <FieldGroup>
+            {props.notice === 'resend-after-sign-in' ? (
+              <Alert>
+                <AlertDescription data-testid="user.sign-in.notice.resend-after-sign-in">
+                  {t('user.sign-in.notice.resend-after-sign-in')}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {props.error ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid="user.sign-in.error">

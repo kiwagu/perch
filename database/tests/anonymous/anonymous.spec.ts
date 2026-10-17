@@ -7,10 +7,10 @@ import { describe, expect, it } from 'vitest'
 // HTTP request that carries no Authorization header at all.
 
 const endpoint = process.env['SURREAL_URL'] ?? 'http://127.0.0.1:8010'
-const query = readFileSync(new URL('./select-users.surql', import.meta.url), 'utf8')
+const query = readFileSync(new URL('./select-identities.surql', import.meta.url), 'utf8')
 
 describe('an anonymous client', () => {
-  it('cannot read users', async () => {
+  it('cannot read identities', async () => {
     const response = await fetch(new URL('/sql', endpoint), {
       method: 'POST',
       headers: { Accept: 'application/json', 'surreal-ns': 'app', 'surreal-db': 'app' },

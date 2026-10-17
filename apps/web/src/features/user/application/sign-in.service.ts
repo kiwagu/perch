@@ -42,11 +42,12 @@ export class SignInService {
       return errAsync(name.error)
     }
 
-    return this.session.signUp({ ...form, name: name.value }).andThen((user) =>
+    // The account holds only what signing in needs; the name lives in the profile.
+    return this.session.signUp({ email: form.email, password: form.password }).andThen((user) =>
       this.profiles
         .createProfile({
           id: profileIdFactory.create(),
-          user: user.id,
+          identity: user.id,
           name: name.value,
           email: form.email,
         })

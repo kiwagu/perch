@@ -16,6 +16,7 @@ const AccountPreset = z.strictObject({
   // The profile refuses an empty name or one over 80 characters; the catalog test
   // checks every preset against the profile's own rule.
   name: z.string().trim().min(1).max(80),
+  bio: z.string().trim().min(1),
   locale: z.enum(['en', 'es']),
 })
 
@@ -27,8 +28,8 @@ export type Catalog = z.infer<typeof Catalog>
 
 export const catalog: Catalog = {
   accounts: [
-    { ref: 'ann', name: 'Ann Example', locale: 'en' },
-    { ref: 'beto', name: 'Beto Ejemplo', locale: 'es' },
+    { ref: 'ann', name: 'Ann Example', bio: 'Demo account of the seed.', locale: 'en' },
+    { ref: 'beto', name: 'Beto Ejemplo', bio: 'Cuenta de ejemplo de la semilla.', locale: 'es' },
   ],
 }
 
@@ -39,6 +40,7 @@ export interface SeedAccount {
   readonly email: string
   readonly password: string
   readonly name: string
+  readonly bio: string
   readonly locale: AccountPreset['locale']
 }
 
@@ -49,6 +51,7 @@ export function accountFor(preset: AccountPreset, mode: SeedMode): SeedAccount {
     email: `${mailbox}@${SEED_EMAIL_DOMAIN}`,
     password: `${preset.ref}-seed-password`,
     name: preset.name,
+    bio: preset.bio,
     locale: preset.locale,
   }
 }

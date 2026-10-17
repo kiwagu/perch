@@ -1,6 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
+import { okAsync } from 'neverthrow'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
+import type { BusError } from '@workspace/cqrs'
 import { useLocale, useT } from '@workspace/i18n'
 
 import { useSetLocale } from '../../../../../platform/i18n'
@@ -11,7 +13,7 @@ import { SESSION } from '../../../../../platform/session.port'
 import { localeChange, PROFILE_SERVICE } from '../../../application/profile.service'
 
 import { profileShape } from './profile.model.gen'
-import { ProfileView } from './profile.view'
+import { type ProfileDraft, ProfileView } from './profile.view'
 
 export function ProfileContainer() {
   const session = useService(SESSION)
@@ -20,10 +22,11 @@ export function ProfileContainer() {
     (onChange) => session.subscribe(onChange),
     () => session.current(),
   )
-  const { tree, status } = useShape(profileShape, user ? { user: user.id } : null)
+  const { tree, status } = useShape(profileShape, user ? { identity: user.id } : null)
   const row = tree?.[0]
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
   const notify = useNotify()
   const navigate = useNavigate()
   const t = useT()
@@ -55,14 +58,24 @@ export function ProfileContainer() {
     }
   }, [row, locale, setLocale, profiles])
 
-  const saveName = (name: string) => {
+  // One Save writes each field the person changed: the name first, then the bio.
+  const save = (draft: ProfileDraft) => {
     if (!row) {
       return
     }
 
+    const name = () =>
+      draft.name === row.name
+        ? okAsync<void, BusError>(undefined)
+        : profiles.updateName({ id: row.id, name: draft.name })
+    const bio = () =>
+      draft.bio === (row.bio ?? '')
+        ? okAsync<void, BusError>(undefined)
+        : profiles.updateBio({ id: row.id, bio: draft.bio })
+
     setSaving(true)
-    void profiles
-      .updateName({ id: row.id, name })
+    void name()
+      .andThen(bio)
       .match(
         () => {
           setError(undefined)
@@ -73,9 +86,14 @@ export function ProfileContainer() {
       .then(() => setSaving(false))
   }
 
-  const signOut = () => {
-    void session.signOut().match(
-      () => navigate({ to: SIGN_IN_PATH }),
+  // Changes this device could not send are lost by signing out: that waits for a confirmation.
+  const signOut = (options?: { readonly forgetUnsent: true }) => {
+    setConfirmSignOut(false)
+    void session.signOut(options).match(
+      (outcome) =>
+        outcome === 'needs-confirmation'
+          ? setConfirmSignOut(true)
+          : void navigate({ to: SIGN_IN_PATH }),
       () => navigate({ to: SIGN_IN_PATH }),
     )
   }
@@ -86,8 +104,10 @@ export function ProfileContainer() {
       profile={row}
       saving={saving}
       error={error}
-      onSaveName={saveName}
+      onSave={save}
       onSignOut={signOut}
+      confirmSignOut={confirmSignOut}
+      onCancelSignOut={() => setConfirmSignOut(false)}
     />
   )
 }

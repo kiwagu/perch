@@ -1,46 +1,56 @@
 /**
- * The composition root: the only module of the application that imports
- * adapters. It opens the local database, restores the session and binds each
- * port to its token; everything below receives ports only.
+ * The composition root: the only module of the application that imports adapters. It
+ * restores the session, which opens the signed-in identity's space, and binds each port to
+ * its token; everything below receives ports only. Nothing is opened while nobody is signed in.
  */
 
 import type { ResultAsync } from 'neverthrow'
 
 import {
   type DataError,
-  type Engines,
-  LOCAL_DB,
-  openLocalDb,
+  type LocalDb,
   SHAPE_RUNNER,
-  ShapeRunner,
   type ShapeRunnerPort,
   WRITE_PATH,
   type WritePathPort,
 } from '@workspace/data'
+import { replicaSchema } from '@workspace/database/replica-schema'
 import { Container } from '@workspace/di'
+import type { IdentityId } from '@workspace/ids'
+import type { Clock } from '@workspace/replica'
+import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
-import { replicaSchema } from '../replica.schema.gen'
 
 import { type CommandLogger, createCommandBus } from './commands'
-import { SessionService } from './session'
+import type { GatewayAuth } from './gateway-auth'
+import type { IdentitySpace, SyncState } from './identity-space'
+import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage } from './storage'
 
-export type BootStep = 'open-db' | 'restore-session' | 'ready'
+/** Where a start stopped: restoring the session, opening the identity's database, or ready. */
+export type BootStep = 'restore-session' | 'open-db' | 'ready'
 
 export interface AppRootOptions {
-  readonly engines: Engines
-  readonly url: string
-  readonly namespace?: string
-  readonly database?: string
-  /** A system user, when the database is a server stand rather than embedded. */
-  readonly credentials?: { readonly username: string; readonly password: string }
-  readonly schema: string
+  /** Opens the database of one identity: each identity has its own on the device. */
+  readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
+  readonly gatewayAuth: GatewayAuth
+  /** The channel to the gateway for the tab that leads an identity's sync. */
+  readonly transport: (context: TransportContext) => SyncTransport
+  /**
+   * The browser's Web Locks: one tab per identity leads its sync, and a sign-out waits for the
+   * writes of every tab; undefined without them (such a browser does not sync).
+   */
+  readonly locks: LockManagerLike | undefined
+  readonly hints: (identity: IdentityId) => SyncHints
+  readonly clock: Clock
   readonly storage: KeyValueStorage
+  readonly visibility: VisibilitySource
   readonly logger: CommandLogger
   readonly onStep?: (step: BootStep) => void
   readonly onError: (error: DataError) => void
+  readonly onSyncState: (state: SyncState) => void
 }
 
 /** What the application receives: ports, and the container that resolves them. */
@@ -50,67 +60,59 @@ export interface AppServices {
   readonly writePath: WritePathPort
   readonly session: SessionPort
   readonly commands: CommandsPort
+  /** The signed-in identity's space, for a composition that drives it directly: the seed waits on its sync. */
+  space(): IdentitySpace | undefined
   close(): Promise<void>
 }
 
-export const NAMESPACE = 'app'
-
-export const DATABASE = 'app'
-
 export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, DataError> {
-  const step = (name: BootStep): void => options.onStep?.(name)
+  let last: BootStep | undefined
+  const step = (name: BootStep): void => {
+    if (name !== last) {
+      last = name
+      options.onStep?.(name)
+    }
+  }
+  const session = new SessionService({
+    auth: options.gatewayAuth,
+    openLocal: options.openLocal,
+    schema: replicaSchema,
+    transport: options.transport,
+    locks: options.locks,
+    hints: options.hints,
+    clock: options.clock,
+    storage: options.storage,
+    visibility: options.visibility,
+    onStep: step,
+    onSyncState: options.onSyncState,
+    onError: options.onError,
+  })
+  const commands = createCommandBus({
+    writePath: session.writePath,
+    session,
+    deviceId: deviceIdFrom(options.storage),
+    logger: options.logger,
+  })
+  // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.
+  const container = new Container()
+    .singleton(SHAPE_RUNNER, () => session.runner)
+    .singleton(WRITE_PATH, () => session.writePath)
+    .singleton(SESSION, () => session)
+    .singleton(COMMANDS, () => commands)
 
-  step('open-db')
+  step('restore-session')
 
-  const namespace = options.namespace ?? NAMESPACE
-  const database = options.database ?? DATABASE
+  return session.restore().map(() => {
+    step('ready')
 
-  return openLocalDb({
-    engines: options.engines,
-    url: options.url,
-    namespace,
-    database,
-    schema: options.schema,
-    ...(options.credentials ? { credentials: options.credentials } : {}),
-  }).andThen((local) => {
-    const session = new SessionService(local, {
-      access: 'user',
-      namespace,
-      database,
-      schema: replicaSchema,
-      storage: options.storage,
-      onError: options.onError,
-    })
-    const runner = new ShapeRunner(local)
-    const commands = createCommandBus({
+    return {
+      container,
+      runner: session.runner,
       writePath: session.writePath,
       session,
-      deviceId: deviceIdFrom(options.storage),
-      logger: options.logger,
-    })
-    const container = new Container()
-      .singleton(LOCAL_DB, () => local)
-      .singleton(SHAPE_RUNNER, () => runner)
-      .singleton(WRITE_PATH, () => session.writePath)
-      .singleton(SESSION, () => session)
-      .singleton(COMMANDS, () => commands)
-
-    step('restore-session')
-
-    return session.restore().map(() => {
-      step('ready')
-
-      return {
-        container,
-        runner,
-        writePath: session.writePath,
-        session,
-        commands,
-        close: async () => {
-          await session.close()
-          await local.close()
-        },
-      }
-    })
+      commands,
+      space: () => session.space(),
+      close: () => session.close(),
+    }
   })
 }

@@ -2,7 +2,9 @@ import { okAsync, ResultAsync } from 'neverthrow'
 
 import { type Command, type DataError, runCommand, type Shape } from '@workspace/data'
 import {
-  openStand as openAppStand,
+  openClient,
+  openStand,
+  type SeedClient,
   type SeedError,
   type Stand,
   type StandOptions,
@@ -12,13 +14,23 @@ import { accountFor, catalog, SEED_EMAIL_DOMAIN, type SeedMode } from './catalog
 import seededAccountsText from './surql/seeded-accounts.surql'
 import sweepText from './surql/sweep.surql'
 
-/** The stand to seed: its address, namespace and database, and a system user. */
-export type StandTarget = Omit<StandOptions, 'logger'>
+export { openStand, type StandOptions } from '@workspace/web/seeding'
+
+/** Where a seed goes: the gateway that creates the accounts, and the stand behind it for a reset. */
+export interface StandTarget extends StandOptions {
+  /** The gateway's address, such as `http://127.0.0.1:5181`. */
+  readonly gatewayUrl: string
+}
 
 export interface SeedOptions extends StandTarget {
   readonly mode: SeedMode
   /** Sweep the stand's seed data first. */
   readonly reset?: boolean
+}
+
+export interface SweepOptions {
+  /** Only the seeded accounts at these addresses; every seeded account when left out. */
+  readonly emails?: readonly string[]
 }
 
 export interface SeededEntry {
@@ -32,33 +44,50 @@ export interface SeedManifest {
   readonly accounts: Readonly<Record<string, SeededEntry>>
 }
 
-const seededAccounts: Shape<{ domain: string }, readonly unknown[]> = {
+interface SweepParams {
+  readonly domain: string
+  readonly emails?: readonly string[]
+}
+
+const sweepParams = [
+  { name: 'domain', type: 'string' },
+  { name: 'emails', type: 'option<array<string>>' },
+] as const
+
+const seededAccounts: Shape<SweepParams, readonly unknown[]> = {
   id: 'seed.seededAccounts',
   kind: 'shape',
   text: seededAccountsText,
-  params: [{ name: 'domain', type: 'string' }],
-  tables: ['user'],
+  params: sweepParams,
+  tables: ['identity'],
 }
 
-const sweepCommand: Command<{ domain: string }> = {
+const sweepCommand: Command<SweepParams> = {
   id: 'seed.sweep',
   kind: 'command',
   text: sweepText,
-  params: [{ name: 'domain', type: 'string' }],
-  tables: ['user', 'profile', '_replica_snapshot', '_replica_update', '_replica_outbox'],
+  params: sweepParams,
+  tables: [
+    'identity',
+    'profile',
+    '_replica_head',
+    '_replica_snapshot',
+    '_replica_update',
+    '_replica_projected',
+  ],
   region: 'server',
   ops: [],
 }
 
-export const openStand = (target: StandTarget): ResultAsync<Stand, DataError> =>
-  openAppStand(target)
-
-/** Runs the work, then closes the stand whatever the outcome. */
-function closing<T, E>(stand: Stand, work: ResultAsync<T, E>): ResultAsync<T, E> {
+/** Runs the work, then closes what it ran on whatever the outcome. */
+function closing<T, E>(
+  opened: { close(): Promise<void> },
+  work: ResultAsync<T, E>,
+): ResultAsync<T, E> {
   const settled = async () => {
     const result = await work
 
-    await stand.close()
+    await opened.close()
 
     return result
   }
@@ -66,48 +95,58 @@ function closing<T, E>(stand: Stand, work: ResultAsync<T, E>): ResultAsync<T, E>
   return new ResultAsync(settled())
 }
 
-function sweepStand(stand: Stand): ResultAsync<{ accounts: number }, DataError> {
-  const domain = SEED_EMAIL_DOMAIN
+function sweepStand(
+  stand: Stand,
+  options: SweepOptions,
+): ResultAsync<{ accounts: number }, DataError> {
+  const params: SweepParams = options.emails
+    ? { domain: SEED_EMAIL_DOMAIN, emails: options.emails }
+    : { domain: SEED_EMAIL_DOMAIN }
 
   return stand.runner
-    .read(seededAccounts, { domain })
+    .read(seededAccounts, params)
     .andThen((accounts) =>
-      runCommand(stand.local, sweepCommand, { domain }).map(() => ({ accounts: accounts.length })),
+      runCommand(stand.local, sweepCommand, params).map(() => ({ accounts: accounts.length })),
     )
 }
 
-/** Removes every seeded account from the stand, with its profile and region documents. */
-export function sweep(target: StandTarget): ResultAsync<{ accounts: number }, DataError> {
-  return openStand(target).andThen((stand) => closing(stand, sweepStand(stand)))
+/**
+ * Removes seeded accounts from the stand with their profiles and the server's copy of their
+ * regions. An operator's task, run as a system user on the stand rather than through the
+ * gateway; no seed client may still be connected as one of these accounts.
+ */
+export function sweep(
+  target: StandOptions,
+  options: SweepOptions = {},
+): ResultAsync<{ accounts: number }, DataError> {
+  return openStand(target).andThen((stand) => closing(stand, sweepStand(stand, options)))
 }
 
-/** Seeds the catalog's accounts through the product path, one account at a time. */
+function seedAccounts(client: SeedClient, mode: SeedMode): ResultAsync<SeedManifest, SeedError> {
+  return catalog.accounts
+    .reduce<ResultAsync<Record<string, SeededEntry>, SeedError>>(
+      (done, preset) =>
+        done.andThen((accounts) => {
+          const account = accountFor(preset, mode)
+
+          return client.ensureAccount(account).map((seeded) => ({
+            ...accounts,
+            [preset.ref]: { id: seeded.user.id, email: account.email, profileId: seeded.profileId },
+          }))
+        }),
+      okAsync({}),
+    )
+    .map((accounts) => ({ accounts }))
+}
+
+/**
+ * Seeds the catalog's accounts through the gateway as a device would, one account at a time.
+ * With `reset`, the stand's seed data is swept first.
+ */
 export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedError> {
-  const { mode, reset, ...target } = options
+  const { mode, reset, gatewayUrl, ...stand } = options
 
-  return openStand(target).andThen((stand) =>
-    closing(
-      stand,
-      (reset ? sweepStand(stand).map(() => undefined) : okAsync(undefined))
-        .andThen(() =>
-          catalog.accounts.reduce<ResultAsync<Record<string, SeededEntry>, SeedError>>(
-            (done, preset) =>
-              done.andThen((accounts) => {
-                const account = accountFor(preset, mode)
-
-                return stand.ensureAccount(account).map((seeded) => ({
-                  ...accounts,
-                  [preset.ref]: {
-                    id: seeded.user.id,
-                    email: account.email,
-                    profileId: seeded.profileId,
-                  },
-                }))
-              }),
-            okAsync({}),
-          ),
-        )
-        .map((accounts) => ({ accounts })),
-    ),
-  )
+  return (reset ? sweep(stand).map(() => undefined) : okAsync(undefined))
+    .andThen(() => openClient({ gatewayUrl }))
+    .andThen((client) => closing(client, seedAccounts(client, mode)))
 }

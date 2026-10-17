@@ -1,0 +1,15 @@
+{
+	admin off
+	auto_https off
+}
+
+https://localhost:5443 {
+	bind 127.0.0.1
+	tls /certs/localhost.pem /certs/localhost-key.pem
+	handle_path /backend/* {
+		reverse_proxy 127.0.0.1:5181
+	}
+	handle {
+		reverse_proxy 127.0.0.1:5180
+	}
+}

@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
-import { type LocalDb, ShapeRunner } from '@workspace/data'
-
-import { openTestSession } from '../../../composition/__fixtures__/session'
+import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
@@ -13,17 +11,15 @@ import { SignInService } from './sign-in.service'
 
 const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
 
-let local: LocalDb
+let opened: TestSession
 let session: SessionService
 let profiles: ProfileService
 let signIn: SignInService
 
 beforeEach(async () => {
-  const opened = await openTestSession()
-
-  local = opened.local
+  opened = await openTestSession()
   session = opened.session
-  profiles = new ProfileService(new ShapeRunner(local), opened.commands, {
+  profiles = new ProfileService(opened.runner, opened.commands, {
     shape: profileShape,
     commands: profileCommands,
   })
@@ -31,8 +27,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await session.close()
-  await local.close()
+  await opened.close()
 })
 
 const start = () => createActor(createSignInMachine(signIn)).start()
@@ -55,9 +50,9 @@ describe('sign-in', () => {
 
     expect((await session.flush()).isOk()).toBe(true)
 
-    const user = me?.id ?? expect.unreachable('signed in')
+    const identity = me?.id ?? expect.unreachable('signed in')
 
-    expect((await profiles.read({ user }))._unsafeUnwrap()).toMatchObject([
+    expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann', email: ann.email },
     ])
   })

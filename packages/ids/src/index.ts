@@ -11,16 +11,16 @@ import { defineEntityPrefixes, type EntityIdOf } from 'entity-id'
 import { withSchemas } from 'entity-id/schema'
 
 export const registry = defineEntityPrefixes({
-  user: 'usr',
+  identity: 'idn',
   profile: 'prf',
 } as const)
 
 export type EntityKind = keyof typeof registry.prefixes
 
-export type UserId = EntityIdOf<typeof registry.prefixes, 'user'>
+export type IdentityId = EntityIdOf<typeof registry.prefixes, 'identity'>
 
 export type ProfileId = EntityIdOf<typeof registry.prefixes, 'profile'>
 
-export const { userIdFactory, profileIdFactory } = registry.factories
+export const { identityIdFactory, profileIdFactory } = registry.factories
 
 export const idSchemas = withSchemas(registry)

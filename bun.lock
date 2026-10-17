@@ -8,11 +8,33 @@
         "@biomejs/biome": "catalog:",
         "@surrealdb/surql-fmt": "catalog:",
         "@types/bun": "catalog:",
+        "@workspace/data": "workspace:*",
         "@workspace/eslint-config": "workspace:*",
+        "@workspace/zod": "workspace:*",
         "eslint": "catalog:",
         "lefthook": "catalog:",
         "turbo": "catalog:",
         "typescript": "catalog:",
+      },
+    },
+    "apps/gateway": {
+      "name": "@workspace/gateway",
+      "version": "0.1.0",
+      "dependencies": {
+        "@workspace/data": "workspace:*",
+        "@workspace/database": "workspace:*",
+        "@workspace/kernel": "workspace:*",
+        "@workspace/logger": "workspace:*",
+        "@workspace/replica": "workspace:*",
+        "@workspace/zod": "workspace:*",
+        "neverthrow": "catalog:",
+        "ts-pattern": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@workspace/ids": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "apps/web": {
@@ -22,6 +44,7 @@
         "@tanstack/react-router": "catalog:",
         "@workspace/cqrs": "workspace:*",
         "@workspace/data": "workspace:*",
+        "@workspace/database": "workspace:*",
         "@workspace/di": "workspace:*",
         "@workspace/i18n": "workspace:*",
         "@workspace/ids": "workspace:*",
@@ -35,6 +58,7 @@
         "neverthrow": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+        "ts-pattern": "catalog:",
         "xstate": "catalog:",
       },
       "devDependencies": {
@@ -57,8 +81,12 @@
     "database": {
       "name": "@workspace/database",
       "version": "0.1.0",
+      "dependencies": {
+        "@workspace/replica": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "catalog:",
+        "@workspace/data": "workspace:*",
         "typescript": "catalog:",
         "vitest": "catalog:",
       },
@@ -233,6 +261,7 @@
       "dependencies": {
         "@workspace/data": "workspace:*",
         "@workspace/kernel": "workspace:*",
+        "@workspace/zod": "workspace:*",
         "loro-crdt": "catalog:",
         "neverthrow": "catalog:",
         "ts-pattern": "catalog:",
@@ -834,6 +863,8 @@
     "@workspace/e2e-spec": ["@workspace/e2e-spec@workspace:packages/e2e-spec"],
 
     "@workspace/eslint-config": ["@workspace/eslint-config@workspace:packages/eslint-config"],
+
+    "@workspace/gateway": ["@workspace/gateway@workspace:apps/gateway"],
 
     "@workspace/i18n": ["@workspace/i18n@workspace:packages/i18n"],
 

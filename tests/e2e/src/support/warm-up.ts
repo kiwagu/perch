@@ -11,7 +11,8 @@ export default async function warmUp(): Promise<void> {
   const browser = await chromium.launch()
 
   try {
-    const page = await browser.newPage()
+    // The front's certificate is a local one, as in the tests' own contexts.
+    const page = await browser.newPage({ ignoreHTTPSErrors: true })
 
     await page.goto(`${BASE_URL}/sign-in`)
     await page.getByTestId('app-shell.ready').waitFor({ state: 'attached', timeout: 120_000 })

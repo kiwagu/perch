@@ -4,7 +4,7 @@ import type { ChangeSpec } from '@workspace/kernel'
 
 export type Region = 'private' | 'public' | 'org' | 'server'
 
-/** A declared parameter: `$id: record<user>` gives `{ name: 'id', type: 'record<user>' }`. */
+/** A declared parameter: `$id: record<identity>` gives `{ name: 'id', type: 'record<identity>' }`. */
 export interface ParamDecl {
   readonly name: string
   readonly type: string
@@ -67,5 +67,11 @@ export interface TableChange {
 export interface LocalDb {
   readonly db: Surreal
   readonly changes: EventTarget
+  /** Closes the connection; closing again does nothing. */
   close(): Promise<void>
+  /**
+   * Closes the database and deletes what it stored: for `indxdb://<name>` the browser's
+   * IndexedDB database `<name>`; an in-memory database is gone once closed.
+   */
+  destroy(): Promise<void>
 }

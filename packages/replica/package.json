@@ -7,17 +7,35 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./protocol": {
+      "types": "./src/protocol.ts",
+      "import": "./src/protocol.ts"
+    },
+    "./server": {
+      "types": "./src/server/index.ts",
+      "import": "./src/server/index.ts"
+    },
+    "./sync": {
+      "types": "./src/sync/index.ts",
+      "import": "./src/sync/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "measure": "bun run scripts/measure.ts"
+    "measure": "bun run scripts/measure.ts",
+    "measure:validation": "bun run scripts/measure-validation.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/kernel": "workspace:*",
+    "@workspace/zod": "workspace:*",
     "loro-crdt": "catalog:",
     "neverthrow": "catalog:",
     "ts-pattern": "catalog:"

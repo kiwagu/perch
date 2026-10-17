@@ -7,6 +7,10 @@ import wasm from 'vite-plugin-wasm'
 
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
 
+// Behind the local stands' Caddy front the page is served over https on the front's port,
+// so the HMR client dials that port over wss and Caddy hands the socket to this server.
+const publicPort = process.env['VITE_PUBLIC_PORT']
+
 export default defineConfig(({ mode }) => ({
   plugins: [surqlPlugin(), wasm(), react(), tailwindcss()],
   resolve: {
@@ -23,5 +27,11 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: { exclude: ['@surrealdb/wasm', '@surrealdb/wasm-native', 'loro-crdt'] },
   build: { target: 'esnext' },
   worker: { format: 'es' },
-  server: { port: Number(process.env['E2E_WEB_PORT'] ?? 5180), strictPort: true },
+  server: {
+    port: Number(process.env['E2E_WEB_PORT'] ?? 5180),
+    strictPort: true,
+    ...(publicPort
+      ? { hmr: { protocol: 'wss', host: 'localhost', clientPort: Number(publicPort) } }
+      : {}),
+  },
 }))

@@ -1,14 +1,14 @@
 import type { ResultAsync } from 'neverthrow'
 
 import { token } from '@workspace/di'
-import type { UserId } from '@workspace/ids'
+import type { IdentityId } from '@workspace/ids'
 
 import type { DataError } from './errors'
 
+/** The signed-in identity: the account's id and the email it signs in with. */
 export interface AuthUser {
-  readonly id: UserId
+  readonly id: IdentityId
   readonly email: string
-  readonly name: string
 }
 
 /** The keys of a signed-in session: a short-lived access token and the refresh key that renews it. */
@@ -20,7 +20,6 @@ export interface AuthTokens {
 export interface SignUpInput {
   readonly email: string
   readonly password: string
-  readonly name: string
 }
 
 export interface SignInInput {
@@ -43,6 +42,11 @@ export interface AuthPort {
   tokens(): AuthTokens | undefined
   /** Hears every change of tokens: sign-in, renewal (a new refresh key) and sign-out. */
   onTokens(listener: (tokens: AuthTokens | undefined) => void): () => void
+  /**
+   * Closes the auth session; the auth object is unusable afterwards. The tokens it handed
+   * out stay valid: closing is not signing out.
+   */
+  close(): Promise<void>
 }
 
 export const AUTH = token<AuthPort>('Auth')

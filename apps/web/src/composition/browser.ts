@@ -1,16 +1,23 @@
 /**
- * Boots the application in a browser: the database runs in a Web Worker on
- * IndexedDB, the session token lives in localStorage, and the boot step is shown
- * on <html data-boot-step> so a start that hangs names where it stopped.
+ * Boots the application in a browser. Each signed-in identity has its own database, run by
+ * an engine in a Web Worker on IndexedDB; the gateway is reached on this page's own origin
+ * under `/backend/`; one tab per browser leads an identity's sync through a Web Lock and the
+ * tabs hint each other over a BroadcastChannel. `<html data-boot-step>` shows where a start
+ * stopped; `data-sync-leader` and `data-sync-channel` show the tab's sync role and channel.
  */
 
 import type { ResultAsync } from 'neverthrow'
 
-import type { DataError } from '@workspace/data'
+import { type DataError, openLocalDb } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
+import { systemClock } from '@workspace/replica'
+import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import { gatewayAuth } from './gateway-auth'
+import type { SyncState, Visibility } from './identity-space'
 import { type AppServices, createAppRoot } from './root'
+import type { VisibilitySource } from './session'
 import { browserStorage } from './storage'
 
 const schemaFiles = import.meta.glob<string>('../../../../database/schema/*.surql', {
@@ -23,19 +30,57 @@ const schema = Object.keys(schemaFiles)
   .map((path) => schemaFiles[path])
   .join('\n')
 
+function documentVisibility(page: Document): VisibilitySource {
+  const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
+
+  return {
+    current,
+    onChange: (listener) => {
+      const handler = () => listener(current())
+
+      page.addEventListener('visibilitychange', handler)
+
+      return () => page.removeEventListener('visibilitychange', handler)
+    },
+  }
+}
+
 export function bootBrowser(): ResultAsync<AppServices, DataError> {
   const html = document.documentElement
   const logger = createLogger('web')
+  const showSync = (state: SyncState): void => {
+    html.dataset['syncLeader'] = state.leader ? '1' : '0'
+    html.dataset['syncChannel'] = state.channel
+  }
+  const origin = window.location.origin
+  // Undefined in a page that is not a secure context: such a page does not sync, and says so.
+  const locks: LockManager | undefined = navigator.locks
 
-  // One device, no server yet: this tab leads and only the local direction exists.
-  html.dataset['syncLeader'] = '1'
-  html.dataset['syncChannel'] = 'down'
+  showSync({ leader: false, channel: 'down' })
 
   return createAppRoot({
-    engines: wasmEngines(),
-    url: 'indxdb://perch',
-    schema,
-    storage: browserStorage(window.localStorage),
+    openLocal: (identity) =>
+      openLocalDb({
+        engines: wasmEngines(),
+        url: `indxdb://app-identity-${identity}`,
+        namespace: 'app',
+        database: 'identity',
+        schema,
+      }),
+    gatewayAuth: gatewayAuth(`${origin}/backend`),
+    transport: (context) =>
+      new WebSocketTransport({
+        url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
+        credentials: context.credentials,
+        onTokens: context.onTokens,
+        onEnded: context.onEnded,
+        clock: systemClock,
+      }),
+    locks,
+    hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
+    clock: systemClock,
+    storage: browserStorage(window.localStorage, window),
+    visibility: documentVisibility(document),
     logger: {
       info: (fields) => logger.info(fields, 'command'),
       warn: (fields) => logger.warn(fields, 'command'),
@@ -45,5 +90,6 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     },
     onError: (error) =>
       logger.error({ code: error.code, cause: String(error.cause) }, error.message),
+    onSyncState: showSync,
   })
 }

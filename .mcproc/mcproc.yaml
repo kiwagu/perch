@@ -13,8 +13,8 @@ apps:
       docker rm -f perch-surrealdb-dev >/dev/null 2>&1;
       exec docker run --rm --name perch-surrealdb-dev -p 127.0.0.1:8000:8000
       surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
-    port: 8000
-    # docker-proxy owns the published port, so readiness is checked over HTTP
+    # docker-proxy holds the published port outside the app's processes, so the app
+    # declares only its url: `wait` and `depends_on: ready` check it over HTTP
     url: http://127.0.0.1:8000/health
   surrealdb-e2e:
     description: >-
@@ -25,28 +25,86 @@ apps:
       docker rm -f perch-surrealdb-e2e >/dev/null 2>&1;
       exec docker run --rm --name perch-surrealdb-e2e -p 127.0.0.1:8010:8000
       surrealdb/surrealdb:v3.3.4 start --user root --pass root --bind 0.0.0.0:8000 memory
-    port: 8010
-    # docker-proxy owns the published port, so readiness is checked over HTTP
+    # docker-proxy holds the published port outside the app's processes, so the app
+    # declares only its url: `wait` and `depends_on: ready` check it over HTTP
     url: http://127.0.0.1:8010/health
   web:
     description: >-
-      The web application's Vite dev server on 127.0.0.1:5180. The database runs in
-      the browser (WASM on IndexedDB), so it needs no server to sign up and edit
-      the profile.
+      The web application's Vite dev server on 127.0.0.1:5180, opened through caddy-dev
+      at https://localhost:5443 (its HMR socket too). Each signed-in identity's database
+      runs in the browser (WASM on IndexedDB); signing up or in and syncing go through the
+      gateway under /backend/ of the same front.
     kind: server
-    run: bun run dev --host 127.0.0.1
+    run: VITE_PUBLIC_PORT=5443 bun run dev --host 127.0.0.1
     cwd: apps/web
     port: 5180
     url: http://127.0.0.1:5180/
   web-e2e:
     description: >-
       The web application's Vite dev server for the e2e runs on 127.0.0.1:5190, apart
-      from the dev server so a test run never disturbs a manual session.
+      from the dev server so a test run never disturbs a manual session; the tests
+      open it through caddy-e2e at https://localhost:5493.
     kind: server
-    run: bun run dev --host 127.0.0.1 --port 5190
+    run: VITE_PUBLIC_PORT=5493 bun run dev --host 127.0.0.1 --port 5190
     cwd: apps/web
     port: 5190
     url: http://127.0.0.1:5190/
+  gateway:
+    description: >-
+      The gateway on 127.0.0.1:5181 for local development: sign-in over HTTP and sync
+      over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
+      account on the stand first, then reloads on every source change.
+    kind: server
+    run: >-
+      SURREAL_URL=ws://127.0.0.1:8000/rpc SURREAL_USER=root SURREAL_PASS=root
+      bun scripts/stand-operator.ts &&
+      SURREAL_URL=ws://127.0.0.1:8000/rpc GATEWAY_PORT=5181
+      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
+      exec bun --watch apps/gateway/src/index.ts
+    port: 5181
+    url: http://127.0.0.1:5181/health
+    depends_on:
+      - { app: surrealdb-dev, condition: ready, timeout: 120 }
+  gateway-e2e:
+    description: >-
+      The gateway on 127.0.0.1:5191 for the e2e runs, the only client of the e2e
+      SurrealDB. Sets up its namespace account on the stand first, then reloads on
+      every source change.
+    kind: server
+    run: >-
+      SURREAL_URL=ws://127.0.0.1:8010/rpc SURREAL_USER=root SURREAL_PASS=root
+      bun scripts/stand-operator.ts &&
+      SURREAL_URL=ws://127.0.0.1:8010/rpc GATEWAY_PORT=5191
+      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
+      exec bun --watch apps/gateway/src/index.ts
+    port: 5191
+    url: http://127.0.0.1:5191/health
+    depends_on:
+      - { app: surrealdb-e2e, condition: ready, timeout: 120 }
+  caddy-dev:
+    description: >-
+      Caddy on https://localhost:5443 in front of the web dev server and, under
+      /backend/, the gateway; certificates from infra/dev/make-certs.sh.
+    kind: server
+    run: >-
+      sh infra/dev/make-certs.sh >/dev/null &&
+      exec docker compose -f infra/dev/compose.yaml up caddy-dev
+    # Caddy listens from its container, outside the app's processes, so the app declares
+    # only its url (checked without verifying the local certificate)
+    url: https://localhost:5443/
+    depends_on: [web, gateway]
+  caddy-e2e:
+    description: >-
+      Caddy on https://localhost:5493 in front of the web-e2e dev server and, under
+      /backend/, the gateway-e2e; certificates from infra/dev/make-certs.sh.
+    kind: server
+    run: >-
+      sh infra/dev/make-certs.sh >/dev/null &&
+      exec docker compose -f infra/dev/compose.yaml up caddy-e2e
+    # Caddy listens from its container, outside the app's processes, so the app declares
+    # only its url (checked without verifying the local certificate)
+    url: https://localhost:5493/
+    depends_on: [web-e2e, gateway-e2e]
 profiles:
-  dev: [surrealdb-dev, web]
-  e2e: [surrealdb-e2e, web-e2e]
+  dev: [surrealdb-dev, gateway, web, caddy-dev]
+  e2e: [surrealdb-e2e, gateway-e2e, web-e2e, caddy-e2e]

@@ -13,7 +13,7 @@ const run = (): string => randomUUID().slice(0, 8)
 
 export const generate = {
   account: (): SeedAccount =>
-    accountFor(preset ?? { ref: 'e2e', name: 'E2E User', locale: 'en' }, {
+    accountFor(preset ?? { ref: 'e2e', name: 'E2E User', bio: 'E2E account.', locale: 'en' }, {
       kind: 'fresh',
       run: run(),
     }),
@@ -21,4 +21,5 @@ export const generate = {
   password: (): string => generate.account().password,
   name: (): string => `${preset?.name ?? 'E2E User'} ${run()}`,
   newName: (): string => `Renamed ${run()}`,
+  bio: (): string => `Bio written in run ${run()}`,
 }

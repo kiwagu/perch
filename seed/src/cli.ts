@@ -10,4 +10,4 @@ import '@workspace/data/bun-plugin-surql'
 
 const { main } = await import('./main')
 
-process.exit(await main(process.argv.slice(2)))
+process.exit(await main(process.argv.slice(2), process.env))

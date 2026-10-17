@@ -9,5 +9,5 @@ tags = ["generated", "user"]
 name = "a signed-in user can run the shape user.profile"
 kind = "sql_expect"
 actor = "record"
-sql = "LET $user = $auth.id; SELECT\n  id,\n  name,\n  email,\n  bio,\n  locale,\n  created_at\nFROM profile\nWHERE user = $user\nLIMIT 1;"
+sql = "LET $identity = $auth.id; SELECT\n  id,\n  name,\n  email,\n  bio,\n  locale,\n  created_at\nFROM profile\nWHERE identity = $identity\nLIMIT 1;"
 allow = true

@@ -1,7 +1,7 @@
-import { err, ok, type Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow'
 import type { RecordId, SurrealSession } from 'surrealdb'
 
-import { userIdFactory } from '@workspace/ids'
+import { identityIdFactory } from '@workspace/ids'
 
 import type { AuthPort, AuthTokens, AuthUser } from './auth.port'
 import { type DataError, type DataErrorCode, dataError } from './errors'
@@ -17,7 +17,6 @@ export interface AuthOptions {
 interface AccountRecord {
   readonly id: RecordId
   readonly email: string
-  readonly name: string
 }
 
 function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined, DataError> {
@@ -27,9 +26,9 @@ function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined,
 
   const key = String(record.id.id)
 
-  return userIdFactory.is(key)
-    ? ok({ id: key, email: record.email, name: record.name })
-    : err(dataError('data:AUTH_FAILED', `account key ${key} is not a user id`))
+  return identityIdFactory.is(key)
+    ? ok({ id: key, email: record.email })
+    : err(dataError('data:AUTH_FAILED', `account key ${key} is not an identity id`))
 }
 
 /**
@@ -39,24 +38,29 @@ function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined,
  */
 export function createAuth(local: LocalDb, options: AuthOptions): AuthPort {
   let session: Promise<SurrealSession> | undefined
+  // The driver's session once it exists, so `close` reaches it even when selecting
+  // the database on it failed.
+  let created: SurrealSession | undefined
+  let closed = false
   let current: AuthTokens | undefined
   const listeners = new Set<(tokens: AuthTokens | undefined) => void>()
 
   const open = (): Promise<SurrealSession> => {
-    session ??= local.db.newSession().then(async (created) => {
+    session ??= local.db.newSession().then(async (opened) => {
+      created = opened
       // The driver announces every change of tokens on the session, including the
       // renewals it makes on its own before a token expires, which replace the
       // refresh key; this is the one place the current pair is learned from.
-      created.subscribe('auth', (tokens) => {
+      opened.subscribe('auth', (tokens) => {
         current = tokens ? { access: tokens.access, refresh: tokens.refresh } : undefined
 
         for (const listener of listeners) {
           listener(current)
         }
       })
-      await created.use({ namespace: options.namespace, database: options.database })
+      await opened.use({ namespace: options.namespace, database: options.database })
 
-      return created
+      return opened
     })
 
     return session
@@ -66,7 +70,10 @@ export function createAuth(local: LocalDb, options: AuthOptions): AuthPort {
     code: DataErrorCode,
     message: string,
     run: (s: SurrealSession) => Promise<T>,
-  ) => ResultAsync.fromPromise(open().then(run), (cause) => dataError(code, message, cause))
+  ): ResultAsync<T, DataError> =>
+    closed
+      ? errAsync(dataError('data:AUTH_FAILED', 'the auth session is closed'))
+      : ResultAsync.fromPromise(open().then(run), (cause) => dataError(code, message, cause))
 
   const readCurrent = (s: SurrealSession): Promise<AccountRecord | undefined> =>
     s.accessToken ? (s.auth() as Promise<AccountRecord | undefined>) : Promise.resolve(undefined)
@@ -125,6 +132,18 @@ export function createAuth(local: LocalDb, options: AuthOptions): AuthPort {
       listeners.add(listener)
 
       return () => listeners.delete(listener)
+    },
+
+    close: async () => {
+      closed = true
+      // Wait for an opening under way, so its session is closed too; a failed opening
+      // already failed the call that started it.
+      await session?.catch(() => undefined)
+
+      const closing = created
+
+      created = undefined
+      await closing?.closeSession()
     },
   }
 }

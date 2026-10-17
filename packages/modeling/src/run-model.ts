@@ -33,7 +33,13 @@ export interface ModelResult {
 }
 
 /** The table of the record access whose users the generated suites sign in as. */
-const ACCESS_TABLE = 'user'
+const ACCESS_TABLE = 'identity'
+
+/**
+ * The replica schema is read by every runtime that replicates, not by one app, so it
+ * is written into the database workspace that holds the schema: `<database>/src`.
+ */
+const replicaSchemaDir = (schemaDir: string): string => join(dirname(schemaDir), 'src')
 
 function filesUnder(dir: string, match: (name: string) => boolean): string[] {
   if (!existsSync(dir)) {
@@ -144,7 +150,11 @@ export async function runModel(options: ModelOptions): Promise<ModelResult> {
       text: emitPagesModel(collected.shapes, collected.commands),
       base: options.root,
     },
-    { path: 'replica.schema.gen.ts', text: emitReplicaSchema(model), base: options.root },
+    {
+      path: 'replica.schema.gen.ts',
+      text: emitReplicaSchema(model),
+      base: replicaSchemaDir(options.schemaDir),
+    },
     ...emitSurrealkitSuites(collected.shapes, ACCESS_TABLE).map((suite) => ({
       path: suite.path,
       text: suite.toml,
