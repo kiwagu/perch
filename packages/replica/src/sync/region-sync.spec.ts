@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
+import { noteIdFactory } from '@workspace/ids'
 
+import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import { recordKey } from '../keys'
 import type { ClientMessage, ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import localTailStatement from '../surql/local-tail.surql'
@@ -12,6 +15,8 @@ import importStatement from '../surql/replica-import.surql'
 import { manualClock } from '../testing/manual-clock'
 
 import {
+  ann,
+  bob,
   closeDevices,
   openDevice,
   openGateway,
@@ -19,6 +24,7 @@ import {
   regionId,
   settleAll,
   twoDevices,
+  twoMembers,
   writeBio,
   writeName,
 } from './__fixtures__/devices'
@@ -586,6 +592,38 @@ describe('region sync through the gateway', () => {
     a.engine.localWrite()
     await settle()
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+
+  it('reports a forbidden edit as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoMembers()
+    const annsNote = noteIdFactory.create()
+    const bobsNote = noteIdFactory.create()
+    const anns = recordKey('note', annsNote)
+    const bobs = recordKey('note', bobsNote)
+
+    noteCreate(a.region.doc, { id: annsNote, author: ann, text: 'hello' })
+    a.engine.localWrite()
+    await settle()
+    // Bob is a member: the gateway refuses his edit of Ann's note, and his device undoes it.
+    noteUpdate(b.region.doc, { id: annsNote, text: 'mine now' })
+    b.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: b.region.ref.id, reason: 'forbidden-action', detail: `${anns}:update` },
+      },
+    ])
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+
+    noteCreate(b.region.doc, { id: bobsNote, author: bob, text: 'mine' })
+    b.engine.localWrite()
+    await settle()
+
+    expect(a.region.recordJson(bobs)).toMatchObject({ text: 'mine' })
+    expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
   })
 
   it('brings back the text of a field a rejected batch deleted, without doubling it', async () => {

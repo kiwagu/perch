@@ -1,4 +1,4 @@
-import { LoroDoc, LoroMap, type LoroText } from 'loro-crdt'
+import { type ContainerID, LoroDoc, LoroMap, type LoroText } from 'loro-crdt'
 import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
@@ -13,9 +13,49 @@ import {
   noteUpdate,
   replicaSchema,
 } from '../__fixtures__/note'
+import { invert } from '../sync/region-sync'
 
 import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
 import { validateBatch } from './batch-validator'
+
+/** The inverse a device commits for a refused update, as the bytes it pushes behind it. */
+function undo(device: LoroDoc, refused: Uint8Array): Uint8Array {
+  const from = device.version()
+
+  invert(device, [{ id: 'refused', seq: 1, bytes: refused }])
+  device.commit()
+
+  return device.export({ mode: 'update', from })
+}
+
+/**
+ * The bytes of a forged push: the text operation of a note's mergeable text, moved through
+ * Loro's JSON form of the changes onto the mergeable text `target` names.
+ */
+function retargetedText(target: ContainerID): Uint8Array {
+  const template = new LoroDoc()
+
+  template
+    .getMap('records')
+    .setContainer('note/own', new LoroMap())
+    .ensureMergeableText('text')
+    .insert(0, 'forged ')
+  template.commit()
+
+  const json = template.exportJsonUpdates()
+
+  for (const change of json.changes) {
+    change.ops = change.ops
+      .filter((op) => op.container.startsWith('cid:root-🤝'))
+      .map((op, index) => ({ ...op, container: target, counter: index }))
+  }
+
+  const forged = new LoroDoc()
+
+  forged.importJsonUpdates(json)
+
+  return forged.export({ mode: 'update' })
+}
 
 describe('batch validation', () => {
   it('turns an accepted edit into one projected row with column values', () => {
@@ -387,6 +427,160 @@ describe('a tenant region', () => {
       reason: 'forbidden-action',
       detail: `note/${id}:create`,
     })
+  })
+
+  it("lets a member undo a refused edit of another member's note: the change and its inverse in one batch are no change", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const device = server.fork()
+    const refused = noteUpdate(device, { id, text: 'mine now' })
+    const undone = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [refused, undo(device, refused)],
+    })
+
+    expect(undone.isOk()).toBe(true)
+    expect(undone._unsafeUnwrap().plan).toMatchObject({ upserts: [], deletes: [] })
+  })
+
+  it("lets a member undo a refused delete of another member's note", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const device = server.fork()
+    const refused = noteDelete(device, { id })
+    const undone = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [refused, undo(device, refused)],
+    })
+
+    expect(undone.isOk()).toBe(true)
+    expect(undone._unsafeUnwrap().plan).toMatchObject({ upserts: [], deletes: [] })
+  })
+
+  it("refuses a member's delete and re-creation of another member's note with other content as an update", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const replaced = (text: string) => {
+      const device = server.fork()
+
+      return validateBatch({
+        doc: server,
+        region,
+        actor: bob,
+        ability: member(bob),
+        schema: replicaSchema,
+        updates: [noteDelete(device, { id }), noteCreate(device, { id, author: ann, text })],
+      })
+    }
+    const rewritten = replaced('mine now')
+    // The same content in a new container is no change: it replaces the note's container as a
+    // concurrent edit would lose to the last writer, which the merge accepts for any record.
+    const unchanged = replaced('hello')
+
+    expect(rewritten.isErr() && rewritten.error).toEqual({
+      reason: 'forbidden-action',
+      detail: `note/${id}:update`,
+    })
+    expect(unchanged.isOk()).toBe(true)
+    expect(unchanged._unsafeUnwrap().plan).toMatchObject({ upserts: [], deletes: [] })
+  })
+
+  it('refuses the whole batch when one record is forbidden', () => {
+    const server = new LoroDoc()
+    const anns = noteIdFactory.create()
+    const bobs = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id: anns, author: ann, text: 'hello' }))
+    server.import(noteCreate(server.fork(), { id: bobs, author: bob, text: 'hi' }))
+
+    const device = server.fork()
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [
+        noteUpdate(device, { id: bobs, text: 'hi there' }),
+        noteUpdate(device, { id: anns, text: 'mine now' }),
+      ],
+    })
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'forbidden-action',
+      detail: `note/${anns}:update`,
+    })
+  })
+
+  it('accepts a note added and deleted again in one batch', () => {
+    const server = new LoroDoc()
+    const device = server.fork()
+    const id = noteIdFactory.create()
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: ann,
+      ability: member(ann),
+      schema: replicaSchema,
+      updates: [noteCreate(device, { id, author: ann, text: 'oops' }), noteDelete(device, { id })],
+    })
+
+    expect(validated.isOk()).toBe(true)
+    expect(validated._unsafeUnwrap().plan).toMatchObject({ upserts: [], deletes: [] })
+  })
+
+  it('refuses a crafted mergeable-text root whose path leads outside the records', () => {
+    const server = new LoroDoc()
+    const device = server.fork()
+
+    device.getMap('other').ensureMergeableText('text').insert(0, 'forged')
+    device.commit()
+
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [device.export({ mode: 'update', from: server.version() })],
+    })
+
+    // Loro writes the mergeable text's parent before the text, so the root named is the parent's.
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'malformed',
+      detail: 'writes outside records: cid:root-other:Map',
+    })
+  })
+
+  it('refuses a crafted update that makes the diff throw, as malformed', () => {
+    // The text of a record that was never created: Loro cannot work out what it changed.
+    const validated = validateBatch({
+      doc: new LoroDoc(),
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [retargetedText('cid:root-🤝:@1:100>text:Text')],
+    })
+
+    expect(validated.isErr() && validated.error.reason).toBe('malformed')
   })
 
   it("refuses removing the author of a member's own note as foreign-owner", () => {

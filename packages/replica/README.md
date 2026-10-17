@@ -47,7 +47,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (2), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (3), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; the
   `welcome` carries the regions the device may name with their heads and the identity's
@@ -75,11 +75,15 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   member reference is not the pushing member, or an edit that changes the member a record
   references). The ability is judged on the record as it is, the one being updated or deleted
   as it was before the batch and a new one as the batch writes it; a table that declares no
-  abilities refuses every client write. The check of the roots reads the operations of the
+  abilities refuses every client write. A record the batch leaves as it was is no change and
+  is neither judged nor written, which is what lets a device undo a refused change: the batch
+  that undoes it carries the refused change and its inverse. Bytes Loro throws on are refused
+  as malformed, never thrown. The check of the roots reads the operations of the
   batch, not its net effect: a write outside the `records` map that a later operation of the
   same batch undid is refused too, as the operations would still be stored and replicated.
   The mergeable containers of a record's fields appear as roots in the operations and are
-  exempt from that refusal when their path leads into the `records` map or is gone.
+  exempt from that refusal when their path leads into the `records` map or when they have no
+  path (their record is gone, or the field they belong to is not set).
   `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
   `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
   database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
@@ -132,8 +136,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the
   given database and, per device, a `StubTransport` that behaves like the gateway's connection
-  without a network (welcomed with the identity's private region and, for each of the
-  `memberships`, none by default, the organisation's region, with those memberships), can go
+  without a network (welcomed with the identity's private region, where it is the owner, and,
+  for each of the `memberships`, none by default, the organisation's region, where its batches
+  are checked with the abilities of the membership's role), can go
   offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
   `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next device to connect a renewed pair

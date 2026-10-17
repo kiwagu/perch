@@ -65,7 +65,7 @@ function ownBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
  * after the rows back to the document right before them, keeping every change of other peers.
  * Applied to the document itself, a field the rows deleted comes back with its content in full.
  */
-function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
+export function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
   const metas = rows.map((row) => decodeImportBlobMeta(row.bytes, false))
   const current = doc.version().toJSON()
   const start = new Map(current)

@@ -1,11 +1,5 @@
-import {
-  type ContainerID,
-  type Frontiers,
-  type ImportStatus,
-  type LoroDoc,
-  LoroMap,
-} from 'loro-crdt'
-import { err, ok, type Result } from 'neverthrow'
+import { type Frontiers, type LoroDoc, LoroMap } from 'loro-crdt'
+import { err, ok, Result } from 'neverthrow'
 
 import type { Ability, Action } from '@workspace/kernel'
 
@@ -50,6 +44,42 @@ function writesOutside(container: string): BatchRejection {
   return { reason: 'malformed', detail: `writes outside ${RECORDS}: ${container}` }
 }
 
+/** Runs a Loro call on what the batch brought: one that throws on crafted bytes refuses the batch. */
+function fromLoro<T>(call: () => T): Result<T, BatchRejection> {
+  return Result.fromThrowable(
+    call,
+    (cause): BatchRejection => ({ reason: 'malformed', detail: String(cause) }),
+  )()
+}
+
+const isList = (value: unknown): value is readonly unknown[] => Array.isArray(value)
+
+const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null
+
+/** Whether two plain JSON values are the same, whatever the order of an object's keys. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (isList(a) || isList(b)) {
+    return (
+      isList(a) &&
+      isList(b) &&
+      a.length === b.length &&
+      a.every((item, index) => sameValue(item, b[index]))
+    )
+  }
+
+  if (isObject(a) && isObject(b)) {
+    const keys = Object.keys(a)
+
+    return (
+      keys.length === Object.keys(b).length &&
+      keys.every((key) => Object.hasOwn(b, key) && sameValue(a[key], b[key]))
+    )
+  }
+
+  return Object.is(a, b)
+}
+
 /**
  * The keys of the records a document changed between two versions: the keys the `records`
  * map itself changed, and the record that holds each changed container nested inside one.
@@ -64,9 +94,20 @@ function touchedRecordKeys(
 ): Result<Set<string>, BatchRejection> {
   const records = doc.getMap(RECORDS).id
   const touched = new Set<string>()
+  const diffs = fromLoro(() => doc.diff(from, to, false))
 
-  for (const [container, diff] of doc.diff(from, to, false)) {
-    const path = doc.getPathToContainer(container)
+  if (diffs.isErr()) {
+    return err(diffs.error)
+  }
+
+  for (const [container, diff] of diffs.value) {
+    const found = fromLoro(() => doc.getPathToContainer(container))
+
+    if (found.isErr()) {
+      return err(found.error)
+    }
+
+    const path = found.value
 
     if (!path) {
       continue
@@ -103,28 +144,40 @@ const forbidden = (entry: string, action: Action): BatchRejection => ({
  * the operations themselves: a write a later operation of the same batch undid is refused too,
  * because the operations would still be stored and replicated. The mergeable containers of a
  * record's fields are roots in the operations, and they are not foreign: one is told apart by
- * its name and by the path to it: one is accepted when the path leads into the records, or when
- * it has no path, because its record is gone.
+ * its name and by the path to it, and accepted when the path leads into the records or when it
+ * has no path (its record is gone, or the field it belongs to is not set).
  */
-function foreignRoot(doc: LoroDoc, fork: LoroDoc): string | undefined {
+function foreignRoot(doc: LoroDoc, fork: LoroDoc): Result<string | undefined, BatchRejection> {
   const records = fork.getMap(RECORDS).id
+  const changes = fromLoro(() => fork.exportJsonUpdates(doc.version(), fork.version()).changes)
 
-  for (const change of fork.exportJsonUpdates(doc.version(), fork.version()).changes) {
+  if (changes.isErr()) {
+    return err(changes.error)
+  }
+
+  for (const change of changes.value) {
     for (const op of change.ops) {
       if (!op.container.startsWith('cid:root-') || op.container === records) {
         continue
       }
 
-      const path = fork.getPathToContainer(op.container)
-      const mergeable = op.container.startsWith(MERGEABLE_ROOT)
+      if (!op.container.startsWith(MERGEABLE_ROOT)) {
+        return ok(op.container)
+      }
 
-      if (mergeable ? path !== undefined && path[0] !== RECORDS : true) {
-        return op.container
+      const path = fromLoro(() => fork.getPathToContainer(op.container))
+
+      if (path.isErr()) {
+        return err(path.error)
+      }
+
+      if (path.value !== undefined && path.value[0] !== RECORDS) {
+        return ok(op.container)
       }
     }
   }
 
-  return undefined
+  return ok(undefined)
 }
 
 /** Fields that reference the pushing identity: `identity` in a private region, `member` in a tenant region. */
@@ -172,22 +225,23 @@ function foreignOwner(
  * action on the record (`forbidden-action`): a record is judged as it is, the one being
  * changed or deleted as it was, the new one as it is.
  * The result is the plan the region's log accepts: the projection of each touched record,
- * the update bytes and the version after the batch. A record the batch creates and deletes
- * again is no change. A refused batch is a value, never a throw, and the authoritative
- * document stays as it was either way.
+ * the update bytes and the version after the batch. A record the batch leaves as it was is no
+ * change, whatever operations reached it: one it creates and deletes again, or one it changes
+ * and changes back. This is what lets a device undo a refused edit or delete: the batch that
+ * undoes it carries the refused change and its inverse. A refused batch is a value, never a
+ * throw (bytes Loro throws on are `malformed`), and the authoritative document stays as it was
+ * either way.
  */
 export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch, BatchRejection> {
   const fork = input.doc.fork()
   const from = input.doc.frontiers()
-  let status: ImportStatus
+  const status = fromLoro(() => fork.importBatch([...input.updates]))
 
-  try {
-    status = fork.importBatch([...input.updates])
-  } catch (cause) {
-    return err({ reason: 'malformed', detail: String(cause) })
+  if (status.isErr()) {
+    return err(status.error)
   }
 
-  if (status.pending && status.pending.size > 0) {
+  if (status.value.pending && status.value.pending.size > 0) {
     return err({
       reason: 'pending-dependencies',
       detail: 'the batch depends on changes the server does not have',
@@ -196,8 +250,12 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
 
   const root = foreignRoot(input.doc, fork)
 
-  if (root) {
-    return err(writesOutside(root))
+  if (root.isErr()) {
+    return err(root.error)
+  }
+
+  if (root.value !== undefined) {
+    return err(writesOutside(root.value))
   }
 
   const touched = touchedRecordKeys(fork, from, fork.frontiers())
@@ -243,6 +301,12 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
     }
 
     const value = record.toJSON() as Record<string, unknown>
+
+    // Changed and changed back, as a refused change and its inverse are: nothing to judge or write.
+    if (prior !== undefined && sameValue(value, prior)) {
+      continue
+    }
+
     const action: Action = prior === undefined ? 'create' : 'update'
 
     // A record is judged as it is: the one being changed, or the new one being created.
