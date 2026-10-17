@@ -71,5 +71,5 @@ note texts).
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,
   `--update-snapshots=missing`). `CI=1` runs one worker.
-- `bun run test:e2e --down`: stops the `e2e` profile.
+- `mcproc stop e2e`: stops the `e2e` profile.
 - `bun run typecheck`, `bun run lint`.

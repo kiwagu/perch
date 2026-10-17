@@ -8,7 +8,8 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 - Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
   containers.
-- mcproc (`npm i -g mcproc`): it starts and stops the stands from `.mcproc/mcproc.yaml`. The
+- mcproc 0.11.0 or later (`npm i -g mcproc`): it starts and stops the stands from
+  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. The
   mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
   and the gateway without the gateway's environment, its database or the front.
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
@@ -50,7 +51,7 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
   profile, waits for each of its apps and runs the Playwright specs through the front;
-  `bun run test:e2e --down` stops the profile. Both fronts serve the one `apps/web/dist`, so
+  `mcproc stop e2e` stops the profile. Both fronts serve the one `apps/web/dist`, so
   after an e2e run the dev stand serves the production build until the watcher's next rebuild.
   The run holds a 4G memory lease for its build and browsers: when the host is short of
   memory it waits its turn (`mcproc leases` shows the queue).
@@ -66,8 +67,9 @@ A branch gets a checkout of its own, with stands of its own, next to the reposit
   `lefthook-local.yml` and the screenshot baselines, runs `bun install` and writes
   `.mcproc/mcproc.local.yaml` there with the slot and the project slug (`perch-w1`). In that
   folder `mcproc start dev` brings the stand up on slot 1's ports (8100, 5281,
-  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; `bun run test:db`,
-  `bun run seed` and `CI=1 bun run test:e2e` address that stand.
+  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; there `bun run
+  seed` addresses that dev stand, `bun run test:db` and `CI=1 bun run test:e2e` that checkout's
+  e2e stand.
 - A start asks the host for memory first: every app declares what it takes and the manifest
   keeps a reserve, so a stand that does not fit waits its turn (`mcproc ls` shows it as
   `queued`, `mcproc leases` shows the queue) and comes up by itself once memory frees.
