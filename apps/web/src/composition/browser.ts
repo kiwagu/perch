@@ -8,7 +8,7 @@
 
 import type { ResultAsync } from 'neverthrow'
 
-import { type DataError, openLocalDb, tenantDatabase } from '@workspace/data'
+import { type DataError, deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
@@ -46,6 +46,10 @@ const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): str
 
 const directorySchema = schemaOf(commonFiles, directoryFiles)
 const tenantSchema = schemaOf(commonFiles, tenantFiles)
+
+/** Where the database of one organisation of an identity lives in this browser. */
+const tenantUrl = (identity: string, key: string): string =>
+  `indxdb://app-identity-${identity}-${tenantDatabase(key)}`
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -87,11 +91,12 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     openTenantLocal: (identity, key) =>
       openLocalDb({
         engines: wasmEngines(),
-        url: `indxdb://app-identity-${identity}-${tenantDatabase(key)}`,
+        url: tenantUrl(identity, key),
         namespace: 'app',
         database: 'tenant',
         schema: tenantSchema,
       }),
+    deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     transport: (context) =>

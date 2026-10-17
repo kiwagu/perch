@@ -300,23 +300,29 @@ export class TenantSpaces {
     return { changed: left.length > 0 || opened.some(Boolean), left }
   }
 
-  /** Deletes the databases of organisations the identity left; a failure is reported. */
-  delete(left: readonly TenantSpace[]): Promise<void> {
+  /**
+   * Deletes the databases of organisations the identity left, and answers the keys of those
+   * deleted; a failure is reported.
+   */
+  delete(left: readonly TenantSpace[]): Promise<readonly string[]> {
     const deleting = left.map((tenant) =>
-      tenant
-        .destroy()
-        .catch((cause: unknown) =>
+      tenant.destroy().then(
+        () => [tenant.key],
+        (cause: unknown) => {
           this.#options.onError(
             dataError(
               'data:WRITE_FAILED',
               `could not delete the local data of organisation ${tenant.key}`,
               cause,
             ),
-          ),
-        ),
+          )
+
+          return []
+        },
+      ),
     )
 
-    return Promise.all(deleting).then(() => undefined)
+    return Promise.all(deleting).then((keys) => keys.flat())
   }
 
   #tellIfMoved(before: TenantSpace | undefined): void {

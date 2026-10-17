@@ -17,7 +17,8 @@ from a saved access token or through a refresh key that is replaced on every use
 - Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`. A
   `LocalDb` closes once however often `close()` is called; `destroy()` closes it and deletes
   what it stored (the browser's IndexedDB database of an `indxdb://` address; an in-memory
-  database is gone once closed).
+  database is gone once closed). `deleteLocalDb(url)` deletes what a database that is not open
+  stored, the same way, without opening it.
 - `runAsOperator`: runs one SurrealQL text as a system user without applying the schema
   (a stand's namespaces, databases and system users), failing at once when the server
   does not answer.

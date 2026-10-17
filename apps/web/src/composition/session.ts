@@ -73,6 +73,8 @@ export interface SessionOptions {
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   /** Opens the database of one organisation of an identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
+  /** Deletes the database of one organisation of an identity while it is not open. */
+  readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
   readonly schema: ReplicaSchema
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -139,8 +141,9 @@ const closedDuringSignIn = () =>
  * The signed-in identity and its space. Signing up or in goes through the gateway, keeps the
  * identity and its keys in the browser's storage and opens the identity's space; restoring
  * opens the saved identity's space without the network. Signing out drains and has the
- * gateway sign the device out, then forgets the keys and deletes the identity's database;
- * with changes that cannot be sent it asks first. Keys the gateway refuses sign the device
+ * gateway sign the device out, then forgets the keys and deletes the identity's databases, its
+ * own and every organisation database the device holds for it; with changes that cannot be
+ * sent it asks first. Keys the gateway refuses sign the device
  * out without it; the database goes too unless it holds changes not sent yet, which wait for
  * the next sign-in as the identity. The tabs of a browser follow the saved identity: when
  * another tab signs it out, this one closes its space. While a sign-out runs, no tab of the
@@ -355,6 +358,8 @@ export class SessionService implements SessionPort {
       identity,
       openLocal: this.#options.openLocal,
       openTenantLocal: this.#options.openTenantLocal,
+      deleteTenantLocal: this.#options.deleteTenantLocal,
+      tenantDatabases: this.#organisations.databases(identity.id),
       ...this.#organisations.saved(identity.id),
       schema: this.#options.schema,
       transport: () => this.#options.transport(this.#transportContext(identity.id)),

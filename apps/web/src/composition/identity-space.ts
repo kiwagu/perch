@@ -2,7 +2,11 @@
  * The signed-in identity's space on this device: its own local database with its private
  * region as a CRDT document projected into it, a database and region of the same kind for each
  * organisation it belongs to, reads and writes routed between them by region and, while this
- * tab leads the browser, the sync engine that keeps every region in step with the gateway.
+ * tab leads the browser, the sync engine that keeps every region in step with the gateway. The
+ * organisation databases the device holds for the identity are counted in an inventory that
+ * outlives the space, so one the space does not open (kept from an earlier session, or one that
+ * failed to open) is still deleted once the identity no longer belongs to its organisation, and
+ * when the space is destroyed.
  */
 
 import { errAsync, ResultAsync } from 'neverthrow'
@@ -59,8 +63,9 @@ export interface IdentitySpace {
   unsent(): ResultAsync<boolean, DataError>
   /**
    * The identity's organisations changed: the databases of new ones open, those of the ones it
-   * left close and are deleted, and a leading tab syncs the regions on a new engine. Changes run
-   * one after the other; one that leaves the databases as they are changes nothing, and one that
+   * left close and are deleted, as are those the device holds of other organisations it no
+   * longer belongs to, and a leading tab syncs the regions on a new engine. Changes run one
+   * after the other; one that leaves the databases as they are changes nothing, and one that
    * fails is reported, never rejected, so the next one still runs and the space still closes.
    */
   setMemberships(next: readonly Membership[]): Promise<void>
@@ -85,8 +90,22 @@ export interface IdentitySpace {
   resumeSync(): void
   /** Stops syncing and leading, persists and projects the last writes, closes every database. */
   close(): Promise<void>
-  /** Closes the space and deletes its databases, the identity's own and each organisation's. */
+  /**
+   * Closes the space and deletes its databases: the identity's own and every organisation
+   * database the device holds for it, open or not. One not open that cannot be deleted is
+   * reported and stays counted.
+   */
   destroy(): Promise<void>
+}
+
+/** The organisation databases this device may hold for an identity, kept across its sessions. */
+export interface TenantDatabaseInventory {
+  /** Their keys, those of databases not open included. */
+  keys(): readonly string[]
+  /** Counts the databases of `keys`, before they open. */
+  add(keys: readonly string[]): void
+  /** Stops counting the databases of `keys`, once they are deleted. */
+  drop(keys: readonly string[]): void
 }
 
 export interface IdentitySpaceOptions {
@@ -94,6 +113,10 @@ export interface IdentitySpaceOptions {
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   /** Opens the database of one organisation of the identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
+  /** Deletes the database of one organisation of the identity while it is not open. */
+  readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
+  /** The organisation databases the device holds for the identity. */
+  readonly tenantDatabases: TenantDatabaseInventory
   /** The organisations the identity belongs to, as the device last heard. */
   readonly memberships: readonly Membership[]
   /** The key of the organisation chosen last on this browser, if any. */
@@ -109,6 +132,11 @@ export interface IdentitySpaceOptions {
 }
 
 const FOLLOWING: SyncState = { leader: false, channel: 'down' }
+
+/** The keys of the organisations of `memberships`. */
+function keysOf(memberships: readonly Membership[]): ReadonlySet<string> {
+  return new Set(memberships.map(({ tenant }) => tenant.key))
+}
 
 class Space implements IdentitySpace {
   readonly runner: ShapeRunnerPort
@@ -141,6 +169,8 @@ class Space implements IdentitySpace {
     }
     this.#listening.push(options.hints.on((hint) => this.#hint(hint)))
     this.#followLeadership(options.leadership)
+    // The databases the device holds of organisations the identity left meanwhile go first.
+    this.#changing = this.#deleteRetained(keysOf(options.memberships))
   }
 
   get identity(): AuthUser {
@@ -217,7 +247,11 @@ class Space implements IdentitySpace {
 
   async destroy(): Promise<void> {
     await this.close()
-    await Promise.all(this.#spaces().map((space) => space.destroy()))
+    await Promise.all([
+      ...this.#spaces().map((space) => space.destroy()),
+      this.#deleteRetained(new Set()),
+    ])
+    this.#options.tenantDatabases.drop(this.#tenants.keys())
   }
 
   /** The identity's own region first, then each organisation's. */
@@ -231,13 +265,44 @@ class Space implements IdentitySpace {
       return
     }
 
+    const keys = keysOf(next)
+
+    this.#options.tenantDatabases.add([...keys])
+
     const { changed, left } = await this.#tenants.change(next)
 
     if (changed) {
       this.#relead()
     }
 
-    await this.#tenants.delete(left)
+    this.#options.tenantDatabases.drop(await this.#tenants.delete(left))
+    await this.#deleteRetained(keys)
+  }
+
+  /**
+   * Deletes the organisation databases the device holds for the identity that are neither open
+   * nor of `keep`, and stops counting those deleted; one that cannot be deleted is reported and
+   * stays counted, for a later change or sign-out to try again. Never rejects.
+   */
+  async #deleteRetained(keep: ReadonlySet<string>): Promise<void> {
+    const open = new Set(this.#tenants.keys())
+    const retained = this.#options.tenantDatabases
+      .keys()
+      .filter((key) => !keep.has(key) && !open.has(key))
+    const deleted = await Promise.all(
+      retained.map((key) =>
+        this.#options.deleteTenantLocal(this.identity.id, key).match(
+          () => [key],
+          (error) => {
+            this.#options.onError(error)
+
+            return []
+          },
+        ),
+      ),
+    )
+
+    this.#options.tenantDatabases.drop(deleted.flat())
   }
 
   #followLeadership(leadership: Leadership | undefined): void {
@@ -396,6 +461,9 @@ export function openIdentitySpace(
   options: IdentitySpaceOptions,
 ): ResultAsync<IdentitySpace, DataError> {
   const id = options.identity.id
+
+  // Counted before they open: a database that opens only in part is still found and deleted.
+  options.tenantDatabases.add([...keysOf(options.memberships)])
 
   return openRegionSpace({
     openLocal: () => options.openLocal(id),

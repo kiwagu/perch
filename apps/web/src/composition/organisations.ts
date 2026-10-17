@@ -3,7 +3,8 @@
  * session's side of them: the memberships come with the sign-in, from the leading tab's channel
  * and from the other tabs through the storage; they are kept in the storage, handed to the
  * identity's space and told to the subscribers, with the organisation chosen on this browser.
- * It also has the keys the organisation routes present renewed. `createOrganisations` is the
+ * It keeps the inventory of the organisation databases the device holds for the identity, and
+ * has the keys the organisation routes present renewed. `createOrganisations` is the
  * port over the gateway's routes: an organisation the identity creates is its membership on this
  * device at once, without waiting for the gateway to tell the channel. Invites and removals change
  * other identities' memberships, which the gateway tells their own devices.
@@ -18,7 +19,7 @@ import type { SyncHints } from '@workspace/replica/sync'
 
 import type { OrganisationsPort } from '../platform/organisations.port'
 
-import type { IdentitySpace } from './identity-space'
+import type { IdentitySpace, TenantDatabaseInventory } from './identity-space'
 import type { OrganisationsApi } from './organisations-api'
 import {
   ACCESS_KEY,
@@ -26,8 +27,10 @@ import {
   savedIdentity,
   savedMemberships,
   savedTenant,
+  savedTenantDatabases,
   saveMemberships,
   saveTenant,
+  saveTenantDatabases,
 } from './storage'
 
 /** The space of the identity signed in on this tab, and the hints between the identity's tabs. */
@@ -94,6 +97,37 @@ export class SessionOrganisations {
     const storage = this.#options.storage
 
     return { memberships: savedMemberships(storage, identity), tenant: savedTenant(storage) }
+  }
+
+  /**
+   * The inventory of the organisation databases `identity` has on this device, kept in the
+   * storage for the tabs and the sessions to come; each change reads it anew, as other tabs
+   * change it too. An inventory kept for another identity is left alone, unless this identity
+   * counts databases of its own: the storage holds one identity's.
+   */
+  databases(identity: IdentityId): TenantDatabaseInventory {
+    const storage = this.#options.storage
+    const kept = () => savedTenantDatabases(storage, identity)
+
+    return {
+      keys: kept,
+      add: (keys) => {
+        const before = kept()
+        const after = [...new Set([...before, ...keys])].sort()
+
+        if (after.length > before.length) {
+          saveTenantDatabases(storage, identity, after)
+        }
+      },
+      drop: (keys) => {
+        const before = kept()
+        const after = before.filter((key) => !keys.includes(key))
+
+        if (after.length < before.length) {
+          saveTenantDatabases(storage, identity, after)
+        }
+      },
+    }
   }
 
   /**

@@ -1,4 +1,4 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
@@ -18,8 +18,15 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from './__fixtures__/session'
-import type { SignedInDevice } from './gateway-auth'
-import { memoryStorage, saveDevice, savedMemberships, saveMemberships } from './storage'
+import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+import {
+  memoryStorage,
+  saveDevice,
+  savedMemberships,
+  savedTenantDatabases,
+  saveMemberships,
+  TENANT_DATABASES_KEY,
+} from './storage'
 
 const ann: SignedInDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -41,6 +48,12 @@ const globex: Membership = {
 
 /** Ann's device as a sign-in left it, a member of `memberships`. */
 const annIn = (memberships: readonly Membership[]): SignedInDevice => ({ ...ann, memberships })
+
+/** A gateway whose sign-in always answers `device`, and which takes no sign-up. */
+const signingIn = (device: SignedInDevice): GatewayAuth => ({
+  signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
+  signIn: () => okAsync(device),
+})
 
 const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2' }
 
@@ -1097,6 +1110,64 @@ describe('SessionService memberships', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(destroyed()).toEqual([ann.identity.id])
     expect([...tenantsDestroyed()].sort()).toEqual(['acme', 'globex'])
+  })
+
+  it('a tenant database retained across a refused-keys sign-out is destroyed at the next sign-in when the membership is gone', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme]))
+
+    // Ann is removed from Acme while signed out: her next sign-in answers without it.
+    const booted = await world({ storage, online: false, auth: signingIn(annIn([])) })
+    const { session, stub, tenantsDestroyed, tenantsDeleted, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect((await session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    // The keys are refused with a change unsent: the databases stay for the next sign-in.
+    stub.endWith('unauthorized')
+    await vi.waitFor(() => expect(session.notice()).toBe('resend-after-sign-in'))
+    await settle()
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    await vi.waitFor(() => expect(tenantsDeleted()).toEqual(['acme']))
+    expect(session.space()?.tenants()).toEqual([])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+
+    // A later sign-out leaves nothing of Acme behind, and has nothing more to delete.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDeleted()).toEqual(['acme'])
+    expect(tenantsDestroyed()).toEqual([])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it('sign-out destroys inventoried tenant databases that are not open', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
+    const { session, contexts, tenantsDestroyed, tenantsDeleted, driveClock, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Globex's database does not open: it is no open space, yet the device may hold it.
+    contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(failures.map(({ code }) => code)).toEqual(['data:OPEN_FAILED']))
+    failures.splice(0)
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDestroyed()).toEqual(['acme'])
+    expect(tenantsDeleted()).toEqual(['globex'])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
   })
 
   it('the sign-in page keeps nothing of the memberships after sign-out', async () => {

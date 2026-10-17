@@ -86,6 +86,17 @@ function deleteStored(url: string): Promise<void> {
 }
 
 /**
+ * Deletes what the database at `url` stored, without opening it: the browser's IndexedDB
+ * database of an `indxdb://` address (one that is not there is no failure), nothing for a
+ * `mem://` one. As `destroy` does once it closed a database; the database must not be open here.
+ */
+export function deleteLocalDb(url: string): ResultAsync<void, DataError> {
+  return ResultAsync.fromPromise(deleteStored(url), (cause) =>
+    dataError('data:WRITE_FAILED', `could not delete ${url}`, cause),
+  )
+}
+
+/**
  * Connects to a local database and brings its schema up to date before anything
  * reads from it. A schema the database already applied is left alone: defining
  * the access method again would give it a new signing key and sign everyone out.

@@ -1,6 +1,6 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb, ShapeRunnerPort } from '@workspace/data'
+import { type DataError, dataError, type LocalDb, type ShapeRunnerPort } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
@@ -43,6 +43,10 @@ export interface TestWorldOptions {
   readonly hints?: Set<FakeHintChannel>
   /** The organisations every account belongs to: the gateway signs in and welcomes with them. */
   readonly memberships?: readonly Membership[]
+  /** Signs devices up and in in place of the fake gateway's accounts. */
+  readonly auth?: GatewayAuth
+  /** The organisations whose databases do not open on this device, by key. */
+  readonly refusedTenants?: readonly string[]
 }
 
 /** The identity databases of one browser: its tabs open the same database for an identity. */
@@ -120,8 +124,10 @@ export interface TestWorld {
   destroyed(): IdentityId[]
   /** The organisations whose databases were opened, by key, in order. */
   tenantsOpened(): string[]
-  /** The organisations whose databases were deleted, by key, in order. */
+  /** The organisations whose open databases were deleted, by key, in order. */
   tenantsDestroyed(): string[]
+  /** The organisations whose databases were deleted while not open, by key, in order. */
+  tenantsDeleted(): string[]
   /** The transport contexts the session handed out, newest last. */
   contexts(): readonly TransportContext[]
   /** The channels to the gateway stub the session opened, newest last. */
@@ -152,13 +158,14 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const gateway = options.gateway ?? (await openTestGateway(memberships))
   const { stub, clock } = gateway
   const storage = options.storage ?? memoryStorage()
-  const auth = fakeGatewayAuth(memberships)
+  const auth = options.auth ?? fakeGatewayAuth(memberships)
   const failures: DataError[] = []
   const states: SyncState[] = []
   const opened: IdentityId[] = []
   const destroyed: IdentityId[] = []
   const tenantsOpened: string[] = []
   const tenantsDestroyed: string[] = []
+  const tenantsDeleted: string[] = []
   const contexts: TransportContext[] = []
   const transports: StubTransport[] = []
   const visibilityListeners = new Set<(state: Visibility) => void>()
@@ -182,17 +189,24 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
         },
       ),
     openTenantLocal: (_identity, key) =>
-      openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
-        tenantsOpened.push(key)
+      options.refusedTenants?.includes(key)
+        ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${key}`))
+        : openTestDb({ schema: readSchema('tenant'), database: 'tenant' }).map((local): LocalDb => {
+            tenantsOpened.push(key)
 
-        return {
-          ...local,
-          destroy: async () => {
-            tenantsDestroyed.push(key)
-            await local.destroy()
-          },
-        }
-      }),
+            return {
+              ...local,
+              destroy: async () => {
+                tenantsDestroyed.push(key)
+                await local.destroy()
+              },
+            }
+          }),
+    deleteTenantLocal: (_identity, key) => {
+      tenantsDeleted.push(key)
+
+      return okAsync(undefined)
+    },
     schema: replicaSchema,
     transport: (context) => {
       const transport = stub.transport(context.identity)
@@ -255,6 +269,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     destroyed: () => [...destroyed],
     tenantsOpened: () => [...tenantsOpened],
     tenantsDestroyed: () => [...tenantsDestroyed],
+    tenantsDeleted: () => [...tenantsDeleted],
     contexts: () => [...contexts],
     transports: () => [...transports],
     setVisibility: (state) => {

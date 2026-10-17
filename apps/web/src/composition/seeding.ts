@@ -324,6 +324,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         database: 'tenant',
         schema: tenantSchema,
       }),
+    // An in-memory database leaves nothing behind once it is closed.
+    deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: gatewayAuth(options.gatewayUrl),
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
     transport: (context) =>

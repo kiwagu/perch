@@ -1,4 +1,4 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/data'
@@ -54,6 +54,7 @@ async function boot(
         return openTestDb()
       }),
     openTenantLocal: () => openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
+    deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
     organisationsApi: (deps) =>
       organisationsApi('/backend', {

@@ -40,6 +40,8 @@ export interface AppRootOptions {
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   /** Opens the database of one organisation of an identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
+  /** Deletes the database of one organisation of an identity while it is not open. */
+  readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
   readonly gatewayAuth: GatewayAuth
   /** The gateway's organisation routes, called with the device's access token. */
   readonly organisationsApi: (deps: OrganisationsApiDeps) => OrganisationsApi
@@ -85,6 +87,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     auth: options.gatewayAuth,
     openLocal: options.openLocal,
     openTenantLocal: options.openTenantLocal,
+    deleteTenantLocal: options.deleteTenantLocal,
     schema: replicaSchema,
     transport: options.transport,
     locks: options.locks,

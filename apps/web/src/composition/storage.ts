@@ -1,5 +1,6 @@
 import type { AuthUser } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { isTenantKey } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
@@ -177,6 +178,53 @@ export function savedTenant(storage: KeyValueStorage): string | undefined {
   return storage.get(TENANT_KEY)
 }
 
+/**
+ * The organisation databases this device may hold for an identity, by key: every one the space
+ * opened or was about to open, until it is deleted. It outlives the keys (a sign-out that keeps
+ * the databases for the next sign-in keeps it too), so a database whose membership went while
+ * nobody was signed in is still found and deleted.
+ */
+export const TENANT_DATABASES_KEY = 'perch.session.tenant-databases'
+
+const savedTenantDatabasesSchema = z.object({
+  identity: idSchemas.identity.schema,
+  // A key names a database to delete: only an organisation's key is taken.
+  keys: z.array(z.string().refine(isTenantKey)),
+})
+
+/** Keeps the keys of the organisation databases `identity` has on this device; none keeps nothing. */
+export function saveTenantDatabases(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+  keys: readonly string[],
+): void {
+  if (keys.length === 0) {
+    storage.remove(TENANT_DATABASES_KEY)
+  } else {
+    storage.set(TENANT_DATABASES_KEY, JSON.stringify({ identity, keys }))
+  }
+}
+
+/** The keys kept for `identity`; none when they were kept for another or do not parse. */
+export function savedTenantDatabases(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+): readonly string[] {
+  const text = storage.get(TENANT_DATABASES_KEY)
+
+  if (text === undefined) {
+    return []
+  }
+
+  try {
+    const parsed = savedTenantDatabasesSchema.safeParse(JSON.parse(text))
+
+    return parsed.success && parsed.data.identity === identity ? parsed.data.keys : []
+  } catch {
+    return []
+  }
+}
+
 /** Keeps a renewed pair of keys: a refresh key works once, so the next connection needs the latest. */
 export function saveKeys(storage: KeyValueStorage, tokens: SignedInDevice['tokens']): void {
   storage.set(ACCESS_KEY, tokens.access)
@@ -248,7 +296,10 @@ export function forgetSigningOut(storage: KeyValueStorage): void {
   storage.remove(SIGNING_OUT_KEY)
 }
 
-/** Forgets who is signed in and the keys; the other tabs hear the identity go. */
+/**
+ * Forgets who is signed in and the keys; the other tabs hear the identity go. The inventory of
+ * the organisation databases stays: the databases may stay too.
+ */
 export function forgetDevice(storage: KeyValueStorage): void {
   storage.remove(ACCESS_KEY)
   storage.remove(REFRESH_KEY)

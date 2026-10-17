@@ -14,11 +14,14 @@ import {
   savedKeys,
   savedMemberships,
   savedTenant,
+  savedTenantDatabases,
   saveKeys,
   saveMemberships,
   saveSigningOut,
   saveTenant,
+  saveTenantDatabases,
   signingOutSince,
+  TENANT_DATABASES_KEY,
 } from './storage'
 
 const ann = {
@@ -212,5 +215,67 @@ describe('memberships and the current tenant', () => {
 
     expect(storage.get('perch.session.tenant')).toBe('acme')
     expect(savedTenant(storage)).toBe('acme')
+  })
+})
+
+describe('the tenant databases on this device', () => {
+  it('keeps the keys of the identity they were saved for', () => {
+    const storage = memoryStorage()
+
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual([])
+
+    saveTenantDatabases(storage, ann.identity.id, ['acme', 'globex'])
+
+    expect(TENANT_DATABASES_KEY).toBe('perch.session.tenant-databases')
+    expect(JSON.parse(storage.get(TENANT_DATABASES_KEY) ?? 'null')).toEqual({
+      identity: ann.identity.id,
+      keys: ['acme', 'globex'],
+    })
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+  })
+
+  it('reads none for another identity', () => {
+    const storage = memoryStorage()
+
+    saveTenantDatabases(storage, ann.identity.id, ['acme'])
+
+    expect(savedTenantDatabases(storage, identityIdFactory.create())).toEqual([])
+  })
+
+  it('reads none from a value that does not parse', () => {
+    const storage = memoryStorage()
+
+    const notAKey = JSON.stringify({ identity: ann.identity.id, keys: ['acme', '../other'] })
+
+    for (const value of [
+      'not json',
+      '[]',
+      '{"identity":"x","keys":["acme"]}',
+      '{"keys":1}',
+      notAKey,
+    ]) {
+      storage.set(TENANT_DATABASES_KEY, value)
+
+      expect(savedTenantDatabases(storage, ann.identity.id)).toEqual([])
+    }
+  })
+
+  it('keeps no empty inventory', () => {
+    const storage = memoryStorage()
+
+    saveTenantDatabases(storage, ann.identity.id, ['acme'])
+    saveTenantDatabases(storage, ann.identity.id, [])
+
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it('outlives forgetDevice: databases kept for the next sign-in stay counted', () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, { ...ann, memberships: [acme] })
+    saveTenantDatabases(storage, ann.identity.id, ['acme'])
+    forgetDevice(storage)
+
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
   })
 })

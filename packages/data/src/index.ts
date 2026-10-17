@@ -12,7 +12,7 @@ export {
 export { CHANGE_EVENT, onChange, publishChange } from './changes'
 export { runCommand } from './commands'
 export { type DataError, type DataErrorCode, dataError } from './errors'
-export { type OpenLocalDbOptions, openLocalDb } from './local-db'
+export { deleteLocalDb, type OpenLocalDbOptions, openLocalDb } from './local-db'
 export { LOCAL_DB, type LocalDbPort } from './local-db.port'
 export { type OperatorOptions, runAsOperator } from './operator'
 export { ShapeRunner, type WatchOptions } from './shape-runner'

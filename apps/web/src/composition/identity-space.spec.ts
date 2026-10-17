@@ -27,7 +27,12 @@ import { profileCommands } from '../features/user/presentation/pages/profile/pro
 
 import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
-import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
+import {
+  type IdentitySpace,
+  openIdentitySpace,
+  type SyncState,
+  type TenantDatabaseInventory,
+} from './identity-space'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
@@ -130,6 +135,28 @@ function tenantDatabases(): TenantDatabases {
   }
 }
 
+/** An inventory of organisation databases in memory, holding `keys` to begin with. */
+function inventory(keys: readonly string[] = []): TenantDatabaseInventory & {
+  readonly held: Set<string>
+} {
+  const held = new Set(keys)
+
+  return {
+    held,
+    keys: () => [...held].sort(),
+    add: (added) => {
+      for (const key of added) {
+        held.add(key)
+      }
+    },
+    drop: (dropped) => {
+      for (const key of dropped) {
+        held.delete(key)
+      }
+    },
+  }
+}
+
 /** Passes everything through to `transport`, keeping what the device sent. */
 function recording(transport: SyncTransport, sent: ClientMessage[]): SyncTransport {
   return {
@@ -168,6 +195,8 @@ async function openTab(gateway: Gateway, browser: Browser): Promise<Tab> {
       identity: ann,
       openLocal: () => okAsync(view),
       openTenantLocal: tenantDatabases().open,
+      deleteTenantLocal: () => okAsync(undefined),
+      tenantDatabases: inventory(),
       memberships: [],
       tenant: undefined,
       schema: replicaSchema,
@@ -200,16 +229,27 @@ async function openSpace(
     readonly local?: LocalDb
     /** Opens the organisations' databases in place of `tenants`, which then opens none. */
     readonly openTenantLocal?: TenantDatabases['open']
+    /** The organisation databases the device holds for Ann to begin with, by key. */
+    readonly held?: readonly string[]
   },
 ) {
   const tenants = tenantDatabases()
   const errors: DataError[] = []
   const sent: ClientMessage[][] = []
+  /** The organisation databases deleted while not open, by key. */
+  const deleted: string[] = []
+  const held = inventory(options.held)
   const space = (
     await openIdentitySpace({
       identity: ann,
       openLocal: () => (options.local ? okAsync(options.local) : openTestDb()),
       openTenantLocal: options.openTenantLocal ?? tenants.open,
+      deleteTenantLocal: (_identity, key) => {
+        deleted.push(key)
+
+        return okAsync(undefined)
+      },
+      tenantDatabases: held,
       memberships: options.memberships,
       tenant: undefined,
       schema: replicaSchema,
@@ -236,7 +276,7 @@ async function openSpace(
   cleanups.push(() => space.close())
   await vi.waitFor(() => expect(space.sync).toBeDefined())
 
-  return { space, tenants, errors, sent }
+  return { space, tenants, errors, sent, deleted, inventory: held.held }
 }
 
 /** Waits until the leader's engine has nothing left to send or hear. */
@@ -274,6 +314,8 @@ describe('openIdentitySpace', () => {
           return okAsync(local)
         },
         openTenantLocal: tenantDatabases().open,
+        deleteTenantLocal: () => okAsync(undefined),
+        tenantDatabases: inventory(),
         memberships: [],
         tenant: undefined,
         schema: replicaSchema,
@@ -403,6 +445,8 @@ describe('openIdentitySpace', () => {
         identity: ann,
         openLocal: () => okAsync(local),
         openTenantLocal: tenantDatabases().open,
+        deleteTenantLocal: () => okAsync(undefined),
+        tenantDatabases: inventory(),
         memberships: [],
         tenant: undefined,
         schema: replicaSchema,
@@ -534,6 +578,53 @@ describe('organisations in the identity space', () => {
     expect(destroy).toHaveBeenCalledOnce()
     expect([...tenants.destroyed].sort()).toEqual(['acme', 'globex'])
     expect(space.sync).toBeUndefined()
+  })
+
+  it('counts the databases it opens, and deletes those the device holds of organisations the identity left', async () => {
+    const gateway = await openGateway([acme, globex])
+    const { space, deleted, inventory, errors } = await openSpace(gateway, {
+      memberships: [acme],
+      held: ['globex', 'initech'],
+    })
+
+    // Globex and Initech were kept from an earlier session: Ann no longer belongs to them.
+    await vi.waitFor(() => expect([...deleted].sort()).toEqual(['globex', 'initech']))
+    expect([...inventory]).toEqual(['acme'])
+
+    await space.setMemberships([acme, globex])
+
+    expect([...inventory].sort()).toEqual(['acme', 'globex'])
+
+    await space.setMemberships([globex])
+
+    // Acme was open: the space deleted it itself, not as a database it does not hold open.
+    expect(deleted).toEqual(['globex', 'initech'])
+    expect([...inventory]).toEqual(['globex'])
+    expect(errors).toEqual([])
+  })
+
+  it('destroy deletes the databases the device holds that are not open, and counts none any more', async () => {
+    const gateway = await openGateway([acme])
+    const failure = new Error('the browser would not open the database')
+    const tenants = tenantDatabases()
+    const { space, deleted, inventory, errors } = await openSpace(gateway, {
+      memberships: [acme],
+      openTenantLocal: (identity, key) =>
+        key === 'globex'
+          ? new ResultAsync<LocalDb, DataError>(Promise.reject(failure))
+          : tenants.open(identity, key),
+    })
+
+    // Globex's database does not open: it is no open space, yet the device may hold it.
+    await space.setMemberships([acme, globex])
+    expect(errors.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
+    expect(space.tenants()).toEqual(['acme'])
+
+    await space.destroy()
+
+    expect(tenants.destroyed).toEqual(['acme'])
+    expect(deleted).toEqual(['globex'])
+    expect([...inventory]).toEqual([])
   })
 
   it('unsent counts the outbox of every region', async () => {

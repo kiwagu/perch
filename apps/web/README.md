@@ -28,7 +28,12 @@ modeling stage.
   sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
   and from the other tabs through the storage; a new organisation's database opens, the
   database of one the identity left is deleted, and a leading tab syncs the regions on a new
-  engine. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
+  engine. Every organisation database the device holds for the identity is counted in
+  `perch.session.tenant-databases` (`{ identity, keys }`) before it opens, and stops being
+  counted once deleted; the count outlives the keys, so whenever the space opens or follows
+  the memberships, a counted database of an organisation the identity no longer belongs to is
+  deleted even when it is not open (`deleteTenantLocal`): one kept across a sign-out that kept
+  the databases, or one that failed to open. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
   routes with the access token, renewing it once on a 401 and mapping refusals to `data:`
   errors; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
   creates its membership on the device at once. A token is renewed through the leading tab:
@@ -39,7 +44,8 @@ modeling stage.
   region and every organisation's, keeping every renewed pair of keys; the tabs hint each
   other over a BroadcastChannel, so each reads what the others wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
   out, then forgets the keys and the memberships and deletes the identity's database and
-  each organisation's; with changes it could not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
+  every organisation database the device holds for it, open or not, and the count of them; with
+  changes it could not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
   `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
   hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that
