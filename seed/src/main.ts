@@ -1,21 +1,31 @@
 /**
  * The seed command behind `cli.ts`.
  *
- *   seed [--fresh] [--reset] [--manifest=<file>] [--url=<stand>] [--database=<name>]
- *   seed sweep [--url=<stand>] [--database=<name>]
+ *   seed [--fresh] [--reset] [--manifest=<file>] [--gateway=<url>] [--url=<stand>]
+ *   seed sweep [--url=<stand>]
  *
- * Also `--namespace=`, `--user=` and `--pass=` for the stand's system user. The
- * stand defaults to the local dev stand with its local credentials.
+ * Accounts are created through the gateway at `--gateway` (or `GATEWAY_URL`), by default
+ * the local dev gateway. The stand behind it is reached only by the sweep (`seed sweep`, and
+ * `--reset` before seeding): `--url`, `--namespace=`, `--database=`, `--user=` and `--pass=`
+ * name it and its system user, by default the local dev stand's root on the gateway's
+ * database.
  */
 
 import { writeFileSync } from 'node:fs'
+
+import { z } from '@workspace/zod'
 
 import type { SeedMode } from './catalog'
 import { runSeed, type StandTarget, sweep } from './seed'
 
 const FLAGS = new Set(['--fresh', '--reset'])
 
-const OPTIONS = ['url', 'namespace', 'database', 'user', 'pass', 'manifest']
+const OPTIONS = ['gateway', 'url', 'namespace', 'database', 'user', 'pass', 'manifest']
+
+/** The gateway's `http(s)://` address, without a trailing slash: its routes are appended. */
+const gatewayAddress = z
+  .url({ protocol: /^https?$/, error: 'must be the http(s):// address of the gateway' })
+  .transform((url) => url.replace(/\/+$/, ''))
 
 function readOption(argv: readonly string[], name: string): string | undefined {
   const prefix = `--${name}=`
@@ -32,7 +42,10 @@ function unknownArguments(argv: readonly string[]): string[] {
   )
 }
 
-export async function main(argv: readonly string[]): Promise<number> {
+export async function main(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<number> {
   const unknown = unknownArguments(argv)
 
   if (unknown.length > 0) {
@@ -41,10 +54,21 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 1
   }
 
+  const gateway = gatewayAddress.safeParse(
+    readOption(argv, 'gateway') ?? env['GATEWAY_URL'] ?? 'http://127.0.0.1:5181',
+  )
+
+  if (!gateway.success) {
+    console.error(`seed: --gateway or GATEWAY_URL ${gateway.error.issues[0]?.message ?? ''}`)
+
+    return 1
+  }
+
   const target: StandTarget = {
+    gatewayUrl: gateway.data,
     url: readOption(argv, 'url') ?? 'http://127.0.0.1:8000',
     namespace: readOption(argv, 'namespace') ?? 'app',
-    database: readOption(argv, 'database') ?? 'app',
+    database: readOption(argv, 'database') ?? 'directory',
     credentials: {
       username: readOption(argv, 'user') ?? 'root',
       password: readOption(argv, 'pass') ?? 'root',

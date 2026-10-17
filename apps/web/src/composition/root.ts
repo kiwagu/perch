@@ -25,7 +25,7 @@ import { SESSION, type SessionPort } from '../platform/session.port'
 
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
-import type { SyncState } from './identity-space'
+import type { IdentitySpace, SyncState } from './identity-space'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage } from './storage'
 
@@ -56,6 +56,8 @@ export interface AppServices {
   readonly writePath: WritePathPort
   readonly session: SessionPort
   readonly commands: CommandsPort
+  /** The signed-in identity's space, for a composition that drives it directly: the seed waits on its sync. */
+  space(): IdentitySpace | undefined
   close(): Promise<void>
 }
 
@@ -105,6 +107,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
       writePath: session.writePath,
       session,
       commands,
+      space: () => session.space(),
       close: () => session.close(),
     }
   })

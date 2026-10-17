@@ -18,7 +18,8 @@ The processes are declared in `.mcproc/mcproc.yaml` and driven by mcproc (pm2 un
   gateway waits for its database and defines its namespace user there before it starts.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). `SURREAL_URL=http://<host>:<port>`
-  points them at another stand.
+  points them at another stand, and `GATEWAY_URL=http://<host>:<port>` the seed at its gateway.
+- `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds, starts the `e2e` profile, waits for each of its apps and runs
   the Playwright specs through the front; `bun run test:e2e --down` stops the profile.
 - A SurrealDB stand keeps nothing when it stops. After restarting one on its own, restart its

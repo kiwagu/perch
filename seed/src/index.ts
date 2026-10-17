@@ -14,6 +14,8 @@ export {
   type SeededEntry,
   type SeedManifest,
   type SeedOptions,
+  type StandOptions,
   type StandTarget,
+  type SweepOptions,
   sweep,
 } from './seed'

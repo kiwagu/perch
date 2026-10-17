@@ -1,72 +1,80 @@
 import { afterAll, describe, expect, it } from 'vitest'
 
-import type { Shape } from '@workspace/data'
+import { signInAndRead } from './__fixtures__/device'
+import { leftOnStand } from './__fixtures__/stand'
+import { accountFor, catalog, type SeedMode } from './catalog'
+import { runSeed, type StandTarget, sweep } from './seed'
 
-import standCountsText from './__fixtures__/stand-counts.surql'
-import { catalog } from './catalog'
-import { openStand, runSeed, type StandTarget, sweep } from './seed'
-
-// Each run seeds its own database on the e2e stand, so a developer's demo data
-// and parallel runs never meet.
+// The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
+// where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
+// share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
 const target: StandTarget = {
+  gatewayUrl: process.env['GATEWAY_URL'] ?? 'http://127.0.0.1:5191',
   url: process.env['SURREAL_URL'] ?? 'http://127.0.0.1:8010',
   namespace: 'app',
-  database: `seed_${Date.now()}`,
+  database: 'directory',
   credentials: { username: 'root', password: 'root' },
 }
 
-const standCounts: Shape<
-  Record<string, never>,
-  { accounts: number; profiles: number; regions: number }
-> = {
-  id: 'fixture.standCounts',
-  kind: 'shape',
-  text: standCountsText,
-  params: [],
-  tables: ['identity', 'profile', '_replica_update'],
-}
+const demo: SeedMode = { kind: 'demo' }
 
-const counts = async () => {
-  const stand = (await openStand(target))._unsafeUnwrap()
-
-  try {
-    return (await stand.runner.read(standCounts, {}))._unsafeUnwrap()
-  } finally {
-    await stand.close()
-  }
-}
-
-const accounts = catalog.accounts.length
+const emails = catalog.accounts.map((preset) => accountFor(preset, demo).email)
 
 afterAll(async () => {
-  expect((await sweep(target)).isOk()).toBe(true)
+  expect((await sweep(target, { emails })).isOk()).toBe(true)
 })
 
-describe('seeding a stand', () => {
-  it('creates the demo accounts with their profiles, and the same ones on every run', async () => {
-    const first = (await runSeed({ ...target, mode: { kind: 'demo' } }))._unsafeUnwrap()
-    const second = (await runSeed({ ...target, mode: { kind: 'demo' } }))._unsafeUnwrap()
+describe('seeding through the gateway', () => {
+  it('seeds the demo accounts through the gateway, and a second device sees them', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const manifest = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
 
-    expect(Object.keys(first.accounts).sort()).toEqual(catalog.accounts.map((a) => a.ref).sort())
-    expect(second).toEqual(first)
-    expect(await counts()).toEqual({ accounts, profiles: accounts, regions: accounts })
-  })
-
-  it('creates new accounts on every fresh run', async () => {
-    const run = (await runSeed({ ...target, mode: { kind: 'fresh', run: 'f1' } }))._unsafeUnwrap()
+    expect(manifest.accounts['ann']?.email).toBe('ann@example.test')
 
     for (const preset of catalog.accounts) {
-      expect(run.accounts[preset.ref]?.email).toContain('.f1@')
-    }
+      const account = accountFor(preset, demo)
+      const seen = (await signInAndRead(target.gatewayUrl, account))._unsafeUnwrap()
+      const profile = seen.profile ?? expect.unreachable(`a profile for ${preset.ref}`)
 
-    expect((await counts()).accounts).toBe(2 * accounts)
+      expect(manifest.accounts[preset.ref]).toEqual({
+        id: seen.user.id,
+        email: account.email,
+        profileId: profile.id,
+      })
+      expect(profile).toMatchObject({
+        name: preset.name,
+        email: account.email,
+        bio: preset.bio,
+        locale: preset.locale,
+      })
+    }
   })
 
-  it('sweeps every test account with its profile and its region, and reseeds after a reset', async () => {
-    expect((await sweep(target))._unsafeUnwrap()).toEqual({ accounts: 2 * accounts })
-    expect(await counts()).toEqual({ accounts: 0, profiles: 0, regions: 0 })
+  it('runs twice without duplicating anything', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const first = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
+    const before = await leftOnStand(target, first)
+    const second = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
 
-    expect((await runSeed({ ...target, mode: { kind: 'demo' }, reset: true })).isOk()).toBe(true)
-    expect(await counts()).toEqual({ accounts, profiles: accounts, regions: accounts })
+    expect(second).toEqual(first)
+    expect(before).toMatchObject({ identities: 2, profiles: 2 })
+    expect(before.accepted).toBeGreaterThan(0)
+    // The second run signed in and found everything in place: the gateway accepted nothing new.
+    expect(await leftOnStand(target, second)).toEqual(before)
+  })
+
+  it('sweeps seeded identities with their profiles and region rows', async () => {
+    const manifest = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
+    const before = await leftOnStand(target, manifest)
+
+    expect(before).toMatchObject({ identities: 2, profiles: 2 })
+    expect(before.regionRows).toBeGreaterThan(0)
+    expect((await sweep(target, { emails }))._unsafeUnwrap()).toEqual({ accounts: 2 })
+    expect(await leftOnStand(target, manifest)).toEqual({
+      identities: 0,
+      profiles: 0,
+      regionRows: 0,
+      accepted: 0,
+    })
   })
 })

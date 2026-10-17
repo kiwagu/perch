@@ -39,8 +39,11 @@ modeling stage.
 
 ## Key exports
 
-`./seeding`: `openStand()`, which seeds a SurrealDB stand from Bun or Node with the
-application's own services, connected to the stand as a system user. Entry point
+`./seeding`: `openClient()`, a device of the application in Bun or Node (the composition
+root over an in-memory database, always leading its identity's sync) that signs accounts
+up or in through the gateway, writes their profiles through commands and waits until the
+gateway acknowledged them, leaving without signing out; and `openStand()`, the operator's
+connection to a stand as a system user, where seeded accounts are swept. Entry point
 `src/main.tsx`; `src/modules.ts` lists the feature modules; `src/test-utils.tsx` renders
 components with the application providers.
 
