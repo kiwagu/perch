@@ -1,0 +1,33 @@
+---
+description: 'Use when: about to commit on any branch, about to squash a branch into main, or tempted to skip a git hook.'
+alwaysApply: true
+---
+
+# Verify before commit and before landing
+
+## Pyramid Layer
+
+- Layer: L0 gate.
+
+## Use This When
+
+- A commit is about to be made on any branch.
+- A branch is about to be squashed into `main`.
+
+## Stop Here If
+
+- The pre-commit hook ran to completion and the commit was accepted.
+
+## Core rule
+
+- Every commit is formatted, lint-clean and unit-tested. The pre-commit hook formats the staged files with Biome, validates staged SurrealQL, regenerates models, then runs typecheck, `bun run lint` and `bun run test`. Run the same commands yourself before committing, so the hook confirms rather than discovers.
+- A commit on `main` is a landing. It is accepted only when `bun run test:db` and `CI=1 bun run test:e2e` have passed on exactly the tree being committed. Both commands record a receipt under `.gates/` keyed by the tree id, and the hook checks for it. Any change to a tracked file after the suites ran needs a fresh run.
+- Hooks are the mechanism, not a reminder. Never bypass them: no `--no-verify`, no `-n` on `git commit`, no `LEFTHOOK=0`, no `LEFTHOOK_EXCLUDE`, no change to `core.hooksPath`. A failing hook is fixed, never skipped.
+- Missing hooks are a broken checkout: run `bun install`, whose `prepare` step installs them.
+
+## Commands
+
+```bash
+bun run lint && bun run test              # before every commit
+bun run test:db && CI=1 bun run test:e2e  # before landing on main
+```

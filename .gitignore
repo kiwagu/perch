@@ -5,6 +5,7 @@ dist/
 *.tsbuildinfo
 
 # test artifacts
+.gates/
 test-results/
 playwright-report/
 coverage/
