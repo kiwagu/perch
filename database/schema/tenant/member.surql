@@ -3,7 +3,9 @@
 -- gateway only; never replicated (devices learn their memberships from the gateway).
 
 -- @replicate none
-DEFINE TABLE OVERWRITE member SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE OVERWRITE member SCHEMAFULL
+  PERMISSIONS
+    FOR select, create, update, delete NONE;
 
 DEFINE FIELD OVERWRITE role ON member TYPE string
   ASSERT $value IN ['member', 'admin'];
