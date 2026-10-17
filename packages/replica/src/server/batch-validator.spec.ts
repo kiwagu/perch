@@ -1,4 +1,4 @@
-import { type ContainerID, LoroDoc, LoroMap, type LoroText } from 'loro-crdt'
+import { type ContainerID, LoroDoc, LoroMap, LoroText } from 'loro-crdt'
 import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
@@ -582,6 +582,107 @@ describe('a tenant region', () => {
     })
 
     expect(validated.isErr() && validated.error.reason).toBe('malformed')
+  })
+
+  describe('a field whose shape the schema does not allow', () => {
+    /** Ann's note `hello`, and what a batch of `actor` that changes it in `edit` validates to. */
+    const changed = (actor: string, edit: (records: LoroMap, key: string) => void) => {
+      const server = new LoroDoc()
+      const id = noteIdFactory.create()
+      const key = `note/${id}`
+
+      server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+      const device = server.fork()
+
+      edit(device.getMap('records'), key)
+      device.commit()
+
+      return {
+        key,
+        validated: validateBatch({
+          doc: server,
+          region,
+          actor,
+          ability: member(actor),
+          schema: replicaSchema,
+          updates: [device.export({ mode: 'update', from: server.version() })],
+        }),
+      }
+    }
+    const noteOf = (records: LoroMap, key: string) => records.get(key) as LoroMap
+
+    it("refuses another member's note whose text became a plain string of the same content", () => {
+      const { key, validated } = changed(bob, (records, note) => {
+        noteOf(records, note).set('text', 'hello')
+      })
+
+      expect(validated.isErr() && validated.error).toEqual({
+        reason: 'invalid-record',
+        detail: `${key}.text`,
+      })
+    })
+
+    it("refuses another member's note whose text became a text that is not mergeable, of the same content", () => {
+      const { key, validated } = changed(bob, (records, note) => {
+        noteOf(records, note).setContainer('text', new LoroText()).insert(0, 'hello')
+      })
+
+      expect(validated.isErr() && validated.error).toEqual({
+        reason: 'invalid-record',
+        detail: `${key}.text`,
+      })
+    })
+
+    it("refuses another member's note deleted and created again with its text as a plain string", () => {
+      const { key, validated } = changed(bob, (records, note) => {
+        records.delete(note)
+
+        const created = records.setContainer(note, new LoroMap())
+
+        created.set('author', `member:${ann}`)
+        created.set('text', 'hello')
+      })
+
+      expect(validated.isErr() && validated.error).toEqual({
+        reason: 'invalid-record',
+        detail: `${key}.text`,
+      })
+    })
+
+    it('refuses a member planting a plain-string text on its own note', () => {
+      const { key, validated } = changed(ann, (records, note) => {
+        noteOf(records, note).set('text', 'mine')
+      })
+
+      expect(validated.isErr() && validated.error).toEqual({
+        reason: 'invalid-record',
+        detail: `${key}.text`,
+      })
+    })
+  })
+
+  it('accepts a write into the mergeable text of a field a live note does not set: it has no path, so no record changed', () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    // The id the mergeable text of the unset field would have, worked out on a copy.
+    const unset = (
+      server.fork().getMap('records').get(`note/${id}`) as LoroMap
+    ).ensureMergeableText('other').id
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: member(bob),
+      schema: replicaSchema,
+      updates: [retargetedText(unset)],
+    })
+
+    expect(validated.isOk()).toBe(true)
+    expect(validated._unsafeUnwrap().plan).toMatchObject({ upserts: [], deletes: [] })
   })
 
   it("refuses removing the author of a member's own note as foreign-owner", () => {

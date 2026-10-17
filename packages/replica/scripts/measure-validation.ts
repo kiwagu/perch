@@ -70,7 +70,7 @@ function authoritativeDocument(count: number): LoroDoc {
     profile.set('identity', owner)
     profile.set('name', `Person ${index}`)
     profile.set('created_at', '2026-10-16T09:00:00.000Z')
-    profile.setContainer('bio', new LoroText()).insert(0, `Bio of person ${index}`)
+    profile.ensureMergeableText('bio').insert(0, `Bio of person ${index}`)
     doc.commit()
   }
 

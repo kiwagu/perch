@@ -68,16 +68,21 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
-  history, a table outside the region, a record that is not a map, `forbidden-action` for a
+  history, a table outside the region, `invalid-record` for a record that is not a map or has
+  a field of a shape its schema does not allow, `forbidden-action` for a
   create, update or delete that `ValidateBatchInput.ability` does not allow on the record, and
   `foreign-owner` for a record that breaks the owner rule: in a private region an identity
   reference other than the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
   member reference is not the pushing member, or an edit that changes the member a record
   references). The ability is judged on the record as it is, the one being updated or deleted
   as it was before the batch and a new one as the batch writes it; a table that declares no
-  abilities refuses every client write. A record the batch leaves as it was is no change and
+  abilities refuses every client write. A record's field shapes are checked first: a text,
+  list or counter field holds the mergeable container of its kind, every other field a plain
+  value, whatever the content. A record the batch leaves as it was is then no change and
   is neither judged nor written, which is what lets a device undo a refused change: the batch
-  that undoes it carries the refused change and its inverse. Bytes Loro throws on are refused
+  that undoes it carries the refused change and its inverse. Such a batch still reaches the
+  document, so a plain field it set and set back wins a later last-writer-wins conflict with a
+  concurrent edit, as any accepted write does. Bytes Loro throws on are refused
   as malformed, never thrown. The check of the roots reads the operations of the
   batch, not its net effect: a write outside the `records` map that a later operation of the
   same batch undid is refused too, as the operations would still be stored and replicated.

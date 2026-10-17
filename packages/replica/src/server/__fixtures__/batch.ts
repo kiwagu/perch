@@ -1,4 +1,4 @@
-import { LoroDoc, LoroMap, LoroText } from 'loro-crdt'
+import { LoroDoc, LoroMap } from 'loro-crdt'
 
 import { OWNER_ABILITY } from '@workspace/kernel'
 
@@ -41,7 +41,7 @@ export function documentWithProfile(name: string): RecordsDoc {
   profile.set('identity', owner)
   profile.set('name', name)
   profile.set('created_at', '2026-10-16T09:00:00.000Z')
-  profile.setContainer('bio', new LoroText()).insert(0, 'Hello')
+  profile.ensureMergeableText('bio').insert(0, 'Hello')
   doc.commit()
 
   return doc

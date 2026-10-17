@@ -1,4 +1,4 @@
-import { type Frontiers, type LoroDoc, LoroMap } from 'loro-crdt'
+import { type Frontiers, isContainer, type LoroDoc, LoroMap } from 'loro-crdt'
 import { err, ok, Result } from 'neverthrow'
 
 import type { Ability, Action } from '@workspace/kernel'
@@ -180,6 +180,48 @@ function foreignRoot(doc: LoroDoc, fork: LoroDoc): Result<string | undefined, Ba
   return ok(undefined)
 }
 
+/** The mergeable container a field of each kind holds; a field of any other kind holds a plain value. */
+const MERGEABLE_KINDS = { text: 'Text', list: 'MovableList', counter: 'Counter' } as const
+
+/** A record as the shape check reads it: its fields and what each holds. */
+interface RecordFields {
+  keys(): readonly unknown[]
+  get(field: string): unknown
+}
+
+/**
+ * The first field of a record whose shape the schema does not allow: a text, list or counter
+ * field holds the mergeable container of its kind, every other field a plain value. A field of
+ * another shape is refused whatever its content: a device writes a text, list or counter field
+ * through its mergeable container and cannot once something else stands there, and a plain
+ * field is written and projected as a value.
+ */
+function misshapenField(
+  schema: ReplicaSchema,
+  table: string,
+  record: RecordFields,
+): string | undefined {
+  return record
+    .keys()
+    .map(String)
+    .find((field) => {
+      const value: unknown = record.get(field)
+      const kind = fieldOf(schema, table, field)?.kind
+      const mergeable =
+        kind === 'text' || kind === 'list' || kind === 'counter' ? MERGEABLE_KINDS[kind] : undefined
+
+      if (!isContainer(value)) {
+        return mergeable !== undefined
+      }
+
+      return (
+        mergeable === undefined ||
+        value.kind() !== mergeable ||
+        !value.id.startsWith(MERGEABLE_ROOT)
+      )
+    })
+}
+
 /** Fields that reference the pushing identity: `identity` in a private region, `member` in a tenant region. */
 function ownerTable(region: RegionRef): string {
   return region.kind === 'tenant' ? 'member' : 'identity'
@@ -219,17 +261,21 @@ function foreignOwner(
 /**
  * Applies a pushed batch to a fork of the authoritative document and checks what it changed:
  * it writes nothing outside the `records` map, and every record it touched belongs to a table
- * of the region, is a map, and keeps the owner rule (`foreignOwner`): in a private region it
- * references no identity but the owner's, in a tenant region a new record names the pushing
- * member and an existing one keeps the members it named, and the member's ability allows the
- * action on the record (`forbidden-action`): a record is judged as it is, the one being
- * changed or deleted as it was, the new one as it is.
- * The result is the plan the region's log accepts: the projection of each touched record,
- * the update bytes and the version after the batch. A record the batch leaves as it was is no
- * change, whatever operations reached it: one it creates and deletes again, or one it changes
- * and changes back. This is what lets a device undo a refused edit or delete: the batch that
- * undoes it carries the refused change and its inverse. A refused batch is a value, never a
- * throw (bytes Loro throws on are `malformed`), and the authoritative document stays as it was
+ * of the region and is a map whose fields have the shapes the schema gives them
+ * (`invalid-record`, judged before anything else about the record). A record the batch leaves
+ * as it was is then no change, whatever operations reached it: one it creates and deletes
+ * again, or one it changes and changes back. This is what lets a device undo a refused edit or
+ * delete: the batch that undoes it carries the refused change and its inverse. Such a batch
+ * still reaches the document, so a plain field it set and set back wins a later
+ * last-writer-wins conflict with a concurrent edit, as any accepted write does. Every other
+ * record keeps the owner rule (`foreignOwner`): in a private region it references no identity
+ * but the owner's, in a tenant region a new record names the pushing member and an existing
+ * one keeps the members it named; and the member's ability allows the action on the record
+ * (`forbidden-action`): a record is judged as it is, the one being changed or deleted as it
+ * was, the new one as it is.
+ * The result is the plan the region's log accepts: the projection of each changed record, the
+ * update bytes and the version after the batch. A refused batch is a value, never a throw
+ * (bytes Loro throws on are `malformed`), and the authoritative document stays as it was
  * either way.
  */
 export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch, BatchRejection> {
@@ -298,6 +344,12 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
 
     if (!(record instanceof LoroMap)) {
       return err({ reason: 'invalid-record', detail: `${entry} is not a map` })
+    }
+
+    const misshapen = misshapenField(input.schema, split.table, record)
+
+    if (misshapen !== undefined) {
+      return err({ reason: 'invalid-record', detail: `${entry}.${misshapen}` })
     }
 
     const value = record.toJSON() as Record<string, unknown>
