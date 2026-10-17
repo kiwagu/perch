@@ -20,6 +20,7 @@ import { DIRECTORY, NAMESPACE } from '../config'
 
 import directoryRows from './__fixtures__/directory-rows.surql'
 import memberClear from './__fixtures__/member-clear.surql'
+import memberForget from './__fixtures__/member-forget.surql'
 import memberRows from './__fixtures__/member-rows.surql'
 import membershipRows from './__fixtures__/membership-rows.surql'
 import namespaceInfo from './__fixtures__/namespace-info.surql'
@@ -123,6 +124,17 @@ async function harness() {
     }
   }
 
+  /** Drops the member row of `identity` from the organisation's database. */
+  const forgetMember = async (key: string, identity: IdentityId) => {
+    const handle = (await databases.acquire(key))._unsafeUnwrap()
+
+    try {
+      await handle.local.db.query(memberForget, { identity })
+    } finally {
+      handle.release()
+    }
+  }
+
   /** Ann creates the organisation, for a test to start from. */
   const founded = async (key = 'acme', name = 'Acme') =>
     (await organisations.create({ identity: ann.id, key, name }))._unsafeUnwrap()
@@ -140,6 +152,7 @@ async function harness() {
     cat,
     membersIn,
     clearMembers,
+    forgetMember,
     founded,
     invited,
   }
@@ -299,6 +312,30 @@ describe('Organisations', () => {
         await organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
       )._unsafeUnwrapErr(),
     ).toEqual(refused('already-member'))
+    expect(heard).toEqual([])
+  })
+
+  it('restores the member rows of identities already in when they are invited again, with the roles the directory holds', async () => {
+    const { organisations, ann, bob, heard, membersIn, forgetMember, founded, invited } =
+      await harness()
+
+    await founded()
+    await invited('bob@example.test')
+    // An invite that failed after the directory membership leaves no member row behind.
+    await forgetMember('acme', bob.id)
+    await forgetMember('acme', ann.id)
+    heard.splice(0)
+
+    for (const email of ['bob@example.test', 'ann@example.test']) {
+      expect(
+        (await organisations.invite({ actor: ann.id, key: 'acme', email }))._unsafeUnwrapErr(),
+      ).toEqual(refused('already-member'))
+    }
+
+    expect(await membersIn('acme')).toEqual([
+      { identity: ann.id, role: 'admin' },
+      { identity: bob.id, role: 'member' },
+    ])
     expect(heard).toEqual([])
   })
 

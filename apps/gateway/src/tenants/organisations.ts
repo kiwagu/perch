@@ -24,6 +24,7 @@ import memberRemoveStatement from './surql/member-remove.surql'
 import membersOfStatement from './surql/members-of.surql'
 import membershipAddStatement from './surql/membership-add.surql'
 import membershipRemoveStatement from './surql/membership-remove.surql'
+import membershipRoleStatement from './surql/membership-role.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import tenantByKeyStatement from './surql/tenant-by-key.surql'
 import tenantCreateStatement from './surql/tenant-create.surql'
@@ -153,7 +154,8 @@ function toMembership(row: MembershipRow): Membership {
  * word its data is checked against. Creating an organisation writes its directory rows, defines
  * its database, adds the creator as its admin member there and marks it ready; until then it is
  * nobody's, and its creator may run the creation again to finish it. A command that fails with
- * a `DataError` after some of its rows were written leaves those rows in place.
+ * a `DataError` after some of its rows were written leaves those rows in place, and asking again
+ * completes it: a creation by its creator, an invite, a removal.
  */
 export class Organisations {
   readonly #directory: LocalDb
@@ -202,7 +204,12 @@ export class Organisations {
       .andThen((tenant) => this.#emit(identity).map((): Membership => ({ tenant, role: 'admin' })))
   }
 
-  /** An admin of the organisation adds the identity that signs in with `email` as a member. */
+  /**
+   * An admin of the organisation adds the identity that signs in with `email` as a member. An
+   * identity already in is refused, once its member row in the organisation's database is
+   * written again with the role the directory holds: asking again completes an invite that
+   * failed after the directory's membership.
+   */
   invite(input: {
     actor: IdentityId
     key: string
@@ -217,14 +224,7 @@ export class Organisations {
           this.#join(tenant, identity.id).map(() => identity),
         ),
       )
-      .andThen((identity) =>
-        this.#inTenant(key, (local) =>
-          writing(
-            local.db.query(memberAddStatement, { identity: identity.id, role: 'member' }).retry(),
-            `could not add ${identity.id} to the members of ${key}`,
-          ),
-        ).map(() => identity),
-      )
+      .andThen((identity) => this.#addMember(key, identity.id, 'member').map(() => identity))
       .andThen((identity) =>
         this.#emit(identity.id).map((): Member => ({ identity, role: 'member' })),
       )
@@ -342,14 +342,7 @@ export class Organisations {
       this.#directory.db.query(tenantDefineStatement, { database: tenantDatabase(key) }).retry(),
       `could not define the database of ${key}`,
     )
-      .andThen(() =>
-        this.#inTenant(key, (local) =>
-          writing(
-            local.db.query(memberAddStatement, { identity, role: 'admin' }).retry(),
-            `could not add the creator of ${key} to its members`,
-          ),
-        ),
-      )
+      .andThen(() => this.#addMember(key, identity, 'admin'))
       .andThen(() =>
         writing(
           this.#directory.db.query(tenantReadyStatement, { id: tenant.id }).retry(),
@@ -400,7 +393,10 @@ export class Organisations {
     )
   }
 
-  /** The directory's membership of `identity` in the organisation, as a member. */
+  /**
+   * The directory's membership of `identity` in the organisation, as a member; one it already
+   * has is refused once its member row is restored.
+   */
   #join(tenant: Tenant, identity: IdentityId): ResultAsync<void, OrganisationError> {
     return writing(
       this.#directory.db
@@ -415,8 +411,38 @@ export class Organisations {
     )
       .map(() => undefined)
       .orElse((error) =>
-        takenIn('membership_identity_tenant', error) ? err(refused('already-member')) : err(error),
+        takenIn('membership_identity_tenant', error)
+          ? this.#restoreMember(tenant, identity).andThen(() =>
+              errAsync<void, OrganisationError>(refused('already-member')),
+            )
+          : errAsync(error),
       )
+  }
+
+  /**
+   * Writes the member row of an identity the directory already counts in the organisation, with
+   * the role the directory holds; nothing when its membership is gone.
+   */
+  #restoreMember(tenant: Tenant, identity: IdentityId): ResultAsync<void, DataError> {
+    return reading(
+      this.#directory.db.query<[TenantRole | undefined]>(membershipRoleStatement, {
+        identity: recordId('identity', identity),
+        tenant: recordId('tenant', tenant.id),
+      }),
+      `could not read the role of ${identity} in ${tenant.key}`,
+    ).andThen(([role]) =>
+      role === undefined ? okAsync(undefined) : this.#addMember(tenant.key, identity, role),
+    )
+  }
+
+  /** Writes the member row of `identity` with `role` in the organisation's database. */
+  #addMember(key: string, identity: IdentityId, role: TenantRole): ResultAsync<void, DataError> {
+    return this.#inTenant(key, (local) =>
+      writing(
+        local.db.query(memberAddStatement, { identity, role }).retry(),
+        `could not add ${identity} to the members of ${key}`,
+      ),
+    ).map(() => undefined)
   }
 
   /** The members with the emails the directory holds for their identities, in the same order. */
