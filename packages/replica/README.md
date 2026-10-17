@@ -94,7 +94,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   other close after it asked, or none within 10 seconds, stops the transport and answers
   `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
-  tells that such a sign-out stopped the channel, after which only a new engine syncs).
+  tells that such a sign-out stopped the channel, after which only a new engine syncs; `reconnect()`
+  asks the transport to connect again at once, so the gateway welcomes the device anew with fresh keys).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
@@ -118,7 +119,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
   into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
-  `settled` and `sign-out` hints between tabs over a `BroadcastChannel` and ignores anything
+  `settled`, `sign-out` and `renew` (a tab asks the leader to renew the keys) hints between tabs over a `BroadcastChannel` and ignores anything
   else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;

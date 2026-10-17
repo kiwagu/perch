@@ -13,10 +13,12 @@ modeling stage.
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
   is opened while nobody is signed in. Signing up or in goes through the gateway
   (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin); the
-  identity and its keys are kept in local storage, and the identity's space opens
+  identity, its keys and its memberships (`perch.session.memberships`, the current tenant in
+  `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
   projector, write path). A reload opens the saved identity's space without the network.
-  One tab per browser leads the identity's sync through a Web Lock and runs the sync
+  `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations` routes with
+  the access token, renewing it once on a 401 and mapping refusals to `data:` errors. One tab per browser leads the identity's sync through a Web Lock and runs the sync
   engine over the gateway's WebSocket (`/backend/sync`), keeping every renewed pair of
   keys; the tabs hint each other over a BroadcastChannel, so each reads what the others
   wrote or imported. Signing out takes the lead, drains, has the gateway sign the device

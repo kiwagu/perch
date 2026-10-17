@@ -28,9 +28,9 @@ export function fakeGatewayAuth(): GatewayAuth {
 
       const identity = { id: identityIdFactory.create(), email: input.email }
 
-      accounts.set(input.email, { device: { identity }, password: input.password })
+      accounts.set(input.email, { device: { identity, memberships: [] }, password: input.password })
 
-      return okAsync({ identity, tokens: keys() })
+      return okAsync({ identity, tokens: keys(), memberships: [] })
     },
     signIn: (input) => {
       const account = accounts.get(input.email)

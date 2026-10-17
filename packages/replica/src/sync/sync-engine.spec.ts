@@ -469,4 +469,12 @@ describe('sync engine', () => {
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
+
+  it('reconnect() asks the transport to connect again', async () => {
+    const { a } = await twoDevices()
+
+    a.engine.reconnect()
+
+    expect(a.transport.reconnects()).toBe(1)
+  })
 })

@@ -22,6 +22,7 @@ import { memoryStorage, saveDevice } from './storage'
 const ann: SignedInDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  memberships: [],
 }
 
 const annSignUp = { email: 'ann@example.test', password: 'pass-word-1' }

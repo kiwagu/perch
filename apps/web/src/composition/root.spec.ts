@@ -76,6 +76,7 @@ async function boot(
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  memberships: [],
 }
 
 describe('createAppRoot', () => {
