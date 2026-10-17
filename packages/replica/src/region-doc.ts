@@ -383,10 +383,19 @@ export class RegionDoc {
     return this.#store?.acknowledge(seq) ?? okAsync(undefined)
   }
 
-  /** Imports update-log rows other tabs appended since this document last looked; resolves to how many. */
+  /**
+   * Imports update-log rows other tabs appended since this document last looked; resolves to
+   * how many rows it read. The rows include this document's own, which change nothing. They
+   * are imported one at a time: a batch that holds updates the document already has makes
+   * Loro announce the change as a checkout, which a projector rightly does not follow.
+   */
   catchUpLocal(): ResultAsync<number, DataError> {
     return (
-      this.#store?.catchUp((updates) => this.#settle(this.doc.importBatch(updates))) ?? okAsync(0)
+      this.#store?.catchUp((updates) => {
+        for (const update of updates) {
+          this.#settle(this.doc.import(update))
+        }
+      }) ?? okAsync(0)
     )
   }
 

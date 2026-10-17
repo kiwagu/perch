@@ -275,6 +275,26 @@ describe('RegionDoc sync state', () => {
     expect(second.recordJson(key)).toMatchObject({ name: 'Ann' })
   })
 
+  it('announces a catch-up as an import, also when it reads its own rows again', async () => {
+    const first = await open()
+    const second = await open()
+    const seen: string[] = []
+
+    writeName(second, 'Beto', otherKey)
+    expect((await second.flush()).isOk()).toBe(true)
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+    second.doc.subscribe((batch) => seen.push(batch.by))
+
+    // The log holds the second tab's own row before the first tab's; a projector follows
+    // imports only, never checkouts, so a catch-up must not read as a checkout.
+    expect((await second.catchUpLocal())._unsafeUnwrap()).toBe(2)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(seen).toEqual(['import'])
+    expect(second.recordJson(key)).toMatchObject({ name: 'Ann' })
+  })
+
   it('compacts only the log rows it has read, catching up with other tabs first', async () => {
     const first = await open()
     const second = await open()
