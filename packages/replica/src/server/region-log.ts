@@ -3,6 +3,7 @@ import { err, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 
+import { messageOf } from '../failure'
 import type { CompactionOutcome } from '../protocol'
 
 import acceptStatement from './surql/server-accept.surql'
@@ -68,11 +69,6 @@ const COMPACTION_REFUSALS: ReadonlyArray<readonly [thrown: string, CompactionOut
 
 /** What the accept transaction throws for a record of another region: `ownership:<entry>`. */
 const OWNERSHIP_REFUSAL = /ownership:(\S+)$/
-
-/** The text of a failure's cause, such as the message the database gave. */
-export function messageOf(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause)
-}
 
 function breaksSchemaRule(cause: unknown): boolean {
   const message = messageOf(cause)

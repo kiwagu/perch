@@ -11,10 +11,13 @@ import {
   type DataError,
   type DataErrorCode,
   dataError,
+  fromDriverValue,
   type LocalDb,
   type Region,
+  recordId,
 } from '@workspace/data'
 
+import { messageOf } from './failure'
 import localTailStatement from './surql/local-tail.surql'
 import outboxAckStatement from './surql/outbox-ack.surql'
 import outboxReadStatement from './surql/outbox-read.surql'
@@ -36,6 +39,8 @@ export interface OpenRegionOptions {
 
 /** A local update not yet acknowledged by a server, under its number in the update log. */
 export interface OutboxRow {
+  /** The row's own key in the outbox, opaque: acknowledging the row deletes exactly it. */
+  readonly id: string
   readonly seq: number
   readonly bytes: Uint8Array
 }
@@ -45,15 +50,28 @@ export interface ImportOutcome {
   readonly complete: boolean
 }
 
-/** A row of the update log or the outbox as the driver returns it: bytes arrive as an ArrayBuffer. */
+/** A row of the update log as the driver returns it: bytes arrive as an ArrayBuffer. */
 interface StoredRow {
   readonly seq: number
   readonly bytes: ArrayBuffer
 }
 
-function toRow(row: StoredRow): OutboxRow {
-  return { seq: row.seq, bytes: new Uint8Array(row.bytes) }
+/** A row of the outbox as the driver returns it, with its record id. */
+interface StoredOutboxRow extends StoredRow {
+  readonly id: unknown
 }
+
+const OUTBOX = '_replica_outbox'
+
+function toRow(row: StoredOutboxRow): OutboxRow {
+  return { id: String(fromDriverValue(row.id)), seq: row.seq, bytes: new Uint8Array(row.bytes) }
+}
+
+/** How SurrealDB words a row under a number another writer on the database took first. */
+const NUMBER_TAKEN = /Database index `replica_(?:update|outbox)_seq` already contains /
+
+/** How many times in a row a write that lost its number to another writer is sent. */
+const NUMBER_ATTEMPTS = 5
 
 function randomPeerId(): bigint {
   const bytes = crypto.getRandomValues(new Uint8Array(8))
@@ -156,13 +174,17 @@ class RegionStore {
       { region: this.region, limit },
       'data:QUERY_FAILED',
       `could not read the outbox of ${this.region}`,
-    ).map(([rows]) => (rows as StoredRow[]).map(toRow))
+    ).map(([rows]) => (rows as StoredOutboxRow[]).map(toRow))
   }
 
-  acknowledge(seq: number): ResultAsync<void, DataError> {
+  acknowledge(rows: readonly OutboxRow[]): ResultAsync<void, DataError> {
+    if (rows.length === 0) {
+      return okAsync(undefined)
+    }
+
     return this.#query(
       outboxAckStatement,
-      { region: this.region, seq },
+      { ids: rows.map((row) => recordId(OUTBOX, row.id)) },
       'data:WRITE_FAILED',
       `could not drop acknowledged updates of ${this.region}`,
     ).map(() => undefined)
@@ -196,21 +218,35 @@ class RegionStore {
     })
   }
 
-  /**
-   * Runs one statement or one transaction of this store. Tabs on one database write the
-   * same head and cursor rows, so the database may refuse one of two concurrent
-   * transactions as a conflict; each of these is safe to replay, and the driver retries it.
-   */
   #query(
     statement: string,
     vars: Record<string, unknown>,
     code: DataErrorCode,
     message: string,
   ): ResultAsync<unknown[], DataError> {
-    return ResultAsync.fromPromise(
-      this.local.db.query(statement, vars).retry() as PromiseLike<unknown[]>,
-      (cause) => dataError(code, message, cause),
+    return ResultAsync.fromPromise(this.#send(statement, vars), (cause) =>
+      dataError(code, message, cause),
     )
+  }
+
+  /**
+   * Sends one statement or one transaction of this store. Tabs on one database write the
+   * same head and cursor rows, so the database may refuse one of two concurrent
+   * transactions as a conflict; each of these is safe to replay, and the driver retries it.
+   * Tabs of a browser each run an engine of their own on the shared database, and two
+   * engines may both take the next number: the log's unique number refuses the later write,
+   * which is sent again at once and takes the number after.
+   */
+  async #send(statement: string, vars: Record<string, unknown>): Promise<unknown[]> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return (await this.local.db.query(statement, vars).retry()) as unknown[]
+      } catch (cause) {
+        if (attempt >= NUMBER_ATTEMPTS || !NUMBER_TAKEN.test(messageOf(cause))) {
+          throw cause
+        }
+      }
+    }
   }
 
   #drain(): Promise<void> {
@@ -227,9 +263,7 @@ class RegionStore {
 
       try {
         // Replayed on a conflict with another tab's append, as in `#query`.
-        results = await this.local.db
-          .query(appendStatement, { region: this.region, bytes: next })
-          .retry()
+        results = await this.#send(appendStatement, { region: this.region, bytes: next })
       } catch (cause) {
         this.#failure = dataError(
           'data:WRITE_FAILED',
@@ -378,9 +412,9 @@ export class RegionDoc {
     return this.#store?.outbox(limit) ?? okAsync([])
   }
 
-  /** Drops outbox rows up to and including `seq` once the server acknowledged them. */
-  acknowledge(seq: number): ResultAsync<void, DataError> {
-    return this.#store?.acknowledge(seq) ?? okAsync(undefined)
+  /** Drops exactly these outbox rows once the server acknowledged them. */
+  acknowledge(rows: readonly OutboxRow[]): ResultAsync<void, DataError> {
+    return this.#store?.acknowledge(rows) ?? okAsync(undefined)
   }
 
   /**

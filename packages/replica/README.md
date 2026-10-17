@@ -7,7 +7,9 @@ access region; the local SurrealDB is a materialized view of those documents. Co
 compiled from `.surql` run here as document operations in one commit, the projector
 writes each touched record into the local database and announces the change, and every
 local update is stored durably in the local database before it counts as persisted. The
-local database numbers each region's update log, so tabs sharing it never reuse a number;
+local database numbers each region's update log, so tabs sharing it never reuse a number (a
+number is unique per region; a write that lost its number to another tab's engine is sent
+again at once under the next one);
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
@@ -27,7 +29,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`,
   `close()`. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
   the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
-  `outbox(limit)` of `OutboxRow`s, `acknowledge(seq)`, and `catchUpLocal()`, which imports
+  `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
+  exactly those rows by id, and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
   an import.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
@@ -56,8 +59,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   for a compaction, `onError`): `subscribe(region, owner, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
-  (`foreign-owner` for a record of another region) and sends the batch to the other subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`,
-  `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+  (`foreign-owner` for a record of another region) and sends the batch to the other
+  subscribers, `pull`, `compact`, `heads(regions)`, `unsubscribe`, `loadedRegions()`,
+  `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty and every region has its first answer on the current connection, `signOut()` that
@@ -67,11 +71,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives the connection up and connects again from the
-  first delay; renewed keys to `onTokens`, `onEnded` with an `EndReason` when the
-  keys (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out;
-  the engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
-  import and pull, push with acknowledgement or rollback, compaction proposals; a push or pull
-  answered with an error or unanswered for 30 seconds is given up for now and sent again, and
+  first delay; renewed keys to `onTokens`, `onEnded` with an `EndReason` when the keys
+  (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out; the
+  engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port;
+  `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
+  compaction proposals; a push or pull answered with an error or unanswered for 30 seconds is
+  given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
   import that fails pulls at once and on every full pass until an answer imports in full; only
   the ack of a first push moves the cursor);
@@ -84,11 +89,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given
-  database and, per device, a `StubTransport` that behaves like the gateway's connection without
-  a network, can go offline and come back, and counts its `reconnects()`; `dropNextFanOutTo`, `rejectEverything`,
-  `swallowNextPush`, `swallowNextProbe`, `refuseNextPull`, `keepOpenOnSignOut`, `endWith(reason)` (the gateway
-  refuses the keys or the protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and
-  `failures` steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
+  database and, per device, a `StubTransport` that behaves like the gateway's connection
+  without a network, can go offline and come back, and counts its `reconnects()`;
+  `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
+  `refuseNextPull`, `keepOpenOnSignOut`, `endWith(reason)` (the gateway refuses the keys or the
+  protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
+  steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
   lock and `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned

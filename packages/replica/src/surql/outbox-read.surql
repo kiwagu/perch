@@ -1,5 +1,7 @@
-SELECT seq,
-bytes
+SELECT
+  id,
+  seq,
+  bytes
 FROM _replica_outbox
 WHERE region = $region
 ORDER BY seq

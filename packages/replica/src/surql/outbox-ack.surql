@@ -1,4 +1,3 @@
-DELETE _replica_outbox
-WHERE
-  region = $region
-  AND seq <= $seq;
+-- Exactly the rows the server acknowledged, by record id: a number alone may be shared by a
+-- row another engine on the same database appended concurrently.
+DELETE $ids;

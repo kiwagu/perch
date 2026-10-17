@@ -5,6 +5,8 @@ import type { LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import acceptAppends from './__fixtures__/accept-appends.surql'
+import bumpHeadStatement from './__fixtures__/bump-head.surql'
+import duplicateSeqStatement from './__fixtures__/duplicate-seq.surql'
 import {
   createProfile,
   identityId,
@@ -16,6 +18,7 @@ import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import coversStatement from './__fixtures__/snapshot-covers.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
+import appendStatement from './surql/replica-append.surql'
 import { LoroWritePath } from './write-path'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
@@ -95,6 +98,38 @@ describe('RegionDoc persistence', () => {
 
     expect(reopened.recordJson(key)).toMatchObject({ name: 'Anna', email: 'ann@example.test' })
     expect(await counts()).toEqual({ snapshots: 0, updates: 2, outbox: 2 })
+  })
+
+  it('writes an update again at once under the next number when another engine took its number', async () => {
+    let attempts = 0
+    // Two engines on one database (the tabs of a browser): the other one commits row 1 while
+    // this one still reads the head before it, then its head shows by the time this one replays.
+    const racing = interceptQueries(local, async (text) => {
+      if (text !== appendStatement) {
+        return
+      }
+
+      attempts += 1
+
+      if (attempts === 1) {
+        await local.db.query(duplicateSeqStatement, {
+          table: '_replica_update',
+          region: ref.id,
+          seq: 1,
+          bytes: new Uint8Array([1]),
+        })
+      } else if (attempts === 2) {
+        await local.db.query(bumpHeadStatement, { region: ref.id, head: 1 })
+      }
+    })
+    const region = (await RegionDoc.open(racing, ref))._unsafeUnwrap()
+
+    writeName(region, 'Ann')
+
+    expect((await region.flush()).isOk()).toBe(true)
+    expect(attempts).toBe(2)
+    expect(region.persistedSeq()).toBe(2)
+    expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([2])
   })
 
   it('restores the document from the local database', async () => {
@@ -254,14 +289,38 @@ describe('RegionDoc sync state', () => {
     const first = await open()
     const second = await open()
 
-    writeName(first, 'Ann')
-    writeName(second, 'Beto')
+    for (let n = 0; n < 10; n += 1) {
+      writeName(first, `Ann ${n}`)
+      writeName(second, `Beto ${n}`, otherKey)
+    }
+
     expect((await first.flush()).isOk()).toBe(true)
     expect((await second.flush()).isOk()).toBe(true)
 
-    const rows = (await first.outbox(10))._unsafeUnwrap()
+    const rows = (await first.outbox(100))._unsafeUnwrap()
 
-    expect(rows.map((row) => row.seq)).toEqual([1, 2])
+    expect(rows.map((row) => row.seq)).toEqual(Array.from({ length: 20 }, (_, n) => n + 1))
+    expect(new Set(rows.map((row) => row.id)).size).toBe(20)
+    expect(await counts()).toEqual({ snapshots: 0, updates: 20, outbox: 20 })
+  })
+
+  it.each([
+    ['_replica_update', 'replica_update_seq'],
+    ['_replica_outbox', 'replica_outbox_seq'],
+  ])('refuses a second row of %s under a number the region already holds', async (table, index) => {
+    const region = await open()
+
+    writeName(region, 'Ann')
+    expect((await region.flush()).isOk()).toBe(true)
+
+    await expect(
+      local.db.query(duplicateSeqStatement, {
+        table,
+        region: ref.id,
+        seq: 1,
+        bytes: new Uint8Array([1]),
+      }),
+    ).rejects.toThrow(index)
   })
 
   it('imports what another tab appended', async () => {
@@ -333,8 +392,26 @@ describe('RegionDoc sync state', () => {
     writeName(region, 'Ana')
     expect((await region.flush()).isOk()).toBe(true)
 
-    expect((await region.acknowledge(1)).isOk()).toBe(true)
+    const [first] = (await region.outbox(10))._unsafeUnwrap()
+
+    expect((await region.acknowledge(first ? [first] : [])).isOk()).toBe(true)
 
     expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([2])
+  })
+
+  it('drops exactly the rows acknowledged, never one under a lower number that was not pushed', async () => {
+    const region = await open()
+
+    writeName(region, 'Ann')
+    writeName(region, 'Ana')
+    writeName(region, 'Anna')
+    expect((await region.flush()).isOk()).toBe(true)
+
+    const rows = (await region.outbox(10))._unsafeUnwrap()
+
+    expect(rows.every((row) => typeof row.id === 'string' && row.id.length > 0)).toBe(true)
+    expect((await region.acknowledge(rows.slice(2))).isOk()).toBe(true)
+
+    expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([1, 2])
   })
 })

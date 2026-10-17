@@ -141,6 +141,8 @@ export class RegionSync implements DrainTarget {
   #lost = false
   /** The last batch given up without an answer: a push of rows up to it may be a redelivery. */
   #givenUpThrough = 0
+  /** The rows of each batch pushed and not acknowledged yet, also after it was given up. */
+  readonly #pushed = new Map<number, readonly OutboxRow[]>()
   /** A compaction proposal went out and its outcome has not arrived. */
   #compacting = false
   /** The last outbox row a rollback covered: a batch rejected again from there stops the region. */
@@ -274,6 +276,7 @@ export class RegionSync implements DrainTarget {
     }
 
     this.#flight = flight
+    this.#pushed.set(flight.batch, flight.rows)
 
     if (
       !this.#transport.send({
@@ -385,11 +388,21 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
-   * The server holds the batch and every row before it, so they leave the outbox, also when
-   * the push was given up meanwhile; only the push in flight lands.
+   * The server holds the batch, so the rows pushed in it leave the outbox, also when the push
+   * was given up meanwhile; only the push in flight lands. Rows are dropped by id, never by
+   * number: another engine on the same database may hold a row under a number this one pushed.
    */
   async #acknowledged(batch: number, head: number, compact: boolean): Promise<void> {
-    const acknowledged = await this.#region.acknowledge(batch)
+    const rows = this.#pushed.get(batch) ?? []
+
+    // A batch covers the batches before it that were pushed again inside it.
+    for (const pushed of this.#pushed.keys()) {
+      if (pushed <= batch) {
+        this.#pushed.delete(pushed)
+      }
+    }
+
+    const acknowledged = await this.#region.acknowledge(rows)
 
     if (acknowledged.isErr()) {
       // The rows stay in the outbox and go out again; the server acknowledges them as known.

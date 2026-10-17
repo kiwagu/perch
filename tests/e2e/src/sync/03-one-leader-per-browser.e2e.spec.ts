@@ -9,12 +9,14 @@ const leading = (tabs: readonly Page[]): Promise<Array<string | null>> =>
   Promise.all(tabs.map((tab) => tab.locator('html').getAttribute('data-sync-leader')))
 
 test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
-  test('Two tabs of one browser share one sync leader, and the other tab takes over when the leader closes', async ({
+  test("Two tabs of one browser share one sync leader, both tabs' edits reach the other device, and the other tab takes over when the leader closes", async ({
     page,
     secondDevice,
   }) => {
     const data = {
       newName: generate.newName(),
+      secondName: generate.newName(),
+      bio: generate.bio(),
     }
 
     await test.step('1. On device A, open "/me" in a first tab and wait for the app to be ready', async () => {
@@ -70,12 +72,30 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
       })
     })
 
-    await test.step('5. Close the tab of device A that leads the sync', async () => {
+    await test.step('5. On device A, enter the second name in the tab that leads the sync and the bio in the other tab, then click "Save" in both tabs at the same moment', async () => {
+      await leader.getByTestId('user.profile.name-input').fill(data.secondName)
+      await follower.getByTestId('user.profile.bio-input').fill(data.bio)
+      // Both tabs append to the browser's one update log at once: neither edit may be lost.
+      await Promise.all([
+        leader.getByTestId('user.profile.save').click(),
+        follower.getByTestId('user.profile.save').click(),
+      ])
+      // Expected: within 5 seconds of step 5 device B shows the second name and the bio: the
+      // edit of each tab arrives
+      await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.secondName, {
+        timeout: 5_000,
+      })
+      await expect(deviceB.getByTestId('user.profile.bio-input')).toHaveValue(data.bio, {
+        timeout: 5_000,
+      })
+    })
+
+    await test.step('6. Close the tab of device A that leads the sync', async () => {
       await leader.close()
     })
 
     // Expected:
-    // - Within 2 seconds of step 5 the remaining tab of device A leads the sync, and its sync channel then comes up
+    // - Within 2 seconds of step 6 the remaining tab of device A leads the sync, and its sync channel then comes up
     await expect(follower.locator('html')).toHaveAttribute('data-sync-leader', '1', {
       timeout: 2_000,
     })

@@ -12,6 +12,8 @@ DEFINE FIELD OVERWRITE bytes ON _replica_snapshot TYPE bytes;
 DEFINE FIELD OVERWRITE version ON _replica_snapshot TYPE bytes;
 DEFINE FIELD OVERWRITE covers ON _replica_snapshot TYPE int DEFAULT 0;
 
+DEFINE INDEX OVERWRITE replica_snapshot_region ON _replica_snapshot FIELDS region;
+
 -- @replicate none
 DEFINE TABLE OVERWRITE _replica_update SCHEMAFULL PERMISSIONS NONE;
 DEFINE FIELD OVERWRITE region ON _replica_update TYPE string;
@@ -19,11 +21,19 @@ DEFINE FIELD OVERWRITE seq ON _replica_update TYPE int;
 DEFINE FIELD OVERWRITE bytes ON _replica_update TYPE bytes;
 DEFINE FIELD OVERWRITE version ON _replica_update TYPE option<bytes>;
 
+-- A number is a region's own: a second row under it, which two writers racing on one
+-- database could otherwise leave behind, fails its transaction, which is then replayed.
+DEFINE INDEX OVERWRITE replica_update_seq ON _replica_update FIELDS region, seq
+  UNIQUE;
+
 -- @replicate none
 DEFINE TABLE OVERWRITE _replica_outbox SCHEMAFULL PERMISSIONS NONE;
 DEFINE FIELD OVERWRITE region ON _replica_outbox TYPE string;
 DEFINE FIELD OVERWRITE seq ON _replica_outbox TYPE int;
 DEFINE FIELD OVERWRITE bytes ON _replica_outbox TYPE bytes;
+
+DEFINE INDEX OVERWRITE replica_outbox_seq ON _replica_outbox FIELDS region, seq
+  UNIQUE;
 
 -- Which records of each region the projector has written into their tables, kept in
 -- the same transaction as each write, so a deletion that failed can still be found
@@ -32,6 +42,8 @@ DEFINE FIELD OVERWRITE bytes ON _replica_outbox TYPE bytes;
 DEFINE TABLE OVERWRITE _replica_projected SCHEMAFULL PERMISSIONS NONE;
 DEFINE FIELD OVERWRITE region ON _replica_projected TYPE string;
 DEFINE FIELD OVERWRITE key ON _replica_projected TYPE string;
+
+DEFINE INDEX OVERWRITE replica_projected_region ON _replica_projected FIELDS region;
 
 -- @replicate none
 DEFINE TABLE OVERWRITE _replica_head SCHEMAFULL PERMISSIONS NONE;

@@ -4,12 +4,13 @@ import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { messageOf } from '../failure'
 import type { CompactionOutcome, RejectReason, ServerMessage } from '../protocol'
 import type { RegionRef } from '../region-doc'
 import type { ReplicaSchema } from '../schema'
 
 import { validateBatch } from './batch-validator'
-import { messageOf, RegionLog } from './region-log'
+import { RegionLog } from './region-log'
 import headsStatement from './surql/server-heads.surql'
 
 /** One device's end of its subscriptions. */
