@@ -21,4 +21,5 @@ export const generate = {
   password: (): string => generate.account().password,
   name: (): string => `${preset?.name ?? 'E2E User'} ${run()}`,
   newName: (): string => `Renamed ${run()}`,
+  bio: (): string => `Bio written in run ${run()}`,
 }

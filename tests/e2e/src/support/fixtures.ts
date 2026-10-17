@@ -1,4 +1,10 @@
-import { test as base, expect, type Page, type TestStepInfo } from '@playwright/test'
+import {
+  type BrowserContext,
+  test as base,
+  expect,
+  type Page,
+  type TestStepInfo,
+} from '@playwright/test'
 
 import type { SeedAccount } from '@workspace/seed/catalog'
 
@@ -6,9 +12,21 @@ import { generate } from './data'
 
 export { expect }
 
+/**
+ * Device B: a second browser (a context of its own, so its own storage, Web Locks and
+ * BroadcastChannel) for the account of `signedIn`. Nothing opens until a test asks.
+ */
+export interface SecondDevice {
+  /** The device's page before it opens the app, for anything that must come first. */
+  open(): Promise<Page>
+  /** Signs the device in with the `signedIn` account through the sign-in page, on `/me`. */
+  signIn(): Promise<Page>
+}
+
 interface Fixtures {
-  /** A user who has just signed up through the sign-in page and landed on `/me`. */
+  /** A user who has just signed up through the sign-in page and landed on `/me` (device A). */
   readonly signedIn: SeedAccount
+  readonly secondDevice: SecondDevice
 }
 
 /** Waits until the shell says the local database is open. */
@@ -16,13 +34,24 @@ export async function appReady(page: Page): Promise<void> {
   await page.getByTestId('app-shell.ready').waitFor({ state: 'attached' })
 }
 
-let currentPage: Page | undefined
+/** Signs in with an existing account through the sign-in page and waits for `/me`. */
+export async function signIn(page: Page, account: SeedAccount): Promise<void> {
+  await page.goto('/sign-in')
+  await appReady(page)
+  await page.getByTestId('user.sign-in.email').fill(account.email)
+  await page.getByTestId('user.sign-in.password').fill(account.password)
+  await page.getByTestId('user.sign-in.submit').click()
+  await page.waitForURL('**/me')
+}
+
+/** The browsers of the running test: the step check looks at every page they have open. */
+const browsers = new Set<BrowserContext>()
 
 const extended = base.extend<Fixtures>({
   page: async ({ page }, use) => {
-    currentPage = page
+    browsers.add(page.context())
     await use(page)
-    currentPage = undefined
+    browsers.clear()
   },
   signedIn: async ({ page }, use) => {
     const account = { ...generate.account(), name: generate.name() }
@@ -37,6 +66,38 @@ const extended = base.extend<Fixtures>({
     await page.waitForURL('**/me')
     await use(account)
   },
+  secondDevice: async ({ browser, contextOptions, signedIn }, use) => {
+    let opened: Promise<Page> | undefined
+    // Playwright Test gives every context of a test the project's options (the device
+    // emulated, the base URL, the front's certificate) on top of these.
+    const open = (): Promise<Page> => {
+      opened ??= browser.newContext(contextOptions).then((context) => {
+        browsers.add(context)
+
+        return context.newPage()
+      })
+
+      return opened
+    }
+
+    await use({
+      open,
+      signIn: async () => {
+        const page = await open()
+
+        await signIn(page, signedIn)
+
+        return page
+      },
+    })
+
+    if (opened) {
+      const context = (await opened).context()
+
+      browsers.delete(context)
+      await context.close()
+    }
+  },
 })
 
 const originalStep = extended.step
@@ -48,7 +109,7 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
     clientWidth: document.documentElement.clientWidth,
   }))
 
-  expect(scrollWidth, 'the page scrolls sideways').toBeLessThanOrEqual(clientWidth)
+  expect(scrollWidth, `${page.url()} scrolls sideways`).toBeLessThanOrEqual(clientWidth)
 }
 
 extended.step = Object.assign(
@@ -62,8 +123,8 @@ extended.step = Object.assign(
       async (info) => {
         const result = await body(info)
 
-        if (currentPage) {
-          await expectNoHorizontalOverflow(currentPage)
+        for (const page of [...browsers].flatMap((context) => context.pages())) {
+          await expectNoHorizontalOverflow(page)
         }
 
         return result
