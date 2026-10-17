@@ -13,7 +13,8 @@ stand's SurrealDB as a system user on the gateway's database. All seed data uses
 on `example.test`, which is how the sweep finds it. The catalog is standalone, so e2e tests
 generate their data from the same presets. Organisations are seeded after every account
 exists: the administrator signs in, creates the organisation (the key `acme`; a `fresh` seed
-suffixes the run id, `acme_<run>`) and invites the members by email.
+suffixes the run id, `acme_<run>`) and invites the members by email. The gateway smoke test leaves an organisation `smoke_<time>`
+behind, created by an `@example.test` identity, so the sweep removes it too.
 
 ## Key exports
 

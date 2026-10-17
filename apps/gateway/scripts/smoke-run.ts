@@ -10,17 +10,19 @@ import type { Result } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
-import { profileIdFactory } from '@workspace/ids'
+import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { RegionDoc, systemClock } from '@workspace/replica'
-import { CLOSE, PROTOCOL_VERSION } from '@workspace/replica/protocol'
+import { CLOSE, type Membership, membership, PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
 import { gatewayConfig, httpRpcUrl } from '../src/config'
 import { type RunningServer, startServer } from '../src/server'
+import { noteCreate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
 import { SmokeDevice } from './smoke-device'
+import { call, postCredentials, type SignedIn } from './smoke-http'
 
 /** The e2e stand and the gateway user its stand operator defines, for what env leaves out. */
 const E2E_STAND = {
@@ -38,13 +40,6 @@ const smokeConfig = gatewayConfig.pick({
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
-
-const signedIn = z.object({
-  identity: z.object({ id: z.string(), email: z.string() }),
-  tokens: z.object({ access: z.string(), refresh: z.string() }),
-})
-
-type SignedIn = z.output<typeof signedIn>
 
 /** What the run opened, to close at its end whatever happened. */
 interface Opened {
@@ -95,38 +90,30 @@ async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
   }
 }
 
-async function postCredentials(
-  base: string,
-  path: string,
-  credentials: { readonly email: string; readonly password: string },
-): Promise<SignedIn> {
-  const response = await fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
-  })
-  const body: unknown = await response.json()
-
-  check(response.ok, `${path} answered ${response.status} ${JSON.stringify(body)}`)
-
-  return signedIn.parse(body)
-}
-
-async function welcomed(
-  base: string,
-  opened: Opened,
-  { identity, tokens }: SignedIn,
-  head: number,
-): Promise<SmokeDevice> {
+/** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
+async function hello(base: string, opened: Opened, { identity, tokens }: SignedIn) {
   const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
 
   opened.devices.push(device)
   device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens })
 
   const welcome = await device.next('welcome')
-  const region = `identity:${identity.id}`
 
   check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
+
+  return { device, welcome }
+}
+
+async function welcomed(
+  base: string,
+  opened: Opened,
+  signedIn: SignedIn,
+  head: number,
+): Promise<SmokeDevice> {
+  const { device, welcome } = await hello(base, opened, signedIn)
+  const { identity } = signedIn
+  const region = `identity:${identity.id}`
+
   check(
     JSON.stringify(welcome.regions) === JSON.stringify([{ region, head }]),
     `welcomed with ${JSON.stringify(welcome.regions)}`,
@@ -143,6 +130,191 @@ async function takeUpdates(device: SmokeDevice, doc: RegionDoc, snapshot: boolea
   unwrap(await doc.importRemote(updates.bytes, updates.head))
 
   return updates.head
+}
+
+const createdOrganisation = z.object({ membership: membership })
+
+const listedMembers = z.object({
+  members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
+})
+
+/** Whether a welcome's regions name `region`. */
+function hasRegion(regions: readonly { readonly region: string }[], region: string): boolean {
+  return regions.some((entry) => entry.region === region)
+}
+
+function keysOf(memberships: readonly Membership[]): string[] {
+  return memberships.map((entry) => entry.tenant.key)
+}
+
+/**
+ * The organisation path: `owner` creates an organisation and invites a second identity into
+ * it, whose device writes into the organisation's region, is refused a note in another
+ * member's name, and is removed. The organisation and the second identity stay on the stand,
+ * for the sweep of `@example.test` accounts.
+ */
+async function organisationSteps(base: string, opened: Opened, owner: SignedIn): Promise<void> {
+  const key = `smoke_${Date.now().toString(36)}`
+  const region = `tenant:${key}`
+  const token = owner.tokens.access
+
+  await step(`organisation ${key} created: 201 with the owner as admin`, async () => {
+    const answer = await call(base, 'POST', '/organisations', token, { key, name: 'Smoke' })
+
+    check(answer.status === 201, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+
+    const { membership: created } = createdOrganisation.parse(answer.body)
+
+    check(created.tenant.key === key && created.role === 'admin', 'not the admin of the key')
+  })
+
+  const guest: SignedIn = await step('signed up a second identity: no memberships', async () => {
+    const signedUp = await postCredentials(base, '/auth/sign-up', {
+      email: `smoke-${crypto.randomUUID()}@example.test`,
+      password: crypto.randomUUID(),
+    })
+
+    check(signedUp.memberships.length === 0, 'the new identity belongs to an organisation')
+
+    return signedUp
+  })
+
+  await step('the second identity invited: 200', async () => {
+    const answer = await call(base, 'POST', `/organisations/${key}/members`, token, {
+      email: guest.identity.email,
+    })
+
+    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+  })
+
+  const guestDoc = RegionDoc.inMemory('tenant', region)
+  const guestDevice = await step(
+    'invited device welcomed with the organisation region',
+    async () => {
+      const { device, welcome } = await hello(base, opened, guest)
+
+      check(
+        keysOf(welcome.memberships).join() === key,
+        `welcomed with ${JSON.stringify(welcome.memberships)}`,
+      )
+      check(
+        hasRegion(welcome.regions, region),
+        `no ${region} in ${JSON.stringify(welcome.regions)}`,
+      )
+
+      return device
+    },
+  )
+
+  await step(
+    'invited device subscribed to the organisation region: an empty snapshot',
+    async () => {
+      guestDevice.subscribe(region)
+      check((await takeUpdates(guestDevice, guestDoc, true)) === 0, 'the snapshot is not at head 0')
+    },
+  )
+
+  const ownerDoc = RegionDoc.inMemory('tenant', region)
+  const ownerDevice = await step('owner device subscribed to the organisation region', async () => {
+    const { device, welcome } = await hello(base, opened, owner)
+
+    check(hasRegion(welcome.regions, region), `no ${region} in ${JSON.stringify(welcome.regions)}`)
+    device.subscribe(region)
+    check((await takeUpdates(device, ownerDoc, true)) === 0, 'the snapshot is not at head 0')
+
+    return device
+  })
+
+  const noteId = noteIdFactory.create()
+
+  await step('invited device pushed a note: ack at head 1, owner device received it', async () => {
+    const created = await noteCreate(guestDoc, {
+      id: noteId,
+      author: guest.identity.id,
+      text: 'Hello team',
+    })
+
+    guestDevice.push(region, 1, unwrap(created))
+
+    const ack = await guestDevice.next('ack')
+
+    check(ack.batch === 1 && ack.head === 1, `ack of batch ${ack.batch} at head ${ack.head}`)
+    check((await takeUpdates(ownerDevice, ownerDoc, false)) === 1, 'owner got no update at head 1')
+    check(ownerDoc.recordJson(`note/${noteId}`)?.['text'] === 'Hello team', 'no note for the owner')
+  })
+
+  await step("a note in the owner's name is rejected: foreign-owner", async () => {
+    const forged = await noteCreate(guestDoc, {
+      id: noteIdFactory.create(),
+      author: owner.identity.id,
+      text: 'Forged',
+    })
+
+    guestDevice.push(region, 2, unwrap(forged))
+
+    const rejected = await guestDevice.next('reject')
+
+    check(
+      rejected.batch === 2 && rejected.reason === 'foreign-owner',
+      `rejected batch ${rejected.batch} for ${rejected.reason}`,
+    )
+  })
+
+  await step('the second identity removed: 204', async () => {
+    const answer = await call(
+      base,
+      'DELETE',
+      `/organisations/${key}/members/${guest.identity.id}`,
+      token,
+    )
+
+    check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+  })
+
+  await step(
+    `removed device told of no memberships, a pull closes it with ${CLOSE.forbidden}`,
+    async () => {
+      const told = await guestDevice.next('memberships')
+
+      check(told.memberships.length === 0, `told of ${JSON.stringify(told.memberships)}`)
+      guestDevice.send({
+        type: 'pull',
+        region,
+        vv: new Uint8Array(guestDoc.doc.oplogVersion().encode()),
+      })
+
+      const refused = await guestDevice.next('error')
+      const { code } = await guestDevice.closed
+
+      check(refused.code === 'forbidden-region', `refused with ${refused.code}`)
+      check(code === CLOSE.forbidden, `closed with ${code}`)
+    },
+  )
+
+  await step('the members of the organisation no longer list the second identity', async () => {
+    const answer = await call(base, 'GET', `/organisations/${key}/members`, token)
+
+    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+
+    const { members } = listedMembers.parse(answer.body)
+
+    check(members.length > 0, 'no members')
+    check(
+      !members.some((member) => member.identity.id === guest.identity.id),
+      'the second identity is still a member',
+    )
+  })
+
+  await step(`second identity signed out: closed with ${CLOSE.signedOut}`, async () => {
+    const { device, welcome } = await hello(base, opened, guest)
+
+    check(welcome.memberships.length === 0, 'the removed identity still belongs')
+    device.send({ type: 'sign-out', scope: 'device' })
+
+    const { code } = await device.closed
+
+    check(code === CLOSE.signedOut, `closed with ${code}`)
+  })
 }
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
@@ -253,6 +425,8 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
 
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
+
+  await organisationSteps(base, opened, second)
 }
 
 /** Runs the smoke test; resolves to the process's exit code. */

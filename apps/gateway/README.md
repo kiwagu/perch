@@ -77,6 +77,9 @@ stand.
   WebSocket endpoint; by default the e2e stand, `ws://127.0.0.1:8010/rpc`) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
   operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
-  `@example.test` identity and drives two of its devices through sync and sign-out, one
-  line per step.
+  `@example.test` identity and drives two of its devices through sync and sign-out, then
+  the organisation path (an organisation `smoke_<time>` created, a second identity invited,
+  its device writing a note into the organisation's region that the owner's device receives, a
+  note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
+  4403), one line per step.
 - `bun run typecheck`, `bun run lint`.
