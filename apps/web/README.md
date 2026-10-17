@@ -34,7 +34,10 @@ modeling stage.
   being counted once deleted; the count outlives the keys, so whenever the space opens or follows
   the memberships, a counted database of an organisation the identity no longer belongs to is
   deleted even when it is not open (`deleteTenantLocal`): one kept across a sign-out that kept
-  the databases, or one that failed to open. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
+  the databases, or one that failed to open. The memberships are saved before their databases
+  are counted, and a tab deletes none whose organisation the memberships saved for the identity
+  still hold, so a tab following an older list leaves alone a database another tab counted and
+  opened for a newer one. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
   routes with the access token, renewing it once on a 401 and mapping refusals to `data:`
   errors; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
   creates its membership on the device at once. A token is renewed through the leading tab:

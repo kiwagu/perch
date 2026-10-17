@@ -103,7 +103,9 @@ export class SessionOrganisations {
    * The inventory of the organisation databases `identity` has on this device, kept in the
    * storage for the tabs and the sessions to come; each change reads it anew, as other tabs
    * change it too. The storage keeps each identity's apart: a change of this one leaves those
-   * kept for other identities as they are.
+   * kept for other identities as they are. The memberships saved for the identity come with it:
+   * every list is saved before the space counts its databases (`apply`, and the sign-in before
+   * the space opens).
    */
   databases(identity: IdentityId): TenantDatabaseInventory {
     const storage = this.#options.storage
@@ -111,6 +113,7 @@ export class SessionOrganisations {
 
     return {
       keys: kept,
+      savedMemberships: () => savedMemberships(storage, identity),
       add: (keys) => {
         const before = kept()
         const after = [...new Set([...before, ...keys])].sort()
@@ -132,8 +135,9 @@ export class SessionOrganisations {
 
   /**
    * The signed-in identity's memberships changed (the gateway said so, or this device created an
-   * organisation): they are kept for the other tabs, and the space opens or deletes databases to
-   * match; resolves once it has. Nothing changes once another tab signed someone else in.
+   * organisation): they are kept for the other tabs, before the space counts and opens or
+   * deletes databases to match; resolves once it has. Nothing changes once another tab signed
+   * someone else in.
    */
   apply(next: readonly Membership[]): Promise<void> {
     const space = this.#options.open()?.space

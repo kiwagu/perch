@@ -6,7 +6,9 @@
  * organisation databases the device holds for the identity are counted in an inventory that
  * outlives the space, so one the space does not open (kept from an earlier session, or one that
  * failed to open) is still deleted once the identity no longer belongs to its organisation, and
- * when the space is destroyed.
+ * when the space is destroyed. The inventory and the memberships are shared by the identity's
+ * tabs: a tab deletes no database of an organisation the memberships saved for the identity
+ * still hold, though the list it follows may be older.
  */
 
 import { errAsync, ResultAsync } from 'neverthrow'
@@ -98,7 +100,12 @@ export interface IdentitySpace {
   destroy(): Promise<void>
 }
 
-/** The organisation databases this device may hold for an identity, kept across its sessions. */
+/**
+ * The organisation databases this device may hold for an identity, kept across its sessions
+ * and shared by its tabs, with the memberships saved for it. Every writer saves the memberships
+ * before it counts the databases of a list: a database counted for a current membership is in
+ * the memberships read after the count.
+ */
 export interface TenantDatabaseInventory {
   /** Their keys, those of databases not open included. */
   keys(): readonly string[]
@@ -106,6 +113,8 @@ export interface TenantDatabaseInventory {
   add(keys: readonly string[]): void
   /** Stops counting the databases of `keys`, once they are deleted. */
   drop(keys: readonly string[]): void
+  /** The memberships saved for the identity on this device now, by whichever of its tabs heard them last. */
+  savedMemberships(): readonly Membership[]
 }
 
 export interface IdentitySpaceOptions {
@@ -249,7 +258,7 @@ class Space implements IdentitySpace {
     await this.close()
     await Promise.all([
       ...this.#spaces().map((space) => space.destroy()),
-      this.#deleteRetained(new Set()),
+      this.#deleteCounted(this.#options.tenantDatabases.keys()),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
   }
@@ -280,26 +289,39 @@ class Space implements IdentitySpace {
   }
 
   /**
-   * Deletes the organisation databases the device holds for the identity that are neither open
-   * nor of `keep`, and stops counting those deleted; one that cannot be deleted is reported and
-   * stays counted, for a later change or sign-out to try again. Never rejects.
+   * Deletes the organisation databases the device holds for the identity of organisations it no
+   * longer belongs to: neither of `keep` (the list this tab follows) nor of the memberships saved
+   * for the identity now, which another tab may have heard after this one. The count is read
+   * before the saved memberships, so a database another tab counted and opened for a newer
+   * membership is kept. Never rejects.
    */
-  async #deleteRetained(keep: ReadonlySet<string>): Promise<void> {
-    const open = new Set(this.#tenants.keys())
-    const retained = this.#options.tenantDatabases
-      .keys()
-      .filter((key) => !keep.has(key) && !open.has(key))
-    const deleted = await Promise.all(
-      retained.map((key) =>
-        this.#options.deleteTenantLocal(this.identity.id, key).match(
-          () => [key],
-          (error) => {
-            this.#options.onError(error)
+  #deleteRetained(keep: ReadonlySet<string>): Promise<void> {
+    const counted = this.#options.tenantDatabases.keys()
+    const saved = keysOf(this.#options.tenantDatabases.savedMemberships())
 
-            return []
-          },
+    return this.#deleteCounted(counted.filter((key) => !keep.has(key) && !saved.has(key)))
+  }
+
+  /**
+   * Deletes the counted databases of `keys` that are not open, and stops counting those
+   * deleted; one that cannot be deleted is reported and stays counted, for a later change or
+   * sign-out to try again. Never rejects.
+   */
+  async #deleteCounted(keys: readonly string[]): Promise<void> {
+    const open = new Set(this.#tenants.keys())
+    const deleted = await Promise.all(
+      keys
+        .filter((key) => !open.has(key))
+        .map((key) =>
+          this.#options.deleteTenantLocal(this.identity.id, key).match(
+            () => [key],
+            (error) => {
+              this.#options.onError(error)
+
+              return []
+            },
+          ),
         ),
-      ),
     )
 
     this.#options.tenantDatabases.drop(deleted.flat())

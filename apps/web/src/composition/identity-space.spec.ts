@@ -135,14 +135,24 @@ function tenantDatabases(): TenantDatabases {
   }
 }
 
-/** An inventory of organisation databases in memory, holding `keys` to begin with. */
+/**
+ * An inventory of organisation databases in memory, holding `keys` to begin with, and the
+ * memberships saved for the identity, none to begin with.
+ */
 function inventory(keys: readonly string[] = []): TenantDatabaseInventory & {
   readonly held: Set<string>
+  /** Saves `memberships` for the identity, as a tab that heard them does. */
+  save(memberships: readonly Membership[]): void
 } {
   const held = new Set(keys)
+  let saved: readonly Membership[] = []
 
   return {
     held,
+    save: (memberships) => {
+      saved = memberships
+    },
+    savedMemberships: () => saved,
     keys: () => [...held].sort(),
     add: (added) => {
       for (const key of added) {
@@ -276,7 +286,7 @@ async function openSpace(
   cleanups.push(() => space.close())
   await vi.waitFor(() => expect(space.sync).toBeDefined())
 
-  return { space, tenants, errors, sent, deleted, inventory: held.held }
+  return { space, tenants, errors, sent, deleted, inventory: held.held, saveMemberships: held.save }
 }
 
 /** Waits until the leader's engine has nothing left to send or hear. */
@@ -600,6 +610,31 @@ describe('organisations in the identity space', () => {
     // Acme was open: the space deleted it itself, not as a database it does not hold open.
     expect(deleted).toEqual(['globex', 'initech'])
     expect([...inventory]).toEqual(['globex'])
+    expect(errors).toEqual([])
+  })
+
+  it('keeps a counted database of a membership another tab saved, though the list this tab follows lacks it', async () => {
+    const gateway = await openGateway([acme, globex])
+    const { space, deleted, inventory, saveMemberships, errors } = await openSpace(gateway, {
+      memberships: [acme],
+    })
+
+    // Another tab heard Ann join Globex: it saved the memberships, then counted Globex's database.
+    saveMemberships([acme, globex])
+    inventory.add('globex')
+
+    // This tab still follows a list without Globex.
+    await space.setMemberships([acme])
+
+    expect(deleted).toEqual([])
+    expect([...inventory].sort()).toEqual(['acme', 'globex'])
+
+    // Once the saved memberships lack Globex too, its database goes.
+    saveMemberships([acme])
+    await space.setMemberships([acme])
+
+    expect(deleted).toEqual(['globex'])
+    expect([...inventory]).toEqual(['acme'])
     expect(errors).toEqual([])
   })
 

@@ -1204,6 +1204,44 @@ describe('SessionService memberships', () => {
     })
   })
 
+  it('a tab that opens on an older list leaves the database of a membership another tab saved and opened meanwhile', async () => {
+    const storage = memoryStorage()
+    const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
+    const holding = holdingRegionLoads()
+
+    saveDevice(storage, annIn([acme]))
+
+    const a = await world(shared)
+
+    expect((await a.session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(a.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Tab B reads the memberships, Acme only, and starts to open; its region load waits.
+    const b = await world({ ...shared, gateway: a.gateway, wrap: holding.wrap })
+
+    holding.hold()
+
+    const restoring = b.session.restore()
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
+    // Meanwhile the leading tab A hears Ann join Globex: it saves the memberships, then counts
+    // Globex's database and opens it.
+    a.contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(a.session.space()?.tenants()).toEqual(['acme', 'globex']))
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+
+    // B opens on its older list, yet leaves Globex's database, which A holds open, alone.
+    holding.release()
+    expect((await restoring).isOk()).toBe(true)
+    expect(b.session.space()?.tenants()).toEqual(['acme'])
+    await settle()
+    expect(b.tenantsDeleted()).toEqual([])
+    expect(a.tenantsDeleted()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+    await expect(b.session.close()).resolves.toBeUndefined()
+  })
+
   it('sign-out destroys inventoried tenant databases that are not open', async () => {
     const storage = memoryStorage()
 
