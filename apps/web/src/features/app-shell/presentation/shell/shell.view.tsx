@@ -31,7 +31,14 @@ export function ShellView(props: ShellViewProps) {
   const locale = useLocale()
   const Link = props.link ?? PlainLink
   const items = props.signedIn
-    ? [{ to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile' }]
+    ? [
+        { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile' },
+        {
+          to: '/org',
+          label: t('app.shell.nav.organisation'),
+          testId: 'app-shell.nav.organisation',
+        },
+      ]
     : [{ to: '/sign-in', label: t('app.shell.nav.sign-in'), testId: 'app-shell.nav.sign-in' }]
   const locales = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,

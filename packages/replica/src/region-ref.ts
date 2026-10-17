@@ -3,7 +3,8 @@
  * region `identity:<identity id>` and an organisation's tenant region `tenant:<key>`.
  */
 
-import { isTenantKey, tenantRegionId } from '@workspace/data'
+import { tenantRegionId } from '@workspace/data'
+import { isTenantKey } from '@workspace/kernel'
 
 import type { Membership } from './protocol'
 import type { RegionRef } from './region-doc'

@@ -65,12 +65,21 @@ modeling stage.
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands and for organisations,
   notices the shell shows, the language state and the app-wide catalogs.
-- `src/features/app-shell/`: the page frame, painted before the database finishes opening.
+- `src/features/app-shell/`: the page frame, painted before the database finishes opening,
+  with the navigation (sign-in, or the profile and the organisation page).
 - `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in
   user's profile (`/me`): name, email, a bio of at most 2000 characters saved with the name by
   one Save, and the chosen language, which follows the user across devices, and signing out,
   which asks before losing changes this device could not send. The sign-in page says so when
   the gateway refused the device's keys while it kept changes to send after the next sign-in.
+- `src/features/organisation/`: the organisation page (`/org`). Without memberships it says so
+  and offers to create an organisation (a key checked by the kernel's `isTenantKey`, a name of
+  at most 80 characters); the creator becomes its administrator and the new organisation the
+  current one. With memberships it shows the current organisation's name and the role there, a
+  choice between organisations when there are several, and the organisation's notes (at most
+  500 characters each), which every member reads, adds and edits in the tenant region; an
+  administrator also sees the members, invites an existing account by email and removes a
+  member. The page follows the memberships as they change, without a reload.
 
 ## Key exports
 

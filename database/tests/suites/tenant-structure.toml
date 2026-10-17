@@ -29,10 +29,21 @@ allow = false
 error_contains = "$value IN"
 
 [[cases]]
-name = "alice cannot read notes or members"
+name = "alice cannot read notes"
 kind = "sql_expect"
 actor = "alice"
-sql = "SELECT VALUE text FROM note; SELECT VALUE role FROM member;"
+sql = "SELECT VALUE text FROM note;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot read members"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE role FROM member;"
 allow = true
 
 [[cases.assertions]]

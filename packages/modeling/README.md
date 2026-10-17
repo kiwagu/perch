@@ -16,7 +16,8 @@ TypeScript or React code.
   tables of more than one region (one shape reads one database), then writes per component
   `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`, plus `pages.model.json`, the
   `generated-<module>.toml` suites (shapes of the `tenant` region are left out: record users
-  have no access to the tenant database on the server yet) and the replica schema (every
+  have no access to the tenant database on the server yet; a module with only such shapes
+  gets no suite) and the replica schema (every
   replicated table with its region and field kinds) in the database workspace,
   `<database>/src/replica.schema.gen.ts`. `--check` writes nothing and fails on missing,
   different or stale output.

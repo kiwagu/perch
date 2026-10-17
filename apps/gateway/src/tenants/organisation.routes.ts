@@ -1,7 +1,7 @@
 import { match, P } from 'ts-pattern'
 
-import { isTenantKey } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { isTenantKey } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { readBody } from '../auth/auth.routes'

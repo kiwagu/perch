@@ -87,6 +87,22 @@ describe('emitPagesModel', () => {
   })
 })
 
+const notesBody = 'SELECT id, text FROM note;'
+
+const notes: ShapeFile = {
+  ...shape,
+  name: 'notes',
+  componentDir: 'features/user/pages/notes',
+  path: 'features/user/pages/notes/notes.shape.surql',
+  id: 'user.notes',
+  header: { kind: 'shape', params: [], server: false },
+  body: notesBody,
+  ast: parseShape(notesBody),
+  tables: ['note'],
+  region: 'tenant',
+  resultType: 'Array<{ id: NoteId; text: string }>',
+}
+
 describe('emitSurrealkitSuites', () => {
   it('checks that a signed-in user may run every shape of a module', () => {
     expect(emitSurrealkitSuites([shape], 'identity')).toEqual([
@@ -113,21 +129,6 @@ describe('emitSurrealkitSuites', () => {
   })
 
   it('leaves out the shapes of the tenant region, and says so', () => {
-    const notesBody = 'SELECT id, text FROM note;'
-    const notes: ShapeFile = {
-      ...shape,
-      name: 'notes',
-      componentDir: 'features/user/pages/notes',
-      path: 'features/user/pages/notes/notes.shape.surql',
-      id: 'user.notes',
-      header: { kind: 'shape', params: [], server: false },
-      body: notesBody,
-      ast: parseShape(notesBody),
-      tables: ['note'],
-      region: 'tenant',
-      resultType: 'Array<{ id: NoteId; text: string }>',
-    }
-
     expect(emitSurrealkitSuites([shape, notes], 'identity')).toEqual([
       {
         path: 'generated-user.toml',
@@ -149,6 +150,22 @@ describe('emitSurrealkitSuites', () => {
           '',
         ].join('\n'),
       },
+    ])
+  })
+
+  it('writes no suite for a module whose shapes are all in the tenant region', () => {
+    const board: ShapeFile = {
+      ...notes,
+      module: 'board',
+      moduleDir: 'features/board',
+      componentDir: 'features/board/pages/notes',
+      path: 'features/board/pages/notes/notes.shape.surql',
+      id: 'board.notes',
+    }
+
+    expect(emitSurrealkitSuites([board], 'identity')).toEqual([])
+    expect(emitSurrealkitSuites([shape, board], 'identity').map(({ path }) => path)).toEqual([
+      'generated-user.toml',
     ])
   })
 })

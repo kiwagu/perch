@@ -1,0 +1,84 @@
+import { errAsync } from 'neverthrow'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { dataError, SHAPE_RUNNER } from '@workspace/data'
+import { Container } from '@workspace/di'
+import { tenantIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
+
+import { openTestWorld, type TestWorld } from '../../composition/__fixtures__/session'
+import { COMMANDS } from '../../platform/commands.port'
+import { ORGANISATIONS, type OrganisationsPort } from '../../platform/organisations.port'
+import { SESSION } from '../../platform/session.port'
+
+import { NOTES_SERVICE } from './application/notes.service'
+import { ORGANISATION_SERVICE } from './application/organisation.service'
+import { OrganisationModule } from './organisation.module'
+
+const acme: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+  role: 'admin',
+}
+
+const offline = () => errAsync(dataError('data:OFFLINE', 'the gateway is out of reach'))
+
+/** The gateway's organisation routes out of reach: these tests go through the session alone. */
+const unreachable: OrganisationsPort = {
+  create: offline,
+  members: offline,
+  invite: offline,
+  remove: offline,
+}
+
+let world: TestWorld
+let container: Container
+
+beforeEach(async () => {
+  world = await openTestWorld({ memberships: [acme] })
+
+  const root = new Container()
+    .singleton(SHAPE_RUNNER, () => world.session.runner)
+    .singleton(COMMANDS, () => world.commands)
+    .singleton(SESSION, () => world.session)
+    .singleton(ORGANISATIONS, () => unreachable)
+
+  container = root.child()
+
+  for (const provider of OrganisationModule.providers) {
+    container.singleton(provider.provide, provider.useFactory)
+  }
+})
+
+afterEach(async () => {
+  await world.close()
+
+  expect(world.failures).toEqual([])
+})
+
+describe('OrganisationModule', () => {
+  it("writes and reads the current organisation's notes over the application ports", async () => {
+    const ann = (
+      await world.session.signUp({ email: 'ann@example.test', password: 'secret-ann' })
+    )._unsafeUnwrap()
+
+    expect(container.get(ORGANISATION_SERVICE).current()).toEqual(acme)
+    expect(
+      (await container.get(NOTES_SERVICE).add({ author: ann.id, text: ' Hello ' })).isOk(),
+    ).toBe(true)
+    expect((await world.session.flush()).isOk()).toBe(true)
+
+    const [note, ...others] = (await container.get(NOTES_SERVICE).read())._unsafeUnwrap()
+
+    expect(others).toEqual([])
+    expect(note?.text).toBe('Hello')
+    expect(note?.author).toBe(ann.id)
+    expect(world.tenantsOpened()).toEqual(['acme'])
+  })
+
+  it('routes signed-in users to the organisation page', () => {
+    expect(OrganisationModule.routes).toEqual([
+      { path: '/org', page: 'OrganisationPage', guard: 'authenticated' },
+    ])
+    expect(Object.keys(OrganisationModule.declarations)).toEqual(['OrganisationPage'])
+  })
+})

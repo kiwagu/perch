@@ -31,9 +31,8 @@ from a saved access token or through a refresh key that is replaced on every use
   Web Worker (Vite builds only).
 - `./schema-files`: `readSchema(database)`, the schema of the `directory` or the `tenant`
   database as one text: the common files, then the database's own (Bun and Node).
-- Organisation names: `TENANT_KEY_PATTERN` and `isTenantKey` (a key is 2 to 32 lowercase
-  letters, digits and underscores, starting with a letter), `tenantDatabase(key)` (`t_<key>`)
-  and `tenantRegionId(key)` (`tenant:<key>`).
+- Organisation names: `tenantDatabase(key)` (`t_<key>`) and `tenantRegionId(key)`
+  (`tenant:<key>`), for a key the kernel's `isTenantKey` accepts.
 - `./surql-names` (also from the root): `surqlComponentFile`, `surqlExportName`, `camelCase`,
   `pascalCase`, the names that bind a `.surql` file to its generated module, shared by the
   modeling stage and the bundler plugins.

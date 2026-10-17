@@ -4,7 +4,6 @@ import {
   type DataError,
   dataError,
   fromDriverValue,
-  isTenantKey,
   type LocalDb,
   recordId,
   tenantDatabase,
@@ -15,6 +14,7 @@ import {
   membershipIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import { isTenantKey } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import identitiesByIdStatement from './surql/identities-by-id.surql'

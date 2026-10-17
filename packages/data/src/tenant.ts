@@ -1,14 +1,7 @@
 /**
- * How an organisation is named across runtimes: its key, the database that holds its data
- * and the region document its members share. A key is checked wherever it comes in; the
- * directory's schema holds the same rule.
+ * Where an organisation's data lives: the database that holds it and the region document its
+ * members share, both named after the organisation's key (`isTenantKey` in the kernel).
  */
-
-export const TENANT_KEY_PATTERN = /^[a-z][a-z0-9_]{1,31}$/
-
-export function isTenantKey(value: string): boolean {
-  return TENANT_KEY_PATTERN.test(value)
-}
 
 /** The organisation's database in the application namespace. */
 export function tenantDatabase(key: string): string {
