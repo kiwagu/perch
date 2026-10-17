@@ -3,7 +3,8 @@ import { LoroDoc, LoroMap, LoroText } from 'loro-crdt'
 import type { ReplicaSchema } from '../../schema'
 import type { ValidateBatchInput } from '../batch-validator'
 
-const owner = 'identity:idn_a'
+/** The record id of the identity that owns the private region these fixtures build. */
+export const owner = 'identity:idn_a'
 
 const schema: ReplicaSchema = {
   profile: {

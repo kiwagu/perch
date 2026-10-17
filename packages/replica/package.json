@@ -29,7 +29,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "measure": "bun run scripts/measure.ts"
+    "measure": "bun run scripts/measure.ts",
+    "measure:validation": "bun run scripts/measure-validation.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",

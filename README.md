@@ -25,7 +25,40 @@ The processes are declared in `.mcproc/mcproc.yaml` and driven by mcproc (pm2 un
 - A SurrealDB stand keeps nothing when it stops. After restarting one on its own, restart its
   gateway too (`mcproc restart gateway-e2e`), so the gateway's user is defined again.
 
-## Checks
+## Workspaces
 
-- `bun run check`: type checks, lint, unit tests and the model, i18n, README and e2e coverage
-  checks; the gate for a change.
+Each workspace has a README with its role, key exports and commands.
+
+- `apps/web`: the browser application; each signed-in identity's local replica in its own
+  IndexedDB database, synced through the gateway by one leading tab per browser.
+- `apps/gateway`: the Bun server in front of the central SurrealDB: sign-up and sign-in over
+  HTTP, sync over a WebSocket.
+- `packages/replica`: Loro region documents, the projector into the local database, the
+  sync protocol, the server's region log, batch validation and hub, and the device's sync engine.
+- `packages/data`: the SurrealDB driver: local databases, shapes and commands, accounts.
+- `packages/modeling`: the build-time stage that compiles `.surql` files into typed models.
+- `database`: the shared schema, its permission suites and the generated replica schema.
+- `seed`: demo accounts seeded through the gateway like any device, and their sweep.
+- `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
+- `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
+  container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
+  logger, the UI kit and the single Zod instance.
+
+## Gates
+
+- `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
+  coverage checks; the gate for a change. `bun run check --force` runs every task afresh
+  instead of replaying turbo's cache.
+- `bun run test:db` with the `e2e` stand up: the schema permission suites, the seed and the
+  gateway smoke test.
+- `CI=1 bun run test:e2e`: the Playwright specs, one worker.
+
+## Commands
+
+- `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
+- `bun run model`: regenerate the models, page model, permission suites and replica schema.
+- `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
+  the seed data.
+- `bun run refactor:scan`: files that have grown past the size thresholds.
+- `bun run --filter @workspace/replica measure` and `measure:validation`: the replica's write
+  path and what checking a pushed batch costs the server, on this machine.

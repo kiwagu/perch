@@ -10,8 +10,9 @@
   namespace `app`, the database `directory` and the user `gateway`), then serves with
   `bun --watch`, reloading on source changes.
 
-- `web` (profile `dev`): the web application's Vite dev server on 127.0.0.1:5180. The
-  database runs in the browser, so signing up and editing the profile need no server.
+- `web` (profile `dev`): the web application's Vite dev server on 127.0.0.1:5180, opened
+  through `caddy-dev`. Each signed-in identity's database runs in the browser; signing up or
+  in and syncing go through the gateway under `/backend/` of the same front.
 
 - `web-e2e` (profile `e2e`): the same dev server on 127.0.0.1:5190 for the Playwright
   runs; `bun run test:e2e` starts and waits for the whole `e2e` profile.

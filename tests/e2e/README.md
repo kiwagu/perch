@@ -41,7 +41,8 @@ the tests. `src/support/fixtures.ts`: the `test` with the step check and its fix
 its own that opens and signs in with the same account when a test asks), `appReady` and
 `signIn`. `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through
 the test so it can go offline and back (Playwright's offline mode leaves an open WebSocket
-up). `src/support/data.ts`: the generators.
+up). `src/support/data.ts`: the generators. `src/support/warm-up.ts`: the global setup, which
+opens the app once so a fresh Vite dev server optimises its dependencies before the first test.
 
 ## Commands
 

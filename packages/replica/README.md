@@ -92,7 +92,13 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 
 ## Commands
 
-- `bun run test`: unit tests of the write path, the transport, the cadence and the outbox
-  drain, and functional tests of the projector, persistence, the server log, the region hub and
-  the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
+- `bun run test`: unit tests of the write path, the schema, the protocol, the batch validator,
+  the transport, the cadence, the outbox drain, the leader, the hints and the manual clock, and
+  functional tests of the projector, persistence, the server log, the region hub, region sync
+  and the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
+- `bun run measure`: the write path on this machine (1000 create commands, 1000 renames of one
+  record, projecting 1000 records into an embedded database), printed as JSON.
+- `bun run measure:validation`: what checking a pushed batch costs the server, as a table: p50
+  and p95 of `validateBatch` for 200 batches of 1 and of 20 changes on regions of 10, 100 and
+  1000 profile records, the time of `doc.fork()` alone and the region's snapshot size.
 - `bun run typecheck`, `bun run lint`.

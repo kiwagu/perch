@@ -5,9 +5,9 @@
 The only package that depends on the SurrealDB driver. It opens the local database
 (applying the schema only when it changed since the last opening, so saved sessions
 stay valid across reloads), runs shapes and commands compiled from `.surql` files,
-announces table changes so watched shapes rerun, and handles accounts: sign-up,
-sign-in, and sessions resumed from a saved access token or through a refresh key that
-is replaced on every use. Above this package ids are entity id strings and times are
+announces table changes so watched shapes rerun, and handles accounts for the gateway,
+which signs devices up and in against its database: sign-up, sign-in, and sessions resumed
+from a saved access token or through a refresh key that is replaced on every use. Above this package ids are entity id strings and times are
 `Date`s; driver record ids and datetimes do not leave it.
 
 ## Key exports
@@ -23,18 +23,22 @@ is replaced on every use. Above this package ids are entity id strings and times
   does not answer.
 - `Shape`, `Command` (with an optional Standard Schema `schema` for its params),
   `TableChange`, `publishChange`, `onChange`, `DataError`.
-- `./engines/node`: embedded engines for Bun and Node; `./engines/remote`: engines for a
-  SurrealDB server, opened as a system user through `openLocalDb({ credentials })` (a root
-  user, or a namespace user when the credentials name the namespace), and `wsRpcUrl`, the
-  server's WebSocket RPC endpoint for any of its `http(s)://` or `ws(s)://` addresses.
+- `./engines/node`: `nodeEngines()`, embedded engines for Bun and Node; `./engines/remote`:
+  `remoteEngines()` for a SurrealDB server, opened as a system user through
+  `openLocalDb({ credentials })` (a root user, or a namespace user when the credentials name
+  the namespace), and `wsRpcUrl`, the server's WebSocket RPC endpoint for any of its
+  `http(s)://` or `ws(s)://` addresses; `./engines/wasm`: `wasmEngines()`, browser engines in a
+  Web Worker (Vite builds only).
 - `./schema-files`: `readSchema()`, the shared schema as one text (Bun and Node).
+- `./surql-names` (also from the root): `surqlComponentFile`, `surqlExportName`, `camelCase`,
+  `pascalCase`, the names that bind a `.surql` file to its generated module, shared by the
+  modeling stage and the bundler plugins.
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`,
   `FakeShapeRunner` (a runner without a database for component tests),
   `interceptQueries()` (holds or fails queries, as a slow or broken database would; its
   queries keep `retry()`).
-- `./engines/wasm`: browser engines in a Web Worker (Vite builds only).
 - `./vite-plugin-surql`: `surqlPlugin()` loads plain `.surql` files as text; `./surql` types such imports.
 
 ## Commands

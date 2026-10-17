@@ -15,9 +15,10 @@ generate their data from the same presets.
 
 ## Key exports
 
-- `catalog`, `accountFor(preset, mode)`, `validateCatalog()`: the presets (name, bio and
-  language), the account data for a `demo` (same address every run) or `fresh` (new
-  address per run) seed, and the offline check of the catalog.
+- `catalog`, `accountFor(preset, mode)`, `validateCatalog()`, `SEED_EMAIL_DOMAIN`: the presets
+  (name, bio and language), the account data for a `demo` (same address every run) or `fresh`
+  (new address per run) seed, and the offline check of the catalog; `./catalog` exports them
+  alone, without the gateway client, for the e2e tests.
 - `runSeed(options)`: seeds every preset through the gateway at `gatewayUrl` and returns
   the manifest (ref to account id, email and profile id); `demo` is idempotent, and
   `reset` sweeps the stand first.
