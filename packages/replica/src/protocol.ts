@@ -1,5 +1,6 @@
 import { err, ok, type Result } from 'neverthrow'
 
+import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 export const PROTOCOL_VERSION = 2
@@ -57,7 +58,7 @@ export const rejectReason = z.enum([
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])
 
 /** An identity's role in an organisation. */
-export const tenantRole = z.enum(['member', 'admin'])
+export const tenantRole = z.enum(TENANT_ROLES)
 
 /** An organisation an identity belongs to, and its role there, as the gateway tells a device. */
 export const membership = z.object({
