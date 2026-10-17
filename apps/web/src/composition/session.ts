@@ -15,6 +15,7 @@ import type {
   DeviceCredentials,
   EndReason,
   Leadership,
+  SyncHint,
   SyncHints,
   SyncTransport,
 } from '@workspace/replica/sync'
@@ -32,6 +33,7 @@ import {
 import {
   forgetDevice,
   forgetNotice,
+  forgetSigningOut,
   IDENTITY_KEY,
   type KeyValueStorage,
   saveDevice,
@@ -40,6 +42,8 @@ import {
   savedNotice,
   saveKeys,
   saveNotice,
+  saveSigningOut,
+  signingOutSince,
 } from './storage'
 
 /** What the channel of one identity needs: its keys, a place for renewed ones, word that it ended. */
@@ -78,15 +82,30 @@ interface SpaceStatus {
   live: boolean
 }
 
+/** When this tab heard another one begin a sign-out, until it hears the sign-out end. */
+interface HeardSignOut {
+  at: number | undefined
+}
+
 interface OpenSpace {
   readonly space: IdentitySpace
   readonly leadership: Leadership | undefined
   readonly status: SpaceStatus
+  /** The hints between the tabs of the identity; the space closes them. */
+  readonly hints: SyncHints
+  readonly heard: HeardSignOut
 }
 
 type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
+
+/**
+ * How long a sign-out holds every tab's writes back at most. A sign-out ends well within it (up
+ * to 5 seconds for the channel, 10 for the drain and 10 for the gateway's close); a tab that
+ * went away during its sign-out leaves the mark behind, and writes must not stay refused for good.
+ */
+const SIGN_OUT_BARRIER_MS = 60_000
 
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
@@ -99,7 +118,8 @@ const closedDuringSignIn = () =>
  * with changes that cannot be sent it asks first. Keys the gateway refuses sign the device
  * out without it; the database goes too unless it holds changes not sent yet, which wait for
  * the next sign-in as the identity. The tabs of a browser follow the saved identity: when
- * another tab signs it out, this one closes its space.
+ * another tab signs it out, this one closes its space. While a sign-out runs, no tab of the
+ * browser takes a write: a write landing after the final drain would go with the database.
  */
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
@@ -119,6 +139,7 @@ export class SessionService implements SessionPort {
     const spaces: SpaceSource = {
       current: () => this.#open?.space,
       onSwitch: (listener) => this.subscribe(() => listener()),
+      signingOut: () => this.#signingOut(),
     }
 
     this.runner = new CurrentSpaceRunner(spaces)
@@ -264,6 +285,11 @@ export class SessionService implements SessionPort {
 
     const status: SpaceStatus = { live: true }
     const leadership = this.#options.leadership(identity.id)
+    const hints = this.#options.hints(identity.id)
+    const heard: HeardSignOut = { at: undefined }
+
+    // Another tab's sign-out holds this tab's writes back until it ends; the space closes the hints.
+    hints.on((hint) => this.#heardHint(heard, hint))
 
     return openIdentitySpace({
       identity,
@@ -271,7 +297,7 @@ export class SessionService implements SessionPort {
       schema: this.#options.schema,
       transport: () => this.#options.transport(this.#transportContext(identity.id)),
       leadership,
-      hints: this.#options.hints(identity.id),
+      hints,
       clock: this.#options.clock,
       onState: (state) => {
         if (status.live) {
@@ -293,7 +319,7 @@ export class SessionService implements SessionPort {
           return err(closedDuringSignIn())
         }
 
-        this.#open = { space, leadership, status }
+        this.#open = { space, leadership, status, hints, heard }
         space.visibility(this.#options.visibility.current())
         this.#options.onStep?.('ready')
         this.#emit(identity)
@@ -302,6 +328,10 @@ export class SessionService implements SessionPort {
       })
   }
 
+  /**
+   * Raises the barrier that holds every tab's writes back before the final drain, lowers it
+   * once the sign-out ends: after the database is deleted, or at once when it is kept.
+   */
   #signOut(forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
     const open = this.#open
 
@@ -313,21 +343,80 @@ export class SessionService implements SessionPort {
 
     const { space, leadership } = open
 
+    this.#holdWrites(open)
+
     // The sign-out runs where the person asked for it: this tab leads from here on. The sync
     // engine answers `offline` without asking the gateway while anything stays unsent, a region
     // that stopped syncing included; what is unsent is then weighed here.
-    return ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
+    const ended = ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
       .andThen(() =>
         ResultAsync.fromSafePromise(space.sync?.signOut() ?? Promise.resolve('offline' as const)),
       )
       .andThen((outcome) =>
-        outcome === 'signed-out' || forgetUnsent ? okAsync(false) : space.unsent(),
+        outcome === 'signed-out'
+          ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
+          : this.#stillSignedIn(open, forgetUnsent),
       )
-      .andThen((asks) =>
-        asks
-          ? okAsync<SignOutOutcome>('needs-confirmation')
-          : this.#forgetSpace(open).map((): SignOutOutcome => 'signed-out'),
-      )
+
+    const release = () => this.#releaseWrites(open)
+
+    return ended.andTee(release).orTee(release)
+  }
+
+  /**
+   * The gateway signed the device out. A write that passed the barrier before it went up (in
+   * another tab, before it heard of the sign-out) may have landed after the final drain: the
+   * database goes only with an empty outbox, or when the person gave unsent changes up.
+   * Otherwise it stays for the next sign-in as the identity, which sends what it holds.
+   */
+  #signedOut(open: OpenSpace, forgetUnsent: boolean): ResultAsync<void, DataError> {
+    if (forgetUnsent) {
+      return this.#forgetSpace(open)
+    }
+
+    return this.#unsentOrUnknown(open).andThen((unsent) =>
+      unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+    )
+  }
+
+  /**
+   * The engine could not have the gateway sign the device out: offline, or with changes it
+   * could not send. With such changes it asks first; without them the device signs out here.
+   */
+  #stillSignedIn(open: OpenSpace, forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
+    return (forgetUnsent ? okAsync(false) : open.space.unsent()).andThen((asks) =>
+      asks
+        ? okAsync<SignOutOutcome>('needs-confirmation')
+        : this.#forgetSpace(open).map((): SignOutOutcome => 'signed-out'),
+    )
+  }
+
+  /** Holds every tab's writes back: the other tabs hear of it now, a tab opened later reads it. */
+  #holdWrites(open: OpenSpace): void {
+    saveSigningOut(this.#options.storage, this.#options.clock.now())
+    open.hints.post('sign-out')
+  }
+
+  /** The sign-out ended: every tab writes again, and the leader drains what waits. */
+  #releaseWrites(open: OpenSpace): void {
+    forgetSigningOut(this.#options.storage)
+    open.hints.post('kick')
+  }
+
+  /** A sign-out began in this browser within the barrier's time and has not ended. */
+  #signingOut(): boolean {
+    const now = this.#options.clock.now()
+    const began = [signingOutSince(this.#options.storage), this.#open?.heard.at]
+
+    return began.some((at) => at !== undefined && now - at < SIGN_OUT_BARRIER_MS)
+  }
+
+  #heardHint(heard: HeardSignOut, hint: SyncHint): void {
+    if (hint === 'sign-out') {
+      heard.at = this.#options.clock.now()
+    } else if (hint === 'kick') {
+      heard.at = undefined
+    }
   }
 
   /**
@@ -408,27 +497,31 @@ export class SessionService implements SessionPort {
       return okAsync(undefined)
     }
 
-    return open.space
-      .unsent()
-      .orElse((error) => {
-        this.#options.onError(error)
+    return this.#unsentOrUnknown(open).andThen((unsent) =>
+      unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+    )
+  }
 
-        return okAsync(true)
-      })
-      .andThen((unsent) => {
-        if (!unsent) {
-          return this.#forgetSpace(open)
-        }
+  /** Whether the space holds changes not sent yet; an outbox that cannot be read is reported and counts. */
+  #unsentOrUnknown(open: OpenSpace): ResultAsync<boolean, DataError> {
+    return open.space.unsent().orElse((error) => {
+      this.#options.onError(error)
 
-        saveNotice(storage, 'resend-after-sign-in')
-        forgetDevice(storage)
+      return okAsync(true)
+    })
+  }
 
-        if (this.#open === open) {
-          this.#leaveAndTell()
-        }
+  /**
+   * Forgets the keys and closes the space, keeping its database with the changes it holds: the
+   * sign-in page says that signing in again as the identity sends them.
+   */
+  #keepForNextSignIn(open: OpenSpace): void {
+    saveNotice(this.#options.storage, 'resend-after-sign-in')
+    forgetDevice(this.#options.storage)
 
-        return okAsync(undefined)
-      })
+    if (this.#open === open) {
+      this.#leaveAndTell()
+    }
   }
 
   /** Another tab changed the saved identity: this tab follows, closing a space that is no longer it. */

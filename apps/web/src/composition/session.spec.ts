@@ -4,10 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
-import { FakeLocks } from '@workspace/replica/testing'
+import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { createProfile, profileById } from './__fixtures__/profile'
-import { openTestWorld, type TestWorld, type TestWorldOptions } from './__fixtures__/session'
+import {
+  browserDatabases,
+  openTestWorld,
+  type TestWorld,
+  type TestWorldOptions,
+} from './__fixtures__/session'
 import type { SignedInDevice } from './gateway-auth'
 import { memoryStorage, saveDevice } from './storage'
 
@@ -83,6 +88,61 @@ async function bootSession(options: {
       ).toBe(true)
     },
   }
+}
+
+/**
+ * The params of a command that creates a profile in Ann's region: hers by default. The local
+ * schema keeps one profile per identity, so a second write of a test names another identity.
+ */
+function aProfile(identity: string = ann.identity.id) {
+  return {
+    id: profileIdFactory.create(),
+    identity,
+    name: 'Ann',
+    email: ann.identity.email,
+  }
+}
+
+/**
+ * Two tabs of one browser where Ann is signed in, sharing the Web Locks and Ann's database;
+ * `a` leads. They share the storage too, unless `b` keeps its own (a tab that has not seen the
+ * other's latest change yet), and the hint channel only when `hints` is set.
+ */
+async function twoTabs(options: {
+  readonly online: boolean
+  readonly hints?: boolean
+  readonly ownStorageOfB?: boolean
+}) {
+  const storage = memoryStorage()
+  const shared = {
+    locks: new FakeLocks(),
+    databases: browserDatabases(),
+    online: options.online,
+    ...(options.hints ? { hints: new Set<FakeHintChannel>() } : {}),
+  }
+
+  saveDevice(storage, ann)
+
+  const a = await world({ ...shared, storage })
+
+  expect((await a.session.restore()).isOk()).toBe(true)
+  await vi.waitFor(() =>
+    expect(a.states.at(-1)).toEqual({ leader: true, channel: options.online ? 'up' : 'down' }),
+  )
+
+  const storageOfB = options.ownStorageOfB ? memoryStorage() : storage
+
+  if (options.ownStorageOfB) {
+    saveDevice(storageOfB, ann)
+  }
+
+  const b = await world({ ...shared, storage: storageOfB, gateway: a.gateway })
+
+  expect((await b.session.restore()).isOk()).toBe(true)
+  await settle()
+  expect(b.states.at(-1)).toEqual({ leader: false, channel: 'down' })
+
+  return { a, b, storage }
 }
 
 /** Region loads of every identity database held while `hold()` is in force. */
@@ -264,6 +324,121 @@ describe('SessionService', () => {
     expect(destroyed()).toEqual([ann.identity.id])
     expect(failures.map((failure) => failure.code)).toContain('data:SYNC_STOPPED')
     failures.splice(0)
+  })
+
+  it('keeps the database and asks to sign in again when a write lands after the final drain', async () => {
+    const { a, b } = await twoTabs({ online: true })
+    const received = a.stub.keepOpenOnSignOut()
+    const signingOut = a.session.signOut()
+
+    await received
+
+    // A write of the other tab that passed the barrier just before it went up lands now,
+    // after the final drain and before the gateway closes the channel.
+    const below = b.session.space() ?? expect.unreachable('a space')
+
+    expect((await below.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    a.stub.endWith('signed-out')
+
+    expect((await signingOut)._unsafeUnwrap()).toBe('signed-out')
+    expect(a.stub.signOuts()).toBe(1)
+    expect(a.destroyed()).toEqual([])
+    expect(a.session.current()).toBeUndefined()
+    expect(a.storage.get('perch.session.identity')).toBeUndefined()
+    expect(a.storage.get('perch.session.refresh')).toBeUndefined()
+    expect(a.session.notice()).toBe('resend-after-sign-in')
+    expect(a.storage.get('perch.session.signing-out')).toBeUndefined()
+  })
+
+  it("refuses every tab's commands while a sign-out is under way, until the database is gone", async () => {
+    const { a, b } = await twoTabs({ online: true })
+    const received = a.stub.keepOpenOnSignOut()
+    const signingOut = a.session.signOut()
+
+    await received
+
+    for (const tab of [a, b]) {
+      const refused = await tab.session.writePath.run(createProfile, aProfile())
+
+      expect(refused._unsafeUnwrapErr()).toMatchObject({
+        code: 'data:WRITE_REJECTED',
+        message: 'signing out',
+      })
+    }
+
+    a.stub.endWith('signed-out')
+
+    expect((await signingOut)._unsafeUnwrap()).toBe('signed-out')
+    expect(a.destroyed()).toEqual([ann.identity.id])
+    expect(a.storage.get('perch.session.signing-out')).toBeUndefined()
+  })
+
+  it('lifts the barrier when the sign-out ends offline, so the other tab writes again', async () => {
+    const { a, b, storage } = await twoTabs({ online: false })
+
+    // A change the device cannot send: the sign-out asks first.
+    expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    const signingOut = a.session.signOut()
+
+    await vi.waitFor(() => expect(storage.get('perch.session.signing-out')).toBeDefined())
+    expect(
+      (await b.session.writePath.run(createProfile, aProfile()))._unsafeUnwrapErr().message,
+    ).toBe('signing out')
+
+    expect((await a.driveClock(signingOut))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(storage.get('perch.session.signing-out')).toBeUndefined()
+
+    const written = await b.session.writePath.run(
+      createProfile,
+      aProfile(identityIdFactory.create()),
+    )
+
+    expect(written.isOk()).toBe(true)
+    expect(a.destroyed()).toEqual([])
+  })
+
+  it('holds back the writes of a tab that hears of the sign-out before its storage shows it', async () => {
+    const { a, b } = await twoTabs({ online: false, hints: true, ownStorageOfB: true })
+
+    expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    const signingOut = a.session.signOut()
+
+    await settle()
+    expect(b.storage.get('perch.session.signing-out')).toBeUndefined()
+    expect(
+      (await b.session.writePath.run(createProfile, aProfile()))._unsafeUnwrapErr().message,
+    ).toBe('signing out')
+
+    // The sign-out ends with the device signed in: a `kick` lifts the barrier.
+    expect((await a.driveClock(signingOut))._unsafeUnwrap()).toBe('needs-confirmation')
+
+    const written = await b.session.writePath.run(
+      createProfile,
+      aProfile(identityIdFactory.create()),
+    )
+
+    expect(written.isOk()).toBe(true)
+  })
+
+  it('stops holding writes back once a sign-out has run for a minute, as when its tab went away', async () => {
+    const { session, storage, clock } = await bootSession({ saved: ann, online: false })
+
+    storage.set('perch.session.signing-out', String(clock.now()))
+
+    expect(
+      (await session.writePath.run(createProfile, aProfile()))._unsafeUnwrapErr().message,
+    ).toBe('signing out')
+
+    await clock.advance(59_999)
+
+    expect((await session.writePath.run(createProfile, aProfile())).isErr()).toBe(true)
+
+    await clock.advance(1)
+
+    expect((await session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
   })
 
   it('signs out from a tab that follows: it takes the lead and the gateway hears the sign-out', async () => {

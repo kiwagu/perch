@@ -9,9 +9,9 @@ export interface SignOutOptions {
 }
 
 /**
- * A word the session leaves for the sign-in page: `resend-after-sign-in` when the gateway
- * refused the device's keys while it held changes it had not sent; they are kept on the
- * device, and signing in again as the same identity sends them.
+ * A word the session leaves for the sign-in page: `resend-after-sign-in` when the device was
+ * signed out (its keys refused, or a write landing during its sign-out) while it held changes it
+ * had not sent; they are kept on the device, and signing in again as the same identity sends them.
  */
 export type SessionNotice = 'resend-after-sign-in'
 

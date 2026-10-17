@@ -20,7 +20,7 @@ export interface SignInViewProps {
   readonly error?: string | undefined
   /**
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
-   * gateway refused the device's keys while it held changes it had not sent.
+   * device was signed out while it held changes it had not sent.
    */
   readonly notice?: 'resend-after-sign-in' | undefined
   readonly onSubmit: (values: SignInValues) => void

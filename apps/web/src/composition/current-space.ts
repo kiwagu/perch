@@ -1,7 +1,8 @@
 /**
  * The application's reads and writes, bound to the space of whoever is signed in: the
  * container hands out these two ports once, and they follow the session from one identity
- * to the next. While nobody is signed in they refuse, saying so.
+ * to the next. While nobody is signed in they refuse, saying so; writes also refuse while a
+ * sign-out runs in any tab of the browser.
  */
 
 import { errAsync, type ResultAsync } from 'neverthrow'
@@ -23,6 +24,11 @@ import type { IdentitySpace } from './identity-space'
 export interface SpaceSource {
   current(): IdentitySpace | undefined
   onSwitch(listener: () => void): () => void
+  /**
+   * A sign-out runs in this tab or another one of the browser: a write landing after its final
+   * drain would be deleted with the database, so none is taken until it ends.
+   */
+  signingOut(): boolean
 }
 
 const signedOut = (what: string): string => `sign in first: ${what} needs the signed-in identity`
@@ -72,9 +78,9 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
   }
 }
 
-/** Writes into the current space's region; refuses while nobody is signed in. */
+/** Writes into the current space's region; refuses while nobody is signed in or a sign-out runs. */
 export class CurrentSpaceWritePath implements WritePathPort {
-  constructor(private readonly spaces: Pick<SpaceSource, 'current'>) {}
+  constructor(private readonly spaces: Pick<SpaceSource, 'current' | 'signingOut'>) {}
 
   run<Params>(
     command: Command<Params>,
@@ -83,8 +89,12 @@ export class CurrentSpaceWritePath implements WritePathPort {
   ): ResultAsync<void, DataError> {
     const space = this.spaces.current()
 
-    return space
-      ? space.writePath.run(command, params, meta)
-      : errAsync(dataError('data:WRITE_REJECTED', signedOut(`command ${command.id}`)))
+    if (!space) {
+      return errAsync(dataError('data:WRITE_REJECTED', signedOut(`command ${command.id}`)))
+    }
+
+    return this.spaces.signingOut()
+      ? errAsync(dataError('data:WRITE_REJECTED', 'signing out'))
+      : space.writePath.run(command, params, meta)
   }
 }

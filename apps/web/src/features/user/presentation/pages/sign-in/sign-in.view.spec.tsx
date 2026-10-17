@@ -74,13 +74,13 @@ describe('SignInView', () => {
     )
   })
 
-  it('says nothing about refused keys unless the session left a notice', () => {
+  it('says nothing about unsent changes unless the session left a notice', () => {
     renderView()
 
     expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
   })
 
-  it('asks to sign in again to send the changes this device kept when its keys were refused', () => {
+  it('asks to sign in again to send the changes this device kept when it was signed out', () => {
     renderView({ notice: 'resend-after-sign-in' })
 
     expect(screen.getByTestId('user.sign-in.notice.resend-after-sign-in').textContent).toBe(

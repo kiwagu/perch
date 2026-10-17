@@ -88,8 +88,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a
   Web Lock (`isLeader`, `onChange`, `takeOver` steals the lock, `stop`; undefined without Web
-  Locks, such a browser does not sync); `syncHints(channel)` sends `journal`, `visible`, `kick`
-  and `settled` hints between tabs over a `BroadcastChannel` and ignores anything else on it.
+  Locks, such a browser does not sync); `syncHints(channel)` sends `journal`, `visible`, `kick`,
+  `settled` and `sign-out` hints between tabs over a `BroadcastChannel` and ignores anything
+  else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given

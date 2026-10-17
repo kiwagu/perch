@@ -107,13 +107,12 @@ describe('createCommandBus', () => {
   })
 
   it('reports a write refused while nobody is signed in', async () => {
-    const result = await bus(new CurrentSpaceWritePath({ current: () => undefined })).execute(
-      profileCommands.updateName,
-      {
-        id: profileIdFactory.create(),
-        name: 'X',
-      },
-    )
+    const result = await bus(
+      new CurrentSpaceWritePath({ current: () => undefined, signingOut: () => false }),
+    ).execute(profileCommands.updateName, {
+      id: profileIdFactory.create(),
+      name: 'X',
+    })
 
     expect(result._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
   })

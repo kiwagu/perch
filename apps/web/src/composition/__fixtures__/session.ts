@@ -1,9 +1,12 @@
+import { okAsync, type ResultAsync } from 'neverthrow'
+
 import type { DataError, LocalDb, ShapeRunnerPort } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
 import { leadership, lockName, syncHints } from '@workspace/replica/sync'
 import {
+  FakeHintChannel,
   FakeLocks,
   type GatewayStub,
   gatewayStub,
@@ -32,6 +35,59 @@ export interface TestWorldOptions {
   readonly locks?: FakeLocks
   /** Another world's gateway, for a second tab or device of the same test; its owner closes it. */
   readonly gateway?: TestGateway
+  /** The identity databases of the browser, which its tabs share; by default each tab opens its own. */
+  readonly databases?: BrowserDatabases
+  /** The browser's BroadcastChannel bus for sync hints; by default the tab hears no other tab. */
+  readonly hints?: Set<FakeHintChannel>
+}
+
+/** The identity databases of one browser: its tabs open the same database for an identity. */
+export interface BrowserDatabases {
+  /**
+   * A tab's connection to the identity's database. Closing or deleting it lets the tab go;
+   * the database closes once the last tab has let it go.
+   */
+  open(identity: IdentityId): ResultAsync<LocalDb, DataError>
+}
+
+export function browserDatabases(): BrowserDatabases {
+  const shared = new Map<IdentityId, { readonly local: LocalDb; tabs: number }>()
+
+  return {
+    open(identity) {
+      const held = shared.get(identity)
+      const opening = held
+        ? okAsync(held)
+        : openTestDb().map((local) => {
+            const opened = { local, tabs: 0 }
+
+            shared.set(identity, opened)
+
+            return opened
+          })
+
+      return opening.map((opened): LocalDb => {
+        let holding = true
+        const release = async () => {
+          if (!holding) {
+            return
+          }
+
+          holding = false
+          opened.tabs -= 1
+
+          if (opened.tabs === 0) {
+            shared.delete(identity)
+            await opened.local.close()
+          }
+        }
+
+        opened.tabs += 1
+
+        return { ...opened.local, close: release, destroy: release }
+      })
+    },
+  }
 }
 
 /** The gateway stub, its database and the clock it shares with the devices. */
@@ -91,19 +147,21 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const session = new SessionService({
     auth,
     openLocal: (identity) =>
-      openTestDb().map((local): LocalDb => {
-        opened.push(identity)
+      (options.databases ? options.databases.open(identity) : openTestDb()).map(
+        (local): LocalDb => {
+          opened.push(identity)
 
-        const wrapped = options.wrap ? options.wrap(local) : local
+          const wrapped = options.wrap ? options.wrap(local) : local
 
-        return {
-          ...wrapped,
-          destroy: async () => {
-            destroyed.push(identity)
-            await local.destroy()
-          },
-        }
-      }),
+          return {
+            ...wrapped,
+            destroy: async () => {
+              destroyed.push(identity)
+              await local.destroy()
+            },
+          }
+        },
+      ),
     schema: replicaSchema,
     transport: (context) => {
       const transport = stub.transport(context.identity)
@@ -120,7 +178,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     },
     // Without shared locks the tab is alone: its lock is granted as soon as it is asked for.
     leadership: (identity) => leadership(options.locks ?? new FakeLocks(), lockName(identity)),
-    hints: () => syncHints(undefined),
+    hints: () => syncHints(options.hints ? new FakeHintChannel(options.hints) : undefined),
     clock,
     storage,
     visibility: {

@@ -229,6 +229,9 @@ class Space implements IdentitySpace {
       case 'kick':
         this.#engine?.localWrite()
         break
+      // Another tab began a sign-out: the session holds this tab's writes back.
+      case 'sign-out':
+        break
     }
   }
 

@@ -21,9 +21,12 @@ modeling stage.
   keys; the tabs hint each other over a BroadcastChannel, so each reads what the others
   wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
   out, then forgets the keys and deletes the identity's database; with changes it could
-  not send it asks first. Keys the gateway refuses sign the device out locally: the
-  identity's database goes with them unless it holds changes not sent yet, in which case it
-  stays and the sign-in page says to sign in again (as the same identity) to send them. A
+  not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
+  `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
+  hold them back); a change that still landed after the final drain keeps the database. Keys
+  the gateway refuses sign the device out locally: the identity's database goes with them
+  unless it holds changes not sent yet, in which case it stays (as after such a sign-out)
+  and the sign-in page says to sign in again (as the same identity) to send them. A
   protocol the gateway refuses stops the sync and keeps everything. A tab follows another
   tab's sign-out by closing its space. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
