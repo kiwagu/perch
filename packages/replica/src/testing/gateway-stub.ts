@@ -10,12 +10,15 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
   type ProtocolError,
   type ServerMessage,
   serverMessage,
 } from '../protocol'
 import type { RegionRef } from '../region-doc'
+import { identityRegions } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
+import { singleDatabase } from '../server/region-databases'
 import { RegionHub, type Subscriber } from '../server/region-hub'
 import type { ChannelState, EndReason, SyncTransport } from '../sync/transport'
 
@@ -26,6 +29,8 @@ export interface GatewayStubOptions {
   readonly clock: Clock
   /** How many log rows after the snapshot make an ack ask for a compaction. */
   readonly compactionLogLimit?: number
+  /** What every device is welcomed with; each opens its organisation's region. None by default. */
+  readonly memberships?: readonly Membership[]
 }
 
 /** A device's channel to the stub, which the test can take offline and bring back. */
@@ -90,6 +95,7 @@ export interface GatewayStub {
 interface Gateway {
   readonly hub: RegionHub
   readonly clock: Clock
+  readonly memberships: readonly Membership[]
   readonly failures: DataError[]
   readonly compactions: CompactionAnswer[]
   rejections: number
@@ -137,14 +143,16 @@ function sentToDevice(message: ServerMessage): ServerMessage {
 
 /**
  * A device's channel to the stub: like the gateway's sync connection, without a network. It
- * is welcomed with the identity's own region, hands subscriptions, pulls, pushes and
- * compactions in that region to the hub, answers probes with the hub's heads and delivers what
- * the hub sends, each message through the protocol's encoding both ways.
+ * is welcomed with the identity's own region and the region of each of the stub's memberships,
+ * hands subscriptions, pulls, pushes and compactions in those regions to the hub, answers
+ * probes with the hub's heads and delivers what the hub sends, each message through the
+ * protocol's encoding both ways.
  */
 class DeviceChannel implements StubTransport {
   readonly #gateway: Gateway
   readonly #identity: string
-  readonly #region: RegionRef
+  /** The regions the device may name, by id. */
+  readonly #regions: ReadonlyMap<string, RegionRef>
   readonly #messageListeners = new Set<(message: ServerMessage) => void>()
   readonly #channelListeners = new Set<(state: ChannelState) => void>()
   readonly #endedListeners = new Set<(reason: EndReason) => void>()
@@ -158,7 +166,9 @@ class DeviceChannel implements StubTransport {
   constructor(gateway: Gateway, identity: string) {
     this.#gateway = gateway
     this.#identity = identity
-    this.#region = { kind: 'private', id: `identity:${identity}` }
+    this.#regions = new Map(
+      identityRegions(identity, gateway.memberships).map((ref) => [ref.id, ref]),
+    )
   }
 
   start(): void {
@@ -267,7 +277,7 @@ class DeviceChannel implements StubTransport {
     this.#connection = connection
     this.#settle(
       this.#gateway.hub
-        .heads([this.#region.id])
+        .heads([...this.#regions.keys()])
         .andTee((regions) => this.#welcome(connection, regions)),
     )
   }
@@ -286,6 +296,7 @@ class DeviceChannel implements StubTransport {
       type: 'welcome',
       identity: this.#identity,
       regions: [...regions],
+      memberships: [...this.#gateway.memberships],
       time: this.#gateway.clock.now(),
     })
 
@@ -303,7 +314,7 @@ class DeviceChannel implements StubTransport {
     }
 
     this.#connection = undefined
-    this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
+    this.#leave(connection)
 
     if (connection.up) {
       for (const listener of this.#channelListeners) {
@@ -318,12 +329,11 @@ class DeviceChannel implements StubTransport {
     }
 
     const hub = this.#gateway.hub
-    const own = this.#region.id
     const subscriber = connection.subscriber
     const named =
       'region' in message ? [message.region] : message.type === 'probe' ? message.regions : []
 
-    if (named.some((region) => region !== own)) {
+    if (named.some((region) => !this.#regions.has(region))) {
       this.#deliver(connection, {
         type: 'error',
         code: 'forbidden-region',
@@ -335,11 +345,16 @@ class DeviceChannel implements StubTransport {
 
     match(message)
       .with({ type: 'hello' }, () => {})
-      .with({ type: 'subscribe' }, ({ vv }) => {
-        connection.asked += 1
-        this.#settle(hub.subscribe(this.#region, own, subscriber, vv))
+      .with({ type: 'subscribe' }, ({ region, vv }) => {
+        const ref = this.#regions.get(region)
+
+        // Checked above: the device may name the region.
+        if (ref) {
+          connection.asked += 1
+          this.#settle(hub.subscribe(ref, this.#identity, subscriber, vv))
+        }
       })
-      .with({ type: 'pull' }, ({ vv }) => {
+      .with({ type: 'pull' }, ({ region, vv }) => {
         connection.asked += 1
 
         if (this.#gateway.refusePull) {
@@ -347,13 +362,13 @@ class DeviceChannel implements StubTransport {
           this.#deliver(connection, {
             type: 'error',
             code: 'protocol',
-            message: `not subscribed to region ${own}`,
+            message: `not subscribed to region ${region}`,
           })
         } else {
-          this.#settle(hub.pull(own, subscriber, vv))
+          this.#settle(hub.pull(region, subscriber, vv))
         }
       })
-      .with({ type: 'push' }, ({ batch, updates }) => {
+      .with({ type: 'push' }, ({ region, batch, updates }) => {
         const swallowed = this.#gateway.swallowPush
 
         if (swallowed) {
@@ -362,17 +377,17 @@ class DeviceChannel implements StubTransport {
         } else if (this.#gateway.rejectAll) {
           this.#deliver(connection, {
             type: 'reject',
-            region: own,
+            region,
             batch,
             reason: 'foreign-table',
             detail: 'the test gateway rejects every batch',
           })
         } else {
-          this.#settle(hub.push(own, subscriber, batch, updates))
+          this.#settle(hub.push(region, subscriber, batch, updates))
         }
       })
-      .with({ type: 'compact' }, ({ covers, snapshot }) => {
-        this.#settle(hub.compact(own, subscriber, covers, snapshot))
+      .with({ type: 'compact' }, ({ region, covers, snapshot }) => {
+        this.#settle(hub.compact(region, subscriber, covers, snapshot))
       })
       .with({ type: 'probe' }, ({ regions }) => {
         const swallowed = this.#gateway.swallowProbe
@@ -408,7 +423,7 @@ class DeviceChannel implements StubTransport {
     if (keptOpen) {
       this.#gateway.keepOpen = undefined
       connection.signedOut = true
-      this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
+      this.#leave(connection)
       keptOpen()
 
       return
@@ -425,6 +440,13 @@ class DeviceChannel implements StubTransport {
 
     if (this.#connection === connection) {
       this.end('signed-out')
+    }
+  }
+
+  /** The hub forgets the connection in every region the device may name. */
+  #leave(connection: Connection): void {
+    for (const region of this.#regions.keys()) {
+      this.#gateway.hub.unsubscribe(region, connection.subscriber.id)
     }
   }
 
@@ -477,7 +499,7 @@ class DeviceChannel implements StubTransport {
 export function gatewayStub(options: GatewayStubOptions): GatewayStub {
   const failures: DataError[] = []
   const hub = new RegionHub({
-    local: options.local,
+    databases: singleDatabase(options.local),
     schema: options.schema,
     clock: options.clock,
     onError: (error) => failures.push(error),
@@ -488,6 +510,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
   const gateway: Gateway = {
     hub,
     clock: options.clock,
+    memberships: options.memberships ?? [],
     failures,
     compactions: [],
     rejections: 0,

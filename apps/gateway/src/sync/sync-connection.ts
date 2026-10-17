@@ -3,19 +3,23 @@ import { match, P } from 'ts-pattern'
 
 import { type AuthTokens, type AuthUser, type DataError, dataError } from '@workspace/data'
 import type { Logger } from '@workspace/logger'
-import type { Clock, RegionRef } from '@workspace/replica'
+import { type Clock, identityRegions, type RegionRef } from '@workspace/replica'
 import {
   CLOSE,
   type ClientMessage,
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
   type ServerMessage,
   serverMessage,
 } from '@workspace/replica/protocol'
 import type { RegionHub, Subscriber } from '@workspace/replica/server'
 
 import type { IdentitySessions } from '../auth/identity-sessions'
+import type { Organisations } from '../tenants/organisations'
+
+import type { ConnectionRegistry } from './connections'
 
 /** The end of a device's WebSocket the connection writes to. */
 export interface SocketLike {
@@ -26,6 +30,9 @@ export interface SocketLike {
 export interface SyncConnectionDeps {
   readonly sessions: Pick<IdentitySessions, 'authenticate' | 'revoke'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
+  readonly organisations: Pick<Organisations, 'membershipsOf'>
+  /** Where the connection registers once the keys are accepted, to hear its memberships change. */
+  readonly connections: ConnectionRegistry
   readonly clock: Clock
   /** Hears sign-outs and failures; no line carries a token, a key or a grant id. */
   readonly log: Logger
@@ -43,8 +50,11 @@ interface Device {
   readonly identity: AuthUser
   /** The keys it holds now: renewed at hello, or as it came with them. */
   readonly tokens: AuthTokens
-  /** The identity's private region, the only region the device may name. */
-  readonly region: RegionRef
+  /**
+   * The regions the device may name, by id: the identity's private region and the region of
+   * each organisation it belongs to.
+   */
+  readonly regions: ReadonlyMap<string, RegionRef>
 }
 
 type State =
@@ -68,6 +78,14 @@ const REASON = {
   failed: 'the gateway failed to handle the message',
 } as const
 
+/** The regions an identity may name, by id. */
+function regionsFor(
+  identity: string,
+  memberships: readonly Membership[],
+): ReadonlyMap<string, RegionRef> {
+  return new Map(identityRegions(identity, memberships).map((ref) => [ref.id, ref]))
+}
+
 /** The regions a message names. */
 function regionsOf(message: ClientMessage): readonly string[] {
   return match(message)
@@ -79,18 +97,23 @@ function regionsOf(message: ClientMessage): readonly string[] {
 
 /**
  * One device's WebSocket to the gateway. The device says hello with its keys first, within
- * the hello time; once they are accepted it is welcomed with its identity's private region
- * and may subscribe, pull, push, probe and compact in that region only, each handed to the
- * region hub, which answers the device itself. Messages are handled one at a time, in the
- * order they came. Text the protocol refuses closes the socket; so does a region of
- * somebody else and a sign-out, which also revokes the device's refresh grant: the sign-out
- * close (4000) means the grant is revoked, and a grant that cannot be revoked closes the
- * socket as a failed server (1011) instead.
+ * the hello time; once they are accepted it is welcomed with its identity's private region,
+ * the region of each organisation the identity belongs to and those memberships, and may
+ * subscribe, pull, push, probe and compact in those regions only, each handed to the region
+ * hub, which answers the device itself and checks its batches against the identity. When the
+ * identity's memberships change, the device leaves the regions it may no longer name, may
+ * name the new ones, and is sent the memberships. Messages and changes of memberships are
+ * handled one at a time, in the order they came. Text the protocol refuses closes the
+ * socket; so does a region the device may not name and a sign-out, which also revokes the
+ * device's refresh grant: the sign-out close (4000) means the grant is revoked, and a grant
+ * that cannot be revoked closes the socket as a failed server (1011) instead.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
   readonly #sessions: SyncConnectionDeps['sessions']
   readonly #hub: SyncConnectionDeps['hub']
+  readonly #organisations: SyncConnectionDeps['organisations']
+  readonly #connections: ConnectionRegistry
   readonly #clock: Clock
   readonly #log: Logger
   readonly #onError: (error: DataError) => void
@@ -98,13 +121,17 @@ export class SyncConnection {
   /** The regions the device subscribed to, to leave when the socket closes. */
   readonly #subscribed = new Set<string>()
   #state: State
-  /** Settles once every message received so far has been handled. */
+  /** Settles once every message and every change of memberships so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
+  /** Takes the connection out of the registry; nothing to take until the keys are accepted. */
+  #unregister: () => void = () => {}
 
   constructor(socket: SocketLike, deps: SyncConnectionDeps) {
     this.#socket = socket
     this.#sessions = deps.sessions
     this.#hub = deps.hub
+    this.#organisations = deps.organisations
+    this.#connections = deps.connections
     this.#clock = deps.clock
     this.#log = deps.log
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
@@ -123,20 +150,25 @@ export class SyncConnection {
 
   /** Handles one text message once the ones before it are handled; never rejects. */
   receive(text: string): Promise<void> {
-    const handled = this.#queue.then(() => this.#handle(text))
-
-    this.#queue = handled
-
-    return handled
+    return this.#enqueue(() => this.#dispatch(text))
   }
 
-  /** The socket closed: leaves every region and ignores whatever comes later. */
+  /**
+   * The identity's memberships changed: once what came before is handled, the device leaves
+   * the regions it may no longer name, may name the new ones, and is sent the memberships.
+   */
+  memberships(next: readonly Membership[]): void {
+    void this.#enqueue(async () => this.#changeMemberships(next))
+  }
+
+  /** The socket closed: leaves every region, unregisters and ignores whatever comes later. */
   closed(): void {
     if (this.#state.kind === 'waiting') {
       this.#state.cancelHello()
     }
 
     this.#state = { kind: 'closed' }
+    this.#unregister()
 
     for (const region of this.#subscribed) {
       this.#hub.unsubscribe(region, this.#subscriber.id)
@@ -145,13 +177,22 @@ export class SyncConnection {
     this.#subscribed.clear()
   }
 
-  async #handle(text: string): Promise<void> {
+  /** Runs `work` once the work before it is done; never rejects. */
+  #enqueue(work: () => Promise<void>): Promise<void> {
+    const handled = this.#queue.then(() => this.#handle(work))
+
+    this.#queue = handled
+
+    return handled
+  }
+
+  async #handle(work: () => Promise<void>): Promise<void> {
     if (this.#state.kind === 'closed') {
       return
     }
 
     try {
-      await this.#dispatch(text)
+      await work()
     } catch (cause) {
       this.#fail(dataError('data:WRITE_FAILED', 'the sync connection failed to answer', cause))
     }
@@ -209,11 +250,6 @@ export class SyncConnection {
     }
 
     const { identity, tokens, renewed } = authenticated.value
-    const device: Device = {
-      identity,
-      tokens,
-      region: { kind: 'private', id: `identity:${identity.id}` },
-    }
 
     // The renewed pair goes out first, before anything else is awaited: the key the device
     // holds is spent already.
@@ -221,7 +257,24 @@ export class SyncConnection {
       this.#send({ type: 'tokens', access: tokens.access, refresh: tokens.refresh })
     }
 
-    const heads = await this.#hub.heads([device.region.id])
+    // Registered before the memberships are read: a change from then on reaches the device
+    // after its welcome, in turn with its messages.
+    this.#unregister = this.#connections.add(identity.id, this)
+
+    const memberships = await this.#organisations.membershipsOf(identity.id)
+
+    if (this.#isClosed()) {
+      return
+    }
+
+    if (memberships.isErr()) {
+      this.#fail(memberships.error)
+
+      return
+    }
+
+    const device: Device = { identity, tokens, regions: regionsFor(identity.id, memberships.value) }
+    const heads = await this.#hub.heads([...device.regions.keys()])
 
     if (this.#isClosed()) {
       return
@@ -238,14 +291,36 @@ export class SyncConnection {
       type: 'welcome',
       identity: identity.id,
       regions: heads.value.map(({ region, head }) => ({ region, head })),
+      memberships: [...memberships.value],
       time: this.#clock.now(),
     })
   }
 
-  async #serve(device: Device, message: ClientMessage): Promise<void> {
-    const own = device.region.id
+  /** Leaves the regions the device may no longer name, replaces its regions and tells it. */
+  #changeMemberships(next: readonly Membership[]): void {
+    const state = this.#state
 
-    if (regionsOf(message).some((region) => region !== own)) {
+    // The connection registers during its hello, which comes first in turn: the device was
+    // welcomed by then, unless the hello failed and the socket closed.
+    if (state.kind !== 'ready') {
+      return
+    }
+
+    const regions = regionsFor(state.device.identity.id, next)
+
+    for (const region of [...this.#subscribed]) {
+      if (!regions.has(region)) {
+        this.#hub.unsubscribe(region, this.#subscriber.id)
+        this.#subscribed.delete(region)
+      }
+    }
+
+    this.#state = { kind: 'ready', device: { ...state.device, regions } }
+    this.#send({ type: 'memberships', memberships: [...next] })
+  }
+
+  async #serve(device: Device, message: ClientMessage): Promise<void> {
+    if (!regionsOf(message).every((region) => device.regions.has(region))) {
       this.#send({ type: 'error', code: 'forbidden-region', message: REASON.forbidden })
       this.#close(CLOSE.forbidden, REASON.forbidden)
 
@@ -257,18 +332,23 @@ export class SyncConnection {
     await match(message)
       .with({ type: 'hello' }, async () => this.#close(CLOSE.protocol, REASON.helloTwice))
       .with({ type: 'sign-out' }, () => this.#signOut(device))
-      .with({ type: 'subscribe' }, async ({ vv }) => {
-        this.#subscribed.add(own)
-        this.#settle(await this.#hub.subscribe(device.region, own, subscriber, vv))
+      .with({ type: 'subscribe' }, async ({ region, vv }) => {
+        const ref = device.regions.get(region)
+
+        // Checked above: the device may name the region.
+        if (ref) {
+          this.#subscribed.add(region)
+          this.#settle(await this.#hub.subscribe(ref, device.identity.id, subscriber, vv))
+        }
       })
-      .with({ type: 'pull' }, async ({ vv }) => {
-        this.#settle(await this.#hub.pull(own, subscriber, vv))
+      .with({ type: 'pull' }, async ({ region, vv }) => {
+        this.#settle(await this.#hub.pull(region, subscriber, vv))
       })
-      .with({ type: 'push' }, async ({ batch, updates }) => {
-        this.#settle(await this.#hub.push(own, subscriber, batch, updates))
+      .with({ type: 'push' }, async ({ region, batch, updates }) => {
+        this.#settle(await this.#hub.push(region, subscriber, batch, updates))
       })
-      .with({ type: 'compact' }, async ({ covers, snapshot }) => {
-        this.#settle(await this.#hub.compact(own, subscriber, covers, snapshot))
+      .with({ type: 'compact' }, async ({ region, covers, snapshot }) => {
+        this.#settle(await this.#hub.compact(region, subscriber, covers, snapshot))
       })
       .with({ type: 'probe' }, async ({ regions }) => {
         const heads = await this.#hub.heads(regions)

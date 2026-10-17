@@ -246,8 +246,8 @@ class Engine implements SyncEngine {
           sync.subscribe()
         }
       })
-      // The transport hands renewed keys to the app.
-      .with({ type: 'tokens' }, () => {})
+      // The transport hands renewed keys and memberships to the app.
+      .with({ type: P.union('tokens', 'memberships') }, () => {})
       .with({ type: 'heads' }, ({ regions }) => {
         this.#probes.shift()?.()
 

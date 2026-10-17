@@ -25,8 +25,8 @@ export interface ValidateBatchInput {
   /** The authoritative document of the region; validation never modifies it. */
   readonly doc: LoroDoc
   readonly region: RegionRef
-  /** For a private region, the record id of the identity that owns it, `identity:<id>`. */
-  readonly owner: string | undefined
+  /** The identity id (its key) of the device that pushed the batch. */
+  readonly actor: string
   readonly schema: ReplicaSchema
   readonly updates: readonly Uint8Array[]
 }
@@ -80,27 +80,46 @@ function touchedRecordKeys(
   return ok(touched)
 }
 
-/** The first field of a private record that references an identity other than the region's owner. */
+/** Fields that reference the pushing identity: `identity` in a private region, `member` in a tenant region. */
+function ownerTable(region: RegionRef): string {
+  return region.kind === 'tenant' ? 'member' : 'identity'
+}
+
+/**
+ * The first field that breaks the owner rule. In a private region every identity reference is
+ * the region's owner. In a tenant region a record created by the batch references the pushing
+ * member only, and a record it updates keeps the member references it had: who wrote a note is
+ * not something another member can change.
+ */
 function foreignOwner(
   input: ValidateBatchInput,
   table: string,
   value: Readonly<Record<string, unknown>>,
+  before: Readonly<Record<string, unknown>> | undefined,
 ): string | undefined {
-  if (input.region.kind !== 'private') {
-    return undefined
-  }
+  const owner = `${ownerTable(input.region)}:${input.actor}`
 
   return Object.keys(value).find((field) => {
     const kind = fieldOf(input.schema, table, field)
 
-    return kind?.kind === 'record' && kind.table === 'identity' && value[field] !== input.owner
+    if (kind?.kind !== 'record' || kind.table !== ownerTable(input.region)) {
+      return false
+    }
+
+    if (input.region.kind === 'private' || before === undefined) {
+      return value[field] !== owner
+    }
+
+    return value[field] !== before[field]
   })
 }
 
 /**
  * Applies a pushed batch to a fork of the authoritative document and checks what it changed:
  * it writes nothing outside the `records` map, and every record it touched belongs to a table
- * of the region, is a map, and in a private region references no identity but the owner's.
+ * of the region, is a map, and keeps the owner rule (`foreignOwner`): in a private region it
+ * references no identity but the owner's, in a tenant region a new record names the pushing
+ * member and an existing one keeps the members it named.
  * The result is the plan the region's log accepts: the projection of each touched record,
  * the update bytes and the version after the batch. A record the batch creates and deletes
  * again is no change. A refused batch is a value, never a throw, and the authoritative
@@ -159,7 +178,10 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
     }
 
     const value = record.toJSON() as Record<string, unknown>
-    const foreign = foreignOwner(input, split.table, value)
+    const previous: unknown = before.get(entry)
+    const prior =
+      previous instanceof LoroMap ? (previous.toJSON() as Record<string, unknown>) : undefined
+    const foreign = foreignOwner(input, split.table, value, prior)
 
     if (foreign) {
       return err({ reason: 'foreign-owner', detail: `${entry}.${foreign}` })

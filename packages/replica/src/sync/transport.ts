@@ -5,6 +5,7 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
@@ -47,6 +48,8 @@ export interface WebSocketTransportOptions {
   readonly url: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
+  /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
+  readonly onMemberships?: (memberships: readonly Membership[]) => void
   /** The gateway refused the keys or the protocol, or signed the device out: no reconnect follows. */
   readonly onEnded: (reason: EndReason) => void
   readonly clock: Clock
@@ -90,9 +93,11 @@ type State =
 
 /**
  * The device's WebSocket to the gateway. On open it says hello with the stored keys; the
- * channel is up once the gateway welcomes it, and only then does it send. A socket that
- * closes, or is not welcomed within 10 seconds, is opened again after a growing delay, which
- * starts over at the next welcome or when the engine gives a connection up (`reconnect`). A
+ * channel is up once the gateway welcomes it, and only then does it send. Renewed keys go to
+ * `onTokens`, and the memberships of the welcome and of every later change to `onMemberships`,
+ * before the listeners of messages hear the message. A socket that closes, or is not welcomed
+ * within 10 seconds, is opened again after a growing delay, which starts over at the next
+ * welcome or when the engine gives a connection up (`reconnect`). A
  * close that refuses the keys or the protocol, or signs the device out, ends the channel for
  * good. Text the protocol refuses closes the socket as a breach and connects again.
  */
@@ -262,6 +267,10 @@ export class WebSocketTransport implements SyncTransport {
 
     if (message.type === 'tokens') {
       this.#options.onTokens({ access: message.access, refresh: message.refresh })
+    }
+
+    if (message.type === 'welcome' || message.type === 'memberships') {
+      this.#options.onMemberships?.(message.memberships)
     }
 
     for (const listener of this.#messageListeners) {

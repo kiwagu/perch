@@ -21,7 +21,9 @@ import { RegionHub } from '@workspace/replica/server'
 
 import { IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
+import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
@@ -29,7 +31,13 @@ export interface GatewayRoot {
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
+  /**
+   * The region hub: it keeps private regions in the directory and each tenant region in its
+   * organisation's database.
+   */
   readonly hub: RegionHub
+  /** The open sync connections of each identity, told of every change of its memberships. */
+  readonly connections: ConnectionRegistry
   /** The directory database. */
   readonly local: LocalDb
   readonly clock: Clock
@@ -71,12 +79,6 @@ export function createGatewayRoot(
     schema: readSchema('directory'),
     ...credentials,
   }).map((local): GatewayRoot => {
-    const hub = new RegionHub({
-      local,
-      schema: replicaSchema,
-      clock: options.clock,
-      onError: (error) => hubLog.error({ code: error.code }, error.message),
-    })
     const databases = new TenantDatabases({
       open: (key) =>
         openLocalDb({
@@ -90,6 +92,20 @@ export function createGatewayRoot(
       clock: options.clock,
       onError: (error) => tenantsLog.error({ code: error.code }, error.message),
     })
+    const hub = new RegionHub({
+      databases: regionDatabases(local, databases),
+      schema: replicaSchema,
+      clock: options.clock,
+      onError: (error) => hubLog.error({ code: error.code }, error.message),
+    })
+    const organisations = new Organisations({ directory: local, databases })
+    const connections = new ConnectionRegistry()
+
+    organisations.onChange((identity, memberships) => {
+      for (const connection of connections.forIdentity(identity)) {
+        connection.memberships(memberships)
+      }
+    })
 
     return {
       sessions: new IdentitySessions({
@@ -99,9 +115,10 @@ export function createGatewayRoot(
         fetch,
         onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
       }),
-      organisations: new Organisations({ directory: local, databases }),
+      organisations,
       databases,
       hub,
+      connections,
       local,
       clock: options.clock,
       close: async () => {

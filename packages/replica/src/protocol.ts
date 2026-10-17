@@ -2,7 +2,7 @@ import { err, ok, type Result } from 'neverthrow'
 
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
@@ -91,9 +91,13 @@ export const serverMessage = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('welcome'),
     identity: z.string(),
+    /** The identity's private region and the region of each organisation it belongs to. */
     regions: z.array(regionHead),
+    memberships: z.array(membership),
     time: z.int(),
   }),
+  /** The identity's memberships changed: the regions the device may name changed with them. */
+  z.object({ type: z.literal('memberships'), memberships: z.array(membership) }),
   z.object({ type: z.literal('tokens'), access: z.string().min(1), refresh: z.string().min(1) }),
   z.object({ type: z.literal('updates'), region, bytes, head, snapshot: z.boolean() }),
   z.object({ type: z.literal('ack'), region, batch, head, compact: z.boolean() }),

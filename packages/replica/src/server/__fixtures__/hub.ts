@@ -3,15 +3,20 @@ import { LoroDoc, LoroMap, type VersionVector } from 'loro-crdt'
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
-import { profileSchema } from '../../__fixtures__/profile'
+import { replicaSchema } from '../../__fixtures__/note'
 import type { ServerMessage } from '../../protocol'
 import type { RegionRef } from '../../region-doc'
 import { type ManualClock, manualClock } from '../../testing/manual-clock'
+import { type RegionDatabases, singleDatabase } from '../region-databases'
 import { RegionHub, type Subscriber } from '../region-hub'
 
 import { nameIn } from './log'
 
-export const owner = 'identity:idn_a'
+/** The identity id of the owner of the private region the hub tests use. */
+export const actor = 'idn_a'
+
+/** The record id of that identity, which is also the id of its private region. */
+export const owner = `identity:${actor}`
 
 export const region: RegionRef = { kind: 'private', id: owner }
 
@@ -33,12 +38,17 @@ export interface HubFixtureOptions {
   readonly compactionLogLimit?: number
   /** Runs before every query the hub sends: it may hold the query or fail it. */
   readonly intercept?: (text: string) => void | Promise<void>
+  /** The databases the hub keeps its regions in; the fixture's database for every region by default. */
+  readonly databases?: (local: LocalDb) => RegionDatabases
 }
 
 /** The version of each subscriber's document right after it last imported what the hub sent. */
 const imported = new WeakMap<LoroDoc, VersionVector>()
 
 const opened: HubFixture[] = []
+
+/** Databases a test opened beside its hub's, closed with the hubs. */
+const others: LocalDb[] = []
 
 /** A subscriber whose document imports every `updates` message it receives. */
 export function subscriber(id: string): TestSubscriber {
@@ -108,14 +118,24 @@ export function nameInSnapshot(device: TestSubscriber): unknown {
   return nameIn(snapshotIn(device))
 }
 
-/** A hub of the profile schema on a fresh embedded database, with a manual clock. */
+/** A fresh embedded database of its own, closed with the hubs. */
+export async function openDatabase(): Promise<LocalDb> {
+  const local = (await openTestDb())._unsafeUnwrap()
+
+  others.push(local)
+
+  return local
+}
+
+/** A hub of the profile and note schema on a fresh embedded database, with a manual clock. */
 export async function openHub(options: HubFixtureOptions = {}): Promise<HubFixture> {
   const local = (await openTestDb())._unsafeUnwrap()
   const clock = manualClock()
   const errors: DataError[] = []
+  const served = options.intercept ? interceptQueries(local, options.intercept) : local
   const hub = new RegionHub({
-    local: options.intercept ? interceptQueries(local, options.intercept) : local,
-    schema: profileSchema,
+    databases: options.databases ? options.databases(served) : singleDatabase(served),
+    schema: replicaSchema,
     clock,
     onError: (error) => errors.push(error),
     ...(options.compactionLogLimit === undefined
@@ -136,7 +156,7 @@ export async function hubWithTwoSubscribers(options: HubFixtureOptions = {}) {
   const b = subscriber('b')
 
   for (const device of [a, b]) {
-    ;(await fixture.hub.subscribe(region, owner, device, null))._unsafeUnwrap()
+    ;(await fixture.hub.subscribe(region, actor, device, null))._unsafeUnwrap()
   }
 
   return { ...fixture, a, b }
@@ -150,7 +170,7 @@ export async function hubWithHistory(names: readonly string[], options: HubFixtu
   const fixture = await openHub(options)
   const a = subscriber('a')
 
-  ;(await fixture.hub.subscribe(region, owner, a, null))._unsafeUnwrap()
+  ;(await fixture.hub.subscribe(region, actor, a, null))._unsafeUnwrap()
 
   for (const [index, name] of names.entries()) {
     ;(await fixture.hub.push(region.id, a, index + 1, [editFrom(a.doc, name)]))._unsafeUnwrap()
@@ -159,10 +179,14 @@ export async function hubWithHistory(names: readonly string[], options: HubFixtu
   return { ...fixture, a, doc: a.doc, fresh: subscriber('fresh') }
 }
 
-/** Closes every hub opened since the last call, then its database. */
+/** Closes every hub opened since the last call, then its database and the others opened beside it. */
 export async function closeHubs(): Promise<void> {
   for (const { hub, local } of opened.splice(0)) {
     await hub.close()
+    await local.close()
+  }
+
+  for (const local of others.splice(0)) {
     await local.close()
   }
 }

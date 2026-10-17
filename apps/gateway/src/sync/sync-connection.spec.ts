@@ -1,10 +1,11 @@
 import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createAuth, type DataError, dataError, type LocalDb } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { createAuth, type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
+import { nodeEngines } from '@workspace/data/engines/node'
+import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { profileIdFactory } from '@workspace/ids'
+import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -23,11 +24,18 @@ import { manualClock } from '@workspace/replica/testing'
 
 import { type DeviceTokens, IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Organisations } from '../tenants/organisations'
+import { regionDatabases } from '../tenants/region-databases'
+import { TenantDatabases } from '../tenants/tenant-databases'
 
+import { noteCreate } from './__fixtures__/note'
 import { profileCreate } from './__fixtures__/profile'
+import { ConnectionRegistry } from './connections'
 import { type SocketLike, SyncConnection, type SyncConnectionDeps } from './sync-connection'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
+
+const bob = { email: 'bob@example.test', password: 'pass-word-1' }
 
 /** The close code of a server that failed. */
 const SERVER_ERROR = 1011
@@ -50,20 +58,15 @@ class FakeSocket implements SocketLike {
   }
 }
 
-interface Opened {
-  readonly hub: RegionHub
-  readonly local: LocalDb
-}
-
-const opened: Opened[] = []
+/** Closes what each test opened: the hub, then the organisations' databases, then the directory. */
+const cleanups: Array<() => Promise<void>> = []
 
 /** Failures the hub, the identity sessions or the connection reported; a test that expects one takes it. */
 const reported: DataError[] = []
 
 afterEach(async () => {
-  for (const { hub, local } of opened.splice(0)) {
-    await hub.close()
-    await local.close()
+  for (const cleanup of cleanups.splice(0)) {
+    await cleanup()
   }
 
   expect(reported.splice(0)).toEqual([])
@@ -71,6 +74,11 @@ afterEach(async () => {
 
 function encode(message: ClientMessage): string {
   return encodeMessage(clientMessage, message)
+}
+
+/** A hello of the protocol before this one, which the encoder of this one cannot write. */
+function helloOfProtocol1({ access, refresh }: DeviceTokens): string {
+  return JSON.stringify({ type: 'hello', protocol: 1, access, refresh })
 }
 
 function types(messages: readonly ServerMessage[]): string[] {
@@ -87,21 +95,38 @@ interface ConnectOptions {
 }
 
 /**
- * A connection over a fake socket, with a real hub and real identity sessions on a fresh
- * embedded database where Ann has signed up. Revoking a grant is only counted: it goes to
- * the database's RPC over HTTP.
+ * The gateway's services on a fresh embedded directory, each organisation's database on an
+ * embedded engine of its own: identity sessions, organisations, a real hub over both, and the
+ * registry of connections, which hears every change of memberships as the composition root
+ * wires it. Revoking a grant goes to the database's RPC over HTTP, so a connection only counts it.
  */
-async function connect(options: ConnectOptions = {}) {
+async function openGateway() {
   const local = (await openTestDb({ namespace: NAMESPACE, database: DIRECTORY }))._unsafeUnwrap()
   const clock = manualClock()
+  const databases = new TenantDatabases({
+    open: (key) =>
+      openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: NAMESPACE,
+        database: tenantDatabase(key),
+        schema: readSchema('tenant'),
+      }),
+    clock: manualClock(),
+    onError: (error) => reported.push(error),
+  })
   const hub = new RegionHub({
-    local,
+    databases: regionDatabases(local, databases),
     schema: replicaSchema,
     clock,
     onError: (error) => reported.push(error),
   })
 
-  opened.push({ hub, local })
+  cleanups.push(async () => {
+    await hub.close()
+    await databases.close()
+    await local.close()
+  })
 
   const sessions = new IdentitySessions({
     openAuth: () =>
@@ -112,9 +137,34 @@ async function connect(options: ConnectOptions = {}) {
     }),
     onCloseFailure: (error) => reported.push(error),
   })
-  const signedUp = (await sessions.signUp(ann))._unsafeUnwrap()
+  const organisations = new Organisations({ directory: local, databases })
+  const connections = new ConnectionRegistry()
+
+  organisations.onChange((identity, memberships) => {
+    for (const connection of connections.forIdentity(identity)) {
+      connection.memberships(memberships)
+    }
+  })
+
+  return {
+    clock,
+    hub,
+    sessions,
+    organisations,
+    connections,
+    signUp: async (credentials: typeof ann) => (await sessions.signUp(credentials))._unsafeUnwrap(),
+  }
+}
+
+type Gateway = Awaited<ReturnType<typeof openGateway>>
+
+/** A connection of a device to the gateway over a fake socket; it has not said hello yet. */
+function open(gateway: Gateway, options: ConnectOptions = {}) {
+  const { hub, sessions } = gateway
   const revoked: DeviceTokens[] = []
   const logLines: string[] = []
+  /** The regions the connection left at the hub, in order. */
+  const unsubscribed: string[] = []
   const socket = new FakeSocket()
   const connection = new SyncConnection(socket, {
     sessions: {
@@ -128,14 +178,19 @@ async function connect(options: ConnectOptions = {}) {
     },
     hub: {
       subscribe: hub.subscribe.bind(hub),
-      unsubscribe: hub.unsubscribe.bind(hub),
+      unsubscribe: (region, subscriber) => {
+        unsubscribed.push(region)
+        hub.unsubscribe(region, subscriber)
+      },
       pull: hub.pull.bind(hub),
       push: hub.push.bind(hub),
       heads: hub.heads.bind(hub),
       compact: hub.compact.bind(hub),
       ...options.hub,
     },
-    clock,
+    organisations: gateway.organisations,
+    connections: gateway.connections,
+    clock: gateway.clock,
     log: createLogger('sync', {
       level: 'info',
       format: 'json',
@@ -144,28 +199,55 @@ async function connect(options: ConnectOptions = {}) {
     onError: (error) => reported.push(error),
   })
 
+  return { socket, connection, revoked, logLines, unsubscribed }
+}
+
+/** Says hello with a pair the gateway gave at sign-up or sign-in. */
+function hello(connection: SyncConnection, { access, refresh }: DeviceTokens): Promise<void> {
+  return connection.receive(encode({ type: 'hello', protocol: PROTOCOL_VERSION, access, refresh }))
+}
+
+/** A gateway where Ann has signed up, and a connection to it that has not said hello yet. */
+async function connect(options: ConnectOptions = {}) {
+  const gateway = await openGateway()
+  const signedUp = await gateway.signUp(ann)
+
   return {
-    socket,
-    connection,
-    clock,
-    hub,
+    ...gateway,
+    ...open(gateway, options),
     ann: signedUp,
     region: `identity:${signedUp.identity.id}`,
-    revoked,
-    logLines,
   }
 }
 
 /** A connection where Ann said hello with the pair her sign-up gave her. */
 async function connectedAsAnn(options: ConnectOptions = {}) {
   const fixture = await connect(options)
-  const { access, refresh } = fixture.ann.tokens
 
-  await fixture.connection.receive(
-    encode({ type: 'hello', protocol: PROTOCOL_VERSION, access, refresh }),
-  )
+  await hello(fixture.connection, fixture.ann.tokens)
 
   return { ...fixture, doc: RegionDoc.inMemory('private', fixture.region) }
+}
+
+/**
+ * A gateway where Ann and Bob have signed up and Ann has created the organisation Acme;
+ * Bob belongs to it when `bobInvited`.
+ */
+async function withAcme(bobInvited: boolean) {
+  const gateway = await openGateway()
+  const anns = await gateway.signUp(ann)
+  const bobs = await gateway.signUp(bob)
+  const acme = (
+    await gateway.organisations.create({ identity: anns.identity.id, key: 'acme', name: 'Acme' })
+  )._unsafeUnwrap()
+
+  if (bobInvited) {
+    ;(
+      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
+    )._unsafeUnwrap()
+  }
+
+  return { gateway, anns, bobs, acme }
 }
 
 /** The update that creates Ann's profile in her device's document. */
@@ -195,7 +277,9 @@ describe('SyncConnection', () => {
   it('closes with unauthorized when the keys are not accepted', async () => {
     const { socket, connection } = await connect()
 
-    await connection.receive(encode({ type: 'hello', protocol: 1, access: 'garbage' }))
+    await connection.receive(
+      encode({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'garbage' }),
+    )
 
     expect(socket.closedWith?.[0]).toBe(CLOSE.unauthorized)
     expect(socket.sent).toEqual([])
@@ -206,7 +290,12 @@ describe('SyncConnection', () => {
 
     await clock.advance(1_000)
     await connection.receive(
-      encode({ type: 'hello', protocol: 1, access: 'stale', refresh: ann.tokens.refresh }),
+      encode({
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        access: 'stale',
+        refresh: ann.tokens.refresh,
+      }),
     )
 
     const [tokens, welcome, ...more] = socket.sent
@@ -219,6 +308,7 @@ describe('SyncConnection', () => {
       type: 'welcome',
       identity: ann.identity.id,
       regions: [{ region: `identity:${ann.identity.id}`, head: 0 }],
+      memberships: [],
       time: 1_000,
     })
     expect(socket.closedWith).toBeUndefined()
@@ -305,7 +395,9 @@ describe('SyncConnection', () => {
   it('signs out a device that came with an access token only, with nothing to revoke', async () => {
     const { socket, connection, revoked, ann, logLines } = await connect()
 
-    await connection.receive(encode({ type: 'hello', protocol: 1, access: ann.tokens.access }))
+    await connection.receive(
+      encode({ type: 'hello', protocol: PROTOCOL_VERSION, access: ann.tokens.access }),
+    )
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
     expect(revoked).toEqual([])
@@ -373,7 +465,12 @@ describe('SyncConnection', () => {
 
     duringRenewal = () => connection.closed()
     await connection.receive(
-      encode({ type: 'hello', protocol: 1, access: 'stale', refresh: ann.tokens.refresh }),
+      encode({
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        access: 'stale',
+        refresh: ann.tokens.refresh,
+      }),
     )
 
     expect(socket.sent).toEqual([])
@@ -414,7 +511,9 @@ describe('SyncConnection', () => {
   it('closes when the device says hello twice', async () => {
     const { socket, connection, ann } = await connectedAsAnn()
 
-    await connection.receive(encode({ type: 'hello', protocol: 1, access: ann.tokens.access }))
+    await connection.receive(
+      encode({ type: 'hello', protocol: PROTOCOL_VERSION, access: ann.tokens.access }),
+    )
 
     expect(socket.closedWith?.[0]).toBe(CLOSE.protocol)
   })
@@ -424,7 +523,7 @@ describe('SyncConnection', () => {
     const { access, refresh } = ann.tokens
 
     await Promise.all([
-      connection.receive(encode({ type: 'hello', protocol: 1, access, refresh })),
+      connection.receive(encode({ type: 'hello', protocol: PROTOCOL_VERSION, access, refresh })),
       connection.receive(encode({ type: 'subscribe', region, vv: null })),
       connection.receive(encode({ type: 'probe', regions: [region] })),
     ])
@@ -434,14 +533,16 @@ describe('SyncConnection', () => {
   })
 
   it('ignores messages once the socket closed and leaves its regions', async () => {
-    const { socket, connection, region, hub, clock } = await connectedAsAnn()
+    const { socket, connection, region, hub, clock, connections, ann } = await connectedAsAnn()
 
     await connection.receive(encode({ type: 'subscribe', region, vv: null }))
+    expect(connections.forIdentity(ann.identity.id)).toEqual([connection])
     connection.closed()
     await connection.receive(encode({ type: 'probe', regions: [region] }))
 
     expect(types(socket.sent)).toEqual(['welcome', 'updates'])
     expect(socket.closedWith).toBeUndefined()
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
 
     await clock.advance(60_000)
     expect(hub.loadedRegions()).toBe(0)
@@ -460,5 +561,143 @@ describe('SyncConnection', () => {
 
     await connection.receive(encode({ type: 'probe', regions: [] }))
     expect(socket.sent).toHaveLength(1)
+  })
+
+  it("welcomes a member with the private region and every ready organisation's region, and the memberships", async () => {
+    const { gateway, anns, acme } = await withAcme(false)
+    const { socket, connection } = open(gateway)
+
+    await hello(connection, anns.tokens)
+
+    expect(socket.sent).toEqual([
+      {
+        type: 'welcome',
+        identity: anns.identity.id,
+        regions: [
+          { region: `identity:${anns.identity.id}`, head: 0 },
+          { region: 'tenant:acme', head: 0 },
+        ],
+        memberships: [acme],
+        time: 0,
+      },
+    ])
+  })
+
+  it('closes 4403 a subscribe to the region of an organisation the identity is not a member of', async () => {
+    const { gateway, bobs } = await withAcme(false)
+    const { socket, connection } = open(gateway)
+
+    await hello(connection, bobs.tokens)
+    await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+
+    expect(types(socket.sent)).toEqual(['welcome', 'error'])
+    expect(socket.sent[1]).toEqual(
+      expect.objectContaining({ type: 'error', code: 'forbidden-region' }),
+    )
+    expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    expect(gateway.hub.loadedRegions()).toBe(0)
+  })
+
+  it('closes 4403 a push into a region the device is not welcomed to', async () => {
+    const { gateway, bobs } = await withAcme(false)
+    const { socket, connection } = open(gateway)
+    const note = (
+      await noteCreate(RegionDoc.inMemory('tenant', 'tenant:acme'), {
+        id: noteIdFactory.create(),
+        author: bobs.identity.id,
+        text: 'hello',
+      })
+    )._unsafeUnwrap()
+
+    await hello(connection, bobs.tokens)
+    await connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 1, updates: [note] }),
+    )
+
+    expect(types(socket.sent)).toEqual(['welcome', 'error'])
+    expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    expect(gateway.hub.loadedRegions()).toBe(0)
+  })
+
+  it('refuses hello with protocol 1 (4400)', async () => {
+    const { socket, connection, ann } = await connect()
+
+    await connection.receive(helloOfProtocol1(ann.tokens))
+
+    expect(socket.closedWith?.[0]).toBe(CLOSE.protocol)
+    expect(socket.sent).toEqual([])
+  })
+
+  it('closes 4400 a hello with protocol 1', async () => {
+    const gateway = await openGateway()
+    const signedUp = await gateway.signUp(ann)
+    const old = open(gateway)
+    const stale = { access: 'stale', refresh: signedUp.tokens.refresh }
+
+    await old.connection.receive(helloOfProtocol1(stale))
+
+    expect(old.socket.closes.map(([code]) => code)).toEqual([CLOSE.protocol])
+    expect(old.socket.sent).toEqual([])
+
+    // The keys were never tried: the refresh key is not spent, and renews the pair at a hello of this protocol.
+    const current = open(gateway)
+
+    await hello(current.connection, stale)
+
+    expect(types(current.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('sends memberships and leaves the region when the identity is removed', async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+    const annsDevice = open(gateway)
+    const bobsDevice = open(gateway)
+
+    for (const [device, signedUp] of [
+      [annsDevice, anns],
+      [bobsDevice, bobs],
+    ] as const) {
+      await hello(device.connection, signedUp.tokens)
+      await device.connection.receive(
+        encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+      )
+    }
+
+    ;(
+      await gateway.organisations.remove({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+      })
+    )._unsafeUnwrap()
+    await bobsDevice.connection.receive(
+      encode({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() }),
+    )
+
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'memberships', 'error'])
+    expect(bobsDevice.socket.sent[2]).toEqual({ type: 'memberships', memberships: [] })
+    expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
+    expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    // Ann's memberships did not change: her connection hears nothing and keeps the region.
+    expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates'])
+    expect(annsDevice.unsubscribed).toEqual([])
+  })
+
+  it('sends memberships with the new organisation when the identity is invited while connected', async () => {
+    const { gateway, anns, bobs, acme } = await withAcme(false)
+    const { socket, connection } = open(gateway)
+
+    await hello(connection, bobs.tokens)
+    ;(
+      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
+    )._unsafeUnwrap()
+    // The region is not subscribed on the device's behalf: the device subscribes, and now may.
+    await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+
+    expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'updates'])
+    expect(socket.sent[1]).toEqual({
+      type: 'memberships',
+      memberships: [{ tenant: acme.tenant, role: 'member' }],
+    })
+    expect(socket.closedWith).toBeUndefined()
   })
 })

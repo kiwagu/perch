@@ -9,12 +9,20 @@ routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in`, answe
 `{ identity, tokens, memberships }`, the memberships being the organisations the identity
 belongs to), each call on a database session of its own that is closed when the call ends;
 `GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
-device says hello with its keys (the pair is renewed with the refresh key when the access
-token no longer works, and the new pair is sent first), is welcomed with its identity's
-private region, the only region it may name, and subscribes, pulls, pushes, probes and
-compacts there through the region hub, the server's copy of the replicated regions, which
-answers it and sends each accepted batch to the identity's other devices. Text the
-protocol refuses (4400), refused keys (4401), a foreign region (4403) and a hello that did
+device says hello with its keys at protocol 2 (the pair is renewed with the refresh key when
+the access token no longer works, and the new pair is sent first), is welcomed with its
+identity's private region, the region `tenant:<key>` of each organisation the identity belongs
+to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
+and compacts there through the region hub, the server's copy of the replicated regions, which
+answers it and sends each accepted batch to the region's other devices. The hub keeps a private
+region in the directory and a tenant region in its organisation's database
+(`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
+note names its own member as its author, and nobody changes the author of a note. A
+connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
+accepted; when an identity's memberships change, each of its connections leaves the regions it
+may no longer name and is sent a `memberships` message, and it subscribes to a new
+organisation's region itself. Text the protocol refuses (4400, a hello of protocol 1
+included), refused keys (4401), a region the device may not name (4403) and a hello that did
 not come within 10 seconds (4408, after which the device connects again) close the socket
 with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
 grant through the database's RPC and closes the socket with 4000, which means the grant is

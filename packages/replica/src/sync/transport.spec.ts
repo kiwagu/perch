@@ -5,6 +5,7 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
@@ -49,7 +50,15 @@ class FakeSocket extends EventTarget {
 
 const keys: DeviceCredentials = { access: 'access-key', refresh: 'refresh-key' }
 
-const welcome: ServerMessage = { type: 'welcome', identity: 'idn_a', regions: [], time: 0 }
+const welcome: ServerMessage = {
+  type: 'welcome',
+  identity: 'idn_a',
+  regions: [],
+  memberships: [],
+  time: 0,
+}
+
+const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'member' }
 
 const probe: ClientMessage = { type: 'probe', regions: ['identity:idn_a'] }
 
@@ -60,10 +69,12 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
   const events: string[] = []
   const received: ServerMessage[] = []
   const tokens: Array<{ readonly access: string; readonly refresh: string }> = []
+  const memberships: Array<readonly Membership[]> = []
   const transport = new WebSocketTransport({
     url: 'wss://gateway.example.test/sync',
     credentials,
     onTokens: (pair) => tokens.push(pair),
+    onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
     socket: (url) => {
@@ -97,7 +108,7 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     return socket()
   }
 
-  return { clock, sockets, events, received, tokens, transport, socket, connect }
+  return { clock, sockets, events, received, tokens, memberships, transport, socket, connect }
 }
 
 describe('WebSocket transport', () => {
@@ -114,6 +125,15 @@ describe('WebSocket transport', () => {
     expect(socket().sent).toEqual([
       { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
     ])
+  })
+
+  it('says hello with protocol 2', () => {
+    const { transport, socket } = harness(() => ({ access: 'access-key' }))
+
+    transport.start()
+    socket().open()
+
+    expect(socket().sent).toEqual([{ type: 'hello', protocol: 2, access: 'access-key' }])
   })
 
   it('reports up only after welcome', () => {
@@ -169,6 +189,19 @@ describe('WebSocket transport', () => {
     connect().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
 
     expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
+  })
+
+  it("hands the welcome's memberships and a later memberships message to onMemberships", () => {
+    const { transport, socket, memberships, received } = harness()
+    const update: ServerMessage = { type: 'memberships', memberships: [] }
+
+    transport.start()
+    socket().open()
+    socket().receive({ ...welcome, memberships: [acme] })
+    socket().receive(update)
+
+    expect(memberships).toEqual([[acme], []])
+    expect(received).toEqual([{ ...welcome, memberships: [acme] }, update])
   })
 
   it('stops on 4401 and reports unauthorized', async () => {
