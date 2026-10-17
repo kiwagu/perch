@@ -7,7 +7,8 @@ type MakeDrain = (target: DrainTarget) => OutboxDrainPort
 
 /**
  * An outbox of numbered batches behind a channel that can fall. While held, every push waits
- * until it is released; it counts pushes in flight at the same time.
+ * until it is released; it counts pushes in flight at the same time. A hook set with
+ * `whenFirstEmpty` runs right after the first push that finds the outbox empty has resolved.
  */
 function fakeOutbox(batches: number) {
   let waiting = batches
@@ -19,8 +20,9 @@ function fakeOutbox(batches: number) {
   let channel: ChannelState = 'up'
   let gate: Promise<void> | undefined
   let open: (() => void) | undefined
+  let firstEmpty: (() => void) | undefined
   const pushed: number[] = []
-  const target: DrainTarget = {
+  const outbox: DrainTarget = {
     async pushNext() {
       calls += 1
       inFlight += 1
@@ -50,9 +52,32 @@ function fakeOutbox(batches: number) {
     },
   }
 
+  const target: DrainTarget = {
+    pushNext() {
+      const outcome = outbox.pushNext()
+      const hook = firstEmpty
+
+      // Queued behind the drain's own reaction to this push, so it runs as that reaction ends.
+      void outcome.then((result) => {
+        if (result === 'empty' && hook && firstEmpty === hook) {
+          firstEmpty = undefined
+          queueMicrotask(hook)
+        }
+      })
+
+      return outcome
+    },
+  }
+
   return {
     target,
     pushed,
+    add(count: number) {
+      waiting += count
+    },
+    whenFirstEmpty(hook: () => void) {
+      firstEmpty = hook
+    },
     calls: () => calls,
     empties: () => empties,
     mostInFlight: () => mostInFlight,
@@ -106,6 +131,22 @@ export function describeOutboxDrain(name: string, make: MakeDrain): void {
 
       expect(outbox.pushed).toEqual([1, 2])
       expect(outbox.empties()).toBe(2)
+    })
+
+    it('starts another round for a request made just as the last push of a round resolves', async () => {
+      const outbox = fakeOutbox(1)
+      const drain = make(outbox.target)
+
+      outbox.whenFirstEmpty(() => {
+        outbox.add(1)
+        drain.request()
+      })
+      drain.request()
+      await drain.idle()
+      await turn()
+      await drain.idle()
+
+      expect(outbox.pushed).toEqual([1, 2])
     })
 
     it('stops on a fallen channel and resumes on the next request', async () => {

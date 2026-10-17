@@ -24,16 +24,28 @@ export function createOutboxDrain(target: DrainTarget): OutboxDrainPort {
   let again = false
   let stopped = false
 
-  async function round(): Promise<void> {
-    do {
+  /**
+   * Runs rounds while requests keep coming. It lets go of `running` in the same continuation
+   * that finds no request waiting, so a request made from then on starts a new round.
+   */
+  async function rounds(): Promise<void> {
+    for (;;) {
       again = false
 
       let outcome: 'sent' | 'empty' | 'down' = 'sent'
 
+      // `request` starts rounds only when not stopped, so this awaits at least once and
+      // `running` is set by the time the rounds end.
       while (outcome === 'sent' && !stopped) {
         outcome = await target.pushNext()
       }
-    } while (again && !stopped)
+
+      if (!again || stopped) {
+        running = undefined
+
+        return
+      }
+    }
   }
 
   return {
@@ -48,9 +60,7 @@ export function createOutboxDrain(target: DrainTarget): OutboxDrainPort {
         return
       }
 
-      running = round().finally(() => {
-        running = undefined
-      })
+      running = rounds()
     },
     stop() {
       stopped = true
