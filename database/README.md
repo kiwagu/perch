@@ -6,10 +6,12 @@ The SurrealDB schema and its permission contract, split by database: `schema/com
 what every database has, `schema/directory` the directory database (accounts, organisations
 and memberships) and `schema/tenant` the database of one organisation (`t_<key>`). A
 database's schema is the common files and then its own, each set in file name order. Comment
-annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`) tell
-the modeling stage how the table replicates and which id prefix its keys use. The same schema
-is applied to the local replica and to a server, and the replica schema generated from it is
-the one description of replicated tables that every runtime reads.
+annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`,
+`-- @owner`, `-- @can`) tell the modeling stage how the table replicates, which id prefix its
+keys use and who may write it. The same schema is applied to the local replica and to a
+server, and the replica schema generated from it is the one description of replicated tables
+that every runtime reads. Notes carry their write rules there: a member creates notes and
+edits or deletes only those it wrote (`-- @owner author`), an admin edits or deletes any note.
 
 ## Key exports
 

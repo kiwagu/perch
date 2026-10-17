@@ -22,6 +22,11 @@ export const replicaSchema: ReplicaSchema = {
       text: { kind: 'text' },
       created_at: { kind: 'datetime' },
     },
+    owner: 'author',
+    can: {
+      member: { create: 'any', update: 'own', delete: 'own' },
+      admin: { create: 'any', update: 'any', delete: 'any' },
+    },
   },
 }
 

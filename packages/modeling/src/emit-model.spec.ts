@@ -23,6 +23,23 @@ const schema: SchemaModel = {
         created_at: { kind: 'scalar', name: 'datetime' },
       },
     },
+    note: {
+      region: 'tenant',
+      idPrefix: 'nte',
+      crdt: { text: 'text' },
+      fields: {
+        author: { kind: 'record', tables: ['member'] },
+        text: { kind: 'scalar', name: 'string' },
+        created_at: { kind: 'scalar', name: 'datetime' },
+      },
+      abilities: {
+        owner: 'author',
+        can: {
+          member: { create: 'any', update: 'own', delete: 'own' },
+          admin: { create: 'any', update: 'any', delete: 'any' },
+        },
+      },
+    },
   },
 }
 
@@ -115,5 +132,11 @@ describe('emitReplicaSchema', () => {
       "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },",
     )
     expect(text).not.toContain('  identity:')
+  })
+
+  it('emits the owner field and the abilities of a table after its fields', () => {
+    expect(emitReplicaSchema(schema)).toContain(
+      "  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, text: { kind: 'text' }, created_at: { kind: 'datetime' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },",
+    )
   })
 })
