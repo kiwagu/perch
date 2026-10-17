@@ -2,6 +2,7 @@ import type { Result, ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError, LocalDb } from '@workspace/data'
+import { OWNER_ABILITY } from '@workspace/kernel'
 
 import type { Clock } from '../clock'
 import {
@@ -366,7 +367,9 @@ class DeviceChannel implements StubTransport {
         // Checked above: the device may name the region.
         if (ref) {
           connection.asked += 1
-          this.#settle(hub.subscribe(ref, this.#identity, subscriber, vv))
+          this.#settle(
+            hub.subscribe(ref, { id: this.#identity, ability: OWNER_ABILITY }, subscriber, vv),
+          )
         }
       })
       .with({ type: 'pull' }, ({ region, vv }) => {

@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 
 import { recordRef } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
+import { defineAbilityFor } from '@workspace/kernel'
 
 import {
   noteCreate,
+  noteDelete,
   noteRemoveAuthor,
   noteSetAuthor,
   noteUpdate,
@@ -113,7 +115,7 @@ describe('batch validation', () => {
 
     expect(validateBatch(input(server, [exportSince(client, server)]))._unsafeUnwrapErr()).toEqual({
       reason: 'malformed',
-      detail: 'writes outside records: other',
+      detail: 'writes outside records: cid:root-other:Map',
     })
   })
 
@@ -217,6 +219,8 @@ describe('a tenant region', () => {
   const region = { kind: 'tenant', id: 'tenant:acme' } as const
   const ann = 'idn_ann000000000000.0000000000'
   const bob = 'idn_bob000000000000.0000000000'
+  const member = (id: string) => defineAbilityFor({ id, role: 'member' }, replicaSchema)
+  const admin = (id: string) => defineAbilityFor({ id, role: 'admin' }, replicaSchema)
 
   it('accepts a note whose author is the pushing member', () => {
     const doc = new LoroDoc()
@@ -225,6 +229,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
+      ability: member(ann),
       schema: replicaSchema,
       updates,
     })
@@ -243,6 +248,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
+      ability: member(ann),
       schema: replicaSchema,
       updates,
     })
@@ -250,7 +256,34 @@ describe('a tenant region', () => {
     expect(validated.isErr() && validated.error.reason).toBe('foreign-owner')
   })
 
-  it('lets another member edit the text but not the author', () => {
+  it('lets a member edit the text of its own note, not its author', () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const edited = validateBatch({
+      doc: server,
+      region,
+      actor: ann,
+      ability: member(ann),
+      schema: replicaSchema,
+      updates: [noteUpdate(server.fork(), { id, text: 'hello, world' })],
+    })
+    const reauthored = validateBatch({
+      doc: server,
+      region,
+      actor: ann,
+      ability: member(ann),
+      schema: replicaSchema,
+      updates: [noteSetAuthor(server.fork(), { id, author: bob })],
+    })
+
+    expect(edited.isOk()).toBe(true)
+    expect(reauthored.isErr() && reauthored.error.reason).toBe('foreign-owner')
+  })
+
+  it("refuses a member editing or deleting another member's note as forbidden-action", () => {
     const server = new LoroDoc()
     const id = noteIdFactory.create()
 
@@ -260,22 +293,103 @@ describe('a tenant region', () => {
       doc: server,
       region,
       actor: bob,
+      ability: member(bob),
       schema: replicaSchema,
-      updates: [noteUpdate(server.fork(), { id, text: 'hello, world' })],
+      updates: [noteUpdate(server.fork(), { id, text: 'mine now' })],
     })
-    const reauthored = validateBatch({
+    const deleted = validateBatch({
       doc: server,
       region,
       actor: bob,
+      ability: member(bob),
       schema: replicaSchema,
-      updates: [noteSetAuthor(server.fork(), { id, author: bob })],
+      updates: [noteDelete(server.fork(), { id })],
+    })
+
+    expect(edited.isErr() && edited.error).toEqual({
+      reason: 'forbidden-action',
+      detail: `note/${id}:update`,
+    })
+    expect(deleted.isErr() && deleted.error).toEqual({
+      reason: 'forbidden-action',
+      detail: `note/${id}:delete`,
+    })
+  })
+
+  it("lets an admin edit and delete another member's note, and a member delete its own", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const edited = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: admin(bob),
+      schema: replicaSchema,
+      updates: [noteUpdate(server.fork(), { id, text: 'edited by the admin' })],
+    })
+    const deletedByAdmin = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      ability: admin(bob),
+      schema: replicaSchema,
+      updates: [noteDelete(server.fork(), { id })],
+    })
+    const deletedByOwner = validateBatch({
+      doc: server,
+      region,
+      actor: ann,
+      ability: member(ann),
+      schema: replicaSchema,
+      updates: [noteDelete(server.fork(), { id })],
     })
 
     expect(edited.isOk()).toBe(true)
-    expect(reauthored.isErr() && reauthored.error.reason).toBe('foreign-owner')
+    expect(deletedByAdmin._unsafeUnwrap().plan.deletes).toMatchObject([{ table: 'note', key: id }])
+    expect(deletedByOwner.isOk()).toBe(true)
   })
 
-  it("refuses deleting the author of another member's note as foreign-owner", () => {
+  it('refuses a client write to a tenant table that declares no abilities', () => {
+    const closed = {
+      ...replicaSchema,
+      note: { region: 'tenant', fields: replicaSchema['note']?.fields ?? {} },
+    } as const
+    const id = noteIdFactory.create()
+    const validated = validateBatch({
+      doc: new LoroDoc(),
+      region,
+      actor: ann,
+      ability: defineAbilityFor({ id: ann, role: 'admin' }, { note: {} }),
+      schema: closed,
+      updates: [noteCreate(new LoroDoc(), { id, author: ann, text: 'hello' })],
+    })
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'forbidden-action',
+      detail: `note/${id}:create`,
+    })
+  })
+
+  it('refuses a batch whose write outside the records was undone in the same batch', () => {
+    const server = documentWithProfile('Ann')
+    const client = forkOf(server)
+
+    client.getMap('junk').set('k', 1)
+    client.getMap('junk').delete('k')
+    client.recordMap('profile/prf_1').set('name', 'Ana')
+
+    const validated = validateBatch(input(server, [exportSince(client, server)]))
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'malformed',
+      detail: 'writes outside records: cid:root-junk:Map',
+    })
+  })
+
+  it("refuses removing the author of a member's own note as foreign-owner", () => {
     const server = new LoroDoc()
     const id = noteIdFactory.create()
 
@@ -284,7 +398,8 @@ describe('a tenant region', () => {
     const validated = validateBatch({
       doc: server,
       region,
-      actor: bob,
+      actor: ann,
+      ability: member(ann),
       schema: replicaSchema,
       updates: [noteRemoveAuthor(server.fork(), { id })],
     })
@@ -300,6 +415,7 @@ describe('a tenant region', () => {
       doc: new LoroDoc(),
       region,
       actor: ann,
+      ability: member(ann),
       schema: replicaSchema,
       updates: [documentWithProfile('Ann').export({ mode: 'update' })],
     })

@@ -127,13 +127,15 @@ describe('WebSocket transport', () => {
     ])
   })
 
-  it('says hello with protocol 2', () => {
+  it('says hello with the current protocol', () => {
     const { transport, socket } = harness(() => ({ access: 'access-key' }))
 
     transport.start()
     socket().open()
 
-    expect(socket().sent).toEqual([{ type: 'hello', protocol: 2, access: 'access-key' }])
+    expect(socket().sent).toEqual([
+      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key' },
+    ])
   })
 
   it('reports up only after welcome', () => {

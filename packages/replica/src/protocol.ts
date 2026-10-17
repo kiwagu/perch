@@ -3,7 +3,7 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
@@ -52,6 +52,7 @@ export const rejectReason = z.enum([
   'pending-dependencies',
   'foreign-table',
   'foreign-owner',
+  'forbidden-action',
   'invalid-record',
 ])
 

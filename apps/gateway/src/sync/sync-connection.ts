@@ -2,8 +2,15 @@ import type { Result } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type AuthTokens, type AuthUser, type DataError, dataError } from '@workspace/data'
+import { type Ability, defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
 import type { Logger } from '@workspace/logger'
-import { type Clock, identityRegions, type RegionRef } from '@workspace/replica'
+import {
+  type Clock,
+  identityRegions,
+  type RegionRef,
+  type ReplicaSchema,
+  tenantKeyOf,
+} from '@workspace/replica'
 import {
   CLOSE,
   type ClientMessage,
@@ -14,7 +21,7 @@ import {
   type ServerMessage,
   serverMessage,
 } from '@workspace/replica/protocol'
-import type { RegionHub, Subscriber } from '@workspace/replica/server'
+import type { Actor, RegionHub, Subscriber } from '@workspace/replica/server'
 
 import type { IdentitySessions } from '../auth/identity-sessions'
 import type { Organisations } from '../tenants/organisations'
@@ -43,6 +50,14 @@ export interface SyncConnectionDeps {
    * internal error and its socket closed. Logged at error level by default.
    */
   readonly onError?: (error: DataError) => void
+  /** Who may write what in each region: the abilities of a member are built from it. */
+  readonly schema: ReplicaSchema
+}
+
+/** A region the device may name, and who it pushes there as. */
+interface DeviceRegion {
+  readonly ref: RegionRef
+  readonly actor: Actor
 }
 
 /** A device whose keys were accepted. */
@@ -51,10 +66,10 @@ interface Device {
   /** The keys it holds now: renewed at hello, or as it came with them. */
   readonly tokens: AuthTokens
   /**
-   * The regions the device may name, by id: the identity's private region and the region of
-   * each organisation it belongs to.
+   * The regions the device may name, by id: the identity's private region as its owner, and the
+   * region of each organisation it belongs to with the member's role.
    */
-  readonly regions: ReadonlyMap<string, RegionRef>
+  readonly regions: ReadonlyMap<string, DeviceRegion>
 }
 
 type State =
@@ -78,12 +93,24 @@ const REASON = {
   failed: 'the gateway failed to handle the message',
 } as const
 
-/** The regions an identity may name, by id. */
+/** The regions an identity may name, by id, with what it may do in each. */
 function regionsFor(
   identity: string,
   memberships: readonly Membership[],
-): ReadonlyMap<string, RegionRef> {
-  return new Map(identityRegions(identity, memberships).map((ref) => [ref.id, ref]))
+  schema: ReplicaSchema,
+): ReadonlyMap<string, DeviceRegion> {
+  const roles = new Map(memberships.map((membership) => [membership.tenant.key, membership.role]))
+
+  return new Map(
+    identityRegions(identity, memberships).map((ref) => {
+      const key = tenantKeyOf(ref)
+      const role = key === undefined ? undefined : roles.get(key)
+      const ability: Ability =
+        role === undefined ? OWNER_ABILITY : defineAbilityFor({ id: identity, role }, schema)
+
+      return [ref.id, { ref, actor: { id: identity, ability } }]
+    }),
+  )
 }
 
 /** The regions a message names. */
@@ -118,6 +145,7 @@ export class SyncConnection {
   readonly #organisations: SyncConnectionDeps['organisations']
   readonly #connections: ConnectionRegistry
   readonly #clock: Clock
+  readonly #schema: ReplicaSchema
   readonly #log: Logger
   readonly #onError: (error: DataError) => void
   readonly #subscriber: Subscriber
@@ -141,6 +169,7 @@ export class SyncConnection {
     this.#organisations = deps.organisations
     this.#connections = deps.connections
     this.#clock = deps.clock
+    this.#schema = deps.schema
     this.#log = deps.log
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
     this.#subscriber = {
@@ -325,7 +354,11 @@ export class SyncConnection {
       return
     }
 
-    const device: Device = { identity, tokens, regions: regionsFor(identity.id, memberships.value) }
+    const device: Device = {
+      identity,
+      tokens,
+      regions: regionsFor(identity.id, memberships.value, this.#schema),
+    }
     const heads = await this.#hub.heads([...device.regions.keys()])
 
     if (this.#isClosed()) {
@@ -363,7 +396,7 @@ export class SyncConnection {
       return
     }
 
-    const regions = regionsFor(state.device.identity.id, next)
+    const regions = regionsFor(state.device.identity.id, next, this.#schema)
 
     for (const region of [...this.#subscribed]) {
       if (!regions.has(region)) {
@@ -412,12 +445,12 @@ export class SyncConnection {
       .with({ type: 'hello' }, async () => this.#close(CLOSE.protocol, REASON.helloTwice))
       .with({ type: 'sign-out' }, () => this.#signOut(device))
       .with({ type: 'subscribe' }, async ({ region, vv }) => {
-        const ref = device.regions.get(region)
+        const entry = device.regions.get(region)
 
         // Checked above: the device may name the region.
-        if (ref) {
+        if (entry) {
           this.#subscribed.add(region)
-          this.#settle(await this.#hub.subscribe(ref, device.identity.id, subscriber, vv))
+          this.#settle(await this.#hub.subscribe(entry.ref, entry.actor, subscriber, vv))
         }
       })
       .with({ type: 'pull' }, async ({ region, vv }) => {

@@ -31,7 +31,7 @@ import membershipRemoveStatement from '../tenants/surql/membership-remove.surql'
 import membershipsOfStatement from '../tenants/surql/memberships-of.surql'
 import { TenantDatabases } from '../tenants/tenant-databases'
 
-import { noteCreate } from './__fixtures__/note'
+import { noteCreate, noteUpdate } from './__fixtures__/note'
 import { profileCreate } from './__fixtures__/profile'
 import { ConnectionRegistry } from './connections'
 import { type SocketLike, SyncConnection, type SyncConnectionDeps } from './sync-connection'
@@ -201,6 +201,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
       ...options.hub,
     },
     organisations: gateway.organisations,
+    schema: replicaSchema,
     connections: gateway.connections,
     clock: gateway.clock,
     log: createLogger('sync', {
@@ -682,6 +683,71 @@ describe('SyncConnection', () => {
     expect(types(socket.sent)).toEqual(['welcome', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
     expect(gateway.hub.loadedRegions()).toBe(0)
+  })
+
+  it("checks a member's push against its role: editing another member's note is rejected as forbidden-action, the admin's edit is acknowledged", async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+    const annsDevice = open(gateway)
+    const bobsDevice = open(gateway)
+    const annsDoc = RegionDoc.inMemory('tenant', 'tenant:acme')
+    const bobsDoc = RegionDoc.inMemory('tenant', 'tenant:acme')
+    const annsId = noteIdFactory.create()
+    const bobsId = noteIdFactory.create()
+
+    for (const [device, signedUp] of [
+      [annsDevice, anns],
+      [bobsDevice, bobs],
+    ] as const) {
+      await hello(device.connection, signedUp.tokens)
+      await device.connection.receive(
+        encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+      )
+    }
+
+    const annsNote = (
+      await noteCreate(annsDoc, { id: annsId, author: anns.identity.id, text: 'from ann' })
+    )._unsafeUnwrap()
+    const bobsNote = (
+      await noteCreate(bobsDoc, { id: bobsId, author: bobs.identity.id, text: 'from bob' })
+    )._unsafeUnwrap()
+
+    await annsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 1, updates: [annsNote] }),
+    )
+    await bobsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 1, updates: [bobsNote] }),
+    )
+    annsDoc.doc.import(bobsNote)
+    bobsDoc.doc.import(annsNote)
+
+    const bobsEdit = (await noteUpdate(bobsDoc, { id: annsId, text: 'mine now' }))._unsafeUnwrap()
+    const annsEdit = (
+      await noteUpdate(annsDoc, { id: bobsId, text: 'edited by ann' })
+    )._unsafeUnwrap()
+
+    await bobsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 2, updates: [bobsEdit] }),
+    )
+    await annsDevice.connection.receive(
+      encode({ type: 'push', region: 'tenant:acme', batch: 2, updates: [annsEdit] }),
+    )
+
+    const answers = (sent: readonly ServerMessage[]) =>
+      sent.filter((message) => message.type === 'ack' || message.type === 'reject')
+
+    expect(answers(bobsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+      expect.objectContaining({
+        type: 'reject',
+        batch: 2,
+        reason: 'forbidden-action',
+        detail: `note/${annsId}:update`,
+      }),
+    ])
+    expect(answers(annsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+      expect.objectContaining({ type: 'ack', batch: 2 }),
+    ])
   })
 
   it('refuses hello with protocol 1 (4400)', async () => {

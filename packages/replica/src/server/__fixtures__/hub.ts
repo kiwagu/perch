@@ -2,21 +2,22 @@ import { LoroDoc, LoroMap, type VersionVector } from 'loro-crdt'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
+import { OWNER_ABILITY } from '@workspace/kernel'
 
 import { replicaSchema } from '../../__fixtures__/note'
 import type { ServerMessage } from '../../protocol'
 import type { RegionRef } from '../../region-doc'
 import { type ManualClock, manualClock } from '../../testing/manual-clock'
 import { type RegionDatabases, singleDatabase } from '../region-databases'
-import { RegionHub, type Subscriber } from '../region-hub'
+import { type Actor, RegionHub, type Subscriber } from '../region-hub'
 
 import { nameIn } from './log'
 
 /** The identity id of the owner of the private region the hub tests use. */
-export const actor = 'idn_a'
+export const actor: Actor = { id: 'idn_a', ability: OWNER_ABILITY }
 
 /** The record id of that identity, which is also the id of its private region. */
-export const owner = `identity:${actor}`
+export const owner = `identity:${actor.id}`
 
 export const region: RegionRef = { kind: 'private', id: owner }
 

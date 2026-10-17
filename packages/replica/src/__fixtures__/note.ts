@@ -76,3 +76,13 @@ export function noteSetAuthor(
 export function noteRemoveAuthor(doc: LoroDoc, note: { readonly id: string }): Uint8Array {
   return updateOf(doc, note.id, (record) => record.delete('author'))
 }
+
+/** Removes a note the document holds; answers with the update to push. */
+export function noteDelete(doc: LoroDoc, note: { readonly id: string }): Uint8Array {
+  const from = doc.version()
+
+  doc.getMap('records').delete(recordKey('note', note.id))
+  doc.commit()
+
+  return doc.export({ mode: 'update', from })
+}

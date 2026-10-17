@@ -1,5 +1,13 @@
-import { type Frontiers, type ImportStatus, type LoroDoc, LoroMap } from 'loro-crdt'
+import {
+  type ContainerID,
+  type Frontiers,
+  type ImportStatus,
+  type LoroDoc,
+  LoroMap,
+} from 'loro-crdt'
 import { err, ok, type Result } from 'neverthrow'
+
+import type { Ability, Action } from '@workspace/kernel'
 
 import { splitRecordKey } from '../keys'
 import { toColumns } from '../projection-values'
@@ -27,11 +35,16 @@ export interface ValidateBatchInput {
   readonly region: RegionRef
   /** The identity id (its key) of the device that pushed the batch. */
   readonly actor: string
+  /** What that device's member may do to the region's records. */
+  readonly ability: Ability
   readonly schema: ReplicaSchema
   readonly updates: readonly Uint8Array[]
 }
 
 const RECORDS = 'records'
+
+/** The prefix of the name Loro gives a mergeable container (a record's text), a root in the operations. */
+const MERGEABLE_ROOT = 'cid:root-🤝:'
 
 function writesOutside(container: string): BatchRejection {
   return { reason: 'malformed', detail: `writes outside ${RECORDS}: ${container}` }
@@ -80,6 +93,40 @@ function touchedRecordKeys(
   return ok(touched)
 }
 
+const forbidden = (entry: string, action: Action): BatchRejection => ({
+  reason: 'forbidden-action',
+  detail: `${entry}:${action}`,
+})
+
+/**
+ * A root container other than the records map that an operation of the batch wrote, read from
+ * the operations themselves: a write a later operation of the same batch undid is refused too,
+ * because the operations would still be stored and replicated. The mergeable containers of a
+ * record's fields are roots in the operations, and they are not foreign: one is told apart by
+ * its name and by the path to it, which leads into the records. A mergeable container whose
+ * record the batch removed has no path any more and is the removal's own.
+ */
+function foreignRoot(doc: LoroDoc, fork: LoroDoc): string | undefined {
+  const records = fork.getMap(RECORDS).id
+
+  for (const change of fork.exportJsonUpdates(doc.version(), fork.version()).changes) {
+    for (const op of change.ops) {
+      if (!op.container.startsWith('cid:root-') || op.container === records) {
+        continue
+      }
+
+      const path = fork.getPathToContainer(op.container as ContainerID)
+      const mergeable = op.container.startsWith(MERGEABLE_ROOT)
+
+      if (mergeable ? path !== undefined && path[0] !== RECORDS : true) {
+        return op.container
+      }
+    }
+  }
+
+  return undefined
+}
+
 /** Fields that reference the pushing identity: `identity` in a private region, `member` in a tenant region. */
 function ownerTable(region: RegionRef): string {
   return region.kind === 'tenant' ? 'member' : 'identity'
@@ -121,7 +168,9 @@ function foreignOwner(
  * it writes nothing outside the `records` map, and every record it touched belongs to a table
  * of the region, is a map, and keeps the owner rule (`foreignOwner`): in a private region it
  * references no identity but the owner's, in a tenant region a new record names the pushing
- * member and an existing one keeps the members it named.
+ * member and an existing one keeps the members it named, and the member's ability allows the
+ * action on the record (`forbidden-action`): a record is judged as it is, the one being
+ * changed or deleted as it was, the new one as it is.
  * The result is the plan the region's log accepts: the projection of each touched record,
  * the update bytes and the version after the batch. A record the batch creates and deletes
  * again is no change. A refused batch is a value, never a throw, and the authoritative
@@ -145,6 +194,12 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
     })
   }
 
+  const root = foreignRoot(input.doc, fork)
+
+  if (root) {
+    return err(writesOutside(root))
+  }
+
   const touched = touchedRecordKeys(fork, from, fork.frontiers())
 
   if (touched.isErr()) {
@@ -159,8 +214,9 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
 
   for (const entry of touched.value) {
     const record: unknown = after.get(entry)
+    const previous: unknown = before.get(entry)
 
-    if (record === undefined && before.get(entry) === undefined) {
+    if (record === undefined && previous === undefined) {
       continue
     }
 
@@ -170,7 +226,14 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
       return err({ reason: 'foreign-table', detail: entry })
     }
 
+    const prior =
+      previous instanceof LoroMap ? (previous.toJSON() as Record<string, unknown>) : undefined
+
     if (record === undefined) {
+      if (!input.ability.can('delete', split.table, prior)) {
+        return err(forbidden(entry, 'delete'))
+      }
+
       deletes.push({ ...split, entry })
       continue
     }
@@ -180,9 +243,13 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
     }
 
     const value = record.toJSON() as Record<string, unknown>
-    const previous: unknown = before.get(entry)
-    const prior =
-      previous instanceof LoroMap ? (previous.toJSON() as Record<string, unknown>) : undefined
+    const action: Action = prior === undefined ? 'create' : 'update'
+
+    // A record is judged as it is: the one being changed, or the new one being created.
+    if (!input.ability.can(action, split.table, action === 'create' ? value : prior)) {
+      return err(forbidden(entry, action))
+    }
+
     const foreign = foreignOwner(input, split.table, value, prior)
 
     if (foreign) {

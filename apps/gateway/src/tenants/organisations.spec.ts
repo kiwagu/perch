@@ -644,7 +644,7 @@ describe('Organisations', () => {
     expect(await membersIn('acme')).toHaveLength(2)
   })
 
-  it('lists the members with their emails for an admin and for a member, not for an outsider', async () => {
+  it('lists the members with their emails for an admin, not for a member nor an outsider', async () => {
     const { organisations, ann, bob, cat, founded, invited } = await harness()
 
     await founded()
@@ -655,7 +655,9 @@ describe('Organisations', () => {
     ]
 
     expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(ok(members))
-    expect(await organisations.membersOf({ actor: bob.id, key: 'acme' })).toEqual(ok(members))
+    expect(
+      (await organisations.membersOf({ actor: bob.id, key: 'acme' }))._unsafeUnwrapErr(),
+    ).toEqual(refused('not-admin'))
     expect(
       (await organisations.membersOf({ actor: cat.id, key: 'acme' }))._unsafeUnwrapErr(),
     ).toEqual(refused('not-a-member'))
