@@ -93,11 +93,6 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 ## Commands
 
 - `bun run test`: unit tests of the write path, the transport, the cadence and the outbox
-  drain (their contracts also run against `createEffectCadence` and `createEffectOutboxDrain`,
-  the same two parts written on Effect for comparison; the engine uses the light ones), and
-  functional tests of the projector, persistence, the server log, the region hub and the sync
-  engine (devices syncing through the gateway stub) on embedded in-memory databases.
-- `bun run measure:effect [work directory]`: builds the cadence and the outbox drain of each
-  kind into a minified browser bundle with Vite in a temporary directory and prints the bundles'
-  sizes raw and gzipped, how much of Effect reaches its bundle, and the lines of both versions.
+  drain, and functional tests of the projector, persistence, the server log, the region hub and
+  the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
 - `bun run typecheck`, `bun run lint`.
