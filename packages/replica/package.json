@@ -29,7 +29,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "measure": "bun run scripts/measure.ts"
+    "measure": "bun run scripts/measure.ts",
+    "measure:effect": "bun run scripts/measure-effect.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "@workspace/ids": "workspace:*",
+    "effect": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
