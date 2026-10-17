@@ -167,4 +167,105 @@ describe('loadSchemaModel', () => {
     expect(model.tables['identity']).toBeUndefined()
     expect(problems).toEqual([])
   })
+
+  it('reads the owner and the abilities of a table', () => {
+    const info: StructureInfo = {
+      db: { tables: [{ name: 'note', kind: { kind: 'NORMAL' } }] },
+      tables: {
+        note: {
+          fields: [
+            { name: 'author', kind: 'record<member>' },
+            { name: 'text', kind: 'string' },
+          ],
+        },
+      },
+    }
+    const text = [
+      '-- @region tenant',
+      '-- @id nte',
+      '-- @owner author',
+      '-- @can member create, update:own, delete:own',
+      '-- @can admin create, update, delete',
+      'DEFINE TABLE OVERWRITE note SCHEMAFULL PERMISSIONS NONE;',
+    ].join('\n')
+
+    const { model, problems } = parseStructure(info, text)
+
+    expect(problems).toEqual([])
+    expect(model.tables['note']?.abilities).toEqual({
+      owner: 'author',
+      can: {
+        member: { create: 'any', update: 'own', delete: 'own' },
+        admin: { create: 'any', update: 'any', delete: 'any' },
+      },
+    })
+  })
+
+  it('refuses owner and can annotations on a table outside the tenant region', () => {
+    const info: StructureInfo = {
+      db: {
+        tables: [
+          { name: 'profile', kind: { kind: 'NORMAL' } },
+          { name: 'page', kind: { kind: 'NORMAL' } },
+        ],
+      },
+      tables: {
+        profile: { fields: [{ name: 'identity', kind: 'record<identity>' }] },
+        page: { fields: [{ name: 'author', kind: 'record<member>' }] },
+      },
+    }
+    const text = [
+      '-- @region private',
+      '-- @id prf',
+      '-- @can member update',
+      'DEFINE TABLE OVERWRITE profile SCHEMAFULL;',
+      '-- @region public',
+      '-- @id pag',
+      '-- @owner author',
+      '-- @can admin create',
+      'DEFINE TABLE OVERWRITE page SCHEMAFULL;',
+    ].join('\n')
+
+    const { model, problems } = parseStructure(info, text)
+
+    expect(problems).toEqual([
+      'table profile: @owner and @can belong to a tenant table; private tables declare none',
+      'table page: @owner and @can belong to a tenant table; public tables declare none',
+    ])
+    expect(model.tables['profile']?.abilities).toBeUndefined()
+    expect(model.tables['page']?.abilities).toBeUndefined()
+  })
+
+  it('reports abilities that are wrong', () => {
+    const info: StructureInfo = {
+      db: {
+        tables: [
+          { name: 'note', kind: { kind: 'NORMAL' } },
+          { name: 'member', kind: { kind: 'NORMAL' } },
+        ],
+      },
+      tables: { note: { fields: [{ name: 'text', kind: 'string' }] }, member: { fields: [] } },
+    }
+    const text = [
+      '-- @region tenant',
+      '-- @id nte',
+      '-- @owner text',
+      '-- @can owner create',
+      '-- @can member create:own, update:own, fly',
+      '-- @can member delete',
+      'DEFINE TABLE OVERWRITE note SCHEMAFULL;',
+      '-- @replicate none',
+      '-- @can admin create',
+      'DEFINE TABLE OVERWRITE member SCHEMAFULL;',
+    ].join('\n')
+
+    expect(parseStructure(info, text).problems).toEqual([
+      'table note: -- @owner text must name a record<member> field',
+      'table note: -- @can needs "<member|admin> <action>[:own], …", got "owner create"',
+      'table note: -- @can member: create:own is not allowed, a created record is owned by its author',
+      'table note: -- @can member: unknown action "fly"',
+      'table note: -- @can member is declared twice',
+      'table member: @owner and @can belong to a replicated table, not to -- @replicate none',
+    ])
+  })
 })

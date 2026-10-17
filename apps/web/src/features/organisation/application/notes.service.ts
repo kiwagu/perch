@@ -1,15 +1,19 @@
-import type { Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, type ResultAsync } from 'neverthrow'
 
 import type { BusError } from '@workspace/cqrs'
 import type { Command, DataError, Shape, ShapeRunnerPort } from '@workspace/data'
 import { token } from '@workspace/di'
 import { type IdentityId, type NoteId, noteIdFactory } from '@workspace/ids'
+import type { Ability } from '@workspace/kernel'
 
 import type { CommandsPort } from '../../../platform/commands.port'
 import { checkNoteText } from '../domain/note.entity'
 
-/** One note of the organisation page: what the page shows and edits. */
-export interface NoteRow {
+/**
+ * One note of the organisation page: what the page shows and edits. A type rather than an
+ * interface, so a row is a record an ability can judge as it is.
+ */
+export type NoteRow = {
   readonly id: NoteId
   /** The member who wrote it, by the key of the identity. */
   readonly author: string
@@ -39,6 +43,11 @@ function noteText(text: string): Result<string, BusError> {
   }))
 }
 
+const forbidden: BusError = {
+  code: 'note:FORBIDDEN',
+  message: 'the rules of the organisation do not allow this change',
+}
+
 /**
  * Reads and writes the notes of the current organisation: the runner and the write path send
  * them to its tenant region, and follow the organisation that becomes current.
@@ -48,6 +57,8 @@ export class NotesService {
     private readonly runner: ShapeRunnerPort,
     private readonly commands: CommandsPort,
     private readonly model: NotesModel,
+    /** What the signed-in member may do in the current organisation, asked at each change. */
+    private readonly ability: () => Ability,
   ) {}
 
   read(): ResultAsync<readonly NoteRow[], DataError> {
@@ -60,7 +71,11 @@ export class NotesService {
 
   /** Writes a new note by `author`, the signed-in identity: its document names the member `member:<key>`. */
   add(input: { readonly author: IdentityId; readonly text: string }): ResultAsync<void, BusError> {
-    return noteText(input.text).asyncAndThen((text) =>
+    const allowed: Result<string, BusError> = this.ability().can('create', 'note')
+      ? ok(input.text)
+      : err(forbidden)
+
+    return allowed.andThen(noteText).asyncAndThen((text) =>
       this.commands.execute(this.model.commands.createNote, {
         id: noteIdFactory.create(),
         author: input.author,
@@ -71,12 +86,38 @@ export class NotesService {
 
   edit(input: { readonly id: NoteId; readonly text: string }): ResultAsync<void, BusError> {
     return noteText(input.text).asyncAndThen((text) =>
-      this.commands.execute(this.model.commands.updateNote, { id: input.id, text }),
+      this.#noteOf(input.id)
+        .andThen((row) => this.#allowed('update', row))
+        .andThen(() =>
+          this.commands.execute(this.model.commands.updateNote, { id: input.id, text }),
+        ),
     )
   }
 
   remove(input: { readonly id: NoteId }): ResultAsync<void, BusError> {
-    return this.commands.execute(this.model.commands.deleteNote, { id: input.id })
+    return this.#noteOf(input.id)
+      .andThen((row) => this.#allowed('delete', row))
+      .andThen(() => this.commands.execute(this.model.commands.deleteNote, { id: input.id }))
+  }
+
+  /** The note `id` as this device holds it, or `note:NOT_FOUND`. */
+  #noteOf(id: NoteId): ResultAsync<NoteRow, BusError> {
+    return this.read()
+      .mapErr((error): BusError => ({ code: error.code, message: error.message }))
+      .andThen((rows) => {
+        const row = rows.find((note) => note.id === id)
+
+        return row
+          ? okAsync(row)
+          : errAsync<NoteRow, BusError>({
+              code: 'note:NOT_FOUND',
+              message: `no note ${id} on this device`,
+            })
+      })
+  }
+
+  #allowed(action: 'update' | 'delete', row: NoteRow): Result<NoteRow, BusError> {
+    return this.ability().can(action, 'note', row) ? ok(row) : err(forbidden)
   }
 }
 

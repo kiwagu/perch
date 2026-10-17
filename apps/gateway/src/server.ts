@@ -111,6 +111,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
         socket.data.connection = new SyncConnection(socket, {
           sessions: root.sessions,
           hub: root.hub,
+          schema: root.schema,
           organisations: root.organisations,
           connections: root.connections,
           clock: root.clock,

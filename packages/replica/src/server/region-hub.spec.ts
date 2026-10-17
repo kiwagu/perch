@@ -1,8 +1,11 @@
 import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { noteIdFactory } from '@workspace/ids'
+import { defineAbilityFor } from '@workspace/kernel'
+
 import bumpHeadStatement from '../__fixtures__/bump-head.surql'
-import { noteCreate } from '../__fixtures__/note'
+import { noteCreate, noteUpdate, replicaSchema } from '../__fixtures__/note'
 
 import {
   actor,
@@ -20,13 +23,18 @@ import {
 } from './__fixtures__/hub'
 import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
 import { singleDatabase } from './region-databases'
-import type { Subscriber } from './region-hub'
+import type { Actor, Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
 import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
 
 afterEach(closeHubs)
+
+/** What a member of the organisation does through a subscription: the abilities its role gives. */
+function memberOf(id: string, role: 'member' | 'admin' = 'member'): Actor {
+  return { id, ability: defineAbilityFor({ id, role }, replicaSchema) }
+}
 
 describe('region hub', () => {
   it('acknowledges a push and sends it to the other subscribers of the region', async () => {
@@ -108,7 +116,9 @@ describe('region hub', () => {
     const theirs = { kind: 'private', id: 'identity:idn_b' } as const
     const intruder = subscriber('intruder')
 
-    expect((await hub.subscribe(theirs, 'idn_b', intruder, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(theirs, { ...actor, id: 'idn_b' }, intruder, null)).isOk()).toBe(
+      true,
+    )
     expect(
       (await hub.push(theirs.id, intruder, 1, [editFrom(intruder.doc, 'Taken', theirs.id)])).isOk(),
     ).toBe(true)
@@ -347,8 +357,8 @@ describe('region hub', () => {
     const ann = subscriber('ann')
     const bob = subscriber('bob')
 
-    expect((await hub.subscribe(acme, 'idn_ann', ann, null)).isOk()).toBe(true)
-    expect((await hub.subscribe(acme, 'idn_bob', bob, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, memberOf('idn_ann'), ann, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, memberOf('idn_bob'), bob, null)).isOk()).toBe(true)
 
     const own = noteCreate(bob.doc, { id: 'nte_1', author: 'idn_bob', text: 'mine' })
     const forged = noteCreate(bob.doc, { id: 'nte_2', author: 'idn_ann', text: 'hers' })
@@ -360,6 +370,51 @@ describe('region hub', () => {
       expect.objectContaining({ type: 'ack', batch: 1 }),
       expect.objectContaining({ type: 'reject', batch: 2, reason: 'foreign-owner' }),
     ])
+  })
+
+  it("rejects a member's edit of another member's note as forbidden-action and acknowledges the admin's", async () => {
+    const { hub } = await openHub()
+    const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+    const ann = subscriber('ann')
+    const bob = subscriber('bob')
+    const boss = subscriber('boss')
+    const id = noteIdFactory.create()
+
+    expect((await hub.subscribe(acme, memberOf('idn_ann'), ann, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, memberOf('idn_bob'), bob, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, memberOf('idn_boss', 'admin'), boss, null)).isOk()).toBe(true)
+
+    expect(
+      (
+        await hub.push(acme.id, ann, 1, [
+          noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' }),
+        ])
+      ).isOk(),
+    ).toBe(true)
+    expect(
+      (await hub.push(acme.id, bob, 1, [noteUpdate(bob.doc, { id, text: 'mine now' })])).isOk(),
+    ).toBe(true)
+    expect(
+      (
+        await hub.push(acme.id, boss, 1, [
+          noteUpdate(boss.doc, { id, text: 'edited by the admin' }),
+        ])
+      ).isOk(),
+    ).toBe(true)
+
+    expect(bob.received.filter((m) => m.type === 'ack' || m.type === 'reject')).toEqual([
+      expect.objectContaining({
+        type: 'reject',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: `note/${id}:update`,
+      }),
+    ])
+    expect(boss.received.filter((m) => m.type === 'ack')).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+    ])
+    // Her snapshot at the subscription, then the admin's edit.
+    expect(ann.received.filter((m) => m.type === 'updates')).toHaveLength(2)
   })
 
   it('answers the head of a region that unloads while the database is asked for others', async () => {

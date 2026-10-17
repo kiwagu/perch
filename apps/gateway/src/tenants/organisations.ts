@@ -296,7 +296,7 @@ export class Organisations {
       )
   }
 
-  /** The members of the organisation with their emails, for any of its members, the earliest first. */
+  /** The members of the organisation with their emails, for its admins, the earliest first. */
   membersOf(input: {
     actor: IdentityId
     key: string
@@ -304,7 +304,7 @@ export class Organisations {
     const { actor, key } = input
 
     return this.#tenantOf(key)
-      .andThen((tenant) => this.#memberOf(actor, tenant))
+      .andThen((tenant) => this.#adminOf(actor, tenant))
       .andThen(() =>
         this.#inTenant(key, (local) =>
           reading(

@@ -1,9 +1,10 @@
 import type { ResultAsync } from 'neverthrow'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
 import { useT } from '@workspace/i18n'
 import type { IdentityId, NoteId } from '@workspace/ids'
+import { ownerKeyOf } from '@workspace/kernel'
 
 import { useService, useShape } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
@@ -58,6 +59,14 @@ export function OrganisationContainer() {
   )
   // The runner follows the organisation that becomes current; no organisation, nothing to read.
   const { tree } = useShape(organisationShape, current ? {} : null)
+  const ability = useMemo(() => organisations.ability(), [organisations, user, current])
+  const items = tree?.map((note) => ({
+    id: note.id,
+    text: note.text,
+    mine: user !== undefined && ownerKeyOf(note.author) === user.id,
+    editable: ability.can('update', 'note', note),
+    deletable: ability.can('delete', 'note', note),
+  }))
   const key = current?.tenant.key
   const admin = current?.role === 'admin'
   // What the page shows of one organisation starts afresh when another becomes current.
@@ -137,6 +146,8 @@ export function OrganisationContainer() {
   const editNote = (input: { readonly id: NoteId; readonly text: string }) =>
     noteDone(notes.edit(input))
 
+  const deleteNote = (id: NoteId) => noteDone(notes.remove({ id }))
+
   const invite = (email: string) =>
     key === undefined
       ? Promise.resolve(false)
@@ -173,7 +184,7 @@ export function OrganisationContainer() {
     <OrganisationView
       organisations={memberships.map(choice)}
       current={current ? choice(current) : undefined}
-      notes={tree}
+      notes={items}
       members={
         members && members.key === key
           ? members.list.map((member) => ({
@@ -188,6 +199,7 @@ export function OrganisationContainer() {
       onSelect={(next) => organisations.select(next)}
       onAddNote={addNote}
       onEditNote={editNote}
+      onDeleteNote={deleteNote}
       onInvite={invite}
       onRemoveMember={removeMember}
     />

@@ -249,7 +249,7 @@ export function emitReplicaSchema(schema: SchemaModel): string {
         }
       }
 
-      return `  ${name}: ${literal({ region: table.region, fields })},`
+      return `  ${name}: ${literal({ region: table.region, fields, ...table.abilities })},`
     })
 
   return [

@@ -16,7 +16,7 @@ import {
 import { readSchema } from '@workspace/data/schema-files'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { createLogger } from '@workspace/logger'
-import type { Clock } from '@workspace/replica'
+import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { RegionHub } from '@workspace/replica/server'
 
 import { IdentitySessions } from '../auth/identity-sessions'
@@ -36,6 +36,8 @@ export interface GatewayRoot {
    * organisation's database.
    */
   readonly hub: RegionHub
+  /** Which tables replicate, and who may write what in them. */
+  readonly schema: ReplicaSchema
   /**
    * The open sync connections of each identity: told of every change of its memberships, and a
    * removed identity's lose the organisation's region at once.
@@ -123,6 +125,7 @@ export function createGatewayRoot(
       organisations,
       databases,
       hub,
+      schema: replicaSchema,
       connections,
       local,
       clock: options.clock,

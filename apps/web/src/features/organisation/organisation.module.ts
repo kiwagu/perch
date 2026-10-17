@@ -1,4 +1,5 @@
 import { SHAPE_RUNNER } from '@workspace/data'
+import { replicaSchema } from '@workspace/database/replica-schema'
 
 import { COMMANDS } from '../../platform/commands.port'
 import { defineModule } from '../../platform/module'
@@ -23,15 +24,21 @@ export const OrganisationModule = defineModule({
     {
       provide: NOTES_SERVICE,
       useFactory: (container) =>
-        new NotesService(container.get(SHAPE_RUNNER), container.get(COMMANDS), {
-          shape: organisationShape,
-          commands: organisationCommands,
-        }),
+        new NotesService(
+          container.get(SHAPE_RUNNER),
+          container.get(COMMANDS),
+          { shape: organisationShape, commands: organisationCommands },
+          () => container.get(ORGANISATION_SERVICE).ability(),
+        ),
     },
     {
       provide: ORGANISATION_SERVICE,
       useFactory: (container) =>
-        new OrganisationService(container.get(SESSION), container.get(ORGANISATIONS)),
+        new OrganisationService(
+          container.get(SESSION),
+          container.get(ORGANISATIONS),
+          replicaSchema,
+        ),
     },
   ],
   declarations: { OrganisationPage: OrganisationContainer },

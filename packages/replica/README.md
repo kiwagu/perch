@@ -47,7 +47,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (2), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (3), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; the
   `welcome` carries the regions the device may name with their heads and the identity's
@@ -68,25 +68,42 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
-  history, a table outside the region, a record that is not a map, and `foreign-owner` for a
-  record that breaks the owner rule: in a private region an identity reference other than
-  the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
+  history, a table outside the region, `invalid-record` for a record that is not a map or has
+  a field of a shape its schema does not allow, `forbidden-action` for a
+  create, update or delete that `ValidateBatchInput.ability` does not allow on the record, and
+  `foreign-owner` for a record that breaks the owner rule: in a private region an identity
+  reference other than the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
   member reference is not the pushing member, or an edit that changes the member a record
-  references).
+  references). The ability is judged on the record as it is, the one being updated or deleted
+  as it was before the batch and a new one as the batch writes it; a table that declares no
+  abilities refuses every client write. A record's field shapes are checked first: a text,
+  list or counter field holds the mergeable container of its kind, every other field a plain
+  value, whatever the content. A record the batch leaves as it was is then no change and
+  is neither judged nor written, which is what lets a device undo a refused change: the batch
+  that undoes it carries the refused change and its inverse. Such a batch still reaches the
+  document, so a plain field it set and set back wins a later last-writer-wins conflict with a
+  concurrent edit, as any accepted write does. Bytes Loro throws on are refused
+  as malformed, never thrown. The check of the roots reads the operations of the
+  batch, not its net effect: a write outside the `records` map that a later operation of the
+  same batch undid is refused too, as the operations would still be stored and replicated.
+  The mergeable containers of a record's fields appear as roots in the operations and are
+  exempt from that refusal when their path leads into the `records` map or when they have no
+  path (their record is gone, or the field they belong to is not set).
   `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
   `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
   database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
   that asks for a compaction, `onError`) holds a region's database from its load until it
   unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
-  updates after `vv` or a full snapshot, and checks the device's batches against `actor`, its
-  identity id; `push(region, subscriber, batch, updates)` answers
+  updates after `vv` or a full snapshot, and checks the device's batches against `actor`
+  (`Actor`: its identity id and its `Ability`); `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
-  (`foreign-owner` for a record of another region) and sends the batch to the other
-  subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
+  ability refuses) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
-- `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
+- `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
+  push carries, 256 by default) returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
@@ -111,7 +128,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
   import that fails pulls at once and on every full pass until an answer imports in full; only
-  the ack of a first push moves the cursor);
+  the ack of a first push moves the cursor; the push after a rollback carries every outbox row
+  from the refused ones through their inverse, rows other tabs queued between included, whatever
+  `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch
+  never goes out again without its undo);
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a
@@ -125,8 +145,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the
   given database and, per device, a `StubTransport` that behaves like the gateway's connection
-  without a network (welcomed with the identity's private region and, for each of the
-  `memberships`, none by default, the organisation's region, with those memberships), can go
+  without a network (welcomed with the identity's private region, where it is the owner, and,
+  for each of the `memberships`, none by default, the organisation's region, where its batches
+  are checked with the abilities of the membership's role), can go
   offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
   `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next device to connect a renewed pair

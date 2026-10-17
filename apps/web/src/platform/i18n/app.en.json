@@ -9,5 +9,6 @@
   "app.shell.locale": "Language",
   "app.shell.locale.en": "English",
   "app.shell.locale.es": "Español",
+  "app.shell.rejected": "The server refused a change and undid it on this device.",
   "app.shell.sync.local": "Saved on this device"
 }

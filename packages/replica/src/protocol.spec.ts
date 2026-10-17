@@ -45,12 +45,12 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 2 only', () => {
+  it('takes a hello of protocol 3 only', () => {
     const hello = (protocol: number) => JSON.stringify({ type: 'hello', protocol, access: 'a' })
 
-    expect(PROTOCOL_VERSION).toBe(2)
-    expect(decodeMessage(clientMessage, hello(2)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(1)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(3)
+    expect(decodeMessage(clientMessage, hello(3)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(2)).isErr()).toBe(true)
   })
 
   it('refuses text that is not JSON', () => {

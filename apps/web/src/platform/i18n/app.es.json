@@ -9,5 +9,6 @@
   "app.shell.locale": "Idioma",
   "app.shell.locale.en": "English",
   "app.shell.locale.es": "Español",
+  "app.shell.rejected": "El servidor rechazó un cambio y lo deshizo en este dispositivo.",
   "app.shell.sync.local": "Guardado en este dispositivo"
 }

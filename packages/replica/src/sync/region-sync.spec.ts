@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
+import { type NoteId, noteIdFactory } from '@workspace/ids'
 
-import type { ClientMessage, ServerMessage } from '../protocol'
+import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import { recordKey } from '../keys'
+import { type ClientMessage, MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import localTailStatement from '../surql/local-tail.surql'
 import outboxReadStatement from '../surql/outbox-read.surql'
@@ -12,6 +15,8 @@ import importStatement from '../surql/replica-import.surql'
 import { manualClock } from '../testing/manual-clock'
 
 import {
+  ann,
+  bob,
   closeDevices,
   openDevice,
   openGateway,
@@ -19,6 +24,7 @@ import {
   regionId,
   settleAll,
   twoDevices,
+  twoMembers,
   writeBio,
   writeName,
 } from './__fixtures__/devices'
@@ -568,6 +574,138 @@ describe('region sync through the gateway', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
   })
 
+  it('reports a rejected batch as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoDevices()
+
+    a.region.records().setContainer('note/n_1', new LoroMap()).set('text', 'x')
+    a.region.doc.commit()
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: a.region.ref.id, reason: 'foreign-table', detail: 'note/n_1' },
+      },
+    ])
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+
+  it('reports a forbidden edit as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoMembers()
+    const annsNote = noteIdFactory.create()
+    const bobsNote = noteIdFactory.create()
+    const anns = recordKey('note', annsNote)
+    const bobs = recordKey('note', bobsNote)
+
+    noteCreate(a.region.doc, { id: annsNote, author: ann, text: 'hello' })
+    a.engine.localWrite()
+    await settle()
+    // Bob is a member: the gateway refuses his edit of Ann's note, and his device undoes it.
+    noteUpdate(b.region.doc, { id: annsNote, text: 'mine now' })
+    b.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: b.region.ref.id, reason: 'forbidden-action', detail: `${anns}:update` },
+      },
+    ])
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+
+    noteCreate(b.region.doc, { id: bobsNote, author: bob, text: 'mine' })
+    b.engine.localWrite()
+    await settle()
+
+    expect(a.region.recordJson(bobs)).toMatchObject({ text: 'mine' })
+    expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+  })
+
+  describe('a refused batch the push limit fills', () => {
+    /** Ann's note, written and synced; then Bob's device goes offline. */
+    async function annsNoteThenOffline(batchRows?: number) {
+      const members = await twoMembers(batchRows === undefined ? {} : { batchRows })
+      const annsNote = noteIdFactory.create()
+
+      noteCreate(members.a.region.doc, { id: annsNote, author: ann, text: 'hello' })
+      members.a.engine.localWrite()
+      await members.settle()
+      members.b.transport.goOffline()
+
+      return { ...members, annsNote, anns: recordKey('note', annsNote) }
+    }
+
+    /** `edits` edits of Ann's note by Bob, made durable: rows the gateway refuses, as Bob is a member. */
+    async function editOffline(region: RegionDoc, annsNote: NoteId, edits: number) {
+      for (let edit = 0; edit < edits; edit += 1) {
+        noteUpdate(region.doc, { id: annsNote, text: `mine ${edit}` })
+      }
+
+      expect((await region.flush()).isOk()).toBe(true)
+    }
+
+    it('pushes the refused rows of a full batch and their undo together, and keeps syncing', async () => {
+      const { a, b, settle, errors, annsNote, anns } = await annsNoteThenOffline(3)
+      const bobsNote = noteIdFactory.create()
+
+      await editOffline(b.region, annsNote, 3)
+      b.transport.goOnline()
+      await settle()
+
+      expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+      expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+      expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
+
+      noteCreate(b.region.doc, { id: bobsNote, author: bob, text: 'mine' })
+      b.engine.localWrite()
+      await settle()
+
+      expect(a.region.recordJson(recordKey('note', bobsNote))).toMatchObject({ text: 'mine' })
+      expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+      expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+    })
+
+    it('pushes the rows another tab queued before the undo together with it', async () => {
+      const { a, b, settle, errors, annsNote, anns } = await annsNoteThenOffline(3)
+      const bobsNote = noteIdFactory.create()
+      // Another tab of Bob's browser on the same database, open before his refused edits.
+      const tab = (await RegionDoc.open(b.local, b.region.ref))._unsafeUnwrap()
+
+      await editOffline(b.region, annsNote, 3)
+      // The tab writes a note of Bob's own: its row lands behind the refused rows.
+      noteCreate(tab.doc, { id: bobsNote, author: bob, text: 'from the other tab' })
+      expect((await tab.flush()).isOk()).toBe(true)
+      tab.close()
+      b.transport.goOnline()
+      await settle()
+
+      expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+      expect(a.region.recordJson(recordKey('note', bobsNote))).toMatchObject({
+        text: 'from the other tab',
+      })
+      expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+      expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
+    })
+
+    it('pushes the refused rows of a batch at the protocol limit and their undo as one update', async () => {
+      const { a, b, settle, errors, annsNote, anns } = await annsNoteThenOffline()
+
+      await editOffline(b.region, annsNote, MAX_PUSH_UPDATES)
+      b.transport.goOnline()
+      await settle()
+
+      expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+      expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+      expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+      expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
+    })
+  })
+
   it('brings back the text of a field a rejected batch deleted, without doubling it', async () => {
     const { a, b, settle } = await twoDevices()
 
@@ -594,7 +732,7 @@ describe('region sync through the gateway', () => {
     a.engine.localWrite()
     await settle()
 
-    expect(errors()).toEqual([expect.objectContaining({ code: 'data:SYNC_STOPPED' })])
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED', 'data:SYNC_STOPPED'])
     expect(stub.rejections()).toBe(2)
     expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
   })

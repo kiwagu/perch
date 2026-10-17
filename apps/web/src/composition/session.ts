@@ -24,8 +24,14 @@ import {
   type SyncTransport,
   writeLockName,
 } from '@workspace/replica/sync'
+import { z } from '@workspace/zod'
 
-import type { SessionNotice, SessionPort, SignOutOptions } from '../platform/session.port'
+import type {
+  PushRejection,
+  SessionNotice,
+  SessionPort,
+  SignOutOptions,
+} from '../platform/session.port'
 
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
 import type { GatewayAuth, SignedInDevice } from './gateway-auth'
@@ -137,6 +143,14 @@ function isAbortError(cause: unknown): boolean {
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
 
+/** What a refused push carries as its cause, read as the port's `PushRejection`. */
+const pushRejection = z.object({
+  region: z.string(),
+  batch: z.number(),
+  reason: z.string(),
+  detail: z.string(),
+}) satisfies z.ZodType<PushRejection>
+
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, keeps the
  * identity and its keys in the browser's storage and opens the identity's space; restoring
@@ -154,6 +168,7 @@ export class SessionService implements SessionPort {
   readonly writePath: CurrentSpaceWritePath
   readonly #options: SessionOptions
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
+  readonly #rejections = new Set<(rejection: PushRejection) => void>()
   readonly #organisations: SessionOrganisations
   readonly #unlisten: Array<() => void>
   #open: OpenSpace | undefined
@@ -269,6 +284,29 @@ export class SessionService implements SessionPort {
     this.#organisations.select(key)
   }
 
+  subscribeRejections(listener: (rejection: PushRejection) => void): () => void {
+    this.#rejections.add(listener)
+
+    return () => {
+      this.#rejections.delete(listener)
+    }
+  }
+
+  /** Reports an error of the space; a refused push is also told to the rejection listeners. */
+  #report(error: DataError): void {
+    if (error.code === 'data:PUSH_REJECTED') {
+      const rejection = pushRejection.safeParse(error.cause)
+
+      if (rejection.success) {
+        for (const listener of this.#rejections) {
+          listener(rejection.data)
+        }
+      }
+    }
+
+    this.#options.onError(error)
+  }
+
   /** Keeps the signed-in identity's new memberships and has its space follow them; see `SessionOrganisations.apply`. */
   applyMemberships(next: readonly Membership[]): Promise<void> {
     return this.#organisations.apply(next)
@@ -371,7 +409,7 @@ export class SessionService implements SessionPort {
           this.#options.onSyncState(state)
         }
       },
-      onError: this.#options.onError,
+      onError: (error) => this.#report(error),
     })
       .mapErr((error) => {
         status.live = false

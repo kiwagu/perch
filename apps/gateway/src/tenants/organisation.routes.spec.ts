@@ -223,15 +223,27 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 409, body: { code: 'key-taken' } })
   })
 
-  it('lists the members with their emails to a member', async () => {
+  it('lists the members with their emails to an admin', async () => {
     const { ann, bob, ask, founded, invited } = await harness()
 
     await founded()
     await invited()
 
-    expect(await ask('GET', '/organisations/acme/members', { as: bob })).toEqual({
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
       body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+    })
+  })
+
+  it('answers 403 to a member asking for the members', async () => {
+    const { bob, ask, founded, invited } = await harness()
+
+    await founded()
+    await invited()
+
+    expect(await ask('GET', '/organisations/acme/members', { as: bob })).toEqual({
+      status: 403,
+      body: { code: 'not-admin' },
     })
   })
 

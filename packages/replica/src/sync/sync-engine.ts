@@ -21,6 +21,8 @@ export interface SyncEngineOptions {
   /** Imported something from the server. */
   readonly onSettled: () => void
   readonly onError: (error: DataError) => void
+  /** How many outbox rows one push of a region carries at most; 256 by default, the protocol's limit. */
+  readonly batchRows?: number
 }
 
 export interface SyncEngine {
@@ -127,6 +129,7 @@ class Engine implements SyncEngine {
             actor: options.actor,
             onSettled: options.onSettled,
             onError: options.onError,
+            ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
           }),
         },
       ]),

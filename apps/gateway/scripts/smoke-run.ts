@@ -18,7 +18,7 @@ import { z } from '@workspace/zod'
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
 import { gatewayConfig, httpRpcUrl } from '../src/config'
 import { type RunningServer, startServer } from '../src/server'
-import { noteCreate } from '../src/sync/__fixtures__/note'
+import { noteCreate, noteDelete, noteUpdate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
 import { SmokeDevice } from './smoke-device'
@@ -137,6 +137,9 @@ const listedMembers = z.object({
   members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
 })
 
+/** The body of a route's refusal: the code that says why. */
+const refusal = z.object({ code: z.string() })
+
 /** Whether a welcome's regions name `region`. */
 function hasRegion(regions: readonly { readonly region: string }[], region: string): boolean {
   return regions.some((entry) => entry.region === region)
@@ -242,19 +245,98 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
     check(ownerDoc.recordJson(`note/${noteId}`)?.['text'] === 'Hello team', 'no note for the owner')
   })
 
+  await step(
+    "owner (admin) edited the invited device's note: ack at head 2, invited device received it",
+    async () => {
+      const edited = await noteUpdate(ownerDoc, {
+        id: noteId,
+        text: 'Hello team, edited by the admin',
+      })
+
+      ownerDevice.push(region, 1, unwrap(edited))
+
+      const ack = await ownerDevice.next('ack')
+
+      check(ack.batch === 1 && ack.head === 2, `ack of batch ${ack.batch} at head ${ack.head}`)
+      check(
+        (await takeUpdates(guestDevice, guestDoc, false)) === 2,
+        'invited device got no update at head 2',
+      )
+      check(
+        guestDoc.recordJson(`note/${noteId}`)?.['text'] === 'Hello team, edited by the admin',
+        'the edit did not reach the invited device',
+      )
+    },
+  )
+
+  const ownerNoteId = noteIdFactory.create()
+
+  await step('owner pushed a note of its own: ack at head 3', async () => {
+    const created = await noteCreate(ownerDoc, {
+      id: ownerNoteId,
+      author: owner.identity.id,
+      text: 'From the admin',
+    })
+
+    ownerDevice.push(region, 2, unwrap(created))
+
+    const ack = await ownerDevice.next('ack')
+
+    check(ack.batch === 2 && ack.head === 3, `ack of batch ${ack.batch} at head ${ack.head}`)
+    check(
+      (await takeUpdates(guestDevice, guestDoc, false)) === 3,
+      'invited device got no update at head 3',
+    )
+  })
+
+  await step('invited device deleted its own note: ack at head 4', async () => {
+    const deleted = await noteDelete(guestDoc, { id: noteId })
+
+    guestDevice.push(region, 2, unwrap(deleted))
+
+    const ack = await guestDevice.next('ack')
+
+    check(ack.batch === 2 && ack.head === 4, `ack of batch ${ack.batch} at head ${ack.head}`)
+  })
+
+  await step("invited device edited the owner's note: rejected as forbidden-action", async () => {
+    const edited = await noteUpdate(guestDoc, { id: ownerNoteId, text: 'Not mine' })
+
+    guestDevice.push(region, 3, unwrap(edited))
+
+    const rejected = await guestDevice.next('reject')
+
+    check(
+      rejected.batch === 3 &&
+        rejected.reason === 'forbidden-action' &&
+        rejected.detail === `note/${ownerNoteId}:update`,
+      `rejected batch ${rejected.batch} for ${rejected.reason} (${rejected.detail})`,
+    )
+  })
+
+  await step('invited device asked for the members: 403 not-admin', async () => {
+    const answer = await call(base, 'GET', `/organisations/${key}/members`, guest.tokens.access)
+
+    check(
+      answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
+      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+    )
+  })
+
   await step("a note in the owner's name is rejected: foreign-owner", async () => {
-    const forged = await noteCreate(guestDoc, {
+    // From a document of its own: the guest's one holds its refused edit, which the server lacks.
+    const forged = await noteCreate(RegionDoc.inMemory('tenant', region), {
       id: noteIdFactory.create(),
       author: owner.identity.id,
       text: 'Forged',
     })
 
-    guestDevice.push(region, 2, unwrap(forged))
+    guestDevice.push(region, 4, unwrap(forged))
 
     const rejected = await guestDevice.next('reject')
 
     check(
-      rejected.batch === 2 && rejected.reason === 'foreign-owner',
+      rejected.batch === 4 && rejected.reason === 'foreign-owner',
       `rejected batch ${rejected.batch} for ${rejected.reason}`,
     )
   })

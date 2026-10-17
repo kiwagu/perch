@@ -2,6 +2,7 @@ import { type LoroDoc, VersionVector } from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
+import type { Ability } from '@workspace/kernel'
 
 import type { Clock } from '../clock'
 import { messageOf } from '../failure'
@@ -51,10 +52,16 @@ interface Loaded {
   readonly database: RegionDatabase
 }
 
-/** A device's subscription: its end, and the identity id its batches are checked against. */
+/** Who pushes through a subscription: the identity id its batches are checked against, and what it may do. */
+export interface Actor {
+  readonly id: string
+  readonly ability: Ability
+}
+
+/** A device's subscription: its end, and the actor its batches are checked as. */
 interface Subscription {
   readonly subscriber: Subscriber
-  readonly actor: string
+  readonly actor: Actor
 }
 
 /** What the hub keeps of one region, from the first subscription until it unloads the region. */
@@ -144,11 +151,11 @@ export class RegionHub {
    * Subscribes a device to a region, loading the region first when the hub does not hold it,
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
    * it has no version. From then on the device receives every batch the others push, and the
-   * batches it pushes are checked against `actor`, the identity id of the device.
+   * batches it pushes are checked against `actor`: the identity id of the device and its ability.
    */
   subscribe(
     region: RegionRef,
-    actor: string,
+    actor: Actor,
     subscriber: Subscriber,
     vv: Uint8Array | null,
   ): ResultAsync<void, DataError> {
@@ -258,7 +265,8 @@ export class RegionHub {
       const validated = validateBatch({
         doc,
         region: state.ref,
-        actor,
+        actor: actor.id,
+        ability: actor.ability,
         schema: this.#schema,
         updates,
       })
@@ -485,13 +493,13 @@ export class RegionHub {
   }
 
   /**
-   * Runs `work` on the region once the device has subscribed to it, with the identity id its
-   * subscription named; any other device is refused.
+   * Runs `work` on the region once the device has subscribed to it, with the actor its
+   * subscription named (identity id and ability); any other device is refused.
    */
   #subscribed(
     regionId: string,
     subscriber: Subscriber,
-    work: (state: RegionState, loaded: Loaded, actor: string) => ResultAsync<void, DataError>,
+    work: (state: RegionState, loaded: Loaded, actor: Actor) => ResultAsync<void, DataError>,
   ): ResultAsync<void, DataError> {
     const state = this.#regions.get(regionId)
 

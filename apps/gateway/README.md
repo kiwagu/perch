@@ -9,7 +9,7 @@ routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in`, answe
 `{ identity, tokens, memberships }`, the memberships being the organisations the identity
 belongs to), each call on a database session of its own that is closed when the call ends;
 `GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
-device says hello with its keys at protocol 2 (the pair is renewed with the refresh key when
+device says hello with its keys at protocol 3 (the pair is renewed with the refresh key when
 the access token no longer works, and the new pair is sent first), is welcomed with its
 identity's private region, the region `tenant:<key>` of each organisation the identity belongs
 to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
@@ -17,8 +17,13 @@ and compacts there through the region hub, the server's copy of the replicated r
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database
 (`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
-note names its own member as its author, and nobody changes the author of a note. A
-connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
+note names its own member as its author, and nobody changes the author of a note. Each
+subscription carries the device's ability, built from its membership's role and the replica
+schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
+deletes only its own notes, an admin any, and the hub rejects any other write as
+`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
+role applies to a device's subscriptions from its next subscribe or hello.
+A connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
 accepted; when an identity's memberships change, each of its connections leaves the regions it
 may no longer name at once, without waiting for the device's messages under way (one handled
 from then on that names such a region closes the socket with 4403, and the hub sends it nothing
@@ -44,7 +49,7 @@ nobody has held it for five minutes. `Organisations` creates an organisation (it
 rows, its database, its creator as admin member there, then ready; a creation its creator left
 unfinished is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to any member, answers what it refuses
+other than itself, lists the members with their emails to an admin, answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change, answering once they
 heard them: the composition root has the registry tell the identity's devices. A removal takes
@@ -61,7 +66,7 @@ The organisation routes act for the identity a device's access token signs in, s
 `Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
 access token that works answers 401 (`unauthorized`). `GET /organisations` lists the caller's
 memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
-as its admin (201); `GET /organisations/:key/members` lists the members to a member;
+as its admin (201); `GET /organisations/:key/members` lists the members to an admin (403 `not-admin` to a member);
 `POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
 `DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
 an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
@@ -92,7 +97,9 @@ stand.
   operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives, a
+  its device writing a note into the organisation's region that the owner's device receives,
+  the owner editing that note as an admin, the invited device deleting its own note, its edit of
+  the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
   note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
   4403), one line per step.
 - `bun run typecheck`, `bun run lint`.

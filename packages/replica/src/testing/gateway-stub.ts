@@ -1,7 +1,8 @@
 import type { Result, ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import { type DataError, type LocalDb, tenantRegionId } from '@workspace/data'
+import { type Ability, defineAbilityFor, NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 
 import type { Clock } from '../clock'
 import {
@@ -19,7 +20,7 @@ import type { RegionRef } from '../region-doc'
 import { identityRegions } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
 import { singleDatabase } from '../server/region-databases'
-import { RegionHub, type Subscriber } from '../server/region-hub'
+import { type Actor, RegionHub, type Subscriber } from '../server/region-hub'
 import type { ChannelState, EndReason, SyncTransport } from '../sync/transport'
 
 export interface GatewayStubOptions {
@@ -29,7 +30,10 @@ export interface GatewayStubOptions {
   readonly clock: Clock
   /** How many log rows after the snapshot make an ack ask for a compaction. */
   readonly compactionLogLimit?: number
-  /** What every device is welcomed with; each opens its organisation's region. None by default. */
+  /**
+   * What every device is welcomed with; each opens its organisation's region, where the device's
+   * batches are checked with the abilities of the membership's role. None by default.
+   */
   readonly memberships?: readonly Membership[]
 }
 
@@ -99,6 +103,7 @@ export interface GatewayStub {
 /** What every device channel of one stub shares. */
 interface Gateway {
   readonly hub: RegionHub
+  readonly schema: ReplicaSchema
   readonly clock: Clock
   readonly memberships: readonly Membership[]
   readonly failures: DataError[]
@@ -117,6 +122,12 @@ interface Gateway {
   failSignOut: (() => void) | undefined
   /** The keys the next device to connect is handed before its welcome. */
   renewal: { readonly access: string; readonly refresh: string } | undefined
+}
+
+/** A region the device may name, and who it subscribes there as. */
+interface DeviceRegion {
+  readonly ref: RegionRef
+  readonly actor: Actor
 }
 
 /** One connection of a device: its end at the hub, up once welcomed. */
@@ -150,8 +161,9 @@ function sentToDevice(message: ServerMessage): ServerMessage {
 
 /**
  * A device's channel to the stub: like the gateway's sync connection, without a network. It
- * is welcomed with the identity's own region and the region of each of the stub's memberships,
- * hands subscriptions, pulls, pushes and compactions in those regions to the hub, answers
+ * is welcomed with the identity's own region, where it may do anything as the owner, and the
+ * region of each of the stub's memberships, where it may do what the membership's role allows;
+ * it hands subscriptions, pulls, pushes and compactions in those regions to the hub, answers
  * probes with the hub's heads and delivers what the hub sends, each message through the
  * protocol's encoding both ways.
  */
@@ -159,7 +171,7 @@ class DeviceChannel implements StubTransport {
   readonly #gateway: Gateway
   readonly #identity: string
   /** The regions the device may name, by id. */
-  readonly #regions: ReadonlyMap<string, RegionRef>
+  readonly #regions: ReadonlyMap<string, DeviceRegion>
   readonly #messageListeners = new Set<(message: ServerMessage) => void>()
   readonly #channelListeners = new Set<(state: ChannelState) => void>()
   readonly #endedListeners = new Set<(reason: EndReason) => void>()
@@ -173,8 +185,23 @@ class DeviceChannel implements StubTransport {
   constructor(gateway: Gateway, identity: string) {
     this.#gateway = gateway
     this.#identity = identity
+    const roles = new Map(
+      gateway.memberships.map(({ tenant, role }) => [tenantRegionId(tenant.key), role]),
+    )
+
     this.#regions = new Map(
-      identityRegions(identity, gateway.memberships).map((ref) => [ref.id, ref]),
+      identityRegions(identity, gateway.memberships).map((ref) => {
+        const role = roles.get(ref.id)
+        // As the gateway does: only the private region is the identity's own.
+        const ability: Ability =
+          ref.kind === 'private'
+            ? OWNER_ABILITY
+            : role === undefined
+              ? NO_ABILITY
+              : defineAbilityFor({ id: identity, role }, gateway.schema)
+
+        return [ref.id, { ref, actor: { id: identity, ability } }]
+      }),
     )
   }
 
@@ -361,12 +388,12 @@ class DeviceChannel implements StubTransport {
     match(message)
       .with({ type: 'hello' }, () => {})
       .with({ type: 'subscribe' }, ({ region, vv }) => {
-        const ref = this.#regions.get(region)
+        const named = this.#regions.get(region)
 
         // Checked above: the device may name the region.
-        if (ref) {
+        if (named) {
           connection.asked += 1
-          this.#settle(hub.subscribe(ref, this.#identity, subscriber, vv))
+          this.#settle(hub.subscribe(named.ref, named.actor, subscriber, vv))
         }
       })
       .with({ type: 'pull' }, ({ region, vv }) => {
@@ -524,6 +551,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
   })
   const gateway: Gateway = {
     hub,
+    schema: options.schema,
     clock: options.clock,
     memberships: options.memberships ?? [],
     failures,
