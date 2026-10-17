@@ -1,5 +1,5 @@
 import { decodeImportBlobMeta, type LoroDoc, VersionVector } from 'loro-crdt'
-import { Result, type ResultAsync } from 'neverthrow'
+import { ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -26,7 +26,10 @@ export interface RegionSyncOptions {
   /** Imported something from the server. */
   readonly onSettled: () => void
   readonly onError: (error: DataError) => void
-  /** How many outbox rows one push carries at most; 256 by default, the protocol's limit. */
+  /**
+   * How many outbox rows one push carries at most; 256 by default, the protocol's limit. The
+   * push after a rollback carries every row up to the inverse, more when it takes more.
+   */
   readonly batchRows?: number
 }
 
@@ -95,6 +98,25 @@ export function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
 }
 
 /**
+ * One update that holds exactly what `rows` hold, for a push of more rows than one message may
+ * carry: the operations of each row, read back from the document, which holds every one of them.
+ */
+function coalesce(doc: LoroDoc, rows: readonly OutboxRow[]): Uint8Array {
+  const spans = rows.flatMap((row) => {
+    const meta = decodeImportBlobMeta(row.bytes, false)
+    const start = meta.partialStartVersionVector.toJSON()
+
+    return [...meta.partialEndVersionVector.toJSON()].map(([peer, end]) => {
+      const counter = start.get(peer) ?? 0
+
+      return { id: { peer, counter }, len: end - counter }
+    })
+  })
+
+  return doc.export({ mode: 'updates-in-range', spans })
+}
+
+/**
  * Syncs one region document with the gateway over the transport. It subscribes with the
  * document's version once the gateway welcomes the device, imports what the server sends (one
  * message at a time, in the order they came) and pulls whenever an import leaves updates
@@ -102,7 +124,9 @@ export function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
  * every full pass and reconnect, until the answer to a pull or a subscription imports in full.
  * It pushes the outbox one batch at a time; an
  * acknowledged batch leaves the outbox, a rejected one is rolled back by an inverse commit
- * and pushed again together with it, and a batch rejected again after its rollback stops the
+ * and pushed again together with it, whatever the batch limit: the push after a rollback carries
+ * every row up to the inverse, the rows other tabs queued in between included, as one update
+ * when they are more than a push may carry. A batch rejected again after its rollback stops the
  * region's sync. A push or a pull answered with an error, or not answered within 30 seconds, is
  * given up for now and goes out again later (an unanswered one also has the transport connect
  * again); a subscription the gateway failed is sent again on
@@ -147,6 +171,11 @@ export class RegionSync implements DrainTarget {
   #compacting = false
   /** The last outbox row a rollback covered: a batch rejected again from there stops the region. */
   #revertedThrough = 0
+  /**
+   * The outbox row of the latest rollback's inverse: until it is acknowledged, a push carries
+   * every row up to it, so the refused rows never go out again without their undo.
+   */
+  #recoveryThrough = 0
   #stopped = false
   /** The last import of the rows other tabs appended failed; reported once until one succeeds. */
   #behindLocally = false
@@ -253,7 +282,7 @@ export class RegionSync implements DrainTarget {
       return 'down'
     }
 
-    const rows = await this.#region.outbox(this.#batchRows)
+    const rows = await this.#nextRows()
 
     if (rows.isErr()) {
       this.#onError(rows.error)
@@ -281,6 +310,26 @@ export class RegionSync implements DrainTarget {
       return this.#stopped ? 'empty' : 'down'
     }
 
+    // A push of a rollback may hold more rows than a message carries: they go out as one update.
+    const updates: Result<Uint8Array<ArrayBuffer>[], DataError> =
+      rows.value.length <= MAX_PUSH_UPDATES
+        ? ok(rows.value.map((row) => ownBytes(row.bytes)))
+        : Result.fromThrowable(
+            () => [ownBytes(coalesce(this.#region.doc, rows.value))],
+            (cause) =>
+              dataError(
+                'data:SYNC_STOPPED',
+                `could not put batch ${last.seq} of ${this.id} into one push; the region no longer syncs`,
+                cause,
+              ),
+          )()
+
+    if (updates.isErr()) {
+      this.#stop(updates.error)
+
+      return 'empty'
+    }
+
     let land: (outcome: PushOutcome) => void = () => {}
     const landed = new Promise<PushOutcome>((resolve) => {
       land = resolve
@@ -301,7 +350,7 @@ export class RegionSync implements DrainTarget {
         type: 'push',
         region: this.id,
         batch: flight.batch,
-        updates: flight.rows.map((row) => ownBytes(row.bytes)),
+        updates: updates.value,
       })
     ) {
       this.#flight = undefined
@@ -323,6 +372,29 @@ export class RegionSync implements DrainTarget {
     })
 
     return landed
+  }
+
+  /**
+   * The rows the next push carries: the oldest of the outbox, at most `batchRows`. After a
+   * rollback it is every row up to the inverse instead, however many: the refused rows, those
+   * other tabs queued behind them and the inverse go out together.
+   */
+  #nextRows(): ResultAsync<readonly OutboxRow[], DataError> {
+    const through = this.#recoveryThrough
+
+    return this.#region.outbox(this.#batchRows).andThen((rows) => {
+      const first = rows[0]
+      const last = rows.at(-1)
+
+      if (!first || !last || first.seq > through || last.seq >= through) {
+        return okAsync(rows)
+      }
+
+      // The rows up to the inverse are no more than the numbers from the first to it.
+      return this.#region
+        .outbox(through - first.seq + 1)
+        .map((span) => span.filter((row) => row.seq <= through))
+    })
   }
 
   /**
@@ -516,7 +588,8 @@ export class RegionSync implements DrainTarget {
     }
 
     this.#revertedThrough = batch
-    // The next push carries the rejected rows and their inverse.
+    // The next push carries the rejected rows and their inverse, the last row this device wrote.
+    this.#recoveryThrough = this.#region.persistedSeq()
     this.#land('sent')
   }
 

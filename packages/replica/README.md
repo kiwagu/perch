@@ -102,7 +102,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
-- `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
+- `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
+  push carries, 256 by default) returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
@@ -127,7 +128,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
   import that fails pulls at once and on every full pass until an answer imports in full; only
-  the ack of a first push moves the cursor);
+  the ack of a first push moves the cursor; the push after a rollback carries every outbox row
+  from the refused ones through their inverse, rows other tabs queued between included, whatever
+  `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch
+  never goes out again without its undo);
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a

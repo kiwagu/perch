@@ -72,6 +72,8 @@ export interface DeviceOptions {
   readonly identity?: string
   /** The region the device syncs, its identity's private region by default. */
   readonly region?: RegionRef
+  /** How many outbox rows one push carries at most, the protocol's limit by default. */
+  readonly batchRows?: number
 }
 
 const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> = []
@@ -137,6 +139,7 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
     },
     onSettled: () => {},
     onError: (error) => errors.push(error),
+    ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
   })
   const device: Device = { local, region, transport, engine, errors, channel: () => channel }
 
@@ -182,11 +185,14 @@ export async function twoDevices(options: GatewayOptions = {}) {
   }
 }
 
-/** A started device of Ann and one of Bob, both members of Acme, syncing the organisation's region. */
-export async function twoMembers() {
+/**
+ * A started device of Ann and one of Bob, both members of Acme, syncing the organisation's
+ * region; each push carries at most `batchRows` rows, the protocol's limit by default.
+ */
+export async function twoMembers(options: Pick<DeviceOptions, 'batchRows'> = {}) {
   const gateway = await openGateway({ schema: replicaSchema, memberships: [acme] })
-  const a = await openDevice(gateway, { identity: ann, region: acmeRegion })
-  const b = await openDevice(gateway, { identity: bob, region: acmeRegion })
+  const a = await openDevice(gateway, { ...options, identity: ann, region: acmeRegion })
+  const b = await openDevice(gateway, { ...options, identity: bob, region: acmeRegion })
   const settle = () => settleAll([a, b])
 
   a.engine.start()

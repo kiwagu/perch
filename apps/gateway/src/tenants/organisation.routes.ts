@@ -89,7 +89,8 @@ export interface OrganisationRoutesOptions {
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin.
- * - `GET /organisations/:key/members`: 200 `{ members }`, for a member.
+ * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
+ *   `not-admin`).
  * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin.
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
  *
