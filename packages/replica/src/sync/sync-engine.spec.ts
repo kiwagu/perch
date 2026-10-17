@@ -225,7 +225,7 @@ describe('sync engine', () => {
     expect(await outcome).toBe('offline')
   })
 
-  it('resolves signed-out 10 seconds after the sign-out when the gateway never closes the channel', async () => {
+  it('resolves offline 10 seconds after the sign-out when the gateway never closes the channel', async () => {
     const { a, stub, clock } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
     const outcome = a.engine.signOut()
@@ -237,8 +237,10 @@ describe('sync engine', () => {
 
     await clock.advance(1)
 
-    expect(await outcome).toBe('signed-out')
+    // A timer is no proof that the gateway revoked the grant.
+    expect(await outcome).toBe('offline')
     expect(a.channel()).toBe('down')
+    expect(a.transport.online()).toBe(false)
   })
 
   it('does not settle while a local update fails to persist, reports it once and signs out offline', async () => {

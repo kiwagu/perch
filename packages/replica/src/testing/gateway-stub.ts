@@ -58,7 +58,11 @@ export interface GatewayStub {
   swallowNextProbe(): Promise<void>
   /** The next pull is answered with the protocol error a device that is not subscribed gets. */
   refuseNextPull(): void
-  /** The next sign-out is taken in but the channel stays open; resolves once it arrived. */
+  /**
+   * The next sign-out is taken in, as the gateway does while it revokes the grant (the device
+   * leaves its regions, and nothing it sends after is handled), but the channel stays open;
+   * resolves once it arrived.
+   */
   keepOpenOnSignOut(): Promise<void>
   /**
    * The next sign-out is taken in, but the grant cannot be revoked: the gateway closes the
@@ -106,6 +110,8 @@ interface Gateway {
 interface Connection {
   readonly subscriber: Subscriber
   up: boolean
+  /** The device asked to be signed out on it: nothing it sends after is handled. */
+  signedOut: boolean
   /** Subscriptions and pulls sent on it that wait for their updates. */
   asked: number
 }
@@ -255,6 +261,7 @@ class DeviceChannel implements StubTransport {
       },
       up: false,
       asked: 0,
+      signedOut: false,
     }
 
     this.#connection = connection
@@ -306,6 +313,10 @@ class DeviceChannel implements StubTransport {
   }
 
   #serve(connection: Connection, message: ClientMessage): void {
+    if (connection.signedOut) {
+      return
+    }
+
     const hub = this.#gateway.hub
     const own = this.#region.id
     const subscriber = connection.subscriber
@@ -396,6 +407,8 @@ class DeviceChannel implements StubTransport {
 
     if (keptOpen) {
       this.#gateway.keepOpen = undefined
+      connection.signedOut = true
+      this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
       keptOpen()
 
       return

@@ -319,6 +319,30 @@ describe('SessionService', () => {
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
   })
 
+  it('asks before signing out when the gateway never closes after the sign-out and a change landed meanwhile', async () => {
+    const { session, stub, storage, destroyed, driveClock } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+    const received = stub.keepOpenOnSignOut()
+    const signingOut = session.signOut()
+
+    await received
+
+    // A write that passed the barrier just before it went up lands during the unanswered wait.
+    const below = session.space() ?? expect.unreachable('a space')
+
+    expect((await below.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    expect((await driveClock(signingOut))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(stub.signOuts()).toBe(1)
+    expect(destroyed()).toEqual([])
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(storage.get('perch.session.refresh')).toBe(ann.tokens.refresh)
+    expect(session.notice()).toBeUndefined()
+    expect(storage.get('perch.session.signing-out')).toBeUndefined()
+  })
+
   it('asks before signing out when the region stopped syncing with changes left in the outbox', async () => {
     const booted = await bootSession({ saved: ann, online: true })
     const { session, gateway, destroyed, failures, writeOffline } = booted

@@ -71,7 +71,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
-  other close after it asked stops the transport and answers `offline`), or answers `offline`
+  other close after it asked, or none within 10 seconds, stops the transport and answers
+  `offline`), or answers `offline`
   while anything stays unsent, rows of a region that stopped syncing and updates that failed to
   persist included; it never rejects).
   Its parts:
@@ -102,7 +103,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   database and, per device, a `StubTransport` that behaves like the gateway's connection
   without a network, can go offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `keepOpenOnSignOut`, `failNextSignOut` (closes as a gateway that could not
+  `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
+  the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
   steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
