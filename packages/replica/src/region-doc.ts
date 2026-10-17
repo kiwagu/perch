@@ -434,6 +434,23 @@ export class RegionDoc {
   }
 
   /**
+   * Imports outbox rows into this document, one at a time as `catchUpLocal` does, so a
+   * projector sees each as an import; rows the document holds already change nothing. The
+   * update log, the outbox and the watermarks stay as they are.
+   */
+  importLocal(rows: readonly OutboxRow[]): Result<void, DataError> {
+    return Result.fromThrowable(
+      () => {
+        for (const row of rows) {
+          this.#settle(this.doc.import(row.bytes))
+        }
+      },
+      (cause) =>
+        dataError('data:QUERY_FAILED', `could not import outbox rows of ${this.ref.id}`, cause),
+    )()
+  }
+
+  /**
    * Replaces the update log with one full snapshot of the document, after making local
    * updates durable and importing what other tabs appended, so the rows it drops are in it.
    * Refuses while an imported update still waits for its history: a snapshot leaves such

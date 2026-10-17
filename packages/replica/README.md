@@ -31,7 +31,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `close()`. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
   the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
-  exactly those rows by id, and `catchUpLocal()`, which imports
+  exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
+  only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
   an import.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only

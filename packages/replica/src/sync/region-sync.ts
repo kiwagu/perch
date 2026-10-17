@@ -267,6 +267,16 @@ export class RegionSync implements DrainTarget {
       return 'empty'
     }
 
+    // Another tab may have appended rows since the catch-up: the document takes in exactly the
+    // rows it pushes, so an ack that moves the cursor over them leaves none of them out.
+    const imported = this.#region.importLocal(rows.value)
+
+    if (imported.isErr()) {
+      this.#onError(imported.error)
+
+      return 'down'
+    }
+
     if (this.#stopped || this.#flight || !this.#subscribed) {
       return this.#stopped ? 'empty' : 'down'
     }

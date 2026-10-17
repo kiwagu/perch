@@ -7,6 +7,7 @@ import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import type { ClientMessage, ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import localTailStatement from '../surql/local-tail.surql'
+import outboxReadStatement from '../surql/outbox-read.surql'
 import importStatement from '../surql/replica-import.surql'
 import { manualClock } from '../testing/manual-clock'
 
@@ -36,7 +37,12 @@ afterEach(async () => {
 
 /** A region's sync over a transport that is always up and keeps what was sent. */
 async function alone(
-  options: { readonly persisted?: boolean; readonly wrap?: (local: LocalDb) => LocalDb } = {},
+  options: {
+    readonly persisted?: boolean
+    readonly wrap?: (local: LocalDb) => LocalDb
+    /** Hears each message as it is sent. */
+    readonly onSend?: (message: ClientMessage) => void
+  } = {},
 ) {
   const clock = manualClock()
   const sent: ClientMessage[] = []
@@ -50,6 +56,7 @@ async function alone(
     },
     send(message) {
       sent.push(message)
+      options.onSend?.(message)
 
       return true
     },
@@ -365,6 +372,65 @@ describe('region sync on its own', () => {
     expect(region.pulled()).toBe(1)
     expect((await region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(errors).toHaveLength(1)
+    follower.close()
+  })
+
+  it('imports the rows it pushes, a row another tab appended after its catch-up included', async () => {
+    let beforeOutboxRead: (() => Promise<void>) | undefined
+    const nameAtPush: unknown[] = []
+    const leader = await alone({
+      persisted: true,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          const run = beforeOutboxRead
+
+          if (text !== outboxReadStatement || !run) {
+            return undefined
+          }
+
+          beforeOutboxRead = undefined
+
+          return run()
+        }),
+      onSend: (message) => {
+        if (message.type === 'push') {
+          nameAtPush.push(leader.region.recordJson(profileKey)?.['name'])
+        }
+      },
+    })
+    const { sync, count, region, errors, lastBatch, otherTab } = leader
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+
+    const follower = await otherTab()
+
+    // The leader has imported the local log; a follower appends a row before the outbox is read.
+    beforeOutboxRead = async () => {
+      writeName(follower, 'Bea')
+      expect((await follower.flush()).isOk()).toBe(true)
+    }
+
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+
+    // The leader's document holds the row by the time it goes out.
+    expect(nameAtPush).toEqual(['Bea'])
+
+    // The server took nothing from others before the batch: the ack moves the cursor over it.
+    await sync.handle({
+      type: 'ack',
+      region: regionId,
+      batch: lastBatch(),
+      head: 1,
+      compact: false,
+    })
+
+    expect(await pushed).toBe('sent')
+    expect(region.pulled()).toBe(1)
+    expect(region.recordJson(profileKey)).toMatchObject({ name: 'Bea' })
+    expect(errors).toEqual([])
     follower.close()
   })
 
