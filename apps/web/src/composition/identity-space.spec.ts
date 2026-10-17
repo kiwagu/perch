@@ -1,4 +1,4 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type AuthUser, type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
@@ -198,6 +198,8 @@ async function openSpace(
     readonly memberships: readonly Membership[]
     readonly online?: boolean
     readonly local?: LocalDb
+    /** Opens the organisations' databases in place of `tenants`, which then opens none. */
+    readonly openTenantLocal?: TenantDatabases['open']
   },
 ) {
   const tenants = tenantDatabases()
@@ -207,7 +209,7 @@ async function openSpace(
     await openIdentitySpace({
       identity: ann,
       openLocal: () => (options.local ? okAsync(options.local) : openTestDb()),
-      openTenantLocal: tenants.open,
+      openTenantLocal: options.openTenantLocal ?? tenants.open,
       memberships: options.memberships,
       tenant: undefined,
       schema: replicaSchema,
@@ -495,6 +497,30 @@ describe('organisations in the identity space', () => {
       'no organisation is selected',
     )
     expect(errors).toEqual([])
+  })
+
+  it('reports a change of memberships that fails, runs the next one and still closes', async () => {
+    const gateway = await openGateway([acme])
+    const tenants = tenantDatabases()
+    const failure = new Error('the browser would not open the database')
+    const { space, errors } = await openSpace(gateway, {
+      memberships: [],
+      openTenantLocal: (identity, key) =>
+        key === 'globex'
+          ? new ResultAsync<LocalDb, DataError>(Promise.reject(failure))
+          : tenants.open(identity, key),
+    })
+
+    await space.setMemberships([globex])
+
+    expect(errors.map(({ code, cause }) => [code, cause])).toEqual([['data:OPEN_FAILED', failure]])
+    expect(space.tenants()).toEqual([])
+
+    await space.setMemberships([acme])
+
+    expect(tenants.opened).toEqual(['acme'])
+    expect(space.tenants()).toEqual(['acme'])
+    await expect(space.close()).resolves.toBeUndefined()
   })
 
   it('destroy deletes the private database and every tenant database', async () => {

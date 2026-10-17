@@ -60,7 +60,8 @@ export interface IdentitySpace {
   /**
    * The identity's organisations changed: the databases of new ones open, those of the ones it
    * left close and are deleted, and a leading tab syncs the regions on a new engine. Changes run
-   * one after the other; one that leaves the databases as they are changes nothing.
+   * one after the other; one that leaves the databases as they are changes nothing, and one that
+   * fails is reported, never rejected, so the next one still runs and the space still closes.
    */
   setMemberships(next: readonly Membership[]): Promise<void>
   /** Makes the open organisation `key` current, or none; a key whose database is not open changes nothing. */
@@ -119,7 +120,7 @@ class Space implements IdentitySpace {
   #engine: SyncEngine | undefined
   #visibility: Visibility = 'visible'
   #closing: Promise<void> | undefined
-  /** The change of memberships under way, if any; the next one waits for it. */
+  /** The change of memberships under way, if any; the next one waits for it. It never rejects. */
   #changing: Promise<void> = Promise.resolve()
 
   constructor(own: RegionSpace, tenants: TenantSpaces, options: IdentitySpaceOptions) {
@@ -161,7 +162,13 @@ class Space implements IdentitySpace {
   }
 
   setMemberships(next: readonly Membership[]): Promise<void> {
-    this.#changing = this.#changing.then(() => this.#changeMemberships(next))
+    this.#changing = this.#changing
+      .then(() => this.#changeMemberships(next))
+      .catch((cause: unknown) =>
+        this.#options.onError(
+          dataError('data:OPEN_FAILED', 'could not follow a change of the memberships', cause),
+        ),
+      )
 
     return this.#changing
   }
