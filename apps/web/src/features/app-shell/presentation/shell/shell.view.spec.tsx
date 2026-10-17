@@ -57,6 +57,19 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.nav.sign-in')).toBeNull()
   })
 
+  it('links a signed-in user to the organisation page', () => {
+    renderShell({ signedIn: true, activePath: '/org' })
+
+    const organisation = screen.getAllByTestId('app-shell.nav.organisation')[0] as HTMLElement
+
+    expect(organisation.getAttribute('href')).toBe('/org')
+    expect(organisation.getAttribute('aria-current')).toBe('page')
+    expect(organisation.textContent).toBe(en['app.shell.nav.organisation'])
+    expect(
+      screen.getAllByTestId('app-shell.nav.profile')[0]?.getAttribute('aria-current'),
+    ).toBeNull()
+  })
+
   it('announces the current notice', () => {
     renderShell({ notice: { testId: 'user.profile.notice', text: 'Saved' } })
 

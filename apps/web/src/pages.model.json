@@ -1,6 +1,73 @@
 {
   "modules": [
     {
+      "id": "organisation",
+      "dir": "features/organisation",
+      "shapes": [
+        {
+          "id": "organisation.organisation",
+          "file": "features/organisation/presentation/pages/organisation/organisation.shape.surql",
+          "tables": [
+            "note"
+          ],
+          "region": "tenant",
+          "fields": [
+            "id",
+            "author",
+            "text",
+            "created_at"
+          ]
+        }
+      ],
+      "commands": [
+        {
+          "id": "organisation.organisation.createNote",
+          "file": "features/organisation/presentation/pages/organisation/organisation.commands.surql",
+          "tables": [
+            "note"
+          ],
+          "region": "tenant",
+          "ops": [
+            "create"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "organisation.organisation.updateNote",
+          "file": "features/organisation/presentation/pages/organisation/organisation.commands.surql",
+          "tables": [
+            "note"
+          ],
+          "region": "tenant",
+          "ops": [
+            "text.update"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "organisation.organisation.deleteNote",
+          "file": "features/organisation/presentation/pages/organisation/organisation.commands.surql",
+          "tables": [
+            "note"
+          ],
+          "region": "tenant",
+          "ops": [
+            "delete"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        }
+      ]
+    },
+    {
       "id": "user",
       "dir": "features/user",
       "shapes": [

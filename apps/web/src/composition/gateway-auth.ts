@@ -14,12 +14,15 @@ import {
   type SignUpInput,
 } from '@workspace/data'
 import { idSchemas } from '@workspace/ids'
+import { type Membership, membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 /** A device the gateway signed in: who it is, and the keys its sync channel presents. */
 export interface SignedInDevice {
   readonly identity: AuthUser
   readonly tokens: { readonly access: string; readonly refresh: string }
+  /** The organisations the identity belongs to. */
+  readonly memberships: readonly Membership[]
 }
 
 export interface GatewayAuth {
@@ -34,6 +37,7 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>
 const signedInDevice = z.object({
   identity: z.object({ id: idSchemas.identity.schema, email: z.string() }),
   tokens: z.object({ access: z.string().min(1), refresh: z.string().min(1) }),
+  memberships: z.array(membership),
 })
 
 /** The statuses the gateway refuses credentials with, and what each means here. */

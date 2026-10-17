@@ -6,6 +6,12 @@ import standCountsText from './stand-counts.surql'
 
 export interface LeftOnStand {
   readonly identities: number
+  /** The organisations the accounts created. */
+  readonly tenants: number
+  /** The memberships of the accounts and the memberships in the manifest's organisations. */
+  readonly memberships: number
+  /** How many of the manifest's organisation databases `t_<key>` exist. */
+  readonly databases: number
   readonly profiles: number
   readonly regionRows: number
   /** The sum of the regions' heads: how many batches the server accepted into them. */
@@ -16,6 +22,8 @@ interface StandCountsParams {
   readonly emails: readonly string[]
   readonly ids: readonly string[]
   readonly regions: readonly string[]
+  readonly databases: readonly string[]
+  readonly tenantIds: readonly string[]
 }
 
 const standCounts: Shape<StandCountsParams, LeftOnStand> = {
@@ -26,9 +34,13 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     { name: 'emails', type: 'array<string>' },
     { name: 'ids', type: 'array<string>' },
     { name: 'regions', type: 'array<string>' },
+    { name: 'databases', type: 'array<string>' },
+    { name: 'tenantIds', type: 'array<string>' },
   ],
   tables: [
     'identity',
+    'tenant',
+    'membership',
     'profile',
     '_replica_head',
     '_replica_snapshot',
@@ -52,6 +64,10 @@ export async function leftOnStand(
         emails: accounts.map((account) => account.email),
         ids,
         regions: ids.map((id) => `identity:${id}`),
+        tenantIds: Object.values(manifest.organisations).map((organisation) => organisation.id),
+        databases: Object.values(manifest.organisations).map(
+          (organisation) => `t_${organisation.key}`,
+        ),
       })
     )._unsafeUnwrap()
   } finally {

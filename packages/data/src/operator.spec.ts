@@ -25,7 +25,7 @@ describe('runAsOperator', () => {
       url,
       namespace: 'app',
       database: 'directory',
-      schema: readSchema(),
+      schema: readSchema('directory'),
       credentials: { username: 'gateway', password, namespace: 'app' },
     }).map((db) => {
       open.push(db)

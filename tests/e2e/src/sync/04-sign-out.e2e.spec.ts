@@ -1,28 +1,8 @@
 // spec: tests/e2e/specs/sync/04-sign-out.md
-import type { Page } from '@playwright/test'
-
 import { generate } from '../support/data'
 import { appReady, expect, signIn, test } from '../support/fixtures'
 import { SyncNetwork } from '../support/network'
-
-/** The IndexedDB databases the page's browser keeps, by name. */
-const databases = (page: Page): Promise<string[]> =>
-  page.evaluate(async () =>
-    (await indexedDB.databases()).flatMap((database) => (database.name ? [database.name] : [])),
-  )
-
-/** The database the app keeps for the identity signed in on the page: `app-identity-<id>`. */
-async function identityDatabase(page: Page): Promise<string> {
-  const id = await page.evaluate(() => {
-    const saved: unknown = JSON.parse(localStorage.getItem('perch.session.identity') ?? 'null')
-
-    return typeof saved === 'object' && saved !== null && 'id' in saved ? String(saved.id) : ''
-  })
-
-  expect(id, 'the identity signed in on the page').not.toBe('')
-
-  return `app-identity-${id}`
-}
+import { databases, identityDatabase } from '../support/storage'
 
 test.describe('Sign out of one device', { tag: '@full' }, () => {
   test("Signing out deletes the device's data and leaves the other device signed in, and asks first while changes are unsent", async ({

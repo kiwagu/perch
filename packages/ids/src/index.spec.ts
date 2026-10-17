@@ -5,9 +5,15 @@ import {
   type IdentityId,
   identityIdFactory,
   idSchemas,
+  type MembershipId,
+  membershipIdFactory,
+  type NoteId,
+  noteIdFactory,
   type ProfileId,
   profileIdFactory,
   registry,
+  type TenantId,
+  tenantIdFactory,
 } from './index'
 
 afterEach(() => resetValidationMode())
@@ -18,6 +24,17 @@ describe('the entity id registry', () => {
 
     expect(id.startsWith('prf_')).toBe(true)
     expect(identityIdFactory.create().startsWith('idn_')).toBe(true)
+  })
+
+  it('mints the ids of organisations, their memberships and their notes', () => {
+    const tenant: TenantId = tenantIdFactory.create()
+    const membership: MembershipId = membershipIdFactory.create()
+    const note: NoteId = noteIdFactory.create()
+
+    expect(tenant.startsWith('tnt_')).toBe(true)
+    expect(membership.startsWith('mbr_')).toBe(true)
+    expect(note.startsWith('nte_')).toBe(true)
+    expect(registry.kindOf(note)).toBe('note')
   })
 
   it('tells kinds apart', () => {

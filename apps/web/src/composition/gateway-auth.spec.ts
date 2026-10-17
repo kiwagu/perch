@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { identityIdFactory } from '@workspace/ids'
+import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
 
 import { type Fetcher, gatewayAuth } from './gateway-auth'
 
@@ -9,6 +10,7 @@ const input = { email: 'ann@example.test', password: 'pass-word-1' }
 const signedIn = {
   identity: { id: identityIdFactory.create(), email: input.email },
   tokens: { access: 'access-1', refresh: 'refresh-1' },
+  memberships: [] as Membership[],
 }
 
 interface Sent {
@@ -98,5 +100,26 @@ describe('gatewayAuth', () => {
     expect(
       (await gatewayAuth('/backend', notJson.fetcher).signIn(input))._unsafeUnwrapErr().code,
     ).toBe('data:AUTH_FAILED')
+  })
+
+  it('parses the memberships of the answer', async () => {
+    const acme: Membership = {
+      tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+      role: 'member',
+    }
+    const { fetcher } = fakeFetch(respond(200, { ...signedIn, memberships: [acme] }))
+    const device = (await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrap()
+
+    expect(device.memberships).toEqual([acme])
+  })
+
+  it('refuses an answer without memberships as data:AUTH_FAILED', async () => {
+    const { fetcher } = fakeFetch(
+      respond(200, { identity: signedIn.identity, tokens: signedIn.tokens }),
+    )
+
+    expect((await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
   })
 })

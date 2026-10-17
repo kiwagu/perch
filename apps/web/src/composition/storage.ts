@@ -1,5 +1,8 @@
 import type { AuthUser } from '@workspace/data'
-import { idSchemas } from '@workspace/ids'
+import { type IdentityId, idSchemas } from '@workspace/ids'
+import { isTenantKey } from '@workspace/kernel'
+import type { Membership } from '@workspace/replica/protocol'
+import { membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 
@@ -109,7 +112,8 @@ export function deviceIdFrom(storage: KeyValueStorage): string {
 /** Who is signed in on this browser; the tabs follow it. */
 export const IDENTITY_KEY = 'perch.session.identity'
 
-const ACCESS_KEY = 'perch.session.token'
+/** The access token the gateway issued the device last; renewing the keys changes it. */
+export const ACCESS_KEY = 'perch.session.token'
 
 const REFRESH_KEY = 'perch.session.refresh'
 
@@ -122,6 +126,121 @@ export function saveDevice(storage: KeyValueStorage, device: SignedInDevice): vo
     IDENTITY_KEY,
     JSON.stringify({ id: device.identity.id, email: device.identity.email }),
   )
+  saveMemberships(storage, device.identity.id, device.memberships)
+}
+
+/** The organisations the signed-in identity belongs to; the tabs follow them. */
+export const MEMBERSHIPS_KEY = 'perch.session.memberships'
+
+const TENANT_KEY = 'perch.session.tenant'
+
+const savedMembershipsSchema = z.object({
+  identity: idSchemas.identity.schema,
+  memberships: z.array(membership),
+})
+
+/** Keeps the organisations the identity belongs to, as the gateway last told this device. */
+export function saveMemberships(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+  memberships: readonly Membership[],
+): void {
+  storage.set(MEMBERSHIPS_KEY, JSON.stringify({ identity, memberships }))
+}
+
+/** The memberships kept for `identity`; none when they were kept for another or do not parse. */
+export function savedMemberships(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+): readonly Membership[] {
+  const text = storage.get(MEMBERSHIPS_KEY)
+
+  if (text === undefined) {
+    return []
+  }
+
+  try {
+    const parsed = savedMembershipsSchema.safeParse(JSON.parse(text))
+
+    return parsed.success && parsed.data.identity === identity ? parsed.data.memberships : []
+  } catch {
+    return []
+  }
+}
+
+/** Keeps the key of the organisation this browser works in. */
+export function saveTenant(storage: KeyValueStorage, key: string): void {
+  storage.set(TENANT_KEY, key)
+}
+
+/** The key of the organisation this browser works in, if one is kept. */
+export function savedTenant(storage: KeyValueStorage): string | undefined {
+  return storage.get(TENANT_KEY)
+}
+
+/**
+ * The organisation databases this device may hold for each identity, by key: every one the
+ * identity's space opened or was about to open, until it is deleted. It outlives the keys (a
+ * sign-out that keeps the databases for the next sign-in keeps it too), so a database whose
+ * membership went while nobody was signed in is still found and deleted. Each identity's keys
+ * are kept apart (`{ [identity]: keys }`): another identity signing in on this browser leaves
+ * them as they are.
+ */
+export const TENANT_DATABASES_KEY = 'perch.session.tenant-databases'
+
+const savedTenantDatabasesSchema = z.record(
+  idSchemas.identity.schema,
+  // A key names a database to delete: only an organisation's key is taken.
+  z.array(z.string().refine(isTenantKey)),
+)
+
+/** The keys kept for every identity; none when the kept value does not parse. */
+function savedTenantDatabasesOfAll(
+  storage: KeyValueStorage,
+): Partial<Record<IdentityId, readonly string[]>> {
+  const text = storage.get(TENANT_DATABASES_KEY)
+
+  if (text === undefined) {
+    return {}
+  }
+
+  try {
+    const parsed = savedTenantDatabasesSchema.safeParse(JSON.parse(text))
+
+    return parsed.success ? parsed.data : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Keeps the keys of the organisation databases `identity` has on this device, in place of those
+ * kept for it before; the other identities' stay. None keeps nothing for it, and the storage
+ * keeps no empty inventory.
+ */
+export function saveTenantDatabases(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+  keys: readonly string[],
+): void {
+  const others = Object.entries(savedTenantDatabasesOfAll(storage)).filter(
+    ([each]) => each !== identity,
+  )
+  const next = keys.length === 0 ? others : [...others, [identity, keys] as const]
+
+  if (next.length === 0) {
+    storage.remove(TENANT_DATABASES_KEY)
+  } else {
+    storage.set(TENANT_DATABASES_KEY, JSON.stringify(Object.fromEntries(next)))
+  }
+}
+
+/** The keys kept for `identity`; none when none were kept for it or the kept value does not parse. */
+export function savedTenantDatabases(
+  storage: KeyValueStorage,
+  identity: IdentityId,
+): readonly string[] {
+  return savedTenantDatabasesOfAll(storage)[identity] ?? []
 }
 
 /** Keeps a renewed pair of keys: a refresh key works once, so the next connection needs the latest. */
@@ -195,9 +314,14 @@ export function forgetSigningOut(storage: KeyValueStorage): void {
   storage.remove(SIGNING_OUT_KEY)
 }
 
-/** Forgets who is signed in and the keys; the other tabs hear the identity go. */
+/**
+ * Forgets who is signed in and the keys; the other tabs hear the identity go. The inventory of
+ * the organisation databases stays: the databases may stay too.
+ */
 export function forgetDevice(storage: KeyValueStorage): void {
   storage.remove(ACCESS_KEY)
   storage.remove(REFRESH_KEY)
   storage.remove(IDENTITY_KEY)
+  storage.remove(MEMBERSHIPS_KEY)
+  storage.remove(TENANT_KEY)
 }

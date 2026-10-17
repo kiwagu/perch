@@ -8,7 +8,7 @@
 
 import type { ResultAsync } from 'neverthrow'
 
-import { type DataError, openLocalDb } from '@workspace/data'
+import { type DataError, deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
@@ -16,19 +16,40 @@ import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync
 
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import type { VisibilitySource } from './session'
 import { browserStorage } from './storage'
 
-const schemaFiles = import.meta.glob<string>('../../../../database/schema/*.surql', {
+const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
+  eager: true,
+  import: 'default',
+})
+const directoryFiles = import.meta.glob<string>('../../../../database/schema/directory/*.surql', {
+  eager: true,
+  import: 'default',
+})
+const tenantFiles = import.meta.glob<string>('../../../../database/schema/tenant/*.surql', {
   eager: true,
   import: 'default',
 })
 
-const schema = Object.keys(schemaFiles)
-  .sort()
-  .map((path) => schemaFiles[path])
-  .join('\n')
+/** One database's schema: the common files, then its own, each set in name order. */
+const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): string =>
+  sets
+    .flatMap((files) =>
+      Object.keys(files)
+        .sort()
+        .map((path) => files[path]),
+    )
+    .join('\n')
+
+const directorySchema = schemaOf(commonFiles, directoryFiles)
+const tenantSchema = schemaOf(commonFiles, tenantFiles)
+
+/** Where the database of one organisation of an identity lives in this browser. */
+const tenantUrl = (identity: string, key: string): string =>
+  `indxdb://app-identity-${identity}-${tenantDatabase(key)}`
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -65,14 +86,25 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
         url: `indxdb://app-identity-${identity}`,
         namespace: 'app',
         database: 'identity',
-        schema,
+        schema: directorySchema,
       }),
+    openTenantLocal: (identity, key) =>
+      openLocalDb({
+        engines: wasmEngines(),
+        url: tenantUrl(identity, key),
+        namespace: 'app',
+        database: 'tenant',
+        schema: tenantSchema,
+      }),
+    deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
+    organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
         credentials: context.credentials,
         onTokens: context.onTokens,
+        onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
       }),

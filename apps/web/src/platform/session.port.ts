@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
+import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
   /** Sign out even though this device holds changes the gateway has not received; they are lost. */
@@ -32,6 +33,17 @@ export interface SessionPort {
   /** The word the last session left for the sign-in page, until `clearNotice`. */
   notice(): SessionNotice | undefined
   clearNotice(): void
+  /** The organisations the signed-in identity belongs to, as the gateway last said; none while nobody is signed in. */
+  memberships(): readonly Membership[]
+  /** Hears the memberships or the current organisation change, a sign-in or sign-out included. */
+  subscribeMemberships(listener: () => void): () => void
+  /**
+   * The organisation the tenant region's reads and writes go to: the one selected last on this
+   * browser while the identity belongs to it, otherwise the first by key; none without memberships.
+   */
+  currentTenant(): Membership | undefined
+  /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
+  selectTenant(key: string): void
 }
 
 export const SESSION = token<SessionPort>('Session')

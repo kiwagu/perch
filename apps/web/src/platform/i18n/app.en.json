@@ -4,6 +4,7 @@
   "app.shell.failed": "This device could not open its data. Reload the page to try again.",
   "app.shell.nav.sign-in": "Sign in",
   "app.shell.nav.profile": "Profile",
+  "app.shell.nav.organisation": "Organisation",
   "app.shell.navigation": "Main navigation",
   "app.shell.locale": "Language",
   "app.shell.locale.en": "English",

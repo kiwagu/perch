@@ -1,5 +1,16 @@
-import { LoroMap, type LoroText } from 'loro-crdt'
+import { LoroDoc, LoroMap, type LoroText } from 'loro-crdt'
 import { describe, expect, it } from 'vitest'
+
+import { recordRef } from '@workspace/data'
+import { noteIdFactory } from '@workspace/ids'
+
+import {
+  noteCreate,
+  noteRemoveAuthor,
+  noteSetAuthor,
+  noteUpdate,
+  replicaSchema,
+} from '../__fixtures__/note'
 
 import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
 import { validateBatch } from './batch-validator'
@@ -199,5 +210,103 @@ describe('batch validation', () => {
     expect(validateBatch(input(server, [exportSince(client, server)])).isOk()).toBe(true)
     expect(server.version().encode()).toEqual(before)
     expect(server.recordMap('profile/prf_1').get('name')).toBe('Ann')
+  })
+})
+
+describe('a tenant region', () => {
+  const region = { kind: 'tenant', id: 'tenant:acme' } as const
+  const ann = 'idn_ann000000000000.0000000000'
+  const bob = 'idn_bob000000000000.0000000000'
+
+  it('accepts a note whose author is the pushing member', () => {
+    const doc = new LoroDoc()
+    const updates = [noteCreate(doc, { id: noteIdFactory.create(), author: ann, text: 'hello' })]
+    const validated = validateBatch({
+      doc: new LoroDoc(),
+      region,
+      actor: ann,
+      schema: replicaSchema,
+      updates,
+    })
+
+    expect(validated.isOk()).toBe(true)
+    expect(recordRef(validated._unsafeUnwrap().plan.upserts[0]?.data['author'])).toEqual({
+      table: 'member',
+      key: ann,
+    })
+  })
+
+  it('refuses a note created in the name of another member', () => {
+    const doc = new LoroDoc()
+    const updates = [noteCreate(doc, { id: noteIdFactory.create(), author: bob, text: 'hello' })]
+    const validated = validateBatch({
+      doc: new LoroDoc(),
+      region,
+      actor: ann,
+      schema: replicaSchema,
+      updates,
+    })
+
+    expect(validated.isErr() && validated.error.reason).toBe('foreign-owner')
+  })
+
+  it('lets another member edit the text but not the author', () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const edited = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      schema: replicaSchema,
+      updates: [noteUpdate(server.fork(), { id, text: 'hello, world' })],
+    })
+    const reauthored = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      schema: replicaSchema,
+      updates: [noteSetAuthor(server.fork(), { id, author: bob })],
+    })
+
+    expect(edited.isOk()).toBe(true)
+    expect(reauthored.isErr() && reauthored.error.reason).toBe('foreign-owner')
+  })
+
+  it("refuses deleting the author of another member's note as foreign-owner", () => {
+    const server = new LoroDoc()
+    const id = noteIdFactory.create()
+
+    server.import(noteCreate(server.fork(), { id, author: ann, text: 'hello' }))
+
+    const validated = validateBatch({
+      doc: server,
+      region,
+      actor: bob,
+      schema: replicaSchema,
+      updates: [noteRemoveAuthor(server.fork(), { id })],
+    })
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'foreign-owner',
+      detail: `note/${id}.author`,
+    })
+  })
+
+  it('refuses a profile pushed into a tenant region', () => {
+    const validated = validateBatch({
+      doc: new LoroDoc(),
+      region,
+      actor: ann,
+      schema: replicaSchema,
+      updates: [documentWithProfile('Ann').export({ mode: 'update' })],
+    })
+
+    expect(validated.isErr() && validated.error).toEqual({
+      reason: 'foreign-table',
+      detail: 'profile/prf_1',
+    })
   })
 })

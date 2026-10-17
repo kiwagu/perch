@@ -53,6 +53,11 @@ export interface SyncEngine {
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
    */
   channelStopped(): boolean
+  /**
+   * Connects again at once: the gateway welcomes the device anew and hands it fresh keys. A
+   * connection the gateway has not welcomed yet is left to the hello it says.
+   */
+  reconnect(): void
 }
 
 /** How long a sign-out waits for the channel to come up. */
@@ -205,6 +210,10 @@ class Engine implements SyncEngine {
     return this.#channelStopped
   }
 
+  reconnect(): void {
+    this.#options.transport.reconnect()
+  }
+
   async signOut(): Promise<'signed-out' | 'offline'> {
     if (!(await this.#untilUp(SIGN_OUT_CHANNEL_MS))) {
       return 'offline'
@@ -246,8 +255,8 @@ class Engine implements SyncEngine {
           sync.subscribe()
         }
       })
-      // The transport hands renewed keys to the app.
-      .with({ type: 'tokens' }, () => {})
+      // The transport hands renewed keys and memberships to the app.
+      .with({ type: P.union('tokens', 'memberships') }, () => {})
       .with({ type: 'heads' }, ({ regions }) => {
         this.#probes.shift()?.()
 

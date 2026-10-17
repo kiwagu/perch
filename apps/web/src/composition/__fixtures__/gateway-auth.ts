@@ -2,6 +2,7 @@ import { errAsync, okAsync } from 'neverthrow'
 
 import { dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
 
 import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 
@@ -10,8 +11,11 @@ interface Account {
   readonly password: string
 }
 
-/** The gateway's sign-up and sign-in without a network: accounts live in memory, each answer carries new keys. */
-export function fakeGatewayAuth(): GatewayAuth {
+/**
+ * The gateway's sign-up and sign-in without a network: accounts live in memory, each answer
+ * carries new keys and every account belongs to `memberships`.
+ */
+export function fakeGatewayAuth(memberships: readonly Membership[] = []): GatewayAuth {
   const accounts = new Map<string, Account>()
   let issued = 0
   const keys = () => {
@@ -28,9 +32,9 @@ export function fakeGatewayAuth(): GatewayAuth {
 
       const identity = { id: identityIdFactory.create(), email: input.email }
 
-      accounts.set(input.email, { device: { identity }, password: input.password })
+      accounts.set(input.email, { device: { identity, memberships }, password: input.password })
 
-      return okAsync({ identity, tokens: keys() })
+      return okAsync({ identity, tokens: keys(), memberships })
     },
     signIn: (input) => {
       const account = accounts.get(input.email)

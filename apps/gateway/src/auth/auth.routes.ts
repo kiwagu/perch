@@ -1,7 +1,10 @@
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
+import type { Membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
+
+import type { Organisations } from '../tenants/organisations'
 
 import type { IdentitySessions, SignedIn } from './identity-sessions'
 
@@ -17,7 +20,13 @@ const ACTIONS = new Map<string, 'signUp' | 'signIn'>([
   ['/auth/sign-in', 'signIn'],
 ])
 
-async function readBody(request: Request): Promise<unknown> {
+/** A signed-in identity with the organisations it belongs to. */
+interface SignedInWithMemberships extends SignedIn {
+  readonly memberships: readonly Membership[]
+}
+
+/** The request's JSON body, or `undefined` when it is not JSON. */
+export async function readBody(request: Request): Promise<unknown> {
   try {
     return (await request.json()) as unknown
   } catch {
@@ -26,10 +35,11 @@ async function readBody(request: Request): Promise<unknown> {
   }
 }
 
-function signedInResponse({ identity, tokens }: SignedIn): Response {
+function signedInResponse({ identity, tokens, memberships }: SignedInWithMemberships): Response {
   return Response.json({
     identity: { id: identity.id, email: identity.email },
     tokens: { access: tokens.access, refresh: tokens.refresh },
+    memberships,
   })
 }
 
@@ -46,11 +56,13 @@ function errorResponse(error: DataError): Response {
 
 /**
  * Sign-up and sign-in over HTTP: `POST /auth/sign-up` and `POST /auth/sign-in` with
- * `{ email, password }` answer `{ identity, tokens }`. A request for another path is not
- * answered here (`undefined`), so the server can try its other routes.
+ * `{ email, password }` answer `{ identity, tokens, memberships }`, the memberships being the
+ * organisations the identity belongs to once it is signed in. A request for another path is
+ * not answered here (`undefined`), so the server can try its other routes.
  */
 export function authRoutes(
   sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
+  organisations: Pick<Organisations, 'membershipsOf'>,
 ): (request: Request) => Promise<Response | undefined> {
   return async (request) => {
     const action = ACTIONS.get(new URL(request.url).pathname)
@@ -72,7 +84,11 @@ export function authRoutes(
       return Response.json({ code: 'bad-request' }, { status: 400 })
     }
 
-    const result = await sessions[action](body.data)
+    const result = await sessions[action](body.data).andThen((signedIn) =>
+      organisations
+        .membershipsOf(signedIn.identity.id)
+        .map((memberships): SignedInWithMemberships => ({ ...signedIn, memberships })),
+    )
 
     return result.match(signedInResponse, errorResponse)
   }

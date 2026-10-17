@@ -1,14 +1,16 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { identityIdFactory, profileIdFactory } from '@workspace/ids'
+import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
 
+import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
 import {
   browserDatabases,
@@ -16,15 +18,42 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from './__fixtures__/session'
-import type { SignedInDevice } from './gateway-auth'
-import { memoryStorage, saveDevice } from './storage'
+import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+import {
+  memoryStorage,
+  saveDevice,
+  savedMemberships,
+  savedTenantDatabases,
+  saveMemberships,
+  TENANT_DATABASES_KEY,
+} from './storage'
 
 const ann: SignedInDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  memberships: [],
 }
 
 const annSignUp = { email: 'ann@example.test', password: 'pass-word-1' }
+
+const acme: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+  role: 'admin',
+}
+
+const globex: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
+  role: 'member',
+}
+
+/** Ann's device as a sign-in left it, a member of `memberships`. */
+const annIn = (memberships: readonly Membership[]): SignedInDevice => ({ ...ann, memberships })
+
+/** A gateway whose sign-in always answers `device`, and which takes no sign-up. */
+const signingIn = (device: SignedInDevice): GatewayAuth => ({
+  signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
+  signIn: () => okAsync(device),
+})
 
 const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2' }
 
@@ -1001,5 +1030,326 @@ describe('SessionService', () => {
     setVisibility('visible')
 
     expect(seen.mock.calls).toEqual([['hidden'], ['visible']])
+  })
+})
+
+describe('SessionService memberships', () => {
+  it('a sign-in keeps the memberships the gateway answered with, and the first by key is the current tenant', async () => {
+    const { session, storage, tenantsOpened } = await world({ memberships: [globex, acme] })
+    const heard: Array<string | undefined> = []
+
+    session.subscribeMemberships(() => heard.push(session.currentTenant()?.tenant.key))
+
+    const user = (await session.signUp(annSignUp))._unsafeUnwrap()
+
+    expect(session.memberships()).toEqual([globex, acme])
+    expect(session.currentTenant()).toEqual(acme)
+    expect(savedMemberships(storage, user.id)).toEqual([globex, acme])
+    expect([...tenantsOpened()].sort()).toEqual(['acme', 'globex'])
+    expect(session.space()?.tenants()).toEqual(['acme', 'globex'])
+    expect(heard).toContain('acme')
+  })
+
+  it('a memberships message from the channel updates storage and the space', async () => {
+    const { session, storage, contexts, tenantsOpened } = await bootSession({ saved: ann })
+    const [context] = contexts()
+
+    expect(session.memberships()).toEqual([])
+    expect(session.currentTenant()).toBeUndefined()
+
+    context?.onMemberships([acme])
+
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+    expect(session.memberships()).toEqual([acme])
+    expect(session.currentTenant()).toEqual(acme)
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(tenantsOpened()).toEqual(['acme'])
+  })
+
+  it("another tab's memberships change (storage event) updates the space", async () => {
+    const { session, storage } = await bootSession({ saved: ann })
+    const elsewhere = memoryStorage()
+
+    saveMemberships(elsewhere, ann.identity.id, [acme])
+    storage.changeElsewhere('perch.session.memberships', elsewhere.get('perch.session.memberships'))
+
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+    expect(session.memberships()).toEqual([acme])
+    expect(session.currentTenant()).toEqual(acme)
+  })
+
+  it('selectTenant is kept across restore', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme, globex]))
+
+    const first = await world({ storage, online: false })
+
+    expect((await first.session.restore()).isOk()).toBe(true)
+    expect(first.session.currentTenant()).toEqual(acme)
+
+    first.session.selectTenant('globex')
+
+    expect(first.session.currentTenant()).toEqual(globex)
+    expect(first.session.space()?.currentTenant()).toBe('globex')
+    await first.session.close()
+
+    const again = await world({ storage, online: false })
+
+    expect((await again.session.restore()).isOk()).toBe(true)
+    expect(again.session.memberships()).toEqual([acme, globex])
+    expect(again.session.currentTenant()).toEqual(globex)
+    expect(again.session.space()?.currentTenant()).toBe('globex')
+  })
+
+  it('sign-out deletes the tenant databases too', async () => {
+    const { session, destroyed, tenantsDestroyed, driveClock } = await bootSession({
+      saved: annIn([acme, globex]),
+    })
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(destroyed()).toEqual([ann.identity.id])
+    expect([...tenantsDestroyed()].sort()).toEqual(['acme', 'globex'])
+  })
+
+  it('a tenant database retained across a refused-keys sign-out is destroyed at the next sign-in when the membership is gone', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme]))
+
+    // Ann is removed from Acme while signed out: her next sign-in answers without it.
+    const booted = await world({ storage, online: false, auth: signingIn(annIn([])) })
+    const { session, stub, tenantsDestroyed, tenantsDeleted, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect((await session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    // The keys are refused with a change unsent: the databases stay for the next sign-in.
+    stub.endWith('unauthorized')
+    await vi.waitFor(() => expect(session.notice()).toBe('resend-after-sign-in'))
+    await settle()
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    await vi.waitFor(() => expect(tenantsDeleted()).toEqual(['acme']))
+    expect(session.space()?.tenants()).toEqual([])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+
+    // A later sign-out leaves nothing of Acme behind, and has nothing more to delete.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDeleted()).toEqual(['acme'])
+    expect(tenantsDestroyed()).toEqual([])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it("another identity's sign-in leaves the count of a database retained for the first, which goes once its membership is gone", async () => {
+    const storage = memoryStorage()
+    const bob: SignedInDevice = {
+      identity: { id: identityIdFactory.create(), email: bobSignUp.email },
+      tokens: { access: 'access-bob', refresh: 'refresh-bob' },
+      memberships: [globex],
+    }
+    // What the gateway answers each one's sign-in.
+    const answers = new Map([
+      [annSignUp.email, annIn([acme])],
+      [bobSignUp.email, bob],
+    ])
+    const auth: GatewayAuth = {
+      signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
+      signIn: (input) =>
+        okAsync(answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`)),
+    }
+
+    saveDevice(storage, annIn([acme]))
+
+    const booted = await world({ storage, online: false, auth })
+    const { session, stub, tenantsDestroyed, tenantsDeletedOf, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect((await session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    // Ann's keys are refused with a change unsent: her databases stay for her next sign-in.
+    stub.endWith('unauthorized')
+    await vi.waitFor(() => expect(session.notice()).toBe('resend-after-sign-in'))
+    await settle()
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    // Bob signs in on the same browser and opens Globex: Ann's Acme stays counted.
+    expect((await session.signIn(bobSignUp))._unsafeUnwrap()).toEqual(bob.identity)
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['globex']))
+    expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    // Ann is removed from Acme while she is signed out: her next sign-in answers without it.
+    answers.set(annSignUp.email, annIn([]))
+    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    await vi.waitFor(() => expect(tenantsDeletedOf(ann.identity.id)).toEqual(['acme']))
+    expect(session.space()?.tenants()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual([])
+    expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
+
+    // Her later sign-out leaves nothing of her, and Bob's count as it was.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDeletedOf(ann.identity.id)).toEqual(['acme'])
+    expect(tenantsDeletedOf(bob.identity.id)).toEqual([])
+    expect(tenantsDestroyed()).toEqual([])
+    expect(JSON.parse(storage.get(TENANT_DATABASES_KEY) ?? 'null')).toEqual({
+      [bob.identity.id]: ['globex'],
+    })
+  })
+
+  it('a tab that opens on an older list leaves the database of a membership another tab saved and opened meanwhile', async () => {
+    const storage = memoryStorage()
+    const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
+    const holding = holdingRegionLoads()
+
+    saveDevice(storage, annIn([acme]))
+
+    const a = await world(shared)
+
+    expect((await a.session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(a.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Tab B reads the memberships, Acme only, and starts to open; its region load waits.
+    const b = await world({ ...shared, gateway: a.gateway, wrap: holding.wrap })
+
+    holding.hold()
+
+    const restoring = b.session.restore()
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
+    // Meanwhile the leading tab A hears Ann join Globex: it saves the memberships, then counts
+    // Globex's database and opens it.
+    a.contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(a.session.space()?.tenants()).toEqual(['acme', 'globex']))
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+
+    // B opens on its older list, yet leaves Globex's database, which A holds open, alone.
+    holding.release()
+    expect((await restoring).isOk()).toBe(true)
+    expect(b.session.space()?.tenants()).toEqual(['acme'])
+    await settle()
+    expect(b.tenantsDeleted()).toEqual([])
+    expect(a.tenantsDeleted()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+    await expect(b.session.close()).resolves.toBeUndefined()
+  })
+
+  it('sign-out destroys inventoried tenant databases that are not open', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
+    const { session, contexts, tenantsDestroyed, tenantsDeleted, driveClock, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Globex's database does not open: it is no open space, yet the device may hold it.
+    contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(failures.map(({ code }) => code)).toEqual(['data:OPEN_FAILED']))
+    failures.splice(0)
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDestroyed()).toEqual(['acme'])
+    expect(tenantsDeleted()).toEqual(['globex'])
+    expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it('the sign-in page keeps nothing of the memberships after sign-out', async () => {
+    const { session, storage, driveClock } = await bootSession({ saved: annIn([acme, globex]) })
+    let heard = 0
+
+    session.selectTenant('globex')
+    session.subscribeMemberships(() => {
+      heard += 1
+    })
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(session.memberships()).toEqual([])
+    expect(session.currentTenant()).toBeUndefined()
+    expect(storage.get('perch.session.memberships')).toBeUndefined()
+    expect(storage.get('perch.session.tenant')).toBeUndefined()
+    expect(heard).toBeGreaterThan(0)
+  })
+
+  it("a watch through the session's runner follows the organisation selected", async () => {
+    const { session } = await bootSession({ saved: annIn([acme, globex]) })
+    const trees: string[][] = []
+    const write = (text: string) =>
+      session.writePath.run(createNote, {
+        id: noteIdFactory.create(),
+        author: ann.identity.id,
+        text,
+      })
+
+    expect((await write('At Acme')).isOk()).toBe(true)
+    session.selectTenant('globex')
+    expect((await write('At Globex')).isOk()).toBe(true)
+    session.selectTenant('acme')
+
+    const stop = session.runner.watch(organisationShape, {}, (tree) =>
+      trees.push(tree.map(({ text }) => text)),
+    )
+
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Acme']))
+    session.selectTenant('globex')
+    await vi.waitFor(() => expect(trees.at(-1)).toEqual(['At Globex']))
+    stop()
+  })
+
+  it('renewKeys in the leading tab connects again and resolves once the gateway handed new keys', async () => {
+    const { session, storage, gateway } = await bootSession({ saved: ann, online: true })
+
+    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+
+    expect(await session.renewKeys()).toBe(true)
+    expect(storage.get('perch.session.token')).toBe('access-2')
+    expect(storage.get('perch.session.refresh')).toBe('refresh-2')
+  })
+
+  it('renewKeys asked again while a renewal is under way joins it: the leader connects again once', async () => {
+    const { session, storage, gateway, transports } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+
+    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+
+    // Two routes refused the access token at once: one hello renews the pair for both.
+    expect(await Promise.all([session.renewKeys(), session.renewKeys()])).toEqual([true, true])
+    expect(transports().map((transport) => transport.reconnects())).toEqual([1])
+    expect(storage.get('perch.session.token')).toBe('access-2')
+  })
+
+  it('renewKeys in a following tab asks the leader and resolves once the access key changed in storage', async () => {
+    const { a, b, storage } = await twoTabs({ online: true, hints: true })
+
+    a.stub.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+
+    const renewing = b.session.renewKeys()
+
+    // The leader connected again and kept the new keys; the browser tells the other tabs.
+    await vi.waitFor(() => expect(storage.get('perch.session.token')).toBe('access-2'))
+    storage.changeElsewhere('perch.session.token', 'access-2')
+
+    expect(await renewing).toBe(true)
+  })
+
+  it('renewKeys resolves false when no new keys come within 10 seconds', async () => {
+    const { session, storage, driveClock } = await bootSession({ saved: ann, online: true })
+
+    expect(await driveClock(session.renewKeys())).toBe(false)
+    expect(storage.get('perch.session.token')).toBe(ann.tokens.access)
   })
 })

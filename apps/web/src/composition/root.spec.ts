@@ -1,17 +1,19 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { COMMANDS } from '../platform/commands.port'
+import { ORGANISATIONS } from '../platform/organisations.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
+import { organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
 import { type MemoryStorage, memoryStorage, saveDevice } from './storage'
 
@@ -51,7 +53,14 @@ async function boot(
 
         return openTestDb()
       }),
+    openTenantLocal: () => openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
+    deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
+    organisationsApi: (deps) =>
+      organisationsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
@@ -76,6 +85,7 @@ async function boot(
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  memberships: [],
 }
 
 describe('createAppRoot', () => {
@@ -92,6 +102,7 @@ describe('createAppRoot', () => {
     expect(services.container.get(WRITE_PATH)).toBe(services.writePath)
     expect(services.container.get(SESSION)).toBe(services.session)
     expect(services.container.get(COMMANDS)).toBe(services.commands)
+    expect(services.container.get(ORGANISATIONS)).toBe(services.organisations)
     expect(services.session.current()).toBeUndefined()
     expect(failures).toEqual([])
   })

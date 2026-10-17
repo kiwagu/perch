@@ -17,5 +17,6 @@ export {
   type Scalar,
   type ValueRef,
 } from './spec'
+export { isTenantKey, TENANT_KEY_PATTERN } from './tenant-key'
 export { byText, compareText } from './text'
 export { ValueObject } from './value-object'

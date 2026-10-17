@@ -2,7 +2,7 @@ import { err, ok, type Result } from 'neverthrow'
 
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
@@ -56,6 +56,15 @@ export const rejectReason = z.enum([
 
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])
 
+/** An identity's role in an organisation. */
+export const tenantRole = z.enum(['member', 'admin'])
+
+/** An organisation an identity belongs to, and its role there, as the gateway tells a device. */
+export const membership = z.object({
+  tenant: z.object({ id: z.string(), key: z.string(), name: z.string() }),
+  role: tenantRole,
+})
+
 const regionHead = z.object({ region, head })
 
 export const clientMessage = z.discriminatedUnion('type', [
@@ -82,9 +91,13 @@ export const serverMessage = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('welcome'),
     identity: z.string(),
+    /** The identity's private region and the region of each organisation it belongs to. */
     regions: z.array(regionHead),
+    memberships: z.array(membership),
     time: z.int(),
   }),
+  /** The identity's memberships changed: the regions the device may name changed with them. */
+  z.object({ type: z.literal('memberships'), memberships: z.array(membership) }),
   z.object({ type: z.literal('tokens'), access: z.string().min(1), refresh: z.string().min(1) }),
   z.object({ type: z.literal('updates'), region, bytes, head, snapshot: z.boolean() }),
   z.object({ type: z.literal('ack'), region, batch, head, compact: z.boolean() }),
@@ -105,6 +118,10 @@ export type ServerMessage = z.output<typeof serverMessage>
 export type RejectReason = z.output<typeof rejectReason>
 
 export type CompactionOutcome = z.output<typeof compactionOutcome>
+
+export type Membership = z.output<typeof membership>
+
+export type TenantRole = z.output<typeof tenantRole>
 
 export interface ProtocolError {
   readonly code: 'protocol'

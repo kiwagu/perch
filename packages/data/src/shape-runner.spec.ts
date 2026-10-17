@@ -20,7 +20,7 @@ const shape: Shape<{ id: string }, { name: string }> = {
   kind: 'shape',
   text: 'SELECT',
   params: [{ name: 'id', type: 'string' }],
-  tables: ['identity', 'org'],
+  tables: ['identity', 'tenant'],
 }
 
 describe('ShapeRunner.read', () => {
@@ -45,7 +45,7 @@ describe('ShapeRunner.watch', () => {
     await vi.runAllTimersAsync()
     publishChange(local, ['post'], 'command')
     await vi.runAllTimersAsync()
-    publishChange(local, ['org'], 'command')
+    publishChange(local, ['tenant'], 'command')
     await vi.runAllTimersAsync()
     stop()
     publishChange(local, ['identity'], 'command')

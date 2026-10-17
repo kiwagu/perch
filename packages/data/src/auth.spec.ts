@@ -151,7 +151,7 @@ describe('createAuth', () => {
 
     const access = auth.tokens()?.access ?? ''
 
-    await local.db.query(readSchema())
+    await local.db.query(readSchema('directory'))
 
     expect((await another().resume({ access }))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
   })

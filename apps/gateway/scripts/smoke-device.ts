@@ -109,6 +109,16 @@ export class SmokeDevice {
     }
   }
 
+  /** Subscribes to `region` from nothing: the server answers with its snapshot. */
+  subscribe(region: string): void {
+    this.send({ type: 'subscribe', region, vv: null })
+  }
+
+  /** Pushes one update, as batch `batch`, into `region`. */
+  push(region: string, batch: number, update: Uint8Array<ArrayBuffer>): void {
+    this.send({ type: 'push', region, batch, updates: [update] })
+  }
+
   close(): void {
     this.#socket.close(1000, 'smoke done')
   }

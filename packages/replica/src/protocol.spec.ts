@@ -4,9 +4,14 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
+  membership,
+  PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
 } from './protocol'
+
+const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'admin' }
 
 describe('sync protocol', () => {
   it('carries Loro bytes through JSON and back', () => {
@@ -40,6 +45,14 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
+  it('takes a hello of protocol 2 only', () => {
+    const hello = (protocol: number) => JSON.stringify({ type: 'hello', protocol, access: 'a' })
+
+    expect(PROTOCOL_VERSION).toBe(2)
+    expect(decodeMessage(clientMessage, hello(2)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(1)).isErr()).toBe(true)
+  })
+
   it('refuses text that is not JSON', () => {
     expect(decodeMessage(serverMessage, 'not json').isErr()).toBe(true)
   })
@@ -50,9 +63,15 @@ describe('sync protocol', () => {
       {
         type: 'welcome',
         identity: 'idn_a',
-        regions: [{ region: 'identity:idn_a', head: 0 }],
+        regions: [
+          { region: 'identity:idn_a', head: 0 },
+          { region: 'tenant:acme', head: 2 },
+        ],
+        memberships: [acme],
         time: 1,
       },
+      { type: 'memberships', memberships: [acme] },
+      { type: 'memberships', memberships: [] },
       { type: 'tokens', access: 'a', refresh: 'r' },
       { type: 'updates', region: 'identity:idn_a', bytes, head: 3, snapshot: false },
       { type: 'ack', region: 'identity:idn_a', batch: 2, head: 4, compact: false },
@@ -73,5 +92,10 @@ describe('sync protocol', () => {
         decodeMessage(serverMessage, encodeMessage(serverMessage, message))._unsafeUnwrap(),
       ).toEqual(message)
     }
+  })
+
+  it('parses a membership and refuses a role it does not know', () => {
+    expect(membership.parse(acme)).toEqual(acme)
+    expect(membership.safeParse({ ...acme, role: 'owner' }).success).toBe(false)
   })
 })

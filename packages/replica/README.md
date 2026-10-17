@@ -18,7 +18,9 @@ gaps, and a compaction replaces rows with the server's own snapshot of the regio
 row, once a device proposed one of the same version (the proposed bytes are never stored). A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
-region from memory once nobody has subscribed for a while. On the device, a sync engine keeps
+region from memory once nobody has subscribed for a while; each region's log lives in the
+database the gateway names for it (an identity's private regions in one, each organisation's
+tenant region in its own). On the device, a sync engine keeps
 each region in step with the gateway over one WebSocket: it pushes the outbox a batch at a
 time, imports what the gateway sends, pulls what is missing, rolls a rejected batch back with
 an inverse commit, and runs passes on a cadence that follows the tab and the channel.
@@ -40,10 +42,19 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `Projector`: `start()` projects current records, deletes those the region projected
   earlier but no longer holds (a deletion that failed before a reload), then follows
   every commit and import; `flush()` retries failed records and reports those still failing.
+- `regionRefOf(id)`: the `RegionRef` a document id names, `identity:<idn_…>` (private) or
+  `tenant:<key>` (tenant), undefined for any other; `tenantKeyOf(ref)`, the organisation key of
+  a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
+  identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION`, `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (2), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
-  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text.
+  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; the
+  `welcome` carries the regions the device may name with their heads and the identity's
+  memberships, and a `memberships` message tells each later change of them. And the
+  membership contract the gateway and devices share: `membership` (an organisation's `id`,
+  `key` and `name` with the identity's role there) and `tenantRole` (`member` or `admin`), with
+  their types `Membership` and `TenantRole`.
 - `@workspace/replica/server`: `RegionLog.load(local, region)` resolves to the log and the
   region's document built from its snapshot and later rows; `accept(plan)` writes an
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)
@@ -57,16 +68,24 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   pushed batch to a fork of the authoritative document, which it never modifies, and returns
   the fork with the `AcceptPlan` of the records the batch changed, or a `BatchRejection` with
   its `RejectReason` (bytes that do not decode or write outside the `records` map, missing
-  history, a table outside the region, a record that is not a map, a private record
-  referencing another identity).
-  `RegionHub` (`RegionHubOptions`: database, schema, `Clock`, idle time, log length that asks
-  for a compaction, `onError`): `subscribe(region, owner, subscriber, vv)` answers with the
-  updates after `vv` or a full snapshot, `push(region, subscriber, batch, updates)` answers
+  history, a table outside the region, a record that is not a map, and `foreign-owner` for a
+  record that breaks the owner rule: in a private region an identity reference other than
+  the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
+  member reference is not the pushing member, or an edit that changes the member a record
+  references).
+  `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
+  `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
+  database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
+  that asks for a compaction, `onError`) holds a region's database from its load until it
+  unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
+  updates after `vv` or a full snapshot, and checks the device's batches against `actor`, its
+  identity id; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region) and sends the batch to the other
   subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
-  `heads(regions)`, `unsubscribe`, `loadedRegions()`,
-  `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+  `heads(regions)` (an unloaded region's from its own database, one query per database; 0
+  for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
+  `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
@@ -75,12 +94,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   other close after it asked, or none within 10 seconds, stops the transport and answers
   `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
-  tells that such a sign-out stopped the channel, after which only a new engine syncs).
+  tells that such a sign-out stopped the channel, after which only a new engine syncs; `reconnect()`
+  asks the transport to connect again at once, so the gateway welcomes the device anew with fresh keys).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
-  opening, and on `reconnect()`, which gives the connection up and connects again from the
-  first delay; renewed keys to `onTokens`, `onEnded` with an `EndReason` when the keys
+  opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
+  the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`, the memberships of the welcome and of each
+  `memberships` message to `onMemberships`, `onEnded` with an `EndReason` when the keys
   (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out; the
   engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
@@ -98,15 +119,18 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
   into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
-  `settled` and `sign-out` hints between tabs over a `BroadcastChannel` and ignores anything
+  `settled`, `sign-out` and `renew` (a tab asks the leader to renew the keys) hints between tabs over a `BroadcastChannel` and ignores anything
   else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
-  `gatewayStub({ local, schema, clock })`, a `GatewayStub` with a region hub on the given
-  database and, per device, a `StubTransport` that behaves like the gateway's connection
-  without a network, can go offline and come back, and counts its `reconnects()`;
+  `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the
+  given database and, per device, a `StubTransport` that behaves like the gateway's connection
+  without a network (welcomed with the identity's private region and, for each of the
+  `memberships`, none by default, the organisation's region, with those memberships), can go
+  offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
+  `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next device to connect a renewed pair
+  before its welcome), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
   the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
@@ -124,7 +148,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 
 ## Commands
 
-- `bun run test`: unit tests of the write path, the schema, the protocol, the batch validator,
+- `bun run test`: unit tests of the write path, the schema, the protocol, the region
+  references, the batch validator,
   the transport, the cadence, the outbox drain, the leader, the hints and the manual clock, and
   functional tests of the projector, persistence, the server log, the region hub, region sync
   and the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.

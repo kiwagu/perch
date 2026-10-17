@@ -77,8 +77,10 @@ export async function main(
 
   if (argv[0] === 'sweep') {
     return (await sweep(target)).match(
-      ({ accounts }) => {
-        console.log(`seed: swept ${accounts} account(s) from ${target.url}`)
+      ({ accounts, organisations }) => {
+        console.log(
+          `seed: swept ${accounts} account(s) and ${organisations} organisation(s) from ${target.url}`,
+        )
 
         return 0
       },
@@ -109,6 +111,10 @@ export async function main(
 
   for (const [ref, entry] of Object.entries(result.value.accounts)) {
     console.log(`seed: ${ref} ${entry.email} ${entry.id}`)
+  }
+
+  for (const [ref, entry] of Object.entries(result.value.organisations)) {
+    console.log(`seed: ${ref} ${entry.key} ${entry.id}`)
   }
 
   return 0

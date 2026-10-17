@@ -5,7 +5,7 @@ import { parseShape } from './shape-dialect'
 describe('parseShape', () => {
   it('parses fields, destructuring, aliases and graph edges', () => {
     const ast = parseShape(`SELECT name, email,
-      ->member_of->org.{ id, name } AS orgs,
+      ->member_of->tenant.{ id, name } AS tenants,
       <-member_of.{ role } AS roles,
       profile.{ bio, avatar: avatar_url }
     FROM ONLY $id;`)
@@ -14,7 +14,7 @@ describe('parseShape', () => {
     expect(ast.projections.map((projection) => projection.name)).toEqual([
       'name',
       'email',
-      'orgs',
+      'tenants',
       'roles',
       'profile',
     ])
@@ -22,7 +22,7 @@ describe('parseShape', () => {
       kind: 'edge',
       dir: 'out',
       edge: 'member_of',
-      target: 'org',
+      target: 'tenant',
     })
     expect(ast.projections[2]?.children?.map((child) => child.name)).toEqual(['id', 'name'])
     expect(ast.projections[3]?.expr.steps[0]).toEqual({
@@ -57,15 +57,15 @@ describe('parseShape', () => {
 
   it('keeps an inner query on an edge and reads its target table', () => {
     const ast = parseShape(
-      'SELECT ->member_of->(SELECT name FROM org WHERE active LIMIT 3) AS orgs FROM ONLY $id;',
+      'SELECT ->member_of->(SELECT name FROM tenant WHERE active LIMIT 3) AS tenants FROM ONLY $id;',
     )
 
     expect(ast.projections[0]?.expr.steps[0]).toEqual({
       kind: 'edge',
       dir: 'out',
       edge: 'member_of',
-      target: 'org',
-      inner: 'SELECT name FROM org WHERE active LIMIT 3',
+      target: 'tenant',
+      inner: 'SELECT name FROM tenant WHERE active LIMIT 3',
     })
   })
 

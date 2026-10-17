@@ -46,7 +46,7 @@ afterEach(async () => {
   expect(closeFailures.splice(0)).toEqual([])
 })
 
-async function testDb(schema = readSchema()): Promise<LocalDb> {
+async function testDb(schema = readSchema('directory')): Promise<LocalDb> {
   const local = (
     await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema })
   )._unsafeUnwrap()
@@ -201,7 +201,7 @@ describe('IdentitySessions', () => {
       new URL('./__fixtures__/identity-without-refresh.surql', import.meta.url),
       'utf8',
     )
-    const sessions = sessionsOver(await testDb(`${readSchema()}\n${withoutRefresh}`))
+    const sessions = sessionsOver(await testDb(`${readSchema('directory')}\n${withoutRefresh}`))
 
     expect((await sessions.signUp(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     expect((await sessions.signIn(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')

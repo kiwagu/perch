@@ -5,6 +5,7 @@ import {
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
@@ -28,8 +29,10 @@ export interface SyncTransport {
   start(): void
   stop(): void
   /**
-   * Gives up on the current connection, which stopped answering, and connects again after the
-   * first delay of the backoff; nothing happens unless a connection is open or opening.
+   * Gives up on the current connection, which stopped answering or must present the keys again,
+   * and connects again after the first delay of the backoff. Nothing happens unless the gateway
+   * has welcomed the connection: one still opening or waiting for its welcome says hello with the
+   * keys anyway, and is given up as any other is: by its close, or by the welcome wait once open.
    */
   reconnect(): void
   /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
@@ -47,6 +50,8 @@ export interface WebSocketTransportOptions {
   readonly url: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
+  /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
+  readonly onMemberships?: (memberships: readonly Membership[]) => void
   /** The gateway refused the keys or the protocol, or signed the device out: no reconnect follows. */
   readonly onEnded: (reason: EndReason) => void
   readonly clock: Clock
@@ -90,9 +95,11 @@ type State =
 
 /**
  * The device's WebSocket to the gateway. On open it says hello with the stored keys; the
- * channel is up once the gateway welcomes it, and only then does it send. A socket that
- * closes, or is not welcomed within 10 seconds, is opened again after a growing delay, which
- * starts over at the next welcome or when the engine gives a connection up (`reconnect`). A
+ * channel is up once the gateway welcomes it, and only then does it send. Renewed keys go to
+ * `onTokens`, and the memberships of the welcome and of every later change to `onMemberships`,
+ * before the listeners of messages hear the message. A socket that closes, or is not welcomed
+ * within 10 seconds, is opened again after a growing delay, which starts over at the next
+ * welcome or when the engine gives a welcomed connection up (`reconnect`). A
  * close that refuses the keys or the protocol, or signs the device out, ends the channel for
  * good. Text the protocol refuses closes the socket as a breach and connects again.
  */
@@ -143,19 +150,20 @@ export class WebSocketTransport implements SyncTransport {
   reconnect(): void {
     const state = this.#state
 
-    if (state.kind !== 'connected') {
+    // A socket not welcomed yet is left alone. Its hello presents the keys, so the gateway
+    // renews a pair whose access token no longer works: closing it with that hello out would
+    // spend the refresh key on a pair the gateway can no longer deliver, and the next hello would
+    // be refused. The engine's answer timeouts never land here: they are cancelled when the
+    // channel goes down, so they only fire on a welcomed connection. A socket left alone is given
+    // up as any other: by its close, or by the welcome wait once it opened.
+    if (state.kind !== 'connected' || !state.up) {
       return
     }
-
-    const wasUp = state.up
 
     state.socket.close(NORMAL_CLOSE)
     this.#attempt = 0
     this.#reconnect()
-
-    if (wasUp) {
-      this.#emitChannel('down')
-    }
+    this.#emitChannel('down')
   }
 
   send(message: ClientMessage): boolean {
@@ -262,6 +270,10 @@ export class WebSocketTransport implements SyncTransport {
 
     if (message.type === 'tokens') {
       this.#options.onTokens({ access: message.access, refresh: message.refresh })
+    }
+
+    if (message.type === 'welcome' || message.type === 'memberships') {
+      this.#options.onMemberships?.(message.memberships)
     }
 
     for (const listener of this.#messageListeners) {

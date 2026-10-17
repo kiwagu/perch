@@ -1,15 +1,17 @@
 import { type LoroDoc, VersionVector } from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError, type LocalDb } from '@workspace/data'
+import { type DataError, dataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
 import { messageOf } from '../failure'
 import type { CompactionOutcome, RejectReason, ServerMessage } from '../protocol'
 import type { RegionRef } from '../region-doc'
+import { regionRefOf } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
 
 import { validateBatch } from './batch-validator'
+import type { RegionDatabase, RegionDatabases } from './region-databases'
 import { RegionLog } from './region-log'
 import headsStatement from './surql/server-heads.surql'
 
@@ -24,7 +26,8 @@ export interface Subscriber {
 }
 
 export interface RegionHubOptions {
-  readonly local: LocalDb
+  /** Where each region's log and projection live: held while the region is loaded. */
+  readonly databases: RegionDatabases
   readonly schema: ReplicaSchema
   readonly clock: Clock
   /** How long a region nobody subscribes to stays in memory; 60 s by default. */
@@ -41,20 +44,26 @@ export interface RegionHubOptions {
 /** The longest `detail` a reject carries. */
 const MAX_DETAIL = 200
 
-/** A region's log and its authoritative document. */
+/** A region's log and its authoritative document, and the hold on the database that keeps them. */
 interface Loaded {
   readonly log: RegionLog
   readonly doc: LoroDoc
+  readonly database: RegionDatabase
+}
+
+/** A device's subscription: its end, and the identity id its batches are checked against. */
+interface Subscription {
+  readonly subscriber: Subscriber
+  readonly actor: string
 }
 
 /** What the hub keeps of one region, from the first subscription until it unloads the region. */
 interface RegionState {
   readonly ref: RegionRef
-  readonly owner: string | undefined
   /** Devices whose subscription was answered: each receives the batches the others push. */
-  readonly subscribers: Map<string, Subscriber>
+  readonly subscribers: Map<string, Subscription>
   /** Devices whose subscription waits in the queue for its answer. */
-  readonly joining: Map<string, Subscriber>
+  readonly joining: Map<string, Subscription>
   /** Settles once the work asked of the region so far has; the next work waits for it. */
   queue: Promise<void>
   /** The region's log and document, once the first subscription has loaded them. */
@@ -105,15 +114,17 @@ function notSubscribed(region: string): ServerMessage {
 
 /**
  * The server's copy of every region a device subscribes to: the region's log and its
- * authoritative document in memory. The work asked of one region (subscriptions, pulls,
- * pushes and compactions, the load that comes first) runs one piece at a time, in the order
- * it was asked. A pushed batch is checked on a fork of the document, accepted by the log
- * with its projection, then imported and sent to the region's other subscribers. A region
- * nobody subscribes to any more is dropped from memory after an idle time.
+ * authoritative document in memory, from the region's own database, held while the region is
+ * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
+ * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
+ * checked on a fork of the document against the identity of the device that pushed it,
+ * accepted by the log with its projection, then imported and sent to the region's other
+ * subscribers. A region nobody subscribes to any more is dropped from memory after an idle
+ * time, and its database released.
  */
 export class RegionHub {
   readonly #regions = new Map<string, RegionState>()
-  readonly #local: LocalDb
+  readonly #databases: RegionDatabases
   readonly #schema: ReplicaSchema
   readonly #clock: Clock
   readonly #idleUnloadMs: number
@@ -121,7 +132,7 @@ export class RegionHub {
   readonly #onError: (error: DataError) => void
 
   constructor(options: RegionHubOptions) {
-    this.#local = options.local
+    this.#databases = options.databases
     this.#schema = options.schema
     this.#clock = options.clock
     this.#idleUnloadMs = options.idleUnloadMs ?? 60_000
@@ -132,11 +143,12 @@ export class RegionHub {
   /**
    * Subscribes a device to a region, loading the region first when the hub does not hold it,
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
-   * it has no version. From then on the device receives every batch the others push.
+   * it has no version. From then on the device receives every batch the others push, and the
+   * batches it pushes are checked against `actor`, the identity id of the device.
    */
   subscribe(
     region: RegionRef,
-    owner: string | undefined,
+    actor: string,
     subscriber: Subscriber,
     vv: Uint8Array | null,
   ): ResultAsync<void, DataError> {
@@ -148,11 +160,12 @@ export class RegionHub {
       return okAsync(undefined)
     }
 
-    const state = this.#regions.get(region.id) ?? this.#hold(region, owner)
+    const state = this.#regions.get(region.id) ?? this.#hold(region)
+    const subscription = { subscriber, actor }
 
     state.unload?.()
     state.unload = undefined
-    state.joining.set(subscriber.id, subscriber)
+    state.joining.set(subscriber.id, subscription)
 
     return this.#answer(state, subscriber, () =>
       this.#load(state)
@@ -162,7 +175,7 @@ export class RegionHub {
             return okAsync(undefined)
           }
 
-          state.subscribers.set(subscriber.id, subscriber)
+          state.subscribers.set(subscriber.id, subscription)
           this.#send(subscriber, {
             type: 'updates',
             region: region.id,
@@ -241,11 +254,11 @@ export class RegionHub {
         detail: detail.slice(0, MAX_DETAIL),
       })
 
-    return this.#subscribed(regionId, subscriber, (state, { log, doc }) => {
+    return this.#subscribed(regionId, subscriber, (state, { log, doc }, actor) => {
       const validated = validateBatch({
         doc,
         region: state.ref,
-        owner: state.owner,
+        actor,
         schema: this.#schema,
         updates,
       })
@@ -287,7 +300,7 @@ export class RegionHub {
             compact: head - log.covers() > this.#compactionLogLimit,
           })
 
-          for (const other of state.subscribers.values()) {
+          for (const { subscriber: other } of state.subscribers.values()) {
             if (other.id !== subscriber.id) {
               this.#send(other, { type: 'updates', region: regionId, bytes, head, snapshot: false })
             }
@@ -312,7 +325,10 @@ export class RegionHub {
     })
   }
 
-  /** The head of each region asked: a loaded region's from its log, any other's from the database. */
+  /**
+   * The head of each region asked: a loaded region's from its log, any other's from its own
+   * database, and 0 for a region without a log or one the hub does not know.
+   */
   heads(
     regionIds: readonly string[],
   ): ResultAsync<ReadonlyArray<{ readonly region: string; readonly head: number }>, DataError> {
@@ -320,22 +336,13 @@ export class RegionHub {
     // A region may unload while the others are read, so the heads in memory are taken now.
     const held = new Map(regionIds.map((region) => [region, inMemory(region)]))
     const unloaded = regionIds.filter((region) => held.get(region) === undefined)
-    const stored =
-      unloaded.length === 0
-        ? okAsync<StoredHead[], DataError>([])
-        : ResultAsync.fromPromise(
-            this.#local.db.query<[StoredHead[]]>(headsStatement, { regions: unloaded }),
-            (cause) => dataError('data:QUERY_FAILED', 'could not read the heads of regions', cause),
-          ).map(([rows]) => rows)
 
-    return stored.map((rows) => {
-      const heads = new Map(rows.map((row) => [row.region, row.head]))
-
-      return regionIds.map((region) => ({
+    return this.#storedHeads(unloaded).map((heads) =>
+      regionIds.map((region) => ({
         region,
         head: inMemory(region) ?? held.get(region) ?? heads.get(region) ?? 0,
-      }))
-    })
+      })),
+    )
   }
 
   /**
@@ -376,7 +383,10 @@ export class RegionHub {
     return [...this.#regions.values()].filter((state) => state.loaded).length
   }
 
-  /** Cancels the scheduled unloads, drops every region and waits for the work under way. */
+  /**
+   * Cancels the scheduled unloads, drops every region, waits for the work under way, then
+   * releases the databases of the regions it held.
+   */
   async close(): Promise<void> {
     const states = [...this.#regions.values()]
 
@@ -387,12 +397,58 @@ export class RegionHub {
     }
 
     await Promise.all(states.map((state) => state.queue))
+
+    for (const state of states) {
+      state.loaded?.database.release()
+    }
   }
 
-  #hold(ref: RegionRef, owner: string | undefined): RegionState {
+  /**
+   * The heads the databases hold for regions not in memory, by region: one query per
+   * database, which is released once it answered. A region the hub does not know is not asked.
+   */
+  #storedHeads(regionIds: readonly string[]): ResultAsync<ReadonlyMap<string, number>, DataError> {
+    // Every private region lives in the same database; each tenant region has one of its own.
+    const groups = new Map<string, { readonly ref: RegionRef; readonly ids: string[] }>()
+
+    for (const id of regionIds) {
+      const ref = regionRefOf(id)
+      const database = ref?.kind === 'private' ? 'directory' : ref?.id
+
+      if (ref && database) {
+        const group = groups.get(database) ?? { ref, ids: [] }
+
+        group.ids.push(id)
+        groups.set(database, group)
+      }
+    }
+
+    return ResultAsync.combine(
+      [...groups.values()].map(({ ref, ids }) => this.#headsIn(ref, ids)),
+    ).map((lists) => new Map(lists.flat().map((row) => [row.region, row.head])))
+  }
+
+  /** The heads the database of `ref` holds for `regionIds`, all kept in that database. */
+  #headsIn(ref: RegionRef, regionIds: readonly string[]): ResultAsync<StoredHead[], DataError> {
+    return this.#databases.acquire(ref).andThen(({ local, release }) => {
+      const read = async (): Promise<Result<StoredHead[], DataError>> => {
+        try {
+          return await ResultAsync.fromPromise(
+            local.db.query<[StoredHead[]]>(headsStatement, { regions: regionIds }),
+            (cause) => dataError('data:QUERY_FAILED', 'could not read the heads of regions', cause),
+          ).map(([rows]) => rows)
+        } finally {
+          release()
+        }
+      }
+
+      return new ResultAsync(read())
+    })
+  }
+
+  #hold(ref: RegionRef): RegionState {
     const state: RegionState = {
       ref,
-      owner,
       subscribers: new Map(),
       joining: new Map(),
       queue: Promise.resolve(),
@@ -405,23 +461,37 @@ export class RegionHub {
     return state
   }
 
+  /** Loads the region from its database, which stays held until the region unloads. */
   #load(state: RegionState): ResultAsync<Loaded, DataError> {
     if (state.loaded) {
       return okAsync(state.loaded)
     }
 
-    return RegionLog.load(this.#local, state.ref.id).map((loaded) => {
-      state.loaded = loaded
+    return this.#databases.acquire(state.ref).andThen((database) =>
+      RegionLog.load(database.local, state.ref.id)
+        .map(({ log, doc }) => {
+          const loaded = { log, doc, database }
 
-      return loaded
-    })
+          state.loaded = loaded
+
+          return loaded
+        })
+        .orElse((error) => {
+          database.release()
+
+          return errAsync(error)
+        }),
+    )
   }
 
-  /** Runs `work` on the region once the device has subscribed to it; any other device is refused. */
+  /**
+   * Runs `work` on the region once the device has subscribed to it, with the identity id its
+   * subscription named; any other device is refused.
+   */
   #subscribed(
     regionId: string,
     subscriber: Subscriber,
-    work: (state: RegionState, loaded: Loaded) => ResultAsync<void, DataError>,
+    work: (state: RegionState, loaded: Loaded, actor: string) => ResultAsync<void, DataError>,
   ): ResultAsync<void, DataError> {
     const state = this.#regions.get(regionId)
 
@@ -432,14 +502,16 @@ export class RegionHub {
     }
 
     return this.#answer(state, subscriber, () => {
+      const subscription = state.subscribers.get(subscriber.id)
+
       // A subscribed device's region is loaded: a region unloads only after its last device left.
-      if (!state.loaded || !state.subscribers.has(subscriber.id)) {
+      if (!state.loaded || !subscription) {
         this.#send(subscriber, notSubscribed(regionId))
 
         return okAsync(undefined)
       }
 
-      return work(state, state.loaded)
+      return work(state, state.loaded, subscription.actor)
     })
   }
 
@@ -487,7 +559,8 @@ export class RegionHub {
 
   /**
    * Schedules the region's unload once no device subscribes to it. The unload runs in the
-   * region's queue, after the work asked before it, and only if still nobody subscribes.
+   * region's queue, after the work asked before it, and only if still nobody subscribes; it
+   * releases the region's database.
    */
   #unloadWhenIdle(state: RegionState): void {
     if (state.unload || state.subscribers.size > 0 || state.joining.size > 0) {
@@ -501,6 +574,8 @@ export class RegionHub {
 
         if (idle && this.#regions.get(state.ref.id) === state) {
           this.#regions.delete(state.ref.id)
+          state.loaded?.database.release()
+          state.loaded = undefined
         }
       })
     })

@@ -1,19 +1,25 @@
+import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import bumpHeadStatement from '../__fixtures__/bump-head.surql'
+import { noteCreate } from '../__fixtures__/note'
+
 import {
+  actor,
   closeHubs,
   editFrom,
   hubWithHistory,
   hubWithTwoSubscribers,
   nameInSnapshot,
+  openDatabase,
   openHub,
-  owner,
   region,
   snapshotIn,
   snapshotOf,
   subscriber,
 } from './__fixtures__/hub'
 import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
+import { singleDatabase } from './region-databases'
 import type { Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
@@ -42,7 +48,7 @@ describe('region hub', () => {
   it('answers a subscription without a version with a full snapshot', async () => {
     const { hub, fresh } = await hubWithHistory(['Ann', 'Ana'])
 
-    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, null)).isOk()).toBe(true)
 
     expect(fresh.received).toContainEqual(
       expect.objectContaining({ type: 'updates', snapshot: true, head: 2 }),
@@ -56,7 +62,7 @@ describe('region hub', () => {
     const known = fresh.doc.version().encode()
 
     expect((await hub.push(region.id, a, 2, [editFrom(a.doc, 'Ana')])).isOk()).toBe(true)
-    expect((await hub.subscribe(region, owner, fresh, known)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, known)).isOk()).toBe(true)
     expect((await hub.pull(region.id, fresh, known)).isOk()).toBe(true)
 
     const answers = fresh.received.filter((m) => m.type === 'updates')
@@ -82,7 +88,7 @@ describe('region hub', () => {
 
     const fresh = subscriber('fresh')
 
-    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, null)).isOk()).toBe(true)
     expect(snapshotIn(fresh).getMap('records').toJSON()).toEqual({})
   })
 
@@ -92,7 +98,7 @@ describe('region hub', () => {
     expect((await hub.push(region.id, a, 2, [editFrom(a.doc, '')])).isOk()).toBe(true)
     expect(a.received.at(-1)).toEqual(expect.objectContaining({ type: 'reject', batch: 2 }))
 
-    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, null)).isOk()).toBe(true)
     expect(fresh.received).toEqual([expect.objectContaining({ type: 'updates', head: 1 })])
     expect(nameInSnapshot(fresh)).toBe('Ann')
   })
@@ -102,7 +108,7 @@ describe('region hub', () => {
     const theirs = { kind: 'private', id: 'identity:idn_b' } as const
     const intruder = subscriber('intruder')
 
-    expect((await hub.subscribe(theirs, theirs.id, intruder, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(theirs, 'idn_b', intruder, null)).isOk()).toBe(true)
     expect(
       (await hub.push(theirs.id, intruder, 1, [editFrom(intruder.doc, 'Taken', theirs.id)])).isOk(),
     ).toBe(true)
@@ -111,7 +117,7 @@ describe('region hub', () => {
       expect.objectContaining({ type: 'reject', batch: 1, reason: 'foreign-owner' }),
     )
     expect((await hub.heads([theirs.id]))._unsafeUnwrap()).toEqual([{ region: theirs.id, head: 0 }])
-    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, null)).isOk()).toBe(true)
     expect(nameInSnapshot(fresh)).toBe('Ann')
   })
 
@@ -144,7 +150,7 @@ describe('region hub', () => {
 
     const fresh = subscriber('fresh')
 
-    expect((await hub.subscribe(region, owner, fresh, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, fresh, null)).isOk()).toBe(true)
     expect(snapshotIn(fresh).getMap('records').toJSON()).toEqual({})
   })
 
@@ -164,7 +170,7 @@ describe('region hub', () => {
     const c = subscriber('c')
 
     for (const device of [failing, c]) {
-      expect((await hub.subscribe(region, owner, device, null)).isOk()).toBe(true)
+      expect((await hub.subscribe(region, actor, device, null)).isOk()).toBe(true)
     }
 
     expect((await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')])).isOk()).toBe(true)
@@ -221,7 +227,7 @@ describe('region hub', () => {
 
     const again = subscriber('again')
 
-    expect((await hub.subscribe(region, owner, again, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, again, null)).isOk()).toBe(true)
     expect(nameInSnapshot(again)).toBe('Ana')
   })
 
@@ -230,7 +236,7 @@ describe('region hub', () => {
 
     hub.unsubscribe(region.id, a.id)
     await clock.advance(30_000)
-    expect((await hub.subscribe(region, owner, subscriber('again'), null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, subscriber('again'), null)).isOk()).toBe(true)
 
     expect(clock.pending()).toBe(0)
     await clock.advance(60_000)
@@ -250,8 +256,8 @@ describe('region hub', () => {
     const b = subscriber('b')
 
     const outcomes = await Promise.all([
-      hub.subscribe(region, owner, a, null),
-      hub.subscribe(region, owner, b, null),
+      hub.subscribe(region, actor, a, null),
+      hub.subscribe(region, actor, b, null),
     ])
 
     expect(outcomes.every((outcome) => outcome.isOk())).toBe(true)
@@ -277,6 +283,82 @@ describe('region hub', () => {
     expect((await hub.heads([unknown, region.id]))._unsafeUnwrap()).toEqual([
       { region: unknown, head: 0 },
       { region: region.id, head: 2 },
+    ])
+  })
+
+  it("acquires the region's database on load and releases it on unload", async () => {
+    const counts = { acquired: 0, released: 0 }
+    const { hub, clock } = await openHub({
+      databases: (local) => ({
+        acquire: (ref) => {
+          counts.acquired += 1
+
+          return singleDatabase(local)
+            .acquire(ref)
+            .map((database) => ({
+              local: database.local,
+              release: () => {
+                counts.released += 1
+              },
+            }))
+        },
+      }),
+    })
+    const a = subscriber('a')
+
+    expect((await hub.subscribe(region, actor, a, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(region, actor, subscriber('b'), null)).isOk()).toBe(true)
+    expect(counts).toEqual({ acquired: 1, released: 0 })
+
+    hub.unsubscribe(region.id, a.id)
+    hub.unsubscribe(region.id, 'b')
+    await clock.advance(60_000)
+
+    expect(hub.loadedRegions()).toBe(0)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+  })
+
+  it("heads of unloaded regions are read from each region's own database", async () => {
+    const directory = await openDatabase()
+    const acme = await openDatabase()
+
+    await directory.db.query(bumpHeadStatement, { region: region.id, head: 3 })
+    // The directory holds no head of the organisation's region: a stray one must not be read.
+    await directory.db.query(bumpHeadStatement, { region: 'tenant:acme', head: 99 })
+    await acme.db.query(bumpHeadStatement, { region: 'tenant:acme', head: 5 })
+
+    const { hub } = await openHub({
+      databases: () => ({
+        acquire: (ref) =>
+          okAsync({ local: ref.kind === 'tenant' ? acme : directory, release: () => {} }),
+      }),
+    })
+
+    expect((await hub.heads(['tenant:acme', region.id, 'note:acme']))._unsafeUnwrap()).toEqual([
+      { region: 'tenant:acme', head: 5 },
+      { region: region.id, head: 3 },
+      { region: 'note:acme', head: 0 },
+    ])
+  })
+
+  it('checks a batch against the identity of the device that pushed it', async () => {
+    const { hub } = await openHub()
+    const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+    const ann = subscriber('ann')
+    const bob = subscriber('bob')
+
+    expect((await hub.subscribe(acme, 'idn_ann', ann, null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, 'idn_bob', bob, null)).isOk()).toBe(true)
+
+    const own = noteCreate(bob.doc, { id: 'nte_1', author: 'idn_bob', text: 'mine' })
+    const forged = noteCreate(bob.doc, { id: 'nte_2', author: 'idn_ann', text: 'hers' })
+
+    expect((await hub.push(acme.id, bob, 1, [own])).isOk()).toBe(true)
+    expect((await hub.push(acme.id, bob, 2, [forged])).isOk()).toBe(true)
+
+    expect(bob.received.filter((m) => m.type === 'ack' || m.type === 'reject')).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+      expect.objectContaining({ type: 'reject', batch: 2, reason: 'foreign-owner' }),
     ])
   })
 

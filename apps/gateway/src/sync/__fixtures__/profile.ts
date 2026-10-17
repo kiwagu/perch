@@ -64,7 +64,7 @@ const updateName: Command<{ readonly id: string; readonly name: string }> = {
  * Runs `command` on the device's document and answers with the update it made, in a buffer
  * of its own, as a message holds Loro bytes.
  */
-function updateOf<Params>(
+export function updateOf<Params>(
   doc: RegionDoc,
   command: Command<Params>,
   params: Params,

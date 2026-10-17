@@ -10,11 +10,15 @@ TypeScript or React code.
 ## Key exports
 
 - CLI `model --root <dir> [--schema <dir>] [--suites <dir>] [--check]` (`main`, `runModel`):
-  validates every `.surql` with `surreal db validate`, applies the schema to an embedded
-  database and reads its structure, cross-checks `-- @id` prefixes against the entity id
-  registry, then writes per component `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`,
-  plus `pages.model.json`, the `generated-<module>.toml` suites and the replica schema
-  (every replicated table with its region and field kinds) in the database workspace,
+  validates every `.surql` with `surreal db validate`, applies the schema (every file under
+  the schema folder, all databases together) to an embedded database and reads its structure,
+  cross-checks `-- @id` prefixes against the entity id registry, refuses a shape that reads
+  tables of more than one region (one shape reads one database), then writes per component
+  `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`, plus `pages.model.json`, the
+  `generated-<module>.toml` suites (shapes of the `tenant` region are left out: record users
+  have no access to the tenant database on the server yet; a module with only such shapes
+  gets no suite) and the replica schema (every
+  replicated table with its region and field kinds) in the database workspace,
   `<database>/src/replica.schema.gen.ts`. `--check` writes nothing and fails on missing,
   different or stale output.
 - CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a
@@ -23,7 +27,7 @@ TypeScript or React code.
 - `findSurqlLiterals`: the same check for one file.
 - `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
 - `loadSchemaModel`, `parseStructure`: the schema model with its annotations
-  (`@region`, `@replicate none`, `@id`, `@crdt`) and their problems.
+  (`@region private|public|tenant`, `@replicate none`, `@id`, `@crdt`) and their problems.
 - `inferResultType`, `tablesOf`, `compileCommand`, `checkIdRegistry`, `collect`, the emitters.
 
 ## Commands

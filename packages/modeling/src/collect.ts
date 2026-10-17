@@ -133,6 +133,16 @@ function readShape(placed: ComponentFile, text: string, schema: SchemaModel): Sh
   const ast = parseShape(body)
   const resultType = inferResultType(ast, header.params, schema)
   const tables = tablesOf(ast, header.params, schema)
+  const regions = new Set(
+    tables.map((table) => schema.tables[table]?.region).filter((region) => region !== undefined),
+  )
+
+  if (regions.size > 1) {
+    const named = tables.map((table) => `${table} (${schema.tables[table]?.region})`).join(', ')
+
+    throw new ModelingException(`reads tables of two databases: ${named}`)
+  }
+
   const serverOnly = tables.find((table) => schema.tables[table]?.replicate === 'none')
 
   if (serverOnly && !header.server) {
