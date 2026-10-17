@@ -1146,6 +1146,64 @@ describe('SessionService memberships', () => {
     expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
   })
 
+  it("another identity's sign-in leaves the count of a database retained for the first, which goes once its membership is gone", async () => {
+    const storage = memoryStorage()
+    const bob: SignedInDevice = {
+      identity: { id: identityIdFactory.create(), email: bobSignUp.email },
+      tokens: { access: 'access-bob', refresh: 'refresh-bob' },
+      memberships: [globex],
+    }
+    // What the gateway answers each one's sign-in.
+    const answers = new Map([
+      [annSignUp.email, annIn([acme])],
+      [bobSignUp.email, bob],
+    ])
+    const auth: GatewayAuth = {
+      signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
+      signIn: (input) =>
+        okAsync(answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`)),
+    }
+
+    saveDevice(storage, annIn([acme]))
+
+    const booted = await world({ storage, online: false, auth })
+    const { session, stub, tenantsDestroyed, tenantsDeletedOf, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+    expect(session.space()?.tenants()).toEqual(['acme'])
+    expect((await session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
+
+    // Ann's keys are refused with a change unsent: her databases stay for her next sign-in.
+    stub.endWith('unauthorized')
+    await vi.waitFor(() => expect(session.notice()).toBe('resend-after-sign-in'))
+    await settle()
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    // Bob signs in on the same browser and opens Globex: Ann's Acme stays counted.
+    expect((await session.signIn(bobSignUp))._unsafeUnwrap()).toEqual(bob.identity)
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['globex']))
+    expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    // Ann is removed from Acme while she is signed out: her next sign-in answers without it.
+    answers.set(annSignUp.email, annIn([]))
+    expect((await session.signIn(annSignUp))._unsafeUnwrap()).toEqual(ann.identity)
+    await vi.waitFor(() => expect(tenantsDeletedOf(ann.identity.id)).toEqual(['acme']))
+    expect(session.space()?.tenants()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual([])
+    expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
+
+    // Her later sign-out leaves nothing of her, and Bob's count as it was.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(tenantsDeletedOf(ann.identity.id)).toEqual(['acme'])
+    expect(tenantsDeletedOf(bob.identity.id)).toEqual([])
+    expect(tenantsDestroyed()).toEqual([])
+    expect(JSON.parse(storage.get(TENANT_DATABASES_KEY) ?? 'null')).toEqual({
+      [bob.identity.id]: ['globex'],
+    })
+  })
+
   it('sign-out destroys inventoried tenant databases that are not open', async () => {
     const storage = memoryStorage()
 

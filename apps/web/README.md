@@ -29,8 +29,9 @@ modeling stage.
   and from the other tabs through the storage; a new organisation's database opens, the
   database of one the identity left is deleted, and a leading tab syncs the regions on a new
   engine. Every organisation database the device holds for the identity is counted in
-  `perch.session.tenant-databases` (`{ identity, keys }`) before it opens, and stops being
-  counted once deleted; the count outlives the keys, so whenever the space opens or follows
+  `perch.session.tenant-databases` (`{ [identity]: keys }`, each identity's count apart, so
+  another identity signing in on this browser leaves it as it is) before it opens, and stops
+  being counted once deleted; the count outlives the keys, so whenever the space opens or follows
   the memberships, a counted database of an organisation the identity no longer belongs to is
   deleted even when it is not open (`deleteTenantLocal`): one kept across a sign-out that kept
   the databases, or one that failed to open. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`

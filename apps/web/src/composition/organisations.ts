@@ -102,8 +102,8 @@ export class SessionOrganisations {
   /**
    * The inventory of the organisation databases `identity` has on this device, kept in the
    * storage for the tabs and the sessions to come; each change reads it anew, as other tabs
-   * change it too. An inventory kept for another identity is left alone, unless this identity
-   * counts databases of its own: the storage holds one identity's.
+   * change it too. The storage keeps each identity's apart: a change of this one leaves those
+   * kept for other identities as they are.
    */
   databases(identity: IdentityId): TenantDatabaseInventory {
     const storage = this.#options.storage

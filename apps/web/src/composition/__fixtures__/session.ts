@@ -128,6 +128,8 @@ export interface TestWorld {
   tenantsDestroyed(): string[]
   /** The organisations whose databases were deleted while not open, by key, in order. */
   tenantsDeleted(): string[]
+  /** The organisations whose databases of `identity` were deleted while not open, by key, in order. */
+  tenantsDeletedOf(identity: IdentityId): string[]
   /** The transport contexts the session handed out, newest last. */
   contexts(): readonly TransportContext[]
   /** The channels to the gateway stub the session opened, newest last. */
@@ -165,7 +167,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const destroyed: IdentityId[] = []
   const tenantsOpened: string[] = []
   const tenantsDestroyed: string[] = []
-  const tenantsDeleted: string[] = []
+  const tenantsDeleted: Array<{ readonly identity: IdentityId; readonly key: string }> = []
   const contexts: TransportContext[] = []
   const transports: StubTransport[] = []
   const visibilityListeners = new Set<(state: Visibility) => void>()
@@ -202,8 +204,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
               },
             }
           }),
-    deleteTenantLocal: (_identity, key) => {
-      tenantsDeleted.push(key)
+    deleteTenantLocal: (identity, key) => {
+      tenantsDeleted.push({ identity, key })
 
       return okAsync(undefined)
     },
@@ -269,7 +271,9 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     destroyed: () => [...destroyed],
     tenantsOpened: () => [...tenantsOpened],
     tenantsDestroyed: () => [...tenantsDestroyed],
-    tenantsDeleted: () => [...tenantsDeleted],
+    tenantsDeleted: () => tenantsDeleted.map(({ key }) => key),
+    tenantsDeletedOf: (identity) =>
+      tenantsDeleted.filter((deleted) => deleted.identity === identity).map(({ key }) => key),
     contexts: () => [...contexts],
     transports: () => [...transports],
     setVisibility: (state) => {
