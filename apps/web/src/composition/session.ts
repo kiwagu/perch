@@ -1,4 +1,4 @@
-import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import {
@@ -11,13 +11,17 @@ import {
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
-import type {
-  DeviceCredentials,
-  EndReason,
-  Leadership,
-  SyncHint,
-  SyncHints,
-  SyncTransport,
+import {
+  type DeviceCredentials,
+  type EndReason,
+  type Leadership,
+  type LockManagerLike,
+  leadership,
+  lockName,
+  type SyncHint,
+  type SyncHints,
+  type SyncTransport,
+  writeLockName,
 } from '@workspace/replica/sync'
 
 import type { SessionNotice, SessionPort, SignOutOptions } from '../platform/session.port'
@@ -65,8 +69,12 @@ export interface SessionOptions {
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   readonly schema: ReplicaSchema
   readonly transport: (context: TransportContext) => SyncTransport
-  /** The Web Lock that makes one tab per browser the identity's sync leader; undefined without Web Locks. */
-  readonly leadership: (identity: IdentityId) => Leadership | undefined
+  /**
+   * The browser's Web Locks: one makes one tab per browser the identity's sync leader, another
+   * lets a sign-out wait for the writes every tab admitted. Undefined without Web Locks: such a
+   * browser does not sync, and its sign-out waits for no other tab.
+   */
+  readonly locks: LockManagerLike | undefined
   readonly hints: (identity: IdentityId) => SyncHints
   readonly clock: Clock
   readonly storage: KeyValueStorage
@@ -107,6 +115,17 @@ const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
  */
 const SIGN_OUT_BARRIER_MS = 60_000
 
+/**
+ * How long a sign-out waits for the writes other tabs admitted before its barrier went up. A
+ * write is durable within moments; a tab that holds one longer is taken for frozen, and the
+ * database is kept rather than deleted under it.
+ */
+const WRITERS_MS = 10_000
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === 'AbortError'
+}
+
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
 
@@ -140,6 +159,7 @@ export class SessionService implements SessionPort {
       current: () => this.#open?.space,
       onSwitch: (listener) => this.subscribe(() => listener()),
       signingOut: () => this.#signingOut(),
+      writing: (space, work) => this.#writing(space, work),
     }
 
     this.runner = new CurrentSpaceRunner(spaces)
@@ -284,7 +304,7 @@ export class SessionService implements SessionPort {
     this.#options.onStep?.('open-db')
 
     const status: SpaceStatus = { live: true }
-    const leadership = this.#options.leadership(identity.id)
+    const lead = leadership(this.#options.locks, lockName(identity.id))
     const hints = this.#options.hints(identity.id)
     const heard: HeardSignOut = { at: undefined }
 
@@ -296,7 +316,7 @@ export class SessionService implements SessionPort {
       openLocal: this.#options.openLocal,
       schema: this.#options.schema,
       transport: () => this.#options.transport(this.#transportContext(identity.id)),
-      leadership,
+      leadership: lead,
       hints,
       clock: this.#options.clock,
       onState: (state) => {
@@ -319,7 +339,7 @@ export class SessionService implements SessionPort {
           return err(closedDuringSignIn())
         }
 
-        this.#open = { space, leadership, status, hints, heard }
+        this.#open = { space, leadership: lead, status, hints, heard }
         space.visibility(this.#options.visibility.current())
         this.#options.onStep?.('ready')
         this.#emit(identity)
@@ -354,10 +374,16 @@ export class SessionService implements SessionPort {
       .andThen(() =>
         ResultAsync.fromSafePromise(space.sync?.signOut() ?? Promise.resolve('offline' as const)),
       )
+      // What is unsent is read, and the database deleted, only once no tab writes any more.
       .andThen((outcome) =>
-        outcome === 'signed-out'
-          ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
-          : this.#stillSignedIn(open, forgetUnsent),
+        this.#exclusively(
+          open,
+          () =>
+            outcome === 'signed-out'
+              ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
+              : this.#stillSignedIn(open, forgetUnsent),
+          'signed-out',
+        ),
       )
 
     const release = () => {
@@ -397,6 +423,91 @@ export class SessionService implements SessionPort {
         ? okAsync<SignOutOutcome>('needs-confirmation')
         : this.#forgetSpace(open).map((): SignOutOutcome => 'signed-out'),
     )
+  }
+
+  /**
+   * Runs a write while holding the identity's write lock shared, until its change is durable:
+   * any number of writes run at once, and a sign-out waits for all of them.
+   */
+  #writing<T>(
+    space: IdentitySpace,
+    work: () => ResultAsync<T, DataError>,
+  ): ResultAsync<T, DataError> {
+    const locks = this.#options.locks
+
+    if (!locks) {
+      return work()
+    }
+
+    const written = new Promise<Result<T, DataError>>((resolve) => {
+      locks
+        .request(writeLockName(space.identity.id), { mode: 'shared' }, async () => {
+          resolve(await work())
+        })
+        .catch((cause: unknown) => {
+          resolve(
+            err(
+              dataError(
+                'data:WRITE_FAILED',
+                `could not take the write lock of ${space.identity.id}`,
+                cause,
+              ),
+            ),
+          )
+        })
+    })
+
+    return new ResultAsync(written)
+  }
+
+  /**
+   * Runs `work` holding the identity's write lock exclusive: every write a tab admitted before
+   * the barrier went up has become durable, and none runs meanwhile. A lock that does not come
+   * within 10 seconds (a frozen tab) deletes nothing: the keys are forgotten and the database
+   * is kept for the next sign-in, as when the gateway refuses the keys; that ends as `kept`.
+   */
+  #exclusively<T>(
+    open: OpenSpace,
+    work: () => ResultAsync<T, DataError>,
+    kept: T,
+  ): ResultAsync<T, DataError> {
+    const locks = this.#options.locks
+
+    if (!locks) {
+      return work()
+    }
+
+    const controller = new AbortController()
+    const giveUp = this.#options.clock.schedule(WRITERS_MS, () => controller.abort())
+    const ended = new Promise<Result<T, DataError>>((resolve) => {
+      locks
+        .request(
+          writeLockName(open.space.identity.id),
+          { mode: 'exclusive', signal: controller.signal },
+          async () => {
+            giveUp()
+            resolve(await work())
+          },
+        )
+        .catch((cause: unknown) => {
+          giveUp()
+
+          if (!isAbortError(cause)) {
+            this.#options.onError(
+              dataError(
+                'data:WRITE_FAILED',
+                `could not wait for the writes of every tab into ${open.space.identity.id}`,
+                cause,
+              ),
+            )
+          }
+
+          this.#keepForNextSignIn(open)
+          resolve(ok(kept))
+        })
+    })
+
+    return new ResultAsync(ended)
   }
 
   /** Holds every tab's writes back: the other tabs hear of it now, a tab opened later reads it. */
@@ -505,8 +616,14 @@ export class SessionService implements SessionPort {
       return okAsync(undefined)
     }
 
-    return this.#unsentOrUnknown(open).andThen((unsent) =>
-      unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+    // As in a sign-out, what is unsent is read, and the database deleted, once no tab writes.
+    return this.#exclusively(
+      open,
+      () =>
+        this.#unsentOrUnknown(open).andThen((unsent) =>
+          unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+        ),
+      undefined,
     )
   }
 

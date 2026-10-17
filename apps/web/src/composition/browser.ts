@@ -12,7 +12,7 @@ import { type DataError, openLocalDb } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
-import { leadership, lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
+import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
@@ -76,7 +76,7 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
         onEnded: context.onEnded,
         clock: systemClock,
       }),
-    leadership: (identity) => leadership(locks, lockName(identity)),
+    locks,
     hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
     clock: systemClock,
     storage: browserStorage(window.localStorage, window),

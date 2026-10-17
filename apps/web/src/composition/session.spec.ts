@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
+import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
@@ -114,6 +115,8 @@ async function twoTabs(options: {
   readonly online: boolean
   readonly hints?: boolean
   readonly ownStorageOfB?: boolean
+  /** Wraps the database connection of tab `b`, e.g. to hold its writes. */
+  readonly wrapB?: (local: LocalDb) => LocalDb
 }) {
   const storage = memoryStorage()
   const shared = {
@@ -138,7 +141,12 @@ async function twoTabs(options: {
     saveDevice(storageOfB, ann)
   }
 
-  const b = await world({ ...shared, storage: storageOfB, gateway: a.gateway })
+  const b = await world({
+    ...shared,
+    storage: storageOfB,
+    gateway: a.gateway,
+    ...(options.wrapB ? { wrap: options.wrapB } : {}),
+  })
 
   expect((await b.session.restore()).isOk()).toBe(true)
   await settle()
@@ -444,6 +452,69 @@ describe('SessionService', () => {
     expect(a.storage.get('perch.session.refresh')).toBeUndefined()
     expect(a.session.notice()).toBe('resend-after-sign-in')
     expect(a.storage.get('perch.session.signing-out')).toBeUndefined()
+  })
+
+  it('waits for a write another tab admitted before the barrier, and keeps the database it then holds', async () => {
+    let holding = false
+    let releaseAppend = () => {}
+    const appendHeld = new Promise<void>((resolve) => {
+      releaseAppend = resolve
+    })
+    const { a, b } = await twoTabs({
+      online: true,
+      wrapB: (local) =>
+        interceptQueries(local, (text) =>
+          holding && text.includes('_replica_outbox SET') ? appendHeld : undefined,
+        ),
+    })
+
+    holding = true
+
+    // B admits a command before any sign-out began; its append is slow to become durable.
+    const writing = b.session.writePath.run(createProfile, aProfile())
+    const signingOut = a.session.signOut()
+
+    // A drains an outbox without B's row, and the gateway signs A out and closes.
+    await vi.waitFor(() => expect(a.stub.signOuts()).toBe(1))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Only now is B's change durable.
+    releaseAppend()
+
+    expect((await writing).isOk()).toBe(true)
+    expect((await signingOut)._unsafeUnwrap()).toBe('signed-out')
+    expect(a.destroyed()).toEqual([])
+    expect(a.session.current()).toBeUndefined()
+    expect(a.storage.get('perch.session.identity')).toBeUndefined()
+    expect(a.session.notice()).toBe('resend-after-sign-in')
+  })
+
+  it('keeps the database for the next sign-in when another tab never lets its write go', async () => {
+    const locks = new FakeLocks()
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({ storage, locks, online: true })
+    const { session, stub, destroyed, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+
+    // A frozen tab holds a write it never finishes.
+    void locks.request(
+      writeLockName(ann.identity.id),
+      { mode: 'shared' },
+      () => new Promise(() => {}),
+    )
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect(stub.signOuts()).toBe(1)
+    expect(destroyed()).toEqual([])
+    expect(session.current()).toBeUndefined()
+    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(session.notice()).toBe('resend-after-sign-in')
+    expect(storage.get('perch.session.signing-out')).toBeUndefined()
   })
 
   it("refuses every tab's commands while a sign-out is under way, until the database is gone", async () => {

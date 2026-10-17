@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { FakeLocks } from '../testing/fake-locks'
 
-import { leadership, lockName } from './leader'
+import { leadership, lockName, writeLockName } from './leader'
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
@@ -158,5 +158,102 @@ describe('leadership', () => {
 
   it('names the lock after the identity', () => {
     expect(lockName('u1')).toBe('perch-sync:u1')
+    expect(writeLockName('u1')).toBe('perch-write:u1')
+  })
+})
+
+/** A lock request whose holder keeps the lock until the test lets it go. */
+function held(
+  locks: FakeLocks,
+  name: string,
+  mode: 'shared' | 'exclusive',
+  log: string[],
+  who: string,
+) {
+  let release = () => {}
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const granted = locks.request(name, { mode }, async () => {
+    log.push(`${who} granted`)
+    await released
+  })
+
+  return { release, granted }
+}
+
+describe('the fake Web Locks', () => {
+  it('grants any number of shared requests of a name at once', async () => {
+    const locks = new FakeLocks()
+    const log: string[] = []
+    const one = held(locks, 'w', 'shared', log, 'one')
+    const two = held(locks, 'w', 'shared', log, 'two')
+
+    await settle()
+    expect(log).toEqual(['one granted', 'two granted'])
+    one.release()
+    two.release()
+    await Promise.all([one.granted, two.granted])
+  })
+
+  it('grants an exclusive request once every holder let go, and holds new ones back meanwhile', async () => {
+    const locks = new FakeLocks()
+    const log: string[] = []
+    const one = held(locks, 'w', 'shared', log, 'one')
+    const two = held(locks, 'w', 'shared', log, 'two')
+    const sole = held(locks, 'w', 'exclusive', log, 'sole')
+    const late = held(locks, 'w', 'shared', log, 'late')
+
+    await settle()
+    expect(log).toEqual(['one granted', 'two granted'])
+
+    one.release()
+    await settle()
+    expect(log).toEqual(['one granted', 'two granted'])
+
+    two.release()
+    await settle()
+    // The shared request made after the exclusive one waits behind it.
+    expect(log).toEqual(['one granted', 'two granted', 'sole granted'])
+
+    sole.release()
+    await settle()
+    expect(log).toEqual(['one granted', 'two granted', 'sole granted', 'late granted'])
+    late.release()
+    await Promise.all([one.granted, two.granted, sole.granted, late.granted])
+  })
+
+  it('lets the requests behind a waiting exclusive one through once it gives up', async () => {
+    const locks = new FakeLocks()
+    const log: string[] = []
+    const one = held(locks, 'w', 'shared', log, 'one')
+    const controller = new AbortController()
+    const sole = locks.request('w', { mode: 'exclusive', signal: controller.signal }, async () => {
+      log.push('sole granted')
+    })
+    const late = held(locks, 'w', 'shared', log, 'late')
+
+    await settle()
+    expect(log).toEqual(['one granted'])
+
+    controller.abort()
+
+    await expect(sole).rejects.toMatchObject({ name: 'AbortError' })
+    await settle()
+    expect(log).toEqual(['one granted', 'late granted'])
+    one.release()
+    late.release()
+  })
+
+  it('keeps the locks of different names apart', async () => {
+    const locks = new FakeLocks()
+    const log: string[] = []
+    const write = held(locks, 'w', 'exclusive', log, 'write')
+    const sync = held(locks, 's', 'exclusive', log, 'sync')
+
+    await settle()
+    expect(log).toEqual(['write granted', 'sync granted'])
+    write.release()
+    sync.release()
   })
 })

@@ -1,7 +1,16 @@
+/**
+ * The part of `navigator.locks` the app uses. A `shared` lock may have any number of holders at
+ * once; an `exclusive` one (the default) waits for every holder of its name and holds the
+ * requests made after it back; requests of a name are granted in the order they were made.
+ */
 export interface LockManagerLike {
   request(
     name: string,
-    options: { readonly steal?: boolean; readonly signal?: AbortSignal },
+    options: {
+      readonly mode?: 'shared' | 'exclusive'
+      readonly steal?: boolean
+      readonly signal?: AbortSignal
+    },
     callback: () => Promise<void>,
   ): Promise<void>
 }
@@ -17,6 +26,14 @@ export interface Leadership {
 /** The lock that makes one tab of this identity the sync leader. */
 export function lockName(identity: string): string {
   return `perch-sync:${identity}`
+}
+
+/**
+ * The lock over writes into this identity's database: each tab holds it shared while a write
+ * of its own runs, and a sign-out takes it exclusive before it reads what is unsent and deletes.
+ */
+export function writeLockName(identity: string): string {
+  return `perch-write:${identity}`
 }
 
 interface Attempt {

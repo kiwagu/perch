@@ -94,7 +94,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a
   Web Lock (`isLeader`, `onChange`, `takeOver` steals the lock, `stop`; undefined without Web
-  Locks, such a browser does not sync); `syncHints(channel)` sends `journal`, `visible`, `kick`,
+  Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
+  into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
+  it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
   `settled` and `sign-out` hints between tabs over a `BroadcastChannel` and ignores anything
   else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
@@ -107,8 +109,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
-  steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
-  lock and `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
+  steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` (per name,
+  `shared` and `exclusive` modes granted in request order, `steal`, abort signals) and
+  `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.

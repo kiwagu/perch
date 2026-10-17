@@ -18,7 +18,7 @@ import { replicaSchema } from '@workspace/database/replica-schema'
 import { Container } from '@workspace/di'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
-import type { Leadership, SyncHints, SyncTransport } from '@workspace/replica/sync'
+import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
@@ -38,7 +38,11 @@ export interface AppRootOptions {
   readonly gatewayAuth: GatewayAuth
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
-  readonly leadership: (identity: IdentityId) => Leadership | undefined
+  /**
+   * The browser's Web Locks: one tab per identity leads its sync, and a sign-out waits for the
+   * writes of every tab; undefined without them (such a browser does not sync).
+   */
+  readonly locks: LockManagerLike | undefined
   readonly hints: (identity: IdentityId) => SyncHints
   readonly clock: Clock
   readonly storage: KeyValueStorage
@@ -74,7 +78,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     openLocal: options.openLocal,
     schema: replicaSchema,
     transport: options.transport,
-    leadership: options.leadership,
+    locks: options.locks,
     hints: options.hints,
     clock: options.clock,
     storage: options.storage,

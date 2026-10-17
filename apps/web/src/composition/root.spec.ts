@@ -5,7 +5,7 @@ import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/
 import { openTestDb } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
-import { leadership, lockName, syncHints } from '@workspace/replica/sync'
+import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { COMMANDS } from '../platform/commands.port'
@@ -59,7 +59,7 @@ async function boot(
 
       return transport
     },
-    leadership: (identity) => leadership(new FakeLocks(), lockName(identity)),
+    locks: new FakeLocks(),
     hints: () => syncHints(undefined),
     clock,
     storage,

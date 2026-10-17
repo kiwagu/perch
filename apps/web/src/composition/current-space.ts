@@ -29,6 +29,11 @@ export interface SpaceSource {
    * drain would be deleted with the database, so none is taken until it ends.
    */
   signingOut(): boolean
+  /**
+   * Runs a write admitted into `space` while holding the identity's write lock shared, until
+   * its change is durable: a sign-out deletes the database only once no write of any tab runs.
+   */
+  writing<T>(space: IdentitySpace, work: () => ResultAsync<T, DataError>): ResultAsync<T, DataError>
 }
 
 const signedOut = (what: string): string => `sign in first: ${what} needs the signed-in identity`
@@ -78,9 +83,12 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
   }
 }
 
-/** Writes into the current space's region; refuses while nobody is signed in or a sign-out runs. */
+/**
+ * Writes into the current space's region; refuses while nobody is signed in or a sign-out runs.
+ * A write it admits runs under the identity's write lock until its change is durable.
+ */
 export class CurrentSpaceWritePath implements WritePathPort {
-  constructor(private readonly spaces: Pick<SpaceSource, 'current' | 'signingOut'>) {}
+  constructor(private readonly spaces: Pick<SpaceSource, 'current' | 'signingOut' | 'writing'>) {}
 
   run<Params>(
     command: Command<Params>,
@@ -95,6 +103,6 @@ export class CurrentSpaceWritePath implements WritePathPort {
 
     return this.spaces.signingOut()
       ? errAsync(dataError('data:WRITE_REJECTED', 'signing out'))
-      : space.writePath.run(command, params, meta)
+      : this.spaces.writing(space, () => space.writePath.run(command, params, meta))
   }
 }

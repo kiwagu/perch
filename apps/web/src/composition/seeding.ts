@@ -27,13 +27,7 @@ import { readSchema } from '@workspace/data/schema-files'
 import type { Locale } from '@workspace/i18n'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
 import { systemClock } from '@workspace/replica'
-import {
-  type LockManagerLike,
-  leadership,
-  lockName,
-  syncHints,
-  WebSocketTransport,
-} from '@workspace/replica/sync'
+import { type LockManagerLike, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
 import {
   PROFILE_SERVICE,
@@ -246,7 +240,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         onEnded: context.onEnded,
         clock: systemClock,
       }),
-    leadership: (identity) => leadership(soleDevice, lockName(identity)),
+    locks: soleDevice,
     hints: () => syncHints(undefined),
     clock: systemClock,
     storage: memoryStorage(),

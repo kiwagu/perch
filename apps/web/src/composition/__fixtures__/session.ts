@@ -4,7 +4,7 @@ import type { DataError, LocalDb, ShapeRunnerPort } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
-import { leadership, lockName, syncHints } from '@workspace/replica/sync'
+import { syncHints } from '@workspace/replica/sync'
 import {
   FakeHintChannel,
   FakeLocks,
@@ -176,8 +176,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
 
       return transport
     },
-    // Without shared locks the tab is alone: its lock is granted as soon as it is asked for.
-    leadership: (identity) => leadership(options.locks ?? new FakeLocks(), lockName(identity)),
+    // Without shared locks the tab is alone: its locks are granted as soon as they are asked for.
+    locks: options.locks ?? new FakeLocks(),
     hints: () => syncHints(options.hints ? new FakeHintChannel(options.hints) : undefined),
     clock,
     storage,
