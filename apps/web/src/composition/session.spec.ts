@@ -286,6 +286,39 @@ describe('SessionService', () => {
     expect(gateway.signOuts()).toBe(0)
   })
 
+  it('asks before signing out while a change fails to persist, though the outbox reads empty', async () => {
+    let failAppend = false
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const booted = await world({
+      storage,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failAppend && text.includes('_replica_outbox SET')) {
+            throw new Error('the disk is full')
+          }
+        }),
+    })
+    const { session, stub, destroyed, failures, driveClock } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+
+    failAppend = true
+
+    // The command hears that its change was not made durable; the change lives on in memory.
+    const written = await session.writePath.run(createProfile, aProfile())
+
+    expect(written._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(stub.signOuts()).toBe(0)
+    expect(destroyed()).toEqual([])
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+  })
+
   it('asks before signing out when the region stopped syncing with changes left in the outbox', async () => {
     const booted = await bootSession({ saved: ann, online: true })
     const { session, gateway, destroyed, failures, writeOffline } = booted

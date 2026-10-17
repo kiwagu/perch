@@ -1,4 +1,3 @@
-import { okAsync } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -32,9 +31,10 @@ export interface SyncEngine {
   localWrite(): void
   /**
    * Resolves once the channel is up, every region has had its first answer on this connection,
-   * the outbox is empty, nothing waits for an answer (a push, a pull, a probe, a compaction),
-   * no pass runs and no message is being handled; rejects after `timeoutMs` on the clock. A
-   * region that stopped syncing counts as settled: its failure was reported.
+   * the outbox is empty and every local update is durable, nothing waits for an answer (a push,
+   * a pull, a probe, a compaction), no pass runs and no message is being handled; rejects after
+   * `timeoutMs` on the clock. A region that stopped syncing counts as settled: its failure was
+   * reported. An update that cannot be made durable is reported once, and is never settled.
    */
   settled(timeoutMs: number): Promise<void>
   /**
@@ -95,6 +95,8 @@ class Engine implements SyncEngine {
    */
   #probes: Array<() => void> = []
   #passing = false
+  /** Regions whose last flush failed, reported once until a flush succeeds again. */
+  readonly #failingFlush = new Set<string>()
 
   constructor(options: SyncEngineOptions) {
     this.#options = options
@@ -387,44 +389,48 @@ class Engine implements SyncEngine {
     await this.#drain.idle()
 
     const syncing = [...this.#regions.values()].filter(({ sync }) => !sync.stopped())
-    const outboxes = await Promise.all(
-      syncing.map(({ region }) =>
-        region
-          .flush()
-          // A failed append is the write path's to report; the outbox is what counts here.
-          .orElse(() => okAsync(undefined))
-          .andThen(() => region.outbox(1)),
-      ),
-    )
+    const unsent = await Promise.all(syncing.map(({ region }) => this.#holdsUnsent(region)))
 
     return (
       this.#channel === 'up' &&
       !this.#passing &&
       this.#probes.length === 0 &&
       this.#handling === 0 &&
-      outboxes.every((rows) => rows.isOk() && rows.value.length === 0) &&
+      !unsent.some(Boolean) &&
       [...this.#regions.values()].every(({ sync }) => sync.quiet())
     )
   }
 
-  /** Whether a region that stopped syncing still holds outbox rows; an outbox it cannot read counts. */
+  /** Whether a region that stopped syncing still holds what it has not sent. */
   async #stoppedWithUnsent(): Promise<boolean> {
     const stopped = [...this.#regions.values()].filter(({ sync }) => sync.stopped())
-    const unsent = await Promise.all(
-      stopped.map(({ region }) =>
-        region
-          .flush()
-          // A failed append is the write path's to report; the outbox is what counts here.
-          .orElse(() => okAsync(undefined))
-          .andThen(() => region.outbox(1))
-          .match(
-            (rows) => rows.length > 0,
-            () => true,
-          ),
-      ),
-    )
+    const unsent = await Promise.all(stopped.map(({ region }) => this.#holdsUnsent(region)))
 
     return unsent.some(Boolean)
+  }
+
+  /**
+   * Whether the region holds local updates the gateway has not acknowledged: outbox rows, or
+   * an update whose append failed and so lives in memory only, which the outbox does not show
+   * (reported once, until a flush succeeds again). An outbox that cannot be read counts.
+   */
+  #holdsUnsent(region: RegionDoc): Promise<boolean> {
+    const id = region.ref.id
+
+    return region
+      .flush()
+      .andTee(() => this.#failingFlush.delete(id))
+      .orTee((error) => {
+        if (!this.#failingFlush.has(id)) {
+          this.#failingFlush.add(id)
+          this.#options.onError(error)
+        }
+      })
+      .andThen(() => region.outbox(1))
+      .match(
+        (rows) => rows.length > 0,
+        () => true,
+      )
   }
 
   /** Resolves true once the channel is up, or false after `ms` on the clock. */

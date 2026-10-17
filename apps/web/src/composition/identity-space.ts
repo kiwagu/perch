@@ -4,7 +4,7 @@
  * this tab leads the browser, the sync engine that keeps the region in step with the gateway.
  */
 
-import { errAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
@@ -48,7 +48,10 @@ export interface IdentitySpace {
   /** The sync engine while this tab leads; undefined while another tab does. */
   readonly sync: SyncEngine | undefined
   flush(): ResultAsync<void, DataError>
-  /** Whether the region holds local changes the gateway has not acknowledged yet. */
+  /**
+   * Whether the region holds local changes the gateway has not acknowledged yet: outbox rows,
+   * or a change whose append failed and so lives in memory only.
+   */
   unsent(): ResultAsync<boolean, DataError>
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
@@ -116,10 +119,14 @@ class Space implements IdentitySpace {
   }
 
   unsent(): ResultAsync<boolean, DataError> {
+    // A failed append was reported to the write that made it; its change is unsent all the same.
     return this.#region
       .flush()
-      .andThen(() => this.#region.outbox(1))
-      .map((rows) => rows.length > 0)
+      .map(() => true)
+      .orElse(() => okAsync(false))
+      .andThen((durable) =>
+        durable ? this.#region.outbox(1).map((rows) => rows.length > 0) : okAsync(true),
+      )
   }
 
   visibility(state: Visibility): void {

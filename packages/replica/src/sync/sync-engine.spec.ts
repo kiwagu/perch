@@ -4,6 +4,8 @@ import { interceptQueries } from '@workspace/data/testing'
 
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
+import appendStatement from '../surql/replica-append.surql'
+import type { ManualClock } from '../testing/manual-clock'
 
 import {
   closeDevices,
@@ -35,6 +37,22 @@ async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 
   return settled
+}
+
+/** Moves the clock on a second at a time until the promise settles, for waits nothing else ends. */
+async function driven<T>(clock: ManualClock, promise: Promise<T>): Promise<T> {
+  let done = false
+
+  void promise.finally(() => {
+    done = true
+  })
+
+  while (!done) {
+    await clock.advance(1_000)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  return promise
 }
 
 describe('sync engine', () => {
@@ -195,6 +213,46 @@ describe('sync engine', () => {
 
     expect(await outcome).toBe('signed-out')
     expect(a.channel()).toBe('down')
+  })
+
+  it('does not settle while a local update fails to persist, reports it once and signs out offline', async () => {
+    let failAppend = false
+    const gateway = await openGateway()
+    const a = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failAppend && text === appendStatement) {
+            throw new Error('the disk is full')
+          }
+        }),
+    })
+
+    a.engine.start()
+    await settleAll([a])
+
+    // The update stays in memory only: the outbox the engine reads is empty.
+    failAppend = true
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+
+    const settling = a.engine.settled(1_000)
+
+    // The engine looked at the region and found the update it could not persist: it says so, once.
+    await vi.waitFor(() => expect(a.errors).toHaveLength(1))
+
+    expect(await hasSettled(settling)).toBe(false)
+
+    await gateway.clock.advance(1_000)
+
+    await expect(settling).rejects.toThrow('1000 ms')
+    expect(await driven(gateway.clock, a.engine.signOut())).toBe('offline')
+    expect(gateway.stub.signOuts()).toBe(0)
+    expect(a.errors).toEqual([
+      expect.objectContaining({
+        code: 'data:WRITE_FAILED',
+        message: `could not persist an update of ${regionId}`,
+      }),
+    ])
   })
 
   it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {
