@@ -38,11 +38,15 @@ own):
 - `organisation/03-membership-change`: an invitation reaches B's open page within 5 seconds;
   a removal takes the organisation away within 5 seconds, and its IndexedDB database is gone
   from B's browser within 5 seconds; after a reload B still shows no organisation.
+- `organisation/04-edit-own-admin-any`: a member edits and deletes only its own notes while an
+  administrator edits and deletes any; B's edit reaches A, A's edit of B's note reaches B, and
+  each deletion reaches the other device, all within 5 seconds and without a reload.
 
-Four specs write measurements into the test's annotations, shown in the HTML report:
+Five specs write measurements into the test's annotations, shown in the HTML report:
 `sync-latency-ms` (from the click on device B to the new name on device A),
 `idle-frames-per-minute`, `note-sync-latency-ms` (from the click on "Add note" on device B to
-the note on device A) and `membership-change-ms` (from the click on "Invite" on device A to
+the note on device A), `note-edit-sync-latency-ms` (from the click on "Save" on device B to the
+edited note on device A) and `membership-change-ms` (from the click on "Invite" on device A to
 the organisation and its note on device B).
 
 ## Key exports
