@@ -114,6 +114,26 @@ describe('sync engine', () => {
     expect(a.transport.online()).toBe(false)
   })
 
+  it('stops syncing when the gateway refuses the protocol, and says to reload the application', async () => {
+    const { a, stub } = await twoDevices()
+
+    a.transport.goOffline()
+    writeName(a.region, 'Ana')
+    stub.endWith('protocol')
+    a.engine.localWrite()
+
+    expect(a.errors).toEqual([
+      expect.objectContaining({
+        code: 'data:SYNC_STOPPED',
+        message: 'the gateway refused the protocol; reload the application',
+      }),
+    ])
+    expect(a.channel()).toBe('down')
+    // The rows stay in the outbox: nothing about the device's data changes.
+    expect((await a.region.flush()).isOk()).toBe(true)
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
   it('keeps the device signed in when a region stops syncing with rows left in its outbox', async () => {
     const { a, stub } = await twoDevices()
 

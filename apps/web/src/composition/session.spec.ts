@@ -1,6 +1,7 @@
+import { errAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
 import { FakeLocks } from '@workspace/replica/testing'
@@ -287,16 +288,80 @@ describe('SessionService', () => {
     expect(following.destroyed()).toEqual([ann.identity.id])
   })
 
-  it('forgets the device when the gateway refuses its keys', async () => {
+  it('forgets the device and its data when the gateway refuses its keys and nothing is unsent', async () => {
     const { session, gateway, storage, destroyed } = await bootSession({ saved: ann, online: true })
 
     gateway.endWith('unauthorized')
-    await settle()
 
-    expect(session.current()).toBeUndefined()
+    // The outbox is read first: it decides whether the database goes.
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
     expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(storage.get('perch.session.notice')).toBeUndefined()
+    expect(session.notice()).toBeUndefined()
     expect(gateway.signOuts()).toBe(0)
+  })
+
+  it('keeps the database with unsent changes when the gateway refuses the keys, and asks to sign in again', async () => {
+    const { session, gateway, storage, destroyed, writeOffline } = await bootSession({
+      saved: ann,
+      online: false,
+    })
+
+    await writeOffline()
+    gateway.endWith('unauthorized')
+
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    expect(session.space()).toBeUndefined()
+    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(storage.get('perch.session.refresh')).toBeUndefined()
+    expect(storage.get('perch.session.notice')).toBe('resend-after-sign-in')
+    expect(session.notice()).toBe('resend-after-sign-in')
+    await settle()
+    expect(destroyed()).toEqual([])
+    expect(gateway.signOuts()).toBe(0)
+
+    session.clearNotice()
+
+    expect(session.notice()).toBeUndefined()
+    expect(storage.get('perch.session.notice')).toBeUndefined()
+  })
+
+  it('keeps the database when the gateway refuses the keys and the outbox cannot be read', async () => {
+    const { session, gateway, storage, destroyed, failures } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+    const space = session.space() ?? expect.unreachable('a space')
+    const unreadable = dataError('data:QUERY_FAILED', 'could not read the outbox')
+
+    vi.spyOn(space, 'unsent').mockReturnValue(errAsync(unreadable))
+    gateway.endWith('unauthorized')
+
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    expect(session.notice()).toBe('resend-after-sign-in')
+    expect(storage.get('perch.session.identity')).toBeUndefined()
+    await settle()
+    expect(destroyed()).toEqual([])
+    expect(failures.splice(0)).toEqual([unreadable])
+  })
+
+  it('stays signed in with its keys and data when the gateway refuses the protocol', async () => {
+    const { session, gateway, storage, destroyed, failures, states } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+
+    gateway.endWith('protocol')
+    await settle()
+
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(storage.get('perch.session.refresh')).toBe(ann.tokens.refresh)
+    expect(storage.get('perch.session.identity')).toContain(ann.identity.id)
+    expect(session.notice()).toBeUndefined()
+    expect(destroyed()).toEqual([])
+    expect(states.at(-1)).toEqual({ leader: true, channel: 'down' })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:SYNC_STOPPED'])
   })
 
   it('keeps the keys the gateway renews and hands the saved ones to the channel', async () => {

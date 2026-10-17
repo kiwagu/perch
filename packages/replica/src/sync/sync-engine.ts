@@ -10,7 +10,7 @@ import type { RegionDoc } from '../region-doc'
 import { type CadencePort, createCadence, type PassKind } from './cadence'
 import { createOutboxDrain, type OutboxDrainPort } from './outbox-drain'
 import { RegionSync } from './region-sync'
-import type { ChannelState, SyncTransport } from './transport'
+import type { ChannelState, EndReason, SyncTransport } from './transport'
 
 export interface SyncEngineOptions {
   readonly regions: readonly RegionDoc[]
@@ -125,6 +125,7 @@ class Engine implements SyncEngine {
     this.#listening = [
       transport.onMessage((message) => this.#receive(message)),
       transport.onChannel((state) => this.#channelChanged(state)),
+      transport.onEnded((reason) => this.#ended(reason)),
     ]
     this.#cadence.start()
     transport.start()
@@ -267,6 +268,27 @@ class Engine implements SyncEngine {
       .exhaustive()
   }
 
+  /**
+   * The channel ended for good. A refused protocol stops syncing and is reported: this
+   * application is older than the gateway, and only a reload brings one that speaks its
+   * protocol; nothing on the device changes. Refused keys and a sign-out are the app's to act on.
+   */
+  #ended(reason: EndReason): void {
+    match(reason)
+      .with('protocol', () => {
+        this.#cadence.stop()
+        this.#drain.stop()
+        this.#options.onError(
+          dataError(
+            'data:SYNC_STOPPED',
+            'the gateway refused the protocol; reload the application',
+          ),
+        )
+      })
+      .with(P.union('unauthorized', 'signed-out'), () => {})
+      .exhaustive()
+  }
+
   #channelChanged(state: ChannelState): void {
     this.#channel = state
 
@@ -400,7 +422,7 @@ class Engine implements SyncEngine {
    * Resolves `signed-out` once the transport reports the channel ended (the gateway closes it
    * after the sign-out; keys it refuses end the device all the same), or once the close has not
    * come within 10 seconds on the clock, stopping the transport; `offline` when the channel
-   * falls without ending.
+   * falls without ending or ends on a refused protocol, which signed nothing out.
    */
   #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
     const transport = this.#options.transport
@@ -417,7 +439,14 @@ class Engine implements SyncEngine {
       }
 
       release = [
-        transport.onEnded(() => finish('signed-out')),
+        transport.onEnded((reason) =>
+          finish(
+            match(reason)
+              .with(P.union('signed-out', 'unauthorized'), () => 'signed-out' as const)
+              .with('protocol', () => 'offline' as const)
+              .exhaustive(),
+          ),
+        ),
         transport.onChannel((state) => {
           if (state === 'down') {
             finish('offline')

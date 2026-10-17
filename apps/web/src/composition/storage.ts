@@ -3,6 +3,8 @@ import { idSchemas } from '@workspace/ids'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 
+import type { SessionNotice } from '../platform/session.port'
+
 import type { SignedInDevice } from './gateway-auth'
 
 /** Small persistent key-value storage, shared by the tabs of one browser. */
@@ -153,6 +155,26 @@ export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefin
   return access === undefined
     ? undefined
     : { access, ...(refresh === undefined ? {} : { refresh }) }
+}
+
+const NOTICE_KEY = 'perch.session.notice'
+
+const sessionNotice = z.enum(['resend-after-sign-in'])
+
+/** Leaves the sign-in page a word about how the last session ended. */
+export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {
+  storage.set(NOTICE_KEY, notice)
+}
+
+/** The word the last session left for the sign-in page; a kept value it does not know is none. */
+export function savedNotice(storage: KeyValueStorage): SessionNotice | undefined {
+  const parsed = sessionNotice.safeParse(storage.get(NOTICE_KEY))
+
+  return parsed.success ? parsed.data : undefined
+}
+
+export function forgetNotice(storage: KeyValueStorage): void {
+  storage.remove(NOTICE_KEY)
 }
 
 /** Forgets who is signed in and the keys; the other tabs hear the identity go. */

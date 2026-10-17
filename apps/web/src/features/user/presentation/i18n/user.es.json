@@ -7,6 +7,7 @@
   "user.sign-in.password": "Contraseña",
   "user.sign-in.name": "Nombre",
   "user.sign-in.welcome": "Bienvenido",
+  "user.sign-in.notice.resend-after-sign-in": "Tus claves fueron rechazadas. Inicia sesión de nuevo para enviar tus cambios pendientes.",
   "user.sign-in.error.invalid-credentials": "Correo o contraseña incorrectos.",
   "user.sign-in.error.sign-up-rejected": "No se puede crear una cuenta con este correo.",
   "user.sign-in.error.name-required": "Escribe tu nombre.",

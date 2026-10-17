@@ -63,8 +63,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   unsent, rows of a region that stopped syncing included; it never rejects).
   Its parts:
   `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
-  `RECONNECT_DELAYS_MS`, renewed keys to `onTokens`, `onEnded` when the keys are refused or the
-  device is signed out) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
+  `RECONNECT_DELAYS_MS`, renewed keys to `onTokens`, `onEnded` with an `EndReason` when the
+  keys (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out;
+  the engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port; `RegionSync` per region (subscribe,
   import and pull, push with acknowledgement or rollback, compaction proposals; a push or pull
   answered with an error or unanswered for 30 seconds is given up for now and sent again);
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
@@ -79,7 +80,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   database and, per device, a `StubTransport` that behaves like the gateway's connection without
   a network and can go offline and come back; `dropNextFanOutTo`, `rejectEverything`,
   `swallowNextPush`, `refuseNextPull`, `keepOpenOnSignOut`, `endWith(reason)` (the gateway
-  refuses the keys or signs the devices out), `rejections`, `signOuts`, `compactions` and
+  refuses the keys or the protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and
   `failures` steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` for one
   lock and `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.

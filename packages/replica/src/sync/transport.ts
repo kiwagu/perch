@@ -12,8 +12,11 @@ import {
 
 export type ChannelState = 'up' | 'down'
 
-/** Why a channel ended for good: the gateway refused the keys, or signed the device out. */
-export type EndReason = 'unauthorized' | 'signed-out'
+/**
+ * Why a channel ended for good: the gateway refused the keys, signed the device out, or
+ * refused the protocol this device speaks (an application older than the gateway).
+ */
+export type EndReason = 'unauthorized' | 'signed-out' | 'protocol'
 
 export interface DeviceCredentials {
   readonly access: string
@@ -39,7 +42,7 @@ export interface WebSocketTransportOptions {
   readonly url: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
-  /** The gateway refused the keys or signed the device out: no reconnect follows. */
+  /** The gateway refused the keys or the protocol, or signed the device out: no reconnect follows. */
   readonly onEnded: (reason: EndReason) => void
   readonly clock: Clock
   /** Opens a socket; `new WebSocket(url)` by default. */
@@ -52,10 +55,13 @@ export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_00
 /** The close code of an orderly close (RFC 6455). */
 const NORMAL_CLOSE = 1000
 
-/** Close codes after which the gateway will not take the device back, and what they mean. */
+/**
+ * Close codes after which the gateway will not take the device back, and what they mean. Any
+ * other close, a hello the gateway stopped waiting for (4408) included, is followed by a reconnect.
+ */
 const ENDINGS: ReadonlyMap<number, EndReason> = new Map([
   [CLOSE.unauthorized, 'unauthorized'],
-  [CLOSE.protocol, 'unauthorized'],
+  [CLOSE.protocol, 'protocol'],
   [CLOSE.signedOut, 'signed-out'],
 ])
 
@@ -66,15 +72,15 @@ type State =
   | { readonly kind: 'connected'; readonly socket: SocketLike; readonly up: boolean }
   /** Waiting to connect again. */
   | { readonly kind: 'waiting'; readonly cancel: () => void }
-  /** The gateway refused the keys or signed the device out. */
+  /** The gateway refused the keys or the protocol, or signed the device out. */
   | { readonly kind: 'ended' }
 
 /**
  * The device's WebSocket to the gateway. On open it says hello with the stored keys; the
  * channel is up once the gateway welcomes it, and only then does it send. A socket that
  * closes is opened again after a growing delay, which starts over at the next welcome. A
- * close that refuses the keys or signs the device out ends the channel for good. Text the
- * protocol refuses closes the socket as a breach and connects again.
+ * close that refuses the keys or the protocol, or signs the device out, ends the channel for
+ * good. Text the protocol refuses closes the socket as a breach and connects again.
  */
 export class WebSocketTransport implements SyncTransport {
   readonly #options: WebSocketTransportOptions

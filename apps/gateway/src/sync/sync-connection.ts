@@ -111,8 +111,9 @@ export class SyncConnection {
     }
     this.#state = {
       kind: 'waiting',
+      // A late hello is no sign of bad keys: the device connects again and says it in time.
       cancelHello: deps.clock.schedule(deps.helloTimeoutMs ?? 10_000, () =>
-        this.#close(CLOSE.unauthorized, REASON.silent),
+        this.#close(CLOSE.timeout, REASON.silent),
       ),
     }
   }
@@ -189,6 +190,12 @@ export class SyncConnection {
     )
 
     if (this.#isClosed()) {
+      // The device's refresh key is spent and the pair that replaces it cannot reach it now:
+      // it will be refused at its next hello. Counted here, without the keys.
+      if (authenticated.isOk() && authenticated.value.renewed) {
+        this.#log.warn({ identity: authenticated.value.identity.id }, 'renewed pair not delivered')
+      }
+
       return
     }
 
@@ -205,7 +212,8 @@ export class SyncConnection {
       region: { kind: 'private', id: `identity:${identity.id}` },
     }
 
-    // The renewed pair goes out first: the key the device holds is spent already.
+    // The renewed pair goes out first, before anything else is awaited: the key the device
+    // holds is spent already.
     if (renewed) {
       this.#send({ type: 'tokens', access: tokens.access, refresh: tokens.refresh })
     }

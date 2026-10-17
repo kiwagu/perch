@@ -13,10 +13,12 @@ token no longer works, and the new pair is sent first), is welcomed with its ide
 private region, the only region it may name, and subscribes, pulls, pushes, probes and
 compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the identity's other devices. Text the
-protocol refuses, a foreign region, a missing hello and refused keys close the socket with
-the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
-grant through the database's RPC and closes the socket. Keys, tokens and grant ids never
-reach its logs.
+protocol refuses (4400), refused keys (4401), a foreign region (4403) and a hello that did
+not come within 10 seconds (4408, after which the device connects again) close the socket
+with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
+grant through the database's RPC and closes the socket. A renewed pair the socket closed
+before it could take is logged at warn as `renewed pair not delivered`. Keys, tokens and
+grant ids never reach its logs.
 
 ## Key exports
 

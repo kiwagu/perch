@@ -38,6 +38,7 @@
     "neverthrow": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "ts-pattern": "catalog:",
     "xstate": "catalog:"
   },
   "devDependencies": {

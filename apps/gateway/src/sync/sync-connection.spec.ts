@@ -82,6 +82,8 @@ interface ConnectOptions {
   readonly hub?: Partial<SyncConnectionDeps['hub']>
   /** Answers the revoke of a grant; it succeeds by default. */
   readonly revoke?: SyncConnectionDeps['sessions']['revoke']
+  /** Runs once the keys were checked, before the connection hears the outcome. */
+  readonly onAuthenticated?: () => void
 }
 
 /**
@@ -116,7 +118,8 @@ async function connect(options: ConnectOptions = {}) {
   const socket = new FakeSocket()
   const connection = new SyncConnection(socket, {
     sessions: {
-      authenticate: sessions.authenticate.bind(sessions),
+      authenticate: (tokens) =>
+        sessions.authenticate(tokens).andTee(() => options.onAuthenticated?.()),
       revoke: (tokens) => {
         revoked.push(tokens)
 
@@ -332,14 +335,37 @@ describe('SyncConnection', () => {
     expect(logged).not.toContain(ann.tokens.refresh)
   })
 
-  it('closes a socket that never says hello', async () => {
+  it('closes a socket that never says hello with the timeout code, not as refused keys', async () => {
     const { socket, clock } = await connect()
 
     await clock.advance(9_999)
     expect(socket.closedWith).toBeUndefined()
 
     await clock.advance(1)
-    expect(socket.closedWith?.[0]).toBe(CLOSE.unauthorized)
+    expect(CLOSE.timeout).toBe(4408)
+    expect(socket.closedWith?.[0]).toBe(CLOSE.timeout)
+  })
+
+  it('logs a renewed pair the socket closed before it could take, without keys', async () => {
+    let duringRenewal = () => {}
+    const { socket, connection, ann, logLines } = await connect({
+      onAuthenticated: () => duringRenewal(),
+    })
+
+    duringRenewal = () => connection.closed()
+    await connection.receive(
+      encode({ type: 'hello', protocol: 1, access: 'stale', refresh: ann.tokens.refresh }),
+    )
+
+    expect(socket.sent).toEqual([])
+    expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
+      expect.objectContaining({
+        level: 40,
+        identity: ann.identity.id,
+        msg: 'renewed pair not delivered',
+      }),
+    ])
+    expect(logLines.join('\n')).not.toContain(ann.tokens.refresh)
   })
 
   it('closes on a malformed message', async () => {

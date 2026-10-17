@@ -21,8 +21,11 @@ modeling stage.
   keys; the tabs hint each other over a BroadcastChannel, so each reads what the others
   wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
   out, then forgets the keys and deletes the identity's database; with changes it could
-  not send it asks first. Keys the gateway refuses sign the device out locally, and a tab
-  follows another tab's sign-out by closing its space. The container's runner and write
+  not send it asks first. Keys the gateway refuses sign the device out locally: the
+  identity's database goes with them unless it holds changes not sent yet, in which case it
+  stays and the sign-in page says to sign in again (as the same identity) to send them. A
+  protocol the gateway refuses stops the sync and keeps everything. A tab follows another
+  tab's sign-out by closing its space. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). `<html data-boot-step>` shows the boot step; `data-sync-leader`

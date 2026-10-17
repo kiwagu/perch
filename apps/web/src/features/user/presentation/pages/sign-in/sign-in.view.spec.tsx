@@ -74,6 +74,28 @@ describe('SignInView', () => {
     )
   })
 
+  it('says nothing about refused keys unless the session left a notice', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
+  })
+
+  it('asks to sign in again to send the changes this device kept when its keys were refused', () => {
+    renderView({ notice: 'resend-after-sign-in' })
+
+    expect(screen.getByTestId('user.sign-in.notice.resend-after-sign-in').textContent).toBe(
+      en['user.sign-in.notice.resend-after-sign-in'],
+    )
+  })
+
+  it('asks the same in Spanish', () => {
+    renderView({ notice: 'resend-after-sign-in' }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.notice.resend-after-sign-in').textContent).toBe(
+      es['user.sign-in.notice.resend-after-sign-in'],
+    )
+  })
+
   it('holds the form while an attempt is running', () => {
     renderView({ submitting: true })
 

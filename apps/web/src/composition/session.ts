@@ -1,4 +1,5 @@
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
+import { match, P } from 'ts-pattern'
 
 import {
   type AuthUser,
@@ -18,7 +19,7 @@ import type {
   SyncTransport,
 } from '@workspace/replica/sync'
 
-import type { SessionPort, SignOutOptions } from '../platform/session.port'
+import type { SessionNotice, SessionPort, SignOutOptions } from '../platform/session.port'
 
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
 import type { GatewayAuth, SignedInDevice } from './gateway-auth'
@@ -30,12 +31,15 @@ import {
 } from './identity-space'
 import {
   forgetDevice,
+  forgetNotice,
   IDENTITY_KEY,
   type KeyValueStorage,
   saveDevice,
   savedIdentity,
   savedKeys,
+  savedNotice,
   saveKeys,
+  saveNotice,
 } from './storage'
 
 /** What the channel of one identity needs: its keys, a place for renewed ones, word that it ended. */
@@ -92,8 +96,10 @@ const closedDuringSignIn = () =>
  * identity and its keys in the browser's storage and opens the identity's space; restoring
  * opens the saved identity's space without the network. Signing out drains and has the
  * gateway sign the device out, then forgets the keys and deletes the identity's database;
- * with changes that cannot be sent it asks first. The tabs of a browser follow the saved
- * identity: when another tab signs it out, this one closes its space.
+ * with changes that cannot be sent it asks first. Keys the gateway refuses sign the device
+ * out without it; the database goes too unless it holds changes not sent yet, which wait for
+ * the next sign-in as the identity. The tabs of a browser follow the saved identity: when
+ * another tab signs it out, this one closes its space.
  */
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
@@ -179,6 +185,14 @@ export class SessionService implements SessionPort {
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
   flush(): ResultAsync<void, DataError> {
     return this.#open?.space.flush() ?? okAsync(undefined)
+  }
+
+  notice(): SessionNotice | undefined {
+    return savedNotice(this.#options.storage)
+  }
+
+  clearNotice(): void {
+    forgetNotice(this.#options.storage)
   }
 
   /**
@@ -356,37 +370,65 @@ export class SessionService implements SessionPort {
           saveKeys(storage, tokens)
         }
       },
-      // A sign-out this device asked for is heard by `signOut`, through the sync engine.
-      onEnded: (reason) => {
-        if (reason === 'unauthorized' && !this.#closed) {
-          void this.#serially(() => this.#refused(identity)).match(
-            () => undefined,
-            (error) => this.#options.onError(error),
-          )
-        }
-      },
+      onEnded: (reason) =>
+        match(reason)
+          .with('unauthorized', () => {
+            if (!this.#closed) {
+              void this.#serially(() => this.#refused(identity)).match(
+                () => undefined,
+                (error) => this.#options.onError(error),
+              )
+            }
+          })
+          // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
+          // refused protocol stops the sync engine, which reports it, and changes nothing here.
+          .with(P.union('signed-out', 'protocol'), () => {})
+          .exhaustive(),
     }
   }
 
   /**
    * The gateway refused the identity's keys, which will not work again: the device signs out
-   * here, without the gateway, and its data for the identity goes with the keys.
+   * here, without the gateway. Its data for the identity goes with the keys only when nothing
+   * in it waits to be sent; otherwise (or when that cannot be read) the database stays, and the
+   * sign-in page says that signing in again as the identity sends the changes.
    */
   #refused(identity: IdentityId): ResultAsync<void, DataError> {
     const open = this.#open
+    const storage = this.#options.storage
 
     if (open?.space.identity.id !== identity) {
       return okAsync(undefined)
     }
 
     // Another tab changed who is signed in: what happens to this identity's data is its call.
-    if (savedIdentity(this.#options.storage)?.id !== identity) {
+    if (savedIdentity(storage)?.id !== identity) {
       this.#leaveAndTell()
 
       return okAsync(undefined)
     }
 
-    return this.#forgetSpace(open)
+    return open.space
+      .unsent()
+      .orElse((error) => {
+        this.#options.onError(error)
+
+        return okAsync(true)
+      })
+      .andThen((unsent) => {
+        if (!unsent) {
+          return this.#forgetSpace(open)
+        }
+
+        saveNotice(storage, 'resend-after-sign-in')
+        forgetDevice(storage)
+
+        if (this.#open === open) {
+          this.#leaveAndTell()
+        }
+
+        return okAsync(undefined)
+      })
   }
 
   /** Another tab changed the saved identity: this tab follows, closing a space that is no longer it. */

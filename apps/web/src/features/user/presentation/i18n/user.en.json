@@ -7,6 +7,7 @@
   "user.sign-in.password": "Password",
   "user.sign-in.name": "Name",
   "user.sign-in.welcome": "Welcome",
+  "user.sign-in.notice.resend-after-sign-in": "Your keys were refused. Sign in again to send your unsent changes.",
   "user.sign-in.error.invalid-credentials": "Wrong email or password.",
   "user.sign-in.error.sign-up-rejected": "An account cannot be created with this email.",
   "user.sign-in.error.name-required": "Enter your name.",

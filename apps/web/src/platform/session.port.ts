@@ -8,6 +8,13 @@ export interface SignOutOptions {
   readonly forgetUnsent?: boolean
 }
 
+/**
+ * A word the session leaves for the sign-in page: `resend-after-sign-in` when the gateway
+ * refused the device's keys while it held changes it had not sent; they are kept on the
+ * device, and signing in again as the same identity sends them.
+ */
+export type SessionNotice = 'resend-after-sign-in'
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError>
@@ -22,6 +29,9 @@ export interface SessionPort {
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */
   flush(): ResultAsync<void, DataError>
+  /** The word the last session left for the sign-in page, until `clearNotice`. */
+  notice(): SessionNotice | undefined
+  clearNotice(): void
 }
 
 export const SESSION = token<SessionPort>('Session')

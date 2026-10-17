@@ -184,14 +184,29 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
-  it('stops on 4400 from the gateway and reports unauthorized', async () => {
-    const { clock, sockets, connect, events } = harness()
+  it('stops on 4400 from the gateway and reports protocol, not unauthorized', async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
 
+    transport.onEnded((reason) => ended.push(reason))
     connect().drop(4400)
     await clock.advance(60_000)
 
-    expect(events).toEqual(['up', 'ended: unauthorized', 'down'])
+    expect(events).toEqual(['up', 'ended: protocol', 'down'])
+    expect(ended).toEqual(['protocol'])
     expect(sockets.length).toBe(1)
+  })
+
+  it('connects again after 4408, a hello the gateway stopped waiting for', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
+
+    transport.start()
+    socket().open()
+    socket().drop(4408)
+    await clock.advance(1_000)
+
+    expect(sockets.length).toBe(2)
+    expect(events).toEqual([])
   })
 
   it('stops on 4000 and reports signed-out', async () => {

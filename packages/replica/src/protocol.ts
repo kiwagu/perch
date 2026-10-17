@@ -4,10 +4,15 @@ import { z } from '@workspace/zod'
 
 export const PROTOCOL_VERSION = 1
 
+/**
+ * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
+ * somebody else, a hello that did not come in time, and a sign-out.
+ */
 export const CLOSE = {
   protocol: 4400,
   unauthorized: 4401,
   forbidden: 4403,
+  timeout: 4408,
   signedOut: 4000,
 } as const
 
