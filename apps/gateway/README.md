@@ -17,7 +17,11 @@ one row per identity and device with its label, the id of the refresh grant its 
 token was issued in, read from the token's `iat` by `issuedAtOf`, `src/auth/token-claims.ts`),
 when it was seen last and whether it was signed out; a sign-in whose device cannot be recorded
 fails and has the grant it minted revoked, and signing in again clears the mark, starts a new
-session and forgets a pair parked for the device. A sign-in on a device whose row held another
+session and forgets a pair parked for the device. A token carries only the second it was issued
+in, so tokens of one second are not told apart: a token of the previous session issued in the
+very second the device was signed out and signed in again binds to the new session until it
+expires (at most 15 minutes). Using it takes a stolen token issued in the same wall-clock
+second as both the sign-out and the new sign-in. A sign-in on a device whose row held another
 grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
 identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
 revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
@@ -140,7 +144,8 @@ asking one included (204): the identity's `sessions_revoked_at` is set to the st
 current second, so every token issued in an earlier second is refused and a sign-in right after
 the sign-out works (a token carries only the second it was issued in; one issued earlier in that
 same second stays valid until it expires, but its grant is revoked and its row marked, so its
-hello and its Bearer calls are refused all the same), every refresh grant of the identity is
+hello and its Bearer calls are refused all the same, unless its device signs in again in that
+very second: the window named with `started_at` above), every refresh grant of the identity is
 revoked, every device row is marked revoked, every parked pair is forgotten and every socket is
 closed with 4001. A sign-out that
 fails after its first write still closes what it signed out before it answers 500. `POST
