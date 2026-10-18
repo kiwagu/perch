@@ -107,6 +107,38 @@ describe('LatencyBook', () => {
     expect(book.finalize(first)).toMatchObject({ ack: [40], fanout: [20], undelivered: 0 })
   })
 
+  it('drops the receipts of an unacked push when its epoch is finalized', () => {
+    const book = new LatencyBook()
+    const first = book.startEpoch()
+
+    book.pushed('w1', 1, 'tenant:a', 1000, 1)
+    book.received('tenant:a', 5, 1020)
+    book.finalize(first)
+
+    const second = book.startEpoch()
+
+    book.pushed('w1', 2, 'tenant:a', 2000, 1)
+    book.acked('w1', 2, 'tenant:a', 5, 2010)
+
+    expect(book.finalize(second).fanout).toEqual([])
+  })
+
+  it('keeps the receipts of a region that still has an unacked push in a live epoch', () => {
+    const book = new LatencyBook()
+    const first = book.startEpoch()
+
+    book.pushed('w1', 1, 'tenant:a', 1000, 1)
+
+    const second = book.startEpoch()
+
+    book.pushed('w2', 1, 'tenant:a', 2000, 1)
+    book.received('tenant:a', 5, 2020)
+    book.finalize(first)
+    book.acked('w2', 1, 'tenant:a', 5, 2030)
+
+    expect(book.finalize(second).fanout).toEqual([20])
+  })
+
   it('counts the pushes without an ack and the deliveries still missing', () => {
     const book = new LatencyBook()
     const epoch = book.startEpoch()

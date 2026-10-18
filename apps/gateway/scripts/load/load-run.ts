@@ -473,14 +473,15 @@ async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
 
   await drain(run, epoch)
 
-  const surreal = run.args.surrealContainer
-    ? await dockerStats(run.args.surrealContainer)
-    : undefined
   const live = liveSims(run)
   const writers = live.filter((sim) => sim.writer).length
   const { ack, fanout, pushes, expected, unacked, undelivered } = run.book.finalize(epoch)
-  const { firstReject } = run.counters
-  const { errors, closes, asked, accepted, other } = run.counters
+  const { firstReject, errors, closes, asked, accepted, other } = run.counters
+
+  // The step is cut here: the docker call below may take as long as it likes.
+  const surreal = run.args.surrealContainer
+    ? await dockerStats(run.args.surrealContainer)
+    : undefined
   const ackP95 = percentile(ack, 0.95)
   const fanoutP95 = percentile(fanout, 0.95)
 

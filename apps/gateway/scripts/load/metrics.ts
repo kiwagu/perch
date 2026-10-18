@@ -35,6 +35,7 @@ export function stepPlan(devices: readonly number[]): readonly Step[] {
 /** One push as the book follows it: its epoch, when it left, and what came of it. */
 interface Push {
   readonly epoch: number
+  readonly region: string
   readonly at: number
   /** How many other devices of its region were live when it left. */
   readonly expected: number
@@ -91,6 +92,7 @@ export class LatencyBook {
 
     const push: Push = {
       epoch: this.#current,
+      region,
       at,
       expected,
       delivered: 0,
@@ -164,8 +166,18 @@ export class LatencyBook {
     }
 
     this.#epochs.delete(epoch)
+    this.#dropStaleReceipts()
 
     return result
+  }
+
+  /** Drops the receipts of regions with no unacked push left that could still claim them. */
+  #dropStaleReceipts(): void {
+    const pending = new Set([...this.#pushes.values()].map((push) => push.region))
+
+    for (const key of this.#early.keys()) {
+      if (!pending.has(key.slice(0, key.lastIndexOf('#')))) this.#early.delete(key)
+    }
   }
 
   #delivered(push: Push, at: number): void {
