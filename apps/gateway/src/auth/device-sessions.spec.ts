@@ -99,7 +99,7 @@ describe('DeviceSessions', () => {
         label: 'Firefox on Linux',
         grant: 'grant-1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
     const revoked = (await devices.revoke({ identity: ann.identity, id: first.id }))._unsafeUnwrap()
     const again = (
       await devices.touch({
@@ -108,7 +108,7 @@ describe('DeviceSessions', () => {
         label: 'Chrome on Linux',
         grant: 'grant-2',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     expect(device_sessionIdFactory.is(first.id)).toBe(true)
     expect(first).toMatchObject({
@@ -129,6 +129,21 @@ describe('DeviceSessions', () => {
     })
     expect(again.revokedAt).toBeUndefined()
     expect(again.lastSeenAt.getTime()).toBeGreaterThanOrEqual(first.lastSeenAt.getTime())
+  })
+
+  it('answers the grant a touched row held before, and none for a new row', async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const touch = (grant: string) =>
+      devices.touch({ identity: ann.identity, device: 'device-laptop', label: 'Laptop', grant })
+
+    const first = (await touch('grant-1'))._unsafeUnwrap()
+    const second = (await touch('grant-2'))._unsafeUnwrap()
+
+    expect(first.previous).toBeUndefined()
+    expect(first.row.grant).toBe('grant-1')
+    expect(second.previous).toBe('grant-1')
+    expect(second.row).toMatchObject({ id: first.row.id, grant: 'grant-2' })
   })
 
   it('lists the devices of the identity only, the earliest first', async () => {
@@ -164,7 +179,7 @@ describe('DeviceSessions', () => {
         label: 'Laptop',
         grant: 'grant-1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     ;(
       await devices.touch({
@@ -196,7 +211,7 @@ describe('DeviceSessions', () => {
         label: 'Laptop',
         grant: 'grant-1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     await new Promise((resolve) => setTimeout(resolve, 5))
     ;(await devices.seen({ identity: ann.identity, device: 'device-laptop' }))._unsafeUnwrap()
@@ -217,7 +232,7 @@ describe('DeviceSessions', () => {
         label: 'Laptop',
         grant: grantOf(ann.refresh),
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     expect((await devices.revoke({ identity: bob.identity, id: anns.id }))._unsafeUnwrap()).toBe(
       undefined,
@@ -261,7 +276,7 @@ describe('DeviceSessions', () => {
         label: 'L',
         grant: 'g1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     ;(
       await devices.touch({
@@ -299,7 +314,7 @@ describe('DeviceSessions', () => {
         label: 'L',
         grant: 'g1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
     const rotate = async (device: string, spent: string, next: string) =>
       (await devices.rotate({ identity: ann.identity, device, spent, next }))._unsafeUnwrap()
 
@@ -392,7 +407,7 @@ describe('DeviceSessions', () => {
         label: 'L',
         grant: 'g1',
       })
-    )._unsafeUnwrap()
+    )._unsafeUnwrap().row
 
     const failure = (
       await devices.revoke({ identity: ann.identity, id: laptop.id })

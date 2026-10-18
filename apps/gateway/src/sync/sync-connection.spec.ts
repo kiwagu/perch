@@ -172,7 +172,7 @@ async function openGateway(options: GatewayOptions = {}) {
     fetch: Object.assign(() => Promise.reject(new TypeError('no network in this test')), {
       preconnect: () => {},
     }),
-    onCloseFailure: (error) => reported.push(error),
+    onFailure: (error) => reported.push(error),
     devices,
     clock,
   })

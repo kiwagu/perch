@@ -14,9 +14,13 @@ device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-s
 one row per identity and device with its label, the id of the refresh grant its pair holds now
 (the second segment of the refresh key, `surreal-refresh-<grant>-<secret>`, read by
 `grantIdOf`), when it was seen last and whether it was signed out; a sign-in whose device
-cannot be recorded fails, and signing in again clears the mark. Devices sync over a WebSocket at
-`/sync`: a device says hello with its keys and its device id at protocol 4 (the pair is renewed
-with the refresh key when the access token no longer works, and the new pair is sent first).
+cannot be recorded fails, and signing in again clears the mark. A sign-in on a device whose
+row held another grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`,
+scoped to the identity), so a device holds one live grant and a pair it left behind dies with
+the sign-in; a revoke that fails is reported and leaves the sign-in standing. Devices sync over
+a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 4 (the
+pair is renewed with the refresh key when the access token no longer works, and the new pair is
+sent first).
 The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
 new one, only while the row holds the spent grant and is not signed out; any other hello reads
 the row. A device without a row, or whose row holds another grant, is closed with 4401 (`no

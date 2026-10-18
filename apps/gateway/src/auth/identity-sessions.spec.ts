@@ -10,7 +10,7 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
-import type { DeviceSessions, DeviceTouch } from './device-sessions'
+import { DeviceSessions, type DeviceTouch } from './device-sessions'
 import { grantIdOf, IdentitySessions } from './identity-sessions'
 
 const RPC_URL = 'http://127.0.0.1:8000/rpc'
@@ -44,13 +44,13 @@ const unreachable = fakeFetch(() => Promise.reject(new TypeError('no network in 
 
 const opened: LocalDb[] = []
 
-/** Failures to close an auth session that no test expected. */
-const closeFailures: DataError[] = []
+/** Failures reported that no test expected. */
+const reportedFailures: DataError[] = []
 
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((local) => local.close()))
 
-  expect(closeFailures.splice(0)).toEqual([])
+  expect(reportedFailures.splice(0)).toEqual([])
 })
 
 async function testDb(schema = readSchema('directory')): Promise<LocalDb> {
@@ -63,31 +63,61 @@ async function testDb(schema = readSchema('directory')): Promise<LocalDb> {
   return local
 }
 
+/** The parts of the device sessions identity sessions use. */
+type SessionDevices = Pick<DeviceSessions, 'touch' | 'revokeGrant'>
+
+interface RecordingOptions {
+  /** Refuses the touch when it says so. */
+  readonly refuse?: () => boolean
+  /** Fails each revoke of a grant. */
+  readonly failRevokes?: boolean
+}
+
 /**
- * The device sessions as identity sessions see them: each touch is recorded, and answered with
- * its row, or refused when `refuse` says so.
+ * The device sessions as identity sessions see them: each touch is recorded and answered with
+ * its row and the grant the device's row held before (none on its first touch), or refused when
+ * `refuse` says so; each revoke of a grant is recorded.
  */
-function recordingDevices(refuse: () => boolean = () => false) {
+function recordingDevices(options: RecordingOptions = {}) {
   const touched: DeviceTouch[] = []
-  const devices: Pick<DeviceSessions, 'touch'> = {
+  const revoked: Array<{ readonly identity: string; readonly grant: string }> = []
+  const grants = new Map<string, string>()
+  const devices: SessionDevices = {
     touch: (input) => {
       touched.push(input)
 
-      return refuse()
-        ? errAsync(dataError('data:WRITE_FAILED', 'the directory refused the device'))
-        : okAsync({
-            id: device_sessionIdFactory.create(),
-            identity: input.identity,
-            device: input.device,
-            label: input.label,
-            grant: input.grant,
-            createdAt: new Date(0),
-            lastSeenAt: new Date(0),
-          })
+      if (options.refuse?.()) {
+        return errAsync(dataError('data:WRITE_FAILED', 'the directory refused the device'))
+      }
+
+      const key = `${input.identity}#${input.device}`
+      const previous = grants.get(key)
+
+      grants.set(key, input.grant)
+
+      return okAsync({
+        row: {
+          id: device_sessionIdFactory.create(),
+          identity: input.identity,
+          device: input.device,
+          label: input.label,
+          grant: input.grant,
+          createdAt: new Date(0),
+          lastSeenAt: new Date(0),
+        },
+        ...(previous === undefined ? {} : { previous }),
+      })
+    },
+    revokeGrant: (input) => {
+      revoked.push(input)
+
+      return options.failRevokes
+        ? errAsync(dataError('data:WRITE_FAILED', 'the directory refused the revoke'))
+        : okAsync(undefined)
     },
   }
 
-  return { touched, devices }
+  return { touched, revoked, devices }
 }
 
 /** Sessions over `local`, opening auth sessions as the composition root does. */
@@ -95,8 +125,8 @@ function sessionsOver(
   local: LocalDb,
   options: {
     readonly fetch?: typeof fetch
-    readonly onCloseFailure?: (error: DataError) => void
-    readonly devices?: Pick<DeviceSessions, 'touch'>
+    readonly onFailure?: (error: DataError) => void
+    readonly devices?: SessionDevices
     readonly clock?: ManualClock
   } = {},
 ): IdentitySessions {
@@ -105,7 +135,7 @@ function sessionsOver(
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
     rpcUrl: RPC_URL,
     fetch: options.fetch ?? unreachable.fetch,
-    onCloseFailure: options.onCloseFailure ?? ((error) => closeFailures.push(error)),
+    onFailure: options.onFailure ?? ((error) => reportedFailures.push(error)),
     devices: options.devices ?? recordingDevices().devices,
     clock: options.clock ?? manualClock(),
   })
@@ -250,7 +280,7 @@ describe('IdentitySessions', () => {
   it('keeps the result of a call whose database session fails to close, and reports the failure', async () => {
     const local = await testDb()
     const failures: DataError[] = []
-    const sessions = sessionsOver(local, { onCloseFailure: (error) => failures.push(error) })
+    const sessions = sessionsOver(local, { onFailure: (error) => failures.push(error) })
 
     failClosing(local)
 
@@ -377,7 +407,7 @@ describe('IdentitySessions and the devices', () => {
 
   it('fails a sign-in whose device cannot be recorded', async () => {
     let refusing = false
-    const { devices } = recordingDevices(() => refusing)
+    const { devices } = recordingDevices({ refuse: () => refusing })
     const sessions = sessionsOver(await testDb(), { devices })
 
     expect((await sessions.signUp(ann, laptop)).isOk()).toBe(true)
@@ -385,6 +415,53 @@ describe('IdentitySessions and the devices', () => {
     refusing = true
 
     expect((await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+  })
+
+  it("revokes the grant a device's row held before when the device signs in again", async () => {
+    const { revoked, devices } = recordingDevices()
+    const sessions = sessionsOver(await testDb(), { devices })
+    const phone = { id: 'device-phone', label: 'Safari on iPhone' }
+
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    ;(await sessions.signIn(ann, phone))._unsafeUnwrap()
+
+    expect(revoked).toEqual([])
+
+    ;(await sessions.signIn(ann, laptop))._unsafeUnwrap()
+
+    expect(revoked).toEqual([{ identity: up.identity.id, grant: grantIdOf(up.tokens.refresh) }])
+  })
+
+  it('leaves the first pair of a device dead once it signs in again, and the second alive', async () => {
+    const local = await testDb()
+    const sessions = sessionsOver(local, {
+      devices: new DeviceSessions({ directory: local, clock: manualClock(Date.now()) }),
+    })
+
+    const first = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const second = (await sessions.signIn(ann, laptop))._unsafeUnwrap()
+
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: first.tokens.refresh })).isErr(),
+    ).toBe(true)
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: second.tokens.refresh })).isOk(),
+    ).toBe(true)
+  })
+
+  it('signs in when the old grant cannot be revoked, and reports the failure', async () => {
+    const { devices } = recordingDevices({ failRevokes: true })
+    const failures: DataError[] = []
+    const sessions = sessionsOver(await testDb(), {
+      devices,
+      onFailure: (error) => failures.push(error),
+    })
+
+    ;(await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    expect((await sessions.signIn(ann, laptop)).isOk()).toBe(true)
+    expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
   })
 
   it('records nothing at a renewal: the hello binds the device to its row', async () => {

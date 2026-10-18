@@ -160,7 +160,7 @@ async function harness(options: HarnessOptions = {}) {
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
     rpcUrl: 'http://127.0.0.1:8000/rpc',
     fetch: Object.assign(rpc, { preconnect: () => {} }),
-    onCloseFailure: (error) => failures.push(error),
+    onFailure: (error) => failures.push(error),
     devices,
     clock,
   })

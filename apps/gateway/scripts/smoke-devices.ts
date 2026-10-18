@@ -22,6 +22,10 @@ const listedDevices = z.object({
   ),
 })
 
+function unreachableRoot(): never {
+  throw new Error('the gateway root is not open')
+}
+
 /** Says hello as `signedIn` from its device and waits for the socket to close: its close. */
 async function refusedHello(base: string, opened: Opened, signedIn: SignedIn) {
   const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
@@ -51,7 +55,8 @@ async function devicesOf(base: string, signedIn: SignedIn) {
  * session refused (4401) and a call that names no device refused (400); both devices listed, the
  * laptop as the current one; the phone signed out from the laptop (its socket closed with 4001,
  * its row revoked, its hello with its still working access token closed with 4001); then a
- * tablet signed in and every device signed out from the laptop (the laptop's and the tablet's
+ * tablet signed in twice (the grant of its first sign-in revoked by the second) and every device
+ * signed out from the laptop (the laptop's and the tablet's
  * sockets closed with 4001), after which the laptop's old pair is refused at hello and by the
  * sign-out route.
  */
@@ -146,14 +151,27 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
     },
   )
 
-  const tablet = await step('devices: signed in on a tablet, welcomed', async () => {
-    const signedIn = await postCredentials(base, '/auth/sign-in', {
-      ...credentials,
-      device: { id: 'smoke-tablet', label: 'Smoke tablet' },
-    })
+  const tablet = await step(
+    'devices: signed in twice on a tablet, the first grant revoked, the second welcomed',
+    async () => {
+      const signIn = () =>
+        postCredentials(base, '/auth/sign-in', {
+          ...credentials,
+          device: { id: 'smoke-tablet', label: 'Smoke tablet' },
+        })
+      const first = await signIn()
+      const second = await signIn()
+      const sessions = opened.root?.sessions ?? unreachableRoot()
+      const renewed = await sessions.authenticate({
+        access: 'stale',
+        refresh: first.tokens.refresh,
+      })
 
-    return (await hello(base, opened, signedIn)).device
-  })
+      check(renewed.isErr(), "the tablet's first refresh key still renews")
+
+      return (await hello(base, opened, second)).device
+    },
+  )
 
   await step(
     `POST /auth/sign-out-everywhere: 204, laptop and tablet closed with ${CLOSE.revoked}`,

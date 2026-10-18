@@ -49,6 +49,13 @@ export interface DeviceTouch {
   readonly grant: string
 }
 
+/** A device's row after a sign-in, and the grant the row held before it. */
+export interface DeviceTouched {
+  readonly row: DeviceSessionRow
+  /** The grant the row held before; none for a new row. Never sent to a device or logged. */
+  readonly previous?: string
+}
+
 /** A device of an identity, as an identity and the id the device names itself with. */
 export interface DeviceOf {
   readonly identity: IdentityId
@@ -111,6 +118,9 @@ const deviceSessionRow = z
     }),
   )
 
+/** What a touch answers: the row and the grant it held before, as the driver returns them. */
+const touchAnswer = z.object({ previous: z.string().optional(), row: z.unknown() })
+
 /** The binding a device's row, or its absence, makes. */
 function bindingOf(row: DeviceSessionRow | undefined): DeviceBinding {
   if (row === undefined) {
@@ -170,9 +180,10 @@ export class DeviceSessions {
 
   /**
    * Records that the device holds `grant` now, seen now and no longer revoked: its row, made on
-   * its first sign-in and kept for every later one and every renewal.
+   * its first sign-in and kept for every later one and every renewal. Answers the row and the
+   * grant it held before, which is the caller's to revoke.
    */
-  touch(input: DeviceTouch): ResultAsync<DeviceSessionRow, DataError> {
+  touch(input: DeviceTouch): ResultAsync<DeviceTouched, DataError> {
     return writing(
       this.#directory.db
         .query<[unknown]>(deviceTouchStatement, {
@@ -184,7 +195,22 @@ export class DeviceSessions {
         })
         .retry(),
       `could not record a device of ${input.identity}`,
-    ).andThen(([row]) => toRow(row))
+    ).andThen(([answer]) => {
+      const parsed = touchAnswer.safeParse(fromDriverValue(answer))
+
+      if (!parsed.success) {
+        return err(
+          dataError('data:QUERY_FAILED', 'a device session of the directory has an unknown shape'),
+        )
+      }
+
+      const { previous, row } = parsed.data
+
+      return toRow(row).map(
+        (touched): DeviceTouched =>
+          previous === undefined ? { row: touched } : { row: touched, previous },
+      )
+    })
   }
 
   /** Whether the device has a session: its row, revoked or not, or none. */

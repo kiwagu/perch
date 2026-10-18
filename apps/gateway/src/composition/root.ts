@@ -130,7 +130,7 @@ export function createGatewayRoot(
           createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
         rpcUrl: options.rpcUrl,
         fetch,
-        onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
+        onFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         devices: deviceSessions,
         clock: options.clock,
       }),

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -46,18 +46,23 @@ export type AuthenticatedDevice =
 export interface IdentitySessionsOptions {
   /** Opens an auth session of its own on the central database, through its identity access method. */
   readonly openAuth: () => AuthPort
-  /** Where each device an identity signs in on is recorded with the refresh grant its pair holds. */
-  readonly devices: Pick<DeviceSessions, 'touch'>
+  /**
+   * Where each device an identity signs in on is recorded with the refresh grant its pair holds,
+   * and where the grant it held before is revoked.
+   */
+  readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   /** Times the pairs parked for a retry out. */
   readonly clock: Clock
   /** The database's RPC endpoint over HTTP, where `revoke` is sent. */
   readonly rpcUrl: string
   readonly fetch: typeof fetch
   /**
-   * Hears that an auth session failed to close after its call. The call keeps its result:
-   * the identity it signed up exists, and the refresh key it renewed is spent.
+   * Hears a failure that does not fail the call it happened in: an auth session that failed to
+   * close after its call (the call keeps its result: the identity it signed up exists, and the
+   * refresh key it renewed is spent), or the grant a device held before a sign-in that could not
+   * be revoked (the sign-in stands: its new pair is valid).
    */
-  readonly onCloseFailure: (error: DataError) => void
+  readonly onFailure: (error: DataError) => void
 }
 
 /** An answer of the database's RPC; a revoke needs only to know whether it failed. */
@@ -165,8 +170,8 @@ function revoked(answer: unknown): Result<void, DataError> {
  */
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
-  readonly #onCloseFailure: (error: DataError) => void
-  readonly #devices: Pick<DeviceSessions, 'touch'>
+  readonly #onFailure: (error: DataError) => void
+  readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   readonly #clock: Clock
   readonly #post: (url: string, init: RequestInit) => ResultAsync<Response, DataError>
   readonly #rpcUrl: string
@@ -175,7 +180,7 @@ export class IdentitySessions {
 
   constructor(options: IdentitySessionsOptions) {
     this.#openAuth = options.openAuth
-    this.#onCloseFailure = options.onCloseFailure
+    this.#onFailure = options.onFailure
     this.#devices = options.devices
     this.#clock = options.clock
     this.#rpcUrl = options.rpcUrl
@@ -298,9 +303,11 @@ export class IdentitySessions {
   }
 
   /**
-   * Records the device of a sign-up or sign-in with the grant of its pair. A device that cannot
-   * be recorded fails the sign-in: every signed-in device is on its identity's list, where it can
-   * be signed out.
+   * Records the device of a sign-up or sign-in with the grant of its pair, and revokes the grant
+   * the device's row held before: a device holds one live grant, so a pair it left behind (one
+   * it could not have revoked, say) dies with the sign-in. A device that cannot be recorded
+   * fails the sign-in: every signed-in device is on its identity's list, where it can be signed
+   * out. An old grant that cannot be revoked is reported and leaves the sign-in standing.
    */
   #recordDevice(signed: SignedIn, device: SignInDevice): ResultAsync<SignedIn, DataError> {
     const grant = grantIdOf(signed.tokens.refresh)
@@ -309,9 +316,22 @@ export class IdentitySessions {
       return errAsync(refused('the refresh key of the sign-in names no grant'))
     }
 
+    const identity = signed.identity.id
+
     return this.#devices
-      .touch({ identity: signed.identity.id, device: device.id, label: device.label, grant })
-      .map(() => signed)
+      .touch({ identity, device: device.id, label: device.label, grant })
+      .andThen(({ previous }) =>
+        previous === undefined || previous === grant
+          ? okAsync(signed)
+          : this.#devices
+              .revokeGrant({ identity, grant: previous })
+              .orElse((error) => {
+                this.#onFailure(error)
+
+                return okAsync(undefined)
+              })
+              .map(() => signed),
+      )
   }
 
   /**
@@ -326,7 +346,7 @@ export class IdentitySessions {
         return await run(auth)
       } finally {
         await auth.close().catch((cause: unknown) => {
-          this.#onCloseFailure(refused('the auth session could not be closed', cause))
+          this.#onFailure(refused('the auth session could not be closed', cause))
         })
       }
     }
