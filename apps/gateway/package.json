@@ -8,7 +8,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:db": "bun scripts/smoke.ts"
+    "test:db": "bun scripts/smoke.ts",
+    "load": "bun scripts/load/ws-clients.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
