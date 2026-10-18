@@ -26,7 +26,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { extname } from 'node:path'
 
 type Tier = 'ok' | 'warn' | 'red' | 'refactor'
@@ -268,13 +268,51 @@ function writeBaseline(
   }
 
   const sorted = Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)))
+  const published = publishBaseline(`${JSON.stringify(sorted, null, 2)}\n`, adopting)
 
-  writeFileSync(BASELINE_PATH, `${JSON.stringify(sorted, null, 2)}\n`)
+  if (!published) {
+    console.log(`${BASELINE_PATH} was written by a concurrent run; using that one`)
+
+    return
+  }
+
   console.log(
     adopting
       ? `${BASELINE_PATH} did not exist on this checkout: ${Object.keys(sorted).length} file(s) at or above ${options.thresholds.red} lines recorded; the size ratchet starts here`
       : `${BASELINE_PATH}: ${Object.keys(sorted).length} file(s) at or above ${options.thresholds.red} lines recorded`,
   )
+}
+
+/**
+ * Writes the baseline atomically: a complete file appears under its final name in one step
+ * (temp file + rename), so a concurrent reader never sees a truncated one. An adoption
+ * creates the file exclusively and yields to a concurrent adopter that got there first;
+ * false means the file now holds the other run's baseline.
+ */
+function publishBaseline(content: string, adopting: boolean): boolean {
+  const temp = `${BASELINE_PATH}.${process.pid}.tmp`
+
+  writeFileSync(temp, content)
+
+  if (!adopting) {
+    renameSync(temp, BASELINE_PATH)
+
+    return true
+  }
+
+  try {
+    writeFileSync(BASELINE_PATH, content, { flag: 'wx' })
+
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false
+    }
+
+    throw error
+  } finally {
+    rmSync(temp, { force: true })
+  }
 }
 
 const options = parseOptions(process.argv.slice(2))
