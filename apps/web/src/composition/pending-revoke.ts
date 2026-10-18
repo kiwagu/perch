@@ -54,7 +54,7 @@ export class PendingRevoke {
     })
 
     if (dropped.length > 0) {
-      this.#options.onError(
+      this.#report(
         dataError(
           'data:WRITE_FAILED',
           `${dropped.length} pair(s) left to revoke dropped: more were waiting than are kept`,
@@ -69,26 +69,38 @@ export class PendingRevoke {
    * any more), a pair is forgotten; so is a pair whose request the gateway refuses otherwise (any
    * other 4xx), which it will never take, a failure being reported. A gateway that cannot be
    * reached or could not revoke it (5xx) leaves it for the next try, the latter being reported.
-   * The send never fails to its caller, and a failure of one send, even a throw, leaves the next
-   * one to run.
+   * The send never fails to its caller. Each pair has its own boundary: one whose send or report
+   * throws is kept, the throw reported, and the next pair is sent all the same; a failure of one
+   * send, even a throw, leaves the next send to run.
    */
   send(): Promise<void> {
     this.#sending = this.#sending
       .then(() => this.#sendAll())
       .catch((cause: unknown) =>
-        this.#options.onError(
+        this.#report(
           dataError('data:WRITE_FAILED', 'could not send the pairs left to revoke', cause),
         ),
       )
-      // An error hook that throws has nobody left to tell.
-      .catch(() => undefined)
 
     return this.#sending
   }
 
   async #sendAll(): Promise<void> {
     for (const pair of pendingRevokes(this.#options.storage)) {
-      await this.#sendOne(pair)
+      try {
+        await this.#sendOne(pair)
+      } catch (cause: unknown) {
+        this.#report(dataError('data:WRITE_FAILED', 'could not send a pair left to revoke', cause))
+      }
+    }
+  }
+
+  /** Reports `error`; an error hook that throws has nobody left to tell. */
+  #report(error: DataError): void {
+    try {
+      this.#options.onError(error)
+    } catch {
+      // Nobody is left to tell.
     }
   }
 
@@ -103,9 +115,9 @@ export class PendingRevoke {
           forget()
         } else if (error.code === 'data:WRITE_REJECTED') {
           forget()
-          this.#options.onError(error)
+          this.#report(error)
         } else if (error.code !== 'data:OFFLINE') {
-          this.#options.onError(error)
+          this.#report(error)
         }
       })
   }

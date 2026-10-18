@@ -20,7 +20,7 @@ export function fakeSession(): {
       signUp: refused,
       signIn: refused,
       signOut: refused,
-      signedOutElsewhere: refused,
+      signingOutEverywhere: () => refused,
       current: () => undefined,
       subscribe: () => () => {},
       flush: refused,

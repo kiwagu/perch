@@ -22,7 +22,7 @@ export type RevokeOutcome =
 export class DevicesService {
   constructor(
     private readonly devices: DevicesPort,
-    private readonly session: Pick<SessionPort, 'signedOutElsewhere'>,
+    private readonly session: Pick<SessionPort, 'signingOutEverywhere'>,
   ) {}
 
   list(): ResultAsync<readonly DeviceView[], DataError> {
@@ -46,7 +46,11 @@ export class DevicesService {
    * finds nothing left to do). A sign-out the gateway did not take leaves the device as it is.
    */
   signOutEverywhere(): ResultAsync<void, DataError> {
-    return this.devices.signOutEverywhere().andThen(() => this.session.signedOutElsewhere())
+    // The session that asks is named before the request goes: an answer that comes once it has
+    // ended (its 4001 came first, and someone signed in since) signs nobody out.
+    const signOutHere = this.session.signingOutEverywhere()
+
+    return this.devices.signOutEverywhere().andThen(() => signOutHere())
   }
 }
 

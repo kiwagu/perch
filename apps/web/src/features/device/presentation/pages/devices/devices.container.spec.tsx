@@ -32,7 +32,7 @@ async function openPage(): Promise<void> {
   const session = {
     ...fakeSession().session,
     current: () => ann,
-    signedOutElsewhere: () => {
+    signingOutEverywhere: () => () => {
       signedOutHere += 1
 
       return okAsync(undefined)

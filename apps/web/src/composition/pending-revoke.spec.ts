@@ -28,6 +28,8 @@ interface HarnessOptions {
   readonly throwingHook?: boolean
   /** The pairs waiting when the test starts, oldest first; `pair` alone by default. */
   readonly waiting?: ReadonlyArray<typeof pair>
+  /** The refresh key of a pair whose send throws before it reaches the gateway. */
+  readonly throwingSendOf?: string
 }
 
 /**
@@ -52,8 +54,18 @@ function harness(answers: Array<() => Promise<Response>>, options: HarnessOption
   }
   const failures: DataError[] = []
   const { fetcher, sent } = fakeFetch(...answers)
+  const auth = gatewayAuth('/backend', fetcher)
   const pending = new PendingRevoke({
-    auth: gatewayAuth('/backend', fetcher),
+    auth: {
+      ...auth,
+      signOut: (keys, device) => {
+        if (keys.refresh === options.throwingSendOf) {
+          throw new Error('the send broke')
+        }
+
+        return auth.signOut(keys, device)
+      },
+    },
     storage,
     onError: (error) => {
       failures.push(error)
@@ -157,6 +169,30 @@ describe('PendingRevoke', () => {
     expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
     // The report names no key.
     expect(JSON.stringify(failures)).not.toContain('refresh-w0')
+  })
+
+  it("sends the next pair in the same pass when one pair's send throws, or its report does: that pair stays", async () => {
+    const throwing = harness([noContent()], {
+      waiting: [pair, other],
+      throwingSendOf: pair.refresh,
+    })
+
+    await expect(throwing.pending.send()).resolves.toBeUndefined()
+    expect(throwing.sent.map((request) => request.body)).toEqual([
+      { access: other.access, refresh: other.refresh },
+    ])
+    expect(throwing.left()).toEqual([pair])
+    expect(throwing.failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(JSON.stringify(throwing.failures)).not.toContain(pair.refresh)
+
+    const reporting = harness([respond(503, { code: 'unavailable' }), noContent()], {
+      waiting: [pair, other],
+      throwingHook: true,
+    })
+
+    await expect(reporting.pending.send()).resolves.toBeUndefined()
+    expect(reporting.sent).toHaveLength(2)
+    expect(reporting.left()).toEqual([pair])
   })
 
   it('leaves the next send to run when the error hook throws', async () => {

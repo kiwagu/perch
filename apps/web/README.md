@@ -72,8 +72,9 @@ modeling stage.
   other, to `POST /backend/auth/sign-out` (the pair in the body, its device in `X-Perch-Device`,
   no bearer token), and each is forgotten on its own answer: once revoked (204), refused as dead
   (401) or refused otherwise (any other 4xx, which the gateway will never take: reported); an
-  unreachable or failing (5xx) gateway leaves that pair for the next try. A send that fails, even
-  by a throw, is reported and never stops the next one. While a sign-out runs, no tab of the browser
+  unreachable or failing (5xx) gateway leaves that pair for the next try. A pair whose send or
+  report throws is kept, the throw reported, and the pairs after it are sent all the same; a
+  send that fails, even by a throw, never stops the next one. While a sign-out runs, no tab of the browser
   takes a write (a `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a
   minute, hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that
@@ -90,9 +91,11 @@ modeling stage.
   the transport's `revoked` ending) signs out the same way, and when its database goes the
   sign-in page says "You were signed out from another device."; the device keeps its id, and
   the dead pair is not left to revoke. A device that asked the gateway to sign every device out
-  signs out the same way as soon as the gateway answered (`SessionPort.signedOutElsewhere()`),
-  without waiting for a 4001 it may never hear (no Web Locks, or no WebSocket); whichever of the
-  two comes second finds nothing left to do. A write that waited for the lock goes on only into the
+  signs out the same way as soon as the gateway answered (`SessionPort.signingOutEverywhere()`,
+  which names the asking session before the request goes), without waiting for a 4001 it may
+  never hear (no Web Locks, or no WebSocket); whichever of the two comes second finds nothing
+  left to do, and an answer that comes once the asking session has ended (another account, or
+  the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses stops the sync and keeps everything. A tab follows another
   tab's sign-out by closing its space. The container's runner and write

@@ -17,15 +17,22 @@ let devices: FakeDevices
 let service: DevicesService
 /** How many times the service had the session sign this device out. */
 let signedOut: number
+/** How many gateway calls had gone when the service named the session that asks, if it did. */
+let namedAfter: number | undefined
 
 beforeEach(() => {
   devices = new FakeDevices()
   signedOut = 0
+  namedAfter = undefined
   service = new DevicesService(devices, {
-    signedOutElsewhere: () => {
-      signedOut += 1
+    signingOutEverywhere: () => {
+      namedAfter = devices.calls.length
 
-      return okAsync(undefined)
+      return () => {
+        signedOut += 1
+
+        return okAsync(undefined)
+      }
     },
   })
 })
@@ -64,6 +71,11 @@ describe('DevicesService', () => {
     expect((await service.signOutEverywhere()).isOk()).toBe(true)
     expect(devices.calls).toEqual([['everywhere']])
     expect(signedOut).toBe(1)
+  })
+
+  it('names the session that asks before the request goes, so a late answer finds which one to sign out', async () => {
+    expect((await service.signOutEverywhere()).isOk()).toBe(true)
+    expect(namedAfter).toBe(0)
   })
 
   it('fails as the gateway failed, and reads nothing after a refused sign-out', async () => {

@@ -25,8 +25,9 @@ and the i18n catalogs.
   the list is read again; this device has no such button and signs out through its session
   (the profile's sign-out, which sends what it can first). "Sign out everywhere" asks first,
   then signs every device out, this one included: once the gateway answered, the service has
-  the session sign this device out (`signedOutElsewhere()`, as on the channel's 4001, which a
-  browser without a sync channel never hears), which leads to the sign-in page. A call that
+  the session sign this device out (`signingOutEverywhere()`, named before the request goes,
+  as on the channel's 4001, which a browser without a sync channel never hears), which leads to
+  the sign-in page; an answer that comes once that session has ended signs nobody out. A call that
   fails says so in a notice; a sign-out that failed reads the list again, unless the gateway is
   out of reach (the read would fail too).
 

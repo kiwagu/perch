@@ -31,7 +31,8 @@ import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
-import { SessionService, type TransportContext, type VisibilitySource } from './session'
+import { SessionService } from './session'
+import type { TransportContext, VisibilitySource } from './session-options'
 import { deviceIdFrom, type KeyValueStorage, savedKeys } from './storage'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */

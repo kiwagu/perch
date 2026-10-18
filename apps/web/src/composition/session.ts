@@ -5,23 +5,12 @@ import {
   type AuthUser,
   type DataError,
   dataError,
-  type LocalDb,
   type SignInInput,
   type SignUpInput,
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
-import {
-  type DeviceCredentials,
-  type EndReason,
-  type Leadership,
-  type LockManagerLike,
-  leadership,
-  lockName,
-  type SyncHints,
-  type SyncTransport,
-} from '@workspace/replica/sync'
+import { type Leadership, leadership, lockName, type SyncHints } from '@workspace/replica/sync'
 
 import type {
   PushRejection,
@@ -31,22 +20,17 @@ import type {
 } from '../platform/session.port'
 
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
-import type { GatewayAuth, NamedDevice, SignedInDevice } from './gateway-auth'
-import {
-  type IdentitySpace,
-  openIdentitySpace,
-  type SyncState,
-  type Visibility,
-} from './identity-space'
+import type { NamedDevice, SignedInDevice } from './gateway-auth'
+import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
+import type { SessionOptions, TransportContext } from './session-options'
 import {
   deviceIdFrom,
   forgetDevice,
   forgetNotice,
   IDENTITY_KEY,
-  type KeyValueStorage,
   MEMBERSHIPS_KEY,
   saveDevice,
   savedIdentity,
@@ -56,55 +40,6 @@ import {
   saveNotice,
 } from './storage'
 import { type HeardSignOut, WriteBarrier } from './write-barrier'
-
-/**
- * What the channel of one identity needs: the device it names in its hello, its keys, where
- * renewed keys and memberships go, its end.
- */
-export interface TransportContext {
-  readonly identity: IdentityId
-  /** The browser's own id (`perch.device.id`). */
-  readonly device: string
-  readonly credentials: () => DeviceCredentials | undefined
-  readonly onTokens: (tokens: SignedInDevice['tokens']) => void
-  readonly onMemberships: (memberships: readonly Membership[]) => void
-  readonly onEnded: (reason: EndReason) => void
-}
-
-/** Whether the tab is in the foreground, and how to hear that it changed. */
-export interface VisibilitySource {
-  current(): Visibility
-  onChange(listener: (state: Visibility) => void): () => void
-}
-
-export interface SessionOptions {
-  readonly auth: GatewayAuth
-  /** The label a sign-up or sign-in gives this browser, next to its own id: "Chrome on Linux". */
-  readonly deviceLabel: string
-  /** Whether the browser says it has a network: only then is a pair left to revoke sent unasked. */
-  readonly online: () => boolean
-  readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
-  /** Opens the database of one organisation of an identity: each has its own on the device. */
-  readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
-  /** Deletes the database of one organisation of an identity while it is not open. */
-  readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
-  readonly schema: ReplicaSchema
-  readonly transport: (context: TransportContext) => SyncTransport
-  /**
-   * The browser's Web Locks: one makes one tab per browser the identity's sync leader, another
-   * lets a sign-out wait for the writes every tab admitted. Undefined without Web Locks: such a
-   * browser does not sync, and its sign-out waits for no other tab.
-   */
-  readonly locks: LockManagerLike | undefined
-  readonly hints: (identity: IdentityId) => SyncHints
-  readonly clock: Clock
-  readonly storage: KeyValueStorage
-  readonly visibility: VisibilitySource
-  /** An identity's space starts to open (`open-db`) or is open (`ready`). */
-  readonly onStep?: (step: 'open-db' | 'ready') => void
-  readonly onSyncState: (state: SyncState) => void
-  readonly onError: (error: DataError) => void
-}
 
 /** Whether an open space still speaks for the tab: a space being closed reports nothing more. */
 interface SpaceStatus {
@@ -239,13 +174,19 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * The gateway signed every device of the identity out, this one included: the device signs out
-   * as on the channel's 4001, which it may never hear (no Web Locks, or its WebSocket blocked).
+   * Names the session open now, before it asks the gateway to sign every device of the identity
+   * out; what it returns signs that session out once the gateway did, as on the channel's 4001,
+   * which it may never hear (no Web Locks, or its WebSocket blocked). A late answer finds the
+   * session ended (the 4001 came first) and changes nothing, whoever signed in since.
    */
-  signedOutElsewhere(): ResultAsync<void, DataError> {
-    const identity = this.#open?.space.identity.id
+  signingOutEverywhere(): () => ResultAsync<void, DataError> {
+    const asking = this.#open
+    const still = () => asking !== undefined && this.#open === asking
 
-    return ResultAsync.fromSafePromise(identity ? this.#outElsewhere(identity) : Promise.resolve())
+    return () =>
+      ResultAsync.fromSafePromise(
+        asking && still() ? this.#outElsewhere(asking.space.identity.id, still) : Promise.resolve(),
+      )
   }
 
   /**
@@ -634,12 +575,15 @@ export class SessionService implements SessionPort {
 
   /**
    * Signed out from another device (4001), or everywhere at this device's request: as refused
-   * keys, and the sign-in page says why. Whichever of the two runs second changes nothing.
+   * keys, and the sign-in page says why. Whichever of the two runs second changes nothing, and
+   * so does one whose session is no longer open (`still`) when its turn comes.
    */
-  #outElsewhere(identity: IdentityId): Promise<void> {
+  #outElsewhere(identity: IdentityId, still = () => true): Promise<void> {
     this.#channelEnded(identity)
 
-    return this.#forced(() => this.#refused(identity, 'signed-out-elsewhere'))
+    return this.#forced(() =>
+      still() ? this.#refused(identity, 'signed-out-elsewhere') : okAsync(undefined),
+    )
   }
 
   /**

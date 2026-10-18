@@ -1684,8 +1684,10 @@ describe('SessionService devices', () => {
       saved: ann,
       online: false,
     })
+    const signOutHere = session.signingOutEverywhere()
 
-    expect((await session.signedOutElsewhere()).isOk()).toBe(true)
+    // The gateway answered: every device of the identity is signed out, this one included.
+    expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
     expect(storage.get('perch.session.identity')).toBeUndefined()
     expect(storage.get('perch.session.refresh')).toBeUndefined()
@@ -1716,7 +1718,9 @@ describe('SessionService devices', () => {
 
     await writeOffline()
 
-    expect((await session.signedOutElsewhere()).isOk()).toBe(true)
+    const signOutHere = session.signingOutEverywhere()
+
+    expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
     expect(storage.get('perch.session.refresh')).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
@@ -1728,14 +1732,67 @@ describe('SessionService devices', () => {
   it('finds nothing left to sign out when the 4001 came first', async () => {
     const { session, gateway, storage, destroyed } = await bootSession({ saved: ann, online: true })
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+    const signOutHere = session.signingOutEverywhere()
 
     gateway.closeChannels(ann.identity.id, id, CLOSE.revoked)
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
     session.clearNotice()
 
-    expect((await session.signedOutElsewhere()).isOk()).toBe(true)
+    expect((await signOutHere()).isOk()).toBe(true)
     expect(session.notice()).toBeUndefined()
     expect(destroyed()).toEqual([ann.identity.id])
+  })
+
+  it('signs out only the session that asked when the answer comes late: Bob, signed in after the 4001 signed Ann out, keeps his keys and his database', async () => {
+    const { session, storage, destroyed, contexts } = await world({ online: false })
+
+    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const annId = session.current()?.id ?? expect.unreachable('Ann signed in')
+    // Ann asks the gateway to sign every device out; its answer is held up on the way.
+    const signOutAnn = session.signingOutEverywhere()
+
+    // Her channel's 4001 signs her out first, and Bob signs in on the same browser.
+    for (const context of contexts()) {
+      context.onEnded('revoked')
+    }
+
+    await vi.waitFor(() => expect(destroyed()).toEqual([annId]))
+    expect((await session.signUp(bobSignUp)).isOk()).toBe(true)
+
+    const bob = session.current() ?? expect.unreachable('Bob signed in')
+    const bobKeys = savedKeys(storage) ?? expect.unreachable("Bob's keys")
+
+    // Ann's answer comes at last: it signs nobody out.
+    expect((await signOutAnn()).isOk()).toBe(true)
+    await settle()
+    expect(session.current()).toEqual(bob)
+    expect(savedKeys(storage)).toEqual(bobKeys)
+    expect(destroyed()).toEqual([annId])
+  })
+
+  it('leaves the same account alone when it signed in again before the late answer: its new session did not ask', async () => {
+    const { session, storage, destroyed, contexts } = await world({ online: false })
+
+    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const annId = session.current()?.id ?? expect.unreachable('Ann signed in')
+    const signOutFirst = session.signingOutEverywhere()
+
+    for (const context of contexts()) {
+      context.onEnded('revoked')
+    }
+
+    await vi.waitFor(() => expect(destroyed()).toEqual([annId]))
+    expect((await session.signIn(annSignUp)).isOk()).toBe(true)
+
+    const keys = savedKeys(storage) ?? expect.unreachable("Ann's new keys")
+
+    expect((await signOutFirst()).isOk()).toBe(true)
+    await settle()
+    expect(session.current()?.id).toBe(annId)
+    expect(savedKeys(storage)).toEqual(keys)
+    expect(destroyed()).toEqual([annId])
   })
 
   it('revokes a pair left to revoke before it signs in again, so the sign-in does not outlive it', async () => {

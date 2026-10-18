@@ -37,13 +37,16 @@ export interface SessionPort {
    */
   signOut(options?: SignOutOptions): ResultAsync<'signed-out' | 'needs-confirmation', DataError>
   /**
-   * The gateway signed this device out with every other one of the identity, at its own request
-   * ("sign out everywhere"): it signs out here as when its channel hears so (4001), without
-   * waiting for a channel it may not have. Its keys are dead and forgotten; its data goes unless
-   * it holds changes not sent yet, which stay for the next sign-in as the identity, and the
-   * sign-in page says which. Resolves once done; a device signed out already is left as it is.
+   * "Sign out everywhere", called before the gateway is asked to sign every device of the
+   * identity out: it names the session open now and returns what to run once the gateway did,
+   * this device included. That signs the session out as when its channel hears so (4001),
+   * without waiting for a channel it may not have: its keys are dead and forgotten; its data goes
+   * unless it holds changes not sent yet, which stay for the next sign-in as the identity, and
+   * the sign-in page says which. It resolves once done, and changes nothing once that session
+   * has ended (signed out already, maybe with another account, or the same one, signed in
+   * since): a late answer signs out only the session that asked.
    */
-  signedOutElsewhere(): ResultAsync<void, DataError>
+  signingOutEverywhere(): () => ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */

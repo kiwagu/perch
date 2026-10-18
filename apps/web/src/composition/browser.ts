@@ -20,7 +20,7 @@ import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
-import type { VisibilitySource } from './session'
+import type { VisibilitySource } from './session-options'
 import { browserStorage } from './storage'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
