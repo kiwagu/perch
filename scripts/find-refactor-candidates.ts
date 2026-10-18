@@ -26,7 +26,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { extname } from 'node:path'
 
 type Tier = 'ok' | 'warn' | 'red' | 'refactor'
@@ -284,32 +284,35 @@ function writeBaseline(
 }
 
 /**
- * Writes the baseline atomically: a complete file appears under its final name in one step
- * (temp file + rename), so a concurrent reader never sees a truncated one. An adoption
- * creates the file exclusively and yields to a concurrent adopter that got there first;
- * false means the file now holds the other run's baseline.
+ * Publishes a complete baseline under its final name in one step, so no reader ever sees a
+ * partial file: the content goes to a temp file first; an update renames it over the old
+ * baseline, an adoption hard-links it to the final name, which fails with EEXIST when a
+ * concurrent adopter got there first (false: the file now holds that run's baseline). The
+ * temp file is removed on every path.
  */
 function publishBaseline(content: string, adopting: boolean): boolean {
   const temp = `${BASELINE_PATH}.${process.pid}.tmp`
 
-  writeFileSync(temp, content)
-
-  if (!adopting) {
-    renameSync(temp, BASELINE_PATH)
-
-    return true
-  }
-
   try {
-    writeFileSync(BASELINE_PATH, content, { flag: 'wx' })
+    writeFileSync(temp, content)
 
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      return false
+    if (!adopting) {
+      renameSync(temp, BASELINE_PATH)
+
+      return true
     }
 
-    throw error
+    try {
+      linkSync(temp, BASELINE_PATH)
+
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        return false
+      }
+
+      throw error
+    }
   } finally {
     rmSync(temp, { force: true })
   }
