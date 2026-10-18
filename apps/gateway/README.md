@@ -102,4 +102,53 @@ stand.
   the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
   note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
   4403), one line per step.
+- `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
+  root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
+
+## Load test
+
+`bun run load -- [arguments]` at the repository root drives simulated devices against a
+gateway of its own: it starts `src/index.ts` as a child process on port 5197, in front of the
+e2e stand's SurrealDB (`SURREAL_URL` from `mcproc exec`), and waits for its `/health`. Each step
+signs up the devices it adds (`load-<run>-<n>@example.test`), groups every `--members` of them
+into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
+devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
+`--writers` of the new devices are writers, spread over the step's organisations: each appends
+a note every `1 / --rate` seconds, at a random phase, and proposes a compaction when an ack asks
+for one. Writers are cumulative: those of earlier steps keep writing, so a row's `writers` is a
+total. One table row is printed per step; a step's devices stay open for the next one.
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `--devices` | `100,500,1000,2000` | device totals of the steps, growing |
+| `--members` | `20` | devices per organisation |
+| `--writers` | `0.3` | share of the new devices that write |
+| `--rate` | `0.1` | notes per second of one writer |
+| `--hold` | `60` | seconds each step holds its load |
+| `--gateway-port` | `5197` | port of the gateway the test starts; it must be free |
+| `--surreal-container` | `perch-surrealdb-e2e` | container `docker stats` reads for the surreal columns |
+| `--json <path>` | none | also writes the steps with the run id, arguments, host and start time |
+| `--stop-on-degrade` | off | stops after the first degraded step |
+
+Columns:
+
+- `devices`, `writers`: open devices and writers in all. `ops/s` is nominal, writers times
+  `--rate`.
+- `ack p50/p95 ms`: from a push to its ack. `fanout p50/p95 ms (n)`: from a push to the arrival
+  of its update at another device of the organisation, before that device imports it; `n` is
+  the number of fan-out samples.
+- `gw RSS MiB`, `gw CPU %`: the child gateway's resident memory at the step's end and its CPU
+  time over the hold. `surreal CPU % / MiB`: the stand container from `docker stats` (`-` when
+  docker cannot say).
+- `compactions asked/accepted`: compactions the devices proposed after an ack asked for one,
+  and those the server accepted.
+- `errors`: server errors, rejected batches, failed imports and devices that could not open
+  or get their snapshot; `closes`: sockets closed during the hold.
+- `degraded`: `yes` when ack p95 is over 1 s, fanout p95 over 2 s, errors or closes are not
+  zero, or writers wrote and no ack came.
+
+The run exits 0, or 1 when the setup or a step failed; SIGINT and SIGTERM stop the devices and
+the child gateway and exit 130. The load accounts live on the in-memory e2e stand and vanish
+when it restarts: afterwards `mcproc restart surrealdb-e2e`, then `mcproc restart gateway-e2e`.
+The seed sweep (`bun run seed:sweep`) targets the dev stand, not this one.

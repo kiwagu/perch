@@ -48,6 +48,11 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
   `GATEWAY_URL` and `E2E_BASE_URL` of the e2e stand, `SURREAL_DEV_URL` and `GATEWAY_DEV_URL` of
   the dev stand); none of them has an address of its own.
+- `bun run load -- --devices 20 --members 10 --hold 15`: the gateway load test. It starts a
+  gateway of its own on port 5197 in front of the e2e stand's SurrealDB and prints one table row
+  per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
+  the in-memory e2e stand, so afterwards run `mcproc restart surrealdb-e2e`, then
+  `mcproc restart gateway-e2e`; `bun run seed:sweep` reaches the dev stand only.
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
   profile, waits for each of its apps and runs the Playwright specs through the front;
