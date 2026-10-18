@@ -32,58 +32,145 @@ export function stepPlan(devices: readonly number[]): readonly Step[] {
   return devices.map((total, i) => ({ total, add: total - (devices[i - 1] ?? 0) }))
 }
 
+/** One push as the book follows it: its epoch, when it left, and what came of it. */
+interface Push {
+  readonly epoch: number
+  readonly at: number
+  /** How many other devices of its region were live when it left. */
+  readonly expected: number
+  delivered: number
+  acked: boolean
+  headKey: string | undefined
+}
+
+interface Epoch {
+  ack: number[]
+  fanout: number[]
+  readonly pushes: Push[]
+}
+
+/** What an epoch measured, once its pushes had their time to be acked and delivered. */
+export interface EpochResult {
+  ack: number[]
+  fanout: number[]
+  pushes: number
+  /** Deliveries the epoch's pushes should have made to other devices. */
+  expected: number
+  /** Pushes without an ack. */
+  unacked: number
+  /** Deliveries missing for the acked pushes. */
+  undelivered: number
+}
+
 /**
- * Latency samples in milliseconds: a push to its ack, and a push to each reader that received
- * its head. The head map outlives `reset` because readers receive heads past a step boundary.
+ * Latency samples in milliseconds: a push to its ack, and a push to each other device that
+ * received its head. Every push belongs to the epoch that was current when it left, and its
+ * ack and deliveries count there however late they come, so a step's numbers account for
+ * every push of the step. A receipt that beats its ack waits for it.
  */
 export class LatencyBook {
-  readonly #pushedAt = new Map<string, number>()
+  readonly #pushes = new Map<string, Push>()
   /** Keyed by region and head: every region counts its heads from 1. */
-  readonly #headPushedAt = new Map<string, number>()
-  /** Receipts of heads whose ack has not arrived yet, which a reader can beat. */
-  #early = new Map<string, number[]>()
-  #ack: number[] = []
-  #fanout: number[] = []
+  readonly #byHead = new Map<string, Push>()
+  readonly #early = new Map<string, number[]>()
+  readonly #epochs = new Map<number, Epoch>()
+  #current = 0
 
-  pushed(device: string, batch: number, at: number): void {
-    this.#pushedAt.set(`${device}#${batch}`, at)
+  /** Opens a new epoch, which the pushes from now on belong to. */
+  startEpoch(): number {
+    this.#current++
+    this.#epochs.set(this.#current, { ack: [], fanout: [], pushes: [] })
+
+    return this.#current
+  }
+
+  pushed(device: string, batch: number, region: string, at: number, expected: number): void {
+    const epoch = this.#epochs.get(this.#current)
+
+    if (!epoch) throw new Error('no epoch started')
+
+    const push: Push = {
+      epoch: this.#current,
+      at,
+      expected,
+      delivered: 0,
+      acked: false,
+      headKey: undefined,
+    }
+
+    this.#pushes.set(`${device}#${batch}#${region}`, push)
+    epoch.pushes.push(push)
   }
 
   acked(device: string, batch: number, region: string, head: number, at: number): void {
-    const pushedAt = this.#pushedAt.get(`${device}#${batch}`)
+    const id = `${device}#${batch}#${region}`
+    const push = this.#pushes.get(id)
+
+    if (push === undefined) return
+
     const key = `${region}#${head}`
 
-    if (pushedAt === undefined) return
-    this.#ack.push(at - pushedAt)
-    this.#pushedAt.delete(`${device}#${batch}`)
-    this.#headPushedAt.set(key, pushedAt)
+    push.acked = true
+    push.headKey = key
+    this.#epochs.get(push.epoch)?.ack.push(at - push.at)
+    this.#pushes.delete(id)
+    this.#byHead.set(key, push)
 
-    for (const receivedAt of this.#early.get(key) ?? []) this.#fanout.push(receivedAt - pushedAt)
+    for (const receivedAt of this.#early.get(key) ?? []) this.#delivered(push, receivedAt)
 
     this.#early.delete(key)
   }
 
-  /** A reader received `head` of `region`; a receipt before the head's ack waits for the ack. */
+  /** A device received `head` of `region`; a receipt before the head's ack waits for the ack. */
   received(region: string, head: number, at: number): void {
     const key = `${region}#${head}`
-    const pushedAt = this.#headPushedAt.get(key)
+    const push = this.#byHead.get(key)
 
-    if (pushedAt !== undefined) this.#fanout.push(at - pushedAt)
+    if (push !== undefined) this.#delivered(push, at)
     else this.#early.set(key, [...(this.#early.get(key) ?? []), at])
   }
 
-  ackSamples(): number[] {
-    return [...this.#ack]
+  /** What the epoch's pushes still lack: an ack, or deliveries to other devices. */
+  status(epoch: number): { unacked: number; undelivered: number } {
+    let unacked = 0
+    let undelivered = 0
+
+    for (const push of this.#epochs.get(epoch)?.pushes ?? []) {
+      if (!push.acked) unacked++
+      else undelivered += Math.max(0, push.expected - push.delivered)
+    }
+
+    return { unacked, undelivered }
   }
 
-  fanoutSamples(): number[] {
-    return [...this.#fanout]
+  /** The epoch's samples and counts; the epoch is forgotten, a later arrival for it ignored. */
+  finalize(epoch: number): EpochResult {
+    const found = this.#epochs.get(epoch)
+    const pushes = found?.pushes ?? []
+    const result: EpochResult = {
+      ack: found?.ack ?? [],
+      fanout: found?.fanout ?? [],
+      pushes: pushes.length,
+      expected: pushes.reduce((sum, push) => sum + push.expected, 0),
+      ...this.status(epoch),
+    }
+
+    for (const push of pushes) {
+      if (push.headKey !== undefined) this.#byHead.delete(push.headKey)
+    }
+
+    for (const [id, push] of this.#pushes) {
+      if (push.epoch === epoch) this.#pushes.delete(id)
+    }
+
+    this.#epochs.delete(epoch)
+
+    return result
   }
 
-  reset(): void {
-    this.#ack = []
-    this.#fanout = []
-    this.#early = new Map()
+  #delivered(push: Push, at: number): void {
+    push.delivered++
+    this.#epochs.get(push.epoch)?.fanout.push(at - push.at)
   }
 }
 
@@ -96,7 +183,8 @@ export interface LoadArgs {
   hold: number
   gatewayPort: number
   surrealUrl: string
-  surrealContainer: string
+  /** The stand's docker container; `undefined` when it is not known, which skips its stats. */
+  surrealContainer: string | undefined
   gatewayUser: string
   gatewayPass: string
   json?: string
@@ -111,6 +199,47 @@ function numberFlag(flag: string, value: string | undefined): number {
   }
 
   return parsed
+}
+
+/** The port of the e2e stand of the main checkout; worktree slots shift it by 100 each. */
+const E2E_PORT = 8010
+const SLOT_PORT_STEP = 100
+
+/**
+ * The docker container of the e2e stand at `surrealUrl`: `perch-surrealdb-e2e` on port 8010,
+ * `perch-w<slot>-surrealdb-e2e` on 8010 plus 100 per slot, none on any other port.
+ */
+export function standContainer(surrealUrl: string): string | undefined {
+  const port = URL.canParse(surrealUrl) ? Number(new URL(surrealUrl).port) : Number.NaN
+  const slot = (port - E2E_PORT) / SLOT_PORT_STEP
+
+  if (!Number.isInteger(slot) || slot < 0) return undefined
+
+  return slot === 0 ? 'perch-surrealdb-e2e' : `perch-w${slot}-surrealdb-e2e`
+}
+
+function checked(flag: string, ok: boolean, domain: string): void {
+  if (!ok) throw new Error(`${flag} must be ${domain}`)
+}
+
+/** Refuses values outside the domains the run can work with, naming the flag. */
+function checkDomains(args: LoadArgs): void {
+  checked(
+    '--devices',
+    args.devices.every(
+      (total, i) => Number.isInteger(total) && total > 0 && total > (args.devices[i - 1] ?? 0),
+    ),
+    'positive integers, each larger than the one before',
+  )
+  checked('--members', Number.isInteger(args.members) && args.members > 0, 'a positive integer')
+  checked('--writers', args.writers >= 0 && args.writers <= 1, 'between 0 and 1')
+  checked('--rate', args.rate > 0, 'above 0')
+  checked('--hold', args.hold > 0, 'above 0')
+  checked(
+    '--gateway-port',
+    Number.isInteger(args.gatewayPort) && args.gatewayPort >= 1 && args.gatewayPort <= 65535,
+    'an integer from 1 to 65535',
+  )
 }
 
 /** Reads the run's flags over their defaults; the stand address comes from `SURREAL_URL`. */
@@ -130,7 +259,7 @@ export function parseArgs(
     hold: 60,
     gatewayPort: 5197,
     surrealUrl,
-    surrealContainer: 'perch-surrealdb-e2e',
+    surrealContainer: standContainer(surrealUrl),
     gatewayUser: env['GATEWAY_SURREAL_USER'] ?? 'gateway',
     gatewayPass: env['GATEWAY_SURREAL_PASS'] ?? 'gateway-stand-password',
     stopOnDegrade: false,
@@ -177,6 +306,8 @@ export function parseArgs(
         throw new Error(`unknown flag ${flag}`)
     }
   }
+
+  checkDomains(args)
 
   return args
 }
@@ -229,6 +360,8 @@ export interface StepReport {
   devices: number
   writers: number
   offeredOpsPerS: number
+  /** Pushes made during the step. */
+  pushes: number
   ackP50: number
   ackP95: number
   fanoutP50: number
@@ -240,6 +373,8 @@ export interface StepReport {
   compactions: { asked: number; accepted: number; other: number }
   errors: number
   closes: number
+  unacked: number
+  undelivered: number
   degraded: boolean
 }
 
@@ -247,6 +382,7 @@ const COLUMNS = [
   'devices',
   'writers',
   'ops/s',
+  'pushes',
   'ack p50/p95 ms',
   'fanout p50/p95 ms (n)',
   'gw RSS MiB',
@@ -255,6 +391,8 @@ const COLUMNS = [
   'compactions asked/accepted',
   'errors',
   'closes',
+  'unacked',
+  'undelivered',
   'degraded',
 ] as const
 
@@ -272,6 +410,7 @@ export function formatRow(row: StepReport): string {
     String(row.devices),
     String(row.writers),
     one(row.offeredOpsPerS),
+    String(row.pushes),
     `${one(row.ackP50)}/${one(row.ackP95)}`,
     `${one(row.fanoutP50)}/${one(row.fanoutP95)} (${row.fanoutSamples})`,
     one(row.gatewayRssMiB),
@@ -280,6 +419,8 @@ export function formatRow(row: StepReport): string {
     `${row.compactions.asked}/${row.compactions.accepted}`,
     String(row.errors),
     String(row.closes),
+    String(row.unacked),
+    String(row.undelivered),
     row.degraded ? 'yes' : 'no',
   ])
 }

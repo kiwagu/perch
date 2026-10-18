@@ -4,8 +4,10 @@
  * counts. Each step prints one table row of latency, memory and CPU (see `metrics.ts`).
  * `ack` is the time from a push to its ack; `fanout` is the time from a push to the arrival
  * of its update at another device of the organisation, before the device imports it (the
- * import is the replica's own measure). `ops/s` is nominal, writers times the rate of their
- * chained timers; a step with writers and no ack at all counts as degraded. The accounts and
+ * import is the replica's own measure). `ops/s` is nominal, writers times the rate; `pushes`
+ * is what was pushed. After the hold the step drains for up to 5 s: `unacked` pushes lack an
+ * ack, `undelivered` counts the deliveries still missing to the region's other live devices.
+ * Either one, an error, a close, a silent step or a fan-out without samples is degraded. The accounts and
  * organisations it signs up stay on the stand, for the sweep of `@example.test` accounts.
  */
 
@@ -39,6 +41,9 @@ const HEALTH_TIMEOUT_MS = 30_000
 const PARALLEL = 20
 const STOP_GRACE_MS = 5_000
 const SNAPSHOT_TIMEOUT_MS = 30_000
+const HANDSHAKE_TIMEOUT_MS = 30_000
+const DRAIN_TIMEOUT_MS = 5_000
+const DRAIN_POLL_MS = 100
 const SIGNAL_EXIT = 130
 const ACK_P95_LIMIT_MS = 1_000
 const FANOUT_P95_LIMIT_MS = 2_000
@@ -53,6 +58,8 @@ interface Sim {
   /** Imports of received updates, one after the other. */
   imports: Promise<void>
   writer: boolean
+  /** A device whose socket closed: no longer written with, counted or delivered to. */
+  retired: boolean
   batch: number
   timer: ReturnType<typeof setTimeout> | undefined
 }
@@ -77,7 +84,11 @@ interface Run {
   readonly book: LatencyBook
   readonly counters: Counters
   readonly sims: Sim[]
+  /** Live (open, not retired) devices per region. */
+  readonly live: Map<string, number>
   accounts: number
+  /** Devices whose open was attempted; the labels count them. */
+  attempted: number
   organisations: number
   /** Whether the writers write; a step switches it on for its hold. */
   writing: boolean
@@ -229,6 +240,7 @@ async function openSim(
     device: undefined,
     imports: Promise.resolve(),
     writer: false,
+    retired: false,
     batch: 0,
     timer: undefined,
   }
@@ -242,10 +254,7 @@ async function openSim(
   // The timer can fire before the open resolves and the wait begins: no unhandled rejection.
   waiting.catch(() => undefined)
 
-  const timeout = setTimeout(
-    () => snapshot?.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
-    SNAPSHOT_TIMEOUT_MS,
-  )
+  let timeout: ReturnType<typeof setTimeout> | undefined
 
   /** Counts a problem of an open device, or fails the wait for the snapshot. */
   const trouble = (text: string): void => {
@@ -259,14 +268,15 @@ async function openSim(
       account.tokens,
       {
         onUpdates: (message, at) => {
+          // The arrival is the fan-out's end; a failed import is an error of its own.
+          if (!message.snapshot) book.received(message.region, message.head, at)
+
           sim.imports = sim.imports.then(() =>
             sim.doc.importRemote(message.bytes, message.head).match(
               () => {
                 if (message.snapshot) {
                   snapshotted = true
                   snapshot?.resolve()
-                } else {
-                  book.received(message.region, message.head, at)
                 }
               },
               (error) => trouble(`import failed: ${error.code} ${error.message}`),
@@ -300,14 +310,24 @@ async function openSim(
         onError: trouble,
         onClose: (code) => {
           if (!snapshotted) trouble(`closed with ${code} before the snapshot`)
-          else if (!run.closing) counters.closes++
+          else if (!run.closing) {
+            counters.closes++
+            retire(run, sim)
+          }
         },
       },
+      { timeoutMs: HANDSHAKE_TIMEOUT_MS },
+    )
+
+    timeout = setTimeout(
+      () => snapshot?.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
+      SNAPSHOT_TIMEOUT_MS,
     )
 
     sim.device = device
     device.subscribe(region)
     await waiting
+    run.live.set(region, (run.live.get(region) ?? 0) + 1)
 
     return sim
   } catch (cause) {
@@ -316,6 +336,7 @@ async function openSim(
       `${sim.label}: dropped: ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     sim.device?.close()
+    sim.retired = true
 
     return undefined
   } finally {
@@ -323,8 +344,19 @@ async function openSim(
   }
 }
 
+/** Takes a closed device out of the live counts and stops its writing. */
+function retire(run: Run, sim: Sim): void {
+  if (sim.retired) return
+
+  sim.retired = true
+  clearTimeout(sim.timer)
+  run.live.set(sim.region, (run.live.get(sim.region) ?? 1) - 1)
+}
+
 /** Appends one note to the sim's region and pushes it. */
 async function write(run: Run, sim: Sim): Promise<void> {
+  if (sim.retired) return
+
   const created = await noteCreate(sim.doc, {
     id: noteIdFactory.create(),
     author: sim.account.identity.id,
@@ -333,7 +365,9 @@ async function write(run: Run, sim: Sim): Promise<void> {
 
   created.match(
     (update) => {
-      run.book.pushed(sim.label, ++sim.batch, performance.now())
+      const others = Math.max(0, (run.live.get(sim.region) ?? 1) - 1)
+
+      run.book.pushed(sim.label, ++sim.batch, sim.region, performance.now(), others)
       sim.device?.push(sim.region, sim.batch, update)
     },
     (error) => {
@@ -346,7 +380,7 @@ async function write(run: Run, sim: Sim): Promise<void> {
 /** Writes a note after `delay` ms and again every `1000 / rate` ms while the run is writing. */
 function scheduleWrite(run: Run, sim: Sim, delay: number): void {
   sim.timer = setTimeout(() => {
-    if (!run.writing) return
+    if (!run.writing || sim.retired) return
 
     void write(run, sim)
     scheduleWrite(run, sim, 1000 / run.args.rate)
@@ -371,9 +405,8 @@ function roundRobin(regions: readonly string[]): number[] {
 async function addDevices(run: Run, step: Step): Promise<void> {
   const accounts = await signUp(run, step.add)
   const regions = await organise(run, accounts)
-  const first = run.sims.length
   const opened = await inParallel(accounts, (account, i) =>
-    openSim(run, account, regions[i] ?? fail('no region'), first + i),
+    openSim(run, account, regions[i] ?? fail('no region'), run.attempted++),
   )
   const writers = roundRobin(regions).slice(0, Math.round(run.args.writers * step.add))
 
@@ -386,13 +419,19 @@ async function addDevices(run: Run, step: Step): Promise<void> {
   run.sims.push(...opened.filter((sim) => sim !== undefined))
 }
 
-/** Lets every writer write for `hold` seconds; answers what the gateway used meanwhile. */
+/** The devices that are still open. */
+function liveSims(run: Run): Sim[] {
+  return run.sims.filter((sim) => !sim.retired)
+}
+
+/** Lets every live writer write for `hold` seconds; answers what the gateway used meanwhile. */
 async function hold(run: Run, pid: number): Promise<{ rssMiB: number; cpuPercent: number }> {
   const before = procStats(pid)
+  const startedAt = performance.now()
 
   run.writing = true
 
-  for (const sim of run.sims.filter((candidate) => candidate.writer)) {
+  for (const sim of liveSims(run).filter((candidate) => candidate.writer)) {
     scheduleWrite(run, sim, Math.random() * (1000 / run.args.rate))
   }
 
@@ -403,36 +442,56 @@ async function hold(run: Run, pid: number): Promise<{ rssMiB: number; cpuPercent
   for (const sim of run.sims) clearTimeout(sim.timer)
 
   const after = procStats(pid)
+  const elapsedS = (performance.now() - startedAt) / 1000
 
   return {
     rssMiB: after.rssMiB,
-    cpuPercent: ((after.cpuSeconds - before.cpuSeconds) / run.args.hold) * 100,
+    cpuPercent: ((after.cpuSeconds - before.cpuSeconds) / elapsedS) * 100,
+  }
+}
+
+/** Waits up to 5 s for the epoch's pushes to be acked and delivered, polling every 100 ms. */
+async function drain(run: Run, epoch: number): Promise<void> {
+  const deadline = performance.now() + DRAIN_TIMEOUT_MS
+
+  for (;;) {
+    const { unacked, undelivered } = run.book.status(epoch)
+
+    if ((unacked === 0 && undelivered === 0) || performance.now() >= deadline) return
+
+    await sleep(DRAIN_POLL_MS)
   }
 }
 
 /** Measures one step: its devices written to for the hold, then the latencies and stats. */
 async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
-  run.book.reset()
   resetCounters(run.counters)
   await addDevices(run, step)
 
+  const epoch = run.book.startEpoch()
   const gateway = await hold(run, pid)
-  const surreal = await dockerStats(run.args.surrealContainer)
-  const writers = run.sims.filter((sim) => sim.writer).length
-  const ack = run.book.ackSamples()
-  const fanout = run.book.fanoutSamples()
+
+  await drain(run, epoch)
+
+  const surreal = run.args.surrealContainer
+    ? await dockerStats(run.args.surrealContainer)
+    : undefined
+  const live = liveSims(run)
+  const writers = live.filter((sim) => sim.writer).length
+  const { ack, fanout, pushes, expected, unacked, undelivered } = run.book.finalize(epoch)
   const { firstReject } = run.counters
   const { errors, closes, asked, accepted, other } = run.counters
   const ackP95 = percentile(ack, 0.95)
   const fanoutP95 = percentile(fanout, 0.95)
 
   if (firstReject)
-    console.log(`load: step of ${run.sims.length} devices: rejected, first ${firstReject}`)
+    console.log(`load: step of ${live.length} devices: rejected, first ${firstReject}`)
 
   return {
-    devices: run.sims.length,
+    devices: live.length,
     writers,
     offeredOpsPerS: writers * run.args.rate,
+    pushes,
     ackP50: percentile(ack, 0.5),
     ackP95,
     fanoutP50: percentile(fanout, 0.5),
@@ -444,12 +503,17 @@ async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
     compactions: { asked, accepted, other },
     errors,
     closes,
+    unacked,
+    undelivered,
     degraded:
       ackP95 > ACK_P95_LIMIT_MS ||
       fanoutP95 > FANOUT_P95_LIMIT_MS ||
       errors > 0 ||
       closes > 0 ||
-      (writers > 0 && ack.length === 0),
+      unacked > 0 ||
+      undelivered > 0 ||
+      (pushes > 0 && ack.length === 0) ||
+      (pushes > 0 && expected > 0 && fanout.length === 0),
   }
 }
 
@@ -507,7 +571,9 @@ export async function runLoadTest(
     book: new LatencyBook(),
     counters: { errors: 0, closes: 0, asked: 0, accepted: 0, other: 0, firstReject: undefined },
     sims: [],
+    live: new Map(),
     accounts: 0,
+    attempted: 0,
     organisations: 0,
     writing: false,
     closing: false,
