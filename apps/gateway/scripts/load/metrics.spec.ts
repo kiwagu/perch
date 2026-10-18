@@ -6,6 +6,7 @@ import {
   parseArgs,
   parseDockerStats,
   percentile,
+  procStats,
   type StepReport,
   stepPlan,
   TABLE_HEADER,
@@ -46,6 +47,30 @@ describe('LatencyBook', () => {
     book.reset()
     expect(book.ackSamples()).toEqual([])
   })
+
+  it('keeps a receipt that lands before its ack: the same sample as one after', () => {
+    const book = new LatencyBook()
+
+    book.pushed('w1', 1, 1000)
+    book.received(7, 1020)
+    book.acked('w1', 1, 7, 1040)
+    book.received(7, 1055)
+
+    expect(book.ackSamples()).toEqual([40])
+    expect(book.fanoutSamples()).toEqual([20, 55])
+    book.reset()
+    book.acked('w1', 1, 7, 2000)
+    expect(book.fanoutSamples()).toEqual([])
+  })
+})
+
+describe('procStats', () => {
+  it('reads memory and cpu time of a running process', () => {
+    const stats = procStats(process.pid)
+
+    expect(stats.rssMiB).toBeGreaterThan(0)
+    expect(stats.cpuSeconds).toBeGreaterThanOrEqual(0)
+  })
 })
 
 describe('parseArgs', () => {
@@ -72,6 +97,10 @@ describe('parseArgs', () => {
 
   it('refuses a flag value that is not a number, naming the flag', () => {
     expect(() => parseArgs(['--hold', 'soon'], env)).toThrow('--hold')
+  })
+
+  it('refuses --surreal-container without a value, naming the flag', () => {
+    expect(() => parseArgs(['--surreal-container'], env)).toThrow('--surreal-container')
   })
 
   it('reads the stop flag and the report path', () => {
@@ -127,6 +156,8 @@ describe('formatRow', () => {
   it('prints a dash for the absent surreal stats', () => {
     const { surreal: _surreal, ...withoutSurreal } = report
 
-    expect(formatRow(withoutSurreal)).toContain(' -')
+    const cell = '-'.padEnd('surreal CPU % / MiB'.length)
+
+    expect(formatRow(withoutSurreal)).toContain(`  ${cell}  `)
   })
 })

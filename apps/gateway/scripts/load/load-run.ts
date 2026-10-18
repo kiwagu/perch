@@ -55,6 +55,8 @@ interface Counters {
   asked: number
   accepted: number
   other: number
+  /** The reason and detail of the first reject of the step, to tell once. */
+  firstReject: string | undefined
 }
 
 /** Everything the steps share. */
@@ -83,6 +85,7 @@ function resetCounters(counters: Counters): void {
   counters.asked = 0
   counters.accepted = 0
   counters.other = 0
+  counters.firstReject = undefined
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
@@ -222,6 +225,10 @@ async function openSim(run: Run, account: SignedIn, region: string, n: number): 
         if (message.outcome === 'accepted') counters.accepted++
         else counters.other++
       },
+      onReject: (message) => {
+        counters.errors++
+        counters.firstReject ??= `${message.reason} (${message.detail})`
+      },
       onError: () => {
         counters.errors++
       },
@@ -317,9 +324,13 @@ async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
   const writers = run.sims.filter((sim) => sim.writer).length
   const ack = run.book.ackSamples()
   const fanout = run.book.fanoutSamples()
+  const { firstReject } = run.counters
   const { errors, closes, asked, accepted, other } = run.counters
   const ackP95 = percentile(ack, 0.95)
   const fanoutP95 = percentile(fanout, 0.95)
+
+  if (firstReject)
+    console.log(`load: step of ${run.sims.length} devices: rejected, first ${firstReject}`)
 
   return {
     devices: run.sims.length,
@@ -387,7 +398,7 @@ export async function runLoadTest(
     base: `http://127.0.0.1:${args.gatewayPort}`,
     password: crypto.randomUUID(),
     book: new LatencyBook(),
-    counters: { errors: 0, closes: 0, asked: 0, accepted: 0, other: 0 },
+    counters: { errors: 0, closes: 0, asked: 0, accepted: 0, other: 0, firstReject: undefined },
     sims: [],
     accounts: 0,
     organisations: 0,

@@ -22,6 +22,7 @@ export interface DeviceHandlers {
   readonly onUpdates: (message: Received<'updates'>, at: number) => void
   readonly onAck: (message: Received<'ack'>, at: number) => void
   readonly onCompaction: (message: Received<'compaction'>) => void
+  readonly onReject: (message: Received<'reject'>) => void
   readonly onError: (message: Received<'error'>) => void
   readonly onClose: (code: number) => void
 }
@@ -98,11 +99,14 @@ export class LoadDevice {
       case 'compaction':
         handlers.onCompaction(message)
         break
+      case 'reject':
+        handlers.onReject(message)
+        break
       case 'error':
         handlers.onError(message)
         break
       default:
-        // memberships, tokens, heads, reject and the rest do not matter to the load.
+        // memberships, tokens, heads and the rest do not matter to the load.
         break
     }
   }

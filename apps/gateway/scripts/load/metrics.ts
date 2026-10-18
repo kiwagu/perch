@@ -39,6 +39,8 @@ export function stepPlan(devices: readonly number[]): readonly Step[] {
 export class LatencyBook {
   readonly #pushedAt = new Map<string, number>()
   readonly #headPushedAt = new Map<number, number>()
+  /** Receipts of heads whose ack has not arrived yet, which a reader can beat. */
+  #early = new Map<number, number[]>()
   #ack: number[] = []
   #fanout: number[] = []
 
@@ -51,14 +53,20 @@ export class LatencyBook {
 
     if (pushedAt === undefined) return
     this.#ack.push(at - pushedAt)
+    this.#pushedAt.delete(`${device}#${batch}`)
     this.#headPushedAt.set(head, pushedAt)
+
+    for (const receivedAt of this.#early.get(head) ?? []) this.#fanout.push(receivedAt - pushedAt)
+
+    this.#early.delete(head)
   }
 
-  /** A reader received `head`; heads this book did not see pushed are ignored. */
+  /** A reader received `head`; a receipt before the head's ack waits for the ack. */
   received(head: number, at: number): void {
     const pushedAt = this.#headPushedAt.get(head)
 
     if (pushedAt !== undefined) this.#fanout.push(at - pushedAt)
+    else this.#early.set(head, [...(this.#early.get(head) ?? []), at])
   }
 
   ackSamples(): number[] {
@@ -72,6 +80,7 @@ export class LatencyBook {
   reset(): void {
     this.#ack = []
     this.#fanout = []
+    this.#early = new Map()
   }
 }
 
@@ -154,7 +163,8 @@ export function parseArgs(
         args.gatewayPort = numberFlag(flag, value)
         break
       case '--surreal-container':
-        args.surrealContainer = value ?? args.surrealContainer
+        if (value === undefined) throw new Error('--surreal-container needs a name')
+        args.surrealContainer = value
         break
       case '--json':
         if (value === undefined) throw new Error('--json needs a path')
