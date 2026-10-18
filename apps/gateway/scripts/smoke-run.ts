@@ -402,9 +402,10 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
 }
 
 /**
- * The clause of the access method, on a fresh identity: a token issued before
- * `sessions_revoked_at` is refused, a refresh is not (its exchange carries no token), and the
- * gateway's namespace user revokes the identity's grants, which refuses the refresh.
+ * The clause of the access method, on a fresh identity: its fresh token is accepted, the same
+ * token issued before `sessions_revoked_at` is refused, a refresh is not (its exchange carries
+ * no token), and the gateway's namespace user revokes the identity's grants, which refuses the
+ * refresh.
  */
 async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<void> {
   const signedUp = await postCredentials(base, '/auth/sign-up', {
@@ -414,6 +415,13 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
   })
   const { access, refresh } = signedUp.tokens
   const identity = signedUp.identity.id
+
+  // The same token through the same calls: only the mark explains the refusal that follows.
+  await step('a fresh token is accepted before sessions_revoked_at', async () => {
+    const accepted = unwrap(await root.sessions.authenticate({ access }))
+
+    check(accepted.renewed === false, 'the token was renewed')
+  })
 
   await step('sessions_revoked_at set by the namespace user', async () => {
     await root.local.db.query(sessionsRevokedStatement, {
@@ -448,6 +456,153 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
       check(refused.isErr(), 'the refresh was accepted')
     },
   )
+}
+
+/** A device as `GET /devices` lists it, as far as the smoke reads it. */
+const listedDevices = z.object({
+  devices: z.array(
+    z.object({
+      id: z.string(),
+      device: z.string(),
+      revokedAt: z.string().nullable(),
+      current: z.boolean(),
+    }),
+  ),
+})
+
+/** The caller's devices as `GET /devices` lists them to `signedIn`, from its own device. */
+async function devicesOf(base: string, signedIn: SignedIn) {
+  const answer = await call(
+    base,
+    'GET',
+    '/devices',
+    signedIn.tokens.access,
+    undefined,
+    signedIn.device,
+  )
+
+  check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+
+  return listedDevices.parse(answer.body).devices
+}
+
+/**
+ * Device sessions, on a fresh identity with a laptop and a phone: both listed, the laptop as the
+ * current one; the phone signed out from the laptop (its socket closed with 4001, its row
+ * revoked); then a tablet signed in and every device signed out from the laptop (the laptop's
+ * and the tablet's sockets closed with 4001), after which the laptop's old pair is refused at
+ * hello and by the sign-out route.
+ */
+async function deviceSessionSteps(base: string, opened: Opened): Promise<void> {
+  const credentials = {
+    email: `smoke-${crypto.randomUUID()}@example.test`,
+    password: crypto.randomUUID(),
+  }
+  const { laptop, phone } = await step(
+    'devices: signed up on a laptop, signed in on a phone',
+    async () => ({
+      laptop: await postCredentials(base, '/auth/sign-up', {
+        ...credentials,
+        device: { id: 'smoke-laptop', label: 'Smoke laptop' },
+      }),
+      phone: await postCredentials(base, '/auth/sign-in', {
+        ...credentials,
+        device: { id: 'smoke-phone', label: 'Smoke phone' },
+      }),
+    }),
+  )
+  const sockets = await step('devices: laptop and phone welcomed', async () => ({
+    laptop: (await hello(base, opened, laptop)).device,
+    phone: (await hello(base, opened, phone)).device,
+  }))
+
+  const phoneRow = await step('GET /devices lists both, the laptop as current', async () => {
+    const devices = await devicesOf(base, laptop)
+
+    check(
+      devices.map((device) => device.device).join() === 'smoke-laptop,smoke-phone',
+      `listed ${JSON.stringify(devices)}`,
+    )
+    check(
+      devices.map((device) => device.current).join() === 'true,false',
+      `current ${JSON.stringify(devices)}`,
+    )
+
+    const [, listedPhone] = devices
+
+    if (!listedPhone) {
+      throw new Error('the phone is not listed')
+    }
+
+    return listedPhone
+  })
+
+  await step(
+    `phone signed out by DELETE /devices/<phone>: 204, closed with ${CLOSE.revoked}`,
+    async () => {
+      const answer = await call(base, 'DELETE', `/devices/${phoneRow.id}`, laptop.tokens.access)
+
+      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+
+      const { code } = await sockets.phone.closed
+      const [, revoked] = await devicesOf(base, laptop)
+
+      check(code === CLOSE.revoked, `closed with ${code}`)
+      check(revoked?.revokedAt !== null, 'the phone is not marked revoked')
+    },
+  )
+
+  const tablet = await step('devices: signed in on a tablet, welcomed', async () => {
+    const signedIn = await postCredentials(base, '/auth/sign-in', {
+      ...credentials,
+      device: { id: 'smoke-tablet', label: 'Smoke tablet' },
+    })
+
+    return (await hello(base, opened, signedIn)).device
+  })
+
+  await step(
+    `POST /auth/sign-out-everywhere: 204, laptop and tablet closed with ${CLOSE.revoked}`,
+    async () => {
+      const answer = await call(base, 'POST', '/auth/sign-out-everywhere', laptop.tokens.access)
+
+      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+
+      const codes = [(await sockets.laptop.closed).code, (await tablet.closed).code]
+
+      check(
+        codes.every((code) => code === CLOSE.revoked),
+        `closed with ${codes.join()}`,
+      )
+    },
+  )
+
+  await step(`hello with the laptop's old pair: closed with ${CLOSE.unauthorized}`, async () => {
+    const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
+
+    opened.devices.push(device)
+    device.send({
+      type: 'hello',
+      protocol: PROTOCOL_VERSION,
+      ...laptop.tokens,
+      device: laptop.device,
+    })
+
+    const { code } = await device.closed
+
+    check(code === CLOSE.unauthorized, `closed with ${code}`)
+  })
+
+  await step('POST /auth/sign-out with the dead pair: 401', async () => {
+    const answer = await call(base, 'POST', '/auth/sign-out', laptop.tokens.access, {
+      refresh: laptop.tokens.refresh,
+    })
+
+    check(
+      answer.status === 401 && refusal.safeParse(answer.body).data?.code === 'unauthorized',
+      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+    )
+  })
 }
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
@@ -567,6 +722,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   })
 
   await sessionsRevokedSteps(base, root)
+  await deviceSessionSteps(base, opened)
   await organisationSteps(base, opened, second)
 }
 

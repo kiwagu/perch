@@ -137,10 +137,15 @@ stand.
   the owner editing that note as an admin, the invited device deleting its own note, its edit of
   the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
   note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
-  4403), and on a further identity the clause of the access method: a token issued before
-  `sessions_revoked_at` refused, a refresh not blocked by it, and the namespace user revoking the
-  identity's grants (`ACCESS identity ON DATABASE REVOKE`) so that the refresh is refused; one
-  line per step.
+  4403), on a further identity the clause of the access method: its fresh token accepted, the
+  same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
+  the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
+  that the refresh is refused; and on another identity its device sessions: a laptop and a phone
+  listed by `GET /devices` with the laptop as current, the phone signed out from the laptop
+  (`DELETE /devices/:id`, its socket closed with 4001, its row revoked), a tablet signed in and
+  then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
+  and the tablet's sockets closed with 4001), the laptop's old pair refused at hello (4401) and
+  by `POST /auth/sign-out` (401); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
