@@ -37,6 +37,11 @@ const listedDevice = z.strictObject({
 
 const listed = z.strictObject({ devices: z.array(listedDevice) })
 
+/** Waits for the next whole second, in which a sign-in starts a session later than any token so far. */
+function nextSecond(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 1_010 - (Date.now() % 1_000)))
+}
+
 /** Closes what a test opened. */
 const cleanups: Array<() => Promise<void>> = []
 
@@ -369,6 +374,25 @@ describe('deviceRoutes', () => {
     expect(after[0]?.revokedAt).toBeNull()
   })
 
+  it('refuses the Bearer calls of an access token issued before its device signed in again, and takes the new pair', async () => {
+    const { ask, sessions, annsPhone, annOnLaptop, annOnPhone } = await harness()
+    const phoneRow = await annsPhone()
+
+    expect(await ask('DELETE', `/devices/${phoneRow.id}`, { as: annOnLaptop })).toEqual(noContent)
+
+    // Signed in again on the phone in a later second: its row is live again, with a new session.
+    await nextSecond()
+
+    const again = (
+      await sessions.signIn({ email: 'ann@example.test', password: PASSWORD }, phone)
+    )._unsafeUnwrap()
+    const phoneAgain = { identity: again.identity.id, tokens: again.tokens, device: phone.id }
+
+    // The old access token still signs Ann in, but it belongs to the session the sign-out ended.
+    expect(await ask('GET', '/devices', { as: annOnPhone })).toEqual(unauthorized)
+    expect((await ask('GET', '/devices', { as: phoneAgain })).status).toBe(200)
+  })
+
   it("answers 404 for a device that is not the caller's or does not exist, and leaves it alone", async () => {
     const { ask, devices, annOnLaptop, bob, sockets } = await harness()
     const [bobsLaptop] = (await devices.list(bob.identity))._unsafeUnwrap()
@@ -539,9 +563,9 @@ describe('deviceRoutes', () => {
     expect(sockets.annLaptop.ended).toEqual([])
   })
 
-  it('leaves no live grant after a renewal when the sign-out then fails', async () => {
+  it('finishes a sign-out that renewed its pair when its row fails to be marked once: the mark is tried again, 204', async () => {
     let failOnce = false
-    const { signOut, liveGrants, annOnLaptop, annOnPhone } = await harness({
+    const { signOut, annsPhone, liveGrants, sockets, annOnLaptop, annOnPhone } = await harness({
       directoryQueries: (text) => {
         if (failOnce && text === deviceSignedOutStatement) {
           failOnce = false
@@ -553,9 +577,42 @@ describe('deviceRoutes', () => {
     failOnce = true
 
     expect(await signOut({ access: 'expired-access', refresh: annOnPhone.tokens.refresh })).toEqual(
+      noContent,
+    )
+    expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
+    expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
+    expect(await liveGrants(annOnPhone.identity)).toEqual([grantIdOf(annOnLaptop.tokens.refresh)])
+  })
+
+  it("closes the device's sockets and leaves no live grant when a sign-out that renewed its pair cannot mark the row, then answers 500", async () => {
+    let failing = false
+    const { signOut, sessions, liveGrants, sockets, annOnLaptop, annOnPhone } = await harness({
+      directoryQueries: (text) => {
+        if (failing && text === deviceSignedOutStatement) {
+          throw new Error('the directory went away')
+        }
+      },
+    })
+
+    sessions.park({
+      identity: annOnPhone.identity,
+      device: phone.id,
+      spentRefresh: 'surreal-refresh-spent-key',
+      tokens: annOnPhone.tokens,
+    })
+    failing = true
+
+    // The refresh key is spent by the renewal: asked again, the pair would be refused, so the
+    // route closes what it can before it answers.
+    expect(await signOut({ access: 'expired-access', refresh: annOnPhone.tokens.refresh })).toEqual(
       { status: 500, body: { code: 'internal' } },
     )
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
+    expect(sockets.annLaptop.ended).toEqual([])
+    expect(
+      sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
+    ).toBeUndefined()
     expect(await liveGrants(annOnPhone.identity)).toEqual([grantIdOf(annOnLaptop.tokens.refresh)])
   })
 

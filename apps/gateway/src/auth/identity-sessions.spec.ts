@@ -13,6 +13,7 @@ import { DIRECTORY, NAMESPACE } from '../config'
 import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { DeviceSessions, type DeviceTouch } from './device-sessions'
 import { grantIdOf, IdentitySessions } from './identity-sessions'
+import { issuedAtOf } from './token-claims'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
@@ -81,6 +82,7 @@ function recordingDevices(options: RecordingOptions = {}) {
           grant: input.grant,
           createdAt: new Date(0),
           lastSeenAt: new Date(0),
+          startedAt: input.startedAt,
         },
         ...(previous === undefined ? {} : { previous }),
       })
@@ -353,7 +355,7 @@ describe('grantIdOf', () => {
 })
 
 describe('IdentitySessions and the devices', () => {
-  it('records the device of a sign-up and of a sign-in with the grant of its refresh key', async () => {
+  it('records the device of a sign-up and of a sign-in with the grant of its refresh key and the second its token was issued in', async () => {
     const { touched, devices } = recordingDevices()
     const sessions = sessionsOver(await testDb(), { devices })
     const phone = { id: 'device-phone', label: 'Safari on iPhone' }
@@ -367,14 +369,17 @@ describe('IdentitySessions and the devices', () => {
         device: laptop.id,
         label: laptop.label,
         grant: grantIdOf(up.tokens.refresh),
+        startedAt: issuedAtOf(up.tokens.access),
       },
       {
         identity: up.identity.id,
         device: phone.id,
         label: phone.label,
         grant: grantIdOf(again.tokens.refresh),
+        startedAt: issuedAtOf(again.tokens.access),
       },
     ])
+    expect(touched.every(({ startedAt }) => startedAt instanceof Date)).toBe(true)
     expect(grantIdOf(up.tokens.refresh)).toMatch(/\S/)
   })
 

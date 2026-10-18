@@ -13,9 +13,11 @@ closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in
 device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
 one row per identity and device with its label, the id of the refresh grant its pair holds now
 (the second segment of the refresh key, `surreal-refresh-<grant>-<secret>`, read by
-`grantIdOf`), when it was seen last and whether it was signed out; a sign-in whose device
-cannot be recorded fails and has the grant it minted revoked, and signing in again clears the
-mark and forgets a pair parked for the device. A sign-in on a device whose row held another
+`grantIdOf`), when its current session started (`started_at`: the second the sign-in's access
+token was issued in, read from the token's `iat` by `issuedAtOf`, `src/auth/token-claims.ts`),
+when it was seen last and whether it was signed out; a sign-in whose device cannot be recorded
+fails and has the grant it minted revoked, and signing in again clears the mark, starts a new
+session and forgets a pair parked for the device. A sign-in on a device whose row held another
 grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
 identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
 revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
@@ -26,13 +28,19 @@ pair is renewed with the refresh key when the access token no longer works, and 
 sent first).
 The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
 new one, only while the row holds the spent grant and is not signed out; any other hello reads
-the row. A device without a row, or whose row holds another grant, is closed with 4401 (`no
-session for this device`), a device signed out with 4001, and a pair renewed for either is
-revoked at once. A bound device is marked seen at its hello and then at most every five minutes
-it talks, and is welcomed with its
-identity's private region, the region `tenant:<key>` of each organisation the identity belongs
-to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
-and compacts there through the region hub, the server's copy of the replicated regions, which
+the row. The access token the hello is accepted with (as it came, renewed or parked) must belong
+to the row's current session: the database verified it, and the gateway reads the second it was
+issued in from its payload. A device without a row, a renewal whose row holds another grant, and
+a token issued before the row's session started (one of an earlier session: the device was
+signed out, then signed in again) or naming no such second are closed with 4401 (`no session for
+this device`), a device signed out with 4001, and a pair renewed for any of them is revoked at
+once. What this does not catch: a live access token presented under another live device of the
+same identity, whose session started before the token was issued, binds to that device until
+the token expires (at most 15 minutes); the list of devices never gives their ids away. A bound
+device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
+with its identity's private region, the region `tenant:<key>` of each organisation the identity
+belongs to and those memberships, the only regions it may name, and subscribes, pulls, pushes,
+probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database
 (`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
@@ -101,19 +109,19 @@ The organisation routes act for the identity a device's access token signs in, s
 `Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
 every call with an access token must carry: a call without a valid device id answers 400
 (`bad-request`), checked before any call to the database, and a device without a live session
-row (unknown, or signed out: its access token still works, its calls do not) 401
-(`unauthorized`). A refresh key is not taken over HTTP: a request with a valid device header but
-without an access token the database accepts answers 401, and one whose token the database
-could not judge answers 500; a missing or invalid `X-Perch-Device` answers 400 first, before any
-token is checked. `GET /organisations` lists the caller's memberships; `POST /organisations`
-with `{ key, name }` creates an organisation with the caller as its admin (201); `GET
-/organisations/:key/members` lists the members to an admin (403 `not-admin` to a member); `POST
-/organisations/:key/members` with `{ email }` lets an admin invite an identity; and
-`DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
-an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
-code, with 400 for `invalid-key` and `invalid-name`, 403 for `not-a-member` and `not-admin`, 404
-for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-member` and
-`self`; a failure of the gateway answers 500 (`internal`).
+row (unknown, or signed out: its access token still works, its calls do not), or whose session
+started after the token was issued, 401 (`unauthorized`). A refresh key is not taken over HTTP:
+a request with a valid device header but without an access token the database accepts answers
+401, and one whose token the database could not judge answers 500; a missing or invalid
+`X-Perch-Device` answers 400 first, before any token is checked. `GET /organisations` lists the
+caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
+the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
+(403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
+invite an identity; and `DELETE /organisations/:key/members/:identity` lets an admin remove a
+member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
+a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
+`not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
+`key-taken`, `already-member` and `self`; a failure of the gateway answers 500 (`internal`).
 
 The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
 and its device the same way. `GET /devices` lists the
@@ -147,7 +155,13 @@ subject.record = … AND grant.id = …`, scoped to the identity), 204; a pair w
 signed out from another one already (its row marked, its grant revoked) answers 204 as well.
 Every step may be asked again: a failure answers 500 and the device keeps the pair to try
 again, and its retry marks the row and revokes the grant anew; a pair the database could not
-judge answers 500 too, with nothing marked. A pair the database refused, or that no device of
+judge answers 500 too, with nothing marked. A renewal spends the pair's refresh key, so a pair
+the route renewed would be refused if asked again: the row's mark is tried three times (after
+100, then 200 ms), and when it still fails the route closes the device the header names (its
+parked pairs forgotten, its sockets closed with 4001), revokes the renewed grant and answers 500.
+That row may then list the device as signed in until its next sign-in or a sign-out from My
+devices; its grants are dead, so only a still valid access token of that session (at most 15
+minutes old) could reach the gateway. A pair the database refused, or that no device of
 the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
 itself has its new grant revoked whatever it answers. A request without its device or its pair
 answers 400, before any key is checked; so does every call with an access token that names no
@@ -187,7 +201,9 @@ stand.
   device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
   laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
   from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
-  with its still working access token closed with 4001), a tablet signed in and
+  with its still working access token closed with 4001) and signed in again in a later second
+  (that old token refused at hello with 4401 and by `GET /devices` with 401, the new pair
+  welcomed), a tablet signed in and
   then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
   and the tablet's sockets closed with 4001, in a later second than every token issued before),
   a sign-in right after it answered 200 with a working token, the laptop's old pair refused at

@@ -67,8 +67,9 @@ async function devicesOf(base: string, signedIn: SignedIn) {
  * Device sessions, on a fresh identity with a laptop and a phone: a hello under a device with no
  * session refused (4401) and a call that names no device refused (400); both devices listed, the
  * laptop as the current one; the phone signed out from the laptop (its socket closed with 4001,
- * its row revoked, its hello with its still working access token closed with 4001); then a
- * tablet signed in twice (the grant of its first sign-in revoked by the second) and every device
+ * its row revoked, its hello with its still working access token closed with 4001), then signed
+ * in again (its old access token, still working, refused at hello with 4401 and on a call with
+ * 401, its new pair welcomed); then a tablet signed in twice (the grant of its first sign-in revoked by the second) and every device
  * signed out from the laptop (the laptop's and the tablet's
  * sockets closed with 4001); a sign-in right after it works, and the laptop's old pair is refused
  * at hello and by the sign-out route.
@@ -158,6 +159,33 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       const { code } = await refusedHello(base, opened, phone)
 
       check(code === CLOSE.revoked, `closed with ${code}`)
+    },
+  )
+
+  await step(
+    `the phone signed in again: its old access token refused at hello (${CLOSE.unauthorized}) and on a call (401), its new pair welcomed`,
+    async () => {
+      // A sign-in in a later second starts a session later than any token issued so far.
+      await new Promise((resolve) => setTimeout(resolve, 1_010 - (Date.now() % 1_000)))
+
+      const again = await postCredentials(base, '/auth/sign-in', {
+        ...credentials,
+        device: { id: 'smoke-phone', label: 'Smoke phone' },
+      })
+      const { code } = await refusedHello(base, opened, phone)
+      const old = await callAs(base, 'GET', '/devices', phone)
+
+      check(code === CLOSE.unauthorized, `the old pair's hello closed with ${code}`)
+      check(
+        old.status === 401 && refusal.safeParse(old.body).data?.code === 'unauthorized',
+        `the old access token answered ${old.status} ${JSON.stringify(old.body)}`,
+      )
+
+      await hello(base, opened, again)
+
+      const fresh = await callAs(base, 'GET', '/devices', again)
+
+      check(fresh.status === 200, `the new access token answered ${fresh.status}`)
     },
   )
 

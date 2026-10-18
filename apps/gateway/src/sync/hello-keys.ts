@@ -15,6 +15,7 @@ import {
   type IdentitySessions,
   keysRefused,
 } from '../auth/identity-sessions'
+import { issuedAtOf } from '../auth/token-claims'
 
 /**
  * Keys a device's hello was accepted with: the identity, the pair the device holds once the
@@ -91,6 +92,9 @@ export async function acceptKeys(
 /**
  * Binds the hello to its device's row: a renewal moves the row from the spent grant to the new
  * one (only while the row holds the spent grant and is not signed out), any other hello reads it.
+ * The access token the hello was accepted with (renewed, parked or as it came) must belong to the
+ * row's current session: one issued before it started, or one that names no second it was issued
+ * in, is a stale token.
  */
 export function bindDevice(
   devices: Pick<DeviceSessions, 'bind' | 'rotate'>,
@@ -98,9 +102,14 @@ export function bindDevice(
 ): ResultAsync<DeviceBinding, DataError> {
   const { identity, device, accepted } = input
   const { spent, deliver } = accepted
+  const issuedAt = issuedAtOf(accepted.tokens.access)
+
+  if (issuedAt === undefined) {
+    return okAsync({ kind: 'stale-token' })
+  }
 
   if (spent === undefined || deliver === undefined) {
-    return devices.bind({ identity, device })
+    return devices.bind({ identity, device, issuedAt })
   }
 
   const from = grantIdOf(spent)
@@ -108,5 +117,5 @@ export function bindDevice(
 
   return from === undefined || to === undefined
     ? okAsync({ kind: 'other-grant' })
-    : devices.rotate({ identity, device, spent: from, next: to })
+    : devices.rotate({ identity, device, spent: from, next: to, issuedAt })
 }

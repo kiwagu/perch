@@ -4,7 +4,6 @@ import { type AuthTokens, createAuth, fromDriverValue, type LocalDb } from '@wor
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { device_sessionIdFactory, type IdentityId } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
-import { z } from '@workspace/zod'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
@@ -15,6 +14,7 @@ import deviceTouchStatement from './surql/device-touch.surql'
 import grantRevokeStatement from './surql/grant-revoke.surql'
 import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from './surql/identity-sessions-revoked.surql'
+import { issuedAtOf } from './token-claims'
 
 const PASSWORD = 'pass-word-1'
 
@@ -80,14 +80,15 @@ async function accepted(local: LocalDb, access: string): Promise<boolean> {
   return withAuth(local, async (auth) => (await auth.resume({ access })).isOk())
 }
 
-const claims = z.object({ iat: z.number().int() })
-
 /** When the access token `access` was issued: its `iat`, a whole second, in milliseconds. */
 function issuedAt(access: string): number {
-  const [, payload = ''] = access.split('.')
-
-  return claims.parse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))).iat * 1000
+  return (
+    issuedAtOf(access) ?? expect.unreachable('a token that names when it was issued')
+  ).getTime()
 }
+
+/** The second the device sessions of most tests started in, as a sign-in names it. */
+const SESSION = new Date(1_760_000_000_000)
 
 /** The refresh key of the pair `refresh` renews to, or `undefined` when it renews nothing. */
 async function renew(local: LocalDb, refresh: string): Promise<string | undefined> {
@@ -120,6 +121,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Firefox on Linux',
         grant: 'grant-1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
     const revoked = (await devices.revoke({ identity: ann.identity, id: first.id }))._unsafeUnwrap()
@@ -129,6 +131,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Chrome on Linux',
         grant: 'grant-2',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -157,7 +160,13 @@ describe('DeviceSessions', () => {
     const { local, devices } = await harness()
     const ann = await signUp(local, 'ann@example.test')
     const touch = (grant: string) =>
-      devices.touch({ identity: ann.identity, device: 'device-laptop', label: 'Laptop', grant })
+      devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'Laptop',
+        grant,
+        startedAt: SESSION,
+      })
 
     const first = (await touch('grant-1'))._unsafeUnwrap()
     const second = (await touch('grant-2'))._unsafeUnwrap()
@@ -194,7 +203,13 @@ describe('DeviceSessions', () => {
     })
     const ann = await signUp(local, 'ann@example.test')
     const touch = (grant: string) =>
-      devices.touch({ identity: ann.identity, device: 'device-laptop', label: 'Laptop', grant })
+      devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'Laptop',
+        grant,
+        startedAt: SESSION,
+      })
 
     const touched = (await Promise.all([touch('grant-1'), touch('grant-2')])).map((result) =>
       result._unsafeUnwrap(),
@@ -221,7 +236,13 @@ describe('DeviceSessions', () => {
       [ann.identity, 'device-phone'],
     ] as const) {
       ;(
-        await devices.touch({ identity, device, label: device, grant: `${device}-grant` })
+        await devices.touch({
+          identity,
+          device,
+          label: device,
+          grant: `${device}-grant`,
+          startedAt: SESSION,
+        })
       )._unsafeUnwrap()
     }
 
@@ -242,6 +263,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Laptop',
         grant: 'grant-1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -251,6 +273,7 @@ describe('DeviceSessions', () => {
         device: 'device-phone',
         label: 'Phone',
         grant: 'grant-2',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap()
     ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
@@ -274,6 +297,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Laptop',
         grant: 'grant-1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -295,6 +319,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Laptop',
         grant: grantOf(ann.refresh),
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -318,6 +343,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'Laptop',
         grant: grantOf(current),
+        startedAt: SESSION,
       })
     )._unsafeUnwrap()
 
@@ -339,6 +365,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'L',
         grant: 'g1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -348,12 +375,13 @@ describe('DeviceSessions', () => {
         device: 'device-phone',
         label: 'P',
         grant: 'g2',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap()
     ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
 
     const bind = async (identity: IdentityId, device: string) =>
-      (await devices.bind({ identity, device }))._unsafeUnwrap()
+      (await devices.bind({ identity, device, issuedAt: SESSION }))._unsafeUnwrap()
 
     expect(await bind(ann.identity, 'device-phone')).toMatchObject({
       kind: 'bound',
@@ -377,10 +405,13 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'L',
         grant: 'g1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
     const rotate = async (device: string, spent: string, next: string) =>
-      (await devices.rotate({ identity: ann.identity, device, spent, next }))._unsafeUnwrap()
+      (
+        await devices.rotate({ identity: ann.identity, device, spent, next, issuedAt: SESSION })
+      )._unsafeUnwrap()
 
     const moved = await rotate('device-laptop', 'g1', 'g2')
     const fromAnother = await rotate('device-laptop', 'g1', 'g3')
@@ -400,6 +431,67 @@ describe('DeviceSessions', () => {
     expect(row?.revokedAt).toBeInstanceOf(Date)
   })
 
+  it('records when the current session of a device started, and moves it with every sign-in', async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const later = new Date(SESSION.getTime() + 60_000)
+    const touch = (grant: string, startedAt: Date) =>
+      devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant,
+        startedAt,
+      })
+
+    const first = (await touch('g1', SESSION))._unsafeUnwrap().row
+    const again = (await touch('g2', later))._unsafeUnwrap().row
+    const [listed] = (await devices.list(ann.identity))._unsafeUnwrap()
+
+    expect(first.startedAt).toEqual(SESSION)
+    expect(again.startedAt).toEqual(later)
+    expect(listed?.startedAt).toEqual(later)
+  })
+
+  it("binds a token issued before its device's session started as stale, one issued in that second or after as bound", async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+
+    ;(
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant: 'g1',
+        startedAt: SESSION,
+      })
+    )._unsafeUnwrap()
+
+    const bind = async (issuedAt: Date) =>
+      (
+        await devices.bind({ identity: ann.identity, device: 'device-laptop', issuedAt })
+      )._unsafeUnwrap().kind
+
+    expect(await bind(new Date(SESSION.getTime() - 1_000))).toBe('stale-token')
+    expect(await bind(SESSION)).toBe('bound')
+    expect(await bind(new Date(SESSION.getTime() + 1_000))).toBe('bound')
+
+    const rotate = async (spent: string, next: string, issuedAt: Date) =>
+      (
+        await devices.rotate({
+          identity: ann.identity,
+          device: 'device-laptop',
+          spent,
+          next,
+          issuedAt,
+        })
+      )._unsafeUnwrap().kind
+
+    // A renewal's token is issued as it renews, after its session started; an earlier one is not.
+    expect(await rotate('g1', 'g2', new Date(SESSION.getTime() - 1_000))).toBe('stale-token')
+    expect(await rotate('g2', 'g3', new Date(SESSION.getTime() + 1_000))).toBe('bound')
+  })
+
   it("marks the device of a signed-out pair by its grant, once, and no other identity's device", async () => {
     const { local, devices } = await harness()
     const ann = await signUp(local, 'ann@example.test')
@@ -411,6 +503,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'L',
         grant: 'g1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap()
 
@@ -470,6 +563,7 @@ describe('DeviceSessions', () => {
         device: 'device-laptop',
         label: 'L',
         grant: 'g1',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap().row
 
@@ -515,7 +609,13 @@ describe('DeviceSessions', () => {
 
     for (const device of ['device-laptop', 'device-phone']) {
       ;(
-        await devices.touch({ identity: ann.identity, device, label: device, grant: device })
+        await devices.touch({
+          identity: ann.identity,
+          device,
+          label: device,
+          grant: device,
+          startedAt: SESSION,
+        })
       )._unsafeUnwrap()
     }
 
@@ -525,6 +625,7 @@ describe('DeviceSessions', () => {
         device: 'device-bobs',
         label: 'Bob',
         grant: 'bob',
+        startedAt: SESSION,
       })
     )._unsafeUnwrap()
     ;(await devices.revokeAll(ann.identity))._unsafeUnwrap()

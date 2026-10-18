@@ -23,6 +23,10 @@ DEFINE FIELD OVERWRITE created_at ON device_session TYPE datetime
   READONLY;
 DEFINE FIELD OVERWRITE last_seen_at ON device_session TYPE datetime
   DEFAULT time::now();
+-- When the device's current session started: the second its latest sign-in's access token was
+-- issued in, moved by every sign-in. A token issued in an earlier second belongs to an earlier
+-- session of the device, one a sign-out may have ended, and the gateway refuses it.
+DEFINE FIELD OVERWRITE started_at ON device_session TYPE datetime;
 DEFINE FIELD OVERWRITE revoked_at ON device_session TYPE option<datetime>;
 
 DEFINE INDEX OVERWRITE device_session_identity_device ON device_session FIELDS identity, device

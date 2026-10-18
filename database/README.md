@@ -26,8 +26,9 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   letters, digits and underscores, its name, namespace, database and status; closed to every
   record user) and `membership` (an identity's role in an organisation, `member` or `admin`; an
   identity reads only its own rows, and only the gateway writes them) and `device_session`
-  (one row per device of an identity, with its label and its current refresh grant; unique per
-  identity and device, closed to every record user, served by the gateway). `identity` also
+  (one row per device of an identity, with its label, its current refresh grant and when its
+  current session started, `started_at`; unique per identity and device, closed to every record
+  user, served by the gateway). `identity` also
   holds `sessions_revoked_at`, and its access method an `AUTHENTICATE` clause that refuses every
   token issued before it ("signed out everywhere"). A refresh exchange carries no token, so the
   clause does not block it: only revoking the identity's grants

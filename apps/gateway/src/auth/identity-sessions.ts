@@ -15,6 +15,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { DeviceSessions } from './device-sessions'
+import { issuedAtOf } from './token-claims'
 
 /** The keys a device keeps: the short-lived access token and the refresh key that renews it. */
 export interface DeviceTokens {
@@ -266,13 +267,14 @@ export class IdentitySessions {
   }
 
   /**
-   * Records the device of a sign-up or sign-in with the grant of its pair, forgets the pairs
-   * parked for the device, and revokes the grant the device's row held before: a device holds one
-   * live grant, so a pair it left behind (one it could not have revoked, or one parked for it)
-   * dies with the sign-in. A device that cannot be recorded fails the sign-in, and the grant the
-   * sign-in minted is revoked: every live grant is a device on its identity's list, where it can
-   * be signed out. A grant that cannot be revoked is reported; an old one leaves the sign-in
-   * standing.
+   * Records the device of a sign-up or sign-in with the grant of its pair and a new session that
+   * started in the second its access token was issued in, forgets the pairs parked for the
+   * device, and revokes the grant the device's row held before: a device holds one live grant, so
+   * a pair it left behind (one it could not have revoked, or one parked for it) dies with the
+   * sign-in, and an access token of an earlier session is refused from then on. A device that
+   * cannot be recorded fails the sign-in, and the grant the sign-in minted is revoked: every live
+   * grant is a device on its identity's list, where it can be signed out. A grant that cannot be
+   * revoked is reported; an old one leaves the sign-in standing.
    */
   #recordDevice(signed: SignedIn, device: SignInDevice): ResultAsync<SignedIn, DataError> {
     const grant = grantIdOf(signed.tokens.refresh)
@@ -290,8 +292,18 @@ export class IdentitySessions {
         return okAsync(undefined)
       })
 
+    // The session starts when its first access token was issued: the touch comes later, maybe in
+    // the next second, and its own time would make that token older than the session.
+    const startedAt = issuedAtOf(signed.tokens.access)
+
+    if (startedAt === undefined) {
+      const unnamed = refused('the access token of the sign-in names no second it was issued in')
+
+      return revoke(grant).andThen(() => errAsync(unnamed))
+    }
+
     return this.#devices
-      .touch({ identity, device: device.id, label: device.label, grant })
+      .touch({ identity, device: device.id, label: device.label, grant, startedAt })
       .orElse((error) => revoke(grant).andThen(() => errAsync(error)))
       .andThen(({ previous }) => {
         this.unpark(identity, device.id)

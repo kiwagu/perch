@@ -80,6 +80,11 @@ class FakeSocket implements SocketLike {
   }
 }
 
+/** Waits for the next whole second, in which a sign-in starts a session later than any token so far. */
+function nextSecond(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 1_010 - (Date.now() % 1_000)))
+}
+
 /** Closes what each test opened: the hub, then the organisations' databases, then the directory. */
 const cleanups: Array<() => Promise<void>> = []
 
@@ -907,6 +912,39 @@ describe('SyncConnection', () => {
     expect(socket.closes).toEqual([[CLOSE.revoked, 'signed out from another device']])
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
+  })
+
+  it('closes 4401 a hello with an access token issued before its device signed in again, and welcomes the new pair', async () => {
+    const fixture = await connect()
+    const { socket, connection, ann, connections, devices } = fixture
+    const [row] = (await devices.list(ann.identity.id))._unsafeUnwrap()
+
+    ;(
+      await devices.revoke({
+        identity: ann.identity.id,
+        id: row?.id ?? expect.unreachable("Ann's laptop listed"),
+      })
+    )._unsafeUnwrap()
+
+    // Signed in again on the laptop in a later second: its row is live again, with a new session.
+    await nextSecond()
+
+    const again = await fixture.signIn(
+      { email: ann.identity.email, password: 'pass-word-1' },
+      DEVICE,
+    )
+
+    await hello(connection, ann.tokens)
+
+    expect(socket.closes).toEqual([[CLOSE.unauthorized, 'no session for this device']])
+    expect(socket.sent).toEqual([])
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
+
+    const fresh = open(fixture)
+
+    await hello(fresh.connection, again.tokens)
+
+    expect(types(fresh.socket.sent)).toEqual(['welcome'])
   })
 
   it("closes 4401 a renewal under another device's id: that device keeps its grant, the new one is revoked", async () => {

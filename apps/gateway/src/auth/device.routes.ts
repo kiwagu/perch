@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
@@ -89,6 +90,16 @@ const noSuchDevice = (): Response => Response.json({ code: 'no-such-device' }, {
 
 const badRequest = (): Response => Response.json({ code: 'bad-request' }, { status: 400 })
 
+/** How many times a sign-out that renewed its pair tries to mark the device's row. */
+const MARK_ATTEMPTS = 3
+
+/** The pause before the first retry of that mark; each later one waits longer. */
+const MARK_BACKOFF_MS = 100
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export interface DeviceRoutesOptions {
   /**
    * Hears each failure of the gateway a request was answered 500 for: the answer leaves the
@@ -119,7 +130,10 @@ export interface DeviceRoutesOptions {
  *   the grant the pair holds (the renewed one when renewed) is revoked through the database: 204.
  *   A failure answers 500 and may be asked again, a pair the database could not judge among
  *   them; a pair the database refused or that no device of the identity holds answers 401
- *   `unauthorized`, with nothing revoked but a grant the route renewed itself.
+ *   `unauthorized`, with nothing revoked but a grant the route renewed itself. A renewal spends
+ *   the pair's refresh key, so that pair cannot be asked again: the row's mark is tried three
+ *   times, and a mark that still fails closes the device the header names with 4001 (its parked
+ *   pairs forgotten) and revokes the renewed grant before the 500.
  *
  * A sign-out that failed after its first write still forgets the parked pairs and closes the
  * sockets of what it signed out before it answers 500. A method a path does not take answers 405
@@ -149,6 +163,26 @@ export function deviceRoutes(
   async function signedOut(identity: IdentityId, device: string | undefined): Promise<void> {
     sessions.unpark(identity, device)
     await connections.close(identity, device, CLOSE.revoked)
+  }
+
+  /**
+   * Marks the device of `identity` that holds `grant` signed out, tried `attempts` times, with a
+   * short pause before each retry; the last answer stands.
+   */
+  async function mark(
+    identity: IdentityId,
+    grant: string,
+    attempts: number,
+  ): Promise<Result<DeviceSessionRow | undefined, DataError>> {
+    for (let attempt = 1; ; attempt += 1) {
+      const marked = await devices.signedOut({ identity, grant })
+
+      if (marked.isOk() || attempt >= attempts) {
+        return marked
+      }
+
+      await pause(MARK_BACKOFF_MS * attempt)
+    }
   }
 
   /** A sign-out that failed: before its first write, or after it (`partial`). */
@@ -217,7 +251,9 @@ export function deviceRoutes(
    * The pair is the credential: it signs the identity in (renewed when its access token no
    * longer works), and its grant names the device. The row is marked first, then the grant the
    * pair holds now is revoked through the database; both may be asked again. A renewal that ends
-   * in anything but 204 still has its grant revoked: nobody holds that pair.
+   * in anything but 204 still has its grant revoked: nobody holds that pair. A renewal spent the
+   * pair's refresh key, so the pair asked again would be refused: the row's mark is tried three
+   * times, and when it still fails, the device the header names is closed before the 500.
    */
   const signOut = async (request: Request): Promise<Response> => {
     const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
@@ -255,9 +291,15 @@ export function deviceRoutes(
 
       return response
     }
-    const marked = await devices.signedOut({ identity: identity.id, grant: sent })
+    const marked = await mark(identity.id, sent, renewed === undefined ? 1 : MARK_ATTEMPTS)
 
     if (marked.isErr()) {
+      // The device cannot ask again after a renewal: what can be closed is closed now. Its row
+      // may stay unmarked; its grants are dead, the renewed one revoked as the route answers.
+      if (renewed !== undefined) {
+        await signedOut(identity.id, device.data)
+      }
+
       return answer(failed(marked.error))
     }
 

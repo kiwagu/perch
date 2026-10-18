@@ -37,16 +37,25 @@ export interface DeviceSessionRow {
   readonly grant: string
   readonly createdAt: Date
   readonly lastSeenAt: Date
+  /**
+   * When the device's current session started: the second its latest sign-in's access token was
+   * issued in. A token issued earlier belongs to an earlier session of the device.
+   */
+  readonly startedAt: Date
   /** When the device was signed out from another device, if it was. */
   readonly revokedAt?: Date
 }
 
-/** A device that signed in, its label, and the grant its pair holds. */
+/**
+ * A device that signed in, its label, the grant its pair holds, and when its session started:
+ * the second the sign-in's access token was issued in.
+ */
 export interface DeviceTouch {
   readonly identity: IdentityId
   readonly device: string
   readonly label: string
   readonly grant: string
+  readonly startedAt: Date
 }
 
 /** A device's row after a sign-in, and the grant the row held before it. */
@@ -62,14 +71,21 @@ export interface DeviceOf {
   readonly device: string
 }
 
+/** A device of an identity, and when the access token that names it was issued. */
+export interface DeviceToken extends DeviceOf {
+  readonly issuedAt: Date
+}
+
 /**
- * Whether a device has a session: its row, not revoked (`bound`); its row, revoked (`revoked`);
- * no row (`missing`); or, for a renewal, a row that holds another grant than the one the
- * renewal spent (`other-grant`).
+ * Whether a device has a session the token belongs to: its row, not revoked (`bound`); its row,
+ * revoked (`revoked`); its row, whose session started after the token was issued
+ * (`stale-token`: the token belongs to an earlier session of the device); no row (`missing`); or,
+ * for a renewal, a row that holds another grant than the one the renewal spent (`other-grant`).
  */
 export type DeviceBinding =
   | { readonly kind: 'bound'; readonly row: DeviceSessionRow }
   | { readonly kind: 'revoked'; readonly row: DeviceSessionRow }
+  | { readonly kind: 'stale-token' }
   | { readonly kind: 'missing' }
   | { readonly kind: 'other-grant' }
 
@@ -103,6 +119,7 @@ const deviceSessionRow = z
     grant: z.string(),
     created_at: z.date(),
     last_seen_at: z.date(),
+    started_at: z.date(),
     revoked_at: z.date().optional(),
   })
   .transform(
@@ -114,6 +131,7 @@ const deviceSessionRow = z
       grant: row.grant,
       createdAt: row.created_at,
       lastSeenAt: row.last_seen_at,
+      startedAt: row.started_at,
       ...(row.revoked_at === undefined ? {} : { revokedAt: row.revoked_at }),
     }),
   )
@@ -121,13 +139,20 @@ const deviceSessionRow = z
 /** What a touch answers: the row and the grant it held before, as the driver returns them. */
 const touchAnswer = z.object({ previous: z.string().optional(), row: z.unknown() })
 
-/** The binding a device's row, or its absence, makes. */
-function bindingOf(row: DeviceSessionRow | undefined): DeviceBinding {
+/** The binding a device's row, or its absence, makes for a token issued at `issuedAt`. */
+function bindingOf(row: DeviceSessionRow | undefined, issuedAt: Date): DeviceBinding {
   if (row === undefined) {
     return { kind: 'missing' }
   }
 
-  return row.revokedAt === undefined ? { kind: 'bound', row } : { kind: 'revoked', row }
+  if (row.revokedAt !== undefined) {
+    return { kind: 'revoked', row }
+  }
+
+  // Whole seconds both: a token issued in the second the session started belongs to it.
+  return issuedAt.getTime() < row.startedAt.getTime()
+    ? { kind: 'stale-token' }
+    : { kind: 'bound', row }
 }
 
 /** A row of the directory, or NONE, parsed. */
@@ -179,9 +204,9 @@ export class DeviceSessions {
   }
 
   /**
-   * Records that the device holds `grant` now, seen now and no longer revoked: its row, made on
-   * its first sign-in and kept for every later one and every renewal. Answers the row and the
-   * grant it held before, which is the caller's to revoke.
+   * Records that the device holds `grant` now, in a session that started at `startedAt`, seen now
+   * and no longer revoked: its row, made on its first sign-in and kept for every later one and
+   * every renewal. Answers the row and the grant it held before, which is the caller's to revoke.
    */
   touch(input: DeviceTouch): ResultAsync<DeviceTouched, DataError> {
     return writing(
@@ -192,6 +217,7 @@ export class DeviceSessions {
           device: input.device,
           label: input.label,
           grant: input.grant,
+          started: input.startedAt,
         })
         .retry(),
       `could not record a device of ${input.identity}`,
@@ -213,27 +239,31 @@ export class DeviceSessions {
     })
   }
 
-  /** Whether the device has a session: its row, revoked or not, or none. */
-  bind(input: DeviceOf): ResultAsync<DeviceBinding, DataError> {
-    const { identity, device } = input
+  /**
+   * Whether the device has a session that a token issued at `issuedAt` belongs to: its row,
+   * revoked or not, whose session started no later than the token's second; or none.
+   */
+  bind(input: DeviceToken): ResultAsync<DeviceBinding, DataError> {
+    const { identity, device, issuedAt } = input
 
     return reading(
       this.#directory.db.query<[unknown]>(deviceOfStatement, { identity, device }),
       `could not read a device of ${identity}`,
     )
       .andThen(([row]) => toOptionalRow(row))
-      .map(bindingOf)
+      .map((row) => bindingOf(row, issuedAt))
   }
 
   /**
    * The device renewed its pair: its row moves from grant `spent` to grant `next` and is seen
-   * now, only while it holds `spent` and is not revoked (`bound`). Otherwise nothing changes,
-   * and the answer says why: `revoked`, `missing`, or `other-grant`.
+   * now, only while it holds `spent` and is not revoked; the renewed access token, issued at
+   * `issuedAt`, then binds as at `bind` (`bound` or `stale-token`). Otherwise nothing changes,
+   * and the answer says why: `revoked`, `missing`, `other-grant` or `stale-token`.
    */
   rotate(
-    input: DeviceOf & { readonly spent: string; readonly next: string },
+    input: DeviceToken & { readonly spent: string; readonly next: string },
   ): ResultAsync<DeviceBinding, DataError> {
-    const { identity, device, spent, next } = input
+    const { identity, device, spent, next, issuedAt } = input
 
     return writing(
       this.#directory.db
@@ -245,8 +275,8 @@ export class DeviceSessions {
       .andThen(
         (row): ResultAsync<DeviceBinding, DataError> =>
           row
-            ? okAsync({ kind: 'bound', row })
-            : this.bind({ identity, device }).map(
+            ? okAsync(bindingOf(row, issuedAt))
+            : this.bind({ identity, device, issuedAt }).map(
                 (binding): DeviceBinding =>
                   binding.kind === 'bound' ? { kind: 'other-grant' } : binding,
               ),

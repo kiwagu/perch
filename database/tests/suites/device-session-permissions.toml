@@ -8,7 +8,7 @@ tags = ["permissions", "device_session"]
 name = "root creates a device session for alice"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Chrome on Linux', grant = 'g1';"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Chrome on Linux', grant = 'g1', started_at = time::floor(time::now(), 1s);"
 allow = true
 
 [[cases]]
@@ -37,6 +37,14 @@ exists = false
 name = "a second row for the same device of the identity is refused"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Again', grant = 'g2';"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Again', grant = 'g2', started_at = time::floor(time::now(), 1s);"
 allow = false
 error_contains = "device_session_identity_device"
+
+[[cases]]
+name = "a device session without the start of its session is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-b', label = 'Firefox on Linux', grant = 'g3';"
+allow = false
+error_contains = "started_at"
