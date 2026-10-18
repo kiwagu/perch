@@ -91,7 +91,8 @@ every call with an access token must carry: a call without a valid device id ans
 (`bad-request`), checked before any call to the database, and a device without a live session
 row (unknown, or signed out: its access
 token still works, its calls do not) 401 (`unauthorized`). A refresh key is not taken over
-HTTP: a request without an access token that works answers 401. `GET /organisations` lists the caller's
+HTTP: a request with a valid device header but without an access token that works answers 401;
+a missing or invalid `X-Perch-Device` answers 400 first, before any token is checked. `GET /organisations` lists the caller's
 memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
 as its admin (201); `GET /organisations/:key/members` lists the members to an admin (403 `not-admin` to a member);
 `POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
@@ -103,10 +104,12 @@ for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-m
 
 The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
 and its device the same way. `GET /devices` lists the
-caller's devices, the earliest first, `{ devices: [{ id, device, label, createdAt, lastSeenAt,
+caller's devices, the earliest first, `{ devices: [{ id, label, createdAt, lastSeenAt,
 revokedAt, current }] }` (times as ISO strings, `revokedAt` null for a device signed in,
 `current` for the device named in the header; a device signed out from another one stays
-listed for 30 days; the grant a device holds is never sent). `DELETE /devices/:id` signs one
+listed for 30 days; neither the grant a device holds nor the device id its header names is
+ever sent: a hello binds by that id, so a live access token must not learn the other devices'
+ids). `DELETE /devices/:id` signs one
 device of the caller out (204): its row is marked revoked, its refresh grant is revoked
 (`ACCESS identity ON DATABASE REVOKE WHERE subject.record = … AND grant.id = …`, the grant id
 going as a parameter: `REVOKE GRANT` takes none), a pair parked for it is forgotten and its
@@ -123,8 +126,9 @@ when its access token no longer works) and its refresh grant must be one of the 
 devices: that row is marked signed out (a row marked already stays as it is), a pair parked for
 it is forgotten, the device's sockets are closed with 4001, and the grant the pair holds (the
 renewed one when renewed) is revoked through the database as the namespace user (`REVOKE WHERE
-subject.record = … AND grant.id = …`, scoped to the identity), 204. Every step may be asked
-again: a failure answers 500 and the device keeps the pair to try again, and its retry marks
+subject.record = … AND grant.id = …`, scoped to the identity), 204; a pair whose device was
+signed out from another one already (its row marked, its grant revoked) answers 204 as well.
+Every step may be asked again: a failure answers 500 and the device keeps the pair to try again, and its retry marks
 the row and revokes the grant anew. A pair that signs nobody in, or that no device of the
 identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
 itself has its new grant revoked whatever it answers. A request without its device or its pair

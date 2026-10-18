@@ -25,10 +25,9 @@ const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
 
 const phone = { id: 'device-phone', label: 'Safari on iPhone' }
 
-/** A device as `GET /devices` lists it. */
+/** A device as `GET /devices` lists it: neither its grant nor the browser's id goes out. */
 const listedDevice = z.strictObject({
   id: z.string(),
-  device: z.string(),
   label: z.string(),
   createdAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),
@@ -223,7 +222,7 @@ async function harness(options: HarnessOptions = {}) {
 
   /** Ann's phone as her laptop lists it. */
   const annsPhone = async () =>
-    (await annsDevices()).find((device) => device.device === phone.id) ??
+    (await annsDevices()).find((device) => device.label === phone.label) ??
     expect.unreachable('the phone listed')
 
   /** A sign-out request of a pair: the pair in the body, the device in its header. */
@@ -275,18 +274,16 @@ describe('deviceRoutes', () => {
 
     const devices = listed.parse(fromLaptop.body).devices
 
-    expect(
-      devices.map(({ device, label, revokedAt, current }) => ({
-        device,
-        label,
-        revokedAt,
-        current,
-      })),
-    ).toEqual([
-      { device: laptop.id, label: laptop.label, revokedAt: null, current: true },
-      { device: phone.id, label: phone.label, revokedAt: null, current: false },
-    ])
+    expect(devices.map(({ label, revokedAt, current }) => ({ label, revokedAt, current }))).toEqual(
+      [
+        { label: laptop.label, revokedAt: null, current: true },
+        { label: phone.label, revokedAt: null, current: false },
+      ],
+    )
     expect(devices.every((device) => device_sessionIdFactory.is(device.id))).toBe(true)
+    // A live access token learns no browser's id: a hello binds by it.
+    expect(JSON.stringify(fromLaptop.body)).not.toContain(laptop.id)
+    expect(JSON.stringify(fromLaptop.body)).not.toContain(phone.id)
     expect(listed.parse(fromPhone.body).devices.map((device) => device.current)).toEqual([
       false,
       true,
@@ -368,7 +365,7 @@ describe('deviceRoutes', () => {
 
     const after = await annsDevices()
 
-    expect(after.map((device) => device.device)).toEqual([laptop.id, phone.id])
+    expect(after.map((device) => device.label)).toEqual([laptop.label, phone.label])
     expect(after[1]?.revokedAt).toMatch(/^\d{4}-/)
     expect(after[0]?.revokedAt).toBeNull()
   })
@@ -529,6 +526,19 @@ describe('deviceRoutes', () => {
 
     expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
     expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
+  })
+
+  it('signs out a pair whose device was signed out from another one: its grant revoked already, 204', async () => {
+    const { ask, signOut, annsPhone, renews, sockets, annOnLaptop, annOnPhone } = await harness()
+    const phoneRow = await annsPhone()
+
+    expect(await ask('DELETE', `/devices/${phoneRow.id}`, { as: annOnLaptop })).toEqual(noContent)
+    expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
+
+    // Its access token still works; the row stays marked and the revoked grant revokes again.
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
+    expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
+    expect(sockets.annLaptop.ended).toEqual([])
   })
 
   it('leaves no live grant after a renewal when the sign-out then fails', async () => {

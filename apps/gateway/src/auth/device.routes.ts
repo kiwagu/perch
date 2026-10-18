@@ -36,10 +36,12 @@ interface Caller {
 /** Answers a request of the caller. */
 type Handler = (caller: Caller, request: Request) => Promise<Response>
 
-/** A device as the caller's list shows it; the grant it holds stays on the server. */
+/**
+ * A device as the caller's list shows it. The grant it holds and the browser's own id stay on the
+ * server: a hello binds by that id, so a live access token must not learn the other devices' ids.
+ */
 interface ListedDevice {
   readonly id: string
-  readonly device: string
   readonly label: string
   readonly createdAt: string
   readonly lastSeenAt: string
@@ -71,7 +73,6 @@ function targetOf(pathname: string): Target | undefined {
 function listed(row: DeviceSessionRow, current: string): ListedDevice {
   return {
     id: row.id,
-    device: row.device,
     label: row.label,
     createdAt: row.createdAt.toISOString(),
     lastSeenAt: row.lastSeenAt.toISOString(),
@@ -103,7 +104,7 @@ export interface DeviceRoutesOptions {
  *
  * - `GET /devices`: 200 `{ devices }`, the caller's devices the earliest first, those signed out
  *   within the last 30 days among them, each with `current` when it is the device the request
- *   came from.
+ *   came from; a device's own id (the one its header names) is never sent.
  * - `DELETE /devices/:id`: 204 once the device is signed out: its row and its grant revoked, a
  *   pair parked for it forgotten and its sockets closed with 4001; 404 `no-such-device` for an id
  *   that is not one of the caller's devices.

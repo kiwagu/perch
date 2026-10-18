@@ -15,7 +15,7 @@ const listedDevices = z.object({
   devices: z.array(
     z.object({
       id: z.string(),
-      device: z.string(),
+      label: z.string(),
       revokedAt: z.string().nullable(),
       current: z.boolean(),
     }),
@@ -100,8 +100,12 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
     const devices = await devicesOf(base, laptop)
 
     check(
-      devices.map((device) => device.device).join() === 'smoke-laptop,smoke-phone',
+      devices.map((device) => device.label).join() === 'Smoke laptop,Smoke phone',
       `listed ${JSON.stringify(devices)}`,
+    )
+    check(
+      !JSON.stringify(devices).includes('smoke-phone'),
+      "the list gives away the phone's device id",
     )
     check(
       devices.map((device) => device.current).join() === 'true,false',
