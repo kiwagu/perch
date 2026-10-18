@@ -36,6 +36,14 @@ export interface SessionPort {
    * when changes could not be sent and signing out would lose them.
    */
   signOut(options?: SignOutOptions): ResultAsync<'signed-out' | 'needs-confirmation', DataError>
+  /**
+   * The gateway signed this device out with every other one of the identity, at its own request
+   * ("sign out everywhere"): it signs out here as when its channel hears so (4001), without
+   * waiting for a channel it may not have. Its keys are dead and forgotten; its data goes unless
+   * it holds changes not sent yet, which stay for the next sign-in as the identity, and the
+   * sign-in page says which. Resolves once done; a device signed out already is left as it is.
+   */
+  signedOutElsewhere(): ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */

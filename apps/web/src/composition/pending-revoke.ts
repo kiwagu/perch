@@ -1,22 +1,24 @@
 /**
- * The pair of keys a sign-out forgot without the gateway revoking it: offline, or giving
- * unsent changes up. Its refresh grant still works at the gateway, so the pair is kept
- * (`perch.session.pending-revoke`) and sent to be revoked at once while the browser is online,
- * else at the next start online, and in any case before the next sign-in, after which the
- * device's session at the gateway holds another grant and the pair could no longer be matched
- * to it. The pair is never logged.
+ * The pairs of keys the sign-outs forgot without the gateway revoking them: offline, or giving
+ * unsent changes up. Their refresh grants still work at the gateway, so each pair is kept with
+ * the device it signed out (`perch.session.pending-revoke`, one list for every account signed out
+ * on this browser, at most 8) and sent to be revoked at once while the browser is online, else at
+ * the next start online, and in any case before the next sign-in, after which the device's
+ * session at the gateway holds another grant and the pair could no longer be matched to it. No
+ * pair is ever logged.
  */
 
 import { type DataError, dataError } from '@workspace/data'
 
 import type { GatewayAuth } from './gateway-auth'
 import {
+  addPendingRevoke,
   deviceIdFrom,
   forgetPendingRevoke,
   type KeyValueStorage,
-  pendingRevoke,
+  type PendingPair,
+  pendingRevokes,
   savedKeys,
-  savePendingRevoke,
 } from './storage'
 
 export interface PendingRevokeOptions {
@@ -33,29 +35,49 @@ export class PendingRevoke {
     this.#options = options
   }
 
-  /** Keeps the pair the device holds now to revoke later, in place of one kept before. */
+  /**
+   * Keeps the pair the device holds now to revoke later, after the pairs kept before, another
+   * account's among them. More than 8 waiting drops the oldest, which is reported.
+   */
   keep(): void {
-    const keys = savedKeys(this.#options.storage)
+    const storage = this.#options.storage
+    const keys = savedKeys(storage)
 
-    if (keys?.refresh !== undefined) {
-      savePendingRevoke(this.#options.storage, { access: keys.access, refresh: keys.refresh })
+    if (keys?.refresh === undefined) {
+      return
+    }
+
+    const dropped = addPendingRevoke(storage, {
+      access: keys.access,
+      refresh: keys.refresh,
+      device: deviceIdFrom(storage),
+    })
+
+    if (dropped.length > 0) {
+      this.#options.onError(
+        dataError(
+          'data:WRITE_FAILED',
+          `${dropped.length} pair(s) left to revoke dropped: more were waiting than are kept`,
+        ),
+      )
     }
   }
 
   /**
-   * Sends the pair left to revoke, if one waits, once any send under way has ended. Revoked,
-   * or refused as dead (it signs nobody in any more), it is forgotten; so is a pair whose
-   * request the gateway refuses otherwise (any other 4xx), which it will never take, a failure
-   * being reported. A gateway that cannot be reached or could not revoke it (5xx) leaves it for
-   * the next try, the latter being reported. The send never fails to its caller, and a failure
-   * of one send, even a throw, leaves the next one to run.
+   * Sends every pair left to revoke, one after the other, once any send under way has ended;
+   * each is kept or forgotten on its own answer. Revoked, or refused as dead (it signs nobody in
+   * any more), a pair is forgotten; so is a pair whose request the gateway refuses otherwise (any
+   * other 4xx), which it will never take, a failure being reported. A gateway that cannot be
+   * reached or could not revoke it (5xx) leaves it for the next try, the latter being reported.
+   * The send never fails to its caller, and a failure of one send, even a throw, leaves the next
+   * one to run.
    */
   send(): Promise<void> {
     this.#sending = this.#sending
-      .then(() => this.#sendOnce())
+      .then(() => this.#sendAll())
       .catch((cause: unknown) =>
         this.#options.onError(
-          dataError('data:WRITE_FAILED', 'could not send the pair left to revoke', cause),
+          dataError('data:WRITE_FAILED', 'could not send the pairs left to revoke', cause),
         ),
       )
       // An error hook that throws has nobody left to tell.
@@ -64,30 +86,27 @@ export class PendingRevoke {
     return this.#sending
   }
 
-  #sendOnce(): Promise<void> {
-    const storage = this.#options.storage
-    const pair = pendingRevoke(storage)
-
-    if (!pair) {
-      return Promise.resolve()
+  async #sendAll(): Promise<void> {
+    for (const pair of pendingRevokes(this.#options.storage)) {
+      await this.#sendOne(pair)
     }
+  }
 
-    const forget = () => {
-      // A pair another tab left meanwhile waits for its own send.
-      if (pendingRevoke(storage)?.refresh === pair.refresh) {
-        forgetPendingRevoke(storage)
-      }
-    }
+  #sendOne(pair: PendingPair): Promise<void> {
+    // Another tab's pairs, kept meanwhile, stay: only this one goes.
+    const forget = () => forgetPendingRevoke(this.#options.storage, pair.refresh)
 
-    return this.#options.auth.signOut(pair, deviceIdFrom(storage)).match(forget, (error) => {
-      if (error.code === 'data:AUTH_FAILED') {
-        forget()
-      } else if (error.code === 'data:WRITE_REJECTED') {
-        forget()
-        this.#options.onError(error)
-      } else if (error.code !== 'data:OFFLINE') {
-        this.#options.onError(error)
-      }
-    })
+    return this.#options.auth
+      .signOut({ access: pair.access, refresh: pair.refresh }, pair.device)
+      .match(forget, (error) => {
+        if (error.code === 'data:AUTH_FAILED') {
+          forget()
+        } else if (error.code === 'data:WRITE_REJECTED') {
+          forget()
+          this.#options.onError(error)
+        } else if (error.code !== 'data:OFFLINE') {
+          this.#options.onError(error)
+        }
+      })
   }
 }

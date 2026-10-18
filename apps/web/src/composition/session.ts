@@ -22,7 +22,6 @@ import {
   type SyncHints,
   type SyncTransport,
 } from '@workspace/replica/sync'
-import { z } from '@workspace/zod'
 
 import type {
   PushRejection,
@@ -41,6 +40,7 @@ import {
 } from './identity-space'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
+import { rejectionOf } from './push-rejection'
 import {
   deviceIdFrom,
   forgetDevice,
@@ -133,14 +133,6 @@ const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
-
-/** What a refused push carries as its cause, read as the port's `PushRejection`. */
-const pushRejection = z.object({
-  region: z.string(),
-  batch: z.number(),
-  reason: z.string(),
-  detail: z.string(),
-}) satisfies z.ZodType<PushRejection>
 
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
@@ -247,6 +239,16 @@ export class SessionService implements SessionPort {
   }
 
   /**
+   * The gateway signed every device of the identity out, this one included: the device signs out
+   * as on the channel's 4001, which it may never hear (no Web Locks, or its WebSocket blocked).
+   */
+  signedOutElsewhere(): ResultAsync<void, DataError> {
+    const identity = this.#open?.space.identity.id
+
+    return ResultAsync.fromSafePromise(identity ? this.#outElsewhere(identity) : Promise.resolve())
+  }
+
+  /**
    * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
    * Online, a pair a sign-out left to revoke is sent meanwhile.
    */
@@ -311,13 +313,11 @@ export class SessionService implements SessionPort {
 
   /** Reports an error of the space; a refused push is also told to the rejection listeners. */
   #report(error: DataError): void {
-    if (error.code === 'data:PUSH_REJECTED') {
-      const rejection = pushRejection.safeParse(error.cause)
+    const rejection = rejectionOf(error)
 
-      if (rejection.success) {
-        for (const listener of this.#rejections) {
-          listener(rejection.data)
-        }
+    if (rejection) {
+      for (const listener of this.#rejections) {
+        listener(rejection)
       }
     }
 
@@ -615,13 +615,9 @@ export class SessionService implements SessionPort {
           // Keys refused: they will not work again, and nothing renews them.
           .with('unauthorized', () => {
             this.#channelEnded(identity)
-            this.#forced(() => this.#refused(identity))
+            void this.#forced(() => this.#refused(identity))
           })
-          // Signed out from another device: as refused keys, and the sign-in page says why.
-          .with('revoked', () => {
-            this.#channelEnded(identity)
-            this.#forced(() => this.#refused(identity, 'signed-out-elsewhere'))
-          })
+          .with('revoked', () => void this.#outElsewhere(identity))
           // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
           // refused protocol stops the sync engine, which reports it, and changes nothing here.
           .with(P.union('signed-out', 'protocol'), () => {})
@@ -636,14 +632,27 @@ export class SessionService implements SessionPort {
     }
   }
 
-  /** Runs a sign-out the gateway forced on the device, once the transitions before it ended. */
-  #forced(run: () => ResultAsync<void, DataError>): void {
-    if (!this.#closed) {
-      void this.#serially(run).match(
-        () => undefined,
-        (error) => this.#options.onError(error),
-      )
-    }
+  /**
+   * Signed out from another device (4001), or everywhere at this device's request: as refused
+   * keys, and the sign-in page says why. Whichever of the two runs second changes nothing.
+   */
+  #outElsewhere(identity: IdentityId): Promise<void> {
+    this.#channelEnded(identity)
+
+    return this.#forced(() => this.#refused(identity, 'signed-out-elsewhere'))
+  }
+
+  /**
+   * Runs a sign-out the gateway forced on the device, once the transitions before it ended; a
+   * failure is reported. Resolves once it ran.
+   */
+  #forced(run: () => ResultAsync<void, DataError>): Promise<void> {
+    return this.#closed
+      ? Promise.resolve()
+      : this.#serially(run).match(
+          () => undefined,
+          (error) => this.#options.onError(error),
+        )
   }
 
   /**

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
@@ -21,9 +22,22 @@ const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
 let devices: FakeDevices
 
+/** How many times the page had the session sign this device out. */
+let signedOutHere = 0
+
 /** The devices page in the application's frame, for Ann signed in, over `devices`. */
 async function openPage(): Promise<void> {
-  const session = { ...fakeSession().session, current: () => ann }
+  signedOutHere = 0
+
+  const session = {
+    ...fakeSession().session,
+    current: () => ann,
+    signedOutElsewhere: () => {
+      signedOutHere += 1
+
+      return okAsync(undefined)
+    },
+  }
   const router = createAppRouter({
     modules: [DeviceModule],
     session,
@@ -139,7 +153,7 @@ describe('DevicesContainer', () => {
     expect(screen.getByTestId('device.page.status').textContent).toBe(en['device.page.loading'])
   })
 
-  it('signs out everywhere once confirmed, then waits for the session to sign this device out', async () => {
+  it('signs out everywhere once confirmed, and has the session sign this device out without waiting for its channel', async () => {
     devices = new FakeDevices()
 
     await openPage()
@@ -147,8 +161,8 @@ describe('DevicesContainer', () => {
     fireEvent.click(screen.getByTestId('device.everywhere.open'))
     fireEvent.click(await screen.findByTestId('device.everywhere.confirm'))
 
-    await waitFor(() => expect(devices.calls).toEqual([['list'], ['everywhere']]))
-    expect((screen.getByTestId('device.everywhere.open') as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => expect(signedOutHere).toBe(1))
+    expect(devices.calls).toEqual([['list'], ['everywhere']])
   })
 
   it('says so when signing out everywhere fails, and lets it be asked again', async () => {
@@ -164,5 +178,6 @@ describe('DevicesContainer', () => {
       en['device.notice.sign-out-failed'],
     )
     expect((screen.getByTestId('device.everywhere.open') as HTMLButtonElement).disabled).toBe(false)
+    expect(signedOutHere).toBe(0)
   })
 })

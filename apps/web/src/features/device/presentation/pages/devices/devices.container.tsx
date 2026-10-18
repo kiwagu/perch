@@ -70,11 +70,11 @@ export function DevicesContainer() {
     )
   }
 
-  // The gateway closes this device's channel as well, and the session signs the device out on
-  // that, which sends the page to sign-in: the buttons wait for it.
+  // Once the gateway signed every device out, the session has signed this one out too, which
+  // sends the page to sign-in.
   const signOutEverywhere = () => {
     setPending(true)
-    void devices.signOutEverywhere().match(() => undefined, failed)
+    void devices.signOutEverywhere().match(() => setPending(false), failed)
   }
 
   return (

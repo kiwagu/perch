@@ -19,8 +19,8 @@ export type FakeAuthRequest =
 export interface FakeGatewayAuth extends GatewayAuth {
   /** Every sign-up, sign-in and sign-out asked, oldest first. */
   readonly requests: FakeAuthRequest[]
-  /** How the gateway answers the sign-outs from now on: it takes each one by default. */
-  answerSignOut(answer: () => ResultAsync<void, DataError>): void
+  /** How the gateway answers the sign-out of each pair from now on: it takes each one by default. */
+  answerSignOut(answer: (pair: KeyPair) => ResultAsync<void, DataError>): void
 }
 
 /**
@@ -31,7 +31,7 @@ export function fakeGatewayAuth(memberships: readonly Membership[] = []): FakeGa
   const accounts = new Map<string, Account>()
   const requests: FakeAuthRequest[] = []
   let issued = 0
-  let signOutAnswer = (): ResultAsync<void, DataError> => okAsync(undefined)
+  let signOutAnswer = (_pair: KeyPair): ResultAsync<void, DataError> => okAsync(undefined)
   const keys = () => {
     issued += 1
 
@@ -68,7 +68,7 @@ export function fakeGatewayAuth(memberships: readonly Membership[] = []): FakeGa
     signOut: (pair, device) => {
       requests.push({ kind: 'sign-out', pair, device })
 
-      return signOutAnswer()
+      return signOutAnswer(pair)
     },
   }
 }

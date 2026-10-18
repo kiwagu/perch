@@ -5,9 +5,19 @@ import type { DataError } from '@workspace/data'
 import { fakeFetch, noContent, respond } from './__fixtures__/gateway-fetch'
 import { gatewayAuth } from './gateway-auth'
 import { PendingRevoke } from './pending-revoke'
-import { type KeyValueStorage, memoryStorage, pendingRevoke, savePendingRevoke } from './storage'
+import {
+  addPendingRevoke,
+  type KeyValueStorage,
+  memoryStorage,
+  pendingRevokes,
+  saveKeys,
+} from './storage'
 
-const pair = { access: 'access-1', refresh: 'refresh-1' }
+/** A pair a sign-out left to revoke, with the device it signed out. */
+const pair = { access: 'access-1', refresh: 'refresh-1', device: 'device-1' }
+
+/** The pair of another account's sign-out on the same browser. */
+const other = { access: 'access-2', refresh: 'refresh-2', device: 'device-1' }
 
 const PENDING_KEY = 'perch.session.pending-revoke'
 
@@ -16,6 +26,8 @@ interface HarnessOptions {
   readonly throwOnFirstRead?: boolean
   /** Throws from the error hook every time it is called. */
   readonly throwingHook?: boolean
+  /** The pairs waiting when the test starts, oldest first; `pair` alone by default. */
+  readonly waiting?: ReadonlyArray<typeof pair>
 }
 
 /**
@@ -52,9 +64,11 @@ function harness(answers: Array<() => Promise<Response>>, options: HarnessOption
     },
   })
 
-  savePendingRevoke(memory, pair)
+  for (const waiting of options.waiting ?? [pair]) {
+    addPendingRevoke(memory, waiting)
+  }
 
-  return { pending, failures, sent, left: () => pendingRevoke(memory) }
+  return { pending, memory, failures, sent, left: () => pendingRevokes(memory) }
 }
 
 describe('PendingRevoke', () => {
@@ -65,7 +79,7 @@ describe('PendingRevoke', () => {
       await pending.send()
 
       expect(sent).toHaveLength(1)
-      expect(left()).toBeUndefined()
+      expect(left()).toEqual([])
       expect(failures).toEqual([])
     }
   })
@@ -75,7 +89,7 @@ describe('PendingRevoke', () => {
 
     await pending.send()
 
-    expect(left()).toBeUndefined()
+    expect(left()).toEqual([])
     expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_REJECTED'])
   })
 
@@ -84,14 +98,14 @@ describe('PendingRevoke', () => {
 
     await failing.pending.send()
 
-    expect(failing.left()).toEqual(pair)
+    expect(failing.left()).toEqual([pair])
     expect(failing.failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
 
     const offline = harness([() => Promise.reject(new TypeError('Failed to fetch'))])
 
     await offline.pending.send()
 
-    expect(offline.left()).toEqual(pair)
+    expect(offline.left()).toEqual([pair])
     expect(offline.failures).toEqual([])
   })
 
@@ -104,7 +118,45 @@ describe('PendingRevoke', () => {
 
     await expect(pending.send()).resolves.toBeUndefined()
     expect(sent).toHaveLength(1)
-    expect(left()).toBeUndefined()
+    expect(left()).toEqual([])
+  })
+
+  it("sends each pair kept with its own device, and forgets each on its own answer: another account's pair is not lost", async () => {
+    const { pending, failures, sent, left } = harness(
+      [respond(503, { code: 'unavailable' }), noContent()],
+      { waiting: [pair, other] },
+    )
+
+    await pending.send()
+
+    expect(sent.map((request) => [request.body, request.device])).toEqual([
+      [{ access: pair.access, refresh: pair.refresh }, pair.device],
+      [{ access: other.access, refresh: other.refresh }, other.device],
+    ])
+    // The first failed (kept, reported), the second was revoked (forgotten).
+    expect(left()).toEqual([pair])
+    expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+  })
+
+  it('keeps the pair the device holds after those kept before, and reports the oldest it drops past 8', () => {
+    const waiting = Array.from({ length: 8 }, (_, n) => ({
+      access: `access-w${n}`,
+      refresh: `refresh-w${n}`,
+      device: 'device-1',
+    }))
+    const { pending, memory, failures, left } = harness([], { waiting })
+
+    saveKeys(memory, { access: 'access-now', refresh: 'refresh-now' })
+    memory.set('perch.device.id', 'device-now')
+    pending.keep()
+
+    expect(left()).toEqual([
+      ...waiting.slice(1),
+      { access: 'access-now', refresh: 'refresh-now', device: 'device-now' },
+    ])
+    expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    // The report names no key.
+    expect(JSON.stringify(failures)).not.toContain('refresh-w0')
   })
 
   it('leaves the next send to run when the error hook throws', async () => {
@@ -115,6 +167,6 @@ describe('PendingRevoke', () => {
     await expect(pending.send()).resolves.toBeUndefined()
     await expect(pending.send()).resolves.toBeUndefined()
     expect(sent).toHaveLength(2)
-    expect(left()).toBeUndefined()
+    expect(left()).toEqual([])
   })
 })

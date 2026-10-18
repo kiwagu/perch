@@ -1,3 +1,4 @@
+import { okAsync } from 'neverthrow'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
@@ -14,10 +15,19 @@ import { DevicesService } from './devices.service'
 
 let devices: FakeDevices
 let service: DevicesService
+/** How many times the service had the session sign this device out. */
+let signedOut: number
 
 beforeEach(() => {
   devices = new FakeDevices()
-  service = new DevicesService(devices)
+  signedOut = 0
+  service = new DevicesService(devices, {
+    signedOutElsewhere: () => {
+      signedOut += 1
+
+      return okAsync(undefined)
+    },
+  })
 })
 
 describe('DevicesService', () => {
@@ -50,9 +60,10 @@ describe('DevicesService', () => {
     expect(devices.calls).toEqual([['revoke', phone.id], ['list']])
   })
 
-  it("signs every device out at the gateway and only awaits its answer: this device's session signs itself out", async () => {
+  it('signs every device out at the gateway, then this one through its session, sync channel or not', async () => {
     expect((await service.signOutEverywhere()).isOk()).toBe(true)
     expect(devices.calls).toEqual([['everywhere']])
+    expect(signedOut).toBe(1)
   })
 
   it('fails as the gateway failed, and reads nothing after a refused sign-out', async () => {
@@ -64,6 +75,8 @@ describe('DevicesService', () => {
     devices.refusal = dataError('data:OFFLINE', 'could not reach the gateway')
 
     expect((await service.signOutEverywhere())._unsafeUnwrapErr().code).toBe('data:OFFLINE')
+    // The gateway signed nobody out: this device stays signed in.
+    expect(signedOut).toBe(0)
 
     devices.refusal = dataError('data:OFFLINE', 'could not reach the gateway')
 

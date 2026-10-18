@@ -16,7 +16,7 @@ and the i18n catalogs.
   label, when it was last seen and signed out, `current` for this device), a sign-out of
   another device is `DELETE /devices/:id` and "Sign out everywhere" is
   `POST /auth/sign-out-everywhere`.
-- Providers: `DEVICES_SERVICE`.
+- Providers: `DEVICES_SERVICE`, over the `DEVICES` port and the session (`SESSION`).
 - i18n namespace `device.*` (`presentation/i18n/device.en.json`, `device.es.json`); test ids
   `device.list.*`, `device.everywhere.*`, `device.page.status` and `device.notice`.
 - Behaviour: every device signed in, and those signed out within 30 days, with the label each
@@ -24,11 +24,11 @@ and the i18n catalogs.
   Another device signs out from its row (its grant revoked, its channel closed), after which
   the list is read again; this device has no such button and signs out through its session
   (the profile's sign-out, which sends what it can first). "Sign out everywhere" asks first,
-  then signs every device out, this one included: the page waits for the gateway's answer
-  only, since the gateway closes this device's channel too and the session signs it out on
-  that, which leads to the sign-in page. A call that fails says so in a notice; a sign-out
-  that failed reads the list again, unless the gateway is out of reach (the read would fail
-  too).
+  then signs every device out, this one included: once the gateway answered, the service has
+  the session sign this device out (`signedOutElsewhere()`, as on the channel's 4001, which a
+  browser without a sync channel never hears), which leads to the sign-in page. A call that
+  fails says so in a notice; a sign-out that failed reads the list again, unless the gateway is
+  out of reach (the read would fail too).
 
 ## Commands
 
