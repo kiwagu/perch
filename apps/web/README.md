@@ -75,27 +75,10 @@ modeling stage.
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands and for organisations,
   notices the shell shows, the language state and the app-wide catalogs.
-- `src/features/app-shell/`: the page frame, painted before the database finishes opening,
-  with the navigation (sign-in, or the profile and the organisation page). When the gateway
-  refuses a change and this device undoes it, the session tells its rejection listeners and the
-  shell raises a notice, so the change does not just vanish.
-- `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in
-  user's profile (`/me`): name, email, a bio of at most 2000 characters saved with the name by
-  one Save, and the chosen language, which follows the user across devices, and signing out,
-  which asks before losing changes this device could not send. The sign-in page says so when
-  the gateway refused the device's keys while it kept changes to send after the next sign-in.
-- `src/features/organisation/`: the organisation page (`/org`). Without memberships it says so
-  and offers to create an organisation (a key checked by the kernel's `isTenantKey`, a name of
-  at most 80 characters); the creator becomes its administrator and the new organisation the
-  current one. With memberships it shows the current organisation's name and the role there, a
-  choice between organisations when there are several, and the organisation's notes (at most
-  500 characters each), which every member reads and adds in the tenant region. The write
-  rules of the replica schema apply on the device before any command (`OrganisationService.ability()`,
-  the same rule the gateway applies): a member edits and deletes only its own notes and an
-  administrator any, so the page shows "Edit" and "Delete" only where allowed, marks the member's
-  own notes "Yours", and explains a change the rules forbid (`note:FORBIDDEN`). An
-  administrator also sees the members, invites an existing account by email and removes a
-  member. The page follows the memberships as they change, without a reload.
+- `src/features/<feature>/`: one module per folder, each with its own `README.md` for its
+  role, surface (routes, shapes, commands, providers) and commands; details live there, not
+  here. Today: `app-shell/` (the page frame and notices), `user/` (accounts and the profile),
+  `organisation/` (memberships, members and the shared notes of the tenant region).
 
 ## Key exports
 

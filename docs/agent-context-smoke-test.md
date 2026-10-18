@@ -25,6 +25,7 @@ skill, to confirm that prompts still route to the narrowest relevant document.
 | Keep the old profile table working while adding the new one | process -> reset-mode-default, poc-no-fallbacks |
 | Name the files of a new settings page | process -> entity-first-module-naming |
 | Add a new workspace package for the gateway | process -> package-readme |
+| Add a feature module with a new page | process -> package-readme |
 | Add a field to the profile table and expose it in a shape | process -> surrealql skill, then domain-context-first-analysis |
 | Write a permission test for the new table | process -> surrealkit skill |
 | Commit a change to the access method | process -> security-review-before-commit |
