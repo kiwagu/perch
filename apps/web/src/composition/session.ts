@@ -1,4 +1,4 @@
-import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import {
@@ -19,10 +19,8 @@ import {
   type LockManagerLike,
   leadership,
   lockName,
-  type SyncHint,
   type SyncHints,
   type SyncTransport,
-  writeLockName,
 } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 
@@ -45,7 +43,6 @@ import { SessionOrganisations } from './organisations'
 import {
   forgetDevice,
   forgetNotice,
-  forgetSigningOut,
   IDENTITY_KEY,
   type KeyValueStorage,
   MEMBERSHIPS_KEY,
@@ -55,9 +52,8 @@ import {
   savedNotice,
   saveKeys,
   saveNotice,
-  saveSigningOut,
-  signingOutSince,
 } from './storage'
+import { type HeardSignOut, WriteBarrier } from './write-barrier'
 
 /** What the channel of one identity needs: its keys, where renewed keys and memberships go, its end. */
 export interface TransportContext {
@@ -104,11 +100,6 @@ interface SpaceStatus {
   live: boolean
 }
 
-/** When this tab heard another one begin a sign-out, until it hears the sign-out end. */
-interface HeardSignOut {
-  at: number | undefined
-}
-
 interface OpenSpace {
   readonly space: IdentitySpace
   readonly leadership: Leadership | undefined
@@ -121,24 +112,6 @@ interface OpenSpace {
 type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
-
-/**
- * How long a sign-out holds every tab's writes back at most. A sign-out ends well within it (up
- * to 5 seconds for the channel, 10 for the drain and 10 for the gateway's close); a tab that
- * went away during its sign-out leaves the mark behind, and writes must not stay refused for good.
- */
-const SIGN_OUT_BARRIER_MS = 60_000
-
-/**
- * How long a sign-out waits for the writes other tabs admitted before its barrier went up. A
- * write is durable within moments; a tab that holds one longer is taken for frozen, and the
- * database is kept rather than deleted under it.
- */
-const WRITERS_MS = 10_000
-
-function isAbortError(cause: unknown): boolean {
-  return cause instanceof Error && cause.name === 'AbortError'
-}
 
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')
@@ -170,6 +143,7 @@ export class SessionService implements SessionPort {
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
   readonly #rejections = new Set<(rejection: PushRejection) => void>()
   readonly #organisations: SessionOrganisations
+  readonly #barrier: WriteBarrier
   readonly #unlisten: Array<() => void>
   #open: OpenSpace | undefined
   #generation = 0
@@ -184,12 +158,18 @@ export class SessionService implements SessionPort {
       clock: options.clock,
       open: () => this.#open,
     })
+    this.#barrier = new WriteBarrier({
+      locks: options.locks,
+      clock: options.clock,
+      storage: options.storage,
+      onError: options.onError,
+    })
 
     const spaces: SpaceSource = {
       current: () => this.#open?.space,
       onSwitch: (listener) => this.subscribe(() => listener()),
-      signingOut: () => this.#signingOut(),
-      writing: (space, work) => this.#writing(space, work),
+      signingOut: () => this.#barrier.signingOut(this.#open?.heard),
+      writing: (space, work) => this.#barrier.writing(space.identity.id, work),
     }
 
     this.runner = new CurrentSpaceRunner(spaces)
@@ -390,7 +370,7 @@ export class SessionService implements SessionPort {
     const heard: HeardSignOut = { at: undefined }
 
     // Another tab's sign-out holds this tab's writes back until it ends; the space closes the hints.
-    hints.on((hint) => this.#heardHint(heard, hint))
+    hints.on((hint) => this.#barrier.hear(heard, hint))
 
     return openIdentitySpace({
       identity,
@@ -450,7 +430,7 @@ export class SessionService implements SessionPort {
 
     const { space, leadership } = open
 
-    this.#holdWrites(open)
+    this.#barrier.hold(open.hints)
 
     // The sign-out runs where the person asked for it: this tab leads from here on. The sync
     // engine answers `offline` without asking the gateway while anything stays unsent, a region
@@ -472,7 +452,7 @@ export class SessionService implements SessionPort {
       )
 
     const release = () => {
-      this.#releaseWrites(open)
+      this.#barrier.release(open.hints)
 
       if (this.#open === open) {
         open.space.resumeSync()
@@ -511,116 +491,21 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * Runs a write while holding the identity's write lock shared, until its change is durable:
-   * any number of writes run at once, and a sign-out waits for all of them.
-   */
-  #writing<T>(
-    space: IdentitySpace,
-    work: () => ResultAsync<T, DataError>,
-  ): ResultAsync<T, DataError> {
-    const locks = this.#options.locks
-
-    if (!locks) {
-      return work()
-    }
-
-    const written = new Promise<Result<T, DataError>>((resolve) => {
-      locks
-        .request(writeLockName(space.identity.id), { mode: 'shared' }, async () => {
-          resolve(await work())
-        })
-        .catch((cause: unknown) => {
-          resolve(
-            err(
-              dataError(
-                'data:WRITE_FAILED',
-                `could not take the write lock of ${space.identity.id}`,
-                cause,
-              ),
-            ),
-          )
-        })
-    })
-
-    return new ResultAsync(written)
-  }
-
-  /**
-   * Runs `work` holding the identity's write lock exclusive: every write a tab admitted before
-   * the barrier went up has become durable, and none runs meanwhile. A lock that does not come
-   * within 10 seconds (a frozen tab) deletes nothing: the keys are forgotten and the database
-   * is kept for the next sign-in, as when the gateway refuses the keys; that ends as `kept`.
+   * Runs `work` once every write a tab admitted is durable, holding the identity's write lock
+   * exclusive (`WriteBarrier.exclusively`). A tab that never lets its write go deletes nothing:
+   * the keys are forgotten and the database is kept for the next sign-in, as when the gateway
+   * refuses the keys; that ends as `kept`.
    */
   #exclusively<T>(
     open: OpenSpace,
     work: () => ResultAsync<T, DataError>,
     kept: T,
   ): ResultAsync<T, DataError> {
-    const locks = this.#options.locks
+    return this.#barrier.exclusively(open.space.identity.id, work, () => {
+      this.#keepForNextSignIn(open)
 
-    if (!locks) {
-      return work()
-    }
-
-    const controller = new AbortController()
-    const giveUp = this.#options.clock.schedule(WRITERS_MS, () => controller.abort())
-    const ended = new Promise<Result<T, DataError>>((resolve) => {
-      locks
-        .request(
-          writeLockName(open.space.identity.id),
-          { mode: 'exclusive', signal: controller.signal },
-          async () => {
-            giveUp()
-            resolve(await work())
-          },
-        )
-        .catch((cause: unknown) => {
-          giveUp()
-
-          if (!isAbortError(cause)) {
-            this.#options.onError(
-              dataError(
-                'data:WRITE_FAILED',
-                `could not wait for the writes of every tab into ${open.space.identity.id}`,
-                cause,
-              ),
-            )
-          }
-
-          this.#keepForNextSignIn(open)
-          resolve(ok(kept))
-        })
+      return kept
     })
-
-    return new ResultAsync(ended)
-  }
-
-  /** Holds every tab's writes back: the other tabs hear of it now, a tab opened later reads it. */
-  #holdWrites(open: OpenSpace): void {
-    saveSigningOut(this.#options.storage, this.#options.clock.now())
-    open.hints.post('sign-out')
-  }
-
-  /** The sign-out ended: every tab writes again, and the leader drains what waits. */
-  #releaseWrites(open: OpenSpace): void {
-    forgetSigningOut(this.#options.storage)
-    open.hints.post('kick')
-  }
-
-  /** A sign-out began in this browser within the barrier's time and has not ended. */
-  #signingOut(): boolean {
-    const now = this.#options.clock.now()
-    const began = [signingOutSince(this.#options.storage), this.#open?.heard.at]
-
-    return began.some((at) => at !== undefined && now - at < SIGN_OUT_BARRIER_MS)
-  }
-
-  #heardHint(heard: HeardSignOut, hint: SyncHint): void {
-    if (hint === 'sign-out') {
-      heard.at = this.#options.clock.now()
-    } else if (hint === 'kick') {
-      heard.at = undefined
-    }
   }
 
   /**
@@ -711,9 +596,9 @@ export class SessionService implements SessionPort {
 
     // As in a sign-out, every tab's writes are held back, and what is unsent is read and the
     // database deleted once no tab writes any more.
-    this.#holdWrites(open)
+    this.#barrier.hold(open.hints)
 
-    const release = () => this.#releaseWrites(open)
+    const release = () => this.#barrier.release(open.hints)
 
     return this.#exclusively(
       open,
