@@ -75,10 +75,12 @@ modeling stage.
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands and for organisations,
   notices the shell shows, the language state and the app-wide catalogs.
-- `src/features/<feature>/`: one module per folder, each with its own `README.md` for its
-  role, surface (routes, shapes, commands, providers) and commands; details live there, not
-  here. Today: `app-shell/` (the page frame and notices), `user/` (accounts and the profile),
-  `organisation/` (memberships, members and the shared notes of the tenant region).
+- `src/features/<feature>/`: one module per folder, each with its own README for its role,
+  surface (routes, shapes, commands, providers) and commands; details live there, not here:
+  - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
+  - [user](src/features/user/README.md): accounts, sign-in and the identity's profile.
+  - [organisation](src/features/organisation/README.md): memberships, members and the
+    shared notes of the tenant region.
 
 ## Key exports
 

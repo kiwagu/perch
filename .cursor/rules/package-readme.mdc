@@ -28,6 +28,7 @@ alwaysApply: true
   - `## Commands`: how to test and check it.
 - Every feature module (a folder under `src/features/`) has its own `README.md`, kept short:
   - `# <Title> (module \`<id>\`)`, the id from its `*.module.ts` manifest (the folder name when it has none)
+  - Folders beginning with `__` or `.` (`__fixtures__`, `__snapshots__`) are support folders, not modules.
   - `## Role in the architecture`: what the module is for and which layers it has.
   - `## Surface`: routes and pages, shapes, commands, providers, the i18n namespace and test ids.
   - `## Commands`: how to test and regenerate it.

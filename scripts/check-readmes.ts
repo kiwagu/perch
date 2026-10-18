@@ -15,8 +15,10 @@
  *   ## Commands
  *
  * The module id is the `id` of its `*.module.ts` manifest, or the folder name when the
- * folder has no manifest. This check fails when a workspace or a module has no
- * README.md, when the title does not name it, or when a section is missing. Keeping
+ * folder has no manifest; support folders (`__fixtures__`, `__snapshots__`, dot folders)
+ * are not modules. This check fails when a workspace or a module has no README.md, when
+ * the title does not name it, when a manifest's id cannot be read, or when a section is
+ * missing. Keeping
  * the content current is part of any change to a package's role, exports or scripts,
  * or to a module's routes, shapes, commands or providers.
  *
@@ -28,6 +30,7 @@ import { basename, join } from 'node:path'
 
 const SECTIONS = ['## Role in the architecture', '## Key exports', '## Commands']
 const MODULE_SECTIONS = ['## Role in the architecture', '## Surface', '## Commands']
+const SUPPORT_FOLDER = /^(__|\.)/
 
 interface RootManifest {
   readonly workspaces: { readonly packages: readonly string[] }
@@ -88,36 +91,47 @@ function moduleDirs(workspaces: readonly string[]): string[] {
     }
 
     return readdirSync(features, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && !SUPPORT_FOLDER.test(entry.name))
       .map((entry) => join(features, entry.name))
   })
 }
 
-function moduleIdOf(dir: string): string {
+/** The module id: from the manifest when the folder has one, else the folder name. */
+function moduleIdOf(dir: string): { readonly id: string; readonly problem?: string } {
   const manifest = readdirSync(dir).find((name) => name.endsWith('.module.ts'))
 
   if (manifest === undefined) {
-    return basename(dir)
+    return { id: basename(dir) }
   }
 
-  const match = /\bid:\s*'([^']+)'/.exec(readFileSync(join(dir, manifest), 'utf8'))
+  const source = readFileSync(join(dir, manifest), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+  const match = /\bid\s*:\s*(['"])([^'"]+)\1/.exec(source)
 
-  return match?.[1] ?? basename(dir)
+  if (match?.[2] === undefined) {
+    return {
+      id: basename(dir),
+      problem: `${join(dir, manifest)}: the module id could not be read (expected id: '<name>')`,
+    }
+  }
+
+  return { id: match[2] }
 }
 
 function moduleProblemsOf(dir: string): string[] {
-  const id = moduleIdOf(dir)
+  const { id, problem } = moduleIdOf(dir)
   const readme = join(dir, 'README.md')
 
   if (!existsSync(readme)) {
-    return [`${dir}: README.md is missing (module \`${id}\`)`]
+    return [...(problem ? [problem] : []), `${dir}: README.md is missing (module \`${id}\`)`]
   }
 
   const text = readFileSync(readme, 'utf8')
   const title = text.split('\n')[0] ?? ''
-  const problems: string[] = []
+  const problems: string[] = problem ? [problem] : []
 
-  if (!(title.startsWith('# ') && title.includes(`(module \`${id}\`)`))) {
+  if (problem === undefined && !(title.startsWith('# ') && title.includes(`(module \`${id}\`)`))) {
     problems.push(`${readme}: the first line must be "# <Title> (module \`${id}\`)"`)
   }
 
