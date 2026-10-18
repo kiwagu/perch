@@ -5,7 +5,7 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { readBody } from '../auth/auth.routes'
+import { bearerIdentity, readBody } from '../auth/auth.routes'
 import type { IdentitySessions } from '../auth/identity-sessions'
 
 import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
@@ -27,9 +27,6 @@ const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
  * key outside the rule makes a path that is not the organisations' own.
  */
 const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/members(?:/([^/]+))?)?)?$`)
-
-/** The access token in an `Authorization` header. */
-const BEARER = /^Bearer +(\S+)$/i
 
 /** What a path names. */
 type Target =
@@ -114,19 +111,6 @@ export function organisationRoutes(
     options.onFailure(error)
 
     return Response.json({ code: 'internal' }, { status: 500 })
-  }
-
-  /** The identity the request's access token signs in, if it does. */
-  async function bearerIdentity(request: Request): Promise<IdentityId | undefined> {
-    const access = BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
-
-    if (access === undefined) {
-      return undefined
-    }
-
-    const device = await sessions.authenticate({ access })
-
-    return device.isOk() ? device.value.identity.id : undefined
   }
 
   const list: Handler = async (identity) =>
@@ -227,7 +211,7 @@ export function organisationRoutes(
       )
     }
 
-    const identity = await bearerIdentity(request)
+    const identity = await bearerIdentity(sessions, request)
 
     if (identity === undefined) {
       return Response.json({ code: 'unauthorized' }, { status: 401 })

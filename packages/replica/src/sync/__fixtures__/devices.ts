@@ -70,6 +70,8 @@ export interface DeviceOptions {
   readonly wrap?: (local: LocalDb) => LocalDb
   /** The identity the device belongs to, `idn_a` by default. */
   readonly identity?: string
+  /** The device's own id, as it names itself in hello; the stub's default device by default. */
+  readonly device?: string
   /** The region the device syncs, its identity's private region by default. */
   readonly region?: RegionRef
   /** How many outbox rows one push carries at most, the protocol's limit by default. */
@@ -126,7 +128,7 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
       options.region ?? { kind: 'private', id: privateRegionId(owner) },
     )
   )._unsafeUnwrap()
-  const transport = gateway.stub.transport(owner)
+  const transport = gateway.stub.transport(owner, options.device)
   const errors: DataError[] = []
   let channel: ChannelState = 'down'
   const engine = createSyncEngine({

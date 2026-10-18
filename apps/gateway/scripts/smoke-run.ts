@@ -92,11 +92,11 @@ async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
 }
 
 /** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
-async function hello(base: string, opened: Opened, { identity, tokens }: SignedIn) {
+async function hello(base: string, opened: Opened, { identity, tokens, device: id }: SignedIn) {
   const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
 
   opened.devices.push(device)
-  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens })
+  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens, device: id })
 
   const welcome = await device.next('welcome')
 
@@ -176,6 +176,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
     const signedUp = await postCredentials(base, '/auth/sign-up', {
       email: `smoke-${crypto.randomUUID()}@example.test`,
       password: crypto.randomUUID(),
+      device: { id: 'smoke-guest-device', label: 'Smoke guest' },
     })
 
     check(signedUp.memberships.length === 0, 'the new identity belongs to an organisation')
@@ -409,6 +410,7 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
   const signedUp = await postCredentials(base, '/auth/sign-up', {
     email: `smoke-${crypto.randomUUID()}@example.test`,
     password: crypto.randomUUID(),
+    device: { id: 'smoke-device', label: 'Smoke' },
   })
   const { access, refresh } = signedUp.tokens
   const identity = signedUp.identity.id
@@ -427,7 +429,7 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
   })
 
   const renewed = await step('a refresh is not blocked by the clause', async () => {
-    const answer = unwrap(await root.sessions.authenticate({ access, refresh }))
+    const answer = unwrap(await root.sessions.authenticate({ access, refresh }, signedUp.device))
 
     if (!answer.renewed) {
       throw new Error('the pair was not renewed')
@@ -441,7 +443,7 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
     async () => {
       await root.local.db.query(revokeGrantsStatement, { identity })
 
-      const refused = await root.sessions.authenticate(renewed)
+      const refused = await root.sessions.authenticate(renewed, signedUp.device)
 
       check(refused.isErr(), 'the refresh was accepted')
     },
@@ -478,10 +480,16 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     password: crypto.randomUUID(),
   }
   const first = await step(`signed up ${credentials.email}`, () =>
-    postCredentials(base, '/auth/sign-up', credentials),
+    postCredentials(base, '/auth/sign-up', {
+      ...credentials,
+      device: { id: 'smoke-device-1', label: 'Smoke device 1' },
+    }),
   )
   const second = await step('signed in a second device', () =>
-    postCredentials(base, '/auth/sign-in', credentials),
+    postCredentials(base, '/auth/sign-in', {
+      ...credentials,
+      device: { id: 'smoke-device-2', label: 'Smoke device 2' },
+    }),
   )
   const region = `identity:${first.identity.id}`
   const profileId = profileIdFactory.create()
@@ -550,6 +558,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
       protocol: PROTOCOL_VERSION,
       access: 'not-a-token',
       refresh: first.tokens.refresh,
+      device: first.device,
     })
 
     const { code } = await device3.closed

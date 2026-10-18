@@ -8,6 +8,9 @@ import { DIRECTORY, NAMESPACE } from '../config'
 
 import { createGatewayRoot } from './root'
 
+/** The device Ann signs up on. */
+const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
+
 describe('createGatewayRoot', () => {
   it('opens the directory database and serves sign-in over it', async () => {
     const root = (
@@ -20,11 +23,19 @@ describe('createGatewayRoot', () => {
     )._unsafeUnwrap()
 
     try {
-      const up = await root.sessions.signUp({ email: 'ann@example.test', password: 'pass-word-1' })
+      const up = await root.sessions.signUp(
+        { email: 'ann@example.test', password: 'pass-word-1' },
+        laptop,
+      )
+      const { identity } = up._unsafeUnwrap()
 
       expect(root.local.db.namespace).toBe(NAMESPACE)
       expect(root.local.db.database).toBe(DIRECTORY)
-      expect(up._unsafeUnwrap().identity.id).toMatch(/^idn_/)
+      expect(identity.id).toMatch(/^idn_/)
+      // The device it signed up on is recorded in the directory.
+      expect(
+        (await root.deviceSessions.list(identity.id))._unsafeUnwrap().map((row) => row.device),
+      ).toEqual([laptop.id])
       expect(root.hub.loadedRegions()).toBe(0)
     } finally {
       await root.close()
@@ -41,7 +52,7 @@ describe('createGatewayRoot', () => {
       })
     )._unsafeUnwrap()
     const { identity } = (
-      await root.sessions.signUp({ email: 'ann@example.test', password: 'pass-word-1' })
+      await root.sessions.signUp({ email: 'ann@example.test', password: 'pass-word-1' }, laptop)
     )._unsafeUnwrap()
     const acme = (
       await root.organisations.create({ identity: identity.id, key: 'acme', name: 'Acme' })

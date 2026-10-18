@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 
+import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
@@ -10,6 +11,7 @@ import type { ManualClock } from '../testing/manual-clock'
 
 import {
   closeDevices,
+  identity,
   openDevice,
   openGateway,
   profileKey,
@@ -131,6 +133,48 @@ describe('sync engine', () => {
     expect(heard).toEqual(['unauthorized while up'])
     expect(a.channel()).toBe('down')
     expect(a.transport.online()).toBe(false)
+  })
+
+  it('hears that the device was signed out from another one, then the channel falls for good', async () => {
+    const { a, stub } = await twoDevices()
+    const heard: string[] = []
+
+    a.transport.onEnded((reason) => heard.push(`${reason} while ${a.channel()}`))
+    stub.endWith('revoked')
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    expect((await a.region.flush()).isOk()).toBe(true)
+
+    expect(heard).toEqual(['revoked while up'])
+    expect(a.channel()).toBe('down')
+    expect(a.transport.online()).toBe(false)
+    expect(a.errors).toEqual([])
+    // What the device wrote stays in its outbox: the app decides what becomes of it.
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('ends only the named device of the identity when the gateway closes it as revoked', async () => {
+    const gateway = await openGateway()
+    const a = await openDevice(gateway, { device: 'device-a' })
+    const b = await openDevice(gateway, { device: 'device-b' })
+    const heard: string[] = []
+
+    a.transport.onEnded((reason) => heard.push(`a: ${reason}`))
+    b.transport.onEnded((reason) => heard.push(`b: ${reason}`))
+    a.engine.start()
+    b.engine.start()
+    await settleAll([a, b])
+
+    gateway.stub.closeChannels(identity, 'device-a', CLOSE.revoked)
+
+    expect(heard).toEqual(['a: revoked'])
+    expect(a.channel()).toBe('down')
+    expect(b.channel()).toBe('up')
+
+    gateway.stub.closeChannels(identity, undefined, CLOSE.revoked)
+
+    expect(heard).toEqual(['a: revoked', 'b: revoked'])
+    expect(b.channel()).toBe('down')
   })
 
   it('stops syncing when the gateway refuses the protocol, and says to reload the application', async () => {

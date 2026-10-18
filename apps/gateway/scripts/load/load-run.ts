@@ -183,6 +183,7 @@ async function signUp(run: Run, count: number): Promise<SignedIn[]> {
     postCredentials(run.base, '/auth/sign-up', {
       email: `load-${run.id}-${first + i}@example.test`,
       password: run.password,
+      device: { id: `load-${run.id}-${first + i}`, label: 'Load test device' },
     }),
   )
 
@@ -316,7 +317,7 @@ async function openSim(
           }
         },
       },
-      { timeoutMs: HANDSHAKE_TIMEOUT_MS },
+      { timeoutMs: HANDSHAKE_TIMEOUT_MS, device: account.device },
     )
 
     timeout = setTimeout(

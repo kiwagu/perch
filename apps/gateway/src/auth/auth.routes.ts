@@ -1,18 +1,23 @@
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
-import type { Membership } from '@workspace/replica/protocol'
+import type { IdentityId } from '@workspace/ids'
+import { deviceId, type Membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { Organisations } from '../tenants/organisations'
 
 import type { IdentitySessions, SignedIn } from './identity-sessions'
 
-/** What a device sends to sign up or in. */
+/** What a device sends to sign up or in: the credentials, and the device's id and label. */
 const credentialsBody = z.object({
   email: z.email(),
   password: z.string().min(8).max(200),
+  device: z.object({ id: deviceId, label: z.string().max(60) }),
 })
+
+/** The access token in an `Authorization` header. */
+const BEARER = /^Bearer +(\S+)$/i
 
 /** The service call behind each path. */
 const ACTIONS = new Map<string, 'signUp' | 'signIn'>([
@@ -33,6 +38,27 @@ export async function readBody(request: Request): Promise<unknown> {
     // A body that is not JSON fails the schema like any other wrong body.
     return undefined
   }
+}
+
+/** The access token the request carries as `Authorization: Bearer <access>`, if it does. */
+export function bearerToken(request: Request): string | undefined {
+  return BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
+}
+
+/** The identity the request's access token signs in, if it does; a refresh key is not taken. */
+export async function bearerIdentity(
+  sessions: Pick<IdentitySessions, 'authenticate'>,
+  request: Request,
+): Promise<IdentityId | undefined> {
+  const access = bearerToken(request)
+
+  if (access === undefined) {
+    return undefined
+  }
+
+  const device = await sessions.authenticate({ access })
+
+  return device.isOk() ? device.value.identity.id : undefined
 }
 
 function signedInResponse({ identity, tokens, memberships }: SignedInWithMemberships): Response {
@@ -56,9 +82,10 @@ function errorResponse(error: DataError): Response {
 
 /**
  * Sign-up and sign-in over HTTP: `POST /auth/sign-up` and `POST /auth/sign-in` with
- * `{ email, password }` answer `{ identity, tokens, memberships }`, the memberships being the
- * organisations the identity belongs to once it is signed in. A request for another path is
- * not answered here (`undefined`), so the server can try its other routes.
+ * `{ email, password, device: { id, label } }` answer `{ identity, tokens, memberships }`, the
+ * memberships being the organisations the identity belongs to once it is signed in; the device
+ * is recorded with the grant of its pair. A request for another path is not answered here
+ * (`undefined`), so the server can try its other routes.
  */
 export function authRoutes(
   sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
@@ -84,7 +111,8 @@ export function authRoutes(
       return Response.json({ code: 'bad-request' }, { status: 400 })
     }
 
-    const result = await sessions[action](body.data).andThen((signedIn) =>
+    const { email, password, device } = body.data
+    const result = await sessions[action]({ email, password }, device).andThen((signedIn) =>
       organisations
         .membershipsOf(signedIn.identity.id)
         .map((memberships): SignedInWithMemberships => ({ ...signedIn, memberships })),

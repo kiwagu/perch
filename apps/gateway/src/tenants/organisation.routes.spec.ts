@@ -102,7 +102,12 @@ async function harness() {
   const root = await openRoot()
   const routes = organisationRoutes(root.sessions, root.organisations, routeOptions)
   const signUp = async (email: string) =>
-    (await root.sessions.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
+    (
+      await root.sessions.signUp(
+        { email, password: PASSWORD },
+        { id: `device-${email}`, label: 'Firefox on Linux' },
+      )
+    )._unsafeUnwrap()
   const ann = await signUp('ann@example.test')
   const bob = await signUp('bob@example.test')
   const cat = await signUp('cat@example.test')

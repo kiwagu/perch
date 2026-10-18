@@ -671,7 +671,8 @@ export class SessionService implements SessionPort {
       },
       onEnded: (reason) =>
         match(reason)
-          .with('unauthorized', () => {
+          // Keys refused, or revoked from another device: they will not work again.
+          .with(P.union('unauthorized', 'revoked'), () => {
             if (!this.#closed) {
               void this.#serially(() => this.#refused(identity)).match(
                 () => undefined,

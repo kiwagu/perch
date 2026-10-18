@@ -12,7 +12,15 @@ const signedIn = z.object({
   memberships: z.array(membership),
 })
 
-export type SignedIn = z.output<typeof signedIn>
+/** An identity signed in on a device: what the gateway answered, and the id of the device. */
+export type SignedIn = z.output<typeof signedIn> & { readonly device: string }
+
+/** What a device sends to sign up or in. */
+export interface Credentials {
+  readonly email: string
+  readonly password: string
+  readonly device: { readonly id: string; readonly label: string }
+}
 
 /** What a route answered: its status and its body, which is not necessarily JSON. */
 export interface Answer {
@@ -23,7 +31,7 @@ export interface Answer {
 export async function postCredentials(
   base: string,
   path: string,
-  credentials: { readonly email: string; readonly password: string },
+  credentials: Credentials,
 ): Promise<SignedIn> {
   const answer = await call(base, 'POST', path, undefined, credentials)
 
@@ -31,22 +39,27 @@ export async function postCredentials(
     throw new Error(`${path} answered ${answer.status} ${JSON.stringify(answer.body)}`)
   }
 
-  return signedIn.parse(answer.body)
+  return { ...signedIn.parse(answer.body), device: credentials.device.id }
 }
 
-/** Calls a route of the gateway, as the holder of `token` when there is one. */
+/**
+ * Calls a route of the gateway, as the holder of `token` when there is one, from `device`
+ * (`X-Perch-Device`) when one is named.
+ */
 export async function call(
   base: string,
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
   token: string | undefined,
   body?: unknown,
+  device?: string,
 ): Promise<Answer> {
   const response = await fetch(`${base}${path}`, {
     method,
     headers: {
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+      ...(device === undefined ? {} : { 'X-Perch-Device': device }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })

@@ -19,6 +19,7 @@ import { createLogger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { RegionHub } from '@workspace/replica/server'
 
+import { DeviceSessions } from '../auth/device-sessions'
 import { IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { ConnectionRegistry } from '../sync/connections'
@@ -28,6 +29,8 @@ import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
   readonly sessions: IdentitySessions
+  /** The devices of each identity, with the grant each holds: listed and signed out over HTTP. */
+  readonly deviceSessions: DeviceSessions
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -39,8 +42,9 @@ export interface GatewayRoot {
   /** Which tables replicate, and who may write what in them. */
   readonly schema: ReplicaSchema
   /**
-   * The open sync connections of each identity: told of every change of its memberships, and a
-   * removed identity's lose the organisation's region at once.
+   * The open sync connections of each identity and device: told of every change of its
+   * memberships, a removed identity's lose the organisation's region at once, and a device
+   * signed out from another one is closed.
    */
   readonly connections: ConnectionRegistry
   /** The directory database. */
@@ -114,6 +118,8 @@ export function createGatewayRoot(
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
+    const deviceSessions = new DeviceSessions({ directory: local, clock: options.clock })
+
     return {
       sessions: new IdentitySessions({
         openAuth: () =>
@@ -121,7 +127,12 @@ export function createGatewayRoot(
         rpcUrl: options.rpcUrl,
         fetch,
         onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
+        devices: deviceSessions,
+        // The code and the gateway's own message, never the cause: a database's text may hold anything.
+        onDeviceFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
+        clock: options.clock,
       }),
+      deviceSessions,
       organisations,
       databases,
       hub,

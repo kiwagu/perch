@@ -17,16 +17,22 @@ const acme: Membership = {
 function connection(answered: Promise<void> = Promise.resolve()) {
   const heard: Array<readonly Membership[]> = []
   const revoked: string[] = []
+  const ended: number[] = []
 
   return {
     heard,
     revoked,
+    ended,
     memberships: async (next: readonly Membership[]) => {
       heard.push(next)
       await answered
     },
     revoke: async (region: string) => {
       revoked.push(region)
+      await answered
+    },
+    end: async (code: number) => {
+      ended.push(code)
       await answered
     },
   }
@@ -60,7 +66,7 @@ describe('ConnectionRegistry', () => {
     const registry = new ConnectionRegistry()
     const ann = identityIdFactory.create()
     const device = connection()
-    const remove = registry.add(ann, device)
+    const remove = registry.add(ann, 'device-laptop', device)
 
     expect(registry.forIdentity(ann)).toEqual([device])
 
@@ -77,10 +83,10 @@ describe('ConnectionRegistry', () => {
     const laptop = connection()
     const phone = connection()
     const bobs = connection()
-    const removeLaptop = registry.add(ann, laptop)
+    const removeLaptop = registry.add(ann, 'device-laptop', laptop)
 
-    registry.add(ann, phone)
-    registry.add(bob, bobs)
+    registry.add(ann, 'device-phone', phone)
+    registry.add(bob, 'device-bobs', bobs)
     removeLaptop()
 
     expect(registry.forIdentity(ann)).toEqual([phone])
@@ -96,9 +102,9 @@ describe('ConnectionRegistry', () => {
     const phone = connection(busy.promise)
     const bobs = connection()
 
-    registry.add(ann, laptop)
-    registry.add(ann, phone)
-    registry.add(identityIdFactory.create(), bobs)
+    registry.add(ann, 'device-laptop', laptop)
+    registry.add(ann, 'device-phone', phone)
+    registry.add(identityIdFactory.create(), 'device-bobs', bobs)
 
     const revoked = registry.revoke(ann, 'tenant:acme')
     const told = registry.tell(ann, [acme])
@@ -125,6 +131,57 @@ describe('ConnectionRegistry', () => {
     expect(bobs.heard).toEqual([])
     // An identity without connections has nothing to wait for.
     await expect(registry.revoke(identityIdFactory.create(), 'tenant:acme')).resolves.toBe(
+      undefined,
+    )
+  })
+
+  it('ends the connections of the named device of the identity only, and resolves once each has', async () => {
+    const registry = new ConnectionRegistry()
+    const ann = identityIdFactory.create()
+    const bob = identityIdFactory.create()
+    const busy = deferred()
+    const laptop = connection(busy.promise)
+    const laptopAgain = connection()
+    const phone = connection()
+    const bobs = connection()
+
+    registry.add(ann, 'device-laptop', laptop)
+    registry.add(ann, 'device-laptop', laptopAgain)
+    registry.add(ann, 'device-phone', phone)
+    registry.add(bob, 'device-laptop', bobs)
+
+    const closed = registry.close(ann, 'device-laptop', 4001)
+    const closing = watch(closed)
+
+    await settle()
+    expect(laptop.ended).toEqual([4001])
+    expect(laptopAgain.ended).toEqual([4001])
+    expect(closing.resolved).toBe(false)
+
+    busy.resolve()
+    await closed
+
+    expect(phone.ended).toEqual([])
+    expect(bobs.ended).toEqual([])
+  })
+
+  it('ends every connection of the identity when no device is named', async () => {
+    const registry = new ConnectionRegistry()
+    const ann = identityIdFactory.create()
+    const laptop = connection()
+    const phone = connection()
+    const bobs = connection()
+
+    registry.add(ann, 'device-laptop', laptop)
+    registry.add(ann, 'device-phone', phone)
+    registry.add(identityIdFactory.create(), 'device-bobs', bobs)
+
+    await registry.close(ann, undefined, 4001)
+
+    expect(laptop.ended).toEqual([4001])
+    expect(phone.ended).toEqual([4001])
+    expect(bobs.ended).toEqual([])
+    await expect(registry.close(identityIdFactory.create(), undefined, 4001)).resolves.toBe(
       undefined,
     )
   })

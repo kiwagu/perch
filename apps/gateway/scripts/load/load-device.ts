@@ -42,7 +42,8 @@ export class LoadDevice {
   }
 
   /**
-   * Opens the socket, says hello and resolves with the welcome, all within `timeoutMs`; a
+   * Opens the socket, says hello as `device` and resolves with the welcome, all within
+   * `timeoutMs`; a
    * renewed pair sent before the welcome is kept as `device.tokens`. When it rejects the socket
    * is closed. After the welcome, a binary message, a message the protocol refuses and a socket
    * error each reach `handlers.onError` once.
@@ -51,7 +52,7 @@ export class LoadDevice {
     url: string,
     tokens: { readonly access: string; readonly refresh: string },
     handlers: DeviceHandlers,
-    { timeoutMs }: { readonly timeoutMs: number },
+    { timeoutMs, device: deviceId }: { readonly timeoutMs: number; readonly device: string },
   ): Promise<{ device: LoadDevice; welcome: Received<'welcome'> }> {
     const socket = new WebSocket(url)
     const device = new LoadDevice(socket, tokens)
@@ -107,7 +108,7 @@ export class LoadDevice {
           )
         })
         socket.addEventListener('open', () =>
-          device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens }),
+          device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens, device: deviceId }),
         )
       })
 

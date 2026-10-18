@@ -63,7 +63,10 @@ const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, r
 const probe: ClientMessage = { type: 'probe', regions: ['identity:idn_a'] }
 
 /** A transport over fake sockets with a manual clock; `events` lists channel changes and endings in order. */
-function harness(credentials: () => DeviceCredentials | undefined = () => keys) {
+function harness(
+  credentials: () => DeviceCredentials | undefined = () => keys,
+  { device }: { readonly device?: string } = { device: 'device-1' },
+) {
   const clock = manualClock()
   const sockets: FakeSocket[] = []
   const events: string[] = []
@@ -77,6 +80,7 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
+    ...(device === undefined ? {} : { device }),
     socket: (url) => {
       const socket = new FakeSocket(url)
 
@@ -112,7 +116,7 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
 }
 
 describe('WebSocket transport', () => {
-  it('says hello with the stored keys when the socket opens', () => {
+  it('says hello with the stored keys and the device when the socket opens', () => {
     const { transport, socket } = harness()
 
     transport.start()
@@ -123,12 +127,29 @@ describe('WebSocket transport', () => {
     socket().open()
 
     expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
+      {
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        access: 'access-key',
+        refresh: 'refresh-key',
+        device: 'device-1',
+      },
     ])
   })
 
   it('says hello with the current protocol', () => {
     const { transport, socket } = harness(() => ({ access: 'access-key' }))
+
+    transport.start()
+    socket().open()
+
+    expect(socket().sent).toEqual([
+      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', device: 'device-1' },
+    ])
+  })
+
+  it('says hello without a device when it was given none', () => {
+    const { transport, socket } = harness(() => ({ access: 'access-key' }), {})
 
     transport.start()
     socket().open()
@@ -229,6 +250,19 @@ describe('WebSocket transport', () => {
 
     expect(events).toEqual(['up', 'ended: protocol', 'down'])
     expect(ended).toEqual(['protocol'])
+    expect(sockets.length).toBe(1)
+  })
+
+  it('stops on 4001 and reports revoked: the device was signed out from another one', async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4001)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: revoked', 'down'])
+    expect(ended).toEqual(['revoked'])
     expect(sockets.length).toBe(1)
   })
 
@@ -392,7 +426,13 @@ describe('WebSocket transport', () => {
     expect(sockets).toHaveLength(1)
     expect(socket().closedWith).toBeUndefined()
     expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
+      {
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        access: 'access-key',
+        refresh: 'refresh-key',
+        device: 'device-1',
+      },
     ])
 
     socket().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })

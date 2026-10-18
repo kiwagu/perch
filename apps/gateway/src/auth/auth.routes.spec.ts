@@ -10,9 +10,15 @@ import { createGatewayRoot, type GatewayRoot } from '../composition/root'
 import type { Organisations } from '../tenants/organisations'
 
 import { authRoutes } from './auth.routes'
-import type { IdentitySessions, SignedIn } from './identity-sessions'
+import type { IdentitySessions, SignedIn, SignInDevice } from './identity-sessions'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
+
+/** The device Ann signs in on. */
+const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
+
+/** Ann's credentials as her laptop sends them. */
+const annOnLaptop = { ...ann, device: laptop }
 
 const signedIn: SignedIn = {
   identity: { id: identityIdFactory.create(), email: ann.email },
@@ -21,21 +27,21 @@ const signedIn: SignedIn = {
 
 /** The sign-in service as the routes see it: Ann exists, with her password. */
 function stubSessions(): Pick<IdentitySessions, 'signUp' | 'signIn'> & {
-  readonly calls: Array<SignUpInput | SignInInput>
+  readonly calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]>
 } {
-  const calls: Array<SignUpInput | SignInInput> = []
+  const calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]> = []
 
   return {
     calls,
-    signUp: (input) => {
-      calls.push(input)
+    signUp: (input, device) => {
+      calls.push([input, device])
 
       return input.email === ann.email
         ? errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected'))
         : okAsync({ ...signedIn, identity: { ...signedIn.identity, email: input.email } })
     },
-    signIn: (input) => {
-      calls.push(input)
+    signIn: (input, device) => {
+      calls.push([input, device])
 
       return input.email === ann.email && input.password === ann.password
         ? okAsync(signedIn)
@@ -90,11 +96,12 @@ async function answer(response: Response | undefined): Promise<{ status: number;
 }
 
 describe('authRoutes', () => {
-  it('signs an identity up and answers with the identity and its tokens', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
+  it('signs an identity up on its device and answers with the identity and its tokens', async () => {
+    const sessions = stubSessions()
+    const routes = authRoutes(sessions, noMemberships)
     const bob = { email: 'bob@example.test', password: 'pass-word-2' }
 
-    expect(await answer(await routes(post('/auth/sign-up', bob)))).toEqual({
+    expect(await answer(await routes(post('/auth/sign-up', { ...bob, device: laptop })))).toEqual({
       status: 200,
       body: {
         identity: { id: signedIn.identity.id, email: bob.email },
@@ -102,21 +109,24 @@ describe('authRoutes', () => {
         memberships: [],
       },
     })
+    expect(sessions.calls).toEqual([[bob, laptop]])
   })
 
-  it('signs an identity in', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
+  it('signs an identity in on its device', async () => {
+    const sessions = stubSessions()
+    const routes = authRoutes(sessions, noMemberships)
 
-    expect(await answer(await routes(post('/auth/sign-in', ann)))).toEqual({
+    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 200,
       body: { identity: signedIn.identity, tokens: signedIn.tokens, memberships: [] },
     })
+    expect(sessions.calls).toEqual([[ann, laptop]])
   })
 
   it('answers 409 to a sign-up with an email that is taken', async () => {
     const routes = authRoutes(stubSessions(), noMemberships)
 
-    expect(await answer(await routes(post('/auth/sign-up', ann)))).toEqual({
+    expect(await answer(await routes(post('/auth/sign-up', annOnLaptop)))).toEqual({
       status: 409,
       body: { code: 'sign-up-rejected' },
     })
@@ -126,7 +136,9 @@ describe('authRoutes', () => {
     const routes = authRoutes(stubSessions(), noMemberships)
 
     expect(
-      await answer(await routes(post('/auth/sign-in', { ...ann, password: 'wrong-password' }))),
+      await answer(
+        await routes(post('/auth/sign-in', { ...annOnLaptop, password: 'wrong-password' })),
+      ),
     ).toEqual({ status: 401, body: { code: 'invalid-credentials' } })
   })
 
@@ -135,10 +147,15 @@ describe('authRoutes', () => {
     const routes = authRoutes(sessions, noMemberships)
 
     for (const body of [
-      { email: 'not-an-email', password: 'pass-word-1' },
-      { email: ann.email, password: 'short' },
-      { email: ann.email, password: 'x'.repeat(201) },
-      { email: ann.email },
+      { email: 'not-an-email', password: 'pass-word-1', device: laptop },
+      { email: ann.email, password: 'short', device: laptop },
+      { email: ann.email, password: 'x'.repeat(201), device: laptop },
+      { email: ann.email, device: laptop },
+      ann,
+      { ...ann, device: { label: laptop.label } },
+      { ...ann, device: { id: '', label: laptop.label } },
+      { ...ann, device: { id: 'd'.repeat(65), label: laptop.label } },
+      { ...ann, device: { id: laptop.id, label: 'l'.repeat(61) } },
       '{"email":',
     ]) {
       expect(await answer(await routes(post('/auth/sign-in', body)))).toEqual({
@@ -160,7 +177,7 @@ describe('authRoutes', () => {
       noMemberships,
     )
 
-    expect(await answer(await routes(post('/auth/sign-in', ann)))).toEqual({
+    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
@@ -171,7 +188,7 @@ describe('authRoutes', () => {
       membershipsOf: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is gone')),
     })
 
-    expect(await answer(await routes(post('/auth/sign-in', ann)))).toEqual({
+    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
@@ -197,8 +214,8 @@ describe('authRoutes over the organisations of the gateway', () => {
   it('answers a sign-up and a sign-in with no memberships while the identity belongs nowhere', async () => {
     const root = await openRoot()
     const routes = authRoutes(root.sessions, root.organisations)
-    const up = await answer(await routes(post('/auth/sign-up', ann)))
-    const again = await answer(await routes(post('/auth/sign-in', ann)))
+    const up = await answer(await routes(post('/auth/sign-up', annOnLaptop)))
+    const again = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
 
     expect(up).toMatchObject({ status: 200, body: { memberships: [] } })
     expect(again).toMatchObject({ status: 200, body: { memberships: [] } })
@@ -207,11 +224,11 @@ describe('authRoutes over the organisations of the gateway', () => {
   it('answers a sign-in with the membership of the organisation the identity created', async () => {
     const root = await openRoot()
     const routes = authRoutes(root.sessions, root.organisations)
-    const { identity } = (await root.sessions.signUp(ann))._unsafeUnwrap()
+    const { identity } = (await root.sessions.signUp(ann, laptop))._unsafeUnwrap()
     const acme = (
       await root.organisations.create({ identity: identity.id, key: 'acme', name: 'Acme' })
     )._unsafeUnwrap()
-    const { status, body } = await answer(await routes(post('/auth/sign-in', ann)))
+    const { status, body } = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
 
     expect(status).toBe(200)
     expect(body).toMatchObject({ identity, memberships: [acme] })
