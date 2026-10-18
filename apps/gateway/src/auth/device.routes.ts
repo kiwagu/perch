@@ -9,7 +9,7 @@ import type { ConnectionRegistry } from '../sync/connections'
 
 import { bearerCaller, DEVICE_HEADER, readBody } from './auth.routes'
 import type { DeviceSessionRow, DeviceSessions, SignOutError } from './device-sessions'
-import { type DeviceTokens, grantIdOf, type IdentitySessions } from './identity-sessions'
+import { grantIdOf, type IdentitySessions } from './identity-sessions'
 
 /**
  * What a device sends to have its pair revoked: the pair itself, which is the credential, so its
@@ -113,11 +113,12 @@ export interface DeviceRoutesOptions {
  * - `POST /auth/sign-out` `{ access, refresh }` from the device named in `X-Perch-Device`, without
  *   `Authorization`: the pair itself is the credential, and its access token need not work any
  *   more. The pair must sign an identity in (renewed when its access token no longer works) and
- *   its refresh grant must be one of the identity's live devices: that device's row is marked
- *   signed out, a pair parked for it is forgotten and the pair (the renewed one when renewed) is
- *   revoked through the database's RPC: 204. A pair that signs nobody in, that no live device of
- *   the identity holds, or that the database refuses to revoke answers 401 `unauthorized`; a
- *   database that could not judge the revoke, 500.
+ *   its refresh grant must be one of the identity's devices: that device's row is marked signed
+ *   out (or stays so), a pair parked for it is forgotten, its sockets are closed with 4001, and
+ *   the grant the pair holds (the renewed one when renewed) is revoked through the database: 204.
+ *   A failure answers 500 and may be asked again; a pair that signs nobody in or that no device
+ *   of the identity holds answers 401 `unauthorized`, with nothing revoked but a grant the route
+ *   renewed itself.
  *
  * A sign-out that failed after its first write still forgets the parked pairs and closes the
  * sockets of what it signed out before it answers 500. A method a path does not take answers 405
@@ -127,8 +128,11 @@ export interface DeviceRoutesOptions {
  * itself handed to `onFailure`. A request for another path is not answered here (`undefined`).
  */
 export function deviceRoutes(
-  sessions: Pick<IdentitySessions, 'authenticate' | 'revoke' | 'unpark'>,
-  devices: Pick<DeviceSessions, 'bind' | 'list' | 'revoke' | 'revokeAll' | 'signedOut'>,
+  sessions: Pick<IdentitySessions, 'authenticate' | 'unpark'>,
+  devices: Pick<
+    DeviceSessions,
+    'bind' | 'list' | 'revoke' | 'revokeGrant' | 'revokeAll' | 'signedOut'
+  >,
   connections: Pick<ConnectionRegistry, 'close'>,
   options: DeviceRoutesOptions,
 ): (request: Request) => Promise<Response | undefined> {
@@ -207,7 +211,12 @@ export function deviceRoutes(
     return noContent()
   }
 
-  /** The pair is the credential: it signs the identity in, and its grant names the device. */
+  /**
+   * The pair is the credential: it signs the identity in (renewed when its access token no
+   * longer works), and its grant names the device. The row is marked first, then the grant the
+   * pair holds now is revoked through the database; both may be asked again. A renewal that ends
+   * in anything but 204 still has its grant revoked: nobody holds that pair.
+   */
   const signOut = async (request: Request): Promise<Response> => {
     const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
     const body = signOutBody.safeParse(await readBody(request))
@@ -217,38 +226,45 @@ export function deviceRoutes(
     }
 
     const { access, refresh } = body.data
+    const sent = grantIdOf(refresh)
     const authenticated = await sessions.authenticate({ access, refresh })
-    const grant = grantIdOf(refresh)
 
-    if (authenticated.isErr() || grant === undefined) {
+    if (authenticated.isErr() || sent === undefined) {
       return unauthorized()
     }
 
     const { identity } = authenticated.value
-    const marked = await devices.signedOut({ identity: identity.id, grant })
+    const renewed = authenticated.value.renewed
+      ? grantIdOf(authenticated.value.tokens.refresh)
+      : undefined
+    /** Answers, once a renewed grant that is not revoked yet has been. */
+    const answer = async (response: Response): Promise<Response> => {
+      if (renewed !== undefined && response.status !== 204) {
+        // A grant still live is reported as a failure of its own; the answer stands.
+        await devices
+          .revokeGrant({ identity: identity.id, grant: renewed })
+          .match(() => undefined, options.onFailure)
+      }
+
+      return response
+    }
+    const marked = await devices.signedOut({ identity: identity.id, grant: sent })
 
     if (marked.isErr()) {
-      return failed(marked.error)
+      return answer(failed(marked.error))
     }
 
-    // No live device of the identity holds the pair's grant: nothing is revoked for it.
+    // No device of the identity holds the pair's grant: nothing is revoked for it.
     if (marked.value === undefined) {
-      return unauthorized()
+      return answer(unauthorized())
     }
 
-    sessions.unpark(identity.id, marked.value.device)
+    await signedOut(identity.id, marked.value.device)
 
-    const live: DeviceTokens = authenticated.value.renewed
-      ? authenticated.value.tokens
-      : { access, refresh }
-    const revoked = await sessions.revoke(live)
+    // The spent grant of a renewal is dead already: the renewed one is the pair's now.
+    const revoked = await devices.revokeGrant({ identity: identity.id, grant: renewed ?? sent })
 
-    if (revoked.isOk()) {
-      return noContent()
-    }
-
-    // Only a pair the database refused is dead; one it never judged may be revoked later.
-    return revoked.error.code === 'data:AUTH_FAILED' ? unauthorized() : failed(revoked.error)
+    return revoked.isOk() ? noContent() : answer(failed(revoked.error))
   }
 
   /** Answers with the handler once the request's access token and device name a live session. */

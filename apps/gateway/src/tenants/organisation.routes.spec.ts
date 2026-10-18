@@ -459,7 +459,9 @@ describe('organisationRoutes', () => {
       // A refresh key is not taken in place of the access token it renews.
       `Bearer ${ann.tokens.refresh}`,
     ]) {
-      const as = authorization === undefined ? {} : { authorization }
+      // From a device of Ann's: only the token is wrong.
+      const device = deviceOf(ann.identity.email)
+      const as = authorization === undefined ? { device } : { authorization, device }
 
       expect(await ask('GET', '/organisations', as)).toEqual({
         status: 401,

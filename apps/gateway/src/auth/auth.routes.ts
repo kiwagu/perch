@@ -60,16 +60,23 @@ export function bearerToken(request: Request): string | undefined {
 }
 
 /**
- * Who the request comes from: its access token must sign an identity in (a refresh key is not
- * taken), the device it names in `X-Perch-Device` must follow the protocol's device id, and that
- * device of the identity must have a live session. A device signed out from another one is
- * refused at once, though its access token still works.
+ * Who the request comes from: the device it names in `X-Perch-Device` must follow the protocol's
+ * device id (checked first, before any call to the database), its access token must sign an
+ * identity in (a refresh key is not taken), and that device of the identity must have a live
+ * session. A device signed out from another one is refused at once, though its access token
+ * still works.
  */
 export async function bearerCaller(
   sessions: Pick<IdentitySessions, 'authenticate'>,
   devices: Pick<DeviceSessions, 'bind'>,
   request: Request,
 ): Promise<BearerCaller> {
+  const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
+
+  if (!device.success) {
+    return { kind: 'bad-request' }
+  }
+
   const access = bearerToken(request)
 
   if (access === undefined) {
@@ -80,12 +87,6 @@ export async function bearerCaller(
 
   if (authenticated.isErr()) {
     return { kind: 'unauthorized' }
-  }
-
-  const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
-
-  if (!device.success) {
-    return { kind: 'bad-request' }
   }
 
   const identity = authenticated.value.identity.id

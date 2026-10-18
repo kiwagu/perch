@@ -88,7 +88,8 @@ gateway process; gateways in several processes would need a durable revision of 
 The organisation routes act for the identity a device's access token signs in, sent as
 `Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
 every call with an access token must carry: a call without a valid device id answers 400
-(`bad-request`), and a device without a live session row (unknown, or signed out: its access
+(`bad-request`), checked before any call to the database, and a device without a live session
+row (unknown, or signed out: its access
 token still works, its calls do not) 401 (`unauthorized`). A refresh key is not taken over
 HTTP: a request without an access token that works answers 401. `GET /organisations` lists the caller's
 memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
@@ -118,13 +119,17 @@ fails after its first write still closes what it signed out before it answers 50
 /auth/sign-out` takes the pair in its body, `{ access, refresh }`, with `X-Perch-Device` and no
 `Authorization`: the pair is the credential, so a device can revoke a pair it could not revoke
 while offline even once its access token expired. The pair must sign an identity in (renewed
-when its access token no longer works) and its refresh grant must be one of the identity's live
-devices: that row is marked signed out, a pair parked for it is forgotten and the pair (the
-renewed one when renewed) is revoked through the database's RPC (204). A pair that signs nobody
-in, that no live device of the identity holds, or that the database refuses to revoke answers
-401 (`unauthorized`), with nothing sent to the RPC in the first two cases; a database that could
-not judge the revoke (unreachable, or no readable answer) answers 500, so the device keeps the
-pair to try again; a request without its device or its pair answers 400.
+when its access token no longer works) and its refresh grant must be one of the identity's
+devices: that row is marked signed out (a row marked already stays as it is), a pair parked for
+it is forgotten, the device's sockets are closed with 4001, and the grant the pair holds (the
+renewed one when renewed) is revoked through the database as the namespace user (`REVOKE WHERE
+subject.record = … AND grant.id = …`, scoped to the identity), 204. Every step may be asked
+again: a failure answers 500 and the device keeps the pair to try again, and its retry marks
+the row and revokes the grant anew. A pair that signs nobody in, or that no device of the
+identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
+itself has its new grant revoked whatever it answers. A request without its device or its pair
+answers 400, before any key is checked; so does every call with an access token that names no
+valid device.
 
 ## Key exports
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createAuth, type DataError, type LocalDb } from '@workspace/data'
+import { createAuth, type DataError, fromDriverValue, type LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { device_sessionIdFactory, type IdentityId } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
@@ -10,9 +10,11 @@ import { z } from '@workspace/zod'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { ConnectionRegistry } from '../sync/connections'
 
+import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
-import { type DeviceTokens, IdentitySessions } from './identity-sessions'
+import { type DeviceTokens, grantIdOf, IdentitySessions } from './identity-sessions'
+import deviceSignedOutStatement from './surql/device-signed-out.surql'
 import devicesOfStatement from './surql/devices-of.surql'
 import grantRevokeStatement from './surql/grant-revoke.surql'
 import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
@@ -164,9 +166,21 @@ async function harness(options: HarnessOptions = {}) {
     clock,
   })
   const connections = new ConnectionRegistry({ onFailure: (error) => failures.push(error) })
-  const routes = deviceRoutes(sessions, devices, connections, {
-    onFailure: (error) => failures.push(error),
-  })
+  /** How many times the routes checked keys: each opens an auth session on the database. */
+  let authentications = 0
+  const routes = deviceRoutes(
+    {
+      authenticate: (tokens) => {
+        authentications += 1
+
+        return sessions.authenticate(tokens)
+      },
+      unpark: (identity, device) => sessions.unpark(identity, device),
+    },
+    devices,
+    connections,
+    { onFailure: (error) => failures.push(error) },
+  )
   const signIn = async (
     action: 'signUp' | 'signIn',
     email: string,
@@ -216,11 +230,29 @@ async function harness(options: HarnessOptions = {}) {
   const signOut = (pair: DeviceTokens, device: string | null = phone.id) =>
     ask('POST', '/auth/sign-out', { device, body: { access: pair.access, refresh: pair.refresh } })
 
+  /** Whether `refresh` still renews a pair; a renewal spends it. */
+  const renews = async (refresh: string) =>
+    (await sessions.authenticate({ access: 'stale', refresh })).isOk()
+
+  /** The ids of the refresh grants of `identity` that are not revoked. */
+  const liveGrants = async (identity: IdentityId) => {
+    const [grants] = await local.db.query<[unknown]>(liveGrantsStatement, { identity })
+
+    return z
+      .array(z.object({ id: z.string() }))
+      .parse(fromDriverValue(grants))
+      .map((grant) => grant.id)
+      .sort()
+  }
+
   return {
     routes,
     sessions,
     devices,
     rpcCalls,
+    renews,
+    liveGrants,
+    authentications: () => authentications,
     ask,
     annsDevices,
     annsPhone,
@@ -279,15 +311,19 @@ describe('deviceRoutes', () => {
     )
   })
 
-  it('answers 400 to a Bearer call that names no device or a device of another form', async () => {
-    const { ask, annOnLaptop } = await harness()
+  it('answers 400 to a Bearer call that names no device or a device of another form, before any check of keys', async () => {
+    const { ask, authentications, annOnLaptop } = await harness()
+    const forged = { ...annOnLaptop, tokens: { ...annOnLaptop.tokens, access: 'not-a-token' } }
 
     for (const device of [null, '', 'd'.repeat(65)]) {
       expect(await ask('GET', '/devices', { as: annOnLaptop, device })).toEqual(badRequest)
       expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop, device })).toEqual(
         badRequest,
       )
+      expect(await ask('GET', '/devices', { as: forged, device })).toEqual(badRequest)
     }
+
+    expect(authentications()).toBe(0)
   })
 
   it('answers 401 to a Bearer call of a device with no session row', async () => {
@@ -430,8 +466,8 @@ describe('deviceRoutes', () => {
     expect(sockets.bobLaptop.ended).toEqual([])
   })
 
-  it("signs a device's pair out: its row marked, the pair revoked through the database's RPC", async () => {
-    const { signOut, annsPhone, rpcCalls, sessions, annOnPhone } = await harness()
+  it("signs a device's pair out: its row marked, its grant revoked through the database, its sockets closed", async () => {
+    const { signOut, annsPhone, rpcCalls, renews, sessions, sockets, annOnPhone } = await harness()
 
     sessions.park({
       identity: annOnPhone.identity,
@@ -441,74 +477,99 @@ describe('deviceRoutes', () => {
     })
 
     expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
-    expect(rpcCalls).toEqual([
-      {
-        id: 1,
-        method: 'revoke',
-        params: [{ access: annOnPhone.tokens.access, refresh: annOnPhone.tokens.refresh }],
-      },
-    ])
+    expect(rpcCalls).toEqual([])
     expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
+    expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
+    expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
+    expect(sockets.annLaptop.ended).toEqual([])
     expect(
       sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
     ).toBeUndefined()
   })
 
-  it('takes a sign-out whose access token no longer works: the pair is renewed, and the renewed pair is revoked', async () => {
-    const { signOut, annsPhone, rpcCalls, annOnPhone } = await harness()
+  it('takes a sign-out whose access token no longer works: the pair is renewed, and the renewed grant is revoked', async () => {
+    const { signOut, annsPhone, liveGrants, annOnLaptop, annOnPhone } = await harness()
 
     expect(await signOut({ access: 'expired-access', refresh: annOnPhone.tokens.refresh })).toEqual(
       noContent,
     )
-    expect(rpcCalls).toHaveLength(1)
-
-    const [call] = z
-      .array(z.object({ params: z.tuple([z.object({ access: z.string(), refresh: z.string() })]) }))
-      .parse(rpcCalls)
-
-    expect(call?.params[0].refresh).not.toBe(annOnPhone.tokens.refresh)
     expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
+    // Only the laptop's grant lives: the phone's was spent, the one it was renewed to revoked.
+    expect(await liveGrants(annOnPhone.identity)).toEqual([grantIdOf(annOnLaptop.tokens.refresh)])
   })
 
-  it("answers 401 to a sign-out whose pair is not one of the identity's device pairs, without asking the database to revoke it", async () => {
-    const { signOut, rpcCalls, annOnPhone, bob } = await harness()
+  it('takes a retry of a sign-out that failed after marking the row: the grant is revoked then', async () => {
+    let failOnce = false
+    const { signOut, renews, annOnPhone } = await harness({
+      directoryQueries: (text) => {
+        if (failOnce && text === grantRevokeStatement) {
+          failOnce = false
+          throw new Error('the directory went away')
+        }
+      },
+    })
+
+    failOnce = true
+
+    expect(await signOut(annOnPhone.tokens)).toEqual({ status: 500, body: { code: 'internal' } })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
+    expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
+  })
+
+  it('signs out a pair whose row is marked already, and revokes its grant', async () => {
+    const { signOut, devices, renews, annOnPhone } = await harness()
+
+    ;(
+      await devices.signedOut({
+        identity: annOnPhone.identity,
+        grant: grantIdOf(annOnPhone.tokens.refresh) ?? expect.unreachable('a grant'),
+      })
+    )._unsafeUnwrap()
+
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
+    expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
+  })
+
+  it('leaves no live grant after a renewal when the sign-out then fails', async () => {
+    let failOnce = false
+    const { signOut, liveGrants, annOnLaptop, annOnPhone } = await harness({
+      directoryQueries: (text) => {
+        if (failOnce && text === deviceSignedOutStatement) {
+          failOnce = false
+          throw new Error('the directory went away')
+        }
+      },
+    })
+
+    failOnce = true
+
+    expect(await signOut({ access: 'expired-access', refresh: annOnPhone.tokens.refresh })).toEqual(
+      { status: 500, body: { code: 'internal' } },
+    )
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(await liveGrants(annOnPhone.identity)).toEqual([grantIdOf(annOnLaptop.tokens.refresh)])
+  })
+
+  it("answers 401 to a sign-out whose pair is not one of the identity's device pairs, and revokes nothing", async () => {
+    const { signOut, renews, sockets, annOnPhone, bob } = await harness()
 
     expect(
       await signOut({ access: annOnPhone.tokens.access, refresh: bob.tokens.refresh }),
     ).toEqual(unauthorized)
-    expect(rpcCalls).toEqual([])
+    expect(sockets.annPhone.ended).toEqual([])
+    expect(await renews(bob.tokens.refresh)).toBe(true)
   })
 
-  it('answers 401 to a sign-out of a dead pair, without asking the database to revoke it', async () => {
-    const { signOut, ask, rpcCalls, annOnLaptop, annOnPhone } = await harness()
+  it('answers 401 to a sign-out of a dead pair', async () => {
+    const { signOut, ask, annOnLaptop, annOnPhone } = await harness()
 
     expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual(noContent)
     expect(await signOut(annOnPhone.tokens)).toEqual(unauthorized)
-    expect(rpcCalls).toEqual([])
   })
 
-  it('answers 401 to a sign-out whose pair the database refuses to revoke', async () => {
-    const { signOut, annOnPhone } = await harness({
-      rpc: () =>
-        Promise.resolve(
-          Response.json({ id: 1, error: { code: -32002, message: 'There was a problem' } }),
-        ),
-    })
-
-    expect(await signOut(annOnPhone.tokens)).toEqual(unauthorized)
-  })
-
-  it('answers 500 to a sign-out the database could not judge: the pair may be revoked later', async () => {
-    const { signOut, annOnPhone } = await harness({
-      rpc: () => Promise.reject(new TypeError('the database is unreachable')),
-    })
-
-    expect(await signOut(annOnPhone.tokens)).toEqual({ status: 500, body: { code: 'internal' } })
-    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
-  })
-
-  it('answers 400 to a sign-out without its device or without its pair', async () => {
-    const { ask, signOut, rpcCalls, annOnPhone } = await harness()
+  it('answers 400 to a sign-out without its device or without its pair, before any check of keys', async () => {
+    const { ask, signOut, rpcCalls, authentications, annOnPhone } = await harness()
 
     expect(await signOut(annOnPhone.tokens, null)).toEqual(badRequest)
 
@@ -522,6 +583,7 @@ describe('deviceRoutes', () => {
     }
 
     expect(rpcCalls).toEqual([])
+    expect(authentications()).toBe(0)
   })
 
   it('answers 500 to a failure of the gateway and hands it to onFailure', async () => {

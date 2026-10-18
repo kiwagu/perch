@@ -228,9 +228,9 @@ export class DeviceSessions {
   }
 
   /**
-   * The device of `identity` that holds `grant` signed out: its row is marked revoked. Answers
-   * the row, or `undefined` when no device of the identity holds the grant or it is revoked
-   * already.
+   * The device of `identity` that holds `grant` signed out: its row is marked revoked, or stays
+   * marked since it was. Answers the row, or `undefined` when no device of the identity holds the
+   * grant; asking again answers the same row.
    */
   signedOut(input: {
     readonly identity: IdentityId

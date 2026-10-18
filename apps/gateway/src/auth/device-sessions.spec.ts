@@ -321,7 +321,7 @@ describe('DeviceSessions', () => {
     expect(row?.revokedAt).toBeInstanceOf(Date)
   })
 
-  it("marks the device of a signed-out pair by its grant, and no other identity's device", async () => {
+  it("marks the device of a signed-out pair by its grant, once, and no other identity's device", async () => {
     const { local, devices } = await harness()
     const ann = await signUp(local, 'ann@example.test')
     const bob = await signUp(local, 'bob@example.test')
@@ -348,10 +348,12 @@ describe('DeviceSessions', () => {
 
     expect(marked).toMatchObject({ device: 'device-laptop', grant: 'g1' })
     expect(marked?.revokedAt).toBeInstanceOf(Date)
-    // A device signed out already is not marked again.
-    expect((await devices.signedOut({ identity: ann.identity, grant: 'g1' }))._unsafeUnwrap()).toBe(
-      undefined,
-    )
+
+    // A device signed out already answers its row again, signed out when it first was.
+    const again = (await devices.signedOut({ identity: ann.identity, grant: 'g1' }))._unsafeUnwrap()
+
+    expect(again?.id).toBe(marked?.id)
+    expect(again?.revokedAt).toEqual(marked?.revokedAt)
   })
 
   it("revokes one refresh grant of the identity, and no other identity's", async () => {
