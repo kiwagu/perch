@@ -37,10 +37,10 @@ describe('LatencyBook', () => {
     const book = new LatencyBook()
 
     book.pushed('w1', 1, 1000)
-    book.acked('w1', 1, 7, 1040)
-    book.received(7, 1055)
-    book.received(7, 1070)
-    book.received(99, 2000)
+    book.acked('w1', 1, 'tenant:a', 7, 1040)
+    book.received('tenant:a', 7, 1055)
+    book.received('tenant:a', 7, 1070)
+    book.received('tenant:a', 99, 2000)
 
     expect(book.ackSamples()).toEqual([40])
     expect(book.fanoutSamples()).toEqual([55, 70])
@@ -52,15 +52,31 @@ describe('LatencyBook', () => {
     const book = new LatencyBook()
 
     book.pushed('w1', 1, 1000)
-    book.received(7, 1020)
-    book.acked('w1', 1, 7, 1040)
-    book.received(7, 1055)
+    book.received('tenant:a', 7, 1020)
+    book.acked('w1', 1, 'tenant:a', 7, 1040)
+    book.received('tenant:a', 7, 1055)
 
     expect(book.ackSamples()).toEqual([40])
     expect(book.fanoutSamples()).toEqual([20, 55])
     book.reset()
-    book.acked('w1', 1, 7, 2000)
+    book.acked('w1', 1, 'tenant:a', 7, 2000)
     expect(book.fanoutSamples()).toEqual([])
+  })
+})
+
+describe('LatencyBook regions', () => {
+  it('scopes a head to its region: two regions with one head number do not cross', () => {
+    const book = new LatencyBook()
+
+    book.pushed('w1', 1, 1000)
+    book.pushed('w2', 1, 2000)
+    book.acked('w1', 1, 'tenant:a', 1, 1010)
+    book.acked('w2', 1, 'tenant:b', 1, 2010)
+    book.received('tenant:a', 1, 1030)
+    book.received('tenant:b', 1, 2050)
+    book.received('tenant:c', 1, 3000)
+
+    expect(book.fanoutSamples()).toEqual([30, 50])
   })
 })
 

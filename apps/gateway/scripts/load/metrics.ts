@@ -38,9 +38,10 @@ export function stepPlan(devices: readonly number[]): readonly Step[] {
  */
 export class LatencyBook {
   readonly #pushedAt = new Map<string, number>()
-  readonly #headPushedAt = new Map<number, number>()
+  /** Keyed by region and head: every region counts its heads from 1. */
+  readonly #headPushedAt = new Map<string, number>()
   /** Receipts of heads whose ack has not arrived yet, which a reader can beat. */
-  #early = new Map<number, number[]>()
+  #early = new Map<string, number[]>()
   #ack: number[] = []
   #fanout: number[] = []
 
@@ -48,25 +49,27 @@ export class LatencyBook {
     this.#pushedAt.set(`${device}#${batch}`, at)
   }
 
-  acked(device: string, batch: number, head: number, at: number): void {
+  acked(device: string, batch: number, region: string, head: number, at: number): void {
     const pushedAt = this.#pushedAt.get(`${device}#${batch}`)
+    const key = `${region}#${head}`
 
     if (pushedAt === undefined) return
     this.#ack.push(at - pushedAt)
     this.#pushedAt.delete(`${device}#${batch}`)
-    this.#headPushedAt.set(head, pushedAt)
+    this.#headPushedAt.set(key, pushedAt)
 
-    for (const receivedAt of this.#early.get(head) ?? []) this.#fanout.push(receivedAt - pushedAt)
+    for (const receivedAt of this.#early.get(key) ?? []) this.#fanout.push(receivedAt - pushedAt)
 
-    this.#early.delete(head)
+    this.#early.delete(key)
   }
 
-  /** A reader received `head`; a receipt before the head's ack waits for the ack. */
-  received(head: number, at: number): void {
-    const pushedAt = this.#headPushedAt.get(head)
+  /** A reader received `head` of `region`; a receipt before the head's ack waits for the ack. */
+  received(region: string, head: number, at: number): void {
+    const key = `${region}#${head}`
+    const pushedAt = this.#headPushedAt.get(key)
 
     if (pushedAt !== undefined) this.#fanout.push(at - pushedAt)
-    else this.#early.set(head, [...(this.#early.get(head) ?? []), at])
+    else this.#early.set(key, [...(this.#early.get(key) ?? []), at])
   }
 
   ackSamples(): number[] {

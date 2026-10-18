@@ -1,8 +1,12 @@
 /**
- * The run of the gateway load test behind `ws-clients.ts`: simulated devices drive a gateway this process starts as a child,
- * in front of a SurrealDB stand, in steps of growing device counts. Each step prints one
- * table row of latency, memory and CPU (see `metrics.ts`). The accounts and organisations
- * it signs up stay on the stand, for the sweep of `@example.test` accounts.
+ * The run of the gateway load test behind `ws-clients.ts`: simulated devices drive a gateway
+ * this process starts as a child, in front of a SurrealDB stand, in steps of growing device
+ * counts. Each step prints one table row of latency, memory and CPU (see `metrics.ts`).
+ * `ack` is the time from a push to its ack; `fanout` is the time from a push to the arrival
+ * of its update at another device of the organisation, before the device imports it (the
+ * import is the replica's own measure). `ops/s` is nominal, writers times the rate of their
+ * chained timers; a step with writers and no ack at all counts as degraded. The accounts and
+ * organisations it signs up stay on the stand, for the sweep of `@example.test` accounts.
  */
 
 import { hostname } from 'node:os'
@@ -32,7 +36,10 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..')
 const HEALTH_TIMEOUT_MS = 30_000
-const SIGN_UP_PARALLEL = 20
+const PARALLEL = 20
+const STOP_GRACE_MS = 5_000
+const SNAPSHOT_TIMEOUT_MS = 30_000
+const SIGNAL_EXIT = 130
 const ACK_P95_LIMIT_MS = 1_000
 const FANOUT_P95_LIMIT_MS = 2_000
 
@@ -43,6 +50,8 @@ interface Sim {
   readonly region: string
   readonly doc: RegionDoc
   device: LoadDevice | undefined
+  /** Imports of received updates, one after the other. */
+  imports: Promise<void>
   writer: boolean
   batch: number
   timer: ReturnType<typeof setTimeout> | undefined
@@ -90,10 +99,24 @@ function resetCounters(counters: Counters): void {
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
 
+/** Whether something answers `/health` of `args.gatewayPort` with 200. */
+async function healthy(args: LoadArgs): Promise<boolean> {
+  return fetch(`http://127.0.0.1:${args.gatewayPort}/health`, {
+    signal: AbortSignal.timeout(2000),
+  }).then(
+    (response) => response.status === 200,
+    () => false,
+  )
+}
+
 /** Starts the gateway as a child process and waits for its health to answer 200. */
 async function startGateway(
   args: LoadArgs,
 ): Promise<Bun.Subprocess<'ignore', 'ignore', 'inherit'>> {
+  if (await healthy(args)) {
+    fail(`port ${args.gatewayPort} already answers /health: a stale gateway? stop it first`)
+  }
+
   const gateway = Bun.spawn(['bun', 'apps/gateway/src/index.ts'], {
     cwd: REPO_ROOT,
     env: {
@@ -112,12 +135,7 @@ async function startGateway(
   while (Date.now() < deadline) {
     if (gateway.exitCode !== null) fail(`the gateway exited with ${gateway.exitCode}`)
 
-    const healthy = await fetch(`http://127.0.0.1:${args.gatewayPort}/health`).then(
-      (response) => response.status === 200,
-      () => false,
-    )
-
-    if (healthy) return gateway
+    if (await healthy(args)) return gateway
 
     await sleep(250)
   }
@@ -127,20 +145,31 @@ async function startGateway(
   return fail(`the gateway did not answer /health within ${HEALTH_TIMEOUT_MS / 1000} s`)
 }
 
-/** Signs up `count` new accounts, `SIGN_UP_PARALLEL` at a time, numbered from `run.accounts`. */
-async function signUp(run: Run, count: number): Promise<SignedIn[]> {
-  const signedUp: SignedIn[] = []
+/** Maps `items` with `work`, `PARALLEL` at a time, answering the results in order. */
+async function inParallel<T, R>(
+  items: readonly T[],
+  work: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = []
 
-  for (let from = 0; from < count; from += SIGN_UP_PARALLEL) {
-    const batch = Array.from({ length: Math.min(SIGN_UP_PARALLEL, count - from) }, (_, i) =>
-      postCredentials(run.base, '/auth/sign-up', {
-        email: `load-${run.id}-${run.accounts + from + i}@example.test`,
-        password: run.password,
-      }),
-    )
+  for (let from = 0; from < items.length; from += PARALLEL) {
+    const chunk = items.slice(from, from + PARALLEL)
 
-    signedUp.push(...(await Promise.all(batch)))
+    results.push(...(await Promise.all(chunk.map((item, i) => work(item, from + i)))))
   }
+
+  return results
+}
+
+/** Signs up `count` new accounts, numbered from `run.accounts`. */
+async function signUp(run: Run, count: number): Promise<SignedIn[]> {
+  const first = run.accounts
+  const signedUp = await inParallel(Array.from({ length: count }), (_, i) =>
+    postCredentials(run.base, '/auth/sign-up', {
+      email: `load-${run.id}-${first + i}@example.test`,
+      password: run.password,
+    }),
+  )
 
   run.accounts += count
 
@@ -177,72 +206,109 @@ async function organise(run: Run, accounts: readonly SignedIn[]): Promise<string
   return regions
 }
 
-/** Opens the device of an account, subscribes it to its region and waits for the snapshot. */
-async function openSim(run: Run, account: SignedIn, region: string, n: number): Promise<Sim> {
+/**
+ * Opens the device of an account, subscribes it to its region and waits for the snapshot.
+ * A device whose open fails, whose snapshot fails to import or does not come within 30 s, or
+ * that hears an error or a close before it is counted as an error and dropped: `undefined`.
+ */
+async function openSim(
+  run: Run,
+  account: SignedIn,
+  region: string,
+  n: number,
+): Promise<Sim | undefined> {
   const sim: Sim = {
     label: `dev${n}`,
     account,
     region,
     doc: RegionDoc.inMemory('tenant', region),
     device: undefined,
+    imports: Promise.resolve(),
     writer: false,
     batch: 0,
     timer: undefined,
   }
-  let snapshot: (() => void) | undefined
-  const snapshotted = new Promise<void>((done) => {
-    snapshot = done
-  })
   const { counters, book } = run
-  const { device } = await LoadDevice.open(
-    `${run.base.replace(/^http/, 'ws')}/sync`,
-    account.tokens,
-    {
-      onUpdates: (message, at) => {
-        void sim.doc.importRemote(message.bytes, message.head).match(
-          () => undefined,
-          () => {
-            counters.errors++
-          },
-        )
-
-        if (message.snapshot) snapshot?.()
-        else book.received(message.head, at)
-      },
-      onAck: (message, at) => {
-        book.acked(sim.label, message.batch, message.head, at)
-
-        if (message.compact) {
-          counters.asked++
-          sim.device?.compact(
-            sim.region,
-            message.head,
-            new Uint8Array(sim.doc.doc.export({ mode: 'snapshot' })),
-          )
-        }
-      },
-      onCompaction: (message) => {
-        if (message.outcome === 'accepted') counters.accepted++
-        else counters.other++
-      },
-      onReject: (message) => {
-        counters.errors++
-        counters.firstReject ??= `${message.reason} (${message.detail})`
-      },
-      onError: () => {
-        counters.errors++
-      },
-      onClose: () => {
-        if (!run.closing) counters.closes++
-      },
-    },
+  let snapshotted = false
+  let snapshot: { resolve: () => void; reject: (cause: Error) => void } | undefined
+  const waiting = new Promise<void>((resolve, reject) => {
+    snapshot = { resolve, reject }
+  })
+  const timeout = setTimeout(
+    () => snapshot?.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
+    SNAPSHOT_TIMEOUT_MS,
   )
 
-  sim.device = device
-  device.subscribe(region)
-  await snapshotted
+  /** Counts a problem of an open device, or fails the wait for the snapshot. */
+  const trouble = (text: string): void => {
+    if (snapshotted) counters.errors++
+    else snapshot?.reject(new Error(text))
+  }
 
-  return sim
+  try {
+    const { device } = await LoadDevice.open(
+      `${run.base.replace(/^http/, 'ws')}/sync`,
+      account.tokens,
+      {
+        onUpdates: (message, at) => {
+          sim.imports = sim.imports.then(() =>
+            sim.doc.importRemote(message.bytes, message.head).match(
+              () => {
+                if (message.snapshot) {
+                  snapshotted = true
+                  snapshot?.resolve()
+                } else {
+                  book.received(message.region, message.head, at)
+                }
+              },
+              (error) => trouble(`import failed: ${error.code} ${error.message}`),
+            ),
+          )
+        },
+        onAck: (message, at) => {
+          book.acked(sim.label, message.batch, message.region, message.head, at)
+
+          if (message.compact) {
+            counters.asked++
+            sim.device?.compact(
+              sim.region,
+              message.head,
+              new Uint8Array(sim.doc.doc.export({ mode: 'snapshot' })),
+            )
+          }
+        },
+        onCompaction: (message) => {
+          if (message.outcome === 'accepted') counters.accepted++
+          else counters.other++
+        },
+        onReject: (message) => {
+          counters.errors++
+          counters.firstReject ??= `${message.reason} (${message.detail})`
+        },
+        onError: trouble,
+        onClose: (code) => {
+          if (!snapshotted) trouble(`closed with ${code} before the snapshot`)
+          else if (!run.closing) counters.closes++
+        },
+      },
+    )
+
+    sim.device = device
+    device.subscribe(region)
+    await waiting
+
+    return sim
+  } catch (cause) {
+    counters.errors++
+    console.error(
+      `${sim.label}: dropped: ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    sim.device?.close()
+
+    return undefined
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 /** Appends one note to the sim's region and pushes it. */
@@ -275,18 +341,37 @@ function scheduleWrite(run: Run, sim: Sim, delay: number): void {
   }, delay)
 }
 
-/** Brings a step's new accounts, organisations and devices up; the first share are writers. */
+/** The indexes of `regions` in an order that takes the devices of each region in turn. */
+function roundRobin(regions: readonly string[]): number[] {
+  const rank = new Map<string, number>()
+  const ranked = regions.map((region, index) => {
+    const turn = rank.get(region) ?? 0
+
+    rank.set(region, turn + 1)
+
+    return { index, turn }
+  })
+
+  return ranked.sort((a, b) => a.turn - b.turn || a.index - b.index).map(({ index }) => index)
+}
+
+/** Brings a step's new accounts, organisations and devices up; writers spread over the regions. */
 async function addDevices(run: Run, step: Step): Promise<void> {
   const accounts = await signUp(run, step.add)
   const regions = await organise(run, accounts)
   const first = run.sims.length
-  const added = await Promise.all(
-    accounts.map((account, i) => openSim(run, account, regions[i] ?? fail('no region'), first + i)),
+  const opened = await inParallel(accounts, (account, i) =>
+    openSim(run, account, regions[i] ?? fail('no region'), first + i),
   )
+  const writers = roundRobin(regions).slice(0, Math.round(run.args.writers * step.add))
 
-  for (const sim of added.slice(0, Math.round(run.args.writers * added.length))) sim.writer = true
+  for (const index of writers) {
+    const sim = opened[index]
 
-  run.sims.push(...added)
+    if (sim) sim.writer = true
+  }
+
+  run.sims.push(...opened.filter((sim) => sim !== undefined))
 }
 
 /** Lets every writer write for `hold` seconds; answers what the gateway used meanwhile. */
@@ -315,9 +400,9 @@ async function hold(run: Run, pid: number): Promise<{ rssMiB: number; cpuPercent
 
 /** Measures one step: its devices written to for the hold, then the latencies and stats. */
 async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
-  await addDevices(run, step)
   run.book.reset()
   resetCounters(run.counters)
+  await addDevices(run, step)
 
   const gateway = await hold(run, pid)
   const surreal = await dockerStats(run.args.surrealContainer)
@@ -348,7 +433,11 @@ async function measure(run: Run, step: Step, pid: number): Promise<StepReport> {
     errors,
     closes,
     degraded:
-      ackP95 > ACK_P95_LIMIT_MS || fanoutP95 > FANOUT_P95_LIMIT_MS || errors > 0 || closes > 0,
+      ackP95 > ACK_P95_LIMIT_MS ||
+      fanoutP95 > FANOUT_P95_LIMIT_MS ||
+      errors > 0 ||
+      closes > 0 ||
+      (writers > 0 && ack.length === 0),
   }
 }
 
@@ -370,7 +459,7 @@ async function runLoad(run: Run, pid: number): Promise<StepReport[]> {
   return reports
 }
 
-/** Closes every device and stops the gateway child, waiting for its exit. */
+/** Closes every device and stops the gateway child: SIGTERM, then SIGKILL after 5 s. */
 async function teardown(run: Run, gateway: Bun.Subprocess): Promise<void> {
   run.closing = true
   run.writing = false
@@ -381,7 +470,11 @@ async function teardown(run: Run, gateway: Bun.Subprocess): Promise<void> {
   }
 
   gateway.kill('SIGTERM')
+
+  const killer = setTimeout(() => gateway.kill('SIGKILL'), STOP_GRACE_MS)
+
   await gateway.exited
+  clearTimeout(killer)
 }
 
 /** Runs the load test; resolves to the process's exit code. */
@@ -408,7 +501,21 @@ export async function runLoadTest(
 
   console.log(`load ${id}: stand ${args.surrealUrl}, gateway on port ${args.gatewayPort}`)
 
-  const gateway = await startGateway(args)
+  const gateway = await startGateway(args).catch((cause: unknown) => {
+    console.error(`load: ${cause instanceof Error ? cause.message : String(cause)}`)
+
+    return undefined
+  })
+
+  if (!gateway) return 1
+
+  const onSignal = (): void => {
+    void teardown(run, gateway).then(() => process.exit(SIGNAL_EXIT))
+  }
+
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
+
   let failed = false
   let reports: StepReport[] = []
 

@@ -23,7 +23,8 @@ export interface DeviceHandlers {
   readonly onAck: (message: Received<'ack'>, at: number) => void
   readonly onCompaction: (message: Received<'compaction'>) => void
   readonly onReject: (message: Received<'reject'>) => void
-  readonly onError: (message: Received<'error'>) => void
+  /** A server `error` frame or a protocol problem on the socket, in words. */
+  readonly onError: (problem: string) => void
   readonly onClose: (code: number) => void
 }
 
@@ -34,7 +35,11 @@ export class LoadDevice {
     this.#socket = socket
   }
 
-  /** Opens the socket, says hello and resolves with the welcome. */
+  /**
+   * Opens the socket, says hello and resolves with the welcome. When it rejects the socket is
+   * closed. After the welcome, a binary message, a message the protocol refuses and a socket
+   * error each reach `handlers.onError` once.
+   */
   static async open(
     url: string,
     tokens: { readonly access: string; readonly refresh: string },
@@ -42,50 +47,56 @@ export class LoadDevice {
   ): Promise<{ device: LoadDevice; welcome: Received<'welcome'> }> {
     const socket = new WebSocket(url)
     const device = new LoadDevice(socket)
-    const welcome = await new Promise<Received<'welcome'>>((resolve, reject) => {
-      let welcomed = false
+    let welcomed = false
 
-      socket.addEventListener('error', () => reject(new Error(`could not open ${url}`)))
-      socket.addEventListener('close', (event) => {
-        if (welcomed) handlers.onClose(event.code)
-        else reject(new Error(`${url} closed with ${event.code} before it welcomed`))
-      })
-      socket.addEventListener('message', (event) => {
-        const at = performance.now()
-        const data: unknown = event.data
-
-        if (typeof data !== 'string') {
-          reject(new Error('the server sent a binary message'))
-
-          return
+    try {
+      const welcome = await new Promise<Received<'welcome'>>((resolve, reject) => {
+        /** Before the welcome a problem fails the open; after it the handler counts it. */
+        const problem = (text: string): void => {
+          if (welcomed) handlers.onError(text)
+          else reject(new Error(text))
         }
 
-        decodeMessage(serverMessage, data).match(
-          (message) => {
-            if (!welcomed) {
-              if (message.type !== 'welcome') {
+        socket.addEventListener('error', () => problem(`socket error on ${url}`))
+        socket.addEventListener('close', (event) => {
+          if (welcomed) handlers.onClose(event.code)
+          else reject(new Error(`${url} closed with ${event.code} before it welcomed`))
+        })
+        socket.addEventListener('message', (event) => {
+          const at = performance.now()
+          const data: unknown = event.data
+
+          if (typeof data !== 'string') {
+            problem('the server sent a binary message')
+
+            return
+          }
+
+          decodeMessage(serverMessage, data).match(
+            (message) => {
+              if (welcomed) {
+                LoadDevice.#dispatch(message, at, handlers)
+              } else if (message.type === 'welcome') {
+                welcomed = true
+                resolve(message)
+              } else {
                 reject(new Error(`expected welcome, received ${message.type}`))
-
-                return
               }
-
-              welcomed = true
-              resolve(message)
-
-              return
-            }
-
-            LoadDevice.#dispatch(message, at, handlers)
-          },
-          (error) => reject(new Error(`the protocol refuses a server message: ${error.message}`)),
+            },
+            (error) => problem(`the protocol refuses a server message: ${error.message}`),
+          )
+        })
+        socket.addEventListener('open', () =>
+          device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens }),
         )
       })
-      socket.addEventListener('open', () =>
-        device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens }),
-      )
-    })
 
-    return { device, welcome }
+      return { device, welcome }
+    } catch (cause) {
+      socket.close()
+
+      throw cause
+    }
   }
 
   static #dispatch(message: ServerMessage, at: number, handlers: DeviceHandlers): void {
@@ -103,7 +114,7 @@ export class LoadDevice {
         handlers.onReject(message)
         break
       case 'error':
-        handlers.onError(message)
+        handlers.onError(`error ${message.code} (${message.message})`)
         break
       default:
         // memberships, tokens, heads and the rest do not matter to the load.
