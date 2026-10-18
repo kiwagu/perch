@@ -169,6 +169,19 @@ describe('gatewayAuth', () => {
     ).toBe('data:AUTH_FAILED')
   })
 
+  it('reads another 4xx to a sign-out as a refusal the gateway will never take back', async () => {
+    for (const status of [400, 404]) {
+      const { fetcher } = fakeFetch(respond(status, { code: 'bad-request' }))
+      const refused = (
+        await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1')
+      )._unsafeUnwrapErr()
+
+      expect(refused.code).toBe('data:WRITE_REJECTED')
+      expect(refused.message).toMatch(new RegExp(String(status)))
+      expect(refused.message).not.toMatch(/access-1|refresh-1/)
+    }
+  })
+
   it('fails a sign-out the gateway could not complete with its status, never the pair', async () => {
     const { fetcher } = fakeFetch(respond(500, { code: 'internal' }))
     const failed = (

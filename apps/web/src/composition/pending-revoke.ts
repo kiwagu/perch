@@ -7,7 +7,7 @@
  * to it. The pair is never logged.
  */
 
-import type { DataError } from '@workspace/data'
+import { type DataError, dataError } from '@workspace/data'
 
 import type { GatewayAuth } from './gateway-auth'
 import {
@@ -44,11 +44,22 @@ export class PendingRevoke {
 
   /**
    * Sends the pair left to revoke, if one waits, once any send under way has ended. Revoked,
-   * or refused as dead (it signs nobody in any more), it is forgotten; a gateway that cannot be
-   * reached or could not revoke it leaves it for the next try, a failure being reported.
+   * or refused as dead (it signs nobody in any more), it is forgotten; so is a pair whose
+   * request the gateway refuses otherwise (any other 4xx), which it will never take, a failure
+   * being reported. A gateway that cannot be reached or could not revoke it (5xx) leaves it for
+   * the next try, the latter being reported. The send never fails to its caller, and a failure
+   * of one send, even a throw, leaves the next one to run.
    */
   send(): Promise<void> {
-    this.#sending = this.#sending.then(() => this.#sendOnce())
+    this.#sending = this.#sending
+      .then(() => this.#sendOnce())
+      .catch((cause: unknown) =>
+        this.#options.onError(
+          dataError('data:WRITE_FAILED', 'could not send the pair left to revoke', cause),
+        ),
+      )
+      // An error hook that throws has nobody left to tell.
+      .catch(() => undefined)
 
     return this.#sending
   }
@@ -71,6 +82,9 @@ export class PendingRevoke {
     return this.#options.auth.signOut(pair, deviceIdFrom(storage)).match(forget, (error) => {
       if (error.code === 'data:AUTH_FAILED') {
         forget()
+      } else if (error.code === 'data:WRITE_REJECTED') {
+        forget()
+        this.#options.onError(error)
       } else if (error.code !== 'data:OFFLINE') {
         this.#options.onError(error)
       }

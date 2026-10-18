@@ -13,7 +13,8 @@ modeling stage.
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
   is opened while nobody is signed in. Signing up or in goes through the gateway
   (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin), naming the
-  device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs) and a
+  device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
+  minted again when the stored value is not a device id of 1 to 64 characters) and a
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
   "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
   same id in its hello and every organisation call sends it as `X-Perch-Device`. The
@@ -64,8 +65,10 @@ modeling stage.
   still works, in `perch.session.pending-revoke`: it is sent at once while the browser is
   online, else at the next start online, and in any case before the next sign-in, to
   `POST /backend/auth/sign-out` (the pair in the body, the device in
-  `X-Perch-Device`, no bearer token) and forgets it once revoked (204) or refused as dead (401);
-  an unreachable or failing gateway leaves it for the next try. While a sign-out runs, no tab of the browser takes a write (a
+  `X-Perch-Device`, no bearer token) and forgets it once revoked (204), refused as dead (401)
+  or refused otherwise (any other 4xx, which the gateway will never take: reported); an
+  unreachable or failing (5xx) gateway leaves it for the next try. A send that fails, even by
+  a throw, is reported and never stops the next one. While a sign-out runs, no tab of the browser takes a write (a
   `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
   hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that

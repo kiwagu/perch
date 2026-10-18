@@ -2,7 +2,7 @@ import type { AuthUser } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
-import { membership } from '@workspace/replica/protocol'
+import { deviceId, membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 
@@ -94,12 +94,15 @@ export function browserStorage(store: Storage, events: StorageEvents): KeyValueS
 
 const DEVICE_KEY = 'perch.device.id'
 
-/** This browser's stable name, minted on first use; commands carry it in their context. */
+/**
+ * This browser's stable name, minted on first use; commands carry it in their context. A stored
+ * value the protocol does not take as a device id (empty, too long) is replaced by a new one.
+ */
 export function deviceIdFrom(storage: KeyValueStorage): string {
-  const saved = storage.get(DEVICE_KEY)
+  const saved = deviceId.safeParse(storage.get(DEVICE_KEY))
 
-  if (saved) {
-    return saved
+  if (saved.success) {
+    return saved.data
   }
 
   const minted = crypto.randomUUID()

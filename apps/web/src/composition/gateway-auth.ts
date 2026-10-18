@@ -45,8 +45,10 @@ export interface GatewayAuth {
   /**
    * Has the gateway revoke `pair`, a pair of the device `device`. A pair the gateway no longer
    * takes (it signs nobody in, or no device of the identity holds it) fails as
-   * `data:AUTH_FAILED`: it is dead already. One the gateway could not revoke fails as
-   * `data:WRITE_FAILED`, and an unreachable gateway as `data:OFFLINE`: the pair may be sent again.
+   * `data:AUTH_FAILED`: it is dead already. A request the gateway refuses otherwise (any other
+   * 4xx) fails as `data:WRITE_REJECTED`: it will never take it. One the gateway could not revoke
+   * fails as `data:WRITE_FAILED`, and an unreachable gateway as `data:OFFLINE`: the pair may be
+   * sent again.
    */
   signOut(pair: KeyPair, device: string): ResultAsync<void, DataError>
 }
@@ -141,9 +143,17 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
         return okAsync(undefined)
       }
 
+      if (response.status === 401) {
+        return errAsync(dataError('data:AUTH_FAILED', 'the gateway no longer takes the pair'))
+      }
+
+      // Any other 4xx is a request the gateway will refuse however often it is sent.
       return errAsync(
-        response.status === 401
-          ? dataError('data:AUTH_FAILED', 'the gateway no longer takes the pair')
+        response.status >= 400 && response.status < 500
+          ? dataError(
+              'data:WRITE_REJECTED',
+              `the gateway refused the sign-out of the pair (${response.status})`,
+            )
           : dataError(
               'data:WRITE_FAILED',
               `the gateway could not sign the pair out (${response.status})`,
