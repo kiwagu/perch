@@ -14,10 +14,13 @@ device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-s
 one row per identity and device with its label, the id of the refresh grant its pair holds now
 (the second segment of the refresh key, `surreal-refresh-<grant>-<secret>`, read by
 `grantIdOf`), when it was seen last and whether it was signed out; a sign-in whose device
-cannot be recorded fails, and signing in again clears the mark. A sign-in on a device whose
-row held another grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`,
-scoped to the identity), so a device holds one live grant and a pair it left behind dies with
-the sign-in; a revoke that fails is reported and leaves the sign-in standing. Devices sync over
+cannot be recorded fails and has the grant it minted revoked, and signing in again clears the
+mark and forgets a pair parked for the device. A sign-in on a device whose row held another
+grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
+identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
+revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
+is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
+cannot be reached answers 500, here and on every route and hello below. Devices sync over
 a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 4 (the
 pair is renewed with the refresh key when the access token no longer works, and the new pair is
 sent first).
@@ -45,14 +48,17 @@ may no longer name at once, without waiting for the device's messages under way 
 from then on that names such a region closes the socket with 4403, and the hub sends it nothing
 more there), and is sent a `memberships` message; it subscribes to a new organisation's region
 itself. A change told while a connection's hello is under way applies right after its welcome.
-Text the protocol refuses (4400, a hello of an older protocol
-or one that names no device included), refused keys (4401), a region the device may not name
-(4403) and a hello that did not come within 10 seconds (4408, after which the device connects
-again) close the socket with the protocol's close codes; a device's sign-out leaves its regions,
-revokes its refresh grant through the database's RPC and closes the socket with 4000, which
-means the grant is revoked; a revoke that fails is tried once more, and a grant that still
-cannot be revoked closes the socket with 1011 (`revoke failed`) instead; a sign-out also marks
-the device's row. A device signed out from another device is closed with 4001 at once, whatever
+Text the protocol refuses (4400, a hello of an older protocol or one that names no device
+included), keys the database refused (4401), a region the device may not name (4403) and a hello
+that did not come within 10 seconds (4408, after which the device connects again) close the
+socket with the protocol's close codes; keys the database could not judge (it could not be
+reached) close it as a failed server (1011), and the device comes back with the same keys. A
+device's sign-out leaves its regions, marks its row signed out, forgets the pairs parked for it
+and revokes its refresh grant through the database as the namespace user, as `POST
+/auth/sign-out` does, then closes the socket with 4000, which means the grant is revoked; a row
+that cannot be marked or a grant that cannot be revoked closes the socket with 1011 (`revoke
+failed`) instead, and the device sends its sign-out again through the route. A device signed
+out from another device is closed with 4001 at once, whatever
 it is doing, also while its hello is under way: the registry knows each connection's identity
 and device (`ConnectionRegistry.close(identity, device, code)`, every device of the identity
 when none is named), and each close moves a revocation epoch of the device or of the identity.
@@ -64,7 +70,9 @@ the device and a SHA-256 digest of the refresh key the renewal spent (the key it
 kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
 device`: the device's next hello with that spent key is refused the renewal, is handed the
 parked pair once (`tokens`, before its welcome) and welcomed; a pair is never handed to another
-device, and signing the device out forgets it. Keys, tokens and grant ids never reach its logs.
+device, and signing the device out or signing in on it again forgets it; a hello whose keys the
+database could not judge leaves it parked, and one that could not judge the parked pair parks it
+again. Keys, tokens and grant ids never reach its logs.
 
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
 the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
@@ -93,13 +101,14 @@ The organisation routes act for the identity a device's access token signs in, s
 `Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
 every call with an access token must carry: a call without a valid device id answers 400
 (`bad-request`), checked before any call to the database, and a device without a live session
-row (unknown, or signed out: its access
-token still works, its calls do not) 401 (`unauthorized`). A refresh key is not taken over
-HTTP: a request with a valid device header but without an access token that works answers 401;
-a missing or invalid `X-Perch-Device` answers 400 first, before any token is checked. `GET /organisations` lists the caller's
-memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
-as its admin (201); `GET /organisations/:key/members` lists the members to an admin (403 `not-admin` to a member);
-`POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
+row (unknown, or signed out: its access token still works, its calls do not) 401
+(`unauthorized`). A refresh key is not taken over HTTP: a request with a valid device header but
+without an access token the database accepts answers 401, and one whose token the database
+could not judge answers 500; a missing or invalid `X-Perch-Device` answers 400 first, before any
+token is checked. `GET /organisations` lists the caller's memberships; `POST /organisations`
+with `{ key, name }` creates an organisation with the caller as its admin (201); `GET
+/organisations/:key/members` lists the members to an admin (403 `not-admin` to a member); `POST
+/organisations/:key/members` with `{ email }` lets an admin invite an identity; and
 `DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
 an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
 code, with 400 for `invalid-key` and `invalid-name`, 403 for `not-a-member` and `not-admin`, 404
@@ -136,9 +145,10 @@ it is forgotten, the device's sockets are closed with 4001, and the grant the pa
 renewed one when renewed) is revoked through the database as the namespace user (`REVOKE WHERE
 subject.record = … AND grant.id = …`, scoped to the identity), 204; a pair whose device was
 signed out from another one already (its row marked, its grant revoked) answers 204 as well.
-Every step may be asked again: a failure answers 500 and the device keeps the pair to try again, and its retry marks
-the row and revokes the grant anew. A pair that signs nobody in, or that no device of the
-identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
+Every step may be asked again: a failure answers 500 and the device keeps the pair to try
+again, and its retry marks the row and revokes the grant anew; a pair the database could not
+judge answers 500 too, with nothing marked. A pair the database refused, or that no device of
+the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
 itself has its new grant revoked whatever it answers. A request without its device or its pair
 answers 400, before any key is checked; so does every call with an access token that names no
 valid device.

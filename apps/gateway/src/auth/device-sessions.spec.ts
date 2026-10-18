@@ -11,6 +11,7 @@ import { DIRECTORY, NAMESPACE } from '../config'
 import sessionsRevokedAtStatement from './__fixtures__/identity-sessions-revoked-at.surql'
 import { DeviceSessions } from './device-sessions'
 import { grantIdOf } from './identity-sessions'
+import deviceTouchStatement from './surql/device-touch.surql'
 import grantRevokeStatement from './surql/grant-revoke.surql'
 import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from './surql/identity-sessions-revoked.surql'
@@ -165,6 +166,48 @@ describe('DeviceSessions', () => {
     expect(first.row.grant).toBe('grant-1')
     expect(second.previous).toBe('grant-1')
     expect(second.row).toMatchObject({ id: first.row.id, grant: 'grant-2' })
+  })
+
+  it('records a new device once when two sign-ins on it touch it at the same moment', async () => {
+    const local = await directory()
+    let release = () => {}
+    const together = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let held = 0
+    const devices = new DeviceSessions({
+      // Both touches wait until both are in flight, then reach the database at once.
+      directory: interceptQueries(local, (text) => {
+        if (text !== deviceTouchStatement) {
+          return undefined
+        }
+
+        held += 1
+
+        if (held === 2) {
+          release()
+        }
+
+        return together
+      }),
+      clock: manualClock(Date.now()),
+    })
+    const ann = await signUp(local, 'ann@example.test')
+    const touch = (grant: string) =>
+      devices.touch({ identity: ann.identity, device: 'device-laptop', label: 'Laptop', grant })
+
+    const touched = (await Promise.all([touch('grant-1'), touch('grant-2')])).map((result) =>
+      result._unsafeUnwrap(),
+    )
+    const rows = (await devices.list(ann.identity))._unsafeUnwrap()
+
+    expect(rows).toHaveLength(1)
+    expect(new Set(touched.map(({ row }) => row.id))).toEqual(new Set([rows[0]?.id]))
+    // One of them made the row. The other's write conflicted with it, and the retry every write
+    // is sent with replayed it: it found the row and took its grant over.
+    expect(
+      touched.map(({ previous }) => previous).filter((previous) => previous !== undefined),
+    ).toHaveLength(1)
   })
 
   it('lists the devices of the identity only, the earliest first', async () => {

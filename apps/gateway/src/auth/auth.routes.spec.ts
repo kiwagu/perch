@@ -68,7 +68,6 @@ async function openRoot(): Promise<GatewayRoot> {
     await createGatewayRoot({
       engines: nodeEngines(),
       url: 'mem://',
-      rpcUrl: 'http://127.0.0.1:8000/rpc',
       clock: manualClock(),
     })
   )._unsafeUnwrap()
@@ -219,6 +218,25 @@ describe('authRoutes over the organisations of the gateway', () => {
 
     expect(up).toMatchObject({ status: 200, body: { memberships: [] } })
     expect(again).toMatchObject({ status: 200, body: { memberships: [] } })
+  })
+
+  it('answers 500, never 401 or 409, to a sign-up and a sign-in the database could not judge', async () => {
+    const root = await openRoot()
+    const routes = authRoutes(root.sessions, root.organisations)
+
+    expect((await answer(await routes(post('/auth/sign-up', annOnLaptop)))).status).toBe(200)
+
+    root.local.db.newSession = () => Promise.reject(new Error('the database cannot be reached'))
+
+    const up = await answer(
+      await routes(post('/auth/sign-up', { ...annOnLaptop, email: 'bob@example.test' })),
+    )
+    const again = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
+
+    expect([up, again]).toEqual([
+      { status: 500, body: { code: 'internal' } },
+      { status: 500, body: { code: 'internal' } },
+    ])
   })
 
   it('answers a sign-in with the membership of the organisation the identity created', async () => {

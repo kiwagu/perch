@@ -8,7 +8,7 @@ import { z } from '@workspace/zod'
 import type { Organisations } from '../tenants/organisations'
 
 import type { DeviceSessions } from './device-sessions'
-import type { IdentitySessions, SignedIn } from './identity-sessions'
+import { type IdentitySessions, keysRefused, type SignedIn } from './identity-sessions'
 
 /** What a device sends to sign up or in: the credentials, and the device's id and label. */
 const credentialsBody = z.object({
@@ -64,7 +64,7 @@ export function bearerToken(request: Request): string | undefined {
  * device id (checked first, before any call to the database), its access token must sign an
  * identity in (a refresh key is not taken), and that device of the identity must have a live
  * session. A device signed out from another one is refused at once, though its access token
- * still works.
+ * still works. A token the database could not judge is no refusal: the call failed.
  */
 export async function bearerCaller(
   sessions: Pick<IdentitySessions, 'authenticate'>,
@@ -86,7 +86,9 @@ export async function bearerCaller(
   const authenticated = await sessions.authenticate({ access })
 
   if (authenticated.isErr()) {
-    return { kind: 'unauthorized' }
+    return keysRefused(authenticated.error)
+      ? { kind: 'unauthorized' }
+      : { kind: 'failed', error: authenticated.error }
   }
 
   const identity = authenticated.value.identity.id

@@ -10,13 +10,18 @@ import { SmokeDevice } from './smoke-device'
 import { call, callAs, postCredentials, type SignedIn } from './smoke-http'
 import { check, hello, type Opened, refusal, step } from './smoke-steps'
 
-/** A device as `GET /devices` lists it, as far as the smoke reads it. */
-const listedDevices = z.object({
+/**
+ * The devices as `GET /devices` lists them, every field of each named: a field the list must not
+ * send (a device's own id, its grant) fails the parse instead of being dropped by it.
+ */
+const listedDevices = z.strictObject({
   devices: z.array(
-    z.object({
+    z.strictObject({
       id: z.string(),
       label: z.string(),
-      revokedAt: z.string().nullable(),
+      createdAt: z.iso.datetime(),
+      lastSeenAt: z.iso.datetime(),
+      revokedAt: z.iso.datetime().nullable(),
       current: z.boolean(),
     }),
   ),
@@ -41,13 +46,21 @@ async function refusedHello(base: string, opened: Opened, signedIn: SignedIn) {
   return device.closed
 }
 
-/** The caller's devices as `GET /devices` lists them to `signedIn`, from its own device. */
-async function devicesOf(base: string, signedIn: SignedIn) {
+/**
+ * The caller's devices as `GET /devices` lists them to `signedIn`, from its own device, and the
+ * answer's body as it came.
+ */
+async function listOf(base: string, signedIn: SignedIn) {
   const answer = await callAs(base, 'GET', '/devices', signedIn)
 
   check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
 
-  return listedDevices.parse(answer.body).devices
+  return { devices: listedDevices.parse(answer.body).devices, raw: JSON.stringify(answer.body) }
+}
+
+/** The caller's devices as `GET /devices` lists them to `signedIn`, from its own device. */
+async function devicesOf(base: string, signedIn: SignedIn) {
+  return (await listOf(base, signedIn)).devices
 }
 
 /**
@@ -102,16 +115,13 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
   })
 
   const phoneRow = await step('GET /devices lists both, the laptop as current', async () => {
-    const devices = await devicesOf(base, laptop)
+    const { devices, raw } = await listOf(base, laptop)
 
     check(
       devices.map((device) => device.label).join() === 'Smoke laptop,Smoke phone',
       `listed ${JSON.stringify(devices)}`,
     )
-    check(
-      !JSON.stringify(devices).includes('smoke-phone'),
-      "the list gives away the phone's device id",
-    )
+    check(!raw.includes('smoke-phone'), "the list gives away the phone's device id")
     check(
       devices.map((device) => device.current).join() === 'true,false',
       `current ${JSON.stringify(devices)}`,

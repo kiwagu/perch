@@ -64,8 +64,6 @@ export interface GatewayRootOptions {
   readonly url: string
   /** The gateway's namespace user; an embedded database needs none. */
   readonly credentials?: { readonly username: string; readonly password: string }
-  /** The database's RPC endpoint over HTTP, where refresh grants are revoked. */
-  readonly rpcUrl: string
   readonly clock: Clock
 }
 
@@ -128,8 +126,6 @@ export function createGatewayRoot(
       sessions: new IdentitySessions({
         openAuth: () =>
           createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
-        rpcUrl: options.rpcUrl,
-        fetch,
         onFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         devices: deviceSessions,
         clock: options.clock,

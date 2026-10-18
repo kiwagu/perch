@@ -126,16 +126,15 @@ const badRequest = { status: 400, body: { code: 'bad-request' } }
 const noContent = { status: 204, body: undefined }
 
 interface HarnessOptions {
-  /** Answers the database's RPC `revoke`; it succeeds by default. */
-  readonly rpc?: () => Promise<Response>
   /** Runs before each statement sent to the directory; it may throw to make it fail. */
   readonly directoryQueries?: (text: string) => void
 }
 
 /**
  * The routes over services on an embedded directory, with Ann signed in on her laptop and her
- * phone and Bob on his laptop, and a connection of each device registered. The database's RPC
- * over HTTP is a fake that records each call.
+ * phone and Bob on his laptop, and a connection of each device registered. `outage` makes every
+ * auth session opened from then on fail to open, as a database that cannot be reached would; what
+ * it answers ends the outage.
  */
 async function harness(options: HarnessOptions = {}) {
   const local: LocalDb = (
@@ -145,12 +144,6 @@ async function harness(options: HarnessOptions = {}) {
   cleanups.push(() => local.close())
 
   const clock = manualClock(Date.now())
-  const rpcCalls: unknown[] = []
-  const rpc = async (_: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    rpcCalls.push(JSON.parse(String(init?.body)) as unknown)
-
-    return options.rpc ? options.rpc() : Response.json({ id: 1, result: null })
-  }
   const directory = options.directoryQueries
     ? interceptQueries(local, options.directoryQueries)
     : local
@@ -158,12 +151,18 @@ async function harness(options: HarnessOptions = {}) {
   const sessions = new IdentitySessions({
     openAuth: () =>
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
-    rpcUrl: 'http://127.0.0.1:8000/rpc',
-    fetch: Object.assign(rpc, { preconnect: () => {} }),
     onFailure: (error) => failures.push(error),
     devices,
     clock,
   })
+  const newSession = local.db.newSession.bind(local.db)
+  const outage = (): (() => void) => {
+    local.db.newSession = () => Promise.reject(new Error('the database cannot be reached'))
+
+    return () => {
+      local.db.newSession = newSession
+    }
+  }
   const connections = new ConnectionRegistry({ onFailure: (error) => failures.push(error) })
   /** How many times the routes checked keys: each opens an auth session on the database. */
   let authentications = 0
@@ -248,7 +247,7 @@ async function harness(options: HarnessOptions = {}) {
     routes,
     sessions,
     devices,
-    rpcCalls,
+    outage,
     renews,
     liveGrants,
     authentications: () => authentications,
@@ -464,7 +463,7 @@ describe('deviceRoutes', () => {
   })
 
   it("signs a device's pair out: its row marked, its grant revoked through the database, its sockets closed", async () => {
-    const { signOut, annsPhone, rpcCalls, renews, sessions, sockets, annOnPhone } = await harness()
+    const { signOut, annsPhone, renews, sessions, sockets, annOnPhone } = await harness()
 
     sessions.park({
       identity: annOnPhone.identity,
@@ -474,7 +473,6 @@ describe('deviceRoutes', () => {
     })
 
     expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
-    expect(rpcCalls).toEqual([])
     expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
     expect(await renews(annOnPhone.tokens.refresh)).toBe(false)
     expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
@@ -581,7 +579,7 @@ describe('deviceRoutes', () => {
   })
 
   it('answers 400 to a sign-out without its device or without its pair, before any check of keys', async () => {
-    const { ask, signOut, rpcCalls, authentications, annOnPhone } = await harness()
+    const { ask, signOut, authentications, annOnPhone } = await harness()
 
     expect(await signOut(annOnPhone.tokens, null)).toEqual(badRequest)
 
@@ -594,8 +592,37 @@ describe('deviceRoutes', () => {
       expect(await ask('POST', '/auth/sign-out', { device: phone.id, body })).toEqual(badRequest)
     }
 
-    expect(rpcCalls).toEqual([])
     expect(authentications()).toBe(0)
+  })
+
+  it('answers 500, never 401, to a sign-out whose pair the database could not judge, and signs nothing out', async () => {
+    const { signOut, annsPhone, outage, sockets, annOnPhone } = await harness()
+    const end = outage()
+
+    expect(await signOut(annOnPhone.tokens)).toEqual({ status: 500, body: { code: 'internal' } })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
+
+    end()
+
+    expect((await annsPhone()).revokedAt).toBeNull()
+    expect(sockets.annPhone.ended).toEqual([])
+    // The pair was not refused: asked again once the database answers, it is signed out.
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
+  })
+
+  it('answers 500, never 401, to a Bearer call whose access token the database could not judge', async () => {
+    const { ask, outage, annOnLaptop } = await harness()
+    const end = outage()
+
+    expect(await ask('GET', '/devices', { as: annOnLaptop })).toEqual({
+      status: 500,
+      body: { code: 'internal' },
+    })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
+
+    end()
+
+    expect((await ask('GET', '/devices', { as: annOnLaptop })).status).toBe(200)
   })
 
   it('answers 500 to a failure of the gateway and hands it to onFailure', async () => {

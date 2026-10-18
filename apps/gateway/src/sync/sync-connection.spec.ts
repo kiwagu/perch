@@ -110,8 +110,10 @@ function types(messages: readonly ServerMessage[]): string[] {
 interface ConnectOptions {
   /** Replaces hub calls, to make them fail. */
   readonly hub?: Partial<SyncConnectionDeps['hub']>
-  /** Answers the revoke of a grant; it succeeds by default. */
-  readonly revoke?: SyncConnectionDeps['sessions']['revoke']
+  /** Answers the revoke of a grant; it goes to the directory by default. */
+  readonly revokeGrant?: SyncConnectionDeps['devices']['revokeGrant']
+  /** Answers the mark of a signed-out device; it goes to the directory by default. */
+  readonly signedOut?: SyncConnectionDeps['devices']['signedOut']
   /** Runs once keys were accepted, before the connection hears the outcome. */
   readonly onAuthenticated?: (device: AuthenticatedDevice) => void
   /** Holds each check of the keys until it resolves, as a slow database would. */
@@ -131,7 +133,8 @@ interface GatewayOptions {
  * The gateway's services on a fresh embedded directory, each organisation's database on an
  * embedded engine of its own: identity sessions, organisations, a real hub over both, and the
  * registry of connections, which hears every change of memberships as the composition root
- * wires it. Revoking a grant goes to the database's RPC over HTTP, so a connection only counts it.
+ * wires it. `outage` makes the auth sessions opened from then on fail to open, as a database that
+ * cannot be reached would, after the first `after` of them; what it answers ends the outage.
  */
 async function openGateway(options: GatewayOptions = {}) {
   const local = (await openTestDb({ namespace: NAMESPACE, database: DIRECTORY }))._unsafeUnwrap()
@@ -168,14 +171,26 @@ async function openGateway(options: GatewayOptions = {}) {
   const sessions = new IdentitySessions({
     openAuth: () =>
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
-    rpcUrl: 'http://127.0.0.1:8000/rpc',
-    fetch: Object.assign(() => Promise.reject(new TypeError('no network in this test')), {
-      preconnect: () => {},
-    }),
     onFailure: (error) => reported.push(error),
     devices,
     clock,
   })
+  const newSession = local.db.newSession.bind(local.db)
+  const outage = (after = 0): (() => void) => {
+    let opened = 0
+
+    local.db.newSession = () => {
+      opened += 1
+
+      return opened > after
+        ? Promise.reject(new Error('the database cannot be reached'))
+        : newSession()
+    }
+
+    return () => {
+      local.db.newSession = newSession
+    }
+  }
   const connections = new ConnectionRegistry({ onFailure: (error) => reported.push(error) })
   const organisations = new Organisations({
     directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,
@@ -192,6 +207,7 @@ async function openGateway(options: GatewayOptions = {}) {
     devices,
     organisations,
     connections,
+    outage,
     signUp: async (credentials: typeof ann) =>
       (await sessions.signUp(credentials, { id: DEVICE, label: 'Laptop' }))._unsafeUnwrap(),
     /** Signs the identity of `credentials` in on another device. */
@@ -205,7 +221,8 @@ type Gateway = Awaited<ReturnType<typeof openGateway>>
 /** A connection of a device to the gateway over a fake socket; it has not said hello yet. */
 function open(gateway: Gateway, options: ConnectOptions = {}) {
   const { hub, sessions, devices } = gateway
-  const revoked: DeviceTokens[] = []
+  /** The grants the connection revoked, in order. */
+  const revokedGrants: Array<{ readonly identity: string; readonly grant: string }> = []
   /** The devices the connection marked seen, in order. */
   const seen: Array<{ readonly identity: string; readonly device: string }> = []
   const logLines: string[] = []
@@ -218,13 +235,9 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
         ResultAsync.fromSafePromise(options.authenticating?.() ?? Promise.resolve())
           .andThen(() => sessions.authenticate(tokens))
           .andTee((authenticated) => options.onAuthenticated?.(authenticated)),
-      revoke: (tokens) => {
-        revoked.push(tokens)
-
-        return options.revoke ? options.revoke(tokens) : okAsync(undefined)
-      },
       park: (parking) => sessions.park(parking),
       parked: (presented) => sessions.parked(presented),
+      unpark: (identity, device) => sessions.unpark(identity, device),
     },
     devices: {
       seen: (device) => {
@@ -237,8 +250,12 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
           devices.bind(device),
         ),
       rotate: (rotation) => devices.rotate(rotation),
-      revokeGrant: (grant) => devices.revokeGrant(grant),
-      signedOut: (pair) => devices.signedOut(pair),
+      revokeGrant: (grant) => {
+        revokedGrants.push(grant)
+
+        return options.revokeGrant ? options.revokeGrant(grant) : devices.revokeGrant(grant)
+      },
+      signedOut: (pair) => (options.signedOut ? options.signedOut(pair) : devices.signedOut(pair)),
     },
     hub: {
       subscribe: hub.subscribe.bind(hub),
@@ -264,7 +281,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
     onError: (error) => reported.push(error),
   })
 
-  return { socket, connection, revoked, seen, logLines, unsubscribed }
+  return { socket, connection, revokedGrants, seen, logLines, unsubscribed }
 }
 
 /**
@@ -502,16 +519,33 @@ describe('SyncConnection', () => {
     expect(socket.closedWith).toBeUndefined()
   })
 
-  it('signs the device out: revokes the grant, marks its row and closes', async () => {
-    const { socket, connection, revoked, ann, region, hub, clock, devices } = await connectedAsAnn()
+  it('signs the device out through the database: its row marked, its grant revoked, its parked pairs forgotten', async () => {
+    const { socket, connection, revokedGrants, ann, region, hub, clock, devices, sessions } =
+      await connectedAsAnn()
+    const spent = 'surreal-refresh-spent-secret'
 
+    sessions.park({
+      identity: ann.identity.id,
+      device: DEVICE,
+      spentRefresh: spent,
+      tokens: { access: 'parked-access', refresh: 'surreal-refresh-parked-secret' },
+    })
     await connection.receive(encode({ type: 'subscribe', region, vv: null }))
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
-    expect(revoked).toEqual([ann.tokens])
+    expect(revokedGrants).toEqual([
+      { identity: ann.identity.id, grant: grantIdOf(ann.tokens.refresh) },
+    ])
     expect(socket.closes).toEqual([[CLOSE.signedOut, 'signed out']])
     // The device's row is marked: it is listed as signed out.
     expect((await devices.list(ann.identity.id))._unsafeUnwrap()[0]?.revokedAt).toBeInstanceOf(Date)
+    // The grant is revoked in the database: its refresh key renews nothing.
+    expect(
+      (
+        await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh })
+      )._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+    expect(sessions.parked({ device: DEVICE, refresh: spent })).toBeUndefined()
 
     // Nobody subscribes to the region any more, so it unloads after the idle time.
     expect(hub.loadedRegions()).toBe(1)
@@ -520,7 +554,7 @@ describe('SyncConnection', () => {
   })
 
   it('signs out a device that came with an access token only, with nothing to revoke', async () => {
-    const { socket, connection, revoked, ann, logLines } = await connect()
+    const { socket, connection, revokedGrants, ann, logLines } = await connect()
 
     await connection.receive(
       encode({
@@ -532,7 +566,7 @@ describe('SyncConnection', () => {
     )
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
-    expect(revoked).toEqual([])
+    expect(revokedGrants).toEqual([])
     expect(socket.closes).toEqual([[CLOSE.signedOut, 'signed out']])
     expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
       expect.objectContaining({ level: 30, identity: ann.identity.id }),
@@ -540,42 +574,42 @@ describe('SyncConnection', () => {
     expect(logLines.join('\n')).not.toContain(ann.tokens.access)
   })
 
-  it('closes as a failed server, never as signed out, when the grant cannot be revoked twice', async () => {
-    const { socket, connection, ann, revoked, logLines } = await connectedAsAnn({
-      revoke: () =>
-        errAsync(dataError('data:AUTH_FAILED', 'the database refused to revoke the grant')),
+  it('closes as a failed server, never as signed out, when the grant cannot be revoked', async () => {
+    const { socket, connection, ann, devices, logLines } = await connectedAsAnn({
+      revokeGrant: () => errAsync(dataError('data:WRITE_FAILED', 'the directory went away')),
     })
 
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
-    expect(revoked).toEqual([ann.tokens, ann.tokens])
     expect(socket.closes).toEqual([[SERVER_ERROR, 'revoke failed']])
     expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
-      expect.objectContaining({ level: 40, code: 'data:AUTH_FAILED' }),
+      expect.objectContaining({ level: 40, code: 'data:WRITE_FAILED' }),
     ])
+    // The row was marked before: a sign-out the device sends again completes it.
+    expect((await devices.list(ann.identity.id))._unsafeUnwrap()[0]?.revokedAt).toBeInstanceOf(Date)
 
     const logged = [...logLines, ...socket.closes.map(([, reason]) => reason)].join('\n')
 
     expect(logged).not.toContain(ann.tokens.access)
     expect(logged).not.toContain(ann.tokens.refresh)
+    expect(logged).not.toContain(String(grantIdOf(ann.tokens.refresh)))
   })
 
-  it('signs the device out when the revoke succeeds on its second try', async () => {
-    let tries = 0
-    const { socket, connection, ann, revoked } = await connectedAsAnn({
-      revoke: () => {
-        tries += 1
-
-        return tries === 1
-          ? errAsync(dataError('data:AUTH_FAILED', 'the database went away for a moment'))
-          : okAsync(undefined)
-      },
+  it('closes as a failed server, revoking nothing, when the row cannot be marked', async () => {
+    const { socket, connection, revokedGrants, ann, sessions, logLines } = await connectedAsAnn({
+      signedOut: () => errAsync(dataError('data:WRITE_FAILED', 'the directory went away')),
     })
 
     await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
 
-    expect(revoked).toEqual([ann.tokens, ann.tokens])
-    expect(socket.closes).toEqual([[CLOSE.signedOut, 'signed out']])
+    expect(socket.closes).toEqual([[SERVER_ERROR, 'revoke failed']])
+    expect(revokedGrants).toEqual([])
+    expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
+      expect.objectContaining({ level: 40, code: 'data:WRITE_FAILED' }),
+    ])
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh })).isOk(),
+    ).toBe(true)
   })
 
   it('closes a socket that never says hello with the timeout code, not as refused keys', async () => {
@@ -692,6 +726,77 @@ describe('SyncConnection', () => {
 
     expect(other.socket.closes.map(([code]) => code)).toEqual([CLOSE.unauthorized])
     expect(other.socket.sent).toEqual([])
+  })
+
+  it('closes as a failed server a hello whose keys the database could not judge, and takes them once it answers', async () => {
+    const fixture = await connect()
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+    const end = fixture.outage()
+
+    await hello(fixture.connection, stale)
+
+    expect(fixture.socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(types(fixture.socket.sent)).toEqual(['error'])
+    expect(reported.splice(0).map((error) => error.code)).toEqual(['data:QUERY_FAILED'])
+
+    end()
+
+    const retry = open(fixture)
+
+    await hello(retry.connection, stale)
+
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('keeps the parked pair when the keys of a hello could not be judged', async () => {
+    let duringRenewal = () => {}
+    const fixture = await connect({ onAuthenticated: () => duringRenewal() })
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+
+    duringRenewal = () => fixture.connection.closed()
+    await hello(fixture.connection, stale)
+
+    const end = fixture.outage()
+    const during = open(fixture)
+
+    await hello(during.connection, stale)
+
+    expect(during.socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(reported.splice(0).map((error) => error.code)).toEqual(['data:QUERY_FAILED'])
+
+    end()
+
+    const after = open(fixture)
+
+    await hello(after.connection, stale)
+
+    expect(types(after.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('parks the pair again when the database could not judge it at the hello it was handed to', async () => {
+    let duringRenewal = () => {}
+    const fixture = await connect({ onAuthenticated: () => duringRenewal() })
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+
+    duringRenewal = () => fixture.connection.closed()
+    await hello(fixture.connection, stale)
+
+    // The spent key is refused; the check of the parked pair cannot open its session.
+    const end = fixture.outage(1)
+    const during = open(fixture)
+
+    await hello(during.connection, stale)
+
+    expect(during.socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(reported.splice(0).map((error) => error.code)).toEqual(['data:QUERY_FAILED'])
+
+    end()
+
+    const after = open(fixture)
+
+    await hello(after.connection, stale)
+
+    expect(types(after.socket.sent)).toEqual(['tokens', 'welcome'])
   })
 
   it('closes 4400 a hello that names no device, without trying its keys', async () => {

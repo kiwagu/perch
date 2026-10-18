@@ -25,7 +25,12 @@ import {
 import type { Actor, RegionHub, Subscriber } from '@workspace/replica/server'
 
 import type { DeviceSessions } from '../auth/device-sessions'
-import { type DeviceTokens, grantIdOf, type IdentitySessions } from '../auth/identity-sessions'
+import {
+  type DeviceTokens,
+  grantIdOf,
+  type IdentitySessions,
+  keysRefused,
+} from '../auth/identity-sessions'
 import type { Organisations } from '../tenants/organisations'
 
 import type { ConnectionRegistry } from './connections'
@@ -38,11 +43,11 @@ export interface SocketLike {
 }
 
 export interface SyncConnectionDeps {
-  readonly sessions: Pick<IdentitySessions, 'authenticate' | 'revoke' | 'park' | 'parked'>
+  readonly sessions: Pick<IdentitySessions, 'authenticate' | 'park' | 'parked' | 'unpark'>
   /**
    * The devices' rows: a hello is bound to its device's row (moved to the new grant when the
    * hello renews the pair), the device is marked seen at its hello and then at most every five
-   * minutes, and a sign-out marks the row.
+   * minutes, and a sign-out marks the row and revokes the device's grant.
    */
   readonly devices: Pick<DeviceSessions, 'seen' | 'bind' | 'rotate' | 'revokeGrant' | 'signedOut'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
@@ -102,7 +107,6 @@ const REASON = {
   malformed: 'the message does not follow the protocol',
   helloFirst: 'the first message must be hello',
   helloTwice: 'hello was already said',
-  noDevice: 'the hello must name its device',
   silent: 'no hello in time',
   refused: 'the keys were not accepted',
   noSession: 'no session for this device',
@@ -163,15 +167,17 @@ function regionsOf(message: ClientMessage): readonly string[] {
  * revocation takes one region away the same way without a message. A change told while the
  * hello is under way applies right after the welcome. Text the protocol refuses closes the
  * socket, a hello that names no device among it; so does a region the device may not name and a
- * sign-out, which also revokes the device's refresh grant: the sign-out close (4000) means the
- * grant is revoked, and a grant that cannot be revoked closes the socket as a failed server
- * (1011) instead. A device signed out from another one is closed at once with 4001, whatever it
- * is doing. A hello is bound to its device's row: a device without one is closed with 4401, a
- * device signed out with 4001, and a pair renewed for either is revoked at once; a renewal moves
- * the row to the new grant. A pair renewed at a hello whose socket closed before it could take
- * it is parked for the device's next hello with the spent refresh key, which is sent it before
- * its welcome. The device is marked seen at its hello and then at most every five minutes it
- * talks; its sign-out marks its row.
+ * sign-out, which marks the device's row signed out, forgets the pairs parked for it and revokes
+ * its refresh grant through the database, as the sign-out route does: the sign-out close (4000)
+ * means the grant is revoked, and a row that cannot be marked or a grant that cannot be revoked
+ * closes the socket as a failed server (1011) instead. A device signed out from another one is
+ * closed at once with 4001, whatever it is doing. Keys the database refuses close the hello with
+ * 4401; keys it could not judge, as a failed server (1011), and the device comes back with them.
+ * A hello is bound to its device's row: a device without one is closed with 4401, a device
+ * signed out with 4001, and a pair renewed for either is revoked at once; a renewal moves the row
+ * to the new grant. A pair renewed at a hello whose socket closed before it could take it is
+ * parked for the device's next hello with the spent refresh key, which is sent it before its
+ * welcome. The device is marked seen at its hello and then at most every five minutes it talks.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
@@ -362,17 +368,15 @@ export class SyncConnection {
 
   async #hello(hello: Hello): Promise<void> {
     const { access, refresh, device: deviceId } = hello
-
-    if (deviceId === undefined) {
-      this.#close(CLOSE.protocol, REASON.noDevice)
-
-      return
-    }
-
     const accepted = await acceptKeys(this.#sessions, { device: deviceId, access, refresh })
 
     if (accepted.isErr()) {
-      this.#close(CLOSE.unauthorized, REASON.refused)
+      // Keys the database could not judge are not refused: the device keeps them and comes back.
+      if (keysRefused(accepted.error)) {
+        this.#close(CLOSE.unauthorized, REASON.refused)
+      } else {
+        this.#fail(accepted.error)
+      }
 
       return
     }
@@ -622,10 +626,12 @@ export class SyncConnection {
   }
 
   /**
-   * Leaves the device's regions, revokes its refresh grant and closes as signed out. A device
-   * that came with an access token only holds no grant. A revoke that fails is tried once
-   * more; a grant that still cannot be revoked is logged, and the socket closes as a failed
-   * server: the device must not take the sign-out close for a revoked grant.
+   * Leaves the device's regions, marks its row signed out, forgets the pairs parked for it and
+   * revokes its refresh grant through the database, as the sign-out route does, then closes as
+   * signed out. A device without a refresh grant (it came with an access token only) has none to
+   * revoke. A row that cannot be marked or a grant that cannot be revoked is logged with its code,
+   * and the socket closes as a failed server: the device must not take the sign-out close for a
+   * revoked grant, and sends the sign-out again through the route, which completes it.
    */
   async #signOut(device: Device): Promise<void> {
     for (const region of this.#subscribed) {
@@ -634,50 +640,44 @@ export class SyncConnection {
 
     this.#subscribed.clear()
 
-    const { access, refresh } = device.tokens
+    const identity = device.identity.id
+    const { refresh } = device.tokens
+    const grant = refresh === undefined ? undefined : grantIdOf(refresh)
 
-    if (refresh === undefined) {
-      this.#log.info(
-        { identity: device.identity.id },
-        'device signed out with an access token only: no grant to revoke',
-      )
-    } else {
-      const tokens = { access, refresh }
-      const revoked = await this.#sessions
-        .revoke(tokens)
-        .orElse(() => this.#sessions.revoke(tokens))
+    if (grant === undefined) {
+      this.#log.info({ identity }, 'device signed out without a refresh grant: nothing to revoke')
+      this.#close(CLOSE.signedOut, REASON.signedOut)
 
-      if (revoked.isErr()) {
-        this.#log.warn(
-          { identity: device.identity.id, code: revoked.error.code },
-          'the refresh grant of a device that signed out could not be revoked',
-        )
-        this.#close(SERVER_ERROR, REASON.revokeFailed)
-
-        return
-      }
-
-      await this.#markSignedOut(device.identity.id, refresh)
+      return
     }
 
-    this.#close(CLOSE.signedOut, REASON.signedOut)
-  }
+    const marked = await this.#devices.signedOut({ identity, grant })
 
-  /**
-   * Marks the row of the device that holds the grant of `refresh` signed out; the grant is
-   * revoked already, so a failure is logged with the code only and the sign-out stands.
-   */
-  async #markSignedOut(identity: IdentityId, refresh: string): Promise<void> {
-    const grant = grantIdOf(refresh)
-    const marked =
-      grant === undefined ? undefined : await this.#devices.signedOut({ identity, grant })
-
-    if (marked?.isErr()) {
+    if (marked.isErr()) {
       this.#log.warn(
         { identity, code: marked.error.code },
         'the row of a device that signed out could not be marked',
       )
+      this.#close(SERVER_ERROR, REASON.revokeFailed)
+
+      return
     }
+
+    this.#sessions.unpark(identity, device.id)
+
+    const revoked = await this.#devices.revokeGrant({ identity, grant })
+
+    if (revoked.isErr()) {
+      this.#log.warn(
+        { identity, code: revoked.error.code },
+        'the refresh grant of a device that signed out could not be revoked',
+      )
+      this.#close(SERVER_ERROR, REASON.revokeFailed)
+
+      return
+    }
+
+    this.#close(CLOSE.signedOut, REASON.signedOut)
   }
 
   /** Marks the device seen when it was not for five minutes. */

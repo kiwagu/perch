@@ -13,7 +13,6 @@ import {
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
-import { z } from '@workspace/zod'
 
 import type { DeviceSessions } from './device-sessions'
 
@@ -43,6 +42,12 @@ export type AuthenticatedDevice =
   | { readonly identity: AuthUser; readonly tokens: AuthTokens; readonly renewed: false }
   | { readonly identity: AuthUser; readonly tokens: DeviceTokens; readonly renewed: true }
 
+/** A pair parked for a device, and the identity it signs in. */
+export interface ParkedPair {
+  readonly identity: IdentityId
+  readonly tokens: DeviceTokens
+}
+
 export interface IdentitySessionsOptions {
   /** Opens an auth session of its own on the central database, through its identity access method. */
   readonly openAuth: () => AuthPort
@@ -53,20 +58,15 @@ export interface IdentitySessionsOptions {
   readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   /** Times the pairs parked for a retry out. */
   readonly clock: Clock
-  /** The database's RPC endpoint over HTTP, where `revoke` is sent. */
-  readonly rpcUrl: string
-  readonly fetch: typeof fetch
   /**
    * Hears a failure that does not fail the call it happened in: an auth session that failed to
    * close after its call (the call keeps its result: the identity it signed up exists, and the
-   * refresh key it renewed is spent), or the grant a device held before a sign-in that could not
-   * be revoked (the sign-in stands: its new pair is valid).
+   * refresh key it renewed is spent), the grant a device held before a sign-in that could not be
+   * revoked (the sign-in stands: its new pair is valid), or the grant a sign-in minted that could
+   * not be revoked once its device failed to be recorded (the sign-in failed all the same).
    */
   readonly onFailure: (error: DataError) => void
 }
-
-/** An answer of the database's RPC; a revoke needs only to know whether it failed. */
-const rpcAnswer = z.object({ error: z.object({ message: z.string() }).optional() })
 
 /** How long a renewed pair the device could not take waits for its next hello. */
 const PARKED_MS = 60_000
@@ -102,9 +102,18 @@ function refused(message: string, cause?: unknown): DataError {
   return dataError('data:AUTH_FAILED', message, cause)
 }
 
-/** A revoke the database never judged: it could not be reached, or answered nothing readable. */
-function notRevoked(message: string, cause?: unknown): DataError {
-  return dataError('data:WRITE_FAILED', message, cause)
+/**
+ * Whether a failure to accept keys refused them: the database judged them dead. Any other failure
+ * judged nothing (the database could not be reached, or the gateway failed), and the same keys may
+ * work once it answers again.
+ */
+export function keysRefused(error: DataError): boolean {
+  return error.code === 'data:AUTH_FAILED'
+}
+
+/** A failure that judged no keys: the gateway or the database failed, the keys may still work. */
+function unjudged(message: string, cause?: unknown): DataError {
+  return dataError('data:QUERY_FAILED', message, cause)
 }
 
 function identityOf(user: AuthUser | undefined): Result<AuthUser, DataError> {
@@ -136,45 +145,22 @@ function renew(
     )
 }
 
-function readAnswer(response: Response): ResultAsync<unknown, DataError> {
-  if (!response.ok) {
-    return errAsync(notRevoked(`the database answered the revoke with status ${response.status}`))
-  }
-
-  return ResultAsync.fromPromise(response.json() as Promise<unknown>, (cause) =>
-    notRevoked('the answer to the revoke is not JSON', cause),
-  )
-}
-
-function revoked(answer: unknown): Result<void, DataError> {
-  const parsed = rpcAnswer.safeParse(answer)
-
-  if (!parsed.success) {
-    return err(notRevoked('the answer to the revoke has an unknown shape'))
-  }
-
-  // The database's message is left out: it may name the grant.
-  return parsed.data.error
-    ? err(refused('the database refused to revoke the grant'))
-    : ok(undefined)
-}
-
 /**
  * Identities as the gateway serves them to devices. Every call runs on a database session
  * of its own that is closed when the call ends, so no call sees another's identity and the
  * connection keeps no session per device. A sign-up and a sign-in record the device with the
  * grant its pair holds; a renewal records nothing here: the hello that renews binds the device
  * to its row. A renewed pair the device could not take is parked for a minute, for the device's
- * next hello with the refresh key the renewal spent. Nothing here logs, and no error carries a
- * key.
+ * next hello with the refresh key the renewal spent. Keys the database refused fail with
+ * `data:AUTH_FAILED`; a call it could not judge (it could not be reached, or the call failed in
+ * the gateway) fails with `data:QUERY_FAILED`, and the keys may still work. Nothing here logs,
+ * and no error carries a key.
  */
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
   readonly #onFailure: (error: DataError) => void
   readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   readonly #clock: Clock
-  readonly #post: (url: string, init: RequestInit) => ResultAsync<Response, DataError>
-  readonly #rpcUrl: string
   /** The pairs parked for a retry, by device and the digest of the spent refresh key. */
   readonly #parked = new Map<string, Parked>()
 
@@ -183,10 +169,6 @@ export class IdentitySessions {
     this.#onFailure = options.onFailure
     this.#devices = options.devices
     this.#clock = options.clock
-    this.#rpcUrl = options.rpcUrl
-    this.#post = ResultAsync.fromThrowable(options.fetch, (cause) =>
-      notRevoked('the database could not be reached to revoke the grant', cause),
-    )
   }
 
   /** Signs an identity up on `device`, which is recorded with the grant of its pair. */
@@ -257,16 +239,18 @@ export class IdentitySessions {
   }
 
   /**
-   * The pair parked for `device` and the spent refresh key it presents, taken out; `undefined`
-   * when none is parked or it waited longer than 60 seconds.
+   * The pair parked for `device` and the spent refresh key it presents, taken out with the
+   * identity it signs in; `undefined` when none is parked or it waited longer than 60 seconds.
    */
-  parked(input: { readonly device: string; readonly refresh: string }): DeviceTokens | undefined {
+  parked(input: { readonly device: string; readonly refresh: string }): ParkedPair | undefined {
     const key = parkingOf(input.device, input.refresh)
     const parked = this.#parked.get(key)
 
     this.#parked.delete(key)
 
-    return parked && parked.until > this.#clock.now() ? parked.tokens : undefined
+    return parked && parked.until > this.#clock.now()
+      ? { identity: parked.identity, tokens: parked.tokens }
+      : undefined
   }
 
   /**
@@ -282,32 +266,13 @@ export class IdentitySessions {
   }
 
   /**
-   * Revokes the device's refresh grant through the database's RPC `revoke`. A pair the database
-   * refuses (its grant revoked already, or no pair at all) fails with `data:AUTH_FAILED`; a
-   * database that cannot be reached or answers nothing readable, with `data:WRITE_FAILED`.
-   */
-  revoke(tokens: DeviceTokens): ResultAsync<void, DataError> {
-    const call = {
-      id: 1,
-      method: 'revoke',
-      params: [{ access: tokens.access, refresh: tokens.refresh }],
-    }
-
-    return this.#post(this.#rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(call),
-    })
-      .andThen(readAnswer)
-      .andThen(revoked)
-  }
-
-  /**
-   * Records the device of a sign-up or sign-in with the grant of its pair, and revokes the grant
-   * the device's row held before: a device holds one live grant, so a pair it left behind (one
-   * it could not have revoked, say) dies with the sign-in. A device that cannot be recorded
-   * fails the sign-in: every signed-in device is on its identity's list, where it can be signed
-   * out. An old grant that cannot be revoked is reported and leaves the sign-in standing.
+   * Records the device of a sign-up or sign-in with the grant of its pair, forgets the pairs
+   * parked for the device, and revokes the grant the device's row held before: a device holds one
+   * live grant, so a pair it left behind (one it could not have revoked, or one parked for it)
+   * dies with the sign-in. A device that cannot be recorded fails the sign-in, and the grant the
+   * sign-in minted is revoked: every live grant is a device on its identity's list, where it can
+   * be signed out. A grant that cannot be revoked is reported; an old one leaves the sign-in
+   * standing.
    */
   #recordDevice(signed: SignedIn, device: SignInDevice): ResultAsync<SignedIn, DataError> {
     const grant = grantIdOf(signed.tokens.refresh)
@@ -317,21 +282,24 @@ export class IdentitySessions {
     }
 
     const identity = signed.identity.id
+    /** Revokes `revoked` of the identity; a failure is reported and the answer stands. */
+    const revoke = (revoked: string): ResultAsync<void, never> =>
+      this.#devices.revokeGrant({ identity, grant: revoked }).orElse((error) => {
+        this.#onFailure(error)
+
+        return okAsync(undefined)
+      })
 
     return this.#devices
       .touch({ identity, device: device.id, label: device.label, grant })
-      .andThen(({ previous }) =>
-        previous === undefined || previous === grant
-          ? okAsync(signed)
-          : this.#devices
-              .revokeGrant({ identity, grant: previous })
-              .orElse((error) => {
-                this.#onFailure(error)
+      .orElse((error) => revoke(grant).andThen(() => errAsync(error)))
+      .andThen(({ previous }) => {
+        this.unpark(identity, device.id)
 
-                return okAsync(undefined)
-              })
-              .map(() => signed),
-      )
+        return previous === undefined || previous === grant
+          ? okAsync(signed)
+          : revoke(previous).map(() => signed)
+      })
   }
 
   /**
@@ -346,13 +314,14 @@ export class IdentitySessions {
         return await run(auth)
       } finally {
         await auth.close().catch((cause: unknown) => {
-          this.#onFailure(refused('the auth session could not be closed', cause))
+          this.#onFailure(unjudged('the auth session could not be closed', cause))
         })
       }
     }
 
+    // A call that threw judged no keys: it failed in the gateway or the driver.
     return ResultAsync.fromPromise(settled(), (cause) =>
-      refused('the identity session failed', cause),
+      unjudged('the identity session failed', cause),
     ).andThen((result) => result)
   }
 }

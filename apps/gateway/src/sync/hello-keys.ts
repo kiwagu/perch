@@ -9,7 +9,12 @@ import type { AuthTokens, AuthUser, DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
 import type { DeviceBinding, DeviceSessions } from '../auth/device-sessions'
-import { type DeviceTokens, grantIdOf, type IdentitySessions } from '../auth/identity-sessions'
+import {
+  type DeviceTokens,
+  grantIdOf,
+  type IdentitySessions,
+  keysRefused,
+} from '../auth/identity-sessions'
 
 /**
  * Keys a device's hello was accepted with: the identity, the pair the device holds once the
@@ -25,11 +30,13 @@ export interface Accepted {
 
 /**
  * The keys of the hello, accepted: as they came, renewed with the refresh key, or, when the
- * refresh key was spent by a renewal the device never saw, the pair parked for the device and
- * that key. A pair the device does not hold yet is to be delivered.
+ * database refused the refresh key because a renewal the device never saw spent it, the pair
+ * parked for the device and that key. A pair the device does not hold yet is to be delivered.
+ * Keys the database could not judge leave the parked pair where it is, and a parked pair it could
+ * not judge is parked again: either waits for a hello the database can answer.
  */
 export async function acceptKeys(
-  sessions: Pick<IdentitySessions, 'authenticate' | 'parked'>,
+  sessions: Pick<IdentitySessions, 'authenticate' | 'park' | 'parked'>,
   hello: {
     readonly device: string
     readonly access: string
@@ -52,21 +59,31 @@ export async function acceptKeys(
     })
   }
 
-  const parked = refresh === undefined ? undefined : sessions.parked({ device, refresh })
+  // Keys the database could not judge were not refused: nothing sends them to a parked pair.
+  if (refresh === undefined || !keysRefused(authenticated.error)) {
+    return err(authenticated.error)
+  }
+
+  const parked = sessions.parked({ device, refresh })
 
   if (!parked) {
     return err(authenticated.error)
   }
 
-  const resumed = await sessions.authenticate(parked)
+  const { identity, tokens } = parked
+  const resumed = await sessions.authenticate(tokens)
+
+  if (resumed.isErr() && !keysRefused(resumed.error)) {
+    sessions.park({ identity, device, spentRefresh: refresh, tokens })
+  }
 
   // The parked pair is new to the device, and so is a pair its access token had to be renewed to.
   return resumed.map(
     (value): Accepted => ({
       identity: value.identity,
       tokens: value.tokens,
-      deliver: value.renewed ? value.tokens : parked,
-      spent: value.renewed ? parked.refresh : undefined,
+      deliver: value.renewed ? value.tokens : tokens,
+      spent: value.renewed ? tokens.refresh : undefined,
     }),
   )
 }

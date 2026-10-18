@@ -10,37 +10,14 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
+import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { DeviceSessions, type DeviceTouch } from './device-sessions'
 import { grantIdOf, IdentitySessions } from './identity-sessions'
-
-const RPC_URL = 'http://127.0.0.1:8000/rpc'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
 /** The device Ann signs in on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
-
-interface FetchCall {
-  readonly url: string
-  readonly init: RequestInit | undefined
-}
-
-/** A `fetch` that records each request and answers it with `answer`. */
-function fakeFetch(answer: () => Promise<Response>): {
-  readonly fetch: typeof fetch
-  readonly calls: readonly FetchCall[]
-} {
-  const calls: FetchCall[] = []
-  const call = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    calls.push({ url: String(input), init })
-
-    return answer()
-  }
-
-  return { fetch: Object.assign(call, { preconnect: () => {} }), calls }
-}
-
-const unreachable = fakeFetch(() => Promise.reject(new TypeError('no network in this test')))
 
 const opened: LocalDb[] = []
 
@@ -124,7 +101,6 @@ function recordingDevices(options: RecordingOptions = {}) {
 function sessionsOver(
   local: LocalDb,
   options: {
-    readonly fetch?: typeof fetch
     readonly onFailure?: (error: DataError) => void
     readonly devices?: SessionDevices
     readonly clock?: ManualClock
@@ -133,16 +109,19 @@ function sessionsOver(
   return new IdentitySessions({
     openAuth: () =>
       createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
-    rpcUrl: RPC_URL,
-    fetch: options.fetch ?? unreachable.fetch,
     onFailure: options.onFailure ?? ((error) => reportedFailures.push(error)),
     devices: options.devices ?? recordingDevices().devices,
     clock: options.clock ?? manualClock(),
   })
 }
 
-async function testSessions(http: typeof fetch = unreachable.fetch): Promise<IdentitySessions> {
-  return sessionsOver(await testDb(), { fetch: http })
+async function testSessions(): Promise<IdentitySessions> {
+  return sessionsOver(await testDb())
+}
+
+/** Makes every driver session opened on `local` from now on fail to open, as an outage would. */
+function failOpening(local: LocalDb): void {
+  local.db.newSession = () => Promise.reject(new Error('the database cannot be reached'))
 }
 
 /** Sessions over a database that counts the driver sessions opened and closed on it. */
@@ -300,7 +279,47 @@ describe('IdentitySessions', () => {
     expect(renewed.refresh).not.toBe(tokens.refresh)
     expect(again._unsafeUnwrap().identity).toEqual(identity)
     expect(failures.map((failure) => [failure.code, failure.message])).toEqual(
-      Array.from({ length: 3 }, () => ['data:AUTH_FAILED', 'the auth session could not be closed']),
+      Array.from({ length: 3 }, () => [
+        'data:QUERY_FAILED',
+        'the auth session could not be closed',
+      ]),
+    )
+  })
+
+  it('fails a call the database could not judge as unjudged, never as refused keys', async () => {
+    const local = await testDb()
+    const sessions = sessionsOver(local)
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    failOpening(local)
+
+    const codes = [
+      (await sessions.signUp({ ...ann, email: 'bob@example.test' }, laptop))._unsafeUnwrapErr()
+        .code,
+      (await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code,
+      (await sessions.authenticate({ access: tokens.access }))._unsafeUnwrapErr().code,
+      (await sessions.authenticate(tokens))._unsafeUnwrapErr().code,
+    ]
+
+    expect(codes).toEqual(Array.from({ length: 4 }, () => 'data:QUERY_FAILED'))
+  })
+
+  it('fails as unjudged, never as refused keys, when a call throws', async () => {
+    const local = await testDb()
+    const sessions = new IdentitySessions({
+      openAuth: () => ({
+        ...createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+        resume: () => {
+          throw new Error('the driver failed')
+        },
+      }),
+      onFailure: (error) => reportedFailures.push(error),
+      devices: recordingDevices().devices,
+      clock: manualClock(),
+    })
+
+    expect((await sessions.authenticate({ access: 'x' }))._unsafeUnwrapErr().code).toBe(
+      'data:QUERY_FAILED',
     )
   })
 
@@ -316,52 +335,6 @@ describe('IdentitySessions', () => {
 
     expect(opened()).toBe(4)
     expect(closed()).toBe(opened())
-  })
-})
-
-describe('IdentitySessions.revoke', () => {
-  const tokens = { access: 'device-access-token', refresh: 'surreal-refresh-device-key' }
-
-  it("posts the database's RPC revoke with the device's pair", async () => {
-    const http = fakeFetch(() => Promise.resolve(Response.json({ id: 1, result: null })))
-    const sessions = await testSessions(http.fetch)
-
-    expect((await sessions.revoke(tokens)).isOk()).toBe(true)
-
-    const [call, ...more] = http.calls
-    const headers = new Headers(call?.init?.headers)
-    const body: unknown = JSON.parse(String(call?.init?.body))
-
-    expect(more).toEqual([])
-    expect(call?.url).toBe(RPC_URL)
-    expect(call?.init?.method).toBe('POST')
-    expect(headers.get('content-type')).toBe('application/json')
-    expect(headers.get('accept')).toBe('application/json')
-    expect(body).toEqual({ id: 1, method: 'revoke', params: [tokens] })
-  })
-
-  it('fails when the database answers the call with an error', async () => {
-    const http = fakeFetch(() =>
-      Promise.resolve(
-        Response.json({ id: 1, error: { code: -32000, message: 'There was a problem' } }),
-      ),
-    )
-    const sessions = await testSessions(http.fetch)
-
-    expect((await sessions.revoke(tokens))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
-  })
-
-  it('fails, the pair unjudged, when the endpoint answers with a failure status', async () => {
-    const http = fakeFetch(() => Promise.resolve(new Response('unavailable', { status: 503 })))
-    const sessions = await testSessions(http.fetch)
-
-    expect((await sessions.revoke(tokens))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
-  })
-
-  it('fails, the pair unjudged, when the endpoint cannot be reached', async () => {
-    const sessions = await testSessions(unreachable.fetch)
-
-    expect((await sessions.revoke(tokens))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
   })
 })
 
@@ -415,6 +388,93 @@ describe('IdentitySessions and the devices', () => {
     refusing = true
 
     expect((await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+  })
+
+  it('revokes the grant a sign-in minted when its device cannot be recorded', async () => {
+    let refusing = false
+    const { touched, revoked, devices } = recordingDevices({ refuse: () => refusing })
+    const sessions = sessionsOver(await testDb(), { devices })
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    refusing = true
+
+    expect((await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+
+    const minted = touched.at(-1)?.grant
+
+    expect(minted).toMatch(/\S/)
+    expect(minted).not.toBe(grantIdOf(up.tokens.refresh))
+    expect(revoked).toEqual([{ identity: up.identity.id, grant: minted }])
+  })
+
+  it('leaves no live grant behind a sign-in whose device cannot be recorded', async () => {
+    const local = await testDb()
+    let refusing = false
+    const real = new DeviceSessions({ directory: local, clock: manualClock(Date.now()) })
+    const sessions = sessionsOver(local, {
+      devices: {
+        touch: (input) =>
+          refusing
+            ? errAsync(dataError('data:WRITE_FAILED', 'the directory refused the device'))
+            : real.touch(input),
+        revokeGrant: (input) => real.revokeGrant(input),
+      },
+    })
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    refusing = true
+
+    expect((await sessions.signIn(ann, laptop)).isErr()).toBe(true)
+
+    const [grants] = await local.db.query<[unknown[]]>(liveGrantsStatement, {
+      identity: up.identity.id,
+    })
+
+    expect(grants).toHaveLength(1)
+  })
+
+  it('answers the failure to record the device and reports a minted grant it could not revoke', async () => {
+    const { devices } = recordingDevices({ refuse: () => true, failRevokes: true })
+    const failures: DataError[] = []
+    const sessions = sessionsOver(await testDb(), {
+      devices,
+      onFailure: (error) => failures.push(error),
+    })
+
+    const failed = (await sessions.signUp(ann, laptop))._unsafeUnwrapErr()
+
+    expect([failed.code, failed.message]).toEqual([
+      'data:WRITE_FAILED',
+      'the directory refused the device',
+    ])
+    expect(failures.map((failure) => [failure.code, failure.message])).toEqual([
+      ['data:WRITE_FAILED', 'the directory refused the revoke'],
+    ])
+  })
+
+  it("forgets the pairs parked for the device once it signs in again, and no other device's", async () => {
+    const sessions = sessionsOver(await testDb())
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const spent = 'surreal-refresh-spent-secret'
+    const pair = { access: 'renewed-access', refresh: 'surreal-refresh-renewed-secret' }
+
+    sessions.park({
+      identity: up.identity.id,
+      device: laptop.id,
+      spentRefresh: spent,
+      tokens: pair,
+    })
+    sessions.park({
+      identity: up.identity.id,
+      device: 'device-phone',
+      spentRefresh: spent,
+      tokens: pair,
+    })
+
+    ;(await sessions.signIn(ann, laptop))._unsafeUnwrap()
+
+    expect(sessions.parked({ device: laptop.id, refresh: spent })).toBeUndefined()
+    expect(sessions.parked({ device: 'device-phone', refresh: spent })?.tokens).toEqual(pair)
   })
 
   it("revokes the grant a device's row held before when the device signs in again", async () => {
@@ -500,7 +560,10 @@ describe('IdentitySessions parking', () => {
     expect(
       sessions.parked({ device: laptop.id, refresh: 'surreal-refresh-other-key' }),
     ).toBeUndefined()
-    expect(sessions.parked({ device: laptop.id, refresh: spent })).toEqual(pair)
+    expect(sessions.parked({ device: laptop.id, refresh: spent })).toEqual({
+      identity: annId,
+      tokens: pair,
+    })
     expect(sessions.parked({ device: laptop.id, refresh: spent })).toBeUndefined()
   })
 
@@ -523,8 +586,8 @@ describe('IdentitySessions parking', () => {
     sessions.unpark(annId, laptop.id)
 
     expect(sessions.parked({ device: laptop.id, refresh: spent })).toBeUndefined()
-    expect(sessions.parked({ device: laptop.id, refresh: bobs })).toEqual(pair)
-    expect(sessions.parked({ device: 'device-phone', refresh: spent })).toEqual(pair)
+    expect(sessions.parked({ device: laptop.id, refresh: bobs })?.tokens).toEqual(pair)
+    expect(sessions.parked({ device: 'device-phone', refresh: spent })?.tokens).toEqual(pair)
   })
 
   it('forgets every pair parked for the identity when no device is named', async () => {
@@ -538,6 +601,6 @@ describe('IdentitySessions parking', () => {
 
     expect(sessions.parked({ device: laptop.id, refresh: spent })).toBeUndefined()
     expect(sessions.parked({ device: 'device-phone', refresh: spent })).toBeUndefined()
-    expect(sessions.parked({ device: laptop.id, refresh: bobs })).toEqual(pair)
+    expect(sessions.parked({ device: laptop.id, refresh: bobs })?.tokens).toEqual(pair)
   })
 })

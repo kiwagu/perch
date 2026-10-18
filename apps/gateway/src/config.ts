@@ -21,16 +21,3 @@ export const NAMESPACE = 'app'
 
 /** The central database: accounts, and the server's copy of the regions. */
 export const DIRECTORY = 'directory'
-
-/**
- * The database's RPC endpoint over plain HTTP for its WebSocket address: `ws` becomes
- * `http`, `wss` becomes `https`, and the path is `/rpc`.
- */
-export function httpRpcUrl(surrealUrl: string): string {
-  const url = new URL(surrealUrl)
-
-  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
-  url.pathname = '/rpc'
-
-  return url.toString()
-}

@@ -9,7 +9,7 @@ import type { ConnectionRegistry } from '../sync/connections'
 
 import { bearerCaller, DEVICE_HEADER, readBody } from './auth.routes'
 import type { DeviceSessionRow, DeviceSessions, SignOutError } from './device-sessions'
-import { grantIdOf, type IdentitySessions } from './identity-sessions'
+import { grantIdOf, type IdentitySessions, keysRefused } from './identity-sessions'
 
 /**
  * What a device sends to have its pair revoked: the pair itself, which is the credential, so its
@@ -117,16 +117,17 @@ export interface DeviceRoutesOptions {
  *   its refresh grant must be one of the identity's devices: that device's row is marked signed
  *   out (or stays so), a pair parked for it is forgotten, its sockets are closed with 4001, and
  *   the grant the pair holds (the renewed one when renewed) is revoked through the database: 204.
- *   A failure answers 500 and may be asked again; a pair that signs nobody in or that no device
- *   of the identity holds answers 401 `unauthorized`, with nothing revoked but a grant the route
- *   renewed itself.
+ *   A failure answers 500 and may be asked again, a pair the database could not judge among
+ *   them; a pair the database refused or that no device of the identity holds answers 401
+ *   `unauthorized`, with nothing revoked but a grant the route renewed itself.
  *
  * A sign-out that failed after its first write still forgets the parked pairs and closes the
  * sockets of what it signed out before it answers 500. A method a path does not take answers 405
- * with the one it does in `Allow`; a request whose token signs nobody in or whose device has no
- * live session, 401 `unauthorized`; a request that names no device or a body that does not
- * follow its schema, 400 `bad-request`; a failure of the gateway, 500 `internal`, the failure
- * itself handed to `onFailure`. A request for another path is not answered here (`undefined`).
+ * with the one it does in `Allow`; a request whose token the database refused or whose device has
+ * no live session, 401 `unauthorized`; a request that names no device or a body that does not
+ * follow its schema, 400 `bad-request`; a failure of the gateway or a token the database could not
+ * judge, 500 `internal`, the failure itself handed to `onFailure`. A request for another path is
+ * not answered here (`undefined`).
  */
 export function deviceRoutes(
   sessions: Pick<IdentitySessions, 'authenticate' | 'unpark'>,
@@ -229,6 +230,11 @@ export function deviceRoutes(
     const { access, refresh } = body.data
     const sent = grantIdOf(refresh)
     const authenticated = await sessions.authenticate({ access, refresh })
+
+    // A pair the database could not judge was not refused: the device keeps it and asks again.
+    if (authenticated.isErr() && !keysRefused(authenticated.error)) {
+      return failed(authenticated.error)
+    }
 
     if (authenticated.isErr() || sent === undefined) {
       return unauthorized()

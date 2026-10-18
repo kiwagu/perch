@@ -15,7 +15,7 @@ import { z } from '@workspace/zod'
 import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
-import { gatewayConfig, httpRpcUrl } from '../src/config'
+import { gatewayConfig } from '../src/config'
 import { startServer } from '../src/server'
 import { noteCreate, noteDelete, noteUpdate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
@@ -398,7 +398,6 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
           username: config.GATEWAY_SURREAL_USER,
           password: config.GATEWAY_SURREAL_PASS,
         },
-        rpcUrl: httpRpcUrl(config.SURREAL_URL),
         clock: systemClock,
       }),
     ),

@@ -17,7 +17,6 @@ describe('createGatewayRoot', () => {
       await createGatewayRoot({
         engines: nodeEngines(),
         url: 'mem://',
-        rpcUrl: 'http://127.0.0.1:8000/rpc',
         clock: manualClock(),
       })
     )._unsafeUnwrap()
@@ -47,7 +46,6 @@ describe('createGatewayRoot', () => {
       await createGatewayRoot({
         engines: nodeEngines(),
         url: 'mem://',
-        rpcUrl: 'http://127.0.0.1:8000/rpc',
         clock: manualClock(),
       })
     )._unsafeUnwrap()

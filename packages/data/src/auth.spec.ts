@@ -117,7 +117,57 @@ describe('createAuth', () => {
     expect(seen[1]).toBeUndefined()
   })
 
-  it('closes its session: later calls are refused and the main session keeps working', async () => {
+  it('fails as a query, never as a refusal, when its session cannot be opened', async () => {
+    local.db.newSession = () => Promise.reject(new Error('the database cannot be reached'))
+
+    const codes = [
+      (await auth.signUp(ann))._unsafeUnwrapErr().code,
+      (await another().signIn(ann))._unsafeUnwrapErr().code,
+      (
+        await another().resume({ access: 'eyJ.e30.x', refresh: 'surreal-refresh-a-b' })
+      )._unsafeUnwrapErr().code,
+      (await another().current())._unsafeUnwrapErr().code,
+    ]
+
+    expect(codes).toEqual(Array.from({ length: 4 }, () => 'data:QUERY_FAILED'))
+  })
+
+  it('fails as a query, never as a refusal, when the database goes away under its session', async () => {
+    expect((await auth.signUp(ann)).isOk()).toBe(true)
+
+    const saved = auth.tokens() ?? expect.unreachable('tokens after sign-up')
+
+    await local.close()
+
+    expect((await auth.current())._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    expect((await auth.resume(saved))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    expect((await auth.signIn(ann))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+  })
+
+  it('tells a refusal by the database from a failure to ask it', async () => {
+    expect((await auth.signUp(ann)).isOk()).toBe(true)
+
+    const saved = auth.tokens() ?? expect.unreachable('tokens after sign-up')
+    const renewed = another()
+
+    expect((await renewed.resume(saved)).isOk()).toBe(true)
+    // The database judged each of these and refused it.
+    expect((await another().resume(saved))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await another().resume({ access: 'not-a-token' }))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
+    expect(
+      (
+        await another().resume({ access: 'x', refresh: 'surreal-refresh-unknown' })
+      )._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+    expect(
+      (await another().signIn({ ...ann, password: 'wrong-password' }))._unsafeUnwrapErr().code,
+    ).toBe('data:INVALID_CREDENTIALS')
+    expect((await another().signUp(ann))._unsafeUnwrapErr().code).toBe('data:SIGN_UP_REJECTED')
+  })
+
+  it('closes its session: later calls fail without a refusal and the main session keeps working', async () => {
     const opened: Array<{ readonly isValid: boolean }> = []
     const newSession = local.db.newSession.bind(local.db)
 
@@ -134,8 +184,8 @@ describe('createAuth', () => {
     await auth.close()
 
     expect(opened.map((session) => session.isValid)).toEqual([false])
-    expect((await auth.current())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
-    expect((await auth.signIn(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await auth.current())._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    expect((await auth.signIn(ann))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
     expect(opened).toHaveLength(1)
     expect((await runCommand(local, createIdentity, { email: 'b@example.test' })).isOk()).toBe(true)
   })
@@ -143,7 +193,7 @@ describe('createAuth', () => {
   it('closes without having opened a session, and stays closed', async () => {
     await auth.close()
 
-    expect((await auth.signUp(ann))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await auth.signUp(ann))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
   })
 
   it('loses its sessions when the access method is defined again, which is why a reopened database skips an unchanged schema', async () => {
