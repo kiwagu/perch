@@ -112,6 +112,7 @@ async function healthy(args: LoadArgs): Promise<boolean> {
 /** Starts the gateway as a child process and waits for its health to answer 200. */
 async function startGateway(
   args: LoadArgs,
+  onSpawn: (child: Bun.Subprocess) => void,
 ): Promise<Bun.Subprocess<'ignore', 'ignore', 'inherit'>> {
   if (await healthy(args)) {
     fail(`port ${args.gatewayPort} already answers /health: a stale gateway? stop it first`)
@@ -130,6 +131,9 @@ async function startGateway(
     stdout: 'ignore',
     stderr: 'inherit',
   })
+
+  onSpawn(gateway)
+
   const deadline = Date.now() + HEALTH_TIMEOUT_MS
 
   while (Date.now() < deadline) {
@@ -234,6 +238,10 @@ async function openSim(
   const waiting = new Promise<void>((resolve, reject) => {
     snapshot = { resolve, reject }
   })
+
+  // The timer can fire before the open resolves and the wait begins: no unhandled rejection.
+  waiting.catch(() => undefined)
+
   const timeout = setTimeout(
     () => snapshot?.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
     SNAPSHOT_TIMEOUT_MS,
@@ -264,6 +272,10 @@ async function openSim(
               (error) => trouble(`import failed: ${error.code} ${error.message}`),
             ),
           )
+          // A throw must not break the chain: the next updates still import.
+          sim.imports = sim.imports.catch(() => {
+            counters.errors++
+          })
         },
         onAck: (message, at) => {
           book.acked(sim.label, message.batch, message.region, message.head, at)
@@ -460,7 +472,7 @@ async function runLoad(run: Run, pid: number): Promise<StepReport[]> {
 }
 
 /** Closes every device and stops the gateway child: SIGTERM, then SIGKILL after 5 s. */
-async function teardown(run: Run, gateway: Bun.Subprocess): Promise<void> {
+async function teardown(run: Run, gateway: Bun.Subprocess | undefined): Promise<void> {
   run.closing = true
   run.writing = false
 
@@ -468,6 +480,8 @@ async function teardown(run: Run, gateway: Bun.Subprocess): Promise<void> {
     clearTimeout(sim.timer)
     sim.device?.close()
   }
+
+  if (!gateway) return
 
   gateway.kill('SIGTERM')
 
@@ -501,20 +515,27 @@ export async function runLoadTest(
 
   console.log(`load ${id}: stand ${args.surrealUrl}, gateway on port ${args.gatewayPort}`)
 
-  const gateway = await startGateway(args).catch((cause: unknown) => {
+  let child: Bun.Subprocess | undefined
+  const onSignal = (): void => {
+    void teardown(run, child).then(() => process.exit(SIGNAL_EXIT))
+  }
+
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
+
+  const gateway = await startGateway(args, (spawned) => {
+    child = spawned
+  }).catch((cause: unknown) => {
     console.error(`load: ${cause instanceof Error ? cause.message : String(cause)}`)
 
     return undefined
   })
 
-  if (!gateway) return 1
+  if (!gateway) {
+    await teardown(run, child)
 
-  const onSignal = (): void => {
-    void teardown(run, gateway).then(() => process.exit(SIGNAL_EXIT))
+    return 1
   }
-
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
 
   let failed = false
   let reports: StepReport[] = []
