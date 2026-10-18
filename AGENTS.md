@@ -19,6 +19,7 @@ that applies to the task, starting with the router.
 @.cursor/rules/reset-mode-default.mdc
 @.cursor/rules/entity-first-module-naming.mdc
 @.cursor/rules/package-readme.mdc
+@.cursor/rules/file-size-tiers.mdc
 
 ## Architecture and contracts
 

@@ -22,3 +22,6 @@ lefthook-local.yml
 
 # the history a `surreal sql` session keeps in its working directory
 history.txt
+
+# the size ratchet baseline is machine-local, written on the first run
+refactor-baseline.json
