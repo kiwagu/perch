@@ -50,13 +50,24 @@ export async function appReady(page: Page): Promise<void> {
   await page.getByTestId('app-shell.ready').waitFor({ state: 'attached' })
 }
 
-/** Signs in with an existing account through the sign-in page and waits for `/me`. */
+/**
+ * Signs in with an existing account through the sign-in page and waits for `/me`; fails at once
+ * when the page shows its error instead.
+ */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
   await appReady(page)
   await page.getByTestId('user.sign-in.email').fill(account.email)
   await page.getByTestId('user.sign-in.password').fill(account.password)
   await page.getByTestId('user.sign-in.submit').click()
+
+  const outcome = await page.waitForFunction(
+    () =>
+      window.location.pathname === '/me' ||
+      document.querySelector('[data-testid="user.sign-in.error"]')?.textContent,
+  )
+
+  expect(await outcome.jsonValue(), 'the sign-in page answered with its error').toBe(true)
   await page.waitForURL('**/me')
 }
 

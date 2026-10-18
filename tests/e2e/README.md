@@ -31,6 +31,11 @@ own):
   unsent change asks first.
 - `sync/05-idle-traffic`: an idle visible tab, its clock driven by the test through 10
   minutes, sends at most 2 sync frames a minute.
+- `sync/06-my-devices`: My devices lists the account's devices, this one marked and the other
+  seen within the last minute; a device signed out from another one is on the sign-in page
+  with "You were signed out from another device." within 5 seconds and its database is gone;
+  signing out everywhere sends both devices to the sign-in page, and the account signs in
+  again after it.
 - `organisation/01-shared-notes`: user A creates an organisation and invites user B; B sees
   it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
   the members nor A's profile.
@@ -57,10 +62,10 @@ the tests. `src/support/fixtures.ts`: the `test` with the step check and its fix
 `signedIn` (device A, signed up on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks) and `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
-a test asks), `appReady`, `signIn`, `signUp` and `pageLoads` (counts a page's full loads, for
-"without a reload"). `src/support/network.ts`: `SyncNetwork`, which routes a page's sync
-socket through the test so it can go offline and back (Playwright's offline mode leaves an
-open WebSocket up). `src/support/storage.ts`: the IndexedDB databases a page's browser keeps
+a test asks), `appReady`, `signIn` (fails at once when the sign-in page shows its error),
+`signUp` and `pageLoads` (counts a page's full loads, for "without a reload").
+`src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
+it can go offline and back (Playwright's offline mode leaves an open WebSocket up). `src/support/storage.ts`: the IndexedDB databases a page's browser keeps
 and the names the app gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
 note texts).
