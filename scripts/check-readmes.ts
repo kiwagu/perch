@@ -179,7 +179,7 @@ function stringValueAt(source: string, i: number): string | undefined {
 
 /**
  * The `id` of the object literal passed to `defineModule(...)`: a scan over the source that
- * steps over comments and strings, finds the call, and reads only a property of the literal's
+ * steps over comments and strings, finds the call itself (not the name in an import), and reads only a property of the literal's
  * own top level, so an `id` of a nested object, of another object before the call, or inside
  * a comment or a string is never taken. Undefined when the manifest has no such property or
  * its value is not a plain string.
@@ -199,15 +199,11 @@ function readModuleId(source: string): string | undefined {
     const ch = source[i] ?? ''
 
     if (depth === -1) {
-      if (source.startsWith('defineModule', i) && !IDENTIFIER_CHAR.test(source[i - 1] ?? '')) {
-        const open = source.indexOf('{', i)
+      const call = /^defineModule\s*\(\s*\{/.exec(source.slice(i))
 
-        if (open === -1) {
-          return undefined
-        }
-
+      if (call !== null && !IDENTIFIER_CHAR.test(source[i - 1] ?? '')) {
         depth = 1
-        i = open + 1
+        i += call[0].length
         continue
       }
 
