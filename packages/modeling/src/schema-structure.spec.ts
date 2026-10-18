@@ -145,6 +145,7 @@ describe('loadSchemaModel', () => {
       '_replica_projected',
       '_replica_snapshot',
       '_replica_update',
+      'device_session',
       'identity',
       'membership',
       'profile',

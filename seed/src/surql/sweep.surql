@@ -21,6 +21,10 @@ LET $regions = $accounts.map(
 FOR $account IN $accounts {
   DELETE membership WHERE identity = $account;
 };
+-- Likewise: the unique index of a device session starts with the identity.
+FOR $account IN $accounts {
+  DELETE device_session WHERE identity = $account;
+};
 LET $tenants = SELECT VALUE id FROM tenant WHERE created_by IN $accounts;
 DELETE membership WHERE tenant IN $tenants;
 -- The databases first, while the `tenant` rows that name them exist.

@@ -101,7 +101,10 @@ stand.
   the owner editing that note as an admin, the invited device deleting its own note, its edit of
   the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
   note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
-  4403), one line per step.
+  4403), and on a further identity the clause of the access method: a token issued before
+  `sessions_revoked_at` refused, a refresh not blocked by it, and the namespace user revoking the
+  identity's grants (`ACCESS identity ON DATABASE REVOKE`) so that the refresh is refused; one
+  line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.

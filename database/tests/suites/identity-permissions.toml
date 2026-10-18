@@ -124,3 +124,14 @@ equals = "bob@example.test"
 [[cases.assertions]]
 path = "2"
 exists = false
+
+[[cases]]
+name = "alice cannot clear sessions_revoked_at"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE identity SET sessions_revoked_at = NONE RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false

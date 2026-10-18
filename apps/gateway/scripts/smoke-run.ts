@@ -15,6 +15,8 @@ import { RegionDoc, systemClock } from '@workspace/replica'
 import { CLOSE, type Membership, membership, PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
+import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
 import { gatewayConfig, httpRpcUrl } from '../src/config'
 import { type RunningServer, startServer } from '../src/server'
@@ -398,6 +400,54 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 }
 
+/**
+ * The clause of the access method, on a fresh identity: a token issued before
+ * `sessions_revoked_at` is refused, a refresh is not (its exchange carries no token), and the
+ * gateway's namespace user revokes the identity's grants, which refuses the refresh.
+ */
+async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<void> {
+  const signedUp = await postCredentials(base, '/auth/sign-up', {
+    email: `smoke-${crypto.randomUUID()}@example.test`,
+    password: crypto.randomUUID(),
+  })
+  const { access, refresh } = signedUp.tokens
+  const identity = signedUp.identity.id
+
+  await step('sessions_revoked_at set by the namespace user', async () => {
+    await root.local.db.query(sessionsRevokedStatement, {
+      identity,
+      at: new Date(Date.now() + 5_000),
+    })
+  })
+
+  await step('a token issued before sessions_revoked_at is refused', async () => {
+    const refused = await root.sessions.authenticate({ access })
+
+    check(refused.isErr(), 'the token was accepted')
+  })
+
+  const renewed = await step('a refresh is not blocked by the clause', async () => {
+    const answer = unwrap(await root.sessions.authenticate({ access, refresh }))
+
+    if (!answer.renewed) {
+      throw new Error('the pair was not renewed')
+    }
+
+    return answer.tokens
+  })
+
+  await step(
+    "the namespace user revokes the identity's grants: the refresh is refused",
+    async () => {
+      await root.local.db.query(revokeGrantsStatement, { identity })
+
+      const refused = await root.sessions.authenticate(renewed)
+
+      check(refused.isErr(), 'the refresh was accepted')
+    },
+  )
+}
+
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   const root = await step(`gateway opened ${config.SURREAL_URL}`, async () =>
     unwrap(
@@ -507,6 +557,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
 
+  await sessionsRevokedSteps(base, root)
   await organisationSteps(base, opened, second)
 }
 

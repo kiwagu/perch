@@ -15,6 +15,7 @@ export const registry = defineEntityPrefixes({
   profile: 'prf',
   tenant: 'tnt',
   membership: 'mbr',
+  device_session: 'dvs',
   note: 'nte',
 } as const)
 
@@ -28,6 +29,8 @@ export type TenantId = EntityIdOf<typeof registry.prefixes, 'tenant'>
 
 export type MembershipId = EntityIdOf<typeof registry.prefixes, 'membership'>
 
+export type DeviceSessionId = EntityIdOf<typeof registry.prefixes, 'device_session'>
+
 export type NoteId = EntityIdOf<typeof registry.prefixes, 'note'>
 
 export const {
@@ -35,6 +38,7 @@ export const {
   profileIdFactory,
   tenantIdFactory,
   membershipIdFactory,
+  device_sessionIdFactory,
   noteIdFactory,
 } = registry.factories
 
