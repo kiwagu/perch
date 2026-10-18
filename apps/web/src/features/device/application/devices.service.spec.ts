@@ -1,7 +1,6 @@
-import { okAsync } from 'neverthrow'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { type DataError, dataError } from '@workspace/data'
+import { dataError } from '@workspace/data'
 
 import {
   FakeDevices,
@@ -10,30 +9,15 @@ import {
   phone,
   REVOKED_AT,
 } from '../../../platform/__fixtures__/devices'
-import type { SignOutOptions } from '../../../platform/session.port'
 
-import { DevicesService, type DevicesSession } from './devices.service'
-
-/** The session's sign-out: it answers `outcome` and keeps what it was asked. */
-class FakeSession implements DevicesSession {
-  readonly signOuts: Array<SignOutOptions | undefined> = []
-  outcome: 'signed-out' | 'needs-confirmation' = 'signed-out'
-
-  signOut(options?: SignOutOptions) {
-    this.signOuts.push(options)
-
-    return okAsync<'signed-out' | 'needs-confirmation', DataError>(this.outcome)
-  }
-}
+import { DevicesService } from './devices.service'
 
 let devices: FakeDevices
-let session: FakeSession
 let service: DevicesService
 
 beforeEach(() => {
   devices = new FakeDevices()
-  session = new FakeSession()
-  service = new DevicesService(devices, session)
+  service = new DevicesService(devices)
 })
 
 describe('DevicesService', () => {
@@ -49,7 +33,6 @@ describe('DevicesService', () => {
       kind: 'listed',
       devices: [laptop, { ...phone, revokedAt: REVOKED_AT }],
     })
-    expect(session.signOuts).toEqual([])
   })
 
   it('counts a sign-out of another device as done when the list cannot be read again', async () => {
@@ -67,22 +50,9 @@ describe('DevicesService', () => {
     expect(devices.calls).toEqual([['revoke', phone.id], ['list']])
   })
 
-  it("signs this device out through the session's sign-out, not through the device route", async () => {
-    expect((await service.revoke(laptop))._unsafeUnwrap()).toEqual({ kind: 'signed-out' })
-    expect(session.signOuts).toEqual([undefined])
-    expect(devices.calls).toEqual([])
-  })
-
-  it('passes on a sign-out of this device that needs a confirmation', async () => {
-    session.outcome = 'needs-confirmation'
-
-    expect((await service.revoke(laptop))._unsafeUnwrap()).toEqual({ kind: 'needs-confirmation' })
-  })
-
   it("signs every device out at the gateway and only awaits its answer: this device's session signs itself out", async () => {
     expect((await service.signOutEverywhere()).isOk()).toBe(true)
     expect(devices.calls).toEqual([['everywhere']])
-    expect(session.signOuts).toEqual([])
   })
 
   it('fails as the gateway failed, and reads nothing after a refused sign-out', async () => {

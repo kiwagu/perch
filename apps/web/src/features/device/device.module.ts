@@ -1,6 +1,5 @@
 import { DEVICES } from '../../platform/devices.port'
 import { defineModule } from '../../platform/module'
-import { SESSION } from '../../platform/session.port'
 
 import { DEVICES_SERVICE, DevicesService } from './application/devices.service'
 import { DevicesContainer } from './presentation/pages/devices/devices.container'
@@ -14,7 +13,7 @@ export const DeviceModule = defineModule({
   providers: [
     {
       provide: DEVICES_SERVICE,
-      useFactory: (container) => new DevicesService(container.get(DEVICES), container.get(SESSION)),
+      useFactory: (container) => new DevicesService(container.get(DEVICES)),
     },
   ],
   declarations: { DevicesPage: DevicesContainer },

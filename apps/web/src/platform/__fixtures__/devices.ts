@@ -26,6 +26,9 @@ export const phone: DeviceView = {
 /** The failure of a gateway out of reach. */
 export const offline = (): DataError => dataError('data:OFFLINE', 'could not reach the gateway')
 
+/** A request the gateway refused with `code`, and will refuse however often it is sent. */
+export const rejected = (code: string): DataError => dataError('data:WRITE_REJECTED', code)
+
 /** When the fake gateway signs a device out. */
 export const REVOKED_AT = new Date('2026-10-18T10:00:00.000Z')
 

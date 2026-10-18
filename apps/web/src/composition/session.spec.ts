@@ -1382,6 +1382,37 @@ describe('SessionService memberships', () => {
     expect(await renewing).toBe(true)
   })
 
+  it.each(['unauthorized', 'revoked'] as const)(
+    'renewKeys under way gives up at once, without waiting 10 seconds, when the gateway ends the channel (%s)',
+    async (reason) => {
+      const { session, gateway } = await bootSession({ saved: ann, online: true })
+      const answers: Array<readonly [boolean, string | undefined]> = []
+
+      // Who is signed in when the answer lands: a route call that fails on it fails before the
+      // forced sign-out ends, never after it on the sign-in page.
+      void session.renewKeys().then((renewed) => answers.push([renewed, session.current()?.id]))
+      await settle()
+      gateway.endWith(reason)
+
+      await vi.waitFor(() => expect(answers).toEqual([[false, ann.identity.id]]))
+      await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    },
+  )
+
+  it.each(['unauthorized', 'revoked'] as const)(
+    'renewKeys asked once the gateway ended the channel (%s) gives up at once, while the device signs out',
+    async (reason) => {
+      const { session, gateway } = await bootSession({ saved: ann, online: true })
+      const answers: boolean[] = []
+
+      gateway.endWith(reason)
+      void session.renewKeys().then((renewed) => answers.push(renewed))
+
+      await vi.waitFor(() => expect(answers).toEqual([false]))
+      await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    },
+  )
+
   it('renewKeys resolves false when no new keys come within 10 seconds', async () => {
     const { session, storage, driveClock } = await bootSession({ saved: ann, online: true })
 

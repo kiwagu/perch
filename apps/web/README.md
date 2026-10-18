@@ -54,11 +54,13 @@ modeling stage.
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. A token is renewed through the
   leading tab: it connects again and the gateway answers a token that no longer works with a
   new pair; another tab asks the leader with the `renew` hint and waits for the new access key
-  in storage (10 seconds at most). One tab per browser leads the identity's sync through a Web
-  Lock and runs the sync engine over the gateway's WebSocket (`/backend/sync`) for the private
-  region and every organisation's, keeping every renewed pair of keys; the tabs hint each
-  other over a BroadcastChannel, so each reads what the others wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
-  out, then forgets the keys and the memberships and deletes the identity's database and
+  in storage (10 seconds at most). A renewal gives up at once when the leading tab's channel ended
+  for good (keys refused, or the device signed out from another one). One tab per browser leads the
+  identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
+  (`/backend/sync`) for the private region and every organisation's, keeping every renewed pair of
+  keys; the tabs hint each other over a BroadcastChannel, so each reads what the others wrote or
+  imported. Signing out takes the lead, drains, has the gateway sign the device out, then forgets
+  the keys and the memberships and deletes the identity's database and
   every organisation database the device holds for it, open or not, and the count of them; with
   changes it could not send it asks first. A sign-out the gateway did not confirm (offline, or
   giving unsent changes up, or kept by a frozen tab while offline) leaves the pair, whose grant
@@ -68,9 +70,9 @@ modeling stage.
   `X-Perch-Device`, no bearer token) and forgets it once revoked (204), refused as dead (401)
   or refused otherwise (any other 4xx, which the gateway will never take: reported); an
   unreachable or failing (5xx) gateway leaves it for the next try. A send that fails, even by
-  a throw, is reported and never stops the next one. While a sign-out runs, no tab of the browser takes a write (a
-  `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
-  hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
+  a throw, is reported and never stops the next one. While a sign-out runs, no tab of the browser
+  takes a write (a `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a
+  minute, hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that
   lock exclusive, waiting for writes admitted earlier, and keeps the database (as after
   refused keys) when it does not get it within 10 seconds (`WriteBarrier`). A change that still
@@ -84,8 +86,8 @@ modeling stage.
   identity) to send them. A device signed out from another one (its channel closed with 4001,
   the transport's `revoked` ending) signs out the same way, and when its database goes the
   sign-in page says "You were signed out from another device."; the device keeps its id, and
-  the dead pair is not left to revoke. A write that waited for the lock goes on only into the space it was
-  admitted for, still open, and while no sign-out runs. A
+  the dead pair is not left to revoke. A write that waited for the lock goes on only into the
+  space it was admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses stops the sync and keeps everything. A tab follows another
   tab's sign-out by closing its space. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
@@ -126,7 +128,8 @@ modeling stage.
   sign-out, which sends what it can first). "Sign out everywhere" asks first, then signs every
   device out, this one included: the page waits for the gateway's answer only, since the
   gateway closes this device's channel too and the session signs it out on that, which leads to
-  the sign-in page. A call that fails says so in a notice (`device.notice`).
+  the sign-in page. A call that fails says so in a notice (`device.notice`); a sign-out that
+  failed reads the list again, unless the gateway is out of reach (the read would fail too).
 
 ## Key exports
 

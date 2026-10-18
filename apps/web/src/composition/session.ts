@@ -612,16 +612,27 @@ export class SessionService implements SessionPort {
       },
       onEnded: (reason) =>
         match(reason)
-          // Keys refused: they will not work again.
-          .with('unauthorized', () => this.#forced(() => this.#refused(identity)))
+          // Keys refused: they will not work again, and nothing renews them.
+          .with('unauthorized', () => {
+            this.#channelEnded(identity)
+            this.#forced(() => this.#refused(identity))
+          })
           // Signed out from another device: as refused keys, and the sign-in page says why.
-          .with('revoked', () =>
-            this.#forced(() => this.#refused(identity, 'signed-out-elsewhere')),
-          )
+          .with('revoked', () => {
+            this.#channelEnded(identity)
+            this.#forced(() => this.#refused(identity, 'signed-out-elsewhere'))
+          })
           // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
           // refused protocol stops the sync engine, which reports it, and changes nothing here.
           .with(P.union('signed-out', 'protocol'), () => {})
           .exhaustive(),
+    }
+  }
+
+  /** The channel of `identity`, open on this tab, ended for good: its keys are renewed no more. */
+  #channelEnded(identity: IdentityId): void {
+    if (this.#open?.space.identity.id === identity) {
+      this.#organisations.ended()
     }
   }
 

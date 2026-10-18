@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
@@ -6,7 +5,6 @@ import { useT } from '@workspace/i18n'
 import type { DeviceView } from '../../../../../platform/devices.port'
 import { useService } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
-import { SIGN_IN_PATH } from '../../../../../platform/router'
 import { DEVICES_SERVICE } from '../../../application/devices.service'
 
 import { type DeviceItem, DevicesView } from './devices.view'
@@ -14,7 +12,6 @@ import { type DeviceItem, DevicesView } from './devices.view'
 export function DevicesContainer() {
   const devices = useService(DEVICES_SERVICE)
   const notify = useNotify()
-  const navigate = useNavigate()
   const t = useT()
   const [list, setList] = useState<readonly DeviceView[] | undefined>(undefined)
   const [pending, setPending] = useState(false)
@@ -48,7 +45,9 @@ export function DevicesContainer() {
     notify({ testId: 'device.notice', text: t('device.notice.sign-out-failed') })
   }
 
-  // Another device's sign-out comes back with the list read again; this device's goes to sign-in.
+  // Another device's sign-out comes back with the list read again (this device signs out from the
+  // profile). A sign-out that failed reads the list again, unless the gateway is out of reach: a
+  // read would fail too, and its notice would replace the one that says the sign-out failed.
   const revoke = (device: DeviceItem) => {
     setPending(true)
     void devices.revoke(device).match(
@@ -57,17 +56,16 @@ export function DevicesContainer() {
 
         if (outcome.kind === 'listed') {
           setList(outcome.devices)
-        } else if (outcome.kind === 'revoked') {
-          setReads((count) => count + 1)
-        } else if (outcome.kind === 'signed-out') {
-          void navigate({ to: SIGN_IN_PATH })
         } else {
-          notify({ testId: 'device.notice', text: t('device.notice.unsent') })
+          setReads((count) => count + 1)
         }
       },
-      () => {
+      (error) => {
         failed()
-        setReads((count) => count + 1)
+
+        if (error.code !== 'data:OFFLINE') {
+          setReads((count) => count + 1)
+        }
       },
     )
   }

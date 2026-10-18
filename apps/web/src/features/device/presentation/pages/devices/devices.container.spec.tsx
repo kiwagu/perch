@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
 
-import { FakeDevices, offline, phone } from '../../../../../platform/__fixtures__/devices'
+import { FakeDevices, offline, phone, rejected } from '../../../../../platform/__fixtures__/devices'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { DEVICES } from '../../../../../platform/devices.port'
@@ -81,17 +81,50 @@ describe('DevicesContainer', () => {
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']])
   })
 
-  it('says so when a sign-out fails, and reads the list again', async () => {
+  it('says so when the gateway refuses a sign-out, and reads the list again', async () => {
     devices = new FakeDevices()
 
     await openPage()
-    devices.refusal = offline()
+    devices.refusal = rejected('no-such-device')
     fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke'))
 
     expect((await screen.findByTestId('device.notice')).textContent).toBe(
       en['device.notice.sign-out-failed'],
     )
     await waitFor(() => expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']]))
+  })
+
+  it('keeps saying the sign-out failed when the gateway is out of reach, without reading the list again', async () => {
+    devices = new FakeDevices()
+
+    await openPage()
+
+    const list = devices.list.bind(devices)
+
+    // Out of reach: the sign-out fails, and so would a read after it.
+    devices.refusal = offline()
+    devices.list = () => {
+      devices.refusal = offline()
+
+      return list()
+    }
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke'))
+
+    expect((await screen.findByTestId('device.notice')).textContent).toBe(
+      en['device.notice.sign-out-failed'],
+    )
+    await waitFor(async () =>
+      expect(
+        (within(await row(phone.label)).getByTestId('device.list.revoke') as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(devices.calls).toEqual([['list'], ['revoke', phone.id]])
+    expect(screen.getByTestId('device.notice').textContent).toBe(
+      en['device.notice.sign-out-failed'],
+    )
   })
 
   it('says so when the devices cannot be read', async () => {

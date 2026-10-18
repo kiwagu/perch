@@ -11,6 +11,5 @@
   "device.everywhere.confirm": "Sign out everywhere",
   "device.everywhere.cancel": "Cancel",
   "device.notice.read-failed": "Your devices could not be read. Check your connection and try again.",
-  "device.notice.sign-out-failed": "The sign-out did not go through. Check your connection and try again.",
-  "device.notice.unsent": "This device holds changes it has not sent yet. Sign it out from your profile."
+  "device.notice.sign-out-failed": "The sign-out did not go through. Check your connection and try again."
 }

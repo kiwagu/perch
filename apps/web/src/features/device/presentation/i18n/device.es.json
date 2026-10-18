@@ -11,6 +11,5 @@
   "device.everywhere.confirm": "Cerrar sesión en todas partes",
   "device.everywhere.cancel": "Cancelar",
   "device.notice.read-failed": "No se pudieron leer tus dispositivos. Comprueba la conexión y vuelve a intentarlo.",
-  "device.notice.sign-out-failed": "No se pudo cerrar la sesión. Comprueba la conexión y vuelve a intentarlo.",
-  "device.notice.unsent": "Este dispositivo tiene cambios sin enviar. Cierra su sesión desde tu perfil."
+  "device.notice.sign-out-failed": "No se pudo cerrar la sesión. Comprueba la conexión y vuelve a intentarlo."
 }

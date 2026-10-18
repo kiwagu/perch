@@ -4,44 +4,29 @@ import type { DataError } from '@workspace/data'
 import { token } from '@workspace/di'
 
 import type { DevicesPort, DeviceView } from '../../../platform/devices.port'
-import type { SessionPort } from '../../../platform/session.port'
-
-/** What the service needs of the session: signing this device out. */
-export type DevicesSession = Pick<SessionPort, 'signOut'>
 
 /**
- * How a sign-out of one device ended: another device signed out and the list read again
- * (`listed`), or signed out while the list could not be read again (`revoked`); this device
- * signed out through its session (`signed-out`), or not yet because it holds changes it could
- * not send (`needs-confirmation`, nothing changed).
+ * How a sign-out of another device ended: the list read again (`listed`), or signed out while
+ * the list could not be read again (`revoked`).
  */
 export type RevokeOutcome =
   | { readonly kind: 'listed'; readonly devices: readonly DeviceView[] }
   | { readonly kind: 'revoked' }
-  | { readonly kind: 'signed-out' }
-  | { readonly kind: 'needs-confirmation' }
 
 /**
- * The signed-in identity's devices: listing them, signing one out and signing out everywhere.
- * This device signs out through its session, which sends what it can and forgets its keys and
- * data; every other device through the gateway's device route.
+ * The signed-in identity's devices: listing them, signing another one out and signing out
+ * everywhere, through the gateway's device routes. This device is signed out from the profile,
+ * through its session, which sends what it can and forgets its keys and data.
  */
 export class DevicesService {
-  constructor(
-    private readonly devices: DevicesPort,
-    private readonly session: DevicesSession,
-  ) {}
+  constructor(private readonly devices: DevicesPort) {}
 
   list(): ResultAsync<readonly DeviceView[], DataError> {
     return this.devices.list()
   }
 
-  /** Signs `device` out; another device's sign-out reads the list again. */
-  revoke(device: Pick<DeviceView, 'id' | 'current'>): ResultAsync<RevokeOutcome, DataError> {
-    if (device.current) {
-      return this.session.signOut().map((outcome) => ({ kind: outcome }))
-    }
-
+  /** Signs another device out, then reads the list again. */
+  revoke(device: Pick<DeviceView, 'id'>): ResultAsync<RevokeOutcome, DataError> {
     // The sign-out went through even when the list read after it fails.
     return this.devices.revoke(device.id).andThen(() =>
       this.devices
