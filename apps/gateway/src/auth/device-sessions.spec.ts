@@ -4,6 +4,7 @@ import { type AuthTokens, createAuth, fromDriverValue, type LocalDb } from '@wor
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { device_sessionIdFactory, type IdentityId } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
+import { z } from '@workspace/zod'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
@@ -50,21 +51,41 @@ async function withAuth<T>(
   }
 }
 
-/** Signs an identity up through the directory's access method: its id and its pair. */
-async function signUp(
-  local: LocalDb,
-  email: string,
-): Promise<{ readonly identity: IdentityId; readonly refresh: string }> {
-  return withAuth(local, async (auth) => {
-    const user = (await auth.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
-    const refresh = auth.tokens()?.refresh
+/** An identity signed in through the directory's access method: its id and its pair. */
+interface Signed {
+  readonly identity: IdentityId
+  readonly access: string
+  readonly refresh: string
+}
 
-    if (refresh === undefined) {
-      return expect.unreachable('a sign-up with a refresh key')
+/** Signs an identity up, or in again, through the directory's access method. */
+async function signed(local: LocalDb, email: string, how: 'signUp' | 'signIn'): Promise<Signed> {
+  return withAuth(local, async (auth) => {
+    const user = (await auth[how]({ email, password: PASSWORD }))._unsafeUnwrap()
+    const tokens = auth.tokens()
+
+    if (tokens?.refresh === undefined) {
+      return expect.unreachable('a sign-in with a refresh key')
     }
 
-    return { identity: user.id, refresh }
+    return { identity: user.id, access: tokens.access, refresh: tokens.refresh }
   })
+}
+
+const signUp = (local: LocalDb, email: string): Promise<Signed> => signed(local, email, 'signUp')
+
+/** Whether the access token `access` still signs its identity in, without a refresh key. */
+async function accepted(local: LocalDb, access: string): Promise<boolean> {
+  return withAuth(local, async (auth) => (await auth.resume({ access })).isOk())
+}
+
+const claims = z.object({ iat: z.number().int() })
+
+/** When the access token `access` was issued: its `iat`, a whole second, in milliseconds. */
+function issuedAt(access: string): number {
+  const [, payload = ''] = access.split('.')
+
+  return claims.parse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))).iat * 1000
 }
 
 /** The refresh key of the pair `refresh` renews to, or `undefined` when it renews nothing. */
@@ -480,5 +501,47 @@ describe('DeviceSessions', () => {
     expect((await devices.list(bob.identity))._unsafeUnwrap()[0]?.revokedAt).toBeUndefined()
     expect(await renew(local, ann.refresh)).toBeUndefined()
     expect(await renew(local, bob.refresh)).toMatch(/^surreal-refresh-/)
+  })
+
+  it('signs out everywhere from the start of its second: a token issued in that second stays valid, one issued a second before does not', async () => {
+    const { local } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const bob = await signUp(local, 'bob@example.test')
+
+    // Ann is signed out everywhere late in the second her token was issued, Bob late in the
+    // second after his.
+    await local.db.query(sessionsRevokedStatement, {
+      identity: ann.identity,
+      at: new Date(issuedAt(ann.access) + 999),
+    })
+    await local.db.query(sessionsRevokedStatement, {
+      identity: bob.identity,
+      at: new Date(issuedAt(bob.access) + 1_999),
+    })
+
+    const [anns] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
+      identity: ann.identity,
+    })
+
+    expect(fromDriverValue(anns)).toEqual(new Date(issuedAt(ann.access)))
+    expect(await accepted(local, ann.access)).toBe(true)
+    expect(await accepted(local, bob.access)).toBe(false)
+  })
+
+  it('lets the identity sign in again right after a sign-out everywhere', async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+
+    ;(await devices.revokeAll(ann.identity))._unsafeUnwrap()
+
+    const again = await signed(local, 'ann@example.test', 'signIn')
+    const [mark] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
+      identity: ann.identity,
+    })
+    const revokedAt = fromDriverValue(mark)
+
+    expect(revokedAt).toBeInstanceOf(Date)
+    expect(revokedAt instanceof Date && revokedAt.getTime() % 1_000).toBe(0)
+    expect(await accepted(local, again.access)).toBe(true)
   })
 })

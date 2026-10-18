@@ -575,7 +575,9 @@ describe('deviceRoutes', () => {
     const { signOut, ask, annOnLaptop, annOnPhone } = await harness()
 
     expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual(noContent)
-    expect(await signOut(annOnPhone.tokens)).toEqual(unauthorized)
+    // Dead: its access token no longer works and its grant is revoked. (A token issued in the
+    // second of the sign-out everywhere would still work until it expires.)
+    expect(await signOut({ ...annOnPhone.tokens, access: 'expired' })).toEqual(unauthorized)
   })
 
   it('answers 400 to a sign-out without its device or without its pair, before any check of keys', async () => {

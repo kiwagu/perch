@@ -57,8 +57,8 @@ async function devicesOf(base: string, signedIn: SignedIn) {
  * its row revoked, its hello with its still working access token closed with 4001); then a
  * tablet signed in twice (the grant of its first sign-in revoked by the second) and every device
  * signed out from the laptop (the laptop's and the tablet's
- * sockets closed with 4001), after which the laptop's old pair is refused at hello and by the
- * sign-out route.
+ * sockets closed with 4001); a sign-in right after it works, and the laptop's old pair is refused
+ * at hello and by the sign-out route.
  */
 export async function deviceSessionSteps(base: string, opened: Opened): Promise<void> {
   const credentials = {
@@ -176,6 +176,10 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
   await step(
     `POST /auth/sign-out-everywhere: 204, laptop and tablet closed with ${CLOSE.revoked}`,
     async () => {
+      // A sign-out everywhere refuses the tokens issued before its second: in the next second,
+      // it refuses every token issued so far, the laptop's old one included.
+      await new Promise((resolve) => setTimeout(resolve, 1_010 - (Date.now() % 1_000)))
+
       const answer = await callAs(base, 'POST', '/auth/sign-out-everywhere', laptop)
 
       check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
@@ -188,6 +192,16 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       )
     },
   )
+
+  await step('a sign-in right after the sign-out everywhere: 200, its token accepted', async () => {
+    const desktop = await postCredentials(base, '/auth/sign-in', {
+      ...credentials,
+      device: { id: 'smoke-desktop', label: 'Smoke desktop' },
+    })
+    const current = (await devicesOf(base, desktop)).filter((device) => device.current)
+
+    check(current.length === 1, `current ${JSON.stringify(current)}`)
+  })
 
   await step(`hello with the laptop's old pair: closed with ${CLOSE.unauthorized}`, async () => {
     const { code } = await refusedHello(base, opened, laptop)

@@ -119,9 +119,13 @@ device of the caller out (204): its row is marked revoked, its refresh grant is 
 going as a parameter: `REVOKE GRANT` takes none), a pair parked for it is forgotten and its
 sockets are closed with 4001; an id that is not one of the caller's devices answers 404
 (`no-such-device`). `POST /auth/sign-out-everywhere` signs every device of the caller out, the
-asking one included (204): the identity's `sessions_revoked_at` is set, so every token issued
-before is refused, every refresh grant of the identity is revoked, every device row is marked
-revoked, every parked pair is forgotten and every socket is closed with 4001. A sign-out that
+asking one included (204): the identity's `sessions_revoked_at` is set to the start of the
+current second, so every token issued in an earlier second is refused and a sign-in right after
+the sign-out works (a token carries only the second it was issued in; one issued earlier in that
+same second stays valid until it expires, but its grant is revoked and its row marked, so its
+hello and its Bearer calls are refused all the same), every refresh grant of the identity is
+revoked, every device row is marked revoked, every parked pair is forgotten and every socket is
+closed with 4001. A sign-out that
 fails after its first write still closes what it signed out before it answers 500. `POST
 /auth/sign-out` takes the pair in its body, `{ access, refresh }`, with `X-Perch-Device` and no
 `Authorization`: the pair is the credential, so a device can revoke a pair it could not revoke
@@ -175,8 +179,9 @@ stand.
   from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
   with its still working access token closed with 4001), a tablet signed in and
   then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
-  and the tablet's sockets closed with 4001), the laptop's old pair refused at hello (4401) and
-  by `POST /auth/sign-out` (401); one line per step.
+  and the tablet's sockets closed with 4001, in a later second than every token issued before),
+  a sign-in right after it answered 200 with a working token, the laptop's old pair refused at
+  hello (4401) and by `POST /auth/sign-out` (401); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
