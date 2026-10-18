@@ -124,6 +124,8 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data.
-- `bun run refactor:scan`: files that have grown past the size thresholds.
+- `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
+- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file written by the first run on a checkout (also in `check` and in the pre-commit hook): afterwards a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails.
+- `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.
 - `bun run --filter @workspace/replica measure` and `measure:validation`: the replica's write
   path and what checking a pushed batch costs the server, on this machine.
