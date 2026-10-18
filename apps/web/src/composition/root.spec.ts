@@ -9,11 +9,14 @@ import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { COMMANDS } from '../platform/commands.port'
+import { DEVICES } from '../platform/devices.port'
 import { ORGANISATIONS } from '../platform/organisations.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
-import { type OrganisationsApiDeps, organisationsApi } from './organisations-api'
+import { devicesApi } from './devices-api'
+import type { BearerDeps } from './gateway-bearer'
+import { organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
 import { type MemoryStorage, memoryStorage, saveDevice } from './storage'
 
@@ -61,6 +64,11 @@ async function boot(
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),
+    devicesApi: (deps) =>
+      devicesApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
@@ -104,6 +112,7 @@ describe('createAppRoot', () => {
     expect(services.container.get(SESSION)).toBe(services.session)
     expect(services.container.get(COMMANDS)).toBe(services.commands)
     expect(services.container.get(ORGANISATIONS)).toBe(services.organisations)
+    expect(services.container.get(DEVICES)).toBe(services.devices)
     expect(services.session.current()).toBeUndefined()
     expect(failures).toEqual([])
   })
@@ -139,10 +148,11 @@ describe('createAppRoot', () => {
     expect(steps).toEqual(['restore-session', 'open-db'])
   })
 
-  it('names this device to the gateway: at sign-up with the label it is given, and on the organisation routes', async () => {
+  it('names this device to the gateway: at sign-up with the label it is given, and on the organisation and device routes', async () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
-    let deps: OrganisationsApiDeps | undefined
+    let deps: BearerDeps | undefined
+    let devicesDeps: BearerDeps | undefined
     const { result } = await boot(storage, [], [], {
       gatewayAuth: auth,
       deviceLabel: 'Safari on iPhone',
@@ -150,6 +160,14 @@ describe('createAppRoot', () => {
         deps = given
 
         return organisationsApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+      devicesApi: (given) => {
+        devicesDeps = given
+
+        return devicesApi('/backend', {
           ...given,
           fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
         })
@@ -168,5 +186,7 @@ describe('createAppRoot', () => {
       { kind: 'sign-up', email, device: { id, label: 'Safari on iPhone' } },
     ])
     expect(deps?.device()).toBe(id)
+    expect(devicesDeps?.device()).toBe(id)
+    expect(devicesDeps?.token()).toBe(deps?.token())
   })
 })

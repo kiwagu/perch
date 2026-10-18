@@ -1,0 +1,16 @@
+{
+  "device.page.title": "My devices",
+  "device.page.loading": "Reading your devices…",
+  "device.list.current": "This device",
+  "device.list.seen": "Last seen {when}",
+  "device.list.revoked": "Signed out {when}",
+  "device.list.revoke": "Sign out",
+  "device.everywhere.open": "Sign out everywhere",
+  "device.everywhere.title": "Sign out everywhere?",
+  "device.everywhere.body": "Every device signed in to your account is signed out, this one included. Changes a device has not sent yet stay on it until you sign in there again.",
+  "device.everywhere.confirm": "Sign out everywhere",
+  "device.everywhere.cancel": "Cancel",
+  "device.notice.read-failed": "Your devices could not be read. Check your connection and try again.",
+  "device.notice.sign-out-failed": "The sign-out did not go through. Check your connection and try again.",
+  "device.notice.unsent": "This device holds changes it has not sent yet. Sign it out from your profile."
+}

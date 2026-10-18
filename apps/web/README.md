@@ -41,13 +41,19 @@ modeling stage.
   the databases, or one that failed to open. The memberships are saved before their databases
   are counted, and a tab deletes none whose organisation the memberships saved for the identity
   still hold, so a tab following an older list leaves alone a database another tab counted and
-  opened for a newer one. `organisationsApi(baseUrl, { token, device, renew })` calls the gateway's `/organisations`
-  routes with the access token, renewing it once on a 401 and mapping refusals to `data:`
-  errors; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once. A token is renewed through the leading tab:
-  it connects again and the gateway answers a token that no longer works with a new pair;
-  another tab asks the leader with the `renew` hint and waits for the new access key in
-  storage (10 seconds at most). One tab per browser leads the identity's sync through a Web
+  opened for a newer one. The routes that act for the signed-in device go through
+  `bearerCalls(baseUrl, { token, device, renew })`: the access token as `Authorization: Bearer`
+  and the device's id as `X-Perch-Device`, the token renewed once on a 401, refusals mapped to
+  `data:` errors (the gateway's code as the message of `data:WRITE_REJECTED`, any other status
+  named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
+  it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
+  creates its membership on the device at once. `devicesApi` is the `DEVICES` port over
+  `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
+  out, `current` for this device; the browser's own id is never sent back),
+  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. A token is renewed through the
+  leading tab: it connects again and the gateway answers a token that no longer works with a
+  new pair; another tab asks the leader with the `renew` hint and waits for the new access key
+  in storage (10 seconds at most). One tab per browser leads the identity's sync through a Web
   Lock and runs the sync engine over the gateway's WebSocket (`/backend/sync`) for the private
   region and every organisation's, keeping every renewed pair of keys; the tabs hint each
   other over a BroadcastChannel, so each reads what the others wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
@@ -86,12 +92,12 @@ modeling stage.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
-  and the current organisation), for commands and for organisations,
+  and the current organisation), for commands, for organisations and for devices,
   notices the shell shows, the language state and the app-wide catalogs.
 - `src/features/app-shell/`: the page frame, painted before the database finishes opening,
-  with the navigation (sign-in, or the profile and the organisation page). When the gateway
-  refuses a change and this device undoes it, the session tells its rejection listeners and the
-  shell raises a notice, so the change does not just vanish.
+  with the navigation (sign-in, or the profile, the organisation page and My devices). When
+  the gateway refuses a change and this device undoes it, the session tells its rejection
+  listeners and the shell raises a notice, so the change does not just vanish.
 - `src/features/user/`: signing in or creating an account (`/sign-in`) and the signed-in
   user's profile (`/me`): name, email, a bio of at most 2000 characters saved with the name by
   one Save, and the chosen language, which follows the user across devices, and signing out,
@@ -109,6 +115,15 @@ modeling stage.
   own notes "Yours", and explains a change the rules forbid (`note:FORBIDDEN`). An
   administrator also sees the members, invites an existing account by email and removes a
   member. The page follows the memberships as they change, without a reload.
+- `src/features/device/`: My devices (`/devices`): every device the identity is signed in on,
+  and those signed out within 30 days, with the label each gave itself, when it was last seen
+  (and signed out), this device marked "This device". Another device signs out from its row
+  (`DELETE /devices/:id`: its grant revoked, its channel closed), after which the list is read
+  again; this device has no such button and signs out through its session (the profile's
+  sign-out, which sends what it can first). "Sign out everywhere" asks first, then signs every
+  device out, this one included: the page waits for the gateway's answer only, since the
+  gateway closes this device's channel too and the session signs it out on that, which leads to
+  the sign-in page. A call that fails says so in a notice (`device.notice`).
 
 ## Key exports
 

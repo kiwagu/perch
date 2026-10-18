@@ -1,0 +1,16 @@
+{
+  "device.page.title": "Mis dispositivos",
+  "device.page.loading": "Leyendo tus dispositivos…",
+  "device.list.current": "Este dispositivo",
+  "device.list.seen": "Última actividad: {when}",
+  "device.list.revoked": "Sesión cerrada: {when}",
+  "device.list.revoke": "Cerrar sesión",
+  "device.everywhere.open": "Cerrar sesión en todas partes",
+  "device.everywhere.title": "¿Cerrar sesión en todas partes?",
+  "device.everywhere.body": "Se cierra la sesión en todos los dispositivos de tu cuenta, también en este. Los cambios que un dispositivo aún no haya enviado se quedan en él hasta que vuelvas a iniciar sesión allí.",
+  "device.everywhere.confirm": "Cerrar sesión en todas partes",
+  "device.everywhere.cancel": "Cancelar",
+  "device.notice.read-failed": "No se pudieron leer tus dispositivos. Comprueba la conexión y vuelve a intentarlo.",
+  "device.notice.sign-out-failed": "No se pudo cerrar la sesión. Comprueba la conexión y vuelve a intentarlo.",
+  "device.notice.unsent": "Este dispositivo tiene cambios sin enviar. Cierra su sesión desde tu perfil."
+}

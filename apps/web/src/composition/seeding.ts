@@ -44,6 +44,7 @@ import {
 import { UserModule } from '../features/user/user.module'
 
 import type { CommandLogger } from './commands'
+import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
@@ -331,6 +332,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     deviceLabel: 'Seed client',
     online: () => true,
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
+    devicesApi: (deps) => devicesApi(options.gatewayUrl, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),

@@ -21,14 +21,16 @@ import type { Clock } from '@workspace/replica'
 import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
+import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
+import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
-import type { OrganisationsApi, OrganisationsApiDeps } from './organisations-api'
+import type { OrganisationsApi } from './organisations-api'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage, savedKeys } from './storage'
 
@@ -48,7 +50,9 @@ export interface AppRootOptions {
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean
   /** The gateway's organisation routes, called with the device's access token and id. */
-  readonly organisationsApi: (deps: OrganisationsApiDeps) => OrganisationsApi
+  readonly organisationsApi: (deps: BearerDeps) => OrganisationsApi
+  /** The gateway's device routes, called the same way. */
+  readonly devicesApi: (deps: BearerDeps) => DevicesPort
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -74,6 +78,7 @@ export interface AppServices {
   readonly session: SessionPort
   readonly commands: CommandsPort
   readonly organisations: OrganisationsPort
+  readonly devices: DevicesPort
   /** The signed-in identity's space, for a composition that drives it directly: the seed waits on its sync. */
   space(): IdentitySpace | undefined
   close(): Promise<void>
@@ -112,14 +117,13 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     logger: options.logger,
   })
   // A route that refuses the access token has the sync leader renew the keys, once.
-  const organisations = createOrganisations(
-    options.organisationsApi({
-      token: () => savedKeys(options.storage)?.access,
-      device: () => deviceIdFrom(options.storage),
-      renew: () => session.renewKeys(),
-    }),
-    session,
-  )
+  const bearer: BearerDeps = {
+    token: () => savedKeys(options.storage)?.access,
+    device: () => deviceIdFrom(options.storage),
+    renew: () => session.renewKeys(),
+  }
+  const organisations = createOrganisations(options.organisationsApi(bearer), session)
+  const devices = options.devicesApi(bearer)
   // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.
   const container = new Container()
     .singleton(SHAPE_RUNNER, () => session.runner)
@@ -127,6 +131,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     .singleton(SESSION, () => session)
     .singleton(COMMANDS, () => commands)
     .singleton(ORGANISATIONS, () => organisations)
+    .singleton(DEVICES, () => devices)
 
   step('restore-session')
 
@@ -140,6 +145,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
       session,
       commands,
       organisations,
+      devices,
       space: () => session.space(),
       close: () => session.close(),
     }

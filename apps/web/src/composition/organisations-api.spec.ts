@@ -3,46 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { Fetcher } from './gateway-auth'
+import { fakeFetch, noContent, respond } from './__fixtures__/gateway-fetch'
 import { organisationsApi } from './organisations-api'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
   role: 'admin',
 }
-
-interface Sent {
-  readonly url: string
-  readonly method: string | undefined
-  readonly authorization: string | null
-  readonly device: string | null
-  readonly body: unknown
-}
-
-/** A `fetch` that answers each request in turn with the next answer and records what was sent. */
-function fakeFetch(...answers: Array<() => Promise<Response>>) {
-  const sent: Sent[] = []
-  const fetcher: Fetcher = async (url, init) => {
-    sent.push({
-      url,
-      method: init.method,
-      authorization: new Headers(init.headers).get('Authorization'),
-      device: new Headers(init.headers).get('X-Perch-Device'),
-      body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
-    })
-
-    const answer = answers[Math.min(sent.length, answers.length) - 1]
-
-    if (!answer) throw new Error('no answer prepared')
-
-    return answer()
-  }
-
-  return { fetcher, sent }
-}
-
-const respond = (status: number, body: unknown) => () =>
-  Promise.resolve(Response.json(body, { status }))
 
 describe('organisationsApi', () => {
   it('sends the bearer token and the device, and parses a created membership (201)', async () => {
@@ -177,7 +144,7 @@ describe('organisationsApi', () => {
     const { fetcher, sent } = fakeFetch(
       respond(200, { members: [member] }),
       respond(200, { member }),
-      () => Promise.resolve(new Response(null, { status: 204 })),
+      noContent(),
     )
     const api = organisationsApi('/backend', {
       token: () => 'access-1',

@@ -15,6 +15,7 @@ import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
 import { deviceLabel } from './device-label'
+import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
@@ -102,6 +103,7 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     deviceLabel: deviceLabel(navigator),
     online: () => navigator.onLine,
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
+    devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
