@@ -14,6 +14,7 @@ import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import { deviceLabel } from './device-label'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
@@ -98,10 +99,13 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
       }),
     deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
+    deviceLabel: deviceLabel(navigator),
+    online: () => navigator.onLine,
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
+        device: context.device,
         credentials: context.credentials,
         onTokens: context.onTokens,
         onMemberships: context.onMemberships,

@@ -11,10 +11,12 @@ export interface SignOutOptions {
 
 /**
  * A word the session leaves for the sign-in page: `resend-after-sign-in` when the device was
- * signed out (its keys refused, or a write landing during its sign-out) while it held changes it
- * had not sent; they are kept on the device, and signing in again as the same identity sends them.
+ * signed out (its keys refused, signed out from another device, or a write landing during its
+ * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
+ * again as the same identity sends them. `signed-out-elsewhere` when another device of the
+ * identity signed this one out and nothing waited to be sent.
  */
-export type SessionNotice = 'resend-after-sign-in'
+export type SessionNotice = 'resend-after-sign-in' | 'signed-out-elsewhere'
 
 /** A change the gateway refused and this device undid: what the shell tells the user about. */
 export interface PushRejection {

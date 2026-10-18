@@ -327,10 +327,14 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     // An in-memory database leaves nothing behind once it is closed.
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: gatewayAuth(options.gatewayUrl),
+    // The client names itself with an id minted into its memory storage, as a browser does.
+    deviceLabel: 'Seed client',
+    online: () => true,
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),
+        device: context.device,
         credentials: context.credentials,
         onTokens: context.onTokens,
         onMemberships: context.onMemberships,

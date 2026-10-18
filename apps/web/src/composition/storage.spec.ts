@@ -7,16 +7,21 @@ import {
   browserStorage,
   deviceIdFrom,
   forgetDevice,
+  forgetPendingRevoke,
   forgetSigningOut,
   memoryStorage,
+  pendingRevoke,
   saveDevice,
   savedIdentity,
   savedKeys,
   savedMemberships,
+  savedNotice,
   savedTenant,
   savedTenantDatabases,
   saveKeys,
   saveMemberships,
+  saveNotice,
+  savePendingRevoke,
   saveSigningOut,
   saveTenant,
   saveTenantDatabases,
@@ -74,6 +79,53 @@ describe('the signed-in device', () => {
 
       expect(savedIdentity(storage)).toBeUndefined()
     }
+  })
+})
+
+describe('a pair left to revoke', () => {
+  it('keeps the pair a sign-out could not revoke until it is forgotten; forgetting the device leaves it', () => {
+    const storage = memoryStorage()
+
+    expect(pendingRevoke(storage)).toBeUndefined()
+
+    saveDevice(storage, ann)
+    savePendingRevoke(storage, ann.tokens)
+    forgetDevice(storage)
+
+    expect(pendingRevoke(storage)).toEqual(ann.tokens)
+
+    forgetPendingRevoke(storage)
+
+    expect(pendingRevoke(storage)).toBeUndefined()
+    expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
+  })
+
+  it('reads no pair from a value that does not describe one', () => {
+    const storage = memoryStorage()
+
+    for (const value of ['not json', '{"access":"a"}', '{"access":"","refresh":"r"}', '[]']) {
+      storage.set('perch.session.pending-revoke', value)
+
+      expect(pendingRevoke(storage)).toBeUndefined()
+    }
+  })
+})
+
+describe('the word for the sign-in page', () => {
+  it('keeps each notice it knows, and reads none from a value it does not', () => {
+    const storage = memoryStorage()
+
+    saveNotice(storage, 'signed-out-elsewhere')
+
+    expect(savedNotice(storage)).toBe('signed-out-elsewhere')
+
+    saveNotice(storage, 'resend-after-sign-in')
+
+    expect(savedNotice(storage)).toBe('resend-after-sign-in')
+
+    storage.set('perch.session.notice', 'something-else')
+
+    expect(savedNotice(storage)).toBeUndefined()
   })
 })
 

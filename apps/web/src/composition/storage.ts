@@ -8,7 +8,7 @@ import { z } from '@workspace/zod'
 
 import type { SessionNotice } from '../platform/session.port'
 
-import type { SignedInDevice } from './gateway-auth'
+import type { KeyPair, SignedInDevice } from './gateway-auth'
 
 /** Small persistent key-value storage, shared by the tabs of one browser. */
 export interface KeyValueStorage {
@@ -278,7 +278,7 @@ export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefin
 
 const NOTICE_KEY = 'perch.session.notice'
 
-const sessionNotice = z.enum(['resend-after-sign-in'])
+const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere'])
 
 /** Leaves the sign-in page a word about how the last session ended. */
 export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {
@@ -294,6 +294,40 @@ export function savedNotice(storage: KeyValueStorage): SessionNotice | undefined
 
 export function forgetNotice(storage: KeyValueStorage): void {
   storage.remove(NOTICE_KEY)
+}
+
+/**
+ * The pair of a sign-out the gateway did not confirm (offline, or giving unsent changes up): its
+ * grant still lives at the gateway until the pair is sent to be revoked. It outlives the keys.
+ */
+const PENDING_REVOKE_KEY = 'perch.session.pending-revoke'
+
+const keyPair = z.object({ access: z.string().min(1), refresh: z.string().min(1) })
+
+/** Keeps a pair to revoke at the gateway, in place of one kept before. */
+export function savePendingRevoke(storage: KeyValueStorage, pair: KeyPair): void {
+  storage.set(PENDING_REVOKE_KEY, JSON.stringify(pair))
+}
+
+/** The pair left to revoke, if one is kept; a kept value that does not describe one is none. */
+export function pendingRevoke(storage: KeyValueStorage): KeyPair | undefined {
+  const text = storage.get(PENDING_REVOKE_KEY)
+
+  if (text === undefined) {
+    return undefined
+  }
+
+  try {
+    const parsed = keyPair.safeParse(JSON.parse(text))
+
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function forgetPendingRevoke(storage: KeyValueStorage): void {
+  storage.remove(PENDING_REVOKE_KEY)
 }
 
 const SIGNING_OUT_KEY = 'perch.session.signing-out'
@@ -316,7 +350,7 @@ export function forgetSigningOut(storage: KeyValueStorage): void {
 
 /**
  * Forgets who is signed in and the keys; the other tabs hear the identity go. The inventory of
- * the organisation databases stays: the databases may stay too.
+ * the organisation databases stays: the databases may stay too. So does a pair left to revoke.
  */
 export function forgetDevice(storage: KeyValueStorage): void {
   storage.remove(ACCESS_KEY)

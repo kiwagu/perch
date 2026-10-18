@@ -1,6 +1,7 @@
 /**
- * The gateway's organisation routes over HTTP, called with the device's access token. A refused
- * token is renewed once through the sync leader and the call is made again.
+ * The gateway's organisation routes over HTTP, called with the device's access token and its
+ * id (`X-Perch-Device`). A refused token is renewed once through the sync leader and the call
+ * is made again.
  */
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
@@ -25,6 +26,8 @@ export interface OrganisationsApi {
 export interface OrganisationsApiDeps {
   /** The access token the device holds now, if any. */
   readonly token: () => string | undefined
+  /** The device's own id, named in every call: the gateway acts on the device's session. */
+  readonly device: () => string
   /** Gets a new access token for `token()`; false when none could be had. */
   readonly renew: () => Promise<boolean>
   readonly fetcher?: Fetcher
@@ -85,6 +88,7 @@ export function organisationsApi(baseUrl: string, deps: OrganisationsApiDeps): O
         method,
         headers: {
           Authorization: `Bearer ${token}`,
+          'X-Perch-Device': deps.device(),
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

@@ -80,11 +80,8 @@ export const clientMessage = z.discriminatedUnion('type', [
     protocol: z.literal(PROTOCOL_VERSION),
     access: z.string().min(1),
     refresh: z.string().min(1).optional(),
-    /**
-     * The device saying hello. The gateway refuses a hello without it (4400); it stays optional
-     * here only until every client sends it.
-     */
-    device: deviceId.optional(),
+    /** The device saying hello; a hello without it breaks the protocol (4400). */
+    device: deviceId,
   }),
   z.object({ type: z.literal('subscribe'), region, vv: bytes.nullable() }),
   z.object({ type: z.literal('pull'), region, vv: bytes }),

@@ -702,8 +702,9 @@ describe('SyncConnection', () => {
       },
     })
 
+    // The protocol's encoder cannot write a hello without its device.
     await connection.receive(
-      encode({ type: 'hello', protocol: PROTOCOL_VERSION, access: ann.tokens.access }),
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: ann.tokens.access }),
     )
 
     expect(socket.closedWith?.[0]).toBe(CLOSE.protocol)

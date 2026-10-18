@@ -7,6 +7,10 @@ import { type Fetcher, gatewayAuth } from './gateway-auth'
 
 const input = { email: 'ann@example.test', password: 'pass-word-1' }
 
+const device = { id: 'device-1', label: 'Chrome on Linux' }
+
+const pair = { access: 'access-1', refresh: 'refresh-1' }
+
 const signedIn = {
   identity: { id: identityIdFactory.create(), email: input.email },
   tokens: { access: 'access-1', refresh: 'refresh-1' },
@@ -17,16 +21,22 @@ interface Sent {
   readonly url: string
   readonly method: string | undefined
   readonly body: unknown
+  readonly device: string | null
+  readonly authorization: string | null
 }
 
 /** A `fetch` that answers every request with `answer` and records what was sent. */
 function fakeFetch(answer: () => Promise<Response>) {
   const sent: Sent[] = []
   const fetcher: Fetcher = async (url, init) => {
+    const headers = new Headers(init.headers)
+
     sent.push({
       url,
       method: init.method,
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
+      device: headers.get('X-Perch-Device'),
+      authorization: headers.get('Authorization'),
     })
 
     return answer()
@@ -39,44 +49,55 @@ const respond = (status: number, body: unknown) => () =>
   Promise.resolve(Response.json(body, { status }))
 
 describe('gatewayAuth', () => {
-  it('signs up with a POST to the gateway and answers with the identity and its keys', async () => {
+  it('signs up with a POST to the gateway naming the device, and answers with the identity and its keys', async () => {
     const { fetcher, sent } = fakeFetch(respond(200, signedIn))
-    const device = (
-      await gatewayAuth('https://app.example.test/backend', fetcher).signUp(input)
+    const answer = (
+      await gatewayAuth('https://app.example.test/backend', fetcher).signUp(input, device)
     )._unsafeUnwrap()
 
-    expect(device).toEqual(signedIn)
+    expect(answer).toEqual(signedIn)
     expect(sent).toEqual([
-      { url: 'https://app.example.test/backend/auth/sign-up', method: 'POST', body: input },
+      {
+        url: 'https://app.example.test/backend/auth/sign-up',
+        method: 'POST',
+        body: { ...input, device },
+        device: null,
+        authorization: null,
+      },
     ])
   })
 
-  it('signs in at its own path', async () => {
+  it('signs in at its own path, naming the device', async () => {
     const { fetcher, sent } = fakeFetch(respond(200, signedIn))
 
-    expect((await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrap()).toEqual(signedIn)
+    expect((await gatewayAuth('/backend', fetcher).signIn(input, device))._unsafeUnwrap()).toEqual(
+      signedIn,
+    )
     expect(sent[0]?.url).toBe('/backend/auth/sign-in')
+    expect(sent[0]?.body).toEqual({ ...input, device })
   })
 
   it('reads 401 as wrong credentials', async () => {
     const { fetcher } = fakeFetch(respond(401, { code: 'invalid-credentials' }))
 
-    expect((await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrapErr().code).toBe(
-      'data:INVALID_CREDENTIALS',
-    )
+    expect(
+      (await gatewayAuth('/backend', fetcher).signIn(input, device))._unsafeUnwrapErr().code,
+    ).toBe('data:INVALID_CREDENTIALS')
   })
 
   it('reads 409 as a refused sign-up', async () => {
     const { fetcher } = fakeFetch(respond(409, { code: 'sign-up-rejected' }))
 
-    expect((await gatewayAuth('/backend', fetcher).signUp(input))._unsafeUnwrapErr().code).toBe(
-      'data:SIGN_UP_REJECTED',
-    )
+    expect(
+      (await gatewayAuth('/backend', fetcher).signUp(input, device))._unsafeUnwrapErr().code,
+    ).toBe('data:SIGN_UP_REJECTED')
   })
 
   it('reads 400 as a request the gateway could not take', async () => {
     const { fetcher } = fakeFetch(respond(400, { code: 'bad-request' }))
-    const refused = (await gatewayAuth('/backend', fetcher).signUp(input))._unsafeUnwrapErr()
+    const refused = (
+      await gatewayAuth('/backend', fetcher).signUp(input, device)
+    )._unsafeUnwrapErr()
 
     expect(refused.code).toBe('data:AUTH_FAILED')
     expect(refused.message).toMatch(/400/)
@@ -85,9 +106,9 @@ describe('gatewayAuth', () => {
   it('is offline when the gateway cannot be reached', async () => {
     const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
 
-    expect((await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrapErr().code).toBe(
-      'data:OFFLINE',
-    )
+    expect(
+      (await gatewayAuth('/backend', fetcher).signIn(input, device))._unsafeUnwrapErr().code,
+    ).toBe('data:OFFLINE')
   })
 
   it('fails when the answer is not what the gateway promises', async () => {
@@ -95,10 +116,12 @@ describe('gatewayAuth', () => {
     const notJson = fakeFetch(() => Promise.resolve(new Response('<html>', { status: 200 })))
 
     expect(
-      (await gatewayAuth('/backend', wrongShape.fetcher).signIn(input))._unsafeUnwrapErr().code,
+      (await gatewayAuth('/backend', wrongShape.fetcher).signIn(input, device))._unsafeUnwrapErr()
+        .code,
     ).toBe('data:AUTH_FAILED')
     expect(
-      (await gatewayAuth('/backend', notJson.fetcher).signIn(input))._unsafeUnwrapErr().code,
+      (await gatewayAuth('/backend', notJson.fetcher).signIn(input, device))._unsafeUnwrapErr()
+        .code,
     ).toBe('data:AUTH_FAILED')
   })
 
@@ -108,9 +131,9 @@ describe('gatewayAuth', () => {
       role: 'member',
     }
     const { fetcher } = fakeFetch(respond(200, { ...signedIn, memberships: [acme] }))
-    const device = (await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrap()
+    const answer = (await gatewayAuth('/backend', fetcher).signIn(input, device))._unsafeUnwrap()
 
-    expect(device.memberships).toEqual([acme])
+    expect(answer.memberships).toEqual([acme])
   })
 
   it('refuses an answer without memberships as data:AUTH_FAILED', async () => {
@@ -118,8 +141,50 @@ describe('gatewayAuth', () => {
       respond(200, { identity: signedIn.identity, tokens: signedIn.tokens }),
     )
 
-    expect((await gatewayAuth('/backend', fetcher).signIn(input))._unsafeUnwrapErr().code).toBe(
-      'data:AUTH_FAILED',
-    )
+    expect(
+      (await gatewayAuth('/backend', fetcher).signIn(input, device))._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+  })
+
+  it('signs a pair out with a POST naming the device, the pair in the body and no bearer token', async () => {
+    const { fetcher, sent } = fakeFetch(() => Promise.resolve(new Response(null, { status: 204 })))
+
+    expect((await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1')).isOk()).toBe(true)
+    expect(sent).toEqual([
+      {
+        url: '/backend/auth/sign-out',
+        method: 'POST',
+        body: pair,
+        device: 'device-1',
+        authorization: null,
+      },
+    ])
+  })
+
+  it('reads 401 to a sign-out as a pair that signs nobody in any more', async () => {
+    const { fetcher } = fakeFetch(respond(401, { code: 'unauthorized' }))
+
+    expect(
+      (await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1'))._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+  })
+
+  it('fails a sign-out the gateway could not complete with its status, never the pair', async () => {
+    const { fetcher } = fakeFetch(respond(500, { code: 'internal' }))
+    const failed = (
+      await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1')
+    )._unsafeUnwrapErr()
+
+    expect(failed.code).toBe('data:WRITE_FAILED')
+    expect(failed.message).toMatch(/500/)
+    expect(failed.message).not.toMatch(/access-1|refresh-1/)
+  })
+
+  it('is offline when a sign-out cannot reach the gateway', async () => {
+    const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+
+    expect(
+      (await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1'))._unsafeUnwrapErr().code,
+    ).toBe('data:OFFLINE')
   })
 })

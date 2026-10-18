@@ -51,10 +51,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
   `hello` names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
-  `deviceId`; the gateway refuses a hello without it with 4400, and the schema keeps it optional
-  only until every client sends it); the `welcome` carries the regions the device may name with
-  their heads and the identity's memberships, and a `memberships` message tells each later
-  change of them. `CLOSE` names the gateway's close codes: `protocol` 4400, `unauthorized`
+  `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
+  the regions the device may name with their heads and the identity's memberships, and a
+  `memberships` message tells each later change of them. `CLOSE` names the gateway's close codes: `protocol` 4400, `unauthorized`
   4401 (keys refused, or a device without a session: no session row for the device it names,
   or a row that holds another grant), `forbidden` 4403, `timeout` 4408, `signedOut` 4000 (the
   device's own sign-out) and `revoked` 4001 (the device's session was signed out, from another

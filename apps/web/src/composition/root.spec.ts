@@ -13,7 +13,7 @@ import { ORGANISATIONS } from '../platform/organisations.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
-import { organisationsApi } from './organisations-api'
+import { type OrganisationsApiDeps, organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
 import { type MemoryStorage, memoryStorage, saveDevice } from './storage'
 
@@ -33,7 +33,7 @@ async function boot(
   storage: MemoryStorage,
   steps: BootStep[],
   failures: DataError[],
-  openLocal?: AppRootOptions['openLocal'],
+  overrides: Partial<AppRootOptions> = {},
 ) {
   const server = (await openTestDb())._unsafeUnwrap()
   const clock = manualClock()
@@ -46,16 +46,16 @@ async function boot(
   })
 
   const result = await createAppRoot({
-    openLocal:
-      openLocal ??
-      ((identity) => {
-        opened.push(identity)
+    openLocal: (identity) => {
+      opened.push(identity)
 
-        return openTestDb()
-      }),
+      return openTestDb()
+    },
     openTenantLocal: () => openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
+    deviceLabel: 'Chrome on Linux',
+    online: () => false,
     organisationsApi: (deps) =>
       organisationsApi('/backend', {
         ...deps,
@@ -77,6 +77,7 @@ async function boot(
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),
     onSyncState: () => {},
+    ...overrides,
   })
 
   return { result, opened }
@@ -130,11 +131,42 @@ describe('createAppRoot', () => {
 
     saveDevice(storage, ann)
 
-    const { result } = await boot(storage, steps, [], () =>
-      errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
-    )
+    const { result } = await boot(storage, steps, [], {
+      openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
+    })
 
     expect(result._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
     expect(steps).toEqual(['restore-session', 'open-db'])
+  })
+
+  it('names this device to the gateway: at sign-up with the label it is given, and on the organisation routes', async () => {
+    const storage = memoryStorage()
+    const auth = fakeGatewayAuth()
+    let deps: OrganisationsApiDeps | undefined
+    const { result } = await boot(storage, [], [], {
+      gatewayAuth: auth,
+      deviceLabel: 'Safari on iPhone',
+      organisationsApi: (given) => {
+        deps = given
+
+        return organisationsApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+    })
+
+    services = result._unsafeUnwrap()
+
+    const email = 'ann@example.test'
+
+    expect((await services.session.signUp({ email, password: 'pass-word-1' })).isOk()).toBe(true)
+
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+
+    expect(auth.requests).toEqual([
+      { kind: 'sign-up', email, device: { id, label: 'Safari on iPhone' } },
+    ])
+    expect(deps?.device()).toBe(id)
   })
 })

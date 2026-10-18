@@ -20,9 +20,10 @@ export interface SignInViewProps {
   readonly error?: string | undefined
   /**
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
-   * device was signed out while it held changes it had not sent.
+   * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
+   * another device signed it out.
    */
-  readonly notice?: 'resend-after-sign-in' | undefined
+  readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | undefined
   readonly onSubmit: (values: SignInValues) => void
   readonly onToggleMode: () => void
 }
@@ -73,6 +74,13 @@ export function SignInView(props: SignInViewProps) {
               <Alert>
                 <AlertDescription data-testid="user.sign-in.notice.resend-after-sign-in">
                   {t('user.sign-in.notice.resend-after-sign-in')}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {props.notice === 'signed-out-elsewhere' ? (
+              <Alert>
+                <AlertDescription data-testid="user.sign-in.notice.signed-out-elsewhere">
+                  {t('user.sign-in.notice.signed-out-elsewhere')}
                 </AlertDescription>
               </Alert>
             ) : null}

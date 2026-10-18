@@ -69,6 +69,12 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, hello('d'.repeat(65))).isErr()).toBe(true)
   })
 
+  it('refuses a hello that names no device', () => {
+    const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a' })
+
+    expect(decodeMessage(clientMessage, hello).isErr()).toBe(true)
+  })
+
   it('closes a device signed out from another one with 4001', () => {
     expect(CLOSE.revoked).toBe(4001)
   })

@@ -43,7 +43,11 @@ export interface AppRootOptions {
   /** Deletes the database of one organisation of an identity while it is not open. */
   readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
   readonly gatewayAuth: GatewayAuth
-  /** The gateway's organisation routes, called with the device's access token. */
+  /** The label sign-ups and sign-ins give this browser, next to its own id: "Chrome on Linux". */
+  readonly deviceLabel: string
+  /** Whether the browser says it has a network (`navigator.onLine`). */
+  readonly online: () => boolean
+  /** The gateway's organisation routes, called with the device's access token and id. */
   readonly organisationsApi: (deps: OrganisationsApiDeps) => OrganisationsApi
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
@@ -85,6 +89,8 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
   }
   const session = new SessionService({
     auth: options.gatewayAuth,
+    deviceLabel: options.deviceLabel,
+    online: options.online,
     openLocal: options.openLocal,
     openTenantLocal: options.openTenantLocal,
     deleteTenantLocal: options.deleteTenantLocal,
@@ -109,6 +115,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
   const organisations = createOrganisations(
     options.organisationsApi({
       token: () => savedKeys(options.storage)?.access,
+      device: () => deviceIdFrom(options.storage),
       renew: () => session.renewKeys(),
     }),
     session,

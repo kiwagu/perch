@@ -74,10 +74,11 @@ describe('SignInView', () => {
     )
   })
 
-  it('says nothing about unsent changes unless the session left a notice', () => {
+  it('says nothing about how the last session ended unless the session left a notice', () => {
     renderView()
 
     expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
+    expect(screen.queryByTestId('user.sign-in.notice.signed-out-elsewhere')).toBeNull()
   })
 
   it('asks to sign in again to send the changes this device kept when it was signed out', () => {
@@ -93,6 +94,23 @@ describe('SignInView', () => {
 
     expect(screen.getByTestId('user.sign-in.notice.resend-after-sign-in').textContent).toBe(
       es['user.sign-in.notice.resend-after-sign-in'],
+    )
+  })
+
+  it('says the device was signed out from another device', () => {
+    renderView({ notice: 'signed-out-elsewhere' })
+
+    expect(screen.getByTestId('user.sign-in.notice.signed-out-elsewhere').textContent).toBe(
+      'You were signed out from another device.',
+    )
+    expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
+  })
+
+  it('says it in Spanish', () => {
+    renderView({ notice: 'signed-out-elsewhere' }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.notice.signed-out-elsewhere').textContent).toBe(
+      es['user.sign-in.notice.signed-out-elsewhere'],
     )
   })
 

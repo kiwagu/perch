@@ -15,6 +15,7 @@ interface Sent {
   readonly url: string
   readonly method: string | undefined
   readonly authorization: string | null
+  readonly device: string | null
   readonly body: unknown
 }
 
@@ -26,6 +27,7 @@ function fakeFetch(...answers: Array<() => Promise<Response>>) {
       url,
       method: init.method,
       authorization: new Headers(init.headers).get('Authorization'),
+      device: new Headers(init.headers).get('X-Perch-Device'),
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
     })
 
@@ -43,10 +45,11 @@ const respond = (status: number, body: unknown) => () =>
   Promise.resolve(Response.json(body, { status }))
 
 describe('organisationsApi', () => {
-  it('sends the bearer token and parses a created membership (201)', async () => {
+  it('sends the bearer token and the device, and parses a created membership (201)', async () => {
     const { fetcher, sent } = fakeFetch(respond(201, { membership: acme }))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -57,6 +60,7 @@ describe('organisationsApi', () => {
         url: '/backend/organisations',
         method: 'POST',
         authorization: 'Bearer access-1',
+        device: 'device-1',
         body: { key: 'acme', name: 'Acme' },
       },
     ])
@@ -71,6 +75,7 @@ describe('organisationsApi', () => {
     let renewals = 0
     const api = organisationsApi('/backend', {
       token: () => token,
+      device: () => 'device-1',
       renew: () => {
         renewals += 1
         token = 'new'
@@ -83,12 +88,14 @@ describe('organisationsApi', () => {
     expect((await api.list())._unsafeUnwrap()).toEqual([acme])
     expect(renewals).toBe(1)
     expect(sent.map((request) => request.authorization)).toEqual(['Bearer old', 'Bearer new'])
+    expect(sent.map((request) => request.device)).toEqual(['device-1', 'device-1'])
   })
 
   it('on 401 after a renew gives up with data:AUTH_FAILED', async () => {
     const { fetcher, sent } = fakeFetch(respond(401, { code: 'unauthorized' }))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(true),
       fetcher,
     })
@@ -101,6 +108,7 @@ describe('organisationsApi', () => {
     const { fetcher, sent } = fakeFetch(respond(401, { code: 'unauthorized' }))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -113,6 +121,7 @@ describe('organisationsApi', () => {
     const { fetcher, sent } = fakeFetch(respond(200, { memberships: [] }))
     const api = organisationsApi('/backend', {
       token: () => undefined,
+      device: () => 'device-1',
       renew: () => Promise.resolve(true),
       fetcher,
     })
@@ -125,6 +134,7 @@ describe('organisationsApi', () => {
     const { fetcher } = fakeFetch(respond(409, { code: 'key-taken' }))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -138,6 +148,7 @@ describe('organisationsApi', () => {
     const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -149,6 +160,7 @@ describe('organisationsApi', () => {
     const { fetcher } = fakeFetch(respond(500, { code: 'internal', secret: 'hunter2' }))
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -169,6 +181,7 @@ describe('organisationsApi', () => {
     )
     const api = organisationsApi('/backend', {
       token: () => 'access-1',
+      device: () => 'device-1',
       renew: () => Promise.resolve(false),
       fetcher,
     })
@@ -182,5 +195,6 @@ describe('organisationsApi', () => {
       ['DELETE', `/backend/organisations/acme/members/${ann}`],
     ])
     expect(sent[1]?.body).toEqual({ email: 'ann@example.test' })
+    expect(sent.map((request) => request.device)).toEqual(['device-1', 'device-1', 'device-1'])
   })
 })

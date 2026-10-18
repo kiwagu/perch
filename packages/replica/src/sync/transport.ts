@@ -50,11 +50,8 @@ export type SocketLike = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>
 export interface WebSocketTransportOptions {
   readonly url: string
   readonly credentials: () => DeviceCredentials | undefined
-  /**
-   * The device's own id, named in every hello. A gateway refuses a hello without one; it stays
-   * optional only until every client passes it.
-   */
-  readonly device?: string
+  /** The device's own id, named in every hello. */
+  readonly device: string
   readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
   /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
   readonly onMemberships?: (memberships: readonly Membership[]) => void
@@ -257,15 +254,13 @@ export class WebSocketTransport implements SyncTransport {
         this.#reconnect()
       }
     })
-    const device = this.#options.device
-
     socket.send(
       encodeMessage(clientMessage, {
         type: 'hello',
         protocol: PROTOCOL_VERSION,
         access: keys.access,
         ...(keys.refresh === undefined ? {} : { refresh: keys.refresh }),
-        ...(device === undefined ? {} : { device }),
+        device: this.#options.device,
       }),
     )
   }

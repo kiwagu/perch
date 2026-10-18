@@ -32,7 +32,7 @@ import type {
 } from '../platform/session.port'
 
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
-import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+import type { GatewayAuth, NamedDevice, SignedInDevice } from './gateway-auth'
 import {
   type IdentitySpace,
   openIdentitySpace,
@@ -40,7 +40,9 @@ import {
   type Visibility,
 } from './identity-space'
 import { SessionOrganisations } from './organisations'
+import { PendingRevoke } from './pending-revoke'
 import {
+  deviceIdFrom,
   forgetDevice,
   forgetNotice,
   IDENTITY_KEY,
@@ -55,9 +57,14 @@ import {
 } from './storage'
 import { type HeardSignOut, WriteBarrier } from './write-barrier'
 
-/** What the channel of one identity needs: its keys, where renewed keys and memberships go, its end. */
+/**
+ * What the channel of one identity needs: the device it names in its hello, its keys, where
+ * renewed keys and memberships go, its end.
+ */
 export interface TransportContext {
   readonly identity: IdentityId
+  /** The browser's own id (`perch.device.id`). */
+  readonly device: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: SignedInDevice['tokens']) => void
   readonly onMemberships: (memberships: readonly Membership[]) => void
@@ -72,6 +79,10 @@ export interface VisibilitySource {
 
 export interface SessionOptions {
   readonly auth: GatewayAuth
+  /** The label a sign-up or sign-in gives this browser, next to its own id: "Chrome on Linux". */
+  readonly deviceLabel: string
+  /** Whether the browser says it has a network: only then is a pair left to revoke sent unasked. */
+  readonly online: () => boolean
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   /** Opens the database of one organisation of an identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
@@ -111,6 +122,13 @@ interface OpenSpace {
 
 type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
+/**
+ * Whether the keys a sign-out forgets still work at the gateway: `live` when it did not revoke
+ * them (the device was offline), which leaves them to revoke later; `dead` when it revoked or
+ * refused them.
+ */
+type KeysLeft = 'live' | 'dead'
+
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
 const closedDuringSignIn = () =>
@@ -125,16 +143,18 @@ const pushRejection = z.object({
 }) satisfies z.ZodType<PushRejection>
 
 /**
- * The signed-in identity and its space. Signing up or in goes through the gateway, keeps the
- * identity and its keys in the browser's storage and opens the identity's space; restoring
- * opens the saved identity's space without the network. Signing out drains and has the
- * gateway sign the device out, then forgets the keys and deletes the identity's databases, its
- * own and every organisation database the device holds for it; with changes that cannot be
- * sent it asks first. Keys the gateway refuses sign the device
- * out without it; the database goes too unless it holds changes not sent yet, which wait for
- * the next sign-in as the identity. The tabs of a browser follow the saved identity: when
- * another tab signs it out, this one closes its space. While a sign-out runs, no tab of the
- * browser takes a write: a write landing after the final drain would go with the database.
+ * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
+ * device (its id and label), keeps the identity and its keys in the browser's storage and
+ * opens the identity's space; restoring opens the saved identity's space without the network.
+ * Signing out drains and has the gateway sign the device out, then forgets the keys and
+ * deletes the identity's databases, its own and every organisation database the device holds
+ * for it; with changes that cannot be sent it asks first. A sign-out the gateway did not
+ * confirm leaves the pair to revoke once online (`PendingRevoke`). Keys the gateway refuses,
+ * or a sign-out from another device, sign the device out without it; the database goes too
+ * unless it holds changes not sent yet, which wait for the next sign-in as the identity. The
+ * tabs of a browser follow the saved identity: when another tab signs it out, this one closes
+ * its space. While a sign-out runs, no tab of the browser takes a write: a write landing after
+ * the final drain would go with the database.
  */
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
@@ -144,6 +164,7 @@ export class SessionService implements SessionPort {
   readonly #rejections = new Set<(rejection: PushRejection) => void>()
   readonly #organisations: SessionOrganisations
   readonly #barrier: WriteBarrier
+  readonly #pendingRevoke: PendingRevoke
   readonly #unlisten: Array<() => void>
   #open: OpenSpace | undefined
   #generation = 0
@@ -161,6 +182,11 @@ export class SessionService implements SessionPort {
     this.#barrier = new WriteBarrier({
       locks: options.locks,
       clock: options.clock,
+      storage: options.storage,
+      onError: options.onError,
+    })
+    this.#pendingRevoke = new PendingRevoke({
+      auth: options.auth,
       storage: options.storage,
       onError: options.onError,
     })
@@ -202,13 +228,17 @@ export class SessionService implements SessionPort {
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
     return this.#serially((generation) =>
-      this.#options.auth.signUp(input).andThen((device) => this.#enter(device, generation)),
+      this.#revokeLeftPair()
+        .andThen(() => this.#options.auth.signUp(input, this.#device()))
+        .andThen((device) => this.#enter(device, generation)),
     )
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
     return this.#serially((generation) =>
-      this.#options.auth.signIn(input).andThen((device) => this.#enter(device, generation)),
+      this.#revokeLeftPair()
+        .andThen(() => this.#options.auth.signIn(input, this.#device()))
+        .andThen((device) => this.#enter(device, generation)),
     )
   }
 
@@ -216,11 +246,18 @@ export class SessionService implements SessionPort {
     return this.#serially(() => this.#signOut(options.forgetUnsent ?? false))
   }
 
-  /** Opens the space of the identity saved by an earlier sign-in; the network is not needed. */
+  /**
+   * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
+   * Online, a pair a sign-out left to revoke is sent meanwhile.
+   */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
     return this.#serially((generation): ResultAsync<AuthUser | undefined, DataError> => {
       const storage = this.#options.storage
       const identity = savedIdentity(storage)
+
+      if (this.#options.online()) {
+        void this.#pendingRevoke.send()
+      }
 
       if (identity) {
         return this.#openSpace(identity, generation)
@@ -311,6 +348,19 @@ export class SessionService implements SessionPort {
 
     this.#leaveAndTell()
     await this.#retiring
+  }
+
+  /** This browser as a sign-up or sign-in names it. */
+  #device(): NamedDevice {
+    return { id: deviceIdFrom(this.#options.storage), label: this.#options.deviceLabel }
+  }
+
+  /**
+   * Has a pair a sign-out left be revoked before a sign-in: the sign-in moves the device's
+   * session at the gateway to a new grant, after which the old pair matches it no more.
+   */
+  #revokeLeftPair(): ResultAsync<void, never> {
+    return ResultAsync.fromSafePromise(this.#pendingRevoke.send())
   }
 
   /** Starts a session transition; a transition that finishes after a later one began is dropped. */
@@ -440,6 +490,7 @@ export class SessionService implements SessionPort {
         ResultAsync.fromSafePromise(space.sync?.signOut() ?? Promise.resolve('offline' as const)),
       )
       // What is unsent is read, and the database deleted, only once no tab writes any more.
+      // Keys the gateway did not revoke are left to revoke, whichever way they are forgotten.
       .andThen((outcome) =>
         this.#exclusively(
           open,
@@ -448,6 +499,7 @@ export class SessionService implements SessionPort {
               ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
               : this.#stillSignedIn(open, forgetUnsent),
           'signed-out',
+          outcome === 'signed-out' ? 'dead' : 'live',
         ),
       )
 
@@ -470,50 +522,53 @@ export class SessionService implements SessionPort {
    */
   #signedOut(open: OpenSpace, forgetUnsent: boolean): ResultAsync<void, DataError> {
     if (forgetUnsent) {
-      return this.#forgetSpace(open)
+      return this.#forgetSpace(open, 'dead')
     }
 
     return this.#unsentOrUnknown(open).andThen((unsent) =>
-      unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+      unsent ? okAsync(this.#keepForNextSignIn(open, 'dead')) : this.#forgetSpace(open, 'dead'),
     )
   }
 
   /**
    * The engine could not have the gateway sign the device out: offline, or with changes it
-   * could not send. With such changes it asks first; without them the device signs out here.
+   * could not send. With such changes it asks first; without them the device signs out here,
+   * leaving its keys to revoke once online.
    */
   #stillSignedIn(open: OpenSpace, forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
     return (forgetUnsent ? okAsync(false) : open.space.unsent()).andThen((asks) =>
       asks
         ? okAsync<SignOutOutcome>('needs-confirmation')
-        : this.#forgetSpace(open).map((): SignOutOutcome => 'signed-out'),
+        : this.#forgetSpace(open, 'live').map((): SignOutOutcome => 'signed-out'),
     )
   }
 
   /**
    * Runs `work` once every write a tab admitted is durable, holding the identity's write lock
    * exclusive (`WriteBarrier.exclusively`). A tab that never lets its write go deletes nothing:
-   * the keys are forgotten and the database is kept for the next sign-in, as when the gateway
-   * refuses the keys; that ends as `kept`.
+   * the keys are forgotten (`keys` says whether they still work) and the database is kept for
+   * the next sign-in, as when the gateway refuses the keys; that ends as `kept`.
    */
   #exclusively<T>(
     open: OpenSpace,
     work: () => ResultAsync<T, DataError>,
     kept: T,
+    keys: KeysLeft,
   ): ResultAsync<T, DataError> {
     return this.#barrier.exclusively(open.space.identity.id, work, () => {
-      this.#keepForNextSignIn(open)
+      this.#keepForNextSignIn(open, keys)
 
       return kept
     })
   }
 
   /**
-   * Forgets the device's identity and keys, then deletes the identity's database. The other
-   * tabs hear the identity go and close their own spaces, which lets the store be deleted.
+   * Forgets the device's identity and keys, leaving live keys to revoke, then deletes the
+   * identity's database. The other tabs hear the identity go and close their own spaces, which
+   * lets the store be deleted.
    */
-  #forgetSpace(open: OpenSpace): ResultAsync<void, DataError> {
-    forgetDevice(this.#options.storage)
+  #forgetSpace(open: OpenSpace, keys: KeysLeft): ResultAsync<void, DataError> {
+    this.#forgetKeys(keys)
 
     if (this.#open === open) {
       this.#open = undefined
@@ -541,6 +596,7 @@ export class SessionService implements SessionPort {
 
     return {
       identity,
+      device: deviceIdFrom(storage),
       // Keys saved for another identity are not this channel's to present.
       credentials: () => (saved() ? savedKeys(storage) : undefined),
       onTokens: (tokens) => {
@@ -556,15 +612,12 @@ export class SessionService implements SessionPort {
       },
       onEnded: (reason) =>
         match(reason)
-          // Keys refused, or revoked from another device: they will not work again.
-          .with(P.union('unauthorized', 'revoked'), () => {
-            if (!this.#closed) {
-              void this.#serially(() => this.#refused(identity)).match(
-                () => undefined,
-                (error) => this.#options.onError(error),
-              )
-            }
-          })
+          // Keys refused: they will not work again.
+          .with('unauthorized', () => this.#forced(() => this.#refused(identity)))
+          // Signed out from another device: as refused keys, and the sign-in page says why.
+          .with('revoked', () =>
+            this.#forced(() => this.#refused(identity, 'signed-out-elsewhere')),
+          )
           // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
           // refused protocol stops the sync engine, which reports it, and changes nothing here.
           .with(P.union('signed-out', 'protocol'), () => {})
@@ -572,14 +625,25 @@ export class SessionService implements SessionPort {
     }
   }
 
+  /** Runs a sign-out the gateway forced on the device, once the transitions before it ended. */
+  #forced(run: () => ResultAsync<void, DataError>): void {
+    if (!this.#closed) {
+      void this.#serially(run).match(
+        () => undefined,
+        (error) => this.#options.onError(error),
+      )
+    }
+  }
+
   /**
-   * The gateway refused the identity's keys, which will not work again: the device signs out
-   * here, without the gateway, behind the same write barrier as a sign-out. Its data for the
-   * identity goes with the keys only when nothing in it waits to be sent; otherwise (or when
-   * that cannot be read) the database stays, and the sign-in page says that signing in again
-   * as the identity sends the changes.
+   * The gateway refused the identity's keys, which will not work again, or signed the device
+   * out from another one: the device signs out here, without the gateway, behind the same write
+   * barrier as a sign-out, and leaves nothing to revoke. Its data for the identity goes with the
+   * keys only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
+   * any; otherwise (or when that cannot be read) the database stays, and the sign-in page says
+   * that signing in again as the identity sends the changes.
    */
-  #refused(identity: IdentityId): ResultAsync<void, DataError> {
+  #refused(identity: IdentityId, notice?: 'signed-out-elsewhere'): ResultAsync<void, DataError> {
     const open = this.#open
     const storage = this.#options.storage
 
@@ -595,8 +659,12 @@ export class SessionService implements SessionPort {
     }
 
     // As in a sign-out, every tab's writes are held back, and what is unsent is read and the
-    // database deleted once no tab writes any more.
+    // database deleted once no tab writes any more. A database kept says so in place of `notice`.
     this.#barrier.hold(open.hints)
+
+    if (notice) {
+      saveNotice(storage, notice)
+    }
 
     const release = () => this.#barrier.release(open.hints)
 
@@ -604,9 +672,10 @@ export class SessionService implements SessionPort {
       open,
       () =>
         this.#unsentOrUnknown(open).andThen((unsent) =>
-          unsent ? okAsync(this.#keepForNextSignIn(open)) : this.#forgetSpace(open),
+          unsent ? okAsync(this.#keepForNextSignIn(open, 'dead')) : this.#forgetSpace(open, 'dead'),
         ),
       undefined,
+      'dead',
     )
       .andTee(release)
       .orTee(release)
@@ -622,15 +691,35 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * Forgets the keys and closes the space, keeping its database with the changes it holds: the
-   * sign-in page says that signing in again as the identity sends them.
+   * Forgets the keys, leaving live ones to revoke, and closes the space, keeping its database
+   * with the changes it holds: the sign-in page says that signing in again as the identity
+   * sends them.
    */
-  #keepForNextSignIn(open: OpenSpace): void {
+  #keepForNextSignIn(open: OpenSpace, keys: KeysLeft): void {
     saveNotice(this.#options.storage, 'resend-after-sign-in')
-    forgetDevice(this.#options.storage)
+    this.#forgetKeys(keys)
 
     if (this.#open === open) {
       this.#leaveAndTell()
+    }
+  }
+
+  /**
+   * Forgets who is signed in and the keys; keys that still work are left to revoke first, and
+   * sent at once while the browser is online.
+   */
+  #forgetKeys(keys: KeysLeft): void {
+    if (keys === 'dead') {
+      forgetDevice(this.#options.storage)
+
+      return
+    }
+
+    this.#pendingRevoke.keep()
+    forgetDevice(this.#options.storage)
+
+    if (this.#options.online()) {
+      void this.#pendingRevoke.send()
     }
   }
 

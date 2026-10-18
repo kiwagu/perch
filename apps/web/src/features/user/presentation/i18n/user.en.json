@@ -8,6 +8,7 @@
   "user.sign-in.name": "Name",
   "user.sign-in.welcome": "Welcome",
   "user.sign-in.notice.resend-after-sign-in": "Some changes made on this device had not reached the server when you were signed out. Sign in again to send them.",
+  "user.sign-in.notice.signed-out-elsewhere": "You were signed out from another device.",
   "user.sign-in.error.invalid-credentials": "Wrong email or password.",
   "user.sign-in.error.sign-up-rejected": "An account cannot be created with this email.",
   "user.sign-in.error.name-required": "Enter your name.",

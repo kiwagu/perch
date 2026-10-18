@@ -63,10 +63,7 @@ const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, r
 const probe: ClientMessage = { type: 'probe', regions: ['identity:idn_a'] }
 
 /** A transport over fake sockets with a manual clock; `events` lists channel changes and endings in order. */
-function harness(
-  credentials: () => DeviceCredentials | undefined = () => keys,
-  { device }: { readonly device?: string } = { device: 'device-1' },
-) {
+function harness(credentials: () => DeviceCredentials | undefined = () => keys) {
   const clock = manualClock()
   const sockets: FakeSocket[] = []
   const events: string[] = []
@@ -80,7 +77,7 @@ function harness(
     onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
-    ...(device === undefined ? {} : { device }),
+    device: 'device-1',
     socket: (url) => {
       const socket = new FakeSocket(url)
 
@@ -145,17 +142,6 @@ describe('WebSocket transport', () => {
 
     expect(socket().sent).toEqual([
       { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', device: 'device-1' },
-    ])
-  })
-
-  it('says hello without a device when it was given none', () => {
-    const { transport, socket } = harness(() => ({ access: 'access-key' }), {})
-
-    transport.start()
-    socket().open()
-
-    expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key' },
     ])
   })
 

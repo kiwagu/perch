@@ -28,7 +28,10 @@ import { fakeGatewayAuth } from './gateway-auth'
 export interface TestWorldOptions {
   /** The browser's storage; tabs of one browser share it. */
   readonly storage?: MemoryStorage
-  /** Whether the device reaches the gateway stub (the default); offline, its channel never comes up. */
+  /**
+   * Whether the device reaches the gateway stub (the default); offline, its channel never comes
+   * up and the browser says it is offline.
+   */
   readonly online?: boolean
   /** Wraps each identity database as it opens, e.g. to hold its queries. */
   readonly wrap?: (local: LocalDb) => LocalDb
@@ -143,6 +146,9 @@ export interface TestWorld {
 
 const silent: CommandLogger = { info: () => {}, warn: () => {} }
 
+/** The label every test session gives its device. */
+export const TEST_DEVICE_LABEL = 'Firefox on Linux'
+
 async function openTestGateway(memberships: readonly Membership[]): Promise<TestGateway> {
   const clock = manualClock()
   const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
@@ -210,8 +216,11 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       return okAsync(undefined)
     },
     schema: replicaSchema,
+    deviceLabel: TEST_DEVICE_LABEL,
+    online: () => options.online !== false,
     transport: (context) => {
-      const transport = stub.transport(context.identity)
+      // The channel names the device its context names, as the browser's hello does.
+      const transport = stub.transport(context.identity, context.device)
 
       contexts.push(context)
       transports.push(transport)
