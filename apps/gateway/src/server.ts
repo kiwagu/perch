@@ -71,7 +71,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   const routes = [
     authRoutes(root.sessions, root.organisations),
-    organisationRoutes(root.sessions, root.organisations, { onFailure }),
+    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, { onFailure }),
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, { onFailure }),
   ]
   const server = Bun.serve<SocketData, never>({

@@ -1,3 +1,4 @@
+import { type DataError, dataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
@@ -15,9 +16,14 @@ export interface MembershipsListener {
   revoke(region: string): Promise<void>
   /**
    * The device was signed out from another device: its socket closes with `code` at once,
-   * whatever it is doing. Resolves once it closed; never rejects.
+   * whatever it is doing. Resolves once it closed.
    */
   end(code: number): Promise<void>
+}
+
+export interface ConnectionRegistryOptions {
+  /** Hears a connection that failed to close; the other connections are closed all the same. */
+  readonly onFailure: (error: DataError) => void
 }
 
 /** A registered connection, with the identity and the device it belongs to. */
@@ -30,13 +36,45 @@ interface Entry {
 /**
  * The open sync connections of each identity and device, so a change of an identity's
  * memberships reaches every device it has connected, and a device signed out from another one
- * is closed wherever it is connected.
+ * is closed wherever it is connected. Each close moves a revocation epoch, of the device or of the
+ * whole identity: a hello reads the epoch once its keys are accepted and registers with it, so a
+ * close that lands while the hello reads the device's row refuses the registration.
  */
 export class ConnectionRegistry {
+  readonly #onFailure: (error: DataError) => void
   readonly #byIdentity = new Map<IdentityId, Set<Entry>>()
+  /** How many times every device of an identity was closed. */
+  readonly #identityEpochs = new Map<IdentityId, number>()
+  /** How many times each device of an identity was closed, by identity and device. */
+  readonly #deviceEpochs = new Map<string, number>()
 
-  /** Registers a connection of `device` of `identity`; the answer removes it again, once. */
-  add(identity: IdentityId, device: string, connection: MembershipsListener): () => void {
+  constructor(options: ConnectionRegistryOptions) {
+    this.#onFailure = options.onFailure
+  }
+
+  /** The revocation epoch of `device` of `identity`: it moves with each close that names it. */
+  epoch(identity: IdentityId, device: string): number {
+    return (
+      (this.#identityEpochs.get(identity) ?? 0) +
+      (this.#deviceEpochs.get(deviceKey(identity, device)) ?? 0)
+    )
+  }
+
+  /**
+   * Registers a connection of `device` of `identity`, whose hello read `epoch`; the answer
+   * removes it again, once. A device closed since that epoch was read is not registered:
+   * `undefined`.
+   */
+  add(
+    identity: IdentityId,
+    device: string,
+    connection: MembershipsListener,
+    epoch: number,
+  ): (() => void) | undefined {
+    if (epoch !== this.epoch(identity, device)) {
+      return undefined
+    }
+
     const entries = this.#byIdentity.get(identity) ?? new Set()
     const entry: Entry = { identity, device, connection }
 
@@ -72,17 +110,42 @@ export class ConnectionRegistry {
 
   /**
    * Closes with `code` every live connection of `device` of `identity`, or of every device of
-   * the identity when `device` is undefined; resolves once each closed.
+   * the identity when `device` is undefined, and moves the epoch of what it names; resolves once
+   * each closed. A connection that fails to close is reported and the others are closed all the
+   * same. Never rejects.
    */
   async close(identity: IdentityId, device: string | undefined, code: number): Promise<void> {
+    if (device === undefined) {
+      this.#identityEpochs.set(identity, (this.#identityEpochs.get(identity) ?? 0) + 1)
+    } else {
+      const key = deviceKey(identity, device)
+
+      this.#deviceEpochs.set(key, (this.#deviceEpochs.get(key) ?? 0) + 1)
+    }
+
     await Promise.all(
       this.#entriesOf(identity)
         .filter((entry) => device === undefined || entry.device === device)
-        .map((entry) => entry.connection.end(code)),
+        .map((entry) => this.#end(entry, code)),
     )
+  }
+
+  async #end(entry: Entry, code: number): Promise<void> {
+    try {
+      await entry.connection.end(code)
+    } catch (cause) {
+      this.#onFailure(
+        dataError('data:WRITE_FAILED', `could not close a connection of ${entry.identity}`, cause),
+      )
+    }
   }
 
   #entriesOf(identity: IdentityId): readonly Entry[] {
     return [...(this.#byIdentity.get(identity) ?? [])]
   }
+}
+
+/** The key of a device of an identity in the map of epochs. */
+function deviceKey(identity: IdentityId, device: string): string {
+  return `${identity}\u0000${device}`
 }

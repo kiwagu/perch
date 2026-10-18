@@ -12,8 +12,10 @@ import { ConnectionRegistry } from '../sync/connections'
 
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
-import { IdentitySessions, type SignedIn } from './identity-sessions'
+import { type DeviceTokens, IdentitySessions } from './identity-sessions'
 import devicesOfStatement from './surql/devices-of.surql'
+import grantRevokeStatement from './surql/grant-revoke.surql'
+import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
 
 const PASSWORD = 'pass-word-1'
 
@@ -48,24 +50,32 @@ afterEach(async () => {
   expect(failures.splice(0)).toEqual([])
 })
 
+/** An identity signed in on a device: its id, its pair and the device. */
+interface Caller {
+  readonly identity: IdentityId
+  readonly tokens: DeviceTokens
+  readonly device: string
+}
+
 interface Ask {
-  /** The identity whose access token goes as `Authorization: Bearer <access>`. */
-  readonly as?: SignedIn
-  /** The device the request comes from, as `X-Perch-Device`. */
-  readonly device?: string
+  /** Sends the caller's access token as `Authorization: Bearer <access>` and its device. */
+  readonly as?: Caller
+  /** The `X-Perch-Device` header instead of the caller's device; `null` leaves it out. */
+  readonly device?: string | null
   /** The JSON body, or a text sent as it is. */
   readonly body?: unknown
 }
 
 function request(method: string, path: string, ask: Ask = {}): Request {
   const headers = new Headers()
+  const device = ask.device === undefined ? ask.as?.device : ask.device
 
   if (ask.as) {
     headers.set('Authorization', `Bearer ${ask.as.tokens.access}`)
   }
 
-  if (ask.device !== undefined) {
-    headers.set('X-Perch-Device', ask.device)
+  if (device !== undefined && device !== null) {
+    headers.set('X-Perch-Device', device)
   }
 
   if (ask.body !== undefined) {
@@ -108,6 +118,12 @@ function listener() {
   }
 }
 
+const unauthorized = { status: 401, body: { code: 'unauthorized' } }
+
+const badRequest = { status: 400, body: { code: 'bad-request' } }
+
+const noContent = { status: 204, body: undefined }
+
 interface HarnessOptions {
   /** Answers the database's RPC `revoke`; it succeeds by default. */
   readonly rpc?: () => Promise<Response>
@@ -145,32 +161,38 @@ async function harness(options: HarnessOptions = {}) {
     fetch: Object.assign(rpc, { preconnect: () => {} }),
     onCloseFailure: (error) => failures.push(error),
     devices,
-    onDeviceFailure: (error) => failures.push(error),
     clock,
   })
-  const connections = new ConnectionRegistry()
+  const connections = new ConnectionRegistry({ onFailure: (error) => failures.push(error) })
   const routes = deviceRoutes(sessions, devices, connections, {
     onFailure: (error) => failures.push(error),
   })
-  const annOnLaptop = (
-    await sessions.signUp({ email: 'ann@example.test', password: PASSWORD }, laptop)
-  )._unsafeUnwrap()
-  const annOnPhone = (
-    await sessions.signIn({ email: 'ann@example.test', password: PASSWORD }, phone)
-  )._unsafeUnwrap()
-  const bob = (
-    await sessions.signUp({ email: 'bob@example.test', password: PASSWORD }, laptop)
-  )._unsafeUnwrap()
+  const signIn = async (
+    action: 'signUp' | 'signIn',
+    email: string,
+    device: typeof laptop,
+  ): Promise<Caller> => {
+    const signed = (await sessions[action]({ email, password: PASSWORD }, device))._unsafeUnwrap()
+
+    return { identity: signed.identity.id, tokens: signed.tokens, device: device.id }
+  }
+  const annOnLaptop = await signIn('signUp', 'ann@example.test', laptop)
+  const annOnPhone = await signIn('signIn', 'ann@example.test', phone)
+  const bob = await signIn('signUp', 'bob@example.test', laptop)
   const sockets = {
     annLaptop: listener(),
     annPhone: listener(),
     bobLaptop: listener(),
   }
-  const ann: IdentityId = annOnLaptop.identity.id
+  const ann = annOnLaptop.identity
 
-  connections.add(ann, laptop.id, sockets.annLaptop)
-  connections.add(ann, phone.id, sockets.annPhone)
-  connections.add(bob.identity.id, laptop.id, sockets.bobLaptop)
+  for (const [identity, device, socket] of [
+    [ann, laptop.id, sockets.annLaptop],
+    [ann, phone.id, sockets.annPhone],
+    [bob.identity, laptop.id, sockets.bobLaptop],
+  ] as const) {
+    connections.add(identity, device, socket, connections.epoch(identity, device))
+  }
 
   /** Sends the request to the routes and reads their answer. */
   const ask = async (method: string, path: string, ask: Ask = {}) =>
@@ -178,12 +200,21 @@ async function harness(options: HarnessOptions = {}) {
 
   /** Ann's devices as her laptop lists them. */
   const annsDevices = async () => {
-    const { status, body } = await ask('GET', '/devices', { as: annOnLaptop, device: laptop.id })
+    const { status, body } = await ask('GET', '/devices', { as: annOnLaptop })
 
     expect(status).toBe(200)
 
     return listed.parse(body).devices
   }
+
+  /** Ann's phone as her laptop lists it. */
+  const annsPhone = async () =>
+    (await annsDevices()).find((device) => device.device === phone.id) ??
+    expect.unreachable('the phone listed')
+
+  /** A sign-out request of a pair: the pair in the body, the device in its header. */
+  const signOut = (pair: DeviceTokens, device: string | null = phone.id) =>
+    ask('POST', '/auth/sign-out', { device, body: { access: pair.access, refresh: pair.refresh } })
 
   return {
     routes,
@@ -192,6 +223,8 @@ async function harness(options: HarnessOptions = {}) {
     rpcCalls,
     ask,
     annsDevices,
+    annsPhone,
+    signOut,
     sockets,
     annOnLaptop,
     annOnPhone,
@@ -203,9 +236,8 @@ describe('deviceRoutes', () => {
   it("lists the caller's devices, the earliest first, with the one it asks from as current", async () => {
     const { ask, annOnLaptop, annOnPhone } = await harness()
 
-    const fromLaptop = await ask('GET', '/devices', { as: annOnLaptop, device: laptop.id })
-    const fromPhone = await ask('GET', '/devices', { as: annOnPhone, device: phone.id })
-    const unnamed = await ask('GET', '/devices', { as: annOnPhone })
+    const fromLaptop = await ask('GET', '/devices', { as: annOnLaptop })
+    const fromPhone = await ask('GET', '/devices', { as: annOnPhone })
 
     expect(fromLaptop.status).toBe(200)
 
@@ -227,57 +259,76 @@ describe('deviceRoutes', () => {
       false,
       true,
     ])
-    expect(listed.parse(unnamed.body).devices.map((device) => device.current)).toEqual([
-      false,
-      false,
-    ])
   })
 
   it('answers 401 to a request without an access token that works', async () => {
-    const { routes } = await harness()
+    const { routes, annOnLaptop } = await harness()
 
     for (const path of ['/devices', '/devices/dvs_x']) {
       const method = path === '/devices' ? 'GET' : 'DELETE'
 
-      expect(await answer(await routes(request(method, path)))).toEqual({
-        status: 401,
-        body: { code: 'unauthorized' },
-      })
+      expect(await answer(await routes(request(method, path, { device: laptop.id })))).toEqual(
+        unauthorized,
+      )
     }
 
-    const forged = new Request('http://gateway.test/devices', {
-      headers: { Authorization: 'Bearer not-a-token' },
-    })
+    const forged = { ...annOnLaptop, tokens: { ...annOnLaptop.tokens, access: 'not-a-token' } }
 
-    expect(await answer(await routes(forged))).toEqual({
-      status: 401,
-      body: { code: 'unauthorized' },
-    })
+    expect(await answer(await routes(request('GET', '/devices', { as: forged })))).toEqual(
+      unauthorized,
+    )
   })
 
-  it('signs one device out: its row revoked, its grant revoked and its sockets closed with 4001', async () => {
-    const { ask, annsDevices, sessions, sockets, annOnLaptop, annOnPhone } = await harness()
-    const phoneRow = (await annsDevices()).find((device) => device.device === phone.id)
+  it('answers 400 to a Bearer call that names no device or a device of another form', async () => {
+    const { ask, annOnLaptop } = await harness()
+
+    for (const device of [null, '', 'd'.repeat(65)]) {
+      expect(await ask('GET', '/devices', { as: annOnLaptop, device })).toEqual(badRequest)
+      expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop, device })).toEqual(
+        badRequest,
+      )
+    }
+  })
+
+  it('answers 401 to a Bearer call of a device with no session row', async () => {
+    const { ask, annOnLaptop, sockets } = await harness()
+
+    expect(await ask('GET', '/devices', { as: annOnLaptop, device: 'device-unlisted' })).toEqual(
+      unauthorized,
+    )
+    expect(
+      await ask('POST', '/auth/sign-out-everywhere', {
+        as: annOnLaptop,
+        device: 'device-unlisted',
+      }),
+    ).toEqual(unauthorized)
+    expect(sockets.annLaptop.ended).toEqual([])
+  })
+
+  it('signs one device out: its row revoked, its grant revoked and its sockets closed with 4001; its Bearer calls refused at once', async () => {
+    const { ask, annsDevices, annsPhone, sessions, sockets, annOnLaptop, annOnPhone } =
+      await harness()
+    const phoneRow = await annsPhone()
     const stale = { access: 'stale', refresh: annOnPhone.tokens.refresh }
 
     sessions.park({
+      identity: annOnPhone.identity,
       device: phone.id,
       spentRefresh: 'surreal-refresh-spent-key',
       tokens: annOnPhone.tokens,
     })
 
-    expect(await ask('DELETE', `/devices/${phoneRow?.id ?? 'none'}`, { as: annOnLaptop })).toEqual({
-      status: 204,
-      body: undefined,
-    })
+    expect(await ask('DELETE', `/devices/${phoneRow.id}`, { as: annOnLaptop })).toEqual(noContent)
     expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
     expect(sockets.annLaptop.ended).toEqual([])
     expect(sockets.bobLaptop.ended).toEqual([])
-    expect((await sessions.authenticate(stale, phone.id)).isErr()).toBe(true)
+    expect((await sessions.authenticate(stale)).isErr()).toBe(true)
     // A pair parked for the device is gone with it.
     expect(
       sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
     ).toBeUndefined()
+    // Its access token still signs Ann in, but not on this device any more.
+    expect(await ask('GET', '/devices', { as: annOnPhone })).toEqual(unauthorized)
 
     const after = await annsDevices()
 
@@ -286,45 +337,70 @@ describe('deviceRoutes', () => {
     expect(after[0]?.revokedAt).toBeNull()
   })
 
-  it("answers 404 for a device that is not the caller's or does not exist", async () => {
-    const { ask, annOnLaptop, bob, sockets } = await harness()
-    const bobs = await ask('GET', '/devices', { as: bob })
-    const bobsLaptop = listed.parse(bobs.body).devices[0]?.id ?? 'none'
+  it("answers 404 for a device that is not the caller's or does not exist, and leaves it alone", async () => {
+    const { ask, devices, annOnLaptop, bob, sockets } = await harness()
+    const [bobsLaptop] = (await devices.list(bob.identity))._unsafeUnwrap()
+    const id = bobsLaptop?.id ?? expect.unreachable("Bob's laptop listed")
 
-    for (const id of [bobsLaptop, device_sessionIdFactory.create(), 'not-an-id']) {
-      expect(await ask('DELETE', `/devices/${id}`, { as: annOnLaptop })).toEqual({
+    for (const each of [id, device_sessionIdFactory.create(), 'not-an-id']) {
+      expect(await ask('DELETE', `/devices/${each}`, { as: annOnLaptop })).toEqual({
         status: 404,
         body: { code: 'no-such-device' },
       })
     }
 
+    const [after] = (await devices.list(bob.identity))._unsafeUnwrap()
+
+    expect(after?.revokedAt).toBeUndefined()
+    expect(after?.grant).toBe(bobsLaptop?.grant)
     expect(sockets.bobLaptop.ended).toEqual([])
+  })
+
+  it("closes the device's sockets and forgets its parked pair when its grant fails to be revoked, then answers 500", async () => {
+    let failing = false
+    const { ask, annsPhone, sessions, sockets, annOnLaptop, annOnPhone } = await harness({
+      directoryQueries: (text) => {
+        if (failing && text === grantRevokeStatement) {
+          throw new Error('the directory went away')
+        }
+      },
+    })
+    const phoneRow = await annsPhone()
+
+    sessions.park({
+      identity: annOnPhone.identity,
+      device: phone.id,
+      spentRefresh: 'surreal-refresh-spent-key',
+      tokens: annOnPhone.tokens,
+    })
+    failing = true
+
+    expect(await ask('DELETE', `/devices/${phoneRow.id}`, { as: annOnLaptop })).toEqual({
+      status: 500,
+      body: { code: 'internal' },
+    })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
+    expect(
+      sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
+    ).toBeUndefined()
   })
 
   it('signs every device of the caller out, its own included', async () => {
     const { ask, sessions, sockets, annOnLaptop, annOnPhone, bob } = await harness()
 
-    expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual({
-      status: 204,
-      body: undefined,
-    })
+    expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual(noContent)
     expect(sockets.annLaptop.ended).toEqual([CLOSE.revoked])
     expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
     expect(sockets.bobLaptop.ended).toEqual([])
 
     // The tokens issued before are refused, and the refresh keys renew nothing.
-    expect(await ask('GET', '/devices', { as: annOnPhone })).toEqual({
-      status: 401,
-      body: { code: 'unauthorized' },
-    })
+    expect(await ask('GET', '/devices', { as: annOnPhone })).toEqual(unauthorized)
 
-    for (const [signedIn, device] of [
-      [annOnLaptop, laptop.id],
-      [annOnPhone, phone.id],
-    ] as const) {
-      const stale = { access: 'stale', refresh: signedIn.tokens.refresh }
+    for (const caller of [annOnLaptop, annOnPhone]) {
+      const stale = { access: 'stale', refresh: caller.tokens.refresh }
 
-      expect((await sessions.authenticate(stale, device)).isErr()).toBe(true)
+      expect((await sessions.authenticate(stale)).isErr()).toBe(true)
     }
 
     const bobs = await ask('GET', '/devices', { as: bob })
@@ -332,15 +408,39 @@ describe('deviceRoutes', () => {
     expect(listed.parse(bobs.body).devices.map((device) => device.revokedAt)).toEqual([null])
   })
 
-  it("signs a device's pair out through the database's RPC revoke", async () => {
-    const { ask, rpcCalls, annOnPhone } = await harness()
+  it('closes every socket of the caller when signing out everywhere fails after its first write, then answers 500', async () => {
+    let failing = false
+    const { ask, sockets, annOnLaptop } = await harness({
+      directoryQueries: (text) => {
+        if (failing && text === grantsRevokeAllStatement) {
+          throw new Error('the directory went away')
+        }
+      },
+    })
 
-    expect(
-      await ask('POST', '/auth/sign-out', {
-        as: annOnPhone,
-        body: { refresh: annOnPhone.tokens.refresh },
-      }),
-    ).toEqual({ status: 204, body: undefined })
+    failing = true
+
+    expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual({
+      status: 500,
+      body: { code: 'internal' },
+    })
+    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    expect(sockets.annLaptop.ended).toEqual([CLOSE.revoked])
+    expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
+    expect(sockets.bobLaptop.ended).toEqual([])
+  })
+
+  it("signs a device's pair out: its row marked, the pair revoked through the database's RPC", async () => {
+    const { signOut, annsPhone, rpcCalls, sessions, annOnPhone } = await harness()
+
+    sessions.park({
+      identity: annOnPhone.identity,
+      device: phone.id,
+      spentRefresh: 'surreal-refresh-spent-key',
+      tokens: annOnPhone.tokens,
+    })
+
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
     expect(rpcCalls).toEqual([
       {
         id: 1,
@@ -348,68 +448,77 @@ describe('deviceRoutes', () => {
         params: [{ access: annOnPhone.tokens.access, refresh: annOnPhone.tokens.refresh }],
       },
     ])
+    expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
+    expect(
+      sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
+    ).toBeUndefined()
   })
 
-  it('takes a sign-out with an access token that no longer works: the database judges the pair', async () => {
-    const { routes, rpcCalls, annOnPhone } = await harness()
-    const expired = new Request('http://gateway.test/auth/sign-out', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer expired-access', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh: annOnPhone.tokens.refresh }),
-    })
+  it('takes a sign-out whose access token no longer works: the pair is renewed, and the renewed pair is revoked', async () => {
+    const { signOut, annsPhone, rpcCalls, annOnPhone } = await harness()
 
-    expect(await answer(await routes(expired))).toEqual({ status: 204, body: undefined })
+    expect(await signOut({ access: 'expired-access', refresh: annOnPhone.tokens.refresh })).toEqual(
+      noContent,
+    )
     expect(rpcCalls).toHaveLength(1)
+
+    const [call] = z
+      .array(z.object({ params: z.tuple([z.object({ access: z.string(), refresh: z.string() })]) }))
+      .parse(rpcCalls)
+
+    expect(call?.params[0].refresh).not.toBe(annOnPhone.tokens.refresh)
+    expect((await annsPhone()).revokedAt).toMatch(/^\d{4}-/)
   })
 
-  it('answers 401 to a sign-out whose pair the database refuses', async () => {
-    const { ask, annOnPhone } = await harness({
+  it("answers 401 to a sign-out whose pair is not one of the identity's device pairs, without asking the database to revoke it", async () => {
+    const { signOut, rpcCalls, annOnPhone, bob } = await harness()
+
+    expect(
+      await signOut({ access: annOnPhone.tokens.access, refresh: bob.tokens.refresh }),
+    ).toEqual(unauthorized)
+    expect(rpcCalls).toEqual([])
+  })
+
+  it('answers 401 to a sign-out of a dead pair, without asking the database to revoke it', async () => {
+    const { signOut, ask, rpcCalls, annOnLaptop, annOnPhone } = await harness()
+
+    expect(await ask('POST', '/auth/sign-out-everywhere', { as: annOnLaptop })).toEqual(noContent)
+    expect(await signOut(annOnPhone.tokens)).toEqual(unauthorized)
+    expect(rpcCalls).toEqual([])
+  })
+
+  it('answers 401 to a sign-out whose pair the database refuses to revoke', async () => {
+    const { signOut, annOnPhone } = await harness({
       rpc: () =>
         Promise.resolve(
           Response.json({ id: 1, error: { code: -32002, message: 'There was a problem' } }),
         ),
     })
 
-    expect(
-      await ask('POST', '/auth/sign-out', {
-        as: annOnPhone,
-        body: { refresh: annOnPhone.tokens.refresh },
-      }),
-    ).toEqual({ status: 401, body: { code: 'unauthorized' } })
+    expect(await signOut(annOnPhone.tokens)).toEqual(unauthorized)
   })
 
   it('answers 500 to a sign-out the database could not judge: the pair may be revoked later', async () => {
-    const { ask, annOnPhone } = await harness({
+    const { signOut, annOnPhone } = await harness({
       rpc: () => Promise.reject(new TypeError('the database is unreachable')),
     })
 
-    expect(
-      await ask('POST', '/auth/sign-out', {
-        as: annOnPhone,
-        body: { refresh: annOnPhone.tokens.refresh },
-      }),
-    ).toEqual({ status: 500, body: { code: 'internal' } })
+    expect(await signOut(annOnPhone.tokens)).toEqual({ status: 500, body: { code: 'internal' } })
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
   })
 
-  it('answers a sign-out without an access token 401, and one without a refresh key 400', async () => {
-    const { ask, routes, rpcCalls, annOnPhone } = await harness()
-    const anonymous = new Request('http://gateway.test/auth/sign-out', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh: annOnPhone.tokens.refresh }),
-    })
+  it('answers 400 to a sign-out without its device or without its pair', async () => {
+    const { ask, signOut, rpcCalls, annOnPhone } = await harness()
 
-    expect(await answer(await routes(anonymous))).toEqual({
-      status: 401,
-      body: { code: 'unauthorized' },
-    })
+    expect(await signOut(annOnPhone.tokens, null)).toEqual(badRequest)
 
-    for (const body of [{}, { refresh: '' }, '{"refresh":']) {
-      expect(await ask('POST', '/auth/sign-out', { as: annOnPhone, body })).toEqual({
-        status: 400,
-        body: { code: 'bad-request' },
-      })
+    for (const body of [
+      {},
+      { refresh: annOnPhone.tokens.refresh },
+      { access: annOnPhone.tokens.access, refresh: '' },
+      '{"refresh":',
+    ]) {
+      expect(await ask('POST', '/auth/sign-out', { device: phone.id, body })).toEqual(badRequest)
     }
 
     expect(rpcCalls).toEqual([])

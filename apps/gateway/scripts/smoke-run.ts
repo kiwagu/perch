@@ -6,9 +6,6 @@
  * the sweep of `@example.test` accounts.
  */
 
-import type { Result } from 'neverthrow'
-
-import type { DataError } from '@workspace/data'
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { RegionDoc, systemClock } from '@workspace/replica'
@@ -19,20 +16,20 @@ import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
 import { gatewayConfig, httpRpcUrl } from '../src/config'
-import { type RunningServer, startServer } from '../src/server'
+import { startServer } from '../src/server'
 import { noteCreate, noteDelete, noteUpdate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
 import { SmokeDevice } from './smoke-device'
-import { call, postCredentials, type SignedIn } from './smoke-http'
+import { deviceSessionSteps } from './smoke-devices'
+import { callAs, postCredentials, type SignedIn } from './smoke-http'
+import { check, hello, type Opened, refusal, step, unwrap } from './smoke-steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
   username: 'gateway',
   password: 'gateway-stand-password',
 } as const
-
-const STEP_TIMEOUT_MS = 5_000
 
 const smokeConfig = gatewayConfig.pick({
   SURREAL_URL: true,
@@ -41,69 +38,6 @@ const smokeConfig = gatewayConfig.pick({
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
-
-/** What the run opened, to close at its end whatever happened. */
-interface Opened {
-  root?: GatewayRoot
-  server?: RunningServer
-  readonly devices: SmokeDevice[]
-}
-
-function check(condition: boolean, failure: string): void {
-  if (!condition) {
-    throw new Error(failure)
-  }
-}
-
-function unwrap<T>(result: Result<T, DataError>): T {
-  return result.match(
-    (value) => value,
-    (error) => {
-      throw new Error(`${error.code} ${error.message}`)
-    },
-  )
-}
-
-function within<T>(work: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const late = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`no answer within ${STEP_TIMEOUT_MS / 1000} s`)),
-      STEP_TIMEOUT_MS,
-    )
-  })
-
-  return Promise.race([work, late]).finally(() => clearTimeout(timer))
-}
-
-/** Runs one step within the step time and prints whether it passed; a failure ends the run. */
-async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
-  try {
-    const value = await within(run())
-
-    console.log(`smoke: ok   ${name}`)
-
-    return value
-  } catch (cause) {
-    console.log(`smoke: FAIL ${name}: ${cause instanceof Error ? cause.message : String(cause)}`)
-
-    throw cause
-  }
-}
-
-/** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
-async function hello(base: string, opened: Opened, { identity, tokens, device: id }: SignedIn) {
-  const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
-
-  opened.devices.push(device)
-  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens, device: id })
-
-  const welcome = await device.next('welcome')
-
-  check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
-
-  return { device, welcome }
-}
 
 async function welcomed(
   base: string,
@@ -139,9 +73,6 @@ const listedMembers = z.object({
   members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
 })
 
-/** The body of a route's refusal: the code that says why. */
-const refusal = z.object({ code: z.string() })
-
 /** Whether a welcome's regions name `region`. */
 function hasRegion(regions: readonly { readonly region: string }[], region: string): boolean {
   return regions.some((entry) => entry.region === region)
@@ -160,10 +91,9 @@ function keysOf(memberships: readonly Membership[]): string[] {
 async function organisationSteps(base: string, opened: Opened, owner: SignedIn): Promise<void> {
   const key = `smoke_${Date.now().toString(36)}`
   const region = `tenant:${key}`
-  const token = owner.tokens.access
 
   await step(`organisation ${key} created: 201 with the owner as admin`, async () => {
-    const answer = await call(base, 'POST', '/organisations', token, { key, name: 'Smoke' })
+    const answer = await callAs(base, 'POST', '/organisations', owner, { key, name: 'Smoke' })
 
     check(answer.status === 201, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
 
@@ -185,7 +115,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('the second identity invited: 200', async () => {
-    const answer = await call(base, 'POST', `/organisations/${key}/members`, token, {
+    const answer = await callAs(base, 'POST', `/organisations/${key}/members`, owner, {
       email: guest.identity.email,
     })
 
@@ -318,7 +248,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('invited device asked for the members: 403 not-admin', async () => {
-    const answer = await call(base, 'GET', `/organisations/${key}/members`, guest.tokens.access)
+    const answer = await callAs(base, 'GET', `/organisations/${key}/members`, guest)
 
     check(
       answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
@@ -345,11 +275,11 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('the second identity removed: 204', async () => {
-    const answer = await call(
+    const answer = await callAs(
       base,
       'DELETE',
       `/organisations/${key}/members/${guest.identity.id}`,
-      token,
+      owner,
     )
 
     check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
@@ -376,7 +306,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   )
 
   await step('the members of the organisation no longer list the second identity', async () => {
-    const answer = await call(base, 'GET', `/organisations/${key}/members`, token)
+    const answer = await callAs(base, 'GET', `/organisations/${key}/members`, owner)
 
     check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
 
@@ -437,7 +367,7 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
   })
 
   const renewed = await step('a refresh is not blocked by the clause', async () => {
-    const answer = unwrap(await root.sessions.authenticate({ access, refresh }, signedUp.device))
+    const answer = unwrap(await root.sessions.authenticate({ access, refresh }))
 
     if (!answer.renewed) {
       throw new Error('the pair was not renewed')
@@ -451,158 +381,11 @@ async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<vo
     async () => {
       await root.local.db.query(revokeGrantsStatement, { identity })
 
-      const refused = await root.sessions.authenticate(renewed, signedUp.device)
+      const refused = await root.sessions.authenticate(renewed)
 
       check(refused.isErr(), 'the refresh was accepted')
     },
   )
-}
-
-/** A device as `GET /devices` lists it, as far as the smoke reads it. */
-const listedDevices = z.object({
-  devices: z.array(
-    z.object({
-      id: z.string(),
-      device: z.string(),
-      revokedAt: z.string().nullable(),
-      current: z.boolean(),
-    }),
-  ),
-})
-
-/** The caller's devices as `GET /devices` lists them to `signedIn`, from its own device. */
-async function devicesOf(base: string, signedIn: SignedIn) {
-  const answer = await call(
-    base,
-    'GET',
-    '/devices',
-    signedIn.tokens.access,
-    undefined,
-    signedIn.device,
-  )
-
-  check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
-
-  return listedDevices.parse(answer.body).devices
-}
-
-/**
- * Device sessions, on a fresh identity with a laptop and a phone: both listed, the laptop as the
- * current one; the phone signed out from the laptop (its socket closed with 4001, its row
- * revoked); then a tablet signed in and every device signed out from the laptop (the laptop's
- * and the tablet's sockets closed with 4001), after which the laptop's old pair is refused at
- * hello and by the sign-out route.
- */
-async function deviceSessionSteps(base: string, opened: Opened): Promise<void> {
-  const credentials = {
-    email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
-  }
-  const { laptop, phone } = await step(
-    'devices: signed up on a laptop, signed in on a phone',
-    async () => ({
-      laptop: await postCredentials(base, '/auth/sign-up', {
-        ...credentials,
-        device: { id: 'smoke-laptop', label: 'Smoke laptop' },
-      }),
-      phone: await postCredentials(base, '/auth/sign-in', {
-        ...credentials,
-        device: { id: 'smoke-phone', label: 'Smoke phone' },
-      }),
-    }),
-  )
-  const sockets = await step('devices: laptop and phone welcomed', async () => ({
-    laptop: (await hello(base, opened, laptop)).device,
-    phone: (await hello(base, opened, phone)).device,
-  }))
-
-  const phoneRow = await step('GET /devices lists both, the laptop as current', async () => {
-    const devices = await devicesOf(base, laptop)
-
-    check(
-      devices.map((device) => device.device).join() === 'smoke-laptop,smoke-phone',
-      `listed ${JSON.stringify(devices)}`,
-    )
-    check(
-      devices.map((device) => device.current).join() === 'true,false',
-      `current ${JSON.stringify(devices)}`,
-    )
-
-    const [, listedPhone] = devices
-
-    if (!listedPhone) {
-      throw new Error('the phone is not listed')
-    }
-
-    return listedPhone
-  })
-
-  await step(
-    `phone signed out by DELETE /devices/<phone>: 204, closed with ${CLOSE.revoked}`,
-    async () => {
-      const answer = await call(base, 'DELETE', `/devices/${phoneRow.id}`, laptop.tokens.access)
-
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
-
-      const { code } = await sockets.phone.closed
-      const [, revoked] = await devicesOf(base, laptop)
-
-      check(code === CLOSE.revoked, `closed with ${code}`)
-      check(revoked?.revokedAt !== null, 'the phone is not marked revoked')
-    },
-  )
-
-  const tablet = await step('devices: signed in on a tablet, welcomed', async () => {
-    const signedIn = await postCredentials(base, '/auth/sign-in', {
-      ...credentials,
-      device: { id: 'smoke-tablet', label: 'Smoke tablet' },
-    })
-
-    return (await hello(base, opened, signedIn)).device
-  })
-
-  await step(
-    `POST /auth/sign-out-everywhere: 204, laptop and tablet closed with ${CLOSE.revoked}`,
-    async () => {
-      const answer = await call(base, 'POST', '/auth/sign-out-everywhere', laptop.tokens.access)
-
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
-
-      const codes = [(await sockets.laptop.closed).code, (await tablet.closed).code]
-
-      check(
-        codes.every((code) => code === CLOSE.revoked),
-        `closed with ${codes.join()}`,
-      )
-    },
-  )
-
-  await step(`hello with the laptop's old pair: closed with ${CLOSE.unauthorized}`, async () => {
-    const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
-
-    opened.devices.push(device)
-    device.send({
-      type: 'hello',
-      protocol: PROTOCOL_VERSION,
-      ...laptop.tokens,
-      device: laptop.device,
-    })
-
-    const { code } = await device.closed
-
-    check(code === CLOSE.unauthorized, `closed with ${code}`)
-  })
-
-  await step('POST /auth/sign-out with the dead pair: 401', async () => {
-    const answer = await call(base, 'POST', '/auth/sign-out', laptop.tokens.access, {
-      refresh: laptop.tokens.refresh,
-    })
-
-    check(
-      answer.status === 401 && refusal.safeParse(answer.body).data?.code === 'unauthorized',
-      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
-    )
-  })
 }
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {

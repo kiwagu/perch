@@ -55,9 +55,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   only until every client sends it); the `welcome` carries the regions the device may name with
   their heads and the identity's memberships, and a `memberships` message tells each later
   change of them. `CLOSE` names the gateway's close codes: `protocol` 4400, `unauthorized`
-  4401, `forbidden` 4403, `timeout` 4408, `signedOut` 4000 (the device's own sign-out) and
-  `revoked` 4001 (the device was signed out from another device, alone or with every device of
-  its identity). And the
+  4401 (keys refused, or a device without a session: no session row for the device it names,
+  or a row that holds another grant), `forbidden` 4403, `timeout` 4408, `signedOut` 4000 (the
+  device's own sign-out) and `revoked` 4001 (the device's session was signed out, from another
+  device, alone or with every device of its identity: also at a hello whose keys still work).
+  And the
   membership contract the gateway and devices share: `membership` (an organisation's `id`,
   `key` and `name` with the identity's role there) and `tenantRole` (`member` or `admin`), with
   their types `Membership` and `TenantRole`.

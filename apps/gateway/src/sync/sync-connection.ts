@@ -1,4 +1,4 @@
-import { err, ok, type Result } from 'neverthrow'
+import type { Result } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type AuthTokens, type AuthUser, type DataError, dataError } from '@workspace/data'
@@ -25,10 +25,11 @@ import {
 import type { Actor, RegionHub, Subscriber } from '@workspace/replica/server'
 
 import type { DeviceSessions } from '../auth/device-sessions'
-import type { DeviceTokens, IdentitySessions } from '../auth/identity-sessions'
+import { type DeviceTokens, grantIdOf, type IdentitySessions } from '../auth/identity-sessions'
 import type { Organisations } from '../tenants/organisations'
 
 import type { ConnectionRegistry } from './connections'
+import { acceptKeys, bindDevice } from './hello-keys'
 
 /** The end of a device's WebSocket the connection writes to. */
 export interface SocketLike {
@@ -38,8 +39,12 @@ export interface SocketLike {
 
 export interface SyncConnectionDeps {
   readonly sessions: Pick<IdentitySessions, 'authenticate' | 'revoke' | 'park' | 'parked'>
-  /** Where the device is marked seen: at its hello, then at most every five minutes. */
-  readonly devices: Pick<DeviceSessions, 'seen'>
+  /**
+   * The devices' rows: a hello is bound to its device's row (moved to the new grant when the
+   * hello renews the pair), the device is marked seen at its hello and then at most every five
+   * minutes, and a sign-out marks the row.
+   */
+  readonly devices: Pick<DeviceSessions, 'seen' | 'bind' | 'rotate' | 'revokeGrant' | 'signedOut'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
   /** Where the connection registers once the keys are accepted, to hear its memberships change. */
@@ -92,17 +97,6 @@ const SEEN_EVERY_MS = 5 * 60_000
 /** The hello of a device. */
 type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
 
-/**
- * Keys a device's hello was accepted with: the identity, the pair the device holds once the
- * hello is through, and whether that pair is one the device does not hold yet (renewed, or
- * parked for it), which it must be sent.
- */
-interface Accepted {
-  readonly identity: AuthUser
-  readonly tokens: AuthTokens
-  readonly deliver: DeviceTokens | undefined
-}
-
 /** Close reasons are fixed texts: a reason never repeats what the device sent. */
 const REASON = {
   malformed: 'the message does not follow the protocol',
@@ -111,6 +105,7 @@ const REASON = {
   noDevice: 'the hello must name its device',
   silent: 'no hello in time',
   refused: 'the keys were not accepted',
+  noSession: 'no session for this device',
   forbidden: 'the region is not open to this device',
   signedOut: 'signed out',
   revoked: 'signed out from another device',
@@ -171,9 +166,12 @@ function regionsOf(message: ClientMessage): readonly string[] {
  * sign-out, which also revokes the device's refresh grant: the sign-out close (4000) means the
  * grant is revoked, and a grant that cannot be revoked closes the socket as a failed server
  * (1011) instead. A device signed out from another one is closed at once with 4001, whatever it
- * is doing. A pair renewed at a hello whose socket closed before it could take it is parked for
- * the device's next hello with the spent refresh key, which is sent it before its welcome. The
- * device is marked seen at its hello and then at most every five minutes it talks.
+ * is doing. A hello is bound to its device's row: a device without one is closed with 4401, a
+ * device signed out with 4001, and a pair renewed for either is revoked at once; a renewal moves
+ * the row to the new grant. A pair renewed at a hello whose socket closed before it could take
+ * it is parked for the device's next hello with the spent refresh key, which is sent it before
+ * its welcome. The device is marked seen at its hello and then at most every five minutes it
+ * talks; its sign-out marks its row.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
@@ -371,25 +369,7 @@ export class SyncConnection {
       return
     }
 
-    const accepted = await this.#accept(deviceId, access, refresh)
-
-    if (this.#isClosed()) {
-      // The device's refresh key is spent and the pair that replaces it cannot reach it now: it
-      // waits for the device's next hello with that key. Counted here, without the keys.
-      if (accepted.isOk() && accepted.value.deliver && refresh !== undefined) {
-        this.#sessions.park({
-          device: deviceId,
-          spentRefresh: refresh,
-          tokens: accepted.value.deliver,
-        })
-        this.#log.warn(
-          { identity: accepted.value.identity.id },
-          'renewed pair not delivered: parked for the next hello of the device',
-        )
-      }
-
-      return
-    }
+    const accepted = await acceptKeys(this.#sessions, { device: deviceId, access, refresh })
 
     if (accepted.isErr()) {
       this.#close(CLOSE.unauthorized, REASON.refused)
@@ -397,7 +377,61 @@ export class SyncConnection {
       return
     }
 
-    const { identity, tokens, deliver } = accepted.value
+    const { identity, deliver, spent } = accepted.value
+    // Read once the keys are accepted and before the row is: a sign-out of the device from now
+    // on refuses the registration, one before is seen by the read.
+    const epoch = this.#connections.epoch(identity.id, deviceId)
+
+    if (this.#isClosed() && spent === undefined) {
+      // A parked pair the socket closed before it could take waits again for the next hello.
+      if (deliver && refresh !== undefined) {
+        this.#park(identity.id, deviceId, refresh, deliver)
+      }
+
+      return
+    }
+
+    const binding = await bindDevice(this.#devices, {
+      identity: identity.id,
+      device: deviceId,
+      accepted: accepted.value,
+    })
+    const bound = binding.isOk() && binding.value.kind === 'bound'
+
+    // A pair renewed for a device that has no session must not live: nobody may take it.
+    if (spent !== undefined && deliver && !bound) {
+      await this.#revokeGrant(identity.id, deliver)
+    }
+
+    if (this.#isClosed()) {
+      // The device's refresh key is spent and the pair that replaces it cannot reach it now: it
+      // waits for the device's next hello with that key.
+      if (bound && deliver && refresh !== undefined) {
+        this.#park(identity.id, deviceId, refresh, deliver)
+      }
+
+      return
+    }
+
+    if (binding.isErr()) {
+      this.#fail(binding.error)
+
+      return
+    }
+
+    const kind = binding.value.kind
+
+    if (kind === 'revoked') {
+      this.#close(CLOSE.revoked, REASON.revoked)
+
+      return
+    }
+
+    if (kind !== 'bound') {
+      this.#close(CLOSE.unauthorized, REASON.noSession)
+
+      return
+    }
 
     // The new pair goes out first, before anything else is awaited: the key the device holds
     // is spent already.
@@ -406,9 +440,24 @@ export class SyncConnection {
     }
 
     // Registered before the memberships are read: a change from then on reaches the device
-    // after its welcome, in turn with its messages.
-    this.#unregister = this.#connections.add(identity.id, deviceId, this)
-    this.#markSeen(identity.id, deviceId)
+    // after its welcome, in turn with its messages. A sign-out of the device since the epoch was
+    // read refuses it.
+    const unregister = this.#connections.add(identity.id, deviceId, this, epoch)
+
+    if (!unregister) {
+      this.#close(CLOSE.revoked, REASON.revoked)
+
+      return
+    }
+
+    this.#unregister = unregister
+
+    // A renewal marked the device seen as it moved the row to the new grant.
+    if (spent === undefined) {
+      this.#markSeen(identity.id, deviceId)
+    } else {
+      this.#seenAt = this.#clock.now()
+    }
 
     const memberships = await this.#organisations.membershipsOf(identity.id)
 
@@ -425,7 +474,7 @@ export class SyncConnection {
     const device: Device = {
       id: deviceId,
       identity,
-      tokens,
+      tokens: accepted.value.tokens,
       regions: regionsFor(identity.id, memberships.value, this.#schema),
     }
     const heads = await this.#hub.heads([...device.regions.keys()])
@@ -457,46 +506,26 @@ export class SyncConnection {
     this.#settleHello()
   }
 
-  /**
-   * The keys of the hello, accepted: as they came, renewed with the refresh key, or, when the
-   * refresh key was spent by a renewal the device never saw, the pair parked for the device and
-   * that key. A pair the device does not hold yet is to be delivered.
-   */
-  async #accept(
-    device: string,
-    access: string,
-    refresh: string | undefined,
-  ): Promise<Result<Accepted, DataError>> {
-    const authenticated = await this.#sessions.authenticate(
-      refresh === undefined ? { access } : { access, refresh },
-      device,
-    )
+  /** Revokes the grant of a renewed pair at once; a failure is logged with the code only. */
+  async #revokeGrant(identity: IdentityId, pair: DeviceTokens): Promise<void> {
+    const grant = grantIdOf(pair.refresh)
+    const revoked =
+      grant === undefined ? undefined : await this.#devices.revokeGrant({ identity, grant })
 
-    if (authenticated.isOk()) {
-      const value = authenticated.value
-
-      return ok({
-        identity: value.identity,
-        tokens: value.tokens,
-        deliver: value.renewed ? value.tokens : undefined,
-      })
+    if (revoked?.isErr()) {
+      this.#log.warn(
+        { identity, code: revoked.error.code },
+        'the grant of a pair renewed for a device without a session could not be revoked',
+      )
     }
+  }
 
-    const parked = refresh === undefined ? undefined : this.#sessions.parked({ device, refresh })
-
-    if (!parked) {
-      return err(authenticated.error)
-    }
-
-    const resumed = await this.#sessions.authenticate(parked, device)
-
-    // The parked pair is new to the device, and so is a pair its access token had to be renewed to.
-    return resumed.map(
-      (value): Accepted => ({
-        identity: value.identity,
-        tokens: value.tokens,
-        deliver: value.renewed ? value.tokens : parked,
-      }),
+  /** Parks a pair the device could not take, for its next hello with the spent refresh key. */
+  #park(identity: IdentityId, device: string, spentRefresh: string, tokens: DeviceTokens): void {
+    this.#sessions.park({ identity, device, spentRefresh, tokens })
+    this.#log.warn(
+      { identity },
+      'renewed pair not delivered: parked for the next hello of the device',
     )
   }
 
@@ -627,9 +656,28 @@ export class SyncConnection {
 
         return
       }
+
+      await this.#markSignedOut(device.identity.id, refresh)
     }
 
     this.#close(CLOSE.signedOut, REASON.signedOut)
+  }
+
+  /**
+   * Marks the row of the device that holds the grant of `refresh` signed out; the grant is
+   * revoked already, so a failure is logged with the code only and the sign-out stands.
+   */
+  async #markSignedOut(identity: IdentityId, refresh: string): Promise<void> {
+    const grant = grantIdOf(refresh)
+    const marked =
+      grant === undefined ? undefined : await this.#devices.signedOut({ identity, grant })
+
+    if (marked?.isErr()) {
+      this.#log.warn(
+        { identity, code: marked.error.code },
+        'the row of a device that signed out could not be marked',
+      )
+    }
   }
 
   /** Marks the device seen when it was not for five minutes. */

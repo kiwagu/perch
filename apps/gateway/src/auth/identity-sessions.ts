@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow'
 
 import {
   type AuthPort,
@@ -46,13 +46,8 @@ export type AuthenticatedDevice =
 export interface IdentitySessionsOptions {
   /** Opens an auth session of its own on the central database, through its identity access method. */
   readonly openAuth: () => AuthPort
-  /** Where each device of an identity is recorded with the refresh grant its pair holds. */
+  /** Where each device an identity signs in on is recorded with the refresh grant its pair holds. */
   readonly devices: Pick<DeviceSessions, 'touch'>
-  /**
-   * Hears that a renewed pair's device could not be recorded with its new grant. The pair still
-   * reaches the device: its refresh key is spent, and the device would lose its session.
-   */
-  readonly onDeviceFailure: (error: DataError) => void
   /** Times the pairs parked for a retry out. */
   readonly clock: Clock
   /** The database's RPC endpoint over HTTP, where `revoke` is sent. */
@@ -82,8 +77,9 @@ export function grantIdOf(refresh: string): string | undefined {
   return REFRESH_KEY.exec(refresh)?.[1]
 }
 
-/** A pair parked for a device, until the moment it is no longer handed out. */
+/** A pair parked for a device of an identity, until the moment it is no longer handed out. */
 interface Parked {
+  readonly identity: IdentityId
   readonly device: string
   readonly tokens: DeviceTokens
   readonly until: number
@@ -161,16 +157,16 @@ function revoked(answer: unknown): Result<void, DataError> {
 /**
  * Identities as the gateway serves them to devices. Every call runs on a database session
  * of its own that is closed when the call ends, so no call sees another's identity and the
- * connection keeps no session per device. A sign-up, a sign-in and a renewal record the device
- * with the grant its new pair holds. A renewed pair the device could not take is parked for a
- * minute, for the device's next hello with the refresh key the renewal spent. Nothing here
- * logs, and no error carries a key.
+ * connection keeps no session per device. A sign-up and a sign-in record the device with the
+ * grant its pair holds; a renewal records nothing here: the hello that renews binds the device
+ * to its row. A renewed pair the device could not take is parked for a minute, for the device's
+ * next hello with the refresh key the renewal spent. Nothing here logs, and no error carries a
+ * key.
  */
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
   readonly #onCloseFailure: (error: DataError) => void
   readonly #devices: Pick<DeviceSessions, 'touch'>
-  readonly #onDeviceFailure: (error: DataError) => void
   readonly #clock: Clock
   readonly #post: (url: string, init: RequestInit) => ResultAsync<Response, DataError>
   readonly #rpcUrl: string
@@ -181,7 +177,6 @@ export class IdentitySessions {
     this.#openAuth = options.openAuth
     this.#onCloseFailure = options.onCloseFailure
     this.#devices = options.devices
-    this.#onDeviceFailure = options.onDeviceFailure
     this.#clock = options.clock
     this.#rpcUrl = options.rpcUrl
     this.#post = ResultAsync.fromThrowable(options.fetch, (cause) =>
@@ -205,21 +200,12 @@ export class IdentitySessions {
 
   /**
    * Accepts the access token, or renews the pair with the refresh key when the token no longer
-   * works; a renewal records `device` with the grant of the new pair. A call with an access
-   * token only never renews, and names no device.
+   * works. It records nothing: the caller binds the device to its row.
    */
   authenticate(tokens: {
     readonly access: string
-    readonly refresh?: never
-  }): ResultAsync<AuthenticatedDevice, DataError>
-  authenticate(
-    tokens: { readonly access: string; readonly refresh?: string },
-    device: string,
-  ): ResultAsync<AuthenticatedDevice, DataError>
-  authenticate(
-    tokens: { readonly access: string; readonly refresh?: string },
-    device?: string,
-  ): ResultAsync<AuthenticatedDevice, DataError> {
+    readonly refresh?: string
+  }): ResultAsync<AuthenticatedDevice, DataError> {
     const { access, refresh } = tokens
 
     return this.#withAuth((auth) =>
@@ -236,10 +222,6 @@ export class IdentitySessions {
         .orElse((error) =>
           refresh === undefined ? errAsync(error) : renew(auth, { access, refresh }),
         ),
-    ).andThen((authenticated) =>
-      authenticated.renewed && device !== undefined
-        ? this.#recordRenewal(authenticated, device)
-        : okAsync(authenticated),
     )
   }
 
@@ -248,6 +230,7 @@ export class IdentitySessions {
    * refresh key the renewal spent; it is handed out once, within 60 seconds.
    */
   park(input: {
+    readonly identity: IdentityId
     readonly device: string
     readonly spentRefresh: string
     readonly tokens: DeviceTokens
@@ -261,6 +244,7 @@ export class IdentitySessions {
     }
 
     this.#parked.set(parkingOf(input.device, input.spentRefresh), {
+      identity: input.identity,
       device: input.device,
       tokens: input.tokens,
       until: now + PARKED_MS,
@@ -280,10 +264,13 @@ export class IdentitySessions {
     return parked && parked.until > this.#clock.now() ? parked.tokens : undefined
   }
 
-  /** Forgets every pair parked for `device`: it was signed out. */
-  unpark(device: string): void {
+  /**
+   * Forgets every pair parked for `device` of `identity`, or for every device of the identity when
+   * none is named: it was signed out.
+   */
+  unpark(identity: IdentityId, device?: string): void {
     for (const [key, parked] of this.#parked) {
-      if (parked.device === device) {
+      if (parked.identity === identity && (device === undefined || parked.device === device)) {
         this.#parked.delete(key)
       }
     }
@@ -325,30 +312,6 @@ export class IdentitySessions {
     return this.#devices
       .touch({ identity: signed.identity.id, device: device.id, label: device.label, grant })
       .map(() => signed)
-  }
-
-  /**
-   * Records the device of a renewed pair with the new grant; a failure is reported, not
-   * returned: the refresh key the device held is spent, and the new pair must reach it.
-   */
-  #recordRenewal(
-    renewed: AuthenticatedDevice & { readonly renewed: true },
-    device: string,
-  ): ResultAsync<AuthenticatedDevice, DataError> {
-    const identity: IdentityId = renewed.identity.id
-    const grant = grantIdOf(renewed.tokens.refresh)
-    const recorded =
-      grant === undefined
-        ? errAsync<unknown, DataError>(refused('the renewed refresh key names no grant'))
-        : this.#devices.touch({ identity, device, grant })
-
-    return recorded
-      .orElse((error) => {
-        this.#onDeviceFailure(error)
-
-        return okAsync(undefined)
-      })
-      .map(() => renewed)
   }
 
   /**

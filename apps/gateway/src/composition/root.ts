@@ -75,6 +75,7 @@ export function createGatewayRoot(
   const hubLog = createLogger('region-hub')
   const sessionsLog = createLogger('identity-sessions')
   const tenantsLog = createLogger('tenant-databases')
+  const connectionsLog = createLogger('connections')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -107,7 +108,10 @@ export function createGatewayRoot(
       clock: options.clock,
       onError: (error) => hubLog.error({ code: error.code }, error.message),
     })
-    const connections = new ConnectionRegistry()
+    // The code and the gateway's own message, never the cause: a socket's text may hold anything.
+    const connections = new ConnectionRegistry({
+      onFailure: (error) => connectionsLog.error({ code: error.code }, error.message),
+    })
     // A removal takes the organisation's region from the removed identity's connections before
     // anything else can fail; every change of memberships resolves once its devices were told.
     const organisations = new Organisations({
@@ -128,8 +132,6 @@ export function createGatewayRoot(
         fetch,
         onCloseFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         devices: deviceSessions,
-        // The code and the gateway's own message, never the cause: a database's text may hold anything.
-        onDeviceFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         clock: options.clock,
       }),
       deviceSessions,

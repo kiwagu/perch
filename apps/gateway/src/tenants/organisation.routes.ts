@@ -5,7 +5,8 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { bearerIdentity, readBody } from '../auth/auth.routes'
+import { bearerCaller, readBody } from '../auth/auth.routes'
+import type { DeviceSessions } from '../auth/device-sessions'
 import type { IdentitySessions } from '../auth/identity-sessions'
 
 import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
@@ -81,8 +82,9 @@ export interface OrganisationRoutesOptions {
 
 /**
  * The organisation routes over HTTP, for the identity the device's access token signs in
- * (`Authorization: Bearer <access>`). A refresh key is not taken here: a device whose access
- * token no longer works renews its pair first.
+ * (`Authorization: Bearer <access>`) on the device it names in `X-Perch-Device`, whose session
+ * must be live. A refresh key is not taken here: a device whose access token no longer works
+ * renews its pair first.
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin.
@@ -92,13 +94,15 @@ export interface OrganisationRoutesOptions {
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
  *
  * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
- * token signs nobody in, 401 `unauthorized`; a body or an identity that does not follow its
- * schema, 400 `bad-request`; a refusal, its code with 400, 403, 404 or 409; a failure of the
- * gateway, 500 `internal`, the failure itself handed to `onFailure`. A request for another path
- * is not answered here (`undefined`), so the server can try its other routes.
+ * token signs nobody in or whose device has no live session, 401 `unauthorized`; a request that
+ * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
+ * a refusal, its code with 400, 403, 404 or 409; a failure of the gateway, 500 `internal`, the
+ * failure itself handed to `onFailure`. A request for another path is not answered here
+ * (`undefined`), so the server can try its other routes.
  */
 export function organisationRoutes(
   sessions: Pick<IdentitySessions, 'authenticate'>,
+  devices: Pick<DeviceSessions, 'bind'>,
   organisations: Organisations,
   options: OrganisationRoutesOptions,
 ): (request: Request) => Promise<Response | undefined> {
@@ -211,12 +215,15 @@ export function organisationRoutes(
       )
     }
 
-    const identity = await bearerIdentity(sessions, request)
+    const caller = await bearerCaller(sessions, devices, request)
 
-    if (identity === undefined) {
-      return Response.json({ code: 'unauthorized' }, { status: 401 })
-    }
-
-    return handler(identity, request)
+    return match(caller)
+      .with({ kind: 'caller' }, ({ identity }) => handler(identity, request))
+      .with({ kind: 'unauthorized' }, async () =>
+        Response.json({ code: 'unauthorized' }, { status: 401 }),
+      )
+      .with({ kind: 'bad-request' }, async () => badRequest())
+      .with({ kind: 'failed' }, async ({ error }) => errorResponse(error))
+      .exhaustive()
   }
 }

@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 
 import type { Organisations } from '../tenants/organisations'
 
+import type { DeviceSessions } from './device-sessions'
 import type { IdentitySessions, SignedIn } from './identity-sessions'
 
 /** What a device sends to sign up or in: the credentials, and the device's id and label. */
@@ -18,6 +19,19 @@ const credentialsBody = z.object({
 
 /** The access token in an `Authorization` header. */
 const BEARER = /^Bearer +(\S+)$/i
+
+/** The header a device names itself in on every call with an access token. */
+export const DEVICE_HEADER = 'X-Perch-Device'
+
+/**
+ * Who a call with an access token comes from: the identity the token signs in and the device
+ * it names, whose session is live; or why the call is refused.
+ */
+export type BearerCaller =
+  | { readonly kind: 'caller'; readonly identity: IdentityId; readonly device: string }
+  | { readonly kind: 'unauthorized' }
+  | { readonly kind: 'bad-request' }
+  | { readonly kind: 'failed'; readonly error: DataError }
 
 /** The service call behind each path. */
 const ACTIONS = new Map<string, 'signUp' | 'signIn'>([
@@ -45,20 +59,45 @@ export function bearerToken(request: Request): string | undefined {
   return BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
 }
 
-/** The identity the request's access token signs in, if it does; a refresh key is not taken. */
-export async function bearerIdentity(
+/**
+ * Who the request comes from: its access token must sign an identity in (a refresh key is not
+ * taken), the device it names in `X-Perch-Device` must follow the protocol's device id, and that
+ * device of the identity must have a live session. A device signed out from another one is
+ * refused at once, though its access token still works.
+ */
+export async function bearerCaller(
   sessions: Pick<IdentitySessions, 'authenticate'>,
+  devices: Pick<DeviceSessions, 'bind'>,
   request: Request,
-): Promise<IdentityId | undefined> {
+): Promise<BearerCaller> {
   const access = bearerToken(request)
 
   if (access === undefined) {
-    return undefined
+    return { kind: 'unauthorized' }
   }
 
-  const device = await sessions.authenticate({ access })
+  const authenticated = await sessions.authenticate({ access })
 
-  return device.isOk() ? device.value.identity.id : undefined
+  if (authenticated.isErr()) {
+    return { kind: 'unauthorized' }
+  }
+
+  const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
+
+  if (!device.success) {
+    return { kind: 'bad-request' }
+  }
+
+  const identity = authenticated.value.identity.id
+  const binding = await devices.bind({ identity, device: device.data })
+
+  if (binding.isErr()) {
+    return { kind: 'failed', error: binding.error }
+  }
+
+  return binding.value.kind === 'bound'
+    ? { kind: 'caller', identity, device: device.data }
+    : { kind: 'unauthorized' }
 }
 
 function signedInResponse({ identity, tokens, memberships }: SignedInWithMemberships): Response {

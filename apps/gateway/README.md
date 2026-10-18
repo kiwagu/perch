@@ -9,17 +9,20 @@ routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
 `{ email, password, device: { id, label } }`, the device's own id of 1 to 64 characters and a
 label of at most 60, answering `{ identity, tokens, memberships }`, the memberships being the
 organisations the identity belongs to), each call on a database session of its own that is
-closed when the call ends; `GET /health` answers `ok`. Every sign-up, sign-in and renewal
-records the device in the directory's `device_session` (`DeviceSessions`,
-`src/auth/device-sessions.ts`): one row per identity and device with its label, the id of the
-refresh grant its pair holds now (the second segment of the refresh key,
-`surreal-refresh-<grant>-<secret>`, read by `grantIdOf`), when it was seen last and whether it
-was signed out from another device. A sign-in whose device cannot be recorded fails; a renewal
-whose device cannot be recorded still delivers the pair (its refresh key is spent) and logs the
-failure's code. Devices sync over a WebSocket at `/sync`: a device says hello with its keys and
-its device id at protocol 4 (the pair is renewed with the refresh key when the access token no
-longer works, and the new pair is sent first), is marked seen at its hello and then at most
-every five minutes it talks, is welcomed with its
+closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in records the
+device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
+one row per identity and device with its label, the id of the refresh grant its pair holds now
+(the second segment of the refresh key, `surreal-refresh-<grant>-<secret>`, read by
+`grantIdOf`), when it was seen last and whether it was signed out; a sign-in whose device
+cannot be recorded fails, and signing in again clears the mark. Devices sync over a WebSocket at
+`/sync`: a device says hello with its keys and its device id at protocol 4 (the pair is renewed
+with the refresh key when the access token no longer works, and the new pair is sent first).
+The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
+new one, only while the row holds the spent grant and is not signed out; any other hello reads
+the row. A device without a row, or whose row holds another grant, is closed with 4401 (`no
+session for this device`), a device signed out with 4001, and a pair renewed for either is
+revoked at once. A bound device is marked seen at its hello and then at most every five minutes
+it talks, and is welcomed with its
 identity's private region, the region `tenant:<key>` of each organisation the identity belongs
 to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
 and compacts there through the region hub, the server's copy of the replicated regions, which
@@ -44,11 +47,15 @@ or one that names no device included), refused keys (4401), a region the device 
 again) close the socket with the protocol's close codes; a device's sign-out leaves its regions,
 revokes its refresh grant through the database's RPC and closes the socket with 4000, which
 means the grant is revoked; a revoke that fails is tried once more, and a grant that still
-cannot be revoked closes the socket with 1011 (`revoke failed`) instead. A device signed out
-from another device is closed with 4001 at once, whatever it is doing, also while its hello is
-under way: the registry knows each connection's identity and device
-(`ConnectionRegistry.close(identity, device, code)`, every device of the identity when none is
-named). A renewed pair the socket closed before it could take is parked for 60 seconds under
+cannot be revoked closes the socket with 1011 (`revoke failed`) instead; a sign-out also marks
+the device's row. A device signed out from another device is closed with 4001 at once, whatever
+it is doing, also while its hello is under way: the registry knows each connection's identity
+and device (`ConnectionRegistry.close(identity, device, code)`, every device of the identity
+when none is named), and each close moves a revocation epoch of the device or of the identity.
+A hello reads the epoch once its keys are accepted, before it reads the row, and registers with
+it: a sign-out that lands meanwhile refuses the registration (4001), one before it is seen by
+the read. A connection that fails to close is reported and the others are closed all the same.
+A renewed pair the socket closed before it could take is parked for 60 seconds under
 the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
 kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
 device`: the device's next hello with that spent key is refused the renewal, is handed the
@@ -79,8 +86,11 @@ the last change left them and its devices hear the lists in that order. This hol
 gateway process; gateways in several processes would need a durable revision of the memberships.
 
 The organisation routes act for the identity a device's access token signs in, sent as
-`Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
-access token that works answers 401 (`unauthorized`). `GET /organisations` lists the caller's
+`Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
+every call with an access token must carry: a call without a valid device id answers 400
+(`bad-request`), and a device without a live session row (unknown, or signed out: its access
+token still works, its calls do not) 401 (`unauthorized`). A refresh key is not taken over
+HTTP: a request without an access token that works answers 401. `GET /organisations` lists the caller's
 memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
 as its admin (201); `GET /organisations/:key/members` lists the members to an admin (403 `not-admin` to a member);
 `POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
@@ -91,7 +101,7 @@ for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-m
 `self`; a failure of the gateway answers 500 (`internal`).
 
 The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
-the same way; a device names itself in the `X-Perch-Device` header. `GET /devices` lists the
+and its device the same way. `GET /devices` lists the
 caller's devices, the earliest first, `{ devices: [{ id, device, label, createdAt, lastSeenAt,
 revokedAt, current }] }` (times as ISO strings, `revokedAt` null for a device signed in,
 `current` for the device named in the header; a device signed out from another one stays
@@ -103,12 +113,18 @@ sockets are closed with 4001; an id that is not one of the caller's devices answ
 (`no-such-device`). `POST /auth/sign-out-everywhere` signs every device of the caller out, the
 asking one included (204): the identity's `sessions_revoked_at` is set, so every token issued
 before is refused, every refresh grant of the identity is revoked, every device row is marked
-revoked and every socket is closed with 4001. `POST /auth/sign-out` with `{ refresh }` and the
-pair's access token as Bearer revokes that pair through the database's RPC, which judges it: an
-access token that no longer works is taken, so a device can revoke a pair it could not revoke
-while offline (204), a pair the database refuses (revoked already, or not a pair) answers 401
-(`unauthorized`), and a database that could not judge it (unreachable, or no readable answer)
-answers 500, so the device keeps the pair to try again.
+revoked, every parked pair is forgotten and every socket is closed with 4001. A sign-out that
+fails after its first write still closes what it signed out before it answers 500. `POST
+/auth/sign-out` takes the pair in its body, `{ access, refresh }`, with `X-Perch-Device` and no
+`Authorization`: the pair is the credential, so a device can revoke a pair it could not revoke
+while offline even once its access token expired. The pair must sign an identity in (renewed
+when its access token no longer works) and its refresh grant must be one of the identity's live
+devices: that row is marked signed out, a pair parked for it is forgotten and the pair (the
+renewed one when renewed) is revoked through the database's RPC (204). A pair that signs nobody
+in, that no live device of the identity holds, or that the database refuses to revoke answers
+401 (`unauthorized`), with nothing sent to the RPC in the first two cases; a database that could
+not judge the revoke (unreachable, or no readable answer) answers 500, so the device keeps the
+pair to try again; a request without its device or its pair answers 400.
 
 ## Key exports
 
@@ -140,9 +156,11 @@ stand.
   4403), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
-  that the refresh is refused; and on another identity its device sessions: a laptop and a phone
-  listed by `GET /devices` with the laptop as current, the phone signed out from the laptop
-  (`DELETE /devices/:id`, its socket closed with 4001, its row revoked), a tablet signed in and
+  that the refresh is refused; and on another identity its device sessions: a hello under a
+  device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
+  laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
+  from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
+  with its still working access token closed with 4001), a tablet signed in and
   then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
   and the tablet's sockets closed with 4001), the laptop's old pair refused at hello (4401) and
   by `POST /auth/sign-out` (401); one line per step.

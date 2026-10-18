@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type AuthTokens, createAuth, fromDriverValue, type LocalDb } from '@workspace/data'
-import { openTestDb } from '@workspace/data/testing'
+import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { device_sessionIdFactory, type IdentityId } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
@@ -10,6 +10,9 @@ import { DIRECTORY, NAMESPACE } from '../config'
 import sessionsRevokedAtStatement from './__fixtures__/identity-sessions-revoked-at.surql'
 import { DeviceSessions } from './device-sessions'
 import { grantIdOf } from './identity-sessions'
+import grantRevokeStatement from './surql/grant-revoke.surql'
+import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
+import sessionsRevokedStatement from './surql/identity-sessions-revoked.surql'
 
 const PASSWORD = 'pass-word-1'
 
@@ -106,9 +109,6 @@ describe('DeviceSessions', () => {
         grant: 'grant-2',
       })
     )._unsafeUnwrap()
-    const renewed = (
-      await devices.touch({ identity: ann.identity, device: 'device-laptop', grant: 'grant-3' })
-    )._unsafeUnwrap()
 
     expect(device_sessionIdFactory.is(first.id)).toBe(true)
     expect(first).toMatchObject({
@@ -129,8 +129,6 @@ describe('DeviceSessions', () => {
     })
     expect(again.revokedAt).toBeUndefined()
     expect(again.lastSeenAt.getTime()).toBeGreaterThanOrEqual(first.lastSeenAt.getTime())
-    // A renewal names no label: the device keeps the one it signed in with.
-    expect(renewed).toMatchObject({ id: first.id, label: 'Chrome on Linux', grant: 'grant-3' })
   })
 
   it('lists the devices of the identity only, the earliest first', async () => {
@@ -229,6 +227,8 @@ describe('DeviceSessions', () => {
         await devices.revoke({ identity: ann.identity, id: device_sessionIdFactory.create() })
       )._unsafeUnwrap(),
     ).toBe(undefined)
+    // Neither marked Ann's row, before anything touches it again.
+    expect((await devices.list(ann.identity))._unsafeUnwrap()[0]?.revokedAt).toBeUndefined()
 
     // Neither touched Ann's grant; its renewal replaces it, and the row holds the new one.
     const current = (await renew(local, ann.refresh)) ?? expect.unreachable('a renewed pair')
@@ -237,6 +237,7 @@ describe('DeviceSessions', () => {
       await devices.touch({
         identity: ann.identity,
         device: 'device-laptop',
+        label: 'Laptop',
         grant: grantOf(current),
       })
     )._unsafeUnwrap()
@@ -247,6 +248,183 @@ describe('DeviceSessions', () => {
     expect(revoked?.revokedAt).toBeInstanceOf(Date)
     expect(await renew(local, current)).toBeUndefined()
     expect(await renew(local, bob.refresh)).toMatch(/^surreal-refresh-/)
+  })
+
+  it('binds a device to its row: bound, revoked or missing', async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const bob = await signUp(local, 'bob@example.test')
+    const laptop = (
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant: 'g1',
+      })
+    )._unsafeUnwrap()
+
+    ;(
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-phone',
+        label: 'P',
+        grant: 'g2',
+      })
+    )._unsafeUnwrap()
+    ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
+
+    const bind = async (identity: IdentityId, device: string) =>
+      (await devices.bind({ identity, device }))._unsafeUnwrap()
+
+    expect(await bind(ann.identity, 'device-phone')).toMatchObject({
+      kind: 'bound',
+      row: { device: 'device-phone', grant: 'g2' },
+    })
+    expect(await bind(ann.identity, 'device-laptop')).toMatchObject({
+      kind: 'revoked',
+      row: { id: laptop.id },
+    })
+    expect(await bind(ann.identity, 'device-tablet')).toEqual({ kind: 'missing' })
+    // Another identity's device of the same id is not this one's.
+    expect(await bind(bob.identity, 'device-phone')).toEqual({ kind: 'missing' })
+  })
+
+  it('rotates the grant of a device only from the grant it holds, and only while it is not revoked', async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const laptop = (
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant: 'g1',
+      })
+    )._unsafeUnwrap()
+    const rotate = async (device: string, spent: string, next: string) =>
+      (await devices.rotate({ identity: ann.identity, device, spent, next }))._unsafeUnwrap()
+
+    const moved = await rotate('device-laptop', 'g1', 'g2')
+    const fromAnother = await rotate('device-laptop', 'g1', 'g3')
+    const unknown = await rotate('device-tablet', 'g2', 'g3')
+
+    expect(moved).toMatchObject({ kind: 'bound', row: { id: laptop.id, grant: 'g2' } })
+    expect(fromAnother).toEqual({ kind: 'other-grant' })
+    expect(unknown).toEqual({ kind: 'missing' })
+
+    ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
+
+    expect(await rotate('device-laptop', 'g2', 'g3')).toMatchObject({ kind: 'revoked' })
+
+    const [row] = (await devices.list(ann.identity))._unsafeUnwrap()
+
+    expect(row?.grant).toBe('g2')
+    expect(row?.revokedAt).toBeInstanceOf(Date)
+  })
+
+  it("marks the device of a signed-out pair by its grant, and no other identity's device", async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const bob = await signUp(local, 'bob@example.test')
+
+    ;(
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant: 'g1',
+      })
+    )._unsafeUnwrap()
+
+    expect((await devices.signedOut({ identity: bob.identity, grant: 'g1' }))._unsafeUnwrap()).toBe(
+      undefined,
+    )
+    expect((await devices.signedOut({ identity: ann.identity, grant: 'g9' }))._unsafeUnwrap()).toBe(
+      undefined,
+    )
+
+    const marked = (
+      await devices.signedOut({ identity: ann.identity, grant: 'g1' })
+    )._unsafeUnwrap()
+
+    expect(marked).toMatchObject({ device: 'device-laptop', grant: 'g1' })
+    expect(marked?.revokedAt).toBeInstanceOf(Date)
+    // A device signed out already is not marked again.
+    expect((await devices.signedOut({ identity: ann.identity, grant: 'g1' }))._unsafeUnwrap()).toBe(
+      undefined,
+    )
+  })
+
+  it("revokes one refresh grant of the identity, and no other identity's", async () => {
+    const { local, devices } = await harness()
+    const ann = await signUp(local, 'ann@example.test')
+    const bob = await signUp(local, 'bob@example.test')
+
+    ;(
+      await devices.revokeGrant({ identity: bob.identity, grant: grantOf(ann.refresh) })
+    )._unsafeUnwrap()
+
+    const current = (await renew(local, ann.refresh)) ?? expect.unreachable('a renewed pair')
+
+    ;(
+      await devices.revokeGrant({ identity: ann.identity, grant: grantOf(current) })
+    )._unsafeUnwrap()
+
+    expect(await renew(local, current)).toBeUndefined()
+  })
+
+  it('answers a revoke that failed after marking the row with that row, the failure partial', async () => {
+    const local = await directory()
+    const devices = new DeviceSessions({
+      directory: interceptQueries(local, (text) => {
+        if (text === grantRevokeStatement) {
+          throw new Error('the directory went away')
+        }
+      }),
+      clock: manualClock(Date.now()),
+    })
+    const ann = await signUp(local, 'ann@example.test')
+    const laptop = (
+      await devices.touch({
+        identity: ann.identity,
+        device: 'device-laptop',
+        label: 'L',
+        grant: 'g1',
+      })
+    )._unsafeUnwrap()
+
+    const failure = (
+      await devices.revoke({ identity: ann.identity, id: laptop.id })
+    )._unsafeUnwrapErr()
+
+    expect('kind' in failure && failure.kind === 'partial' ? failure.row?.device : undefined).toBe(
+      'device-laptop',
+    )
+    expect((await devices.list(ann.identity))._unsafeUnwrap()[0]?.revokedAt).toBeInstanceOf(Date)
+  })
+
+  it('answers a sign-out everywhere that failed after its first write as partial, and one that failed before as a failure', async () => {
+    let refused: string | undefined
+    const local = await directory()
+    const devices = new DeviceSessions({
+      directory: interceptQueries(local, (text) => {
+        if (text === refused) {
+          throw new Error('the directory went away')
+        }
+      }),
+      clock: manualClock(Date.now()),
+    })
+    const ann = await signUp(local, 'ann@example.test')
+
+    refused = sessionsRevokedStatement
+
+    const before = (await devices.revokeAll(ann.identity))._unsafeUnwrapErr()
+
+    refused = grantsRevokeAllStatement
+
+    const after = (await devices.revokeAll(ann.identity))._unsafeUnwrapErr()
+
+    expect('kind' in before).toBe(false)
+    expect('kind' in after && after.kind === 'partial').toBe(true)
   })
 
   it('revokes every device of the identity, its grants and the tokens issued before', async () => {

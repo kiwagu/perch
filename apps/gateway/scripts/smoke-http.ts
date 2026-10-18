@@ -67,3 +67,14 @@ export async function call(
 
   return { status: response.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) }
 }
+
+/** Calls a route of the gateway as `signedIn`: its access token, from its device. */
+export function callAs(
+  base: string,
+  method: 'GET' | 'POST' | 'DELETE',
+  path: string,
+  signedIn: SignedIn,
+  body?: unknown,
+): Promise<Answer> {
+  return call(base, method, path, signedIn.tokens.access, body, signedIn.device)
+}
