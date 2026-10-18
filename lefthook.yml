@@ -40,6 +40,9 @@ pre-commit:
     - name: lint
       run: . scripts/ensure-path.sh && bun run lint
 
+    - name: readmes of packages and modules
+      run: . scripts/ensure-path.sh && bun run readme:check
+
     - name: unit tests
       run: . scripts/ensure-path.sh && bun run test
 
