@@ -1,0 +1,27 @@
+---
+description: 'Use when: adding a class or a function, or when ESLint reports max-classes-per-file or workspace/one-unit-per-file.'
+alwaysApply: true
+---
+
+# One class per file, one business function per file
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- You add a class anywhere, or a function in a feature's `domain/` or `application/` layer.
+- ESLint reports `max-classes-per-file` or `workspace/one-unit-per-file`.
+
+## Stop Here If
+
+- The file holds one class, or (in domain and application code) one exported function or class, and is named after it.
+
+## Core rule
+
+- One class, one file, everywhere in source. A private helper class used by one exported class or function still gets its own file.
+- One pure business function, one file. In `domain/` and `application/` a file exports one function or one class: a domain rule is `<subject>.rule.ts` (`profile-name.rule.ts` exports `checkProfileName`), an application function is `<subject>.policy.ts` (`locale-change.policy.ts` exports `localeChange`), a service is `<name>.service.ts`. Types, interfaces, constants, Zod schemas and DI tokens may sit next to the unit; the unit's own small helpers stay unexported in the same file.
+- Small utilities may share a file, and that is the rarer case: only when they are generic, tiny and about one topic, in a file named after that topic (`text.ts` with `compareText` and `byText`), outside the domain and application layers. Never a catch-all `utils.ts` or `helpers.ts`.
+- Tests sit next to the unit they test: `profile-name.rule.spec.ts` beside `profile-name.rule.ts`.
+- Enforced by ESLint: core `max-classes-per-file` (max 1) in all source, `workspace/one-unit-per-file` in domain and application code. A file still being split is listed in the root `eslint.config.js` and leaves the list in the change that splits it; never add one.

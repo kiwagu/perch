@@ -20,6 +20,7 @@ describe('workspace eslint config', () => {
   it('accepts code that follows the conventions', async () => {
     expect(await rulesFiredIn('clean.ts')).toEqual([])
     expect(await rulesFiredIn('feature/domain/invariant.ts')).toEqual([])
+    expect(await rulesFiredIn('feature/domain/negative.exception.ts')).toEqual([])
     expect(await rulesFiredIn('barrel.ts')).toEqual([])
   })
 
@@ -75,5 +76,18 @@ describe('workspace eslint config', () => {
   it('forbids let and throwing plain errors in domain code', async () => {
     expect(await rulesFiredIn('feature/domain/mutable.ts')).toEqual(['functional/no-let'])
     expect(await rulesFiredIn('feature/domain/throws.ts')).toEqual(['no-restricted-syntax'])
+  })
+
+  it('keeps one class per file', async () => {
+    expect(await rulesFiredIn('two-classes.ts')).toEqual(['max-classes-per-file'])
+  })
+
+  it('keeps one business function or class per file in domain and application code', async () => {
+    expect(await rulesFiredIn('feature/domain/two-rules.ts')).toEqual([
+      'workspace/one-unit-per-file',
+    ])
+    expect(await rulesFiredIn('feature/application/service-and-policy.ts')).toEqual([
+      'workspace/one-unit-per-file',
+    ])
   })
 })
