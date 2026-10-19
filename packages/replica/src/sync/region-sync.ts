@@ -6,7 +6,6 @@ import type { Clock } from '../clock'
 import { MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
-import { ANSWER_TIMEOUT_MS } from './answer-timeout'
 import { ownBytes } from './message-bytes'
 import type { DrainTarget } from './outbox-drain'
 import { RegionCompaction } from './region-compaction'
@@ -33,8 +32,6 @@ export interface RegionSyncOptions {
 }
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
-
-export { ANSWER_TIMEOUT_MS }
 
 /**
  * Syncs one region document with the gateway over the transport. It subscribes with the
