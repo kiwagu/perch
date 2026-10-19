@@ -31,7 +31,8 @@ export const DEVICE_RENEWALS = { limit: 10, windowMs: 15 * minute } as const
 /**
  * Renewals per client address, 120 per minute: everyone behind one NAT renews when they open
  * their laptops after the access tokens expired overnight, and 120 a minute lets about 500
- * devices through in five minutes; one guessing address is held to 2 lookups a second.
+ * devices through in five minutes, a device the address refused retrying with its reconnect
+ * backoff at no cost to its own limit; one guessing address is held to 2 lookups a second.
  */
 export const ADDRESS_RENEWALS = { limit: 120, windowMs: minute } as const
 
@@ -149,12 +150,24 @@ export class RequestLimits {
 
   /**
    * Takes one renewal of `device` from the client at `address`, before its refresh key is
-   * exchanged; the address is charged only when the device's limit allows it.
+   * exchanged; the address is charged only when the device's limit allows it, and a renewal the
+   * address's limit refuses gives the device's attempt back, so the devices that wait behind one
+   * busy address keep their own limit for when it lets them through.
    */
   renewal(address: string, device: string): Allowance {
-    const ofDevice = this.deviceRenewals.take(device)
+    const ofDevice = this.deviceRenewals.reserve(device)
 
-    return ofDevice.allowed ? this.addressRenewals.take(addressKey(address)) : ofDevice
+    if (!ofDevice.allowed) {
+      return ofDevice
+    }
+
+    const ofAddress = this.addressRenewals.take(addressKey(address))
+
+    if (!ofAddress.allowed) {
+      ofDevice.giveBack()
+    }
+
+    return ofAddress
   }
 
   /**

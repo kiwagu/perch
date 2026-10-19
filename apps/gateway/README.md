@@ -243,16 +243,20 @@ emails, addresses from many IPv6 /64s) lock everyone else out, while an evicted 
 a fresh window.
 Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
 id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
-the address charged only when the device's limit allows. A renewal is counted when the database
-refused the access token and a refresh key came with it, before the key is exchanged, so a
-refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a working access
-token counts nothing, and neither does one the database could not judge, which fails as it is (a
-hello closes as a failed server, the pair sign-out answers 500). A hello's address is the one its
-upgrade request came from. A hello whose renewal is refused is closed with 1013 (`too many
-renewals`, try again later): the client ends its channel only on 4000, 4001, 4400 and 4401, so it
-reconnects with its backoff and keeps its keys. The pair sign-out answers 429 `rate-limited` with
-`Retry-After`, revoking nothing. `POST /auth/sign-out` itself is not limited, only the renewal it
-may run.
+the address charged only when the device's limit allows, and a renewal the address refuses gives
+the device's attempt back (once, while the device's window still holds it): behind one address
+whose devices all renew at once, as after a night when every access token expired, the devices the
+address holds back retry with their reconnect backoff without spending their own limit, so 500 of
+them all renew within about four minutes instead of being held for 15 minutes. A renewal is counted
+when the database refused the access token and a refresh key came with it, before the key is
+exchanged, so a refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a
+working access token counts nothing, and neither does one the database could not judge, which fails
+as it is (a hello closes as a failed server, the pair sign-out answers 500). A hello's address is
+the one its upgrade request came from. A hello whose renewal is refused is closed with 1013 (`too
+many renewals`, try again later): the client ends its channel only on 4000, 4001, 4400 and 4401, so
+it reconnects with its backoff and keeps its keys. The pair sign-out answers 429 `rate-limited`
+with `Retry-After`, revoking nothing. `POST /auth/sign-out` itself is not limited, only the renewal
+it may run.
 Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
 and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
 identity is charged first and the address only when the identity's limit allows. Every attempt

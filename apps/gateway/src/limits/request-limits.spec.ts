@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { idSchemas } from '@workspace/ids'
+import { RECONNECT_DELAYS_MS } from '@workspace/replica/sync'
 import { manualClock } from '@workspace/replica/testing'
 
 import { RequestLimits, type SignInAttempt, type SignInOutcome } from './request-limits'
@@ -201,6 +202,78 @@ describe('RequestLimits', () => {
     }
 
     expect(limits.renewal('203.0.113.7', 'device-110').allowed).toBe(false)
+  })
+
+  it("leaves the device uncharged by a renewal its address's limit refuses", async () => {
+    const { clock, limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      limits.renewal('203.0.113.7', `device-${attempt}`)
+    }
+
+    // 20 refusals by the address take nothing of the laptop's 10.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({
+        allowed: false,
+        retryAfterMs: minute,
+      })
+    }
+
+    await clock.advance(minute)
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({ allowed: true })
+    }
+
+    expect(limits.renewal('203.0.113.7', 'device-laptop').allowed).toBe(false)
+  })
+
+  it('lets 500 devices behind one address renew within 5 minutes with the client backoff, none left blocked', async () => {
+    const { clock, limits } = limitsOn()
+    const start = clock.now()
+    const nat = '203.0.113.7'
+    /** When each device that has not renewed yet says hello again, and how often it was refused. */
+    const waiting = new Map<string, { at: number; refused: number }>()
+
+    for (let device = 0; device < 500; device += 1) {
+      waiting.set(`device-${device}`, { at: start, refused: 0 })
+    }
+
+    while (waiting.size > 0) {
+      const next = Math.min(...Array.from(waiting.values(), (hello) => hello.at))
+
+      if (next > start + 5 * minute) {
+        break
+      }
+
+      await clock.advance(next - clock.now())
+
+      for (const [device, hello] of waiting) {
+        if (hello.at !== next) {
+          continue
+        }
+
+        if (limits.renewal(nat, device).allowed) {
+          waiting.delete(device)
+        } else {
+          // The client's reconnect after a 1013 close: the next delay of its backoff.
+          const last = RECONNECT_DELAYS_MS.length - 1
+
+          hello.at = next + (RECONNECT_DELAYS_MS[Math.min(hello.refused, last)] ?? 0)
+          hello.refused += 1
+        }
+      }
+    }
+
+    expect(waiting.size).toBe(0)
+
+    // Each device kept its own limit while the address refused it: from an address of its own,
+    // it still renews.
+    for (let device = 0; device < 500; device += 1) {
+      const address = `198.18.${Math.floor(device / 256)}.${device % 256}`
+
+      expect(limits.renewal(address, `device-${device}`)).toEqual({ allowed: true })
+    }
   })
 
   it('takes 30 invitations of one identity within 10 minutes, from any addresses, and refuses the 31st with the rest of the window', async () => {
