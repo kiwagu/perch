@@ -1,3 +1,5 @@
+-- The rows first, the generation after them: rows read before a reset are checked against the
+-- generation they belong to or a later one, never applied under a generation they predate.
 SELECT
   seq,
   bytes

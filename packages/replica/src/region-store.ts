@@ -126,16 +126,16 @@ export class RegionStore {
     )
   }
 
+  /** The generation the database holds the region in. */
+  static generation(local: LocalDb, region: string): ResultAsync<number, DataError> {
+    return ResultAsync.fromPromise(local.db.query(generationStatement, { region }), (cause) =>
+      dataError('data:QUERY_FAILED', `could not read the generation of ${region}`, cause),
+    ).andThen(([current]) => generationOf(current, region))
+  }
+
   /** Whether the database holds the region in a later generation than the one this store loaded. */
   stale(): ResultAsync<boolean, DataError> {
-    return this.#query(
-      generationStatement,
-      { region: this.region },
-      'data:QUERY_FAILED',
-      `could not read the generation of ${this.region}`,
-    ).andThen(([current]) =>
-      generationOf(current, this.region).map((read) => read !== this.generation),
-    )
+    return RegionStore.generation(this.local, this.region).map((read) => read !== this.generation)
   }
 
   get persistedSeq(): number {

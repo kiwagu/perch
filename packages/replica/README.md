@@ -10,7 +10,8 @@ local update is stored durably in the local database before it counts as persist
 local database numbers each region's update log, so tabs sharing it never reuse a number (a
 number is unique per region; a write that lost its number to another tab's engine is sent
 again at once under the next one); a reset drops a region's local copy and moves it to a new
-generation, and a document of an earlier one can no longer write to the log or read from it;
+generation, and a document of an earlier one can no longer write to the log or read from it
+(a document reads the generation before the copy it opens, so a reset meanwhile leaves it stale);
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,

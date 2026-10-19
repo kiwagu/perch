@@ -19,7 +19,9 @@ import countsStatement from './__fixtures__/replica-counts.surql'
 import coversStatement from './__fixtures__/snapshot-covers.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
 import { replaceRegionDoc } from './region-replacement'
+import { RegionStore } from './region-store'
 import appendStatement from './surql/replica-append.surql'
+import loadStatement from './surql/replica-load.surql'
 import { LoroWritePath } from './write-path'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
@@ -465,6 +467,34 @@ describe('a region reset on the device', () => {
 
     expect((await old.flush())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
     expect((await (await open()).outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('opens a region reset while it loads as stale, never under the new generation', async () => {
+    const before = await open()
+
+    writeName(before, 'Ann')
+    expect((await before.flush()).isOk()).toBe(true)
+
+    // Another tab resets the region while this one reads it.
+    let reset: Promise<void> | undefined
+    const resetting = interceptQueries(local, (text) => {
+      if (text === loadStatement) {
+        reset ??= RegionStore.reset(local, ref.id).match(
+          () => undefined,
+          (error) => expect.unreachable(error.message),
+        )
+
+        return reset
+      }
+
+      return undefined
+    })
+    const opened = (await RegionDoc.open(resetting, ref))._unsafeUnwrap()
+
+    expect(reset).toBeDefined()
+    expect((await opened.stale())._unsafeUnwrap()).toBe(true)
+    writeName(opened, 'Late')
+    expect((await opened.flush())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
   })
 
   it('refuses its catch-up and imports nothing', async () => {

@@ -68,15 +68,21 @@ export class RegionDoc {
     return new RegionDoc({ kind, id }, createDoc(peerId))
   }
 
-  /** Loads the region from the local database and persists every later local update there. */
+  /**
+   * Loads the region from the local database and persists every later local update there. The
+   * region's generation is read first, apart from the copy it guards: a reset in between leaves a
+   * document that holds the new copy under the old generation, whose every write and catch-up
+   * fails `data:REGION_STALE`, never one that holds the dropped copy under the new generation.
+   */
   static open(
     local: LocalDb,
     ref: RegionRef,
     options: OpenRegionOptions = {},
   ): ResultAsync<RegionDoc, DataError> {
-    const load = async (): Promise<RegionDoc> => {
-      const [snapshots, updates, cursor, generation] = await local.db.query<
-        [ArrayBuffer[], StoredRow[], number[], number]
+    const load = async (generation: number): Promise<RegionDoc> => {
+      // BEGIN yields a result of its own, before the snapshot's, the rows' and the cursor's.
+      const [, snapshots, updates, cursor] = await local.db.query<
+        [unknown, ArrayBuffer[], StoredRow[], number[]]
       >(loadStatement, { region: ref.id })
       const doc = createDoc(options.peerId ?? randomPeerId())
       const batch = [...snapshots, ...updates.map((update) => update.bytes)]
@@ -92,10 +98,12 @@ export class RegionDoc {
 
       return region
     }
+    const failed = (cause: unknown) =>
+      dataError('data:OPEN_FAILED', `could not open region ${ref.id}`, cause)
 
-    return ResultAsync.fromPromise(load(), (cause) =>
-      dataError('data:OPEN_FAILED', `could not open region ${ref.id}`, cause),
-    )
+    return RegionStore.generation(local, ref.id)
+      .mapErr(failed)
+      .andThen((generation) => ResultAsync.fromPromise(load(generation), failed))
   }
 
   get kind(): Region {
