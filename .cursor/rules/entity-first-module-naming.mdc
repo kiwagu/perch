@@ -20,7 +20,7 @@ alwaysApply: true
 ## Core rule
 
 - File names are `<name>.<role>.<ext>`, the entity or component first: `profile.service.ts`, `profile.view.tsx`, `profile.shape.surql`.
-- Fixed roles in a feature: `module`, `shape`, `commands`, `model.gen`, `service`, `machine`, `container`, `view`, `spec`, `view.spec`, `stories`, plus `entity` and `port`.
+- Fixed roles in a feature: `module`, `shape`, `commands`, `model.gen`, `service`, `machine`, `container`, `view`, `spec`, `view.spec`, `stories`, plus `entity`, `port`, `rule` (one domain rule function, `profile-name.rule.ts`) and `policy` (one application business function, `locale-change.policy.ts`).
 - A component folder is kebab-case and has the component's name.
 - Feature layout: `<feature>/<feature>.module.ts`, `domain/`, `application/`, `presentation/pages/<page>/`, `presentation/components/<name>/`, `presentation/i18n/`.
 - Tests sit next to the code they test.

@@ -5,9 +5,11 @@
 The platform's account module: signing in or creating an account, and the signed-in
 identity's own profile. The profile lives in the identity's private region: it is read and
 written on the device and kept in step across devices through the gateway. Layers:
-`domain/` holds the profile entity and its rules, `application/` the `SignInService` over
-the session port, the `ProfileService` over the shape runner and the command bus, and the
-sign-in state machine; `presentation/` the pages, their views and the i18n catalogs.
+`domain/` holds the profile entity (schema and bounds) and one file per rule
+(`profile-name.rule.ts`, `profile-bio.rule.ts`); `application/` the `SignInService` over the
+session port, the `ProfileService` over the shape runner and the command bus, the sign-in
+state machine and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
+`locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
 
 ## Surface
 

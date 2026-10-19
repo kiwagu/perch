@@ -7,7 +7,8 @@ import { profileIdFactory } from '@workspace/ids'
 
 import type { SessionPort } from '../../../platform/session.port'
 
-import { type ProfileService, profileName } from './profile.service'
+import type { ProfileService } from './profile.service'
+import { profileName } from './profile-name.policy'
 
 export type SignInMode = 'sign-in' | 'sign-up'
 
