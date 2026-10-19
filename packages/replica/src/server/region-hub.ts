@@ -187,13 +187,7 @@ export class RegionHub {
     })
   }
 
-  /**
-   * Checks a batch a subscribed device pushed and, when the log accepts it, acknowledges it
-   * with its number and sends it to the region's other subscribers. A refused batch is
-   * answered with a reject and changes nothing (`foreign-owner` when it writes a record of
-   * another region); a batch the region already holds, delivered again, is acknowledged
-   * without a new log row.
-   */
+  /** Takes in a batch a subscribed device pushed; the contract is `takeInBatch`'s. */
   push(
     regionId: string,
     subscriber: Subscriber,
