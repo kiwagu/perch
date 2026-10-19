@@ -81,10 +81,11 @@ the read. A connection that fails to close is reported and the others are closed
 A renewed pair the socket closed before it could take is parked for 60 seconds under
 the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
 kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
-device`: the device's next hello with that spent key is refused the renewal, is handed the
-parked pair once (`tokens`, before its welcome) and welcomed; a pair is never handed to another
-device, and signing the device out or signing in on it again forgets it; a hello whose keys the
-database could not judge leaves it parked, and one that could not judge the parked pair parks it
+device`: the device's next hello with that spent key is handed the parked pair once (`tokens`,
+before its welcome) and welcomed, looked up before its keys are checked, so no renewal is tried
+or counted; a pair is never handed to another device, and signing the device out or signing in
+on it again forgets it; a hello whose keys the database could not judge leaves it parked, and
+one that could not judge the parked pair, or whose renewal of it the limits refused, parks it
 again. Keys, tokens and grant ids never reach its logs.
 
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
