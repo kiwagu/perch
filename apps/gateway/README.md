@@ -79,7 +79,8 @@ when none is named), and each close moves a revocation epoch of the device or of
 A hello reads the epoch once its keys are accepted, before it reads the row, and registers with
 it: a sign-out that lands meanwhile refuses the registration (4001), one before it is seen by
 the read. A connection that fails to close is reported and the others are closed all the same.
-A renewed pair the socket closed before it could take is parked for 60 seconds under
+A renewed pair the socket closed before it could take is parked, for 60 seconds after the last
+hello that held it (one that takes it and parks it again, below, starts them over), under
 the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
 kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
 device`: the device's next hello with that spent key is handed the parked pair once (`tokens`,

@@ -159,10 +159,10 @@ function renew(
  * of its own that is closed when the call ends, so no call sees another's identity and the
  * connection keeps no session per device. A sign-up and a sign-in record the device with the
  * grant its pair holds; a renewal records nothing here: the hello that renews binds the device
- * to its row. A renewed pair the device could not take is parked for a minute, for the device's
- * next hello with the refresh key the renewal spent. Keys the database refused fail with
- * `data:AUTH_FAILED`; a call it could not judge (it could not be reached, or the call failed in
- * the gateway) fails with `data:QUERY_FAILED`, and a renewal its gate refused with
+ * to its row. A renewed pair the device could not take is parked for a minute after it was last
+ * parked, for the device's next hello with the refresh key the renewal spent. Keys the database
+ * refused fail with `data:AUTH_FAILED`; a call it could not judge (it could not be reached, or the
+ * call failed in the gateway) fails with `data:QUERY_FAILED`, and a renewal its gate refused with
  * `data:RATE_LIMITED`: the keys may still work. Nothing here logs, and no error carries a key.
  */
 export class IdentitySessions {
@@ -280,7 +280,7 @@ export class IdentitySessions {
 
   /**
    * The pair parked for `device` and the spent refresh key it presents, taken out with the
-   * identity it signs in; `undefined` when none is parked or it waited longer than 60 seconds.
+   * identity it signs in; `undefined` when none is parked or 60 s passed since it was last parked.
    */
   parked(input: { readonly device: string; readonly refresh: string }): ParkedPair | undefined {
     const key = parkingOf(input.device, input.refresh)
