@@ -324,31 +324,25 @@ describe('authRoutes limits', () => {
     expect((await ask(post('/auth/sign-in', longest)))?.status).toBe(401)
   })
 
-  it('refuses a sign-in of an email after 10 wrong passwords from any addresses, whatever its case, without asking the service', async () => {
+  it('refuses a sign-in of an email after 10 wrong passwords from any addresses, without asking the service', async () => {
     const sessions = stubSessions()
     const { clock, ask } = limitedRoutes(sessions)
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const email = attempt % 2 === 0 ? ann.email : 'ANN@example.test'
-
-      expect(
-        (await ask(post('/auth/sign-in', { ...wrongPassword, email }), addressOf(attempt)))?.status,
-      ).toBe(401)
+      expect((await ask(post('/auth/sign-in', wrongPassword), addressOf(attempt)))?.status).toBe(
+        401,
+      )
     }
 
     const refused = await ask(post('/auth/sign-in', annOnLaptop), addressOf(10))
 
     expect(refused?.headers.get('Retry-After')).toBe(String(15 * 60))
     expect(await answer(refused)).toEqual(rateLimited)
-    expect(
-      await answer(
-        await ask(
-          post('/auth/sign-in', { ...annOnLaptop, email: 'ANN@example.test' }),
-          addressOf(11),
-        ),
-      ),
-    ).toEqual(rateLimited)
     expect(sessions.calls).toHaveLength(10)
+    // A case variant of the email is another account to the database, so it is counted apart.
+    expect(
+      (await ask(post('/auth/sign-in', { ...wrongPassword, email: 'ANN@example.test' })))?.status,
+    ).toBe(401)
     await clock.advance(15 * 60_000)
     expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
   })
@@ -559,5 +553,27 @@ describe('authRoutes over the organisations of the gateway', () => {
 
     expect(status).toBe(200)
     expect(body).toMatchObject({ identity, memberships: [acme] })
+  })
+
+  it('keeps the failed sign-ins of an email when an account of a case variant of it signs in', async () => {
+    const root = await openRoot()
+    const { ask } = limitedRoutes(root.sessions, root.organisations)
+    const victim = { ...annOnLaptop, email: 'victim@example.test' }
+    const variant = { ...annOnLaptop, email: 'VICTIM@example.test', password: 'pass-word-2' }
+    const guess = { ...victim, password: 'wrong-password' }
+
+    // The database keeps the two as two accounts, each with its own password.
+    expect((await ask(post('/auth/sign-up', victim), addressOf(0)))?.status).toBe(200)
+    expect((await ask(post('/auth/sign-up', variant), addressOf(1)))?.status).toBe(200)
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      expect((await ask(post('/auth/sign-in', guess), addressOf(attempt)))?.status).toBe(401)
+    }
+
+    expect((await ask(post('/auth/sign-in', variant), addressOf(9)))?.status).toBe(200)
+    expect((await ask(post('/auth/sign-in', guess), addressOf(10)))?.status).toBe(401)
+    expect(await answer(await ask(post('/auth/sign-in', victim), addressOf(11)))).toEqual(
+      rateLimited,
+    )
   })
 })

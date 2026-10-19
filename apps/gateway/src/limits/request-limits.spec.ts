@@ -51,24 +51,34 @@ describe('RequestLimits', () => {
     expect(limits.credentials('2001:db8:1:3::1').allowed).toBe(true)
   })
 
-  it('lets 10 sign-ins of an email fail within 15 minutes, whatever its case, and refuses the 11th', async () => {
+  it('lets 10 sign-ins of an email fail within 15 minutes and refuses the 11th', async () => {
     const { clock, limits } = limitsOn()
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      settle(
-        limits.signInAttempt(attempt % 2 === 0 ? 'ann@example.test' : 'ANN@Example.Test'),
-        'failed',
-      )
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
     }
 
     await clock.advance(5 * minute)
-    expect(limits.signInAttempt('Ann@example.test')).toEqual({
+    expect(limits.signInAttempt('ann@example.test')).toEqual({
       allowed: false,
       retryAfterMs: 10 * minute,
     })
     expect(limits.signInAttempt('bob@example.test').allowed).toBe(true)
     await clock.advance(10 * minute)
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
+  })
+
+  // The database matches an account's email exactly, its case included, so the limits count an
+  // email as it does: a case variant of an email is another account, with failures of its own.
+  it('counts the failed sign-ins of each email exactly as the database matches it, its case included', () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+    expect(limits.signInAttempt('ANN@example.test').allowed).toBe(true)
   })
 
   it('holds a place for each sign-in of an email still under way', () => {
@@ -111,7 +121,7 @@ describe('RequestLimits', () => {
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
-  it("clears an email's failures and sign-ins under way once one signs in, whatever its case", () => {
+  it("clears an email's failures and sign-ins under way once it signs in", () => {
     const { limits } = limitsOn()
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -119,11 +129,24 @@ describe('RequestLimits', () => {
     }
 
     limits.signInAttempt('ann@example.test')
-    settle(limits.signInAttempt('ANN@example.test'), 'succeeded')
+    settle(limits.signInAttempt('ann@example.test'), 'succeeded')
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
       expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
     }
+  })
+
+  it("keeps an email's failures when a case variant of it, another account, signs in", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    settle(limits.signInAttempt('ANN@example.test'), 'succeeded')
+    settle(limits.signInAttempt('ann@example.test'), 'failed')
+
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
   it('takes 10 renewals of one device within 15 minutes and refuses the 11th with the rest of the window', async () => {

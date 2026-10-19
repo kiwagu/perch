@@ -16,7 +16,8 @@ export const CREDENTIAL_CHECKS = { limit: 20, windowMs: 10 * second } as const
 /**
  * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until the
  * database answers, cleared by a successful sign-in: online guessing against one account is held
- * to about 960 tries a day, refused before the database is asked, parallel guesses included.
+ * to about 960 tries a day, refused before the database is asked, parallel guesses included. An
+ * email is counted exactly as the database matches an account's, its case included.
  */
 export const FAILED_SIGN_INS = { limit: 10, windowMs: 15 * minute } as const
 
@@ -74,11 +75,6 @@ export type SignInAttempt =
   | { readonly allowed: true; settle(outcome: SignInOutcome): void }
   | { readonly allowed: false; readonly retryAfterMs: number }
 
-/** The key an email is counted under: emails are counted whatever their case. */
-function emailKey(email: string): string {
-  return email.toLowerCase()
-}
-
 /**
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
@@ -119,11 +115,12 @@ export class RequestLimits {
    * Lets a sign-in of `email` through while its failed sign-ins and those under way are below the
    * limit, holding a place for it until it is settled: a failure keeps the place, a success
    * forgets the email's window (its failures and the places of those under way), and an answer
-   * the database could not judge gives the place back.
+   * the database could not judge gives the place back. The email is counted as it came, its case
+   * included: the database matches an account's email exactly, so a case variant is another
+   * account, and its success must not clear this one's failures.
    */
   signInAttempt(email: string): SignInAttempt {
-    const key = emailKey(email)
-    const reserved = this.failedSignIns.reserve(key)
+    const reserved = this.failedSignIns.reserve(email)
 
     if (!reserved.allowed) {
       return reserved
@@ -142,7 +139,7 @@ export class RequestLimits {
         settled = true
 
         if (outcome === 'succeeded') {
-          this.failedSignIns.forget(key)
+          this.failedSignIns.forget(email)
         } else if (outcome === 'unjudged') {
           reserved.giveBack()
         }
