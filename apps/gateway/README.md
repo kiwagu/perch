@@ -7,8 +7,9 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
 routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
 `{ email, password, device: { id, label } }`, an email of at most 254 characters, the device's
-own id of 1 to 64 characters and a label of at most 60, answering `{ identity, tokens, memberships }`, the memberships being the
-organisations the identity belongs to), each call on a database session of its own that is
+own id of 1 to 64 characters and a label of at most 60, answering
+`{ identity, tokens, memberships }`, the memberships being the organisations the identity
+belongs to), each call on a database session of its own that is
 closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in records the
 device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
 one row per identity and device with its label, the id of the refresh grant its pair holds now
@@ -172,9 +173,9 @@ devices; its grants are dead, so only a still valid access token of that session
 minutes old) could reach the gateway. A pair the database refused, or that no device of
 the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
 itself has its new grant revoked whatever it answers. A renewal the limits refuse answers 429
-before the database is asked, with nothing revoked and the refresh key unspent (see Limits). A request without its device or its pair
-answers 400, before any key is checked; so does every call with an access token that names no
-valid device.
+before the database is asked, with nothing revoked and the refresh key unspent (see Limits). A
+request without its device or its pair answers 400, before any key is checked; so does every
+call with an access token that names no valid device.
 
 ## Key exports
 
@@ -202,13 +203,14 @@ key at its next hello; nobody is signed out. The organisations' databases have n
 of their own yet; when they get one, it takes its key from this variable too.
 
 Token scope: an access token issued for another namespace, database or access method is refused
-before the database is asked (`data:AUTH_FAILED`, by `namesOtherScope`, `src/auth/token-claims.ts`),
-since the database would accept a record access token of another database and switch the session
-to it. Its claims are read under every name SurrealDB 3.3 takes them by: the `NS`, `DB` and `AC`
-it issues, `ns`, `db` and `ac`, and the namespaced `https://surrealdb.com/ns` (or `/namespace`),
-`/db` (or `/database`) and `/ac` (or `/access`); any of them that names another scope, or a scope
-named only in part, refuses the token. Such a token is never renewed: a refresh key presented
-beside it is not spent. A payload without any of these claims goes to the database as before.
+before the database is asked (`data:AUTH_FAILED`, by `namesOtherScope` in
+`src/auth/token-claims.ts`), since the database would accept a record access token of another
+database and switch the session to it. Its claims are read under every name SurrealDB 3.3 takes
+them by: the `NS`, `DB` and `AC` it issues, `ns`, `db` and `ac`, and the namespaced
+`https://surrealdb.com/ns` (or `/namespace`), `/db` (or `/database`) and `/ac` (or `/access`);
+any of them that names another scope, or a scope named only in part, refuses the token. Such a
+token is never renewed: a refresh key presented beside it is not spent. A payload without any of
+these claims goes to the database as before.
 
 Limits (`RequestLimits`, `src/limits/`): fixed windows in the gateway process's memory, each
 starting at its key's first attempt; every gateway process keeps its own, so several processes
@@ -225,9 +227,13 @@ is asked, and is not logged.
 The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
 else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
 to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets none, every
-client shares the front's address. The gateway listens on `127.0.0.1` only, so nothing but the
-front and local tools can name an address (the smoke and the load test give each simulated
-device one of its own, `198.18.<a>.<b>` from a hash of its id). Each window table holds at most
+client shares the front's address. Behind a load balancer in front of Caddy, Caddy sees the
+balancer and, even when it trusts it, appends the balancer's address last, so Caddy must name the
+balancer in its `trusted_proxies` (with `trusted_proxies_strict`) and send the client's address
+on with `header_up X-Forwarded-For {client_ip}`, or every client shares the balancer's buckets.
+The gateway listens on `127.0.0.1` only, so nothing but the front and local tools can name an
+address (the smoke and the load test give each simulated device one of its own,
+`198.18.<a>.<b>` from a hash of its id). Each window table holds at most
 100 000 keys, in the order their windows started: an unseen key at a full table evicts the window
 that started first, even a live one, and is let in. Availability wins over a marginal gain:
 refusing unseen keys would let anyone who fills a table with cheap requests (sign-ins of unknown
@@ -239,11 +245,12 @@ the address charged only when the device's limit allows. A renewal is counted wh
 refused the access token and a refresh key came with it, before the key is exchanged, so a
 refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a working access
 token counts nothing, and neither does one the database could not judge, which fails as it is (a
-hello closes as a failed server, the pair sign-out answers 500). A hello's address is the one its upgrade request came from. A hello whose renewal is
-refused is closed with 1013 (`too many renewals`, try again later): the client ends its channel
-only on 4000, 4001, 4400 and 4401, so it reconnects with its backoff and keeps its keys. The pair
-sign-out answers 429 `rate-limited` with `Retry-After`, revoking nothing. `POST /auth/sign-out`
-itself is not limited, only the renewal it may run.
+hello closes as a failed server, the pair sign-out answers 500). A hello's address is the one its
+upgrade request came from. A hello whose renewal is refused is closed with 1013 (`too many
+renewals`, try again later): the client ends its channel only on 4000, 4001, 4400 and 4401, so it
+reconnects with its backoff and keeps its keys. The pair sign-out answers 429 `rate-limited` with
+`Retry-After`, revoking nothing. `POST /auth/sign-out` itself is not limited, only the renewal it
+may run.
 Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
 and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
 identity is charged first and the address only when the identity's limit allows. Every attempt
