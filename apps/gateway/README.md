@@ -196,6 +196,12 @@ key, earlier access tokens are refused, and each device renews its pair once wit
 key at its next hello; nobody is signed out. The organisations' databases have no access method
 of their own yet; when they get one, it takes its key from this variable too.
 
+Token scope: an access token issued for another namespace, database or access method is refused
+before the database is asked (`data:AUTH_FAILED`, read from the token's `NS`, `DB` and `AC` claims
+by `scopeOf`, `src/auth/token-claims.ts`), since the database would accept a record access token
+of another database and switch the session to it. Such a token is never renewed: a refresh key
+presented beside it is not spent. A payload without these claims goes to the database as before.
+
 ## Commands
 
 - `bun run dev`: runs the gateway and restarts it on changes.

@@ -20,6 +20,15 @@ const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 /** The device Ann signs in on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
 
+/** The access method identities sign in through, and the scope its tokens are issued for. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
+
+/** A second access method of the directory database, whose tokens the identity access never issued. */
+const elsewhereAccess = readFileSync(
+  new URL('./__fixtures__/identity-elsewhere-access.surql', import.meta.url),
+  'utf8',
+)
+
 const opened: LocalDb[] = []
 
 /** Failures reported that no test expected. */
@@ -109,8 +118,8 @@ function sessionsOver(
   } = {},
 ): IdentitySessions {
   return new IdentitySessions({
-    openAuth: () =>
-      createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+    openAuth: () => createAuth(local, identityAccess),
+    scope: identityAccess,
     onFailure: options.onFailure ?? ((error) => reportedFailures.push(error)),
     devices: options.devices ?? recordingDevices().devices,
     clock: options.clock ?? manualClock(),
@@ -258,6 +267,39 @@ describe('IdentitySessions', () => {
     expect((await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
   })
 
+  it('refuses an access token of another access method', async () => {
+    const local = await testDb(`${readSchema('directory')}\n${elsewhereAccess}`)
+    const elsewhere = createAuth(local, { ...identityAccess, access: 'elsewhere' })
+
+    ;(await elsewhere.signUp(ann))._unsafeUnwrap()
+
+    const token = elsewhere.tokens()?.access ?? expect.unreachable('a token of the other access')
+    const error = (await sessionsOver(local).authenticate({ access: token }))._unsafeUnwrapErr()
+
+    expect(error.code).toBe('data:AUTH_FAILED')
+  })
+
+  it('never renews beside such a token', async () => {
+    const local = await testDb(`${readSchema('directory')}\n${elsewhereAccess}`)
+    const sessions = sessionsOver(local)
+    const elsewhere = createAuth(local, { ...identityAccess, access: 'elsewhere' })
+
+    ;(
+      await elsewhere.signUp({ email: 'bob@example.test', password: 'pass-word-2' })
+    )._unsafeUnwrap()
+
+    const token = elsewhere.tokens()?.access ?? expect.unreachable('a token of the other access')
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const refused = await sessions.authenticate({ access: token, refresh: tokens.refresh })
+    const renewed = (
+      await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+    )._unsafeUnwrap()
+
+    expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    // The refresh key was not spent by the refused call.
+    expect(renewed.renewed).toBe(true)
+  })
+
   it('keeps the result of a call whose database session fails to close, and reports the failure', async () => {
     const local = await testDb()
     const failures: DataError[] = []
@@ -310,11 +352,12 @@ describe('IdentitySessions', () => {
     const local = await testDb()
     const sessions = new IdentitySessions({
       openAuth: () => ({
-        ...createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+        ...createAuth(local, identityAccess),
         resume: () => {
           throw new Error('the driver failed')
         },
       }),
+      scope: identityAccess,
       onFailure: (error) => reportedFailures.push(error),
       devices: recordingDevices().devices,
       clock: manualClock(),

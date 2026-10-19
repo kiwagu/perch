@@ -19,6 +19,9 @@ import devicesOfStatement from './surql/devices-of.surql'
 import grantRevokeStatement from './surql/grant-revoke.surql'
 import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
 
+/** The access method identities sign in through, and the scope its tokens are issued for. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
+
 const PASSWORD = 'pass-word-1'
 
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
@@ -154,8 +157,8 @@ async function harness(options: HarnessOptions = {}) {
     : local
   const devices = new DeviceSessions({ directory, clock })
   const sessions = new IdentitySessions({
-    openAuth: () =>
-      createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+    openAuth: () => createAuth(local, identityAccess),
+    scope: identityAccess,
     onFailure: (error) => failures.push(error),
     devices,
     clock,

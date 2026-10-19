@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { issuedAtOf } from './token-claims'
+import { issuedAtOf, scopeOf } from './token-claims'
 
 /** A token of the JWT form whose payload is `payload`, encoded; the signature is not checked. */
 function tokenWith(payload: string): string {
@@ -25,6 +25,35 @@ describe('issuedAtOf', () => {
   it('answers undefined for anything that is not a token of three segments', () => {
     for (const access of ['', 'stale', 'a.b', `${tokenWith('{"iat":1760000000}')}.extra`]) {
       expect(issuedAtOf(access)).toBeUndefined()
+    }
+  })
+})
+
+describe('scopeOf', () => {
+  it('reads the namespace, database and access method a token was issued for', () => {
+    expect(
+      scopeOf(tokenWith('{"iat":1760000000,"NS":"app","DB":"directory","AC":"identity"}')),
+    ).toEqual({ namespace: 'app', database: 'directory', access: 'identity' })
+  })
+
+  it('answers undefined for a token whose payload names no namespace, database and access method', () => {
+    for (const payload of [
+      '{}',
+      '{"DB":"directory","AC":"identity"}',
+      '{"NS":"app","AC":"identity"}',
+      '{"NS":"app","DB":"directory"}',
+      '{"NS":1,"DB":"directory","AC":"identity"}',
+      'not json',
+    ]) {
+      expect(scopeOf(tokenWith(payload))).toBeUndefined()
+    }
+  })
+
+  it('answers undefined for anything that is not a token of three segments', () => {
+    const payload = '{"NS":"app","DB":"directory","AC":"identity"}'
+
+    for (const access of ['', 'stale', 'a.b', `${tokenWith(payload)}.extra`]) {
+      expect(scopeOf(access)).toBeUndefined()
     }
   })
 })

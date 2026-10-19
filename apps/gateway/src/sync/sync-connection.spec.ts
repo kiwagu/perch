@@ -49,6 +49,9 @@ import {
   type SyncConnectionDeps,
 } from './sync-connection'
 
+/** The access method identities sign in through, and the scope its tokens are issued for. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
+
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
 const bob = { email: 'bob@example.test', password: 'pass-word-1' }
@@ -174,8 +177,8 @@ async function openGateway(options: GatewayOptions = {}) {
   const devices = new DeviceSessions({ directory: local, clock })
 
   const sessions = new IdentitySessions({
-    openAuth: () =>
-      createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+    openAuth: () => createAuth(local, identityAccess),
+    scope: identityAccess,
     onFailure: (error) => reported.push(error),
     devices,
     clock,

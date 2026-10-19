@@ -73,6 +73,9 @@ export interface GatewayRootOptions {
   readonly clock: Clock
 }
 
+/** The access method identities sign in through, and where its tokens are issued. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
+
 export function createGatewayRoot(
   options: GatewayRootOptions,
 ): ResultAsync<GatewayRoot, DataError> {
@@ -131,8 +134,8 @@ export function createGatewayRoot(
 
     return {
       sessions: new IdentitySessions({
-        openAuth: () =>
-          createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+        openAuth: () => createAuth(local, identityAccess),
+        scope: identityAccess,
         onFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         devices: deviceSessions,
         clock: options.clock,
