@@ -1,3 +1,4 @@
+import type { Result } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
@@ -5,6 +6,8 @@ import type { IdentityId } from '@workspace/ids'
 import { deviceId, type Membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import type { RequestLimits } from '../limits/request-limits'
+import { tooMany } from '../limits/too-many'
 import type { Organisations } from '../tenants/organisations'
 
 import type { DeviceSessions } from './device-sessions'
@@ -132,18 +135,45 @@ function errorResponse(error: DataError): Response {
     .otherwise(() => Response.json({ code: 'internal' }, { status: 500 }))
 }
 
+/** What the sign-up and sign-in routes count. */
+type CredentialLimits = Pick<
+  RequestLimits,
+  'credentials' | 'signInAllowed' | 'signInFailed' | 'signInSucceeded'
+>
+
+/**
+ * Counts a sign-in's answer against its email: wrong credentials are one failure, a success
+ * clears them, and a sign-in the database could not judge counts nothing.
+ */
+function countSignIn(
+  limits: CredentialLimits,
+  email: string,
+  checked: Result<SignedIn, DataError>,
+): void {
+  if (checked.isOk()) {
+    limits.signInSucceeded(email)
+  } else if (checked.error.code === 'data:INVALID_CREDENTIALS') {
+    limits.signInFailed(email)
+  }
+}
+
 /**
  * Sign-up and sign-in over HTTP: `POST /auth/sign-up` and `POST /auth/sign-in` with
  * `{ email, password, device: { id, label } }` answer `{ identity, tokens, memberships }`, the
  * memberships being the organisations the identity belongs to once it is signed in; the device
- * is recorded with the grant of its pair. A request for another path is not answered here
- * (`undefined`), so the server can try its other routes.
+ * is recorded with the grant of its pair. A request whose body follows the schema takes a
+ * credential check of the address it comes from (`from`), and a sign-in must find its email's
+ * failed sign-ins below their limit, both before the service is asked: either refusal answers 429
+ * `rate-limited` with `Retry-After`. A sign-in the database refuses as wrong credentials counts
+ * one failure of its email, and one it accepts clears them. A request for another path is not
+ * answered here (`undefined`), so the server can try its other routes.
  */
 export function authRoutes(
   sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
   organisations: Pick<Organisations, 'membershipsOf'>,
-): (request: Request) => Promise<Response | undefined> {
-  return async (request) => {
+  limits: CredentialLimits,
+): (request: Request, from: string) => Promise<Response | undefined> {
+  return async (request, from) => {
     const action = ACTIONS.get(new URL(request.url).pathname)
 
     if (!action) {
@@ -164,7 +194,25 @@ export function authRoutes(
     }
 
     const { email, password, device } = body.data
-    const result = await sessions[action]({ email, password }, device).andThen((signedIn) =>
+    const address = limits.credentials(from)
+
+    if (!address.allowed) {
+      return tooMany(address)
+    }
+
+    const account = action === 'signIn' ? limits.signInAllowed(email) : address
+
+    if (!account.allowed) {
+      return tooMany(account)
+    }
+
+    const checked = await sessions[action]({ email, password }, device)
+
+    if (action === 'signIn') {
+      countSignIn(limits, email, checked)
+    }
+
+    const result = await checked.asyncAndThen((signedIn) =>
       organisations
         .membershipsOf(signedIn.identity.id)
         .map((memberships): SignedInWithMemberships => ({ ...signedIn, memberships })),

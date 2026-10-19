@@ -8,6 +8,7 @@ import { identityIdFactory } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
 import { createGatewayRoot, type GatewayRoot } from '../composition/root'
+import { RequestLimits } from '../limits/request-limits'
 import type { Organisations } from '../tenants/organisations'
 
 import { authRoutes } from './auth.routes'
@@ -56,6 +57,26 @@ const noMemberships: Pick<Organisations, 'membershipsOf'> = {
   membershipsOf: () => okAsync([]),
 }
 
+/** The address Ann's requests come from, as the server reads it. */
+const annsAddress = '203.0.113.7'
+
+/**
+ * The routes over `sessions` with limits of their own on a manual clock: `ask` sends a request
+ * from an address, Ann's by default.
+ */
+function limitedRoutes(
+  sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
+  organisations: Pick<Organisations, 'membershipsOf'> = noMemberships,
+) {
+  const clock = manualClock(1_000)
+  const routes = authRoutes(sessions, organisations, new RequestLimits({ clock }))
+
+  return {
+    clock,
+    ask: (request: Request, from: string = annsAddress) => routes(request, from),
+  }
+}
+
 /** The gateways the tests opened, closed after each. */
 const opened: GatewayRoot[] = []
 
@@ -99,10 +120,10 @@ async function answer(response: Response | undefined): Promise<{ status: number;
 describe('authRoutes', () => {
   it('signs an identity up on its device and answers with the identity and its tokens', async () => {
     const sessions = stubSessions()
-    const routes = authRoutes(sessions, noMemberships)
+    const { ask } = limitedRoutes(sessions, noMemberships)
     const bob = { email: 'bob@example.test', password: 'pass-word-2' }
 
-    expect(await answer(await routes(post('/auth/sign-up', { ...bob, device: laptop })))).toEqual({
+    expect(await answer(await ask(post('/auth/sign-up', { ...bob, device: laptop })))).toEqual({
       status: 200,
       body: {
         identity: { id: signedIn.identity.id, email: bob.email },
@@ -115,9 +136,9 @@ describe('authRoutes', () => {
 
   it('signs an identity in on its device', async () => {
     const sessions = stubSessions()
-    const routes = authRoutes(sessions, noMemberships)
+    const { ask } = limitedRoutes(sessions, noMemberships)
 
-    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
+    expect(await answer(await ask(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 200,
       body: { identity: signedIn.identity, tokens: signedIn.tokens, memberships: [] },
     })
@@ -125,27 +146,27 @@ describe('authRoutes', () => {
   })
 
   it('answers 409 to a sign-up with an email that is taken', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
+    const { ask } = limitedRoutes(stubSessions(), noMemberships)
 
-    expect(await answer(await routes(post('/auth/sign-up', annOnLaptop)))).toEqual({
+    expect(await answer(await ask(post('/auth/sign-up', annOnLaptop)))).toEqual({
       status: 409,
       body: { code: 'sign-up-rejected' },
     })
   })
 
   it('answers 401 to a wrong password', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
+    const { ask } = limitedRoutes(stubSessions(), noMemberships)
 
     expect(
       await answer(
-        await routes(post('/auth/sign-in', { ...annOnLaptop, password: 'wrong-password' })),
+        await ask(post('/auth/sign-in', { ...annOnLaptop, password: 'wrong-password' })),
       ),
     ).toEqual({ status: 401, body: { code: 'invalid-credentials' } })
   })
 
   it('answers 400 to a body that does not follow the schema, without calling the service', async () => {
     const sessions = stubSessions()
-    const routes = authRoutes(sessions, noMemberships)
+    const { ask } = limitedRoutes(sessions, noMemberships)
 
     for (const body of [
       { email: 'not-an-email', password: 'pass-word-1', device: laptop },
@@ -159,7 +180,7 @@ describe('authRoutes', () => {
       { ...ann, device: { id: laptop.id, label: 'l'.repeat(61) } },
       '{"email":',
     ]) {
-      expect(await answer(await routes(post('/auth/sign-in', body)))).toEqual({
+      expect(await answer(await ask(post('/auth/sign-in', body)))).toEqual({
         status: 400,
         body: { code: 'bad-request' },
       })
@@ -169,7 +190,7 @@ describe('authRoutes', () => {
   })
 
   it("answers 500 to a failure that is not the caller's fault", async () => {
-    const routes = authRoutes(
+    const { ask } = limitedRoutes(
       {
         ...stubSessions(),
         signIn: () =>
@@ -178,45 +199,176 @@ describe('authRoutes', () => {
       noMemberships,
     )
 
-    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
+    expect(await answer(await ask(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
   })
 
   it('answers 500 when the memberships of the identity cannot be read', async () => {
-    const routes = authRoutes(stubSessions(), {
+    const { ask } = limitedRoutes(stubSessions(), {
       membershipsOf: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is gone')),
     })
 
-    expect(await answer(await routes(post('/auth/sign-in', annOnLaptop)))).toEqual({
+    expect(await answer(await ask(post('/auth/sign-in', annOnLaptop)))).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
   })
 
   it('answers 405 to a method other than POST', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
-    const response = await routes(new Request('http://gateway.test/auth/sign-in'))
+    const { ask } = limitedRoutes(stubSessions(), noMemberships)
+    const response = await ask(new Request('http://gateway.test/auth/sign-in'))
 
     expect(response?.status).toBe(405)
     expect(response?.headers.get('allow')).toBe('POST')
   })
 
   it('leaves a path that is not its own to the caller', async () => {
-    const routes = authRoutes(stubSessions(), noMemberships)
+    const { ask } = limitedRoutes(stubSessions(), noMemberships)
 
-    expect(await routes(post('/auth/sign-out', ann))).toBeUndefined()
-    expect(await routes(post('/health', ann))).toBeUndefined()
+    expect(await ask(post('/auth/sign-out', ann))).toBeUndefined()
+    expect(await ask(post('/health', ann))).toBeUndefined()
+  })
+})
+
+/** Ann's credentials from her laptop with a password that is not hers. */
+const wrongPassword = { ...annOnLaptop, password: 'wrong-password' }
+
+/** An address of its own for the attempt numbered `n`. */
+const addressOf = (n: number): string => `198.51.100.${n + 1}`
+
+const rateLimited = { status: 429, body: { code: 'rate-limited' } }
+
+describe('authRoutes limits', () => {
+  it('lets 20 sign-ins of one address within 10 s reach the service and answers the 21st 429 with Retry-After', async () => {
+    const sessions = stubSessions()
+    const { clock, ask } = limitedRoutes(sessions)
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect((await ask(post('/auth/sign-in', annOnLaptop)))?.status).toBe(200)
+    }
+
+    await clock.advance(3_000)
+
+    const refused = await ask(post('/auth/sign-in', annOnLaptop))
+
+    expect(refused?.headers.get('Retry-After')).toBe('7')
+    expect(await answer(refused)).toEqual(rateLimited)
+    expect(sessions.calls).toHaveLength(20)
+    expect((await ask(post('/auth/sign-in', annOnLaptop), '203.0.113.8'))?.status).toBe(200)
+    await clock.advance(7_000)
+    expect((await ask(post('/auth/sign-in', annOnLaptop)))?.status).toBe(200)
+  })
+
+  it('counts the sign-ups and the sign-ins of one address together', async () => {
+    const sessions = stubSessions()
+    const { ask } = limitedRoutes(sessions)
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const bob = { ...annOnLaptop, email: `bob-${attempt}@example.test` }
+
+      expect((await ask(post('/auth/sign-up', bob)))?.status).toBe(200)
+      expect((await ask(post('/auth/sign-in', annOnLaptop)))?.status).toBe(200)
+    }
+
+    expect(
+      await answer(await ask(post('/auth/sign-up', { ...annOnLaptop, email: 'cy@example.test' }))),
+    ).toEqual(rateLimited)
+    expect(await answer(await ask(post('/auth/sign-in', annOnLaptop)))).toEqual(rateLimited)
+    expect(sessions.calls).toHaveLength(20)
+  })
+
+  it('counts nothing for a body that does not follow the schema', async () => {
+    const sessions = stubSessions()
+    const { ask } = limitedRoutes(sessions)
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const body = { ...annOnLaptop, email: 'not-an-email' }
+
+      expect((await ask(post('/auth/sign-in', body)))?.status).toBe(400)
+    }
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect((await ask(post('/auth/sign-in', annOnLaptop)))?.status).toBe(200)
+    }
+  })
+
+  it('refuses a sign-in of an email after 10 wrong passwords from any addresses, whatever its case, without asking the service', async () => {
+    const sessions = stubSessions()
+    const { clock, ask } = limitedRoutes(sessions)
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const email = attempt % 2 === 0 ? ann.email : 'ANN@example.test'
+
+      expect(
+        (await ask(post('/auth/sign-in', { ...wrongPassword, email }), addressOf(attempt)))?.status,
+      ).toBe(401)
+    }
+
+    const refused = await ask(post('/auth/sign-in', annOnLaptop), addressOf(10))
+
+    expect(refused?.headers.get('Retry-After')).toBe(String(15 * 60))
+    expect(await answer(refused)).toEqual(rateLimited)
+    expect(
+      await answer(
+        await ask(
+          post('/auth/sign-in', { ...annOnLaptop, email: 'ANN@example.test' }),
+          addressOf(11),
+        ),
+      ),
+    ).toEqual(rateLimited)
+    expect(sessions.calls).toHaveLength(10)
+    await clock.advance(15 * 60_000)
+    expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
+  })
+
+  it("clears an email's failures when it signs in", async () => {
+    const { ask } = limitedRoutes(stubSessions())
+
+    for (let round = 0; round < 2; round += 1) {
+      for (let attempt = 0; attempt < 9; attempt += 1) {
+        expect(
+          (await ask(post('/auth/sign-in', wrongPassword), addressOf(round * 10 + attempt)))
+            ?.status,
+        ).toBe(401)
+      }
+
+      expect(
+        (await ask(post('/auth/sign-in', annOnLaptop), addressOf(round * 10 + 9)))?.status,
+      ).toBe(200)
+    }
+  })
+
+  it('counts no failure of the email for a sign-in the database could not judge', async () => {
+    const stub = stubSessions()
+    let reachable = false
+    const { ask } = limitedRoutes({
+      ...stub,
+      signIn: (input, device) =>
+        reachable
+          ? stub.signIn(input, device)
+          : errAsync(dataError('data:QUERY_FAILED', 'the directory is gone')),
+    })
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      expect(
+        await answer(await ask(post('/auth/sign-in', wrongPassword), addressOf(attempt))),
+      ).toEqual({ status: 500, body: { code: 'internal' } })
+    }
+
+    reachable = true
+
+    expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
   })
 })
 
 describe('authRoutes over the organisations of the gateway', () => {
   it('answers a sign-up and a sign-in with no memberships while the identity belongs nowhere', async () => {
     const root = await openRoot()
-    const routes = authRoutes(root.sessions, root.organisations)
-    const up = await answer(await routes(post('/auth/sign-up', annOnLaptop)))
-    const again = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
+    const { ask } = limitedRoutes(root.sessions, root.organisations)
+    const up = await answer(await ask(post('/auth/sign-up', annOnLaptop)))
+    const again = await answer(await ask(post('/auth/sign-in', annOnLaptop)))
 
     expect(up).toMatchObject({ status: 200, body: { memberships: [] } })
     expect(again).toMatchObject({ status: 200, body: { memberships: [] } })
@@ -224,16 +376,16 @@ describe('authRoutes over the organisations of the gateway', () => {
 
   it('answers 500, never 401 or 409, to a sign-up and a sign-in the database could not judge', async () => {
     const root = await openRoot()
-    const routes = authRoutes(root.sessions, root.organisations)
+    const { ask } = limitedRoutes(root.sessions, root.organisations)
 
-    expect((await answer(await routes(post('/auth/sign-up', annOnLaptop)))).status).toBe(200)
+    expect((await answer(await ask(post('/auth/sign-up', annOnLaptop)))).status).toBe(200)
 
     root.local.db.newSession = () => Promise.reject(new Error('the database cannot be reached'))
 
     const up = await answer(
-      await routes(post('/auth/sign-up', { ...annOnLaptop, email: 'bob@example.test' })),
+      await ask(post('/auth/sign-up', { ...annOnLaptop, email: 'bob@example.test' })),
     )
-    const again = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
+    const again = await answer(await ask(post('/auth/sign-in', annOnLaptop)))
 
     expect([up, again]).toEqual([
       { status: 500, body: { code: 'internal' } },
@@ -243,12 +395,12 @@ describe('authRoutes over the organisations of the gateway', () => {
 
   it('answers a sign-in with the membership of the organisation the identity created', async () => {
     const root = await openRoot()
-    const routes = authRoutes(root.sessions, root.organisations)
+    const { ask } = limitedRoutes(root.sessions, root.organisations)
     const { identity } = (await root.sessions.signUp(ann, laptop))._unsafeUnwrap()
     const acme = (
       await root.organisations.create({ identity: identity.id, key: 'acme', name: 'Acme' })
     )._unsafeUnwrap()
-    const { status, body } = await answer(await routes(post('/auth/sign-in', annOnLaptop)))
+    const { status, body } = await answer(await ask(post('/auth/sign-in', annOnLaptop)))
 
     expect(status).toBe(200)
     expect(body).toMatchObject({ identity, memberships: [acme] })

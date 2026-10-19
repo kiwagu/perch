@@ -127,8 +127,10 @@ commands and waits until the gateway acknowledged it, and whose `readAccount` si
 reads the profile the gateway sends; it leaves each account without signing out. As the
 signed-in account, `ensureOrganisation` creates an organisation (one that is already the
 account's is found), `ensureMember` invites an existing account by email, and
-`readOrganisation` signs in, makes the organisation current and reads its notes.
-`openStand()` is the operator's connection to a stand as a system user, where seeded
+`readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
+of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
+by default), which a test talking to the gateway directly uses to name a client address in
+`X-Forwarded-For`, as the front would. `openStand()` is the operator's connection to a stand as a system user, where seeded
 accounts and the organisations they created are swept; it applies the directory schema with the
 key the stand's gateway signs with (`signingKey`, required), so opening a stand never changes
 that key. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;

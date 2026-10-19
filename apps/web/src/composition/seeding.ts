@@ -45,7 +45,7 @@ import { UserModule } from '../features/user/user.module'
 
 import type { CommandLogger } from './commands'
 import { devicesApi } from './devices-api'
-import { gatewayAuth } from './gateway-auth'
+import { type Fetcher, gatewayAuth } from './gateway-auth'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import { memoryStorage } from './storage'
@@ -54,9 +54,16 @@ export type { NoteRow } from '../features/organisation/application/notes.service
 export type { ProfileRow } from '../features/user/application/profile.service'
 export { checkProfileName } from '../features/user/domain/profile-name.rule'
 
+export type { Fetcher } from './gateway-auth'
+
 export interface ClientOptions {
   /** The gateway's address, such as `http://127.0.0.1:5181`; its sync WebSocket is `/sync` under it. */
   readonly gatewayUrl: string
+  /**
+   * What the client calls the gateway's HTTP routes with, the global `fetch` by default: a test
+   * that talks to the gateway directly plays the front with it, naming a client address.
+   */
+  readonly fetcher?: Fetcher
   readonly logger?: CommandLogger
 }
 
@@ -312,6 +319,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
   const tenantSchema = readSchema('tenant')
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
+  const fetcher: Fetcher = options.fetcher ?? fetch
 
   return createAppRoot({
     openLocal: () =>
@@ -332,12 +340,12 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
       }),
     // An in-memory database leaves nothing behind once it is closed.
     deleteTenantLocal: () => okAsync(undefined),
-    gatewayAuth: gatewayAuth(options.gatewayUrl),
+    gatewayAuth: gatewayAuth(options.gatewayUrl, fetcher),
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
     online: () => true,
-    organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
-    devicesApi: (deps) => devicesApi(options.gatewayUrl, deps),
+    organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
+    devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),

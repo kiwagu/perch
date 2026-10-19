@@ -202,6 +202,23 @@ by `scopeOf`, `src/auth/token-claims.ts`), since the database would accept a rec
 of another database and switch the session to it. Such a token is never renewed: a refresh key
 presented beside it is not spent. A payload without these claims goes to the database as before.
 
+Limits (`RequestLimits`, `src/limits/`): fixed windows in the gateway process's memory, each
+starting at its key's first attempt; every gateway process keeps its own, so several processes
+multiply them. Credential checks, `POST /auth/sign-up` and `POST /auth/sign-in` together (each
+one argon2 run on the database), are limited to 20 per client address in 10 s; failed sign-ins
+(answered `invalid-credentials`) to 10 per email, lower-cased, in 15 minutes, cleared by a
+successful sign-in. A body that fails its schema (400) counts nothing, and neither does a sign-in
+the database could not judge. A refusal answers 429 `{ "code": "rate-limited" }` with
+`Retry-After` in whole seconds (at least 1), before the database is asked, and is not logged.
+The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
+else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
+to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets none, every
+client shares the front's address. The gateway listens on `127.0.0.1` only, so nothing but the
+front and local tools can name an address (the smoke and the load test give each simulated
+device one of its own, `198.18.<a>.<b>` from a hash of its id). Each window table holds at most
+100 000 keys: expired keys are swept when it fills, and a table full of live keys refuses the
+keys it has not seen. `POST /auth/sign-out` itself is not limited.
+
 ## Commands
 
 - `bun run dev`: runs the gateway and restarts it on changes.
@@ -225,7 +242,10 @@ presented beside it is not spent. A payload without these claims goes to the dat
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
   that the refresh is refused; on a further identity the directory schema applied again with the
-  stand's key, the access token issued before it still accepted without a renewal; and on
+  stand's key, the access token issued before it still accepted without a renewal; the limits of
+  the credential routes, each from a device, so a simulated client address, of its own (21
+  sign-ins of unknown emails within 10 s, the 21st answered 429 with `Retry-After`; 11 wrong
+  passwords for a further identity, the 11th answered 429); and on
   another identity its device sessions: a hello under a
   device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
   laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
@@ -246,7 +266,8 @@ presented beside it is not spent. A payload without these claims goes to the dat
 `bun run load -- [arguments]` at the repository root drives simulated devices against a
 gateway of its own: it starts `src/index.ts` as a child process on port 5197, in front of the
 e2e stand's SurrealDB (`SURREAL_URL` from `mcproc exec`), and waits for its `/health`. Each step
-signs up the devices it adds (`load-<run>-<n>@example.test`), groups every `--members` of them
+signs up the devices it adds (`load-<run>-<n>@example.test`, each device from a simulated client
+address of its own, as in the smoke), groups every `--members` of them
 into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends

@@ -1,17 +1,18 @@
 /**
  * The access method steps of the smoke test, each on a fresh identity: the clause that refuses
  * tokens issued before `sessions_revoked_at`, and the directory schema applied again with the
- * stand's key.
+ * stand's key; then the limits of the credential routes, each from a device of its own.
  */
 
 import { applySchema } from '@workspace/data'
 import { readSchema } from '@workspace/data/schema-files'
+import { z } from '@workspace/zod'
 
 import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
 import type { GatewayRoot } from '../src/composition/root'
 
-import { postCredentials } from './smoke-http'
+import { type Answer, type Credentials, call, postCredentials } from './smoke-http'
 import { check, step, unwrap } from './smoke-steps'
 
 /**
@@ -96,9 +97,80 @@ async function reappliedSteps(base: string, root: GatewayRoot, signingKey: strin
   )
 }
 
+/** The answer of a limit that refused a request. */
+const rateLimited = z.object({ code: z.literal('rate-limited') })
+
+/** Signs in `count` times one after the other from `device`, each time with `credentials()`. */
+async function signIns(
+  base: string,
+  device: Credentials['device'],
+  count: number,
+  credentials: () => Omit<Credentials, 'device'>,
+): Promise<Answer[]> {
+  const answers: Answer[] = []
+
+  for (let attempt = 0; attempt < count; attempt += 1) {
+    const body = { ...credentials(), device }
+
+    answers.push(await call(base, 'POST', '/auth/sign-in', undefined, body, device.id))
+  }
+
+  return answers
+}
+
+/** Every answer but the last has `status`; the last is a 429 `rate-limited` with `Retry-After`. */
+function checkLimited(answers: readonly Answer[], status: number): void {
+  const before = answers.slice(0, -1).map((answer) => answer.status)
+  const last = answers.at(-1)
+  const retryAfter = Number(last?.headers.get('Retry-After'))
+
+  check(
+    before.every((answered) => answered === status),
+    `answered ${before.join(' ')} before the limit`,
+  )
+  check(last?.status === 429, `the last answered ${last?.status}`)
+  check(rateLimited.safeParse(last?.body).success, `the last said ${JSON.stringify(last?.body)}`)
+  check(Number.isInteger(retryAfter) && retryAfter >= 1, `Retry-After ${retryAfter}`)
+}
+
+/**
+ * The limits of the credential routes, each from a device, so a simulated client address, of its
+ * own: 20 credential checks per address within 10 s (sign-ins of unknown emails, which cost the
+ * database no password check), and 10 failed sign-ins per email.
+ */
+async function limitSteps(base: string): Promise<void> {
+  await step(
+    '21 sign-ins of unknown emails from one address within 10 s: the 21st answers 429 with Retry-After',
+    async () => {
+      const device = { id: 'smoke-device-unknown-emails', label: 'Smoke' }
+      const answers = await signIns(base, device, 21, () => ({
+        email: `smoke-${crypto.randomUUID()}@example.test`,
+        password: crypto.randomUUID(),
+      }))
+
+      checkLimited(answers, 401)
+    },
+  )
+
+  await step('11 wrong passwords for one email: the 11th answers 429', async () => {
+    const device = { id: 'smoke-device-wrong-passwords', label: 'Smoke' }
+    const { identity } = await postCredentials(base, '/auth/sign-up', {
+      email: `smoke-${crypto.randomUUID()}@example.test`,
+      password: crypto.randomUUID(),
+      device,
+    })
+    const answers = await signIns(base, device, 11, () => ({
+      email: identity.email,
+      password: crypto.randomUUID(),
+    }))
+
+    checkLimited(answers, 401)
+  })
+}
+
 /**
  * The access method steps: the clause of `sessions_revoked_at`, then the directory schema applied
- * again with `signingKey`, the stand's key.
+ * again with `signingKey`, the stand's key; then the limits of the credential routes.
  */
 export async function accessSteps(
   base: string,
@@ -107,4 +179,5 @@ export async function accessSteps(
 ): Promise<void> {
   await sessionsRevokedSteps(base, root)
   await reappliedSteps(base, root, signingKey)
+  await limitSteps(base)
 }

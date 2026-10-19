@@ -22,6 +22,7 @@ import { RegionHub } from '@workspace/replica/server'
 import { DeviceSessions } from '../auth/device-sessions'
 import { IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { RequestLimits } from '../limits/request-limits'
 import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
@@ -49,6 +50,11 @@ export interface GatewayRoot {
   readonly connections: ConnectionRegistry
   /** The directory database. */
   readonly local: LocalDb
+  /**
+   * The request limits of this process: the credential checks of each client address and the
+   * failed sign-ins of each email.
+   */
+  readonly limits: RequestLimits
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -147,6 +153,7 @@ export function createGatewayRoot(
       schema: replicaSchema,
       connections,
       local,
+      limits: new RequestLimits({ clock: options.clock }),
       clock: options.clock,
       close: async () => {
         await hub.close()
