@@ -30,8 +30,8 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 - `sweep(target, { emails? })`: removes the seeded accounts (or only those at `emails`)
   with the organisations they created (their databases `t_<key>`, memberships and directory
   rows), their profiles and the server's copy of their regions (`_replica_head`,
-  `_replica_snapshot`, `_replica_update`, `_replica_projected`). Of a region the gateway
-  keeps in memory only what a connected device subscribed to, unloaded 60 s after the last
+  `_replica_snapshot`, `_replica_update`, `_replica_projected`, `_replica_peer`). Of a region
+  the gateway keeps in memory only what a connected device subscribed to, unloaded 60 s after the last
   device left. Re-creating an organisation under the key of a swept one works: the gateway
   opens a new connection to its database. Sweep only once the seed clients have left (`runSeed` closes its client
   before it returns), or a device still connected keeps the swept region in the gateway.

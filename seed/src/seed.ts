@@ -100,6 +100,7 @@ const sweepCommand: Command<SweepParams> = {
     '_replica_snapshot',
     '_replica_update',
     '_replica_projected',
+    '_replica_peer',
   ],
   region: 'server',
   ops: [],

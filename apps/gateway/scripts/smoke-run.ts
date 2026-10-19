@@ -22,7 +22,8 @@ import { accessSteps } from './smoke-access'
 import { SmokeDevice } from './smoke-device'
 import { deviceSessionSteps } from './smoke-devices'
 import { callAs, postCredentials, type SignedIn } from './smoke-http'
-import { check, hello, type Opened, refusal, step, unwrap } from './smoke-steps'
+import { refusedWriteSteps } from './smoke-refused-writes'
+import { check, hello, type Opened, refusal, step, takeUpdates, unwrap } from './smoke-steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
@@ -55,16 +56,6 @@ async function welcomed(
   )
 
   return device
-}
-
-/** Takes the device's next `updates` into its document; answers with the update's head. */
-async function takeUpdates(device: SmokeDevice, doc: RegionDoc, snapshot: boolean) {
-  const updates = await device.next('updates')
-
-  check(updates.snapshot === snapshot, `updates with snapshot ${updates.snapshot}`)
-  unwrap(await doc.importRemote(updates.bytes, updates.head))
-
-  return updates.head
 }
 
 const createdOrganisation = z.object({ membership: membership })
@@ -232,19 +223,11 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
     check(ack.batch === 2 && ack.head === 4, `ack of batch ${ack.batch} at head ${ack.head}`)
   })
 
-  await step("invited device edited the owner's note: rejected as forbidden-action", async () => {
-    const edited = await noteUpdate(guestDoc, { id: ownerNoteId, text: 'Not mine' })
-
-    guestDevice.push(region, 3, unwrap(edited))
-
-    const rejected = await guestDevice.next('reject')
-
-    check(
-      rejected.batch === 3 &&
-        rejected.reason === 'forbidden-action' &&
-        rejected.detail === `note/${ownerNoteId}:update`,
-      `rejected batch ${rejected.batch} for ${rejected.reason} (${rejected.detail})`,
-    )
+  await refusedWriteSteps({
+    region,
+    owner: { signedIn: owner, device: ownerDevice, doc: ownerDoc },
+    guest: { signedIn: guest, device: guestDevice, doc: guestDoc },
+    ownerNoteId,
   })
 
   await step('invited device asked for the members: 403 not-admin', async () => {
@@ -253,24 +236,6 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
     check(
       answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
       `answered ${answer.status} ${JSON.stringify(answer.body)}`,
-    )
-  })
-
-  await step("a note in the owner's name is rejected: foreign-owner", async () => {
-    // From a document of its own: the guest's one holds its refused edit, which the server lacks.
-    const forged = await noteCreate(RegionDoc.inMemory('tenant', region), {
-      id: noteIdFactory.create(),
-      author: owner.identity.id,
-      text: 'Forged',
-    })
-
-    guestDevice.push(region, 4, unwrap(forged))
-
-    const rejected = await guestDevice.next('reject')
-
-    check(
-      rejected.batch === 4 && rejected.reason === 'foreign-owner',
-      `rejected batch ${rejected.batch} for ${rejected.reason}`,
     )
   })
 

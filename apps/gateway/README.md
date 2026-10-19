@@ -28,7 +28,7 @@ identity), so a device holds one live grant and a pair it left behind dies with 
 revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
 is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
 cannot be reached answers 500, here and on every route and hello below. Devices sync over
-a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 4 (the
+a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 5 (the
 pair is renewed with the refresh key when the access token no longer works, and the new pair is
 sent first).
 The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
@@ -54,7 +54,9 @@ subscription carries the device's ability, built from its membership's role and 
 schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
 deletes only its own notes, an admin any, and the hub rejects any other write as
 `forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
-role applies to a device's subscriptions from its next subscribe or hello.
+role applies to a device's subscriptions from its next subscribe or hello. The hub also refuses
+a batch that brings changes under a Loro peer another identity's batch was accepted under in the
+region (`foreign-peer`), so no member can write as another member's device and stop it.
 A connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
 accepted; when an identity's memberships change, each of its connections leaves the regions it
 may no longer name at once, without waiting for the device's messages under way (one handled
@@ -285,9 +287,10 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
   its device writing a note into the organisation's region that the owner's device receives,
   the owner editing that note as an admin, the invited device deleting its own note, its edit of
-  the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
-  note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
-  4403), on a further identity the clause of the access method: its fresh token accepted, the
+  the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
+  `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
+  owner's next note still acknowledged and delivered, the member list refused to it with 403,
+  the removal that closes the region with 4403), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
   that the refresh is refused; on a further identity the directory schema applied again with the

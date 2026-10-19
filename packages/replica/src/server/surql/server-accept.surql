@@ -1,4 +1,21 @@
 BEGIN TRANSACTION;
+  -- A peer writes as one identity in a region: the first batch accepted with changes of a peer
+  -- binds it to the identity that pushed it, and a batch of another identity that brings
+  -- changes of it is refused whole. Checked first, so a refused batch does no other work.
+  FOR $peer IN $peers {
+    LET $bound = (
+      SELECT VALUE identity FROM ONLY type::record('_replica_peer', [$region, $peer])
+    );
+    IF $bound != NONE AND $bound != $identity {
+      THROW string::concat('peer:', $peer);
+    };
+    IF $bound = NONE {
+      CREATE type::record('_replica_peer', [$region, $peer]) SET
+        region = $region,
+        peer = $peer,
+        identity = $identity;
+    };
+  };
   -- A region writes only its own records: one the region projected (its marker exists), or
   -- one nobody holds yet. An upsert of a record that exists without this region's marker, and
   -- a delete without it, belong to another region and refuse the whole batch.

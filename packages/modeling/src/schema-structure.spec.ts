@@ -142,6 +142,7 @@ describe('loadSchemaModel', () => {
       '_replica_cursor',
       '_replica_head',
       '_replica_outbox',
+      '_replica_peer',
       '_replica_projected',
       '_replica_snapshot',
       '_replica_update',

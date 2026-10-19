@@ -4,13 +4,32 @@ import type { LocalDb } from '@workspace/data'
 
 import { profileSchema } from '../../__fixtures__/profile'
 import { toColumns } from '../../projection-values'
+import type { BatchWriter } from '../batch-writer'
 import type { AcceptPlan, RegionLog } from '../region-log'
 
+import boundIdentityStatement from './bound-identity.surql'
 import countRowsStatement from './count-rows.surql'
 import storedProfileStatement from './stored-profile.surql'
 import storedSnapshotStatement from './stored-snapshot.surql'
 
 export const region = 'identity:idn_a'
+
+/** The writer of the batches these tests accept: the owner, with peers these tests do not follow. */
+export const ownerWriter: BatchWriter = { identity: 'idn_a', peers: [] }
+
+/** The identity peer `peer` of `inRegion` writes as; undefined while the peer is free. */
+export async function boundIdentity(
+  local: LocalDb,
+  inRegion: string,
+  peer: string,
+): Promise<string | undefined> {
+  const [identity] = await local.db.query<[string | null | undefined]>(boundIdentityStatement, {
+    region: inRegion,
+    peer,
+  })
+
+  return identity ?? undefined
+}
 
 /** The frontiers of a document right after each of its accepted edits, by the edit's seq. */
 const acceptedAt = new WeakMap<LoroDoc, Map<number, Frontiers>>()
@@ -70,7 +89,12 @@ export async function acceptEdits(
   acceptedAt.set(doc, frontiers)
 
   for (const name of names) {
-    const seq = (await log.accept(commitName(doc, name, 'prf_1', region)))._unsafeUnwrap()
+    const seq = (
+      await log.accept(commitName(doc, name, 'prf_1', region), {
+        identity: 'idn_a',
+        peers: [doc.peerIdStr],
+      })
+    )._unsafeUnwrap()
 
     frontiers.set(seq, doc.frontiers())
   }

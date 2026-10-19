@@ -3,7 +3,7 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 4
+export const PROTOCOL_VERSION = 5
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
@@ -52,6 +52,7 @@ const head = z.int().nonnegative()
 
 const batch = z.int().positive()
 
+/** `foreign-peer`: the batch brings changes under a Loro peer another identity writes as in the region. */
 export const rejectReason = z.enum([
   'malformed',
   'pending-dependencies',
@@ -59,6 +60,7 @@ export const rejectReason = z.enum([
   'foreign-owner',
   'forbidden-action',
   'invalid-record',
+  'foreign-peer',
 ])
 
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])

@@ -2,10 +2,9 @@ import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { noteIdFactory } from '@workspace/ids'
-import { defineAbilityFor } from '@workspace/kernel'
 
 import bumpHeadStatement from '../__fixtures__/bump-head.surql'
-import { noteCreate, noteUpdate, replicaSchema } from '../__fixtures__/note'
+import { noteCreate, noteUpdate } from '../__fixtures__/note'
 
 import {
   actor,
@@ -13,6 +12,7 @@ import {
   editFrom,
   hubWithHistory,
   hubWithTwoSubscribers,
+  memberOf,
   nameInSnapshot,
   openDatabase,
   openHub,
@@ -20,21 +20,17 @@ import {
   snapshotIn,
   snapshotOf,
   subscriber,
+  underPeerOf,
 } from './__fixtures__/hub'
 import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
 import { singleDatabase } from './region-databases'
-import type { Actor, Subscriber } from './region-hub'
+import type { Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
 import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
 
 afterEach(closeHubs)
-
-/** What a member of the organisation does through a subscription: the abilities its role gives. */
-function memberOf(id: string, role: 'member' | 'admin' = 'member'): Actor {
-  return { id, ability: defineAbilityFor({ id, role }, replicaSchema) }
-}
 
 describe('region hub', () => {
   it('acknowledges a push and sends it to the other subscribers of the region', async () => {
@@ -576,5 +572,51 @@ describe('region hub', () => {
     expect((await hub.pull(region.id, a, new Uint8Array([255, 255, 255]))).isOk()).toBe(true)
 
     expect(a.received.at(-1)).toEqual(expect.objectContaining({ type: 'error', code: 'protocol' }))
+  })
+
+  it("keeps a member's peer bound across the region's unload: after the reload another member's batch under it is refused as foreign-peer and the member's next batch is acknowledged", async () => {
+    const { hub, clock } = await openHub()
+    const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+    const ann = subscriber('ann')
+    const bob = subscriber('bob')
+    const id = noteIdFactory.create()
+
+    ;(await hub.subscribe(acme, memberOf('idn_ann'), ann, null))._unsafeUnwrap()
+    ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
+    ;(
+      await hub.push(acme.id, ann, 1, [
+        noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' }),
+      ])
+    )._unsafeUnwrap()
+
+    hub.unsubscribe(acme.id, ann.id)
+    hub.unsubscribe(acme.id, bob.id)
+    await clock.advance(60_000)
+    expect(hub.loadedRegions()).toBe(0)
+
+    ;(
+      await hub.subscribe(acme, memberOf('idn_bob'), bob, bob.doc.version().encode())
+    )._unsafeUnwrap()
+    ;(
+      await hub.push(acme.id, bob, 1, [
+        noteCreate(underPeerOf(ann.doc, bob.doc), {
+          id: noteIdFactory.create(),
+          author: 'idn_bob',
+          text: 'mine',
+        }),
+      ])
+    )._unsafeUnwrap()
+    ;(
+      await hub.subscribe(acme, memberOf('idn_ann'), ann, ann.doc.version().encode())
+    )._unsafeUnwrap()
+    ;(
+      await hub.push(acme.id, ann, 2, [noteUpdate(ann.doc, { id, text: 'hello again' })])
+    )._unsafeUnwrap()
+
+    expect(bob.received.findLast((m) => m.type === 'reject')).toMatchObject({
+      batch: 1,
+      reason: 'foreign-peer',
+    })
+    expect(ann.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 2, head: 2 })
   })
 })
