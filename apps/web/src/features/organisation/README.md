@@ -20,6 +20,9 @@ on the replica schema are applied on the device before a command runs
   the tenant region. Creating an organisation, inviting an account by email and removing a
   member go through the gateway's `/organisations` routes via the `ORGANISATIONS` port, not
   through the replica.
+- Components: `OrganisationMembers` (the members card with the invite form) and
+  `OrganisationErrorLine` (the error code of a refused change as copy), in `presentation/components/`;
+  the page's `useAction` hook sits beside its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`; test ids `organisation.*`.
 - Behaviour: without memberships the page offers to create an organisation (a key checked
@@ -30,7 +33,7 @@ on the replica schema are applied on the device before a command runs
   member's own notes are marked "Yours", and a change the rules forbid is explained
   (`note:FORBIDDEN`). An administrator also sees the members, invites an existing account by
   email and removes a member. The page follows the memberships as they change, without a
-  reload.
+  reload. A refused change the gateway limits (`rate-limited`) is worded as "too many attempts".
 
 ## Commands
 

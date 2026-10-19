@@ -45,7 +45,7 @@ import { UserModule } from '../features/user/user.module'
 
 import type { CommandLogger } from './commands'
 import { devicesApi } from './devices-api'
-import { gatewayAuth } from './gateway-auth'
+import { type Fetcher, gatewayAuth } from './gateway-auth'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
 import { memoryStorage } from './storage'
@@ -54,9 +54,16 @@ export type { NoteRow } from '../features/organisation/application/notes.service
 export type { ProfileRow } from '../features/user/application/profile.service'
 export { checkProfileName } from '../features/user/domain/profile-name.rule'
 
+export type { Fetcher } from './gateway-auth'
+
 export interface ClientOptions {
   /** The gateway's address, such as `http://127.0.0.1:5181`; its sync WebSocket is `/sync` under it. */
   readonly gatewayUrl: string
+  /**
+   * What the client calls the gateway's HTTP routes with, the global `fetch` by default: a test
+   * that talks to the gateway directly plays the front with it, naming a client address.
+   */
+  readonly fetcher?: Fetcher
   readonly logger?: CommandLogger
 }
 
@@ -122,6 +129,11 @@ export interface StandOptions {
   readonly namespace: string
   readonly database: string
   readonly credentials: { readonly username: string; readonly password: string }
+  /**
+   * The key the stand's gateway signs tokens with (`GATEWAY_JWT_KEY`): the directory schema is
+   * applied with it, so opening the stand never gives its access method another key.
+   */
+  readonly signingKey: string
 }
 
 /** The operator's connection to a stand, where seeded accounts are swept. */
@@ -307,6 +319,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
   const tenantSchema = readSchema('tenant')
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
+  const fetcher: Fetcher = options.fetcher ?? fetch
 
   return createAppRoot({
     openLocal: () =>
@@ -327,12 +340,12 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
       }),
     // An in-memory database leaves nothing behind once it is closed.
     deleteTenantLocal: () => okAsync(undefined),
-    gatewayAuth: gatewayAuth(options.gatewayUrl),
+    gatewayAuth: gatewayAuth(options.gatewayUrl, fetcher),
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
     online: () => true,
-    organisationsApi: (deps) => organisationsApi(options.gatewayUrl, deps),
-    devicesApi: (deps) => devicesApi(options.gatewayUrl, deps),
+    organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
+    devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),
@@ -356,7 +369,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
 
 /**
  * Connects to a stand as its operator. The directory schema is applied as the gateway applies
- * it, which leaves a database that already has it alone.
+ * it, with the gateway's signing key, which leaves a database that already has it alone; without
+ * that key, the stand would be given a new one and every device's access token refused.
  */
 export function openStand(options: StandOptions): ResultAsync<Stand, DataError> {
   return openLocalDb({
@@ -366,5 +380,6 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
     database: options.database,
     credentials: options.credentials,
     schema: readSchema('directory'),
+    signingKey: options.signingKey,
   }).map((local) => ({ local, runner: new ShapeRunner(local), close: () => local.close() }))
 }

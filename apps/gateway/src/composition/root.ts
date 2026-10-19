@@ -22,6 +22,7 @@ import { RegionHub } from '@workspace/replica/server'
 import { DeviceSessions } from '../auth/device-sessions'
 import { IdentitySessions } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { RequestLimits } from '../limits/request-limits'
 import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
@@ -49,6 +50,11 @@ export interface GatewayRoot {
   readonly connections: ConnectionRegistry
   /** The directory database. */
   readonly local: LocalDb
+  /**
+   * The request limits of this process: the credential checks of each client address and the
+   * failed sign-ins of each email.
+   */
+  readonly limits: RequestLimits
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -64,8 +70,17 @@ export interface GatewayRootOptions {
   readonly url: string
   /** The gateway's namespace user; an embedded database needs none. */
   readonly credentials?: { readonly username: string; readonly password: string }
+  /**
+   * The key the directory's identity access method signs tokens with, given to its schema at
+   * apply, so a schema applied again keeps every issued token valid. The organisations'
+   * databases do not take it.
+   */
+  readonly signingKey: string
   readonly clock: Clock
 }
+
+/** The access method identities sign in through, and where its tokens are issued. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
 
 export function createGatewayRoot(
   options: GatewayRootOptions,
@@ -85,6 +100,7 @@ export function createGatewayRoot(
     namespace: NAMESPACE,
     database: DIRECTORY,
     schema: readSchema('directory'),
+    signingKey: options.signingKey,
     ...credentials,
   }).map((local): GatewayRoot => {
     const databases = new TenantDatabases({
@@ -124,8 +140,8 @@ export function createGatewayRoot(
 
     return {
       sessions: new IdentitySessions({
-        openAuth: () =>
-          createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+        openAuth: () => createAuth(local, identityAccess),
+        scope: identityAccess,
         onFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
         devices: deviceSessions,
         clock: options.clock,
@@ -137,6 +153,7 @@ export function createGatewayRoot(
       schema: replicaSchema,
       connections,
       local,
+      limits: new RequestLimits({ clock: options.clock }),
       clock: options.clock,
       close: async () => {
         await hub.close()

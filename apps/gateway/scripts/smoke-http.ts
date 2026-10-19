@@ -1,6 +1,11 @@
 /**
  * The HTTP side of the smoke test: signing an identity up or in, and calling the gateway's
  * routes with an access token. An answer the smoke does not expect fails the step.
+ *
+ * The smoke and the load test talk to the gateway directly, so they play the front: like Caddy,
+ * which names the address it saw in `X-Forwarded-For`, they give each simulated device a client
+ * address of its own, `198.18.<a>.<b>` (a range set aside for benchmarks) from a stable hash of
+ * the device id, so the gateway's limits per client address count each device apart.
  */
 
 import { membership } from '@workspace/replica/protocol'
@@ -22,10 +27,18 @@ export interface Credentials {
   readonly device: { readonly id: string; readonly label: string }
 }
 
-/** What a route answered: its status and its body, which is not necessarily JSON. */
+/** What a route answered: its status, its headers and its body, which is not necessarily JSON. */
 export interface Answer {
   readonly status: number
+  readonly headers: Headers
   readonly body: unknown
+}
+
+/** The client address of a simulated device: `198.18.<a>.<b>` from a stable hash of its id. */
+function simulatedAddress(device: string): string {
+  const hash = Bun.hash.crc32(device)
+
+  return `198.18.${(hash >>> 8) & 0xff}.${hash & 0xff}`
 }
 
 export async function postCredentials(
@@ -33,7 +46,7 @@ export async function postCredentials(
   path: string,
   credentials: Credentials,
 ): Promise<SignedIn> {
-  const answer = await call(base, 'POST', path, undefined, credentials)
+  const answer = await call(base, 'POST', path, undefined, credentials, credentials.device.id)
 
   if (answer.status !== 200) {
     throw new Error(`${path} answered ${answer.status} ${JSON.stringify(answer.body)}`)
@@ -44,7 +57,7 @@ export async function postCredentials(
 
 /**
  * Calls a route of the gateway, as the holder of `token` when there is one, from `device`
- * (`X-Perch-Device`) when one is named.
+ * (`X-Perch-Device`, and the device's simulated address in `X-Forwarded-For`) when one is named.
  */
 export async function call(
   base: string,
@@ -59,13 +72,19 @@ export async function call(
     headers: {
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
-      ...(device === undefined ? {} : { 'X-Perch-Device': device }),
+      ...(device === undefined
+        ? {}
+        : { 'X-Perch-Device': device, 'X-Forwarded-For': simulatedAddress(device) }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   const text = await response.text()
 
-  return { status: response.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) }
+  return {
+    status: response.status,
+    headers: response.headers,
+    body: text === '' ? undefined : (JSON.parse(text) as unknown),
+  }
 }
 
 /** Calls a route of the gateway as `signedIn`: its access token, from its device. */

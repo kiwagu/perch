@@ -30,6 +30,7 @@ import {
   type DeviceTokens,
   grantIdOf,
   IdentitySessions,
+  type RenewalGate,
 } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { Organisations } from '../tenants/organisations'
@@ -49,6 +50,9 @@ import {
   type SyncConnectionDeps,
 } from './sync-connection'
 
+/** The access method identities sign in through, and the scope its tokens are issued for. */
+const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
+
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
 const bob = { email: 'bob@example.test', password: 'pass-word-1' }
@@ -61,6 +65,12 @@ const SEEN_EVERY_MS = 5 * 60_000
 
 /** The close code of a server that failed. */
 const SERVER_ERROR = 1011
+
+/** The close code of a server that asks the client to try again later. */
+const TRY_AGAIN_LATER = 1013
+
+/** A gate that lets every renewal through. */
+const anyRenewal: RenewalGate = () => true
 
 /** A socket that records what the connection sent it, decoded, and how it was closed. */
 class FakeSocket implements SocketLike {
@@ -125,6 +135,8 @@ interface ConnectOptions {
   readonly authenticating?: () => Promise<void>
   /** Holds each read of the device's row until it resolves. */
   readonly binding?: () => Promise<void>
+  /** The gate of each hello's renewals, by device; every renewal goes through by default. */
+  readonly renewals?: (device: string) => RenewalGate
 }
 
 interface GatewayOptions {
@@ -174,8 +186,8 @@ async function openGateway(options: GatewayOptions = {}) {
   const devices = new DeviceSessions({ directory: local, clock })
 
   const sessions = new IdentitySessions({
-    openAuth: () =>
-      createAuth(local, { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }),
+    openAuth: () => createAuth(local, identityAccess),
+    scope: identityAccess,
     onFailure: (error) => reported.push(error),
     devices,
     clock,
@@ -236,9 +248,19 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   const socket = new FakeSocket()
   const connection = new SyncConnection(socket, {
     sessions: {
-      authenticate: (tokens) =>
+      authenticate: (
+        tokens: { readonly access: string; readonly refresh?: string },
+        renewal?: RenewalGate,
+      ) =>
         ResultAsync.fromSafePromise(options.authenticating?.() ?? Promise.resolve())
-          .andThen(() => sessions.authenticate(tokens))
+          .andThen(() =>
+            tokens.refresh === undefined
+              ? sessions.authenticate({ access: tokens.access })
+              : sessions.authenticate(
+                  { access: tokens.access, refresh: tokens.refresh },
+                  renewal ?? expect.unreachable('a refresh key without a gate'),
+                ),
+          )
           .andTee((authenticated) => options.onAuthenticated?.(authenticated)),
       park: (parking) => sessions.park(parking),
       parked: (presented) => sessions.parked(presented),
@@ -278,6 +300,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
     schema: replicaSchema,
     connections: gateway.connections,
     clock: gateway.clock,
+    renewals: options.renewals ?? (() => anyRenewal),
     log: createLogger('sync', {
       level: 'info',
       format: 'json',
@@ -547,7 +570,7 @@ describe('SyncConnection', () => {
     // The grant is revoked in the database: its refresh key renews nothing.
     expect(
       (
-        await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh })
+        await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh }, anyRenewal)
       )._unsafeUnwrapErr().code,
     ).toBe('data:AUTH_FAILED')
     expect(sessions.parked({ device: DEVICE, refresh: spent })).toBeUndefined()
@@ -613,7 +636,9 @@ describe('SyncConnection', () => {
       expect.objectContaining({ level: 40, code: 'data:WRITE_FAILED' }),
     ])
     expect(
-      (await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh })).isOk(),
+      (
+        await sessions.authenticate({ access: 'stale', refresh: ann.tokens.refresh }, anyRenewal)
+      ).isOk(),
     ).toBe(true)
   })
 
@@ -733,6 +758,124 @@ describe('SyncConnection', () => {
     expect(other.socket.sent).toEqual([])
   })
 
+  it('closes 1013 a hello whose renewal the limit refuses, and its keys still renew', async () => {
+    const asked: string[] = []
+    const fixture = await connect({
+      renewals: (device) => () => {
+        asked.push(device)
+
+        return false
+      },
+    })
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+
+    await hello(fixture.connection, stale)
+
+    expect(fixture.socket.closes).toEqual([[TRY_AGAIN_LATER, 'too many renewals']])
+    expect(fixture.socket.sent).toEqual([])
+    expect(asked).toEqual([DEVICE])
+    // A refusal is not logged.
+    expect(fixture.logLines).toEqual([])
+
+    const retry = open(fixture)
+
+    await hello(retry.connection, stale)
+
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('hands the parked pair to the spent key while the limit refuses renewals, asking it nothing', async () => {
+    let renewed: AuthenticatedDevice | undefined
+    let duringRenewal = (_: AuthenticatedDevice) => {}
+    const fixture = await connect({ onAuthenticated: (device) => duringRenewal(device) })
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+
+    duringRenewal = (device) => {
+      renewed = device
+      fixture.connection.closed()
+    }
+    await hello(fixture.connection, stale)
+
+    const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+    const asked: string[] = []
+    const retry = open(fixture, {
+      renewals: (device) => () => {
+        asked.push(device)
+
+        return false
+      },
+    })
+
+    await hello(retry.connection, stale)
+
+    expect(retry.socket.sent[0]).toEqual({
+      type: 'tokens',
+      access: pair.access,
+      refresh: pair.refresh,
+    })
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+    expect(asked).toEqual([])
+  })
+
+  it('hands the spent key a pair parked for it while the keys of its hello were checked', async () => {
+    const spent = 'surreal-refresh-spent-key'
+    let parkOnce = () => {}
+    const fixture = await connect({
+      authenticating: async () => {
+        parkOnce()
+        parkOnce = () => {}
+      },
+    })
+
+    // Another hello's renewal with the same key parks its pair while this hello is checked.
+    parkOnce = () =>
+      fixture.sessions.park({
+        identity: fixture.ann.identity.id,
+        device: DEVICE,
+        spentRefresh: spent,
+        tokens: fixture.ann.tokens,
+      })
+    await hello(fixture.connection, { access: 'stale', refresh: spent })
+
+    expect(fixture.socket.sent[0]).toEqual({ type: 'tokens', ...fixture.ann.tokens })
+    expect(types(fixture.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('closes 1013 a hello whose parked pair needs a renewal the limit refuses, and parks it again', async () => {
+    const fixture = await connect()
+    const spent = 'surreal-refresh-spent-key'
+
+    // A pair whose access token no longer works waits for the device's hello with the spent key.
+    fixture.sessions.park({
+      identity: fixture.ann.identity.id,
+      device: DEVICE,
+      spentRefresh: spent,
+      tokens: { access: 'stale', refresh: fixture.ann.tokens.refresh },
+    })
+
+    const asked: string[] = []
+    const refused = open(fixture, {
+      renewals: (device) => () => {
+        asked.push(device)
+
+        return false
+      },
+    })
+
+    await hello(refused.connection, { access: 'stale', refresh: spent })
+
+    expect(refused.socket.closes).toEqual([[TRY_AGAIN_LATER, 'too many renewals']])
+    expect(refused.socket.sent).toEqual([])
+    expect(asked).toEqual([DEVICE])
+
+    // Nothing was spent: the next hello takes the parked pair, renewed.
+    const retry = open(fixture)
+
+    await hello(retry.connection, { access: 'stale', refresh: spent })
+
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
   it('closes as a failed server a hello whose keys the database could not judge, and takes them once it answers', async () => {
     const fixture = await connect()
     const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
@@ -751,6 +894,26 @@ describe('SyncConnection', () => {
     await hello(retry.connection, stale)
 
     expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('charges no renewal for a hello whose access token the database could not judge', async () => {
+    const asked: string[] = []
+    const fixture = await connect({
+      renewals: (device) => () => {
+        asked.push(device)
+
+        return true
+      },
+    })
+    const end = fixture.outage()
+
+    await hello(fixture.connection, { access: 'stale', refresh: fixture.ann.tokens.refresh })
+
+    expect(fixture.socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(reported.splice(0).map((error) => error.code)).toEqual(['data:QUERY_FAILED'])
+    expect(asked).toEqual([])
+
+    end()
   })
 
   it('keeps the parked pair when the keys of a hello could not be judged', async () => {
@@ -786,8 +949,8 @@ describe('SyncConnection', () => {
     duringRenewal = () => fixture.connection.closed()
     await hello(fixture.connection, stale)
 
-    // The spent key is refused; the check of the parked pair cannot open its session.
-    const end = fixture.outage(1)
+    // The check of the parked pair, the first thing the hello asks, cannot open its session.
+    const end = fixture.outage()
     const during = open(fixture)
 
     await hello(during.connection, stale)
@@ -971,9 +1134,9 @@ describe('SyncConnection', () => {
     expect(socket.sent).toEqual([])
     expect((await phoneRow())._unsafeUnwrap()?.grant).toBe(before?.grant)
     expect(phone.tokens.refresh).not.toBe(pair.refresh)
-    expect((await sessions.authenticate({ access: 'stale', refresh: pair.refresh })).isErr()).toBe(
-      true,
-    )
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: pair.refresh }, anyRenewal)).isErr(),
+    ).toBe(true)
   })
 
   it('leaves a signed-out device revoked when its pair is renewed at hello, and revokes the new grant', async () => {
@@ -1000,9 +1163,9 @@ describe('SyncConnection', () => {
     expect(socket.sent).toEqual([])
     expect(row?.revokedAt).toBeInstanceOf(Date)
     expect(row?.grant).toBe(grantIdOf(ann.tokens.refresh))
-    expect((await sessions.authenticate({ access: 'stale', refresh: pair.refresh })).isErr()).toBe(
-      true,
-    )
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: pair.refresh }, anyRenewal)).isErr(),
+    ).toBe(true)
   })
 
   it('closes 4001 a hello whose device is signed out while its keys are checked', async () => {

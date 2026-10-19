@@ -15,7 +15,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { DeviceSessions } from './device-sessions'
-import { issuedAtOf } from './token-claims'
+import { issuedAtOf, namesOtherScope, type TokenScope } from './token-claims'
 
 /** The keys a device keeps: the short-lived access token and the refresh key that renews it. */
 export interface DeviceTokens {
@@ -43,6 +43,12 @@ export type AuthenticatedDevice =
   | { readonly identity: AuthUser; readonly tokens: AuthTokens; readonly renewed: false }
   | { readonly identity: AuthUser; readonly tokens: DeviceTokens; readonly renewed: true }
 
+/**
+ * Asked once the access token was refused and before the refresh key beside it is exchanged:
+ * whether the renewal may go on. A renewal it refuses asks the database nothing and spends nothing.
+ */
+export type RenewalGate = () => boolean
+
 /** A pair parked for a device, and the identity it signs in. */
 export interface ParkedPair {
   readonly identity: IdentityId
@@ -57,6 +63,8 @@ export interface IdentitySessionsOptions {
    * and where the grant it held before is revoked.
    */
   readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
+  /** Where the identity access method issues tokens; a token issued elsewhere is refused. */
+  readonly scope: TokenScope
   /** Times the pairs parked for a retry out. */
   readonly clock: Clock
   /**
@@ -105,8 +113,8 @@ function refused(message: string, cause?: unknown): DataError {
 
 /**
  * Whether a failure to accept keys refused them: the database judged them dead. Any other failure
- * judged nothing (the database could not be reached, or the gateway failed), and the same keys may
- * work once it answers again.
+ * judged nothing (the database could not be reached, the gateway failed, or a limit refused the
+ * renewal), and the same keys may work once it answers again.
  */
 export function keysRefused(error: DataError): boolean {
   return error.code === 'data:AUTH_FAILED'
@@ -151,17 +159,18 @@ function renew(
  * of its own that is closed when the call ends, so no call sees another's identity and the
  * connection keeps no session per device. A sign-up and a sign-in record the device with the
  * grant its pair holds; a renewal records nothing here: the hello that renews binds the device
- * to its row. A renewed pair the device could not take is parked for a minute, for the device's
- * next hello with the refresh key the renewal spent. Keys the database refused fail with
- * `data:AUTH_FAILED`; a call it could not judge (it could not be reached, or the call failed in
- * the gateway) fails with `data:QUERY_FAILED`, and the keys may still work. Nothing here logs,
- * and no error carries a key.
+ * to its row. A renewed pair the device could not take is parked for a minute after it was last
+ * parked, for the device's next hello with the refresh key the renewal spent. Keys the database
+ * refused fail with `data:AUTH_FAILED`; a call it could not judge (it could not be reached, or the
+ * call failed in the gateway) fails with `data:QUERY_FAILED`, and a renewal its gate refused with
+ * `data:RATE_LIMITED`: the keys may still work. Nothing here logs, and no error carries a key.
  */
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
   readonly #onFailure: (error: DataError) => void
   readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   readonly #clock: Clock
+  readonly #scope: TokenScope
   /** The pairs parked for a retry, by device and the digest of the spent refresh key. */
   readonly #parked = new Map<string, Parked>()
 
@@ -170,6 +179,7 @@ export class IdentitySessions {
     this.#onFailure = options.onFailure
     this.#devices = options.devices
     this.#clock = options.clock
+    this.#scope = options.scope
   }
 
   /** Signs an identity up on `device`, which is recorded with the grant of its pair. */
@@ -187,14 +197,30 @@ export class IdentitySessions {
   }
 
   /**
-   * Accepts the access token, or renews the pair with the refresh key when the token no longer
-   * works. It records nothing: the caller binds the device to its row.
+   * Accepts the access token, or renews the pair with the refresh key when the database refused
+   * the token, once `renewal` lets it: a refresh key comes with its gate, and a renewal the gate
+   * refuses fails `data:RATE_LIMITED`, its key unspent. A token the database could not judge
+   * fails as it is, with no gate asked and nothing spent. It records nothing: the caller binds
+   * the device to its row.
    */
   authenticate(tokens: {
     readonly access: string
-    readonly refresh?: string
-  }): ResultAsync<AuthenticatedDevice, DataError> {
+    readonly refresh?: never
+  }): ResultAsync<AuthenticatedDevice, DataError>
+  authenticate(
+    tokens: { readonly access: string; readonly refresh: string },
+    renewal: RenewalGate,
+  ): ResultAsync<AuthenticatedDevice, DataError>
+  authenticate(
+    tokens: { readonly access: string; readonly refresh?: string },
+    renewal?: RenewalGate,
+  ): ResultAsync<AuthenticatedDevice, DataError> {
     const { access, refresh } = tokens
+
+    // The database would accept a token of another database's record access: refuse it first.
+    if (namesOtherScope(access, this.#scope)) {
+      return errAsync(refused('the access token names another namespace, database or access'))
+    }
 
     return this.#withAuth((auth) =>
       auth
@@ -207,9 +233,22 @@ export class IdentitySessions {
             renewed: false,
           }),
         )
-        .orElse((error) =>
-          refresh === undefined ? errAsync(error) : renew(auth, { access, refresh }),
-        ),
+        .orElse((error) => {
+          // Only a token the database refused is renewed: one it could not judge may still work.
+          if (refresh === undefined || !keysRefused(error)) {
+            return errAsync(error)
+          }
+
+          // The overloads give every refresh key its gate: one without is the gateway's failure.
+          if (renewal === undefined) {
+            return errAsync(unjudged('a refresh key came without its renewal gate'))
+          }
+
+          // Counted before the refresh key is exchanged: a refused renewal spends nothing.
+          return renewal()
+            ? renew(auth, { access, refresh })
+            : errAsync(dataError('data:RATE_LIMITED', 'too many renewals'))
+        }),
     )
   }
 
@@ -241,7 +280,7 @@ export class IdentitySessions {
 
   /**
    * The pair parked for `device` and the spent refresh key it presents, taken out with the
-   * identity it signs in; `undefined` when none is parked or it waited longer than 60 seconds.
+   * identity it signs in; `undefined` when none is parked or 60 s passed since it was last parked.
    */
   parked(input: { readonly device: string; readonly refresh: string }): ParkedPair | undefined {
     const key = parkingOf(input.device, input.refresh)

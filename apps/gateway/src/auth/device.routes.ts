@@ -6,6 +6,8 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CLOSE, deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import type { RequestLimits } from '../limits/request-limits'
+import { tooMany } from '../limits/too-many'
 import type { ConnectionRegistry } from '../sync/connections'
 
 import { bearerCaller, DEVICE_HEADER, readBody } from './auth.routes'
@@ -106,6 +108,8 @@ export interface DeviceRoutesOptions {
    * failure out, so this is where it is told.
    */
   readonly onFailure: (error: DataError) => void
+  /** Counts the renewal of a pair sign-out whose access token no longer works. */
+  readonly limits: Pick<RequestLimits, 'renewal'>
 }
 
 /**
@@ -128,6 +132,9 @@ export interface DeviceRoutesOptions {
  *   its refresh grant must be one of the identity's devices: that device's row is marked signed
  *   out (or stays so), a pair parked for it is forgotten, its sockets are closed with 4001, and
  *   the grant the pair holds (the renewed one when renewed) is revoked through the database: 204.
+ *   A renewal counts against the device and the client address (`from`) before the refresh key
+ *   is exchanged: one the limits refuse answers 429 `rate-limited` with `Retry-After`, nothing
+ *   revoked and nothing spent.
  *   A failure answers 500 and may be asked again, a pair the database could not judge among
  *   them; a pair the database refused or that no device of the identity holds answers 401
  *   `unauthorized`, with nothing revoked but a grant the route renewed itself. A renewal spends
@@ -151,7 +158,7 @@ export function deviceRoutes(
   >,
   connections: Pick<ConnectionRegistry, 'close'>,
   options: DeviceRoutesOptions,
-): (request: Request) => Promise<Response | undefined> {
+): (request: Request, from: string) => Promise<Response | undefined> {
   /** A failure of the gateway answers without its cause, which `onFailure` hears. */
   function failed(error: DataError): Response {
     options.onFailure(error)
@@ -255,7 +262,7 @@ export function deviceRoutes(
    * pair's refresh key, so the pair asked again would be refused: the row's mark is tried three
    * times, and when it still fails, the device the header names is closed before the 500.
    */
-  const signOut = async (request: Request): Promise<Response> => {
+  const signOut = async (request: Request, from: string): Promise<Response> => {
     const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
     const body = signOutBody.safeParse(await readBody(request))
 
@@ -265,7 +272,22 @@ export function deviceRoutes(
 
     const { access, refresh } = body.data
     const sent = grantIdOf(refresh)
-    const authenticated = await sessions.authenticate({ access, refresh })
+    /** The renewal the limits refused, kept for its `Retry-After`. */
+    const limited: { refused?: { readonly retryAfterMs: number } } = {}
+    const authenticated = await sessions.authenticate({ access, refresh }, () => {
+      const allowance = options.limits.renewal(from, device.data)
+
+      if (!allowance.allowed) {
+        limited.refused = allowance
+      }
+
+      return allowance.allowed
+    })
+
+    // A renewal the limits refused asked the database nothing: the pair is as it was.
+    if (limited.refused) {
+      return tooMany(limited.refused)
+    }
 
     // A pair the database could not judge was not refused: the device keeps it and asks again.
     if (authenticated.isErr() && !keysRefused(authenticated.error)) {
@@ -331,7 +353,9 @@ export function deviceRoutes(
     }
 
   /** The one method the target takes, and its handler. */
-  function handlerOf(target: Target): readonly [string, (request: Request) => Promise<Response>] {
+  function handlerOf(
+    target: Target,
+  ): readonly [string, (request: Request, from: string) => Promise<Response>] {
     return match(target)
       .with({ kind: 'devices' }, () => ['GET', signedIn(list)] as const)
       .with({ kind: 'device' }, ({ id }) => ['DELETE', signedIn(revoke(id))] as const)
@@ -340,7 +364,7 @@ export function deviceRoutes(
       .exhaustive()
   }
 
-  return async (request) => {
+  return async (request, from) => {
     const target = targetOf(new URL(request.url).pathname)
 
     if (!target) {
@@ -356,6 +380,6 @@ export function deviceRoutes(
       )
     }
 
-    return handler(request)
+    return handler(request, from)
   }
 }

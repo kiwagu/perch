@@ -74,6 +74,14 @@ describe('SignInView', () => {
     )
   })
 
+  it('asks to wait when the gateway limits the attempts', () => {
+    renderView({ error: 'data:RATE_LIMITED' })
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      en['user.sign-in.error.rate-limited'],
+    )
+  })
+
   it('says nothing about how the last session ended unless the session left a notice', () => {
     renderView()
 

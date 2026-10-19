@@ -1,17 +1,21 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import type { ClientOptions, Fetcher } from '@workspace/web/seeding'
 import { z } from '@workspace/zod'
 
 import { inviteInto, readOrganisation, signInAndRead } from './__fixtures__/device'
+import { simulatedFront } from './__fixtures__/simulated-front'
 import { leftOnStand } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
-import { runSeed, type StandTarget, sweep } from './seed'
+import { openStand, runSeed, type StandTarget, sweep } from './seed'
 
 // The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
 // where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
 // share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
-// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses from the
-// manifest's vars.
+// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses and the key
+// the stand's gateway signs with from the manifest's vars.
+const signingKeyRule =
+  'must be the key the gateway-e2e gateway signs with; run the suite with bun run test:db'
 const stand = z
   .object({
     GATEWAY_URL: z.url({
@@ -24,6 +28,7 @@ const stand = z
       error:
         'must be the http(s):// address of the surrealdb-e2e stand; run the suite with bun run test:db',
     }),
+    GATEWAY_JWT_KEY: z.string({ error: signingKeyRule }).min(1, { error: signingKeyRule }),
   })
   .parse(process.env)
 const target: StandTarget = {
@@ -32,6 +37,7 @@ const target: StandTarget = {
   namespace: 'app',
   database: 'directory',
   credentials: { username: 'root', password: 'root' },
+  signingKey: stand.GATEWAY_JWT_KEY,
 }
 
 const demo: SeedMode = { kind: 'demo' }
@@ -49,20 +55,65 @@ const outsider = {
   locale: 'en',
 } as const
 
+// An account that keeps the pair it signed up with while the stand is opened as its operator.
+const keyholder = {
+  email: `keyholder.${run}@example.test`,
+  password: 'keyholder-seed-password',
+  device: { id: `seed-keyholder-${run}`, label: 'Seed spec' },
+} as const
+
+/** What a sign-up answers, as far as this spec reads it. */
+const signedUp = z.object({ tokens: z.object({ access: z.string() }) })
+
+/**
+ * The running test's client of the stand's gateway: each test is a simulated client with a
+ * client address of its own, so the gateway's limits per address count the tests apart.
+ */
+let client: ClientOptions & { readonly fetcher: Fetcher }
+
+beforeEach(({ task }) => {
+  client = { gatewayUrl: target.gatewayUrl, fetcher: simulatedFront(task.name) }
+})
+
 afterAll(async () => {
   expect((await sweep(target, { emails })).isOk()).toBe(true)
-  expect((await sweep(target, { emails: [outsider.email] })).isOk()).toBe(true)
+  expect((await sweep(target, { emails: [outsider.email, keyholder.email] })).isOk()).toBe(true)
+})
+
+describe("the stand's operator", () => {
+  it('leaves the access tokens the gateway issued valid when it opens the stand', async () => {
+    const answer = await client.fetcher(`${target.gatewayUrl}/auth/sign-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(keyholder),
+    })
+
+    // The status first, so a refusal (a limit's 429 among them) fails with its status, not a parse.
+    expect(answer.status).toBe(200)
+
+    const { access } = signedUp.parse(await answer.json()).tokens
+    const opened = (await openStand(target))._unsafeUnwrap()
+
+    await opened.close()
+
+    // The directory schema is applied with the gateway's key, or not at all: the token still works.
+    const organisations = await client.fetcher(`${target.gatewayUrl}/organisations`, {
+      headers: { Authorization: `Bearer ${access}`, 'X-Perch-Device': keyholder.device.id },
+    })
+
+    expect(organisations.status).toBe(200)
+  })
 })
 
 describe('seeding through the gateway', () => {
   it('seeds the accounts through the gateway, and a second device sees them', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode }))._unsafeUnwrap()
+    const manifest = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
 
     for (const preset of catalog.accounts) {
       const account = accountFor(preset, mode)
-      const seen = (await signInAndRead(target.gatewayUrl, account))._unsafeUnwrap()
+      const seen = (await signInAndRead(client, account))._unsafeUnwrap()
       const profile = seen.profile ?? expect.unreachable(`a profile for ${preset.ref}`)
 
       expect(manifest.accounts[preset.ref]).toEqual({
@@ -82,7 +133,7 @@ describe('seeding through the gateway', () => {
   it('seeds acme with its administrator and member, and a second device of the member sees it', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode }))._unsafeUnwrap()
+    const manifest = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
     const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
     const [ann, beto] = ['ann', 'beto'].map((ref) => {
       const preset = catalog.accounts.find((account) => account.ref === ref)
@@ -94,7 +145,7 @@ describe('seeding through the gateway', () => {
     expect(acme.name).toBe('Acme Corp')
 
     const seenByBeto = (
-      await readOrganisation(target.gatewayUrl, acme.key, beto ?? expect.unreachable('beto'))
+      await readOrganisation(client, acme.key, beto ?? expect.unreachable('beto'))
     )._unsafeUnwrap()
 
     expect(seenByBeto.membership).toEqual({
@@ -104,7 +155,7 @@ describe('seeding through the gateway', () => {
     expect(seenByBeto.notes).toEqual([])
 
     const seenByAnn = (
-      await readOrganisation(target.gatewayUrl, acme.key, ann ?? expect.unreachable('ann'))
+      await readOrganisation(client, acme.key, ann ?? expect.unreachable('ann'))
     )._unsafeUnwrap()
 
     expect(seenByAnn.membership.role).toBe('admin')
@@ -113,9 +164,9 @@ describe('seeding through the gateway', () => {
   it('runs twice without duplicating anything', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const first = (await runSeed({ ...target, mode }))._unsafeUnwrap()
+    const first = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
     const before = await leftOnStand(target, first)
-    const second = (await runSeed({ ...target, mode }))._unsafeUnwrap()
+    const second = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
 
     expect(second).toEqual(first)
     expect(before).toMatchObject({
@@ -132,14 +183,16 @@ describe('seeding through the gateway', () => {
 
   it('sweeps seeded identities with their profiles, region rows, memberships and organisation databases', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    const manifest = (await runSeed({ ...target, mode: demo }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode: demo, fetcher: client.fetcher })
+    )._unsafeUnwrap()
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
 
     // An organisation of someone else that ann belongs to: only the sweep of ann's own memberships reaches it.
     expect(
       (
         await inviteInto(
-          target.gatewayUrl,
+          client,
           outsider,
           { key: `out_${outsider.run}`, name: 'Outside' },
           accountFor(ann ?? expect.unreachable('a preset ann'), demo).email,

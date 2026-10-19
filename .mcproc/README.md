@@ -14,7 +14,8 @@ of the checkout it runs in.
 - `gateway` (profile `dev`) and `gateway-e2e` (profile `e2e`): the gateway on 127.0.0.1:5181 and
   127.0.0.1:5191. Each waits until its SurrealDB answers, runs `scripts/stand-operator.ts` (the
   namespace `app`, the database `directory` and the user `gateway`), then serves with
-  `bun --watch`, reloading on source changes.
+  `bun --watch`, reloading on source changes. Both sign tokens with the manifest's stand-only
+  key, `stand_jwt_key` in `vars`, as `GATEWAY_JWT_KEY`.
 
 - `web` (profile `dev`, kind `build`): the web application's build watcher, `vite build
   --watch` in development mode. It listens on no port: every source change rewrites
@@ -38,10 +39,12 @@ http://127.0.0.1:8010 --user root --pass root` opens a shell against the e2e sta
 Every app declares the memory it takes (`memory:`; `containers:` names the docker containers
 counted with it) and `resources` keeps 4G for the host: a start that does not fit waits its
 turn in the host's queue (`mcproc leases`). `mcproc exec -- <command>` runs a command with
-this checkout's stand addresses in its environment (`exec.env`): `bun run test:db`, `bun run
-test:e2e`, `bun run seed` and `bun run seed:sweep` go through it, the e2e run under a 4G lease
-of its own. The `worktree` section names what a new worktree copies from the main checkout
-(the certificates, the local hook file, the screenshot baselines) and how it installs.
+this checkout's stand addresses and the stands' signing key (`GATEWAY_JWT_KEY`, so the smoke,
+the load test and the seed's sweep open a stand's directory with its gateway's key) in its
+environment (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
+seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section
+names what a new worktree copies from the main checkout (the certificates, the local hook file,
+the screenshot baselines) and how it installs.
 
 `mcproc start <profile> --reload` restarts the apps already online (a restarted Caddy reads the
 current Caddyfile; a restarted SurrealDB stand is empty). An app removed from the manifest is

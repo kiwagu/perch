@@ -3,9 +3,9 @@
 ## Role in the architecture
 
 The only package that depends on the SurrealDB driver. It opens the local database
-(applying the schema only when it changed since the last opening, so saved sessions
-stay valid across reloads), runs shapes and commands compiled from `.surql` files,
-announces table changes so watched shapes rerun, and handles accounts for the gateway,
+(applying the schema only when its text or its signing key changed since the last opening,
+so saved sessions stay valid across reloads), runs shapes and commands compiled from
+`.surql` files, announces table changes so watched shapes rerun, and handles accounts for the gateway,
 which signs devices up and in against its database: sign-up, sign-in, and sessions resumed
 from a saved access token or through a refresh key that is replaced on every use. Above this package ids are entity id strings and times are
 `Date`s; driver record ids and datetimes do not leave it.
@@ -14,7 +14,12 @@ from a saved access token or through a refresh key that is replaced on every use
 
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `AuthPort` / `AUTH`, `LocalDbPort` / `LOCAL_DB`.
-- Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`. A
+- Adapters: `openLocalDb`, `applySchema`, `ShapeRunner`, `runCommand`, `SurrealWritePath`,
+  `createAuth`. `openLocalDb({ signingKey })` gives the schema's access methods the key they sign
+  tokens with, as `$jwt_key`: a server's database is opened with one fixed key, so applying the
+  schema again leaves issued tokens valid; without one each apply gives them a key of its own
+  (a device's replica, a test). `applySchema(local, schema, signingKey?)` applies a schema to an
+  open database the same way and remembers it, failing with `data:QUERY_FAILED`. A
   `LocalDb` closes once however often `close()` is called; `destroy()` closes it and deletes
   what it stored (the browser's IndexedDB database of an `indxdb://` address; an in-memory
   database is gone once closed). `deleteLocalDb(url)` deletes what a database that is not open
@@ -42,7 +47,9 @@ from a saved access token or through a refresh key that is replaced on every use
   modeling stage and the bundler plugins.
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
-- `./testing`: `openTestDb()` (in-memory database with the directory schema), `readSchema(database)`,
+- `./testing`: `openTestDb({ signingKey? })` (in-memory database with the directory schema),
+  `TEST_SIGNING_KEY` (a test-only fixed key, for a test that applies a schema again and keeps its
+  tokens), `readSchema(database)`,
   `FakeShapeRunner` (a runner without a database for component tests),
   `interceptQueries()` (holds or fails queries, as a slow or broken database would; its
   queries keep `retry()`).

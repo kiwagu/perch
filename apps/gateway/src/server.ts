@@ -10,6 +10,7 @@ import { createLogger } from '@workspace/logger'
 import { authRoutes } from './auth/auth.routes'
 import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
+import { clientAddress } from './limits/client-address'
 import { SyncConnection } from './sync/sync-connection'
 import { organisationRoutes } from './tenants/organisation.routes'
 
@@ -26,8 +27,12 @@ export interface RunningServer {
   stop(): Promise<void>
 }
 
-/** What the server keeps on each WebSocket: the device's sync connection, once it opened. */
+/**
+ * What the server keeps on each WebSocket: the client address it came from, and the device's sync
+ * connection, once it opened.
+ */
 interface SocketData {
+  readonly from: string
   connection?: SyncConnection
 }
 
@@ -40,16 +45,20 @@ const MAX_REQUEST_BODY = 16 * 1024
 /** The largest WebSocket message: a push of the most updates a push may carry, of ordinary size. */
 const MAX_MESSAGE = 4 * 1024 * 1024
 
-/** An HTTP route: its answer to a request, or `undefined` for a path that is not its own. */
-type Route = (request: Request) => Promise<Response | undefined>
+/**
+ * An HTTP route: its answer to a request from the client address `from`, or `undefined` for a
+ * path that is not its own.
+ */
+type Route = (request: Request, from: string) => Promise<Response | undefined>
 
 /** The answer of the first route that answers the request. */
 async function firstAnswer(
   routes: readonly Route[],
   request: Request,
+  from: string,
 ): Promise<Response | undefined> {
   for (const route of routes) {
-    const response = await route(request)
+    const response = await route(request, from)
 
     if (response) {
       return response
@@ -69,10 +78,16 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const syncLog = createLogger('sync')
   // The code and the gateway's own message, never the cause: a database's text may hold anything.
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
-  const routes = [
-    authRoutes(root.sessions, root.organisations),
-    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, { onFailure }),
-    deviceRoutes(root.sessions, root.deviceSessions, root.connections, { onFailure }),
+  const routes: readonly Route[] = [
+    authRoutes(root.sessions, root.organisations, root.limits),
+    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, {
+      onFailure,
+      limits: root.limits,
+    }),
+    deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
+      onFailure,
+      limits: root.limits,
+    }),
   ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,
@@ -85,13 +100,16 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
         return new Response('ok')
       }
 
+      // The front's X-Forwarded-For names the client; a request without one comes from its peer.
+      const from = clientAddress(request, bun.requestIP(request)?.address)
+
       if (pathname === '/sync') {
-        return bun.upgrade(request, { data: {} })
+        return bun.upgrade(request, { data: { from } })
           ? undefined
           : new Response('upgrade required', { status: 426 })
       }
 
-      const response = await firstAnswer(routes, request)
+      const response = await firstAnswer(routes, request, from)
 
       if (!response) {
         return new Response('not found', { status: 404 })
@@ -118,6 +136,8 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           organisations: root.organisations,
           connections: root.connections,
           clock: root.clock,
+          // A renewal at hello counts against the device and the address the socket came from.
+          renewals: (device) => () => root.limits.renewal(socket.data.from, device).allowed,
           log: syncLog,
         })
       },

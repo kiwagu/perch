@@ -105,6 +105,24 @@ describe('PendingRevoke', () => {
     expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_REJECTED'])
   })
 
+  it('keeps a pair the gateway asked to wait for (429) without reporting it, and sends it on the next pass', async () => {
+    const { pending, failures, sent, left } = harness([
+      respond(429, { code: 'rate-limited' }),
+      noContent(),
+    ])
+
+    await pending.send()
+
+    expect(left()).toEqual([pair])
+    expect(failures).toEqual([])
+
+    await pending.send()
+
+    expect(sent).toHaveLength(2)
+    expect(left()).toEqual([])
+    expect(failures).toEqual([])
+  })
+
   it('keeps the pair when the gateway failed (5xx), reporting it, and quietly while it is out of reach', async () => {
     const failing = harness([respond(503, { code: 'unavailable' })])
 

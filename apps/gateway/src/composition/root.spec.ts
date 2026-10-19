@@ -1,15 +1,23 @@
-import { ok } from 'neverthrow'
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
+import { ok } from 'neverthrow'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
+
+import { applySchema } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
+import { readSchema, TEST_SIGNING_KEY } from '@workspace/data/testing'
 import { manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
-import { createGatewayRoot } from './root'
+import { createGatewayRoot, type GatewayRoot } from './root'
 
 /** The device Ann signs up on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
+
+const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
 describe('createGatewayRoot', () => {
   it('opens the directory database and serves sign-in over it', async () => {
@@ -18,6 +26,7 @@ describe('createGatewayRoot', () => {
         engines: nodeEngines(),
         url: 'mem://',
         clock: manualClock(),
+        signingKey: TEST_SIGNING_KEY,
       })
     )._unsafeUnwrap()
 
@@ -47,6 +56,7 @@ describe('createGatewayRoot', () => {
         engines: nodeEngines(),
         url: 'mem://',
         clock: manualClock(),
+        signingKey: TEST_SIGNING_KEY,
       })
     )._unsafeUnwrap()
     const { identity } = (
@@ -63,5 +73,70 @@ describe('createGatewayRoot', () => {
 
     // The organisation's database is still held when the gateway closes.
     await expect(root.close()).resolves.toBeUndefined()
+  })
+})
+
+describe('createGatewayRoot over a directory on disk', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'perch-gateway-root-'))
+  const open: GatewayRoot[] = []
+  /** Another key than the one the directory was first opened with. Test-only. */
+  const otherKey = 'root-spec-other-signing-key-'.padEnd(64, '1')
+
+  async function openRoot(path: string, signingKey: string): Promise<GatewayRoot> {
+    const root = (
+      await createGatewayRoot({
+        engines: nodeEngines(),
+        url: `surrealkv://${path}`,
+        clock: manualClock(),
+        signingKey,
+      })
+    )._unsafeUnwrap()
+
+    open.push(root)
+
+    return root
+  }
+
+  async function closeFirst(root: GatewayRoot): Promise<void> {
+    open.splice(open.indexOf(root), 1)
+    await root.close()
+  }
+
+  // A file database stays locked until it is closed, also when a test fails.
+  afterEach(async () => {
+    await Promise.all(open.splice(0).map((root) => root.close()))
+  })
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('keeps an issued token valid when the directory schema is applied again with its key', async () => {
+    const root = await openRoot(mkdtempSync(join(dir, 'directory-')), TEST_SIGNING_KEY)
+    const { identity, tokens } = (await root.sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    ;(await applySchema(root.local, readSchema('directory'), TEST_SIGNING_KEY))._unsafeUnwrap()
+
+    const accepted = (await root.sessions.authenticate({ access: tokens.access }))._unsafeUnwrap()
+
+    expect(accepted.renewed).toBe(false)
+    expect(accepted.identity).toEqual(identity)
+  })
+
+  it('refuses earlier access tokens once opened with another key, and renews them with the refresh key', async () => {
+    const path = mkdtempSync(join(dir, 'directory-'))
+    const first = await openRoot(path, TEST_SIGNING_KEY)
+    const { identity, tokens } = (await first.sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    await closeFirst(first)
+
+    const second = await openRoot(path, otherKey)
+    const refused = await second.sessions.authenticate({ access: tokens.access })
+
+    expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+
+    // Every renewal goes through: the limits are not under test here.
+    const renewed = (await second.sessions.authenticate(tokens, () => true))._unsafeUnwrap()
+
+    expect(renewed.renewed).toBe(true)
+    expect(renewed.identity).toEqual(identity)
   })
 })

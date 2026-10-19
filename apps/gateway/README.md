@@ -6,9 +6,10 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
 routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
-`{ email, password, device: { id, label } }`, the device's own id of 1 to 64 characters and a
-label of at most 60, answering `{ identity, tokens, memberships }`, the memberships being the
-organisations the identity belongs to), each call on a database session of its own that is
+`{ email, password, device: { id, label } }`, an email of at most 254 characters, the device's
+own id of 1 to 64 characters and a label of at most 60, answering
+`{ identity, tokens, memberships }`, the memberships being the organisations the identity
+belongs to), each call on a database session of its own that is
 closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in records the
 device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
 one row per identity and device with its label, the id of the refresh grant its pair holds now
@@ -64,7 +65,8 @@ Text the protocol refuses (4400, a hello of an older protocol or one that names 
 included), keys the database refused (4401), a region the device may not name (4403) and a hello
 that did not come within 10 seconds (4408, after which the device connects again) close the
 socket with the protocol's close codes; keys the database could not judge (it could not be
-reached) close it as a failed server (1011), and the device comes back with the same keys. A
+reached) close it as a failed server (1011), and the device comes back with the same keys, as it
+does after a hello closed with 1013 because the limits refused its renewal (see Limits). A
 device's sign-out leaves its regions, marks its row signed out, forgets the pairs parked for it
 and revokes its refresh grant through the database as the namespace user, as `POST
 /auth/sign-out` does, then closes the socket with 4000, which means the grant is revoked; a row
@@ -77,13 +79,15 @@ when none is named), and each close moves a revocation epoch of the device or of
 A hello reads the epoch once its keys are accepted, before it reads the row, and registers with
 it: a sign-out that lands meanwhile refuses the registration (4001), one before it is seen by
 the read. A connection that fails to close is reported and the others are closed all the same.
-A renewed pair the socket closed before it could take is parked for 60 seconds under
+A renewed pair the socket closed before it could take is parked, for 60 seconds after the last
+hello that held it (one that takes it and parks it again, below, starts them over), under
 the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
 kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
-device`: the device's next hello with that spent key is refused the renewal, is handed the
-parked pair once (`tokens`, before its welcome) and welcomed; a pair is never handed to another
-device, and signing the device out or signing in on it again forgets it; a hello whose keys the
-database could not judge leaves it parked, and one that could not judge the parked pair parks it
+device`: the device's next hello with that spent key is handed the parked pair once (`tokens`,
+before its welcome) and welcomed, looked up before its keys are checked, so no renewal is tried
+or counted; a pair is never handed to another device, and signing the device out or signing in
+on it again forgets it; a hello whose keys the database could not judge leaves it parked, and
+one that could not judge the parked pair, or whose renewal of it the limits refused, parks it
 again. Keys, tokens and grant ids never reach its logs.
 
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
@@ -125,7 +129,8 @@ invite an identity; and `DELETE /organisations/:key/members/:identity` lets an a
 member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
 a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
 `not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
-`key-taken`, `already-member` and `self`; a failure of the gateway answers 500 (`internal`).
+`key-taken`, `already-member` and `self`; an invitation or a creation over its limit answers 429
+(`rate-limited`, see Limits); a failure of the gateway answers 500 (`internal`).
 
 The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
 and its device the same way. `GET /devices` lists the
@@ -168,9 +173,10 @@ That row may then list the device as signed in until its next sign-in or a sign-
 devices; its grants are dead, so only a still valid access token of that session (at most 15
 minutes old) could reach the gateway. A pair the database refused, or that no device of
 the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
-itself has its new grant revoked whatever it answers. A request without its device or its pair
-answers 400, before any key is checked; so does every call with an access token that names no
-valid device.
+itself has its new grant revoked whatever it answers. A renewal the limits refuse answers 429
+before the database is asked, with nothing revoked and the refresh key unspent (see Limits). A
+request without its device or its pair answers 400, before any key is checked; so does every
+call with an access token that names no valid device.
 
 ## Key exports
 
@@ -178,9 +184,89 @@ None: this is an application. Its entry point is `src/index.ts`, which registers
 `.surql` loader and runs `src/main.ts`; `SIGINT` and `SIGTERM` stop the server and close
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
-`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, and optionally the logger's `LOG_LEVEL`
-and `LOG_FORMAT`. `scripts/smoke.ts` is the entry point of the smoke test against a
-stand.
+`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
+optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
+an issue that names it, never its value. `scripts/smoke.ts` is the entry point of the smoke test
+against a stand.
+
+Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
+which the gateway gives the directory schema when it applies it, so a schema applied again (at a
+restart after a schema change, or on a deployment) keeps every issued token valid. It is
+required, with no default and at least 64 characters: generate one with `openssl rand -hex 64`
+(128 characters on one line).
+The local stands use a literal of the mcproc manifest (`stand_jwt_key`), for those stands only;
+everything else that opens a stand's directory (the smoke, the load test's gateway, the seed's
+sweep) applies the schema with that same key, from `mcproc exec`, or it would give the stand a
+key of its own.
+To rotate it, set a new value and restart the gateway: the schema is applied again under the new
+key, earlier access tokens are refused, and each device renews its pair once with its refresh
+key at its next hello; nobody is signed out. The organisations' databases have no access method
+of their own yet; when they get one, it takes its key from this variable too.
+
+Token scope: an access token issued for another namespace, database or access method is refused
+before the database is asked (`data:AUTH_FAILED`, by `namesOtherScope` in
+`src/auth/token-claims.ts`), since the database would accept a record access token of another
+database and switch the session to it. Its claims are read under every name SurrealDB 3.3 takes
+them by: the `NS`, `DB` and `AC` it issues, `ns`, `db` and `ac`, and the namespaced
+`https://surrealdb.com/ns` (or `/namespace`), `/db` (or `/database`) and `/ac` (or `/access`);
+any of them that names another scope, or a scope named only in part, refuses the token. Such a
+token is never renewed: a refresh key presented beside it is not spent. A payload without any of
+these claims goes to the database as before.
+
+Limits (`RequestLimits`, `src/limits/`): fixed windows in the gateway process's memory, each
+starting at its key's first attempt; every gateway process keeps its own, so several processes
+multiply them. Credential checks, `POST /auth/sign-up` and `POST /auth/sign-in` together (each
+one argon2 run on the database), are limited to 20 per client address in 10 s; failed sign-ins
+(answered `invalid-credentials`) to 10 per email in 15 minutes, cleared by a successful
+sign-in. An email counts exactly as it came, its case included, since the database matches an
+account's email exactly: the limit follows the account the database would match, and a case
+variant, another account, neither shares nor clears its failures. A sign-in holds one of its
+email's 10 places from the moment it is let through until the database answers, so parallel
+guesses are counted while under way: wrong credentials keep the place, a success clears the
+email's window, and an answer the database could not judge, or a call that threw instead of
+answering, gives the place back; each sign-in is settled once. A body that fails its schema
+(400) counts nothing. A refusal answers 429 `{ "code": "rate-limited" }` with `Retry-After` in
+whole seconds (at least 1), before the database is asked, and is not logged.
+The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
+else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
+to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets none, every
+client shares the front's address. Behind a load balancer in front of Caddy, Caddy sees the
+balancer and, even when it trusts it, appends the balancer's address last, so Caddy must name the
+balancer in its `trusted_proxies` (with `trusted_proxies_strict`) and send the client's address
+on with `header_up X-Forwarded-For {client_ip}`, or every client shares the balancer's buckets.
+The gateway listens on `127.0.0.1` only, so nothing but the front and local tools can name an
+address (the smoke and the load test give each simulated device one of its own,
+`198.18.<a>.<b>` from a hash of its id). Each window table holds at most
+100 000 keys, in the order their windows started: an unseen key at a full table evicts the window
+that started first, even a live one, and is let in. Availability wins over a marginal gain:
+refusing unseen keys would let anyone who fills a table with cheap requests (sign-ins of unknown
+emails, addresses from many IPv6 /64s) lock everyone else out, while an evicted key only starts
+a fresh window.
+Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
+id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
+the address charged only when the device's limit allows, and a renewal the address refuses gives
+the device's attempt back (once, while the device's window still holds it): behind one address
+whose devices all renew at once, as after a night when every access token expired, the devices the
+address holds back retry with their reconnect backoff without spending their own limit, so 500 of
+them all renew within about four minutes instead of being held for 15 minutes. A renewal is counted
+when the database refused the access token and a refresh key came with it, before the key is
+exchanged, so a refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a
+working access token counts nothing, and neither does one the database could not judge, which fails
+as it is (a hello closes as a failed server, the pair sign-out answers 500). A hello's address is
+the one its upgrade request came from. A hello whose renewal is refused is closed with 1013 (`too
+many renewals`, try again later): the client ends its channel only on 4000, 4001, 4400 and 4401, so
+it reconnects with its backoff and keeps its keys. The pair sign-out answers 429 `rate-limited`
+with `Retry-After`, revoking nothing. `POST /auth/sign-out` itself is not limited, only the renewal
+it may run.
+Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
+and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
+identity is charged first and the address only when the identity's limit allows. Every attempt
+counts whatever the answer (an unknown email's 404 included), once the body follows its schema
+(a 400 counts nothing); the limit is checked before the service is asked. Organisation creation,
+`POST /organisations`, is limited to 10 per identity and 30 per client address in an hour (each
+one provisions a database, and one address cannot farm identities past the identity's limit),
+the address charged only when the identity's limit allows, checked before anything is
+provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not logged.
 
 ## Commands
 
@@ -192,7 +278,9 @@ stand.
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
-  operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
+  operator defines, `scripts/stand-operator.ts` at the repository root) and with
+  `GATEWAY_JWT_KEY`, the key the stand's gateway signs with (required, no default; the root
+  `bun run test:db` sets it from the manifest), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
   its device writing a note into the organisation's region that the owner's device receives,
@@ -202,7 +290,14 @@ stand.
   4403), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
-  that the refresh is refused; and on another identity its device sessions: a hello under a
+  that the refresh is refused; on a further identity the directory schema applied again with the
+  stand's key, the access token issued before it still accepted without a renewal; the limits of
+  the credential routes, each from a device, so a simulated client address, of its own (21
+  sign-ins of unknown emails within 10 s, the 21st answered 429 with `Retry-After`; 11 wrong
+  passwords for a further identity, the 11th answered 429); the renewal limit of a device (11
+  hellos of one device with a dead access token and a made-up refresh key within 15 minutes,
+  the first 10 closed with 4401, the 11th with 1013, counted by the smoke's own gateway); and on
+  another identity its device sessions: a hello under a
   device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
   laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
   from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
@@ -222,7 +317,8 @@ stand.
 `bun run load -- [arguments]` at the repository root drives simulated devices against a
 gateway of its own: it starts `src/index.ts` as a child process on port 5197, in front of the
 e2e stand's SurrealDB (`SURREAL_URL` from `mcproc exec`), and waits for its `/health`. Each step
-signs up the devices it adds (`load-<run>-<n>@example.test`), groups every `--members` of them
+signs up the devices it adds (`load-<run>-<n>@example.test`, each device from a simulated client
+address of its own, as in the smoke), groups every `--members` of them
 into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends

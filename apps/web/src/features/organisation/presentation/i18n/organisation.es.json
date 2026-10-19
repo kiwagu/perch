@@ -28,6 +28,7 @@
   "organisation.error.key-taken": "Esta clave ya está en uso.",
   "organisation.error.no-such-identity": "Ninguna cuenta tiene este correo.",
   "organisation.error.already-member": "Esta cuenta ya es miembro.",
+  "organisation.error.rate-limited": "Demasiados intentos. Vuelve a intentarlo más tarde.",
   "organisation.error.not-admin": "Solo un administrador puede hacer esto.",
   "organisation.error.forbidden": "Solo el autor o un administrador puede cambiar esta nota.",
   "organisation.error.text-required": "Escribe primero la nota.",

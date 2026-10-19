@@ -16,6 +16,15 @@ import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
+import { OrganisationErrorLine } from '../../components/organisation-error-line/organisation-error-line.view'
+import {
+  type MemberItem,
+  OrganisationMembers,
+} from '../../components/organisation-members/organisation-members.view'
+
+import { useAction } from './use-action'
+
+export type { MemberItem }
 
 /** An organisation the signed-in identity belongs to, with its role there. */
 export interface OrganisationChoice {
@@ -33,13 +42,6 @@ export interface NoteItem {
   readonly editable: boolean
   /** The rules let the signed-in member delete it. */
   readonly deletable: boolean
-}
-
-export interface MemberItem {
-  readonly id: IdentityId
-  readonly email: string
-  /** An administrator removes any member but itself. */
-  readonly removable: boolean
 }
 
 /** The codes of the last refused changes, by the part of the page that asked for them. */
@@ -66,61 +68,6 @@ export interface OrganisationViewProps {
   readonly onDeleteNote: (id: NoteId) => Promise<boolean>
   readonly onInvite: (email: string) => Promise<boolean>
   readonly onRemoveMember: (id: IdentityId) => void
-}
-
-function errorText(t: ReturnType<typeof useT>, code: string): string {
-  switch (code) {
-    case 'organisation:KEY_INVALID':
-    case 'invalid-key':
-      return t('organisation.error.key-invalid')
-    case 'organisation:NAME_REQUIRED':
-      return t('organisation.error.name-required')
-    case 'organisation:NAME_TOO_LONG':
-      return t('organisation.error.name-too-long')
-    case 'key-taken':
-      return t('organisation.error.key-taken')
-    case 'no-such-identity':
-      return t('organisation.error.no-such-identity')
-    case 'already-member':
-      return t('organisation.error.already-member')
-    case 'not-admin':
-      return t('organisation.error.not-admin')
-    case 'note:FORBIDDEN':
-      return t('organisation.error.forbidden')
-    case 'note:TEXT_REQUIRED':
-      return t('organisation.error.text-required')
-    case 'note:TEXT_TOO_LONG':
-      return t('organisation.error.text-too-long')
-    default:
-      return t('organisation.error.failed')
-  }
-}
-
-/** Runs a form's action, one at a time: `pending` while it runs, then `after` hears whether it was done. */
-function useAction(): readonly [
-  boolean,
-  (action: Promise<boolean>, after: (done: boolean) => void) => void,
-] {
-  const [pending, setPending] = useState(false)
-
-  return [
-    pending,
-    (action, after) => {
-      setPending(true)
-      void action.then((done) => {
-        setPending(false)
-        after(done)
-      })
-    },
-  ]
-}
-
-function ErrorLine(props: { readonly code: string | undefined; readonly testId: string }) {
-  const t = useT()
-
-  return props.code ? (
-    <FieldError data-testid={props.testId}>{errorText(t, props.code)}</FieldError>
-  ) : null
 }
 
 function CreateForm(props: {
@@ -180,7 +127,7 @@ function CreateForm(props: {
               />
             </Field>
             <Field data-invalid={props.error ? true : undefined}>
-              <ErrorLine code={props.error} testId="organisation.create.error" />
+              <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
               <Button type="submit" disabled={pending} data-testid="organisation.create.submit">
                 {t('organisation.create.submit')}
               </Button>
@@ -215,7 +162,10 @@ function OrganisationHeader(props: {
           <OptionSelect
             label={t('organisation.select')}
             value={current.key}
-            options={props.organisations.map(({ key, name }) => ({ value: key, label: name }))}
+            options={props.organisations.map(({ key, name }) => ({
+              value: key,
+              label: name,
+            }))}
             onChange={props.onSelect}
             testId="organisation.select"
           />
@@ -352,82 +302,9 @@ function NotesCard(props: {
               aria-invalid={props.error ? true : undefined}
               data-testid="organisation.notes.input"
             />
-            <ErrorLine code={props.error} testId="organisation.notes.error" />
+            <OrganisationErrorLine code={props.error} testId="organisation.notes.error" />
             <Button type="submit" disabled={pending} data-testid="organisation.notes.add">
               {t('organisation.notes.add')}
-            </Button>
-          </Field>
-        </form>
-      </CardContent>
-    </Card>
-  )
-}
-
-function MembersCard(props: {
-  readonly members: readonly MemberItem[] | undefined
-  readonly error: string | undefined
-  readonly onInvite: OrganisationViewProps['onInvite']
-  readonly onRemove: OrganisationViewProps['onRemoveMember']
-}) {
-  const t = useT()
-  const emailId = useId()
-  const [email, setEmail] = useState('')
-  const [pending, run] = useAction()
-  const invite = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    run(props.onInvite(email), (done) => {
-      if (done) {
-        setEmail('')
-      }
-    })
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>{t('organisation.members.title')}</h2>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {props.members ? (
-          <ul className="flex flex-col gap-2" data-testid="organisation.members.list">
-            {props.members.map((member) => (
-              <li
-                key={member.id}
-                className="flex items-center justify-between gap-2"
-                data-testid="organisation.members.item"
-              >
-                <span className="min-w-0 break-all">{member.email}</span>
-                {member.removable ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => props.onRemove(member.id)}
-                    data-testid="organisation.members.remove"
-                  >
-                    {t('organisation.members.remove')}
-                  </Button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <form onSubmit={invite}>
-          <Field data-invalid={props.error ? true : undefined}>
-            <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
-            <Input
-              id={emailId}
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="off"
-              aria-invalid={props.error ? true : undefined}
-              data-testid="organisation.invite.email"
-            />
-            <ErrorLine code={props.error} testId="organisation.invite.error" />
-            <Button type="submit" disabled={pending} data-testid="organisation.invite.submit">
-              {t('organisation.invite.submit')}
             </Button>
           </Field>
         </form>
@@ -464,7 +341,7 @@ export function OrganisationView(props: OrganisationViewProps) {
               onDelete={props.onDeleteNote}
             />
             {current.role === 'admin' ? (
-              <MembersCard
+              <OrganisationMembers
                 members={props.members}
                 error={props.errors?.members}
                 onInvite={props.onInvite}

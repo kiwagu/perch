@@ -2,6 +2,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type Command, type DataError, dataError, runCommand, type Shape } from '@workspace/data'
 import {
+  type ClientOptions,
   openClient,
   openStand,
   type SeedClient,
@@ -23,7 +24,7 @@ export interface StandTarget extends StandOptions {
   readonly gatewayUrl: string
 }
 
-export interface SeedOptions extends StandTarget {
+export interface SeedOptions extends StandTarget, Pick<ClientOptions, 'fetcher'> {
   readonly mode: SeedMode
   /** Sweep the stand's seed data first. */
   readonly reset?: boolean
@@ -216,10 +217,10 @@ function seedOrganisations(
  * first). With `reset`, the stand's seed data is swept first.
  */
 export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedError> {
-  const { mode, reset, gatewayUrl, ...stand } = options
+  const { mode, reset, gatewayUrl, fetcher, ...stand } = options
 
   return (reset ? sweep(stand).map(() => undefined) : okAsync(undefined))
-    .andThen(() => openClient({ gatewayUrl }))
+    .andThen(() => openClient(fetcher ? { gatewayUrl, fetcher } : { gatewayUrl }))
     .andThen((client) =>
       closing(
         client,

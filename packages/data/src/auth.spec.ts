@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createAuth } from './auth'
 import type { AuthPort } from './auth.port'
 import { runCommand } from './commands'
-import { openTestDb, readSchema } from './testing'
+import { applySchema } from './local-db'
+import { openTestDb, readSchema, TEST_SIGNING_KEY } from './testing'
 import type { Command, LocalDb } from './types'
 
 const createIdentity: Command<{ email: string }> = {
@@ -196,13 +197,15 @@ describe('createAuth', () => {
     expect((await auth.signUp(ann))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
   })
 
-  it('loses its sessions when the access method is defined again, which is why a reopened database skips an unchanged schema', async () => {
-    expect((await auth.signUp(ann)).isOk()).toBe(true)
+  it('keeps its sessions when the directory schema is applied again with its signing key', async () => {
+    await local.close()
+    local = (await openTestDb({ signingKey: TEST_SIGNING_KEY }))._unsafeUnwrap()
 
-    const access = auth.tokens()?.access ?? ''
+    const signedUp = another()
+    const user = (await signedUp.signUp(ann))._unsafeUnwrap()
+    const access = signedUp.tokens()?.access ?? ''
 
-    await local.db.query(readSchema('directory'))
-
-    expect((await another().resume({ access }))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await applySchema(local, readSchema('directory'), TEST_SIGNING_KEY)).isOk()).toBe(true)
+    expect((await another().resume({ access }))._unsafeUnwrap()).toEqual(user)
   })
 })

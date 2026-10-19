@@ -26,15 +26,16 @@ import type { Actor, RegionHub, Subscriber } from '@workspace/replica/server'
 
 import type { DeviceSessions } from '../auth/device-sessions'
 import {
-  type DeviceTokens,
   grantIdOf,
   type IdentitySessions,
   keysRefused,
+  type RenewalGate,
 } from '../auth/identity-sessions'
 import type { Organisations } from '../tenants/organisations'
 
 import type { ConnectionRegistry } from './connections'
-import { acceptKeys, bindDevice } from './hello-keys'
+import { acceptKeys, bindDevice, TRY_AGAIN_LATER } from './hello-keys'
+import { HelloRenewals } from './hello-renewals'
 
 /** The end of a device's WebSocket the connection writes to. */
 export interface SocketLike {
@@ -55,6 +56,8 @@ export interface SyncConnectionDeps {
   /** Where the connection registers once the keys are accepted, to hear its memberships change. */
   readonly connections: ConnectionRegistry
   readonly clock: Clock
+  /** The gate a hello of `device` asks before its refresh key is exchanged: the renewal limits. */
+  readonly renewals: (device: string) => RenewalGate
   /** Hears sign-outs and failures; no line carries a token, a key or a grant id. */
   readonly log: Logger
   /** How long a device may stay silent before its hello; 10 s by default. */
@@ -109,6 +112,7 @@ const REASON = {
   helloTwice: 'hello was already said',
   silent: 'no hello in time',
   refused: 'the keys were not accepted',
+  tooManyRenewals: 'too many renewals',
   noSession: 'no session for this device',
   forbidden: 'the region is not open to this device',
   signedOut: 'signed out',
@@ -172,7 +176,8 @@ function regionsOf(message: ClientMessage): readonly string[] {
  * means the grant is revoked, and a row that cannot be marked or a grant that cannot be revoked
  * closes the socket as a failed server (1011) instead. A device signed out from another one is
  * closed at once with 4001, whatever it is doing. Keys the database refuses close the hello with
- * 4401; keys it could not judge, as a failed server (1011), and the device comes back with them.
+ * 4401; keys it could not judge, as a failed server (1011), and a renewal the limits refused, with
+ * 1013 (try again later): the device comes back with them.
  * A hello is bound to its device's row: a device without one is closed with 4401, a device
  * signed out with 4001, and a pair renewed for either is revoked at once; a renewal moves the row
  * to the new grant. A pair renewed at a hello whose socket closed before it could take it is
@@ -190,6 +195,8 @@ export class SyncConnection {
   readonly #schema: ReplicaSchema
   readonly #log: Logger
   readonly #onError: (error: DataError) => void
+  readonly #renewals: HelloRenewals
+  readonly #renewalGate: SyncConnectionDeps['renewals']
   readonly #subscriber: Subscriber
   /** The regions the device subscribed to, to leave when the socket closes. */
   readonly #subscribed = new Set<string>()
@@ -217,6 +224,8 @@ export class SyncConnection {
     this.#schema = deps.schema
     this.#log = deps.log
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
+    this.#renewals = new HelloRenewals(deps)
+    this.#renewalGate = deps.renewals
     this.#subscriber = {
       id: crypto.randomUUID(),
       send: (message) => this.#send(message),
@@ -368,12 +377,19 @@ export class SyncConnection {
 
   async #hello(hello: Hello): Promise<void> {
     const { access, refresh, device: deviceId } = hello
-    const accepted = await acceptKeys(this.#sessions, { device: deviceId, access, refresh })
+    const accepted = await acceptKeys(
+      this.#sessions,
+      { device: deviceId, access, refresh },
+      this.#renewalGate(deviceId),
+    )
 
     if (accepted.isErr()) {
-      // Keys the database could not judge are not refused: the device keeps them and comes back.
+      // Keys the database could not judge are not refused: the device keeps them and comes back,
+      // as it does after a renewal the limits refused, which is not logged.
       if (keysRefused(accepted.error)) {
         this.#close(CLOSE.unauthorized, REASON.refused)
+      } else if (accepted.error.code === 'data:RATE_LIMITED') {
+        this.#close(TRY_AGAIN_LATER, REASON.tooManyRenewals)
       } else {
         this.#fail(accepted.error)
       }
@@ -389,7 +405,7 @@ export class SyncConnection {
     if (this.#isClosed() && spent === undefined) {
       // A parked pair the socket closed before it could take waits again for the next hello.
       if (deliver && refresh !== undefined) {
-        this.#park(identity.id, deviceId, refresh, deliver)
+        this.#renewals.park(identity.id, deviceId, refresh, deliver)
       }
 
       return
@@ -404,14 +420,14 @@ export class SyncConnection {
 
     // A pair renewed for a device that has no session must not live: nobody may take it.
     if (spent !== undefined && deliver && !bound) {
-      await this.#revokeGrant(identity.id, deliver)
+      await this.#renewals.drop(identity.id, deliver)
     }
 
     if (this.#isClosed()) {
       // The device's refresh key is spent and the pair that replaces it cannot reach it now: it
       // waits for the device's next hello with that key.
       if (bound && deliver && refresh !== undefined) {
-        this.#park(identity.id, deviceId, refresh, deliver)
+        this.#renewals.park(identity.id, deviceId, refresh, deliver)
       }
 
       return
@@ -508,29 +524,6 @@ export class SyncConnection {
     }
 
     this.#settleHello()
-  }
-
-  /** Revokes the grant of a renewed pair at once; a failure is logged with the code only. */
-  async #revokeGrant(identity: IdentityId, pair: DeviceTokens): Promise<void> {
-    const grant = grantIdOf(pair.refresh)
-    const revoked =
-      grant === undefined ? undefined : await this.#devices.revokeGrant({ identity, grant })
-
-    if (revoked?.isErr()) {
-      this.#log.warn(
-        { identity, code: revoked.error.code },
-        'the grant of a pair renewed for a device without a session could not be revoked',
-      )
-    }
-  }
-
-  /** Parks a pair the device could not take, for its next hello with the spent refresh key. */
-  #park(identity: IdentityId, device: string, spentRefresh: string, tokens: DeviceTokens): void {
-    this.#sessions.park({ identity, device, spentRefresh, tokens })
-    this.#log.warn(
-      { identity },
-      'renewed pair not delivered: parked for the next hello of the device',
-    )
   }
 
   /** Leaves the regions the device may no longer name, replaces its regions and tells it. */

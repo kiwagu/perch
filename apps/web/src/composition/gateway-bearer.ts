@@ -37,7 +37,7 @@ export interface BearerCalls {
 const refusalBody = z.object({ code: z.string() })
 
 /** The statuses the gateway refuses a request with a code of its own. */
-const REJECTED = new Set([400, 403, 404, 409])
+const REJECTED = new Set([400, 403, 404, 409, 429])
 
 const authFailed = (message: string) => dataError('data:AUTH_FAILED', message)
 

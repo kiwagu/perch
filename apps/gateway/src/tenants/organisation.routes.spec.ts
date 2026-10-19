@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { DataError } from '@workspace/data'
-import { nodeEngines } from '@workspace/data/engines/node'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
@@ -10,149 +8,26 @@ import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
 import type { SignedIn } from '../auth/identity-sessions'
-import { createGatewayRoot, type GatewayRoot } from '../composition/root'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { RequestLimits } from '../limits/request-limits'
 
+import {
+  ADDRESS,
+  answer,
+  closeHarness,
+  deviceOf,
+  failures,
+  harness,
+  request,
+  routeOptions,
+} from './__fixtures__/organisation-routes'
 import { organisationRoutes } from './organisation.routes'
 import { Organisations } from './organisations'
-
-const PASSWORD = 'pass-word-1'
 
 /** What a creation answers. */
 const created = z.object({ membership })
 
-/** Closes what a test opened. */
-const cleanups: Array<() => Promise<void>> = []
-
-/** Failures the routes answered 500 for; a test that expects one takes it. */
-const failures: DataError[] = []
-
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) {
-    await cleanup()
-  }
-
-  expect(failures.splice(0)).toEqual([])
-})
-
-/** What the routes are given besides the services: they hand each failure to `failures`. */
-const routeOptions = { onFailure: (error: DataError) => failures.push(error) }
-
-interface Ask {
-  /**
-   * The identity whose access token goes as `Authorization: Bearer <access>`, from the device it
-   * signed up on (`X-Perch-Device`).
-   */
-  readonly as?: SignedIn
-  /** The `Authorization` header exactly as sent, for one a device should not send. */
-  readonly authorization?: string
-  /** The `X-Perch-Device` header instead of the caller's device; `null` leaves it out. */
-  readonly device?: string | null
-  /** The JSON body, or a text sent as it is. */
-  readonly body?: unknown
-}
-
-/** The device each identity of these tests signs up on. */
-function deviceOf(email: string): string {
-  return `device-${email}`
-}
-
-function request(method: string, path: string, ask: Ask = {}): Request {
-  const headers = new Headers()
-  const authorization = ask.as ? `Bearer ${ask.as.tokens.access}` : ask.authorization
-  const device = ask.device === undefined && ask.as ? deviceOf(ask.as.identity.email) : ask.device
-
-  if (authorization !== undefined) {
-    headers.set('Authorization', authorization)
-  }
-
-  if (device !== undefined && device !== null) {
-    headers.set('X-Perch-Device', device)
-  }
-
-  if (ask.body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  return new Request(`http://gateway.test${path}`, {
-    method,
-    headers,
-    ...(ask.body === undefined
-      ? {}
-      : { body: typeof ask.body === 'string' ? ask.body : JSON.stringify(ask.body) }),
-  })
-}
-
-async function answer(response: Response | undefined): Promise<{ status: number; body: unknown }> {
-  if (!response) {
-    return expect.unreachable('the route answered nothing')
-  }
-
-  const text = await response.text()
-  const body: unknown = text === '' ? undefined : (JSON.parse(text) as unknown)
-
-  return { status: response.status, body }
-}
-
-async function openRoot(): Promise<GatewayRoot> {
-  const root = (
-    await createGatewayRoot({
-      engines: nodeEngines(),
-      url: 'mem://',
-      clock: manualClock(),
-    })
-  )._unsafeUnwrap()
-
-  cleanups.push(() => root.close())
-
-  return root
-}
-
-/**
- * The routes over a gateway on embedded databases, the directory and one per organisation, with
- * three identities signed up through its sessions: ann, bob and cat.
- */
-async function harness() {
-  const root = await openRoot()
-  const routes = organisationRoutes(
-    root.sessions,
-    root.deviceSessions,
-    root.organisations,
-    routeOptions,
-  )
-  const signUp = async (email: string) =>
-    (
-      await root.sessions.signUp(
-        { email, password: PASSWORD },
-        { id: deviceOf(email), label: 'Firefox on Linux' },
-      )
-    )._unsafeUnwrap()
-  const ann = await signUp('ann@example.test')
-  const bob = await signUp('bob@example.test')
-  const cat = await signUp('cat@example.test')
-
-  /** Sends the request to the routes and reads their answer. */
-  const ask = async (method: string, path: string, options: Ask = {}) =>
-    answer(await routes(request(method, path, options)))
-
-  /** Ann creates acme, for a test to start from. */
-  const founded = async () =>
-    (
-      await root.organisations.create({ identity: ann.identity.id, key: 'acme', name: 'Acme' })
-    )._unsafeUnwrap()
-
-  /** Ann invites bob into acme, for a test to start from. */
-  const invited = async () =>
-    (
-      await root.organisations.invite({
-        actor: ann.identity.id,
-        key: 'acme',
-        email: 'bob@example.test',
-      })
-    )._unsafeUnwrap()
-
-  return { root, routes, ann, bob, cat, ask, founded, invited }
-}
+afterEach(closeHarness)
 
 /** A member as the member list answers it. */
 function memberOf(signedIn: SignedIn, role: 'admin' | 'member') {
@@ -529,13 +404,12 @@ describe('organisationRoutes', () => {
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
       }),
-      routeOptions,
+      routeOptions(new RequestLimits({ clock: manualClock() })),
     )
 
-    expect(await answer(await routes(request('GET', '/organisations', { as: ann })))).toEqual({
-      status: 500,
-      body: { code: 'internal' },
-    })
+    expect(
+      await answer(await routes(request('GET', '/organisations', { as: ann }), ADDRESS)),
+    ).toEqual({ status: 500, body: { code: 'internal' } })
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
   })
 
@@ -549,7 +423,7 @@ describe('organisationRoutes', () => {
       ['GET', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
       ['POST', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
     ] as const) {
-      const response = await routes(request(method, path, { as: ann }))
+      const response = await routes(request(method, path, { as: ann }), ADDRESS)
 
       expect(await answer(response)).toEqual({
         status: 405,
@@ -564,7 +438,10 @@ describe('organisationRoutes', () => {
     const keys = ['ab', 'acme_2026', 'a'.repeat(32), 'a', '1acme', 'Acme', 'acme-corp']
 
     for (const key of [...keys, 'a'.repeat(33), 'a'.repeat(40), 'a'.repeat(41)]) {
-      const response = await routes(request('GET', `/organisations/${key}/members`, { as: ann }))
+      const response = await routes(
+        request('GET', `/organisations/${key}/members`, { as: ann }),
+        ADDRESS,
+      )
 
       expect({ key, matched: response !== undefined }).toEqual({ key, matched: isTenantKey(key) })
     }
@@ -584,7 +461,7 @@ describe('organisationRoutes', () => {
       '/organisationsx',
       '/auth/sign-in',
     ]) {
-      expect(await routes(request('GET', path, { as: ann }))).toBeUndefined()
+      expect(await routes(request('GET', path, { as: ann }), ADDRESS)).toBeUndefined()
     }
   })
 })

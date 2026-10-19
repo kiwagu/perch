@@ -12,7 +12,8 @@ modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
   is opened while nobody is signed in. Signing up or in goes through the gateway
-  (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin), naming the
+  (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin; a 429 is
+  `data:RATE_LIMITED`, and the sign-in page says to wait), naming the
   device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
   minted again when the stored value is not a device id of 1 to 64 characters) and a
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
@@ -45,7 +46,8 @@ modeling stage.
   opened for a newer one. The routes that act for the signed-in device go through
   `bearerCalls(baseUrl, { token, device, renew })`: the access token as `Authorization: Bearer`
   and the device's id as `X-Perch-Device`, the token renewed once on a 401, refusals mapped to
-  `data:` errors (the gateway's code as the message of `data:WRITE_REJECTED`, any other status
+  `data:` errors (the gateway's code as the message of `data:WRITE_REJECTED`, a 429 among them,
+  which the organisation page words as "too many attempts"; any other status
   named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
   it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
   creates its membership on the device at once. `devicesApi` is the `DEVICES` port over
@@ -72,7 +74,8 @@ modeling stage.
   other, to `POST /backend/auth/sign-out` (the pair in the body, its device in `X-Perch-Device`,
   no bearer token), and each is forgotten on its own answer: once revoked (204), refused as dead
   (401) or refused otherwise (any other 4xx, which the gateway will never take: reported); an
-  unreachable or failing (5xx) gateway leaves that pair for the next try. A pair whose send or
+  unreachable, failing (5xx) or waiting-asking (429, `data:RATE_LIMITED`) gateway leaves that
+  pair for the next try, a 429 without a report. A pair whose send or
   report throws is kept, the throw reported, and the pairs after it are sent all the same; a
   send that fails, even by a throw, never stops the next one. While a sign-out runs, no tab of the browser
   takes a write (a `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a
@@ -127,10 +130,13 @@ commands and waits until the gateway acknowledged it, and whose `readAccount` si
 reads the profile the gateway sends; it leaves each account without signing out. As the
 signed-in account, `ensureOrganisation` creates an organisation (one that is already the
 account's is found), `ensureMember` invites an existing account by email, and
-`readOrganisation` signs in, makes the organisation current and reads its notes.
-`openStand()` is the operator's connection to a stand as a system user, where seeded
-accounts and the organisations they created are swept, and `checkProfileName` the profile name rule the seed catalog is
-checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
+`readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
+of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
+by default), which a test talking to the gateway directly uses to name a client address in
+`X-Forwarded-For`, as the front would. `openStand()` is the operator's connection to a stand as a system user, where seeded
+accounts and the organisations they created are swept; it applies the directory schema with the
+key the stand's gateway signs with (`signingKey`, required), so opening a stand never changes
+that key. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands

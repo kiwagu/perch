@@ -17,6 +17,8 @@ vars:
   gateway_e2e: '{{ 5191 + slot * 100 }}'    # the e2e gateway
   front: '{{ 5443 + slot * 100 }}'          # Caddy of the dev stand
   front_e2e: '{{ 5493 + slot * 100 }}'      # Caddy of the e2e stand
+  # the stands' identity access key; a deployment sets its own GATEWAY_JWT_KEY
+  stand_jwt_key: 'stand-only-signing-key-not-for-any-deployment-0123456789abcdefghijklmnop'
 # A start asks for memory first: an app's estimate is its `memory` or what a running sibling
 # checkout's copy measures, plus the margin; what does not fit waits its turn in the host's queue.
 resources:
@@ -37,6 +39,9 @@ exec:
     E2E_BASE_URL: 'https://localhost:{{ front_e2e }}'
     SURREAL_DEV_URL: 'http://127.0.0.1:{{ surreal_dev }}'
     GATEWAY_DEV_URL: 'http://127.0.0.1:{{ gateway }}'
+    # the key the stands' gateways sign with: the smoke, the load test and the seed's sweep
+    # open a stand's directory with it, as its gateway does
+    GATEWAY_JWT_KEY: '{{ stand_jwt_key }}'
 apps:
   surrealdb-dev:
     description: >-
@@ -88,6 +93,7 @@ apps:
       bun scripts/stand-operator.ts &&
       SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc GATEWAY_PORT={{ gateway }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
+      GATEWAY_JWT_KEY={{ stand_jwt_key }}
       exec bun --watch apps/gateway/src/index.ts
     port: '{{ gateway }}'
     url: http://127.0.0.1:{{ gateway }}/health
@@ -105,6 +111,7 @@ apps:
       bun scripts/stand-operator.ts &&
       SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc GATEWAY_PORT={{ gateway_e2e }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
+      GATEWAY_JWT_KEY={{ stand_jwt_key }}
       exec bun --watch apps/gateway/src/index.ts
     port: '{{ gateway_e2e }}'
     url: http://127.0.0.1:{{ gateway_e2e }}/health

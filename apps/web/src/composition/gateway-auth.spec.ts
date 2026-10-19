@@ -93,6 +93,19 @@ describe('gatewayAuth', () => {
     ).toBe('data:SIGN_UP_REJECTED')
   })
 
+  it('reads 429 to a sign-up or a sign-in as a request to wait', async () => {
+    for (const run of [
+      (auth: ReturnType<typeof gatewayAuth>) => auth.signUp(input, device),
+      (auth: ReturnType<typeof gatewayAuth>) => auth.signIn(input, device),
+    ]) {
+      const { fetcher } = fakeFetch(respond(429, { code: 'rate-limited' }))
+
+      expect((await run(gatewayAuth('/backend', fetcher)))._unsafeUnwrapErr().code).toBe(
+        'data:RATE_LIMITED',
+      )
+    }
+  })
+
   it('reads 400 as a request the gateway could not take', async () => {
     const { fetcher } = fakeFetch(respond(400, { code: 'bad-request' }))
     const refused = (
@@ -180,6 +193,16 @@ describe('gatewayAuth', () => {
       expect(refused.message).toMatch(new RegExp(String(status)))
       expect(refused.message).not.toMatch(/access-1|refresh-1/)
     }
+  })
+
+  it('reads 429 to a sign-out as a request to wait, not as a refusal for good', async () => {
+    const { fetcher } = fakeFetch(respond(429, { code: 'rate-limited' }))
+    const refused = (
+      await gatewayAuth('/backend', fetcher).signOut(pair, 'device-1')
+    )._unsafeUnwrapErr()
+
+    expect(refused.code).toBe('data:RATE_LIMITED')
+    expect(refused.message).not.toMatch(/access-1|refresh-1/)
   })
 
   it('fails a sign-out the gateway could not complete with its status, never the pair', async () => {

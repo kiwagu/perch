@@ -116,7 +116,7 @@ export class PendingRevoke {
         } else if (error.code === 'data:WRITE_REJECTED') {
           forget()
           this.#report(error)
-        } else if (error.code !== 'data:OFFLINE') {
+        } else if (error.code !== 'data:OFFLINE' && error.code !== 'data:RATE_LIMITED') {
           this.#report(error)
         }
       })
