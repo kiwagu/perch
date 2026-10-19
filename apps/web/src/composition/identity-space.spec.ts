@@ -302,6 +302,11 @@ async function headOf(gateway: Gateway, region: string): Promise<number | undefi
   return (await gateway.stub.hub.heads([region]))._unsafeUnwrap()[0]?.head
 }
 
+/** Takes the leading tab's channel down. */
+function leaderOffline(leader: Tab): void {
+  ;(leader.transports.at(-1) ?? expect.unreachable('the leader connected')).goOffline()
+}
+
 /** Resets Ann's private region on the browser's store, as a tab whose rollback was refused again does. */
 async function resetPrivateRegion(browser: Browser): Promise<void> {
   const ref = { kind: 'private', id: privateRegionId(ann.id) } as const
@@ -460,6 +465,8 @@ describe('openIdentitySpace', () => {
       ).toMatchObject({ name: 'Ann' }),
     )
 
+    // Offline, the leader does not load the region again from the server meanwhile.
+    leaderOffline(leader)
     await resetPrivateRegion(browser)
     syncHints(new FakeHintChannel(browser.bus)).post('reset')
 
@@ -486,6 +493,7 @@ describe('openIdentitySpace', () => {
       ).toMatchObject({ name: 'Ann' }),
     )
 
+    leaderOffline(leader)
     await resetPrivateRegion(browser)
     syncHints(new FakeHintChannel(browser.bus)).post('journal')
 
@@ -494,6 +502,34 @@ describe('openIdentitySpace', () => {
         (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
       ).toBeUndefined(),
     )
+    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
+  })
+
+  it('the leader reloads a region whose rollback the gateway refused again, and its follower reopens it', async () => {
+    const gateway = await openGateway()
+    const browser = await openBrowser()
+    const leader = await openTab(gateway, browser)
+    const follower = await openTab(gateway, browser)
+    const written = profile('Ann')
+
+    await leading(leader)
+    gateway.stub.rejectEverything()
+    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+
+    // The server holds nothing of the region: both tabs end with what it holds.
+    await vi.waitFor(async () => {
+      expect(leader.errors.map((error) => error.code)).toEqual([
+        'data:PUSH_REJECTED',
+        'data:REGION_RELOADED',
+      ])
+      expect((await leader.space.unsent())._unsafeUnwrap()).toBe(false)
+      expect(
+        (await leader.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toBeUndefined()
+      expect(
+        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toBeUndefined()
+    })
     expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
   })
 

@@ -42,6 +42,13 @@ export function invert(doc: LoroDoc, rows: readonly OutboxRow[]): void {
   doc.applyDiff(doc.diff(after, before, false), { fullState: true })
 }
 
+/** A batch the gateway refused, and why. */
+export interface Refusal {
+  readonly batch: number
+  readonly reason: RejectReason
+  readonly detail: string
+}
+
 export interface RegionRollbackOptions {
   readonly region: RegionDoc
   /** Who the inverse commit of a rejected batch is written as. */
@@ -51,12 +58,16 @@ export interface RegionRollbackOptions {
   readonly push: RegionPush
   /** Stops the region's sync and reports why. */
   readonly stop: (error: DataError) => void
+  /** Has the region reloaded from the server: the gateway refused a batch again after its rollback. */
+  readonly reset: (refusal: Refusal) => void
 }
 
 /**
  * Rolls a batch the gateway rejected back with an inverse commit, made durable behind the rows it
  * undoes, so the next push carries the refused rows and their undo together, whatever the batch
- * limit. A batch rejected again after its rollback stops the region's sync.
+ * limit. A batch rejected again after its rollback has the region reloaded from the server
+ * (`reset`): the rows written after the refused ones depend on them, so no undo of them is
+ * worked out.
  */
 export class RegionRollback {
   readonly #region: RegionDoc
@@ -64,7 +75,8 @@ export class RegionRollback {
   readonly #onError: (error: DataError) => void
   readonly #push: RegionPush
   readonly #stop: (error: DataError) => void
-  /** The last outbox row a rollback covered: a batch rejected again from there stops the region. */
+  readonly #reset: (refusal: Refusal) => void
+  /** The last outbox row a rollback covered: a batch rejected again from there reloads the region. */
   #revertedThrough = 0
   /**
    * The outbox row of the latest rollback's inverse: until it is acknowledged, a push carries
@@ -78,6 +90,7 @@ export class RegionRollback {
     this.#onError = options.onError
     this.#push = options.push
     this.#stop = options.stop
+    this.#reset = options.reset
   }
 
   get id(): string {
@@ -89,7 +102,7 @@ export class RegionRollback {
     return this.#recoveryThrough
   }
 
-  /** The gateway rejected batch `batch`: the push in flight is rolled back, or the region stops when it was rolled back before. */
+  /** The gateway rejected batch `batch`: the push in flight is rolled back, or the region reloaded when it was rolled back before. */
   async rejected(batch: number, reason: RejectReason, detail: string): Promise<void> {
     const flight = this.#push.inFlight()
 
@@ -97,15 +110,8 @@ export class RegionRollback {
       return
     }
 
-    const refusal = `${reason}: ${detail}`
-
     if ((flight.rows[0]?.seq ?? 0) <= this.#revertedThrough) {
-      this.#stop(
-        dataError(
-          'data:SYNC_STOPPED',
-          `the gateway rejected batch ${batch} of ${this.id} again after its rollback (${refusal}); the region no longer syncs`,
-        ),
-      )
+      this.#reset({ batch, reason, detail })
 
       return
     }
@@ -113,7 +119,7 @@ export class RegionRollback {
     this.#onError(
       dataError(
         'data:PUSH_REJECTED',
-        `the gateway rejected batch ${batch} of ${this.id} (${refusal}); the change is undone on this device`,
+        `the gateway rejected batch ${batch} of ${this.id} (${reason}: ${detail}); the change is undone on this device`,
         { region: this.id, batch, reason, detail },
       ),
     )

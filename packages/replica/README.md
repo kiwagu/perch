@@ -125,7 +125,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
-  push carries, 256 by default) returns a `SyncEngine` (`start`,
+  push carries, 256 by default; `replaceRegion(region, how)`, the app's document that takes a
+  region's place, below) returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
@@ -157,7 +158,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the ack of a first push moves the cursor; the push after a rollback carries every outbox row
   from the refused ones through their inverse, rows other tabs queued between included, whatever
   `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch
-  never goes out again without its undo);
+  never goes out again without its undo). A batch refused again after its rollback no longer
+  stops the region: the engine (`EngineRegions`) asks the app for a new document of the region
+  (`replaceRegion`, `reset`: `replaceRegionDoc` drops the local copy with every change not sent
+  yet), subscribes it without a version, so the gateway answers with a full snapshot, and
+  reports `data:REGION_RELOADED` once; the one `data:PUSH_REJECTED` of the first refusal stays
+  the only rejection. A region another tab reset (`data:REGION_STALE`) is opened again
+  (`reopen`); a replacement that fails stops the region as before (`data:SYNC_STOPPED`), and
+  `settled` waits for a replacement under way;
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a

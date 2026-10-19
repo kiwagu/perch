@@ -1,3 +1,4 @@
+import type { ResultAsync } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -5,13 +6,14 @@ import { type DataError, dataError } from '@workspace/data'
 import type { Clock } from '../clock'
 import type { ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
+import type { RegionReplacement } from '../region-replacement'
 
 import { type CadencePort, createCadence } from './cadence'
 import { EnginePasses } from './engine-passes'
-import { EngineSettling, type SyncedRegion } from './engine-settling'
+import { EngineRegions } from './engine-regions'
+import { EngineSettling } from './engine-settling'
 import { EngineSignOut } from './engine-sign-out'
 import { createOutboxDrain, type OutboxDrainPort } from './outbox-drain'
-import { RegionSync } from './region-sync'
 import type { ChannelState, EndReason, SyncTransport } from './transport'
 
 export interface SyncEngineOptions {
@@ -26,6 +28,15 @@ export interface SyncEngineOptions {
   readonly onError: (error: DataError) => void
   /** How many outbox rows one push of a region carries at most; 256 by default, the protocol's limit. */
   readonly batchRows?: number
+  /**
+   * The document that takes a region's place: `reset` when the gateway refused its batch again
+   * after the rollback (the engine then loads the region from the server), `reopen` when another
+   * tab reset it. A failure stops that region's sync and is reported.
+   */
+  readonly replaceRegion: (
+    region: RegionDoc,
+    how: RegionReplacement,
+  ) => ResultAsync<RegionDoc, DataError>
 }
 
 export interface SyncEngine {
@@ -67,7 +78,7 @@ export interface SyncEngine {
 
 class Engine implements SyncEngine {
   readonly #options: SyncEngineOptions
-  readonly #regions: ReadonlyMap<string, SyncedRegion>
+  readonly #regions: EngineRegions
   readonly #drain: OutboxDrainPort
   readonly #cadence: CadencePort
   readonly #settling: EngineSettling
@@ -78,33 +89,22 @@ class Engine implements SyncEngine {
 
   constructor(options: SyncEngineOptions) {
     this.#options = options
-    this.#regions = new Map(
-      options.regions.map((region) => [
-        region.ref.id,
-        {
-          region,
-          sync: new RegionSync({
-            region,
-            transport: options.transport,
-            clock: options.clock,
-            actor: options.actor,
-            onSettled: options.onSettled,
-            onError: options.onError,
-            ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
-          }),
-        },
-      ]),
-    )
-    this.#drain = createOutboxDrain({ pushNext: () => this.#pushNext() })
+    this.#regions = new EngineRegions({
+      ...options,
+      track: (replaced) => this.#settling.track(replaced),
+      drain: () => this.#drain.request(),
+      changed: () => this.#settling.changed(),
+    })
+    this.#drain = createOutboxDrain({ pushNext: () => this.#regions.pushNext() })
     this.#settling = new EngineSettling({
-      regions: this.#regions,
+      regions: this.#regions.map,
       clock: options.clock,
       drain: this.#drain,
       onError: options.onError,
       ready: () => this.#channel === 'up' && this.#passes.idle(),
     })
     this.#passes = new EnginePasses({
-      regions: this.#regions,
+      regions: this.#regions.map,
       transport: options.transport,
       clock: options.clock,
       drain: this.#drain,
@@ -138,6 +138,7 @@ class Engine implements SyncEngine {
   }
 
   stop(): void {
+    this.#regions.stop()
     this.#cadence.stop()
     this.#drain.stop()
     this.#options.transport.stop()
@@ -146,7 +147,7 @@ class Engine implements SyncEngine {
       unlisten()
     }
 
-    for (const { sync } of this.#regions.values()) {
+    for (const { sync } of this.#regions.map.values()) {
       sync.channelDown()
     }
 
@@ -182,7 +183,7 @@ class Engine implements SyncEngine {
   #receive(message: ServerMessage): void {
     match(message)
       .with({ type: 'welcome' }, () => {
-        for (const { sync } of this.#regions.values()) {
+        for (const { sync } of this.#regions.map.values()) {
           sync.subscribe()
         }
       })
@@ -192,7 +193,7 @@ class Engine implements SyncEngine {
         this.#passes.answered()
 
         for (const { region, head } of regions) {
-          this.#regions.get(region)?.sync.catchUp(head)
+          this.#regions.map.get(region)?.sync.catchUp(head)
         }
 
         this.#settling.changed()
@@ -206,12 +207,12 @@ class Engine implements SyncEngine {
         )
 
         // An error names no request: each region gives up what waits for an answer.
-        for (const { sync } of this.#regions.values()) {
+        for (const { sync } of this.#regions.map.values()) {
           this.#settling.track(sync.handle(error))
         }
       })
       .with({ type: P.union('updates', 'ack', 'reject', 'compaction') }, (regional) => {
-        const synced = this.#regions.get(regional.region)
+        const synced = this.#regions.map.get(regional.region)
 
         if (synced) {
           this.#settling.track(synced.sync.handle(regional))
@@ -262,7 +263,7 @@ class Engine implements SyncEngine {
     if (state === 'down') {
       this.#passes.forgetProbes()
 
-      for (const { sync } of this.#regions.values()) {
+      for (const { sync } of this.#regions.map.values()) {
         sync.channelDown()
       }
     }
@@ -270,23 +271,6 @@ class Engine implements SyncEngine {
     this.#cadence.channel(state)
     this.#options.onState({ channel: state })
     this.#settling.changed()
-  }
-
-  /** The next batch of the first region that has one. */
-  async #pushNext(): Promise<'sent' | 'empty' | 'down'> {
-    try {
-      for (const { sync } of this.#regions.values()) {
-        const outcome = await sync.pushNext()
-
-        if (outcome !== 'empty') {
-          return outcome
-        }
-      }
-
-      return 'empty'
-    } finally {
-      this.#settling.changed()
-    }
   }
 }
 

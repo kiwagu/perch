@@ -331,6 +331,7 @@ class Space implements IdentitySpace {
         }
       },
       onSettled: () => this.#options.hints.post('settled'),
+      replaceRegion: (region, how) => this.#reloads.replace(region, how),
       // Work a stopped engine still had under way fails once the database closes under it;
       // that is not reported: what it did not store, the next leader pulls again.
       onError: (error) => {
