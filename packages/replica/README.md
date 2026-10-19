@@ -9,7 +9,8 @@ writes each touched record into the local database and announces the change, and
 local update is stored durably in the local database before it counts as persisted. The
 local database numbers each region's update log, so tabs sharing it never reuse a number (a
 number is unique per region; a write that lost its number to another tab's engine is sent
-again at once under the next one);
+again at once under the next one); a reset drops a region's local copy and moves it to a new
+generation, and a document of an earlier one can no longer write to the log or read from it;
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
@@ -38,7 +39,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
-  an import.
+  an import. `stale()` tells whether another document of the region reset it since this one
+  opened (an in-memory document never is); every write and catch-up of such a document fails
+  `data:REGION_STALE`.
+- `replaceRegionDoc(local, current, how)` (`RegionReplacement`: `reset` or `reopen`): the
+  document that takes `current`'s place: `reset` drops the region's local copy (snapshot, update
+  log, outbox, cursor; every change not sent yet) and opens it empty, `reopen` opens again what
+  the database holds after another document reset it; `current` is closed once its successor
+  is open, and a reset the database refuses changes nothing.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
   once its update is durable.
 - `Projector`: `start()` projects current records, deletes those the region projected
@@ -182,6 +190,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `shared` and `exclusive` modes granted in request order, `steal`, abort signals; `waiting(name,
   mode)` tells a test that a request waits) and
   `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
+  `interceptRegionResets(local, before)` wraps a device database so each region reset first
+  goes through `before`, which may throw (the reset fails) or wait (the reset is held).
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.

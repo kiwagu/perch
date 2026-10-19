@@ -1,4 +1,4 @@
-import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import {
   type DataError,
@@ -8,6 +8,7 @@ import {
   type LocalDb,
   recordId,
 } from '@workspace/data'
+import { z } from '@workspace/zod'
 
 import { messageOf } from './failure'
 import localTailStatement from './surql/local-tail.surql'
@@ -15,7 +16,9 @@ import outboxAckStatement from './surql/outbox-ack.surql'
 import outboxReadStatement from './surql/outbox-read.surql'
 import appendStatement from './surql/replica-append.surql'
 import cursorStatement from './surql/replica-cursor.surql'
+import generationStatement from './surql/replica-generation.surql'
 import importStatement from './surql/replica-import.surql'
+import resetStatement from './surql/replica-reset.surql'
 import saveSnapshotStatement from './surql/replica-save-snapshot.surql'
 
 /** A local update not yet acknowledged by a server, under its number in the update log. */
@@ -49,6 +52,37 @@ const NUMBER_TAKEN = /Database index `replica_(?:update|outbox)_seq` already con
 /** How many times in a row a write that lost its number to another writer is sent. */
 const NUMBER_ATTEMPTS = 5
 
+/** What a statement of a store throws once the device dropped the region's local copy after it loaded. */
+const REGION_RESET = /replica: the region was reset/
+
+/** A region's generation as the database answers it. */
+const storedGeneration = z.int().nonnegative()
+
+/** The generation in a statement's answer, or the failure to read one. */
+function generationOf(value: unknown, region: string): Result<number, DataError> {
+  const parsed = storedGeneration.safeParse(value)
+
+  return parsed.success
+    ? ok(parsed.data)
+    : err(dataError('data:QUERY_FAILED', `no generation was read for ${region}`, parsed.error))
+}
+
+/** The error a failed statement of `region` stands for: the region reset under it, or `code`. */
+function storeError(
+  region: string,
+  code: DataErrorCode,
+  message: string,
+  cause: unknown,
+): DataError {
+  return REGION_RESET.test(messageOf(cause))
+    ? dataError(
+        'data:REGION_STALE',
+        `the local copy of ${region} was reset since it was opened`,
+        cause,
+      )
+    : dataError(code, message, cause)
+}
+
 /**
  * Durable storage of a region document in the local database: every local
  * update is appended to the update log and the outbox in one transaction, in
@@ -58,7 +92,9 @@ const NUMBER_ATTEMPTS = 5
  * durable watermark moves only after a write succeeded. A separate watermark marks
  * how far this document has read the log; it moves only when the log is read, never
  * on this document's own writes, since another tab may hold a lower number. A compaction
- * drops only the rows up to it.
+ * drops only the rows up to it. A store writes and reads in the generation of the region it
+ * loaded: once the device dropped the region's local copy (`reset`), every write and every
+ * catch-up of a store loaded before fails `data:REGION_STALE`.
  */
 export class RegionStore {
   readonly #pending: Uint8Array[] = []
@@ -71,9 +107,35 @@ export class RegionStore {
     private readonly local: LocalDb,
     private readonly region: string,
     loadedSeq: number,
+    private readonly generation: number,
   ) {
     this.#persistedSeq = loadedSeq
     this.#seenSeq = loadedSeq
+  }
+
+  /**
+   * Drops the region's local copy, its snapshot, update log, outbox and cursor, in one
+   * transaction that moves the region to a new generation; numbering goes on. Answers it.
+   */
+  static reset(local: LocalDb, region: string): ResultAsync<number, DataError> {
+    return ResultAsync.fromPromise(local.db.query(resetStatement, { region }).retry(), (cause) =>
+      dataError('data:WRITE_FAILED', `could not reset the local copy of ${region}`, cause),
+    ).andThen((results) =>
+      // Every statement of the transaction yields a result: RETURN's is the one before COMMIT's.
+      generationOf(results.at(-2), region),
+    )
+  }
+
+  /** Whether the database holds the region in a later generation than the one this store loaded. */
+  stale(): ResultAsync<boolean, DataError> {
+    return this.#query(
+      generationStatement,
+      { region: this.region },
+      'data:QUERY_FAILED',
+      `could not read the generation of ${this.region}`,
+    ).andThen(([current]) =>
+      generationOf(current, this.region).map((read) => read !== this.generation),
+    )
   }
 
   get persistedSeq(): number {
@@ -99,7 +161,7 @@ export class RegionStore {
   saveSnapshot(bytes: Uint8Array, version: Uint8Array): ResultAsync<void, DataError> {
     return this.#query(
       saveSnapshotStatement,
-      { region: this.region, bytes, version, covers: this.#seenSeq },
+      { region: this.region, bytes, version, covers: this.#seenSeq, generation: this.generation },
       'data:WRITE_FAILED',
       `could not compact region ${this.region}`,
     ).map(() => undefined)
@@ -111,7 +173,7 @@ export class RegionStore {
       .andThen(() =>
         this.#query(
           importStatement,
-          { region: this.region, bytes },
+          { region: this.region, bytes, generation: this.generation },
           'data:WRITE_FAILED',
           `could not persist a server update of ${this.region}`,
         ),
@@ -123,7 +185,7 @@ export class RegionStore {
   writeCursor(pulled: number): ResultAsync<void, DataError> {
     return this.#query(
       cursorStatement,
-      { region: this.region, pulled },
+      { region: this.region, pulled, generation: this.generation },
       'data:WRITE_FAILED',
       `could not move the cursor of ${this.region}`,
     ).map(() => undefined)
@@ -160,23 +222,35 @@ export class RegionStore {
       { region: this.region, after: this.#seenSeq },
       'data:QUERY_FAILED',
       message,
-    ).andThen(([tail]) => {
-      const rows = tail as StoredRow[]
-      const last = rows.at(-1)
+    ).andThen(([tail, current]) =>
+      generationOf(current, this.region).andThen((read): Result<number, DataError> => {
+        // Rows of a later generation belong to a copy this document never held.
+        if (read !== this.generation) {
+          return err(
+            dataError(
+              'data:REGION_STALE',
+              `the local copy of ${this.region} was reset since it was opened`,
+            ),
+          )
+        }
 
-      if (!last) {
-        return ok(0)
-      }
+        const rows = tail as StoredRow[]
+        const last = rows.at(-1)
 
-      return Result.fromThrowable(
-        () => apply(rows.map((row) => new Uint8Array(row.bytes))),
-        (cause) => dataError('data:QUERY_FAILED', message, cause),
-      )().map(() => {
-        this.#seenSeq = Math.max(this.#seenSeq, last.seq)
+        if (!last) {
+          return ok(0)
+        }
 
-        return rows.length
-      })
-    })
+        return Result.fromThrowable(
+          () => apply(rows.map((row) => new Uint8Array(row.bytes))),
+          (cause) => dataError('data:QUERY_FAILED', message, cause),
+        )().map(() => {
+          this.#seenSeq = Math.max(this.#seenSeq, last.seq)
+
+          return rows.length
+        })
+      }),
+    )
   }
 
   #query(
@@ -186,7 +260,7 @@ export class RegionStore {
     message: string,
   ): ResultAsync<unknown[], DataError> {
     return ResultAsync.fromPromise(this.#send(statement, vars), (cause) =>
-      dataError(code, message, cause),
+      storeError(this.region, code, message, cause),
     )
   }
 
@@ -224,9 +298,14 @@ export class RegionStore {
 
       try {
         // Replayed on a conflict with another tab's append, as in `#query`.
-        results = await this.#send(appendStatement, { region: this.region, bytes: next })
+        results = await this.#send(appendStatement, {
+          region: this.region,
+          bytes: next,
+          generation: this.generation,
+        })
       } catch (cause) {
-        this.#failure = dataError(
+        this.#failure = storeError(
+          this.region,
           'data:WRITE_FAILED',
           `could not persist an update of ${this.region}`,
           cause,

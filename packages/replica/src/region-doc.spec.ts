@@ -18,6 +18,7 @@ import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import coversStatement from './__fixtures__/snapshot-covers.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
+import { replaceRegionDoc } from './region-replacement'
 import appendStatement from './surql/replica-append.surql'
 import { LoroWritePath } from './write-path'
 
@@ -428,5 +429,92 @@ describe('RegionDoc sync state', () => {
     expect((await region.acknowledge(rows.slice(2))).isOk()).toBe(true)
 
     expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([1, 2])
+  })
+})
+
+describe('a region reset on the device', () => {
+  const reset = async (region: RegionDoc) =>
+    (await replaceRegionDoc(local, region, 'reset'))._unsafeUnwrap()
+
+  it("drops the region's snapshot, log, outbox and cursor, and numbers new rows after the old ones", async () => {
+    const region = await open()
+
+    writeName(region, 'Ann')
+    writeName(region, 'Ana')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.importRemote(updateWithMissingHistory().fill, 7)).isOk()).toBe(true)
+    expect((await region.compact()).isOk()).toBe(true)
+
+    const fresh = await reset(region)
+
+    expect(fresh.recordJson(key)).toBeUndefined()
+    expect(fresh.pulled()).toBe(0)
+    expect((await fresh.outbox(10))._unsafeUnwrap()).toEqual([])
+    expect(await counts()).toEqual({ snapshots: 0, updates: 0, outbox: 0 })
+
+    writeName(fresh, 'Bea')
+    expect((await fresh.flush()).isOk()).toBe(true)
+    expect((await fresh.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([4])
+  })
+
+  it('refuses the writes of a document opened before the reset', async () => {
+    const old = await open()
+
+    await reset(await open())
+    writeName(old, 'Late')
+
+    expect((await old.flush())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await (await open()).outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('refuses its catch-up and imports nothing', async () => {
+    const old = await open()
+    const fresh = await reset(await open())
+
+    writeName(fresh, 'New')
+    expect((await fresh.flush()).isOk()).toBe(true)
+
+    expect((await old.catchUpLocal())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect(old.recordJson(key)).toBeUndefined()
+  })
+
+  it('refuses its server imports, its cursor and its compaction', async () => {
+    const old = await open()
+
+    await reset(await open())
+
+    expect(
+      (await old.importRemote(updateWithMissingHistory().fill, 5))._unsafeUnwrapErr().code,
+    ).toBe('data:REGION_STALE')
+    expect((await old.advanceCursor(5))._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await old.compact())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await open()).pulled()).toBe(0)
+  })
+
+  it('tells a document of an earlier generation', async () => {
+    const old = await open()
+    const fresh = await reset(await open())
+
+    expect((await old.stale())._unsafeUnwrap()).toBe(true)
+    expect((await fresh.stale())._unsafeUnwrap()).toBe(false)
+    expect((await RegionDoc.inMemory('private', ref.id).stale())._unsafeUnwrap()).toBe(false)
+  })
+
+  it('leaves the other regions of the database alone', async () => {
+    const other: RegionRef = { kind: 'private', id: 'identity:idn_0000000000000001.01m52pexcp' }
+    const mine = await open()
+    const theirs = (await RegionDoc.open(local, other))._unsafeUnwrap()
+
+    writeName(mine, 'Ann')
+    writeName(theirs, 'Bob')
+    expect((await mine.flush()).isOk()).toBe(true)
+    expect((await theirs.flush()).isOk()).toBe(true)
+
+    await reset(mine)
+
+    const again = (await RegionDoc.open(local, other))._unsafeUnwrap()
+
+    expect(again.recordJson(key)).toMatchObject({ name: 'Bob' })
+    expect((await again.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 })

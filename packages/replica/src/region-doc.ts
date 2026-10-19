@@ -75,15 +75,15 @@ export class RegionDoc {
     options: OpenRegionOptions = {},
   ): ResultAsync<RegionDoc, DataError> {
     const load = async (): Promise<RegionDoc> => {
-      const [snapshots, updates, cursor] = await local.db.query<
-        [ArrayBuffer[], StoredRow[], number[]]
+      const [snapshots, updates, cursor, generation] = await local.db.query<
+        [ArrayBuffer[], StoredRow[], number[], number]
       >(loadStatement, { region: ref.id })
       const doc = createDoc(options.peerId ?? randomPeerId())
       const batch = [...snapshots, ...updates.map((update) => update.bytes)]
       const status =
         batch.length > 0 ? doc.importBatch(batch.map((bytes) => new Uint8Array(bytes))) : undefined
       const loadedSeq = Math.max(0, ...updates.map((update) => update.seq))
-      const store = new RegionStore(local, ref.id, loadedSeq)
+      const store = new RegionStore(local, ref.id, loadedSeq, generation)
       const region = new RegionDoc(ref, doc, store, cursor[0] ?? 0)
 
       if (status) {
@@ -121,6 +121,11 @@ export class RegionDoc {
   /** The sequence number of the last local update known to be durable. */
   persistedSeq(): number {
     return this.#store?.persistedSeq ?? 0
+  }
+
+  /** Whether another document of the region reset it since this one opened; an in-memory one never is. */
+  stale(): ResultAsync<boolean, DataError> {
+    return this.#store?.stale() ?? okAsync(false)
   }
 
   /** How far this device has pulled the region from the server. */

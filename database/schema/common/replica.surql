@@ -3,7 +3,9 @@
 -- acknowledged by a server, the records each region has projected, and the identity each
 -- Loro peer of a region writes as. Bytes are
 -- opaque to the database. The head row numbers a region's update log without gaps;
--- the cursor remembers how far a client has pulled from the server. These tables are
+-- on a device it also holds the region's generation, which moves when the device drops the
+-- region's local copy: a document of an earlier generation can no longer write to the log or
+-- read from it. The cursor remembers how far a client has pulled from the server. These tables are
 -- infrastructure, not data: closed to every record user and never replicated.
 
 -- @replicate none
@@ -62,6 +64,7 @@ DEFINE TABLE OVERWRITE _replica_head SCHEMAFULL PERMISSIONS NONE;
 DEFINE FIELD OVERWRITE region ON _replica_head TYPE string;
 DEFINE FIELD OVERWRITE head ON _replica_head TYPE int DEFAULT 0;
 DEFINE FIELD OVERWRITE covers ON _replica_head TYPE int DEFAULT 0;
+DEFINE FIELD OVERWRITE generation ON _replica_head TYPE int DEFAULT 0;
 
 -- @replicate none
 DEFINE TABLE OVERWRITE _replica_cursor SCHEMAFULL PERMISSIONS NONE;

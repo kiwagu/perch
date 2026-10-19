@@ -15,6 +15,7 @@ export {
   type RegionRef,
 } from './region-doc'
 export { identityRegions, privateRegionId, regionRefOf, tenantKeyOf } from './region-ref'
+export { type RegionReplacement, replaceRegionDoc } from './region-replacement'
 export {
   fieldOf,
   type ReplicaField,
