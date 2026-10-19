@@ -15,7 +15,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { DeviceSessions } from './device-sessions'
-import { issuedAtOf, scopeOf } from './token-claims'
+import { issuedAtOf, namesOtherScope, type TokenScope } from './token-claims'
 
 /** The keys a device keeps: the short-lived access token and the refresh key that renews it. */
 export interface DeviceTokens {
@@ -64,7 +64,7 @@ export interface IdentitySessionsOptions {
    */
   readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   /** Where the identity access method issues tokens; a token issued elsewhere is refused. */
-  readonly scope: { readonly namespace: string; readonly database: string; readonly access: string }
+  readonly scope: TokenScope
   /** Times the pairs parked for a retry out. */
   readonly clock: Clock
   /**
@@ -125,17 +125,6 @@ function unjudged(message: string, cause?: unknown): DataError {
   return dataError('data:QUERY_FAILED', message, cause)
 }
 
-function sameScope(
-  one: IdentitySessionsOptions['scope'],
-  other: IdentitySessionsOptions['scope'],
-): boolean {
-  return (
-    one.namespace === other.namespace &&
-    one.database === other.database &&
-    one.access === other.access
-  )
-}
-
 function identityOf(user: AuthUser | undefined): Result<AuthUser, DataError> {
   return user ? ok(user) : err(refused('no identity is signed in with these keys'))
 }
@@ -181,7 +170,7 @@ export class IdentitySessions {
   readonly #onFailure: (error: DataError) => void
   readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
   readonly #clock: Clock
-  readonly #scope: IdentitySessionsOptions['scope']
+  readonly #scope: TokenScope
   /** The pairs parked for a retry, by device and the digest of the spent refresh key. */
   readonly #parked = new Map<string, Parked>()
 
@@ -227,11 +216,10 @@ export class IdentitySessions {
     renewal?: RenewalGate,
   ): ResultAsync<AuthenticatedDevice, DataError> {
     const { access, refresh } = tokens
-    const issuedFor = scopeOf(access)
 
     // The database would accept a token of another database's record access: refuse it first.
-    if (issuedFor !== undefined && !sameScope(issuedFor, this.#scope)) {
-      return errAsync(refused('the access token was issued for another access method'))
+    if (namesOtherScope(access, this.#scope)) {
+      return errAsync(refused('the access token names another namespace, database or access'))
     }
 
     return this.#withAuth((auth) =>

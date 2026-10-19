@@ -201,10 +201,13 @@ key at its next hello; nobody is signed out. The organisations' databases have n
 of their own yet; when they get one, it takes its key from this variable too.
 
 Token scope: an access token issued for another namespace, database or access method is refused
-before the database is asked (`data:AUTH_FAILED`, read from the token's `NS`, `DB` and `AC` claims
-by `scopeOf`, `src/auth/token-claims.ts`), since the database would accept a record access token
-of another database and switch the session to it. Such a token is never renewed: a refresh key
-presented beside it is not spent. A payload without these claims goes to the database as before.
+before the database is asked (`data:AUTH_FAILED`, by `namesOtherScope`, `src/auth/token-claims.ts`),
+since the database would accept a record access token of another database and switch the session
+to it. Its claims are read under every name SurrealDB 3.3 takes them by: the `NS`, `DB` and `AC`
+it issues, `ns`, `db` and `ac`, and the namespaced `https://surrealdb.com/ns` (or `/namespace`),
+`/db` (or `/database`) and `/ac` (or `/access`); any of them that names another scope, or a scope
+named only in part, refuses the token. Such a token is never renewed: a refresh key presented
+beside it is not spent. A payload without any of these claims goes to the database as before.
 
 Limits (`RequestLimits`, `src/limits/`): fixed windows in the gateway process's memory, each
 starting at its key's first attempt; every gateway process keeps its own, so several processes

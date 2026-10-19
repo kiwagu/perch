@@ -27,8 +27,26 @@ function payloadOf(access: string): unknown {
 /** The claims read here; a token carries others, which are left alone. */
 const issuedClaims = z.object({ iat: z.number().int() })
 
-/** Where the database issued a token: its namespace, database and access method, upper case. */
-const scopeClaims = z.object({ NS: z.string(), DB: z.string(), AC: z.string() })
+/** Where a token is issued: the namespace, the database and the access method. */
+export interface TokenScope {
+  readonly namespace: string
+  readonly database: string
+  readonly access: string
+}
+
+/**
+ * The names the database reads each part of a token's scope by (SurrealDB 3.3): the upper case
+ * claim it issues, the lower case one and two namespaced ones. It refuses a token that carries
+ * two names of one part.
+ */
+const SCOPE_CLAIMS = [
+  ['namespace', ['NS', 'ns', 'https://surrealdb.com/ns', 'https://surrealdb.com/namespace']],
+  ['database', ['DB', 'db', 'https://surrealdb.com/db', 'https://surrealdb.com/database']],
+  ['access', ['AC', 'ac', 'https://surrealdb.com/ac', 'https://surrealdb.com/access']],
+] as const
+
+/** A payload as claims by name. */
+const claimsByName = z.record(z.string(), z.unknown())
 
 /**
  * When access token `access` was issued: its `iat` claim, a whole second, as a date. Anything
@@ -41,16 +59,29 @@ export function issuedAtOf(access: string): Date | undefined {
 }
 
 /**
- * The namespace, database and access method access token `access` was issued for: its `NS`, `DB`
- * and `AC` claims. Anything that is not a token of three segments whose payload names all three
- * answers `undefined`.
+ * Whether access token `access` names a scope other than `scope`: a namespace, database or access
+ * method claim, under any name the database reads it by, that differs from `scope`'s, or a scope
+ * named only in part. A token that names no part of a scope, and anything that is not a token of
+ * three segments with a JSON payload, names no other: the database judges it.
  */
-export function scopeOf(
-  access: string,
-): { namespace: string; database: string; access: string } | undefined {
-  const parsed = scopeClaims.safeParse(payloadOf(access))
+export function namesOtherScope(access: string, scope: TokenScope): boolean {
+  const parsed = claimsByName.safeParse(payloadOf(access))
 
-  return parsed.success
-    ? { namespace: parsed.data.NS, database: parsed.data.DB, access: parsed.data.AC }
-    : undefined
+  if (!parsed.success) {
+    return false
+  }
+
+  const claims = parsed.data
+  const parts = SCOPE_CLAIMS.map(([part, names]) => ({
+    expected: scope[part],
+    named: names.filter((name) => Object.hasOwn(claims, name)).map((name) => claims[name]),
+  }))
+
+  if (parts.every(({ named }) => named.length === 0)) {
+    return false
+  }
+
+  return parts.some(
+    ({ expected, named }) => named.length === 0 || named.some((value) => value !== expected),
+  )
 }

@@ -1,12 +1,14 @@
+import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createAuth, type DataError, dataError, type LocalDb } from '@workspace/data'
-import { openTestDb, readSchema } from '@workspace/data/testing'
+import { openTestDb, readSchema, TEST_SIGNING_KEY } from '@workspace/data/testing'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
+import { z } from '@workspace/zod'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 
@@ -37,6 +39,22 @@ const elsewhereAccess = readFileSync(
   'utf8',
 )
 
+/** The claims of a token's payload. */
+function claimsOf(token: string): Record<string, unknown> {
+  const payload = Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')
+
+  return z.record(z.string(), z.unknown()).parse(JSON.parse(payload) as unknown)
+}
+
+/** A token of `claims` signed with `key` (HS512), as the database signs the tokens it issues. */
+function signedToken(claims: Record<string, unknown>, key: string): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS512', typ: 'JWT' })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
+  const signature = createHmac('sha512', key).update(`${header}.${payload}`).digest('base64url')
+
+  return `${header}.${payload}.${signature}`
+}
+
 const opened: LocalDb[] = []
 
 /** Failures reported that no test expected. */
@@ -48,9 +66,14 @@ afterEach(async () => {
   expect(reportedFailures.splice(0)).toEqual([])
 })
 
-async function testDb(schema = readSchema('directory')): Promise<LocalDb> {
+async function testDb(schema = readSchema('directory'), signingKey?: string): Promise<LocalDb> {
   const local = (
-    await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema })
+    await openTestDb({
+      namespace: NAMESPACE,
+      database: DIRECTORY,
+      schema,
+      ...(signingKey === undefined ? {} : { signingKey }),
+    })
   )._unsafeUnwrap()
 
   opened.push(local)
@@ -406,6 +429,41 @@ describe('IdentitySessions', () => {
     expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     // The refresh key was not spent by the refused call.
     expect(renewed.renewed).toBe(true)
+  })
+
+  it('refuses a token of another access method whatever names its scope claims go by', async () => {
+    const local = await testDb(`${readSchema('directory')}\n${elsewhereAccess}`, TEST_SIGNING_KEY)
+    const sessions = sessionsOver(local)
+    const { identity, tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const { NS, DB, ID, ...rest } = claimsOf(tokens.access)
+    const spellings = [
+      { ns: NS, db: DB, ac: 'elsewhere', id: ID },
+      {
+        'https://surrealdb.com/ns': NS,
+        'https://surrealdb.com/db': DB,
+        'https://surrealdb.com/ac': 'elsewhere',
+        'https://surrealdb.com/id': ID,
+      },
+      {
+        'https://surrealdb.com/namespace': NS,
+        'https://surrealdb.com/database': DB,
+        'https://surrealdb.com/access': 'elsewhere',
+        'https://surrealdb.com/record': ID,
+      },
+    ]
+    const { AC: _issuedFor, ...times } = rest
+
+    for (const scope of spellings) {
+      const forged = signedToken({ ...times, ...scope }, TEST_SIGNING_KEY)
+      const bare = createAuth(local, identityAccess)
+
+      // The database reads these names as its own: it signs the session in through `elsewhere`.
+      expect((await bare.resume({ access: forged }))._unsafeUnwrap()).toEqual(identity)
+      await bare.close()
+      expect((await sessions.authenticate({ access: forged }))._unsafeUnwrapErr().code).toBe(
+        'data:AUTH_FAILED',
+      )
+    }
   })
 
   it('keeps the result of a call whose database session fails to close, and reports the failure', async () => {
