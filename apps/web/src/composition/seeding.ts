@@ -122,6 +122,11 @@ export interface StandOptions {
   readonly namespace: string
   readonly database: string
   readonly credentials: { readonly username: string; readonly password: string }
+  /**
+   * The key the stand's gateway signs tokens with (`GATEWAY_JWT_KEY`): the directory schema is
+   * applied with it, so opening the stand never gives its access method another key.
+   */
+  readonly signingKey: string
 }
 
 /** The operator's connection to a stand, where seeded accounts are swept. */
@@ -356,7 +361,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
 
 /**
  * Connects to a stand as its operator. The directory schema is applied as the gateway applies
- * it, which leaves a database that already has it alone.
+ * it, with the gateway's signing key, which leaves a database that already has it alone; without
+ * that key, the stand would be given a new one and every device's access token refused.
  */
 export function openStand(options: StandOptions): ResultAsync<Stand, DataError> {
   return openLocalDb({
@@ -366,5 +372,6 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
     database: options.database,
     credentials: options.credentials,
     schema: readSchema('directory'),
+    signingKey: options.signingKey,
   }).map((local) => ({ local, runner: new ShapeRunner(local), close: () => local.close() }))
 }

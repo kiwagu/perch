@@ -178,9 +178,23 @@ None: this is an application. Its entry point is `src/index.ts`, which registers
 `.surql` loader and runs `src/main.ts`; `SIGINT` and `SIGTERM` stop the server and close
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
-`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, and optionally the logger's `LOG_LEVEL`
-and `LOG_FORMAT`. `scripts/smoke.ts` is the entry point of the smoke test against a
-stand.
+`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
+optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
+an issue that names it, never its value. `scripts/smoke.ts` is the entry point of the smoke test
+against a stand.
+
+Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
+which the gateway gives the directory schema when it applies it, so a schema applied again (at a
+restart after a schema change, or on a deployment) keeps every issued token valid. It is
+required, with no default and at least 64 characters: generate one with `openssl rand -base64 64`.
+The local stands use a literal of the mcproc manifest (`stand_jwt_key`), for those stands only;
+everything else that opens a stand's directory (the smoke, the load test's gateway, the seed's
+sweep) applies the schema with that same key, from `mcproc exec`, or it would give the stand a
+key of its own.
+To rotate it, set a new value and restart the gateway: the schema is applied again under the new
+key, earlier access tokens are refused, and each device renews its pair once with its refresh
+key at its next hello; nobody is signed out. The organisations' databases have no access method
+of their own yet; when they get one, it takes its key from this variable too.
 
 ## Commands
 
@@ -192,7 +206,9 @@ stand.
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
-  operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
+  operator defines, `scripts/stand-operator.ts` at the repository root) and with
+  `GATEWAY_JWT_KEY`, the key the stand's gateway signs with (required, no default; the root
+  `bun run test:db` sets it from the manifest), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
   its device writing a note into the organisation's region that the owner's device receives,
@@ -202,7 +218,9 @@ stand.
   4403), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
-  that the refresh is refused; and on another identity its device sessions: a hello under a
+  that the refresh is refused; on a further identity the directory schema applied again with the
+  stand's key, the access token issued before it still accepted without a renewal; and on
+  another identity its device sessions: a hello under a
   device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
   laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
   from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello

@@ -47,7 +47,8 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
   `GATEWAY_URL` and `E2E_BASE_URL` of the e2e stand, `SURREAL_DEV_URL` and `GATEWAY_DEV_URL` of
-  the dev stand); none of them has an address of its own.
+  the dev stand) and the stands' signing key `GATEWAY_JWT_KEY`; none of them has an address of
+  its own.
 - `bun run load -- --devices 20 --members 10 --hold 15`: the gateway load test. It starts a
   gateway of its own on port 5197 in front of the e2e stand's SurrealDB and prints one table row
   per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
@@ -123,7 +124,7 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
-  the seed data.
+  the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
 - `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file written by the first run on a checkout (also in `check` and in the pre-commit hook): afterwards a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails.
 - `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.

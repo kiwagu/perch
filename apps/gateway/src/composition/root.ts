@@ -64,6 +64,12 @@ export interface GatewayRootOptions {
   readonly url: string
   /** The gateway's namespace user; an embedded database needs none. */
   readonly credentials?: { readonly username: string; readonly password: string }
+  /**
+   * The key the directory's identity access method signs tokens with, given to its schema at
+   * apply, so a schema applied again keeps every issued token valid. The organisations'
+   * databases do not take it.
+   */
+  readonly signingKey: string
   readonly clock: Clock
 }
 
@@ -85,6 +91,7 @@ export function createGatewayRoot(
     namespace: NAMESPACE,
     database: DIRECTORY,
     schema: readSchema('directory'),
+    signingKey: options.signingKey,
     ...credentials,
   }).map((local): GatewayRoot => {
     const databases = new TenantDatabases({

@@ -12,14 +12,13 @@ import { RegionDoc, systemClock } from '@workspace/replica'
 import { CLOSE, type Membership, membership, PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
-import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
-import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
+import { createGatewayRoot } from '../src/composition/root'
 import { gatewayConfig } from '../src/config'
 import { startServer } from '../src/server'
 import { noteCreate, noteDelete, noteUpdate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
+import { accessSteps } from './smoke-access'
 import { SmokeDevice } from './smoke-device'
 import { deviceSessionSteps } from './smoke-devices'
 import { callAs, postCredentials, type SignedIn } from './smoke-http'
@@ -35,6 +34,7 @@ const smokeConfig = gatewayConfig.pick({
   SURREAL_URL: true,
   GATEWAY_SURREAL_USER: true,
   GATEWAY_SURREAL_PASS: true,
+  GATEWAY_JWT_KEY: true,
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
@@ -331,63 +331,6 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 }
 
-/**
- * The clause of the access method, on a fresh identity: its fresh token is accepted, the same
- * token issued before `sessions_revoked_at` is refused, a refresh is not (its exchange carries
- * no token), and the gateway's namespace user revokes the identity's grants, which refuses the
- * refresh.
- */
-async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<void> {
-  const signedUp = await postCredentials(base, '/auth/sign-up', {
-    email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
-    device: { id: 'smoke-device', label: 'Smoke' },
-  })
-  const { access, refresh } = signedUp.tokens
-  const identity = signedUp.identity.id
-
-  // The same token through the same calls: only the mark explains the refusal that follows.
-  await step('a fresh token is accepted before sessions_revoked_at', async () => {
-    const accepted = unwrap(await root.sessions.authenticate({ access }))
-
-    check(accepted.renewed === false, 'the token was renewed')
-  })
-
-  await step('sessions_revoked_at set by the namespace user', async () => {
-    await root.local.db.query(sessionsRevokedStatement, {
-      identity,
-      at: new Date(Date.now() + 5_000),
-    })
-  })
-
-  await step('a token issued before sessions_revoked_at is refused', async () => {
-    const refused = await root.sessions.authenticate({ access })
-
-    check(refused.isErr(), 'the token was accepted')
-  })
-
-  const renewed = await step('a refresh is not blocked by the clause', async () => {
-    const answer = unwrap(await root.sessions.authenticate({ access, refresh }))
-
-    if (!answer.renewed) {
-      throw new Error('the pair was not renewed')
-    }
-
-    return answer.tokens
-  })
-
-  await step(
-    "the namespace user revokes the identity's grants: the refresh is refused",
-    async () => {
-      await root.local.db.query(revokeGrantsStatement, { identity })
-
-      const refused = await root.sessions.authenticate(renewed)
-
-      check(refused.isErr(), 'the refresh was accepted')
-    },
-  )
-}
-
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   const root = await step(`gateway opened ${config.SURREAL_URL}`, async () =>
     unwrap(
@@ -398,6 +341,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
           username: config.GATEWAY_SURREAL_USER,
           password: config.GATEWAY_SURREAL_PASS,
         },
+        signingKey: config.GATEWAY_JWT_KEY,
         clock: systemClock,
       }),
     ),
@@ -503,7 +447,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
 
-  await sessionsRevokedSteps(base, root)
+  await accessSteps(base, root, config.GATEWAY_JWT_KEY)
   await deviceSessionSteps(base, opened)
   await organisationSteps(base, opened, second)
 }
@@ -518,6 +462,8 @@ export async function runSmoke(env: Readonly<Record<string, string | undefined>>
     SURREAL_URL: url !== undefined && URL.canParse(url) ? wsRpcUrl(url) : url,
     GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? STAND_USER.username,
     GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? STAND_USER.password,
+    // No default: the smoke opens the stand's directory with the key its gateway signs with.
+    GATEWAY_JWT_KEY: env['GATEWAY_JWT_KEY'],
   })
 
   if (!parsed.success) {

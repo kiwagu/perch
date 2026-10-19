@@ -5,13 +5,15 @@ import { z } from '@workspace/zod'
 import { inviteInto, readOrganisation, signInAndRead } from './__fixtures__/device'
 import { leftOnStand } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
-import { runSeed, type StandTarget, sweep } from './seed'
+import { openStand, runSeed, type StandTarget, sweep } from './seed'
 
 // The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
 // where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
 // share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
-// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses from the
-// manifest's vars.
+// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses and the key
+// the stand's gateway signs with from the manifest's vars.
+const signingKeyRule =
+  'must be the key the gateway-e2e gateway signs with; run the suite with bun run test:db'
 const stand = z
   .object({
     GATEWAY_URL: z.url({
@@ -24,6 +26,7 @@ const stand = z
       error:
         'must be the http(s):// address of the surrealdb-e2e stand; run the suite with bun run test:db',
     }),
+    GATEWAY_JWT_KEY: z.string({ error: signingKeyRule }).min(1, { error: signingKeyRule }),
   })
   .parse(process.env)
 const target: StandTarget = {
@@ -32,6 +35,7 @@ const target: StandTarget = {
   namespace: 'app',
   database: 'directory',
   credentials: { username: 'root', password: 'root' },
+  signingKey: stand.GATEWAY_JWT_KEY,
 }
 
 const demo: SeedMode = { kind: 'demo' }
@@ -49,9 +53,40 @@ const outsider = {
   locale: 'en',
 } as const
 
+// An account that keeps the pair it signed up with while the stand is opened as its operator.
+const keyholder = {
+  email: `keyholder.${run}@example.test`,
+  password: 'keyholder-seed-password',
+  device: { id: `seed-keyholder-${run}`, label: 'Seed spec' },
+} as const
+
+/** What a sign-up answers, as far as this spec reads it. */
+const signedUp = z.object({ tokens: z.object({ access: z.string() }) })
+
 afterAll(async () => {
   expect((await sweep(target, { emails })).isOk()).toBe(true)
-  expect((await sweep(target, { emails: [outsider.email] })).isOk()).toBe(true)
+  expect((await sweep(target, { emails: [outsider.email, keyholder.email] })).isOk()).toBe(true)
+})
+
+describe("the stand's operator", () => {
+  it('leaves the access tokens the gateway issued valid when it opens the stand', async () => {
+    const answer = await fetch(`${target.gatewayUrl}/auth/sign-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(keyholder),
+    })
+    const { access } = signedUp.parse(await answer.json()).tokens
+    const opened = (await openStand(target))._unsafeUnwrap()
+
+    await opened.close()
+
+    // The directory schema is applied with the gateway's key, or not at all: the token still works.
+    const organisations = await fetch(`${target.gatewayUrl}/organisations`, {
+      headers: { Authorization: `Bearer ${access}`, 'X-Perch-Device': keyholder.device.id },
+    })
+
+    expect(organisations.status).toBe(200)
+  })
 })
 
 describe('seeding through the gateway', () => {

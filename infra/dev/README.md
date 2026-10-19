@@ -29,4 +29,7 @@ the gateway's `/sync`). No dev server runs behind it.
   and the gateway's namespace user (role OWNER, no root account). The gateway's mcproc apps run it
   before each start; every statement may run again. Its password, `gateway-stand-password`, is a
   literal for the local in-memory stands only; a real deployment defines the gateway's user by
-  hand with a password of its own.
+  hand with a password of its own. So is the key the stands' gateways sign tokens with
+  (`GATEWAY_JWT_KEY`): a literal of the mcproc manifest, `stand_jwt_key` in its `vars`, given to
+  both gateway apps and to `mcproc exec`, for the local stands only; a real deployment sets a key
+  of its own (`openssl rand -base64 64`).

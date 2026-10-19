@@ -129,8 +129,9 @@ signed-in account, `ensureOrganisation` creates an organisation (one that is alr
 account's is found), `ensureMember` invites an existing account by email, and
 `readOrganisation` signs in, makes the organisation current and reads its notes.
 `openStand()` is the operator's connection to a stand as a system user, where seeded
-accounts and the organisations they created are swept, and `checkProfileName` the profile name rule the seed catalog is
-checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
+accounts and the organisations they created are swept; it applies the directory schema with the
+key the stand's gateway signs with (`signingKey`, required), so opening a stand never changes
+that key. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands

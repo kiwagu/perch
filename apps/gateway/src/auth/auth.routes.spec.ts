@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
+import { TEST_SIGNING_KEY } from '@workspace/data/testing'
 import { identityIdFactory } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
@@ -69,6 +70,7 @@ async function openRoot(): Promise<GatewayRoot> {
       engines: nodeEngines(),
       url: 'mem://',
       clock: manualClock(),
+      signingKey: TEST_SIGNING_KEY,
     })
   )._unsafeUnwrap()
 

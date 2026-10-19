@@ -34,7 +34,10 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   device left. Re-creating an organisation under the key of a swept one works: the gateway
   opens a new connection to its database. Sweep only once the seed clients have left (`runSeed` closes its client
   before it returns), or a device still connected keeps the swept region in the gateway.
-- `openStand(target)`: the operator's connection to a stand that the sweep runs on.
+- `openStand(target)`: the operator's connection to a stand that the sweep runs on. Its target
+  names the key the stand's gateway signs with (`signingKey`): the directory schema is applied
+  with it, so a sweep never gives the stand's access method another key, which would refuse
+  every device's access token.
 
 ## Commands
 
@@ -45,13 +48,17 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   Flags: `--fresh`, `--reset` (sweep first), `--manifest=<file>`. The stand behind the
   gateway is reached only by the sweep: `--url=` (else `SURREAL_DEV_URL`),
   `--namespace=` and `--database=` (default `app` and `directory`, the gateway's
-  database), `--user=` and `--pass=` (default the stand's root). Demo accounts sign in
-  with the password `<ref>-seed-password`.
+  database), `--user=` and `--pass=` (default the stand's root). `GATEWAY_JWT_KEY`, the key the
+  stand's gateway signs with, is required (no default; `mcproc exec` sets the stands' key from
+  the manifest), and a run without it stops naming the variable, never its value. Demo
+  accounts sign in with the password `<ref>-seed-password`.
 - `bun run seed:sweep`: removes the seed data from the stand (same stand flags).
 - `bun run test`: the offline catalog check.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
-  `GATEWAY_URL` and its SurrealDB at `SURREAL_URL`, both set by `bun run test:db` through
-  `mcproc exec` from the mcproc manifest (`http://127.0.0.1:5191` and `http://127.0.0.1:8010`
-  in the main checkout). It sweeps only the demo accounts (and one outsider
-  account) it seeds, so the other suites on the stand keep theirs.
+  `GATEWAY_URL` and its SurrealDB at `SURREAL_URL`, with the gateway's key in
+  `GATEWAY_JWT_KEY`, all set by `bun run test:db` through `mcproc exec` from the mcproc manifest
+  (`http://127.0.0.1:5191` and `http://127.0.0.1:8010` in the main checkout). First, an access
+  token the gateway issued still works after the stand was opened as its operator. It sweeps
+  only the demo accounts (and one outsider and one key-holder account) it seeds, so the other
+  suites on the stand keep theirs.

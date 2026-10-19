@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { openTestDb, readSchema } from '@workspace/data/testing'
+import { openTestDb, readSchema, TEST_SIGNING_KEY } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import { membership } from '@workspace/replica/protocol'
@@ -100,6 +100,7 @@ async function openRoot(): Promise<GatewayRoot> {
       engines: nodeEngines(),
       url: 'mem://',
       clock: manualClock(),
+      signingKey: TEST_SIGNING_KEY,
     })
   )._unsafeUnwrap()
 
