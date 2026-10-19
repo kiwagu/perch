@@ -34,6 +34,11 @@ import {
   type SyncTransport,
 } from '@workspace/replica/sync'
 
+import {
+  keysOf,
+  RetainedTenantDatabases,
+  type TenantDatabaseInventory,
+} from './retained-tenant-databases'
 import { RoutingShapeRunner, RoutingWritePath } from './routing'
 import { openRegionSpace, type RegionSpace, TenantSpaces } from './tenant-space'
 
@@ -100,22 +105,7 @@ export interface IdentitySpace {
   destroy(): Promise<void>
 }
 
-/**
- * The organisation databases this device may hold for an identity, kept across its sessions
- * and shared by its tabs, with the memberships saved for it. Every writer saves the memberships
- * before it counts the databases of a list: a database counted for a current membership is in
- * the memberships read after the count.
- */
-export interface TenantDatabaseInventory {
-  /** Their keys, those of databases not open included. */
-  keys(): readonly string[]
-  /** Counts the databases of `keys`, before they open. */
-  add(keys: readonly string[]): void
-  /** Stops counting the databases of `keys`, once they are deleted. */
-  drop(keys: readonly string[]): void
-  /** The memberships saved for the identity on this device now, by whichever of its tabs heard them last. */
-  savedMemberships(): readonly Membership[]
-}
+export type { TenantDatabaseInventory } from './retained-tenant-databases'
 
 export interface IdentitySpaceOptions {
   readonly identity: AuthUser
@@ -142,16 +132,12 @@ export interface IdentitySpaceOptions {
 
 const FOLLOWING: SyncState = { leader: false, channel: 'down' }
 
-/** The keys of the organisations of `memberships`. */
-function keysOf(memberships: readonly Membership[]): ReadonlySet<string> {
-  return new Set(memberships.map(({ tenant }) => tenant.key))
-}
-
 class Space implements IdentitySpace {
   readonly runner: ShapeRunnerPort
   readonly writePath: WritePathPort
   readonly #own: RegionSpace
   readonly #tenants: TenantSpaces
+  readonly #retained: RetainedTenantDatabases
   readonly #options: IdentitySpaceOptions
   readonly #listening: Array<() => void> = []
   #engine: SyncEngine | undefined
@@ -164,6 +150,13 @@ class Space implements IdentitySpace {
     this.#own = own
     this.#tenants = tenants
     this.#options = options
+    this.#retained = new RetainedTenantDatabases({
+      identity: options.identity.id,
+      inventory: options.tenantDatabases,
+      deleteTenantLocal: options.deleteTenantLocal,
+      open: () => tenants.keys(),
+      onError: options.onError,
+    })
     this.runner = new RoutingShapeRunner(
       own.runner,
       () => tenants.currentSpace()?.runner,
@@ -179,7 +172,7 @@ class Space implements IdentitySpace {
     this.#listening.push(options.hints.on((hint) => this.#hint(hint)))
     this.#followLeadership(options.leadership)
     // The databases the device holds of organisations the identity left meanwhile go first.
-    this.#changing = this.#deleteRetained(keysOf(options.memberships))
+    this.#changing = this.#retained.deleteRetained(keysOf(options.memberships))
   }
 
   get identity(): AuthUser {
@@ -258,7 +251,7 @@ class Space implements IdentitySpace {
     await this.close()
     await Promise.all([
       ...this.#spaces().map((space) => space.destroy()),
-      this.#deleteCounted(this.#options.tenantDatabases.keys()),
+      this.#retained.deleteCounted(this.#options.tenantDatabases.keys()),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
   }
@@ -285,46 +278,7 @@ class Space implements IdentitySpace {
     }
 
     this.#options.tenantDatabases.drop(await this.#tenants.delete(left))
-    await this.#deleteRetained(keys)
-  }
-
-  /**
-   * Deletes the organisation databases the device holds for the identity of organisations it no
-   * longer belongs to: neither of `keep` (the list this tab follows) nor of the memberships saved
-   * for the identity now, which another tab may have heard after this one. The count is read
-   * before the saved memberships, so a database another tab counted and opened for a newer
-   * membership is kept. Never rejects.
-   */
-  #deleteRetained(keep: ReadonlySet<string>): Promise<void> {
-    const counted = this.#options.tenantDatabases.keys()
-    const saved = keysOf(this.#options.tenantDatabases.savedMemberships())
-
-    return this.#deleteCounted(counted.filter((key) => !keep.has(key) && !saved.has(key)))
-  }
-
-  /**
-   * Deletes the counted databases of `keys` that are not open, and stops counting those
-   * deleted; one that cannot be deleted is reported and stays counted, for a later change or
-   * sign-out to try again. Never rejects.
-   */
-  async #deleteCounted(keys: readonly string[]): Promise<void> {
-    const open = new Set(this.#tenants.keys())
-    const deleted = await Promise.all(
-      keys
-        .filter((key) => !open.has(key))
-        .map((key) =>
-          this.#options.deleteTenantLocal(this.identity.id, key).match(
-            () => [key],
-            (error) => {
-              this.#options.onError(error)
-
-              return []
-            },
-          ),
-        ),
-    )
-
-    this.#options.tenantDatabases.drop(deleted.flat())
+    await this.#retained.deleteRetained(keys)
   }
 
   #followLeadership(leadership: Leadership | undefined): void {
