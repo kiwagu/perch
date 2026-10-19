@@ -484,10 +484,7 @@ describe('IdentitySessions', () => {
     )._unsafeUnwrap()
     const renewed = device.renewed ? device.tokens : expect.unreachable('a renewed pair')
     const again = await sessions.authenticate(
-      {
-        access: 'expired.or.garbage',
-        refresh: renewed.refresh,
-      },
+      { access: 'expired.or.garbage', refresh: renewed.refresh },
       anyRenewal,
     )
 

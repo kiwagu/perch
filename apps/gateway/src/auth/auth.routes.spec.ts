@@ -71,10 +71,7 @@ function limitedRoutes(
   const clock = manualClock(1_000)
   const routes = authRoutes(sessions, organisations, new RequestLimits({ clock }))
 
-  return {
-    clock,
-    ask: (request: Request, from: string = annsAddress) => routes(request, from),
-  }
+  return { clock, ask: (request: Request, from: string = annsAddress) => routes(request, from) }
 }
 
 /** The gateways the tests opened, closed after each. */

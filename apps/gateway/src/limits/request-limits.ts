@@ -50,10 +50,7 @@ export const ADDRESS_INVITES = { limit: 60, windowMs: 10 * minute } as const
 /**
  * Organisations created per identity, 10 per hour: each creation provisions a database.
  */
-export const IDENTITY_ORGANISATIONS = {
-  limit: 10,
-  windowMs: 60 * minute,
-} as const
+export const IDENTITY_ORGANISATIONS = { limit: 10, windowMs: 60 * minute } as const
 
 export interface RequestLimitsOptions {
   readonly clock: Clock
@@ -94,30 +91,12 @@ export class RequestLimits {
   private readonly identityOrganisations: FixedWindow
 
   constructor(options: RequestLimitsOptions) {
-    this.credentialChecks = new FixedWindow({
-      ...CREDENTIAL_CHECKS,
-      clock: options.clock,
-    })
-    this.failedSignIns = new FixedWindow({
-      ...FAILED_SIGN_INS,
-      clock: options.clock,
-    })
-    this.deviceRenewals = new FixedWindow({
-      ...DEVICE_RENEWALS,
-      clock: options.clock,
-    })
-    this.addressRenewals = new FixedWindow({
-      ...ADDRESS_RENEWALS,
-      clock: options.clock,
-    })
-    this.identityInvites = new FixedWindow({
-      ...IDENTITY_INVITES,
-      clock: options.clock,
-    })
-    this.addressInvites = new FixedWindow({
-      ...ADDRESS_INVITES,
-      clock: options.clock,
-    })
+    this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
+    this.failedSignIns = new FixedWindow({ ...FAILED_SIGN_INS, clock: options.clock })
+    this.deviceRenewals = new FixedWindow({ ...DEVICE_RENEWALS, clock: options.clock })
+    this.addressRenewals = new FixedWindow({ ...ADDRESS_RENEWALS, clock: options.clock })
+    this.identityInvites = new FixedWindow({ ...IDENTITY_INVITES, clock: options.clock })
+    this.addressInvites = new FixedWindow({ ...ADDRESS_INVITES, clock: options.clock })
     this.identityOrganisations = new FixedWindow({
       ...IDENTITY_ORGANISATIONS,
       clock: options.clock,

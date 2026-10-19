@@ -35,11 +35,7 @@ const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/members(?:/([^/]+))?)?)?
 type Target =
   | { readonly kind: 'organisations' }
   | { readonly kind: 'members'; readonly key: string }
-  | {
-      readonly kind: 'member'
-      readonly key: string
-      readonly identity: string
-    }
+  | { readonly kind: 'member'; readonly key: string; readonly identity: string }
 
 /** Answers a request of the identity its access token signs in, from the client address `from`. */
 type Handler = (identity: IdentityId, request: Request, from: string) => Promise<Response>
@@ -107,9 +103,9 @@ export interface OrganisationRoutesOptions {
  * token signs nobody in or whose device has no live session, 401 `unauthorized`; a request that
  * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
  * a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited` with `Retry-After`,
- * before the service is asked and counted only once the body follows its schema; a failure of the gateway, 500 `internal`, the
- * failure itself handed to `onFailure`. A request for another path is not answered here
- * (`undefined`), so the server can try its other routes.
+ * before the service is asked and counted only once the body follows its schema; a failure of the
+ * gateway, 500 `internal`, the failure itself handed to `onFailure`. A request for another path
+ * is not answered here (`undefined`), so the server can try its other routes.
  */
 export function organisationRoutes(
   sessions: Pick<IdentitySessions, 'authenticate'>,
