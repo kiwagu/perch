@@ -530,7 +530,11 @@ describe('openIdentitySpace', () => {
         (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
       ).toBeUndefined()
     })
-    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
+    // The follower writes into the reloaded region once it reopened it: a write into the copy
+    // that was dropped, or while it reopens, is refused, and the first has it reopen.
+    await vi.waitFor(async () =>
+      expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true),
+    )
   })
 
   it('does not sync without Web Locks and says which capability is missing', async () => {
