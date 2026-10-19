@@ -1,7 +1,7 @@
-import { errAsync, okAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { err, errAsync, okAsync, type Result, ResultAsync } from 'neverthrow'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { dataError, type SignInInput, type SignUpInput } from '@workspace/data'
+import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { TEST_SIGNING_KEY } from '@workspace/data/testing'
 import { identityIdFactory } from '@workspace/ids'
@@ -360,6 +360,84 @@ describe('authRoutes limits', () => {
     reachable = true
 
     expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
+  })
+})
+
+/**
+ * The sign-in service held: every sign-in reaches it at once (counted in `arrived`) and is
+ * answered by `answer` only once `release` is called.
+ */
+function heldSignIns(answer: () => Promise<Result<SignedIn, DataError>>) {
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const state = { arrived: 0 }
+  const sessions: Pick<IdentitySessions, 'signUp' | 'signIn'> = {
+    ...stubSessions(),
+    signIn: () => {
+      state.arrived += 1
+
+      return new ResultAsync(held.then(answer))
+    },
+  }
+
+  return { sessions, state, release: () => release() }
+}
+
+describe('authRoutes limits on sign-ins under way', () => {
+  /**
+   * Sends `count` sign-ins from addresses of their own at once and waits until each either
+   * reached the held service or was refused; answers their statuses once they are released.
+   */
+  async function sendHeld(
+    held: ReturnType<typeof heldSignIns>,
+    ask: ReturnType<typeof limitedRoutes>['ask'],
+    count: number,
+    credentials: typeof annOnLaptop,
+  ): Promise<Array<number | undefined>> {
+    let refused = 0
+    const answers = Array.from({ length: count }, (_, attempt) =>
+      ask(post('/auth/sign-in', credentials), addressOf(attempt)).then((response) => {
+        refused += response?.status === 429 ? 1 : 0
+
+        return response?.status
+      }),
+    )
+
+    await vi.waitFor(() => expect(held.state.arrived + refused).toBe(count))
+    held.release()
+
+    return Promise.all(answers)
+  }
+
+  it('counts the sign-ins of an email still under way: of 15 parallel wrong passwords, 10 reach the service', async () => {
+    const held = heldSignIns(() =>
+      Promise.resolve(err(dataError('data:INVALID_CREDENTIALS', 'wrong email or password'))),
+    )
+    const { ask } = limitedRoutes(held.sessions)
+    const statuses = await sendHeld(held, ask, 15, wrongPassword)
+
+    expect(held.state.arrived).toBe(10)
+    expect(statuses.filter((status) => status === 401)).toHaveLength(10)
+    expect(statuses.filter((status) => status === 429)).toHaveLength(5)
+  })
+
+  it('gives the places of sign-ins the database could not judge back to the email', async () => {
+    const held = heldSignIns(() =>
+      Promise.resolve(err(dataError('data:QUERY_FAILED', 'the directory is gone'))),
+    )
+    const { ask } = limitedRoutes(held.sessions)
+    const statuses = await sendHeld(held, ask, 11, annOnLaptop)
+
+    // While 10 were under way, the 11th was refused; once judged by nobody, they count nothing.
+    expect(held.state.arrived).toBe(10)
+    expect(statuses.filter((status) => status === 500)).toHaveLength(10)
+    expect(statuses.filter((status) => status === 429)).toHaveLength(1)
+    expect((await sendHeld(held, ask, 10, annOnLaptop)).every((status) => status === 500)).toBe(
+      true,
+    )
+    expect(held.state.arrived).toBe(20)
   })
 })
 

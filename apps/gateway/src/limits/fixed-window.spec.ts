@@ -60,34 +60,57 @@ describe('FixedWindow', () => {
     expect(window.take('a').allowed).toBe(false)
   })
 
-  it('never counts on check', () => {
-    const { window } = windowOf(1, 10_000)
+  it('reserves an attempt like a take, and gives it back while its window holds it', () => {
+    const { window } = windowOf(2, 10_000)
+    const first = window.reserve('a')
 
-    expect(window.check('a')).toEqual({ allowed: true })
-    expect(window.check('a')).toEqual({ allowed: true })
+    expect(first.allowed).toBe(true)
+    expect(window.reserve('a').allowed).toBe(true)
+    expect(window.reserve('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+
+    if (first.allowed) {
+      first.giveBack()
+    }
+
     expect(window.take('a')).toEqual({ allowed: true })
-    expect(window.check('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+    expect(window.take('a').allowed).toBe(false)
   })
 
-  it('refuses a check at the limit after counts', () => {
-    const { window } = windowOf(2, 10_000)
+  it('gives nothing back to a window that restarted or a key that was forgotten since', async () => {
+    const { clock, window } = windowOf(1, 10_000)
+    const old = window.reserve('a')
 
-    window.count('a')
-    expect(window.check('a').allowed).toBe(true)
-    window.count('a')
-    expect(window.check('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+    await clock.advance(10_000)
+    expect(window.take('a')).toEqual({ allowed: true })
+
+    if (old.allowed) {
+      old.giveBack()
+    }
+
+    expect(window.take('a').allowed).toBe(false)
+
+    const forgotten = window.reserve('b')
+
+    window.forget('b')
+    expect(window.take('b')).toEqual({ allowed: true })
+
+    if (forgotten.allowed) {
+      forgotten.giveBack()
+    }
+
+    expect(window.take('b').allowed).toBe(false)
   })
 
   it('forgets a key', () => {
     const { window } = windowOf(1, 10_000)
 
-    window.count('a')
+    window.take('a')
     window.forget('a')
 
     expect(window.take('a')).toEqual({ allowed: true })
   })
 
-  it('sweeps expired keys when the table is full and lets an unseen key in', async () => {
+  it('drops the oldest window, an expired one, to let an unseen key in when the table is full', async () => {
     const { clock, window } = windowOf(1, 10_000, 2)
 
     window.take('a')
@@ -99,15 +122,33 @@ describe('FixedWindow', () => {
     expect(window.take('b').allowed).toBe(false)
   })
 
-  it('refuses an unseen key while the table is full of live keys, keeping the known ones counted', () => {
+  it('evicts the oldest window, even a live one, to let an unseen key in: the table never holds more than its keys', () => {
     const { window } = windowOf(1, 10_000, 2)
 
     window.take('a')
     window.take('b')
 
-    expect(window.take('c')).toEqual({ allowed: false, retryAfterMs: 10_000 })
-    expect(window.check('c')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+    expect(window.take('c')).toEqual({ allowed: true })
+    // a was evicted, so it starts fresh, which evicts b in turn; c and a stay counted.
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('b')).toEqual({ allowed: true })
     expect(window.take('a').allowed).toBe(false)
     expect(window.take('b').allowed).toBe(false)
+    expect(window.take('c')).toEqual({ allowed: true })
+  })
+
+  it('moves a key whose window restarted to the end, after the windows that started before it', async () => {
+    const { clock, window } = windowOf(1, 10_000, 2)
+
+    window.take('a')
+    await clock.advance(5_000)
+    window.take('b')
+    await clock.advance(5_000)
+    // a's window restarts after b's started: b is now the oldest.
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('c')).toEqual({ allowed: true })
+
+    expect(window.take('a').allowed).toBe(false)
+    expect(window.take('b')).toEqual({ allowed: true })
   })
 })

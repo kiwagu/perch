@@ -209,8 +209,10 @@ starting at its key's first attempt; every gateway process keeps its own, so sev
 multiply them. Credential checks, `POST /auth/sign-up` and `POST /auth/sign-in` together (each
 one argon2 run on the database), are limited to 20 per client address in 10 s; failed sign-ins
 (answered `invalid-credentials`) to 10 per email, lower-cased, in 15 minutes, cleared by a
-successful sign-in. A body that fails its schema (400) counts nothing, and neither does a sign-in
-the database could not judge. A refusal answers 429 `{ "code": "rate-limited" }` with
+successful sign-in. A sign-in holds one of its email's 10 places from the moment it is let
+through until the database answers, so parallel guesses are counted while under way: wrong
+credentials keep the place, a success clears the email's window, and an answer the database
+could not judge gives the place back. A body that fails its schema (400) counts nothing. A refusal answers 429 `{ "code": "rate-limited" }` with
 `Retry-After` in whole seconds (at least 1), before the database is asked, and is not logged.
 The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
 else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
@@ -218,8 +220,11 @@ to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets
 client shares the front's address. The gateway listens on `127.0.0.1` only, so nothing but the
 front and local tools can name an address (the smoke and the load test give each simulated
 device one of its own, `198.18.<a>.<b>` from a hash of its id). Each window table holds at most
-100 000 keys: expired keys are swept when it fills, and a table full of live keys refuses the
-keys it has not seen.
+100 000 keys, in the order their windows started: an unseen key at a full table evicts the window
+that started first, even a live one, and is let in. Availability wins over a marginal gain:
+refusing unseen keys would let anyone who fills a table with cheap requests (sign-ins of unknown
+emails, addresses from many IPv6 /64s) lock everyone else out, while an evicted key only starts
+a fresh window.
 Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
 id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
 the address charged only when the device's limit allows. A renewal is counted when the access

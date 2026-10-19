@@ -2,9 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import { manualClock } from '@workspace/replica/testing'
 
-import { RequestLimits } from './request-limits'
+import { RequestLimits, type SignInAttempt, type SignInOutcome } from './request-limits'
 
 const minute = 60_000
+
+/** Settles a sign-in the limits let through; one they refused fails the test. */
+function settle(attempt: SignInAttempt, outcome: SignInOutcome): void {
+  if (!attempt.allowed) {
+    expect.unreachable('the sign-in was refused')
+  }
+
+  attempt.settle(outcome)
+}
 
 function limitsOn() {
   const clock = manualClock(1_000)
@@ -38,32 +47,63 @@ describe('RequestLimits', () => {
     expect(limits.credentials('2001:db8:1:3::1').allowed).toBe(true)
   })
 
-  it('refuses a sign-in of an email after 10 failures within 15 minutes, whatever its case', async () => {
+  it('lets 10 sign-ins of an email fail within 15 minutes, whatever its case, and refuses the 11th', async () => {
     const { clock, limits } = limitsOn()
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      expect(limits.signInAllowed('ann@example.test')).toEqual({ allowed: true })
-      limits.signInFailed(attempt % 2 === 0 ? 'ann@example.test' : 'ANN@Example.Test')
+      settle(
+        limits.signInAttempt(attempt % 2 === 0 ? 'ann@example.test' : 'ANN@Example.Test'),
+        'failed',
+      )
     }
 
     await clock.advance(5 * minute)
-    expect(limits.signInAllowed('Ann@example.test')).toEqual({
+    expect(limits.signInAttempt('Ann@example.test')).toEqual({
       allowed: false,
       retryAfterMs: 10 * minute,
     })
-    expect(limits.signInAllowed('bob@example.test')).toEqual({ allowed: true })
+    expect(limits.signInAttempt('bob@example.test').allowed).toBe(true)
     await clock.advance(10 * minute)
-    expect(limits.signInAllowed('ann@example.test')).toEqual({ allowed: true })
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
   })
 
-  it('checks a sign-in without counting it', () => {
+  it('holds a place for each sign-in of an email still under way', () => {
     const { limits } = limitsOn()
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      limits.signInAllowed('ann@example.test')
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
     }
 
-    expect(limits.signInAllowed('ann@example.test')).toEqual({ allowed: true })
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
+  it('gives the place of a sign-in the database could not judge back', () => {
+    const { limits } = limitsOn()
+    const unjudged = limits.signInAttempt('ann@example.test')
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    settle(unjudged, 'unjudged')
+
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
+  it("clears an email's failures and sign-ins under way once one signs in, whatever its case", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    limits.signInAttempt('ann@example.test')
+    settle(limits.signInAttempt('ANN@example.test'), 'succeeded')
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
+    }
   })
 
   it('takes 10 renewals of one device within 15 minutes and refuses the 11th with the rest of the window', async () => {
@@ -118,17 +158,5 @@ describe('RequestLimits', () => {
     }
 
     expect(limits.renewal('203.0.113.7', 'device-110').allowed).toBe(false)
-  })
-
-  it("clears an email's failures once it signs in, whatever its case", () => {
-    const { limits } = limitsOn()
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      limits.signInFailed('ann@example.test')
-    }
-
-    limits.signInSucceeded('ANN@example.test')
-
-    expect(limits.signInAllowed('ann@example.test')).toEqual({ allowed: true })
   })
 })

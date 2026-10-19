@@ -13,8 +13,9 @@ const minute = 60 * second
 export const CREDENTIAL_CHECKS = { limit: 20, windowMs: 10 * second } as const
 
 /**
- * Failed sign-ins per email, 10 per 15 minutes, cleared by a successful sign-in: online guessing
- * against one account is held to about 960 tries a day, refused before the database is asked.
+ * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until the
+ * database answers, cleared by a successful sign-in: online guessing against one account is held
+ * to about 960 tries a day, refused before the database is asked, parallel guesses included.
  */
 export const FAILED_SIGN_INS = { limit: 10, windowMs: 15 * minute } as const
 
@@ -35,6 +36,17 @@ export const ADDRESS_RENEWALS = { limit: 120, windowMs: minute } as const
 export interface RequestLimitsOptions {
   readonly clock: Clock
 }
+
+/**
+ * What the database answered a sign-in: wrong credentials (`failed`), signed in (`succeeded`), or
+ * nothing it could judge (`unjudged`, the database could not be reached).
+ */
+export type SignInOutcome = 'failed' | 'succeeded' | 'unjudged'
+
+/** A sign-in of an email let through, to settle once the database answered it; or its refusal. */
+export type SignInAttempt =
+  | { readonly allowed: true; settle(outcome: SignInOutcome): void }
+  | { readonly allowed: false; readonly retryAfterMs: number }
 
 /** The key an email is counted under: emails are counted whatever their case. */
 function emailKey(email: string): string {
@@ -64,19 +76,30 @@ export class RequestLimits {
     return this.credentialChecks.take(addressKey(address))
   }
 
-  /** Whether `email` may try to sign in, counting nothing. */
-  signInAllowed(email: string): Allowance {
-    return this.failedSignIns.check(emailKey(email))
-  }
+  /**
+   * Lets a sign-in of `email` through while its failed sign-ins and those under way are below the
+   * limit, holding a place for it until it is settled: a failure keeps the place, a success
+   * forgets the email's window (its failures and the places of those under way), and an answer
+   * the database could not judge gives the place back.
+   */
+  signInAttempt(email: string): SignInAttempt {
+    const key = emailKey(email)
+    const reserved = this.failedSignIns.reserve(key)
 
-  /** Counts a sign-in of `email` the database refused as wrong credentials. */
-  signInFailed(email: string): void {
-    this.failedSignIns.count(emailKey(email))
-  }
+    if (!reserved.allowed) {
+      return reserved
+    }
 
-  /** Forgets the failed sign-ins of `email`, which just signed in. */
-  signInSucceeded(email: string): void {
-    this.failedSignIns.forget(emailKey(email))
+    return {
+      allowed: true,
+      settle: (outcome) => {
+        if (outcome === 'succeeded') {
+          this.failedSignIns.forget(key)
+        } else if (outcome === 'unjudged') {
+          reserved.giveBack()
+        }
+      },
+    }
   }
 
   /**
