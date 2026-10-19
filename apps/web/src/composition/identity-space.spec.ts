@@ -11,6 +11,7 @@ import {
   profileIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import { privateRegionId, RegionDoc, replaceRegionDoc } from '@workspace/replica'
 import type { ClientMessage, Membership } from '@workspace/replica/protocol'
 import { leadership, lockName, type SyncTransport, syncHints } from '@workspace/replica/sync'
 import {
@@ -301,6 +302,14 @@ async function headOf(gateway: Gateway, region: string): Promise<number | undefi
   return (await gateway.stub.hub.heads([region]))._unsafeUnwrap()[0]?.head
 }
 
+/** Resets Ann's private region on the browser's store, as a tab whose rollback was refused again does. */
+async function resetPrivateRegion(browser: Browser): Promise<void> {
+  const ref = { kind: 'private', id: privateRegionId(ann.id) } as const
+  const doc = (await RegionDoc.open(browser.store, ref))._unsafeUnwrap()
+
+  ;(await replaceRegionDoc(browser.store, doc, 'reset'))._unsafeUnwrap().close()
+}
+
 const leading = (tab: Tab) => vi.waitFor(() => expect(tab.space.sync).toBeDefined())
 
 const profile = (name: string) => ({
@@ -434,6 +443,58 @@ describe('openIdentitySpace', () => {
     await vi.waitFor(async () =>
       expect((await follower.space.unsent())._unsafeUnwrap()).toBe(false),
     )
+  })
+
+  it('a follower reopens a region another tab reset when it hears so', async () => {
+    const gateway = await openGateway()
+    const browser = await openBrowser()
+    const leader = await openTab(gateway, browser)
+    const follower = await openTab(gateway, browser)
+    const written = profile('Ann')
+
+    await leading(leader)
+    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+    await vi.waitFor(async () =>
+      expect(
+        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toMatchObject({ name: 'Ann' }),
+    )
+
+    await resetPrivateRegion(browser)
+    syncHints(new FakeHintChannel(browser.bus)).post('reset')
+
+    await vi.waitFor(async () =>
+      expect(
+        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toBeUndefined(),
+    )
+    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
+  })
+
+  it('a tab that missed the hint reopens the region at its next catch-up', async () => {
+    const gateway = await openGateway()
+    const browser = await openBrowser()
+    const leader = await openTab(gateway, browser)
+    const follower = await openTab(gateway, browser)
+    const written = profile('Ann')
+
+    await leading(leader)
+    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+    await vi.waitFor(async () =>
+      expect(
+        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toMatchObject({ name: 'Ann' }),
+    )
+
+    await resetPrivateRegion(browser)
+    syncHints(new FakeHintChannel(browser.bus)).post('journal')
+
+    await vi.waitFor(async () =>
+      expect(
+        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+      ).toBeUndefined(),
+    )
+    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
   })
 
   it('does not sync without Web Locks and says which capability is missing', async () => {

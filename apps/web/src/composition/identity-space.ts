@@ -34,6 +34,7 @@ import {
   type SyncTransport,
 } from '@workspace/replica/sync'
 
+import { RegionReloads } from './region-reloads'
 import {
   keysOf,
   RetainedTenantDatabases,
@@ -138,6 +139,7 @@ class Space implements IdentitySpace {
   readonly #own: RegionSpace
   readonly #tenants: TenantSpaces
   readonly #retained: RetainedTenantDatabases
+  readonly #reloads: RegionReloads
   readonly #options: IdentitySpaceOptions
   readonly #listening: Array<() => void> = []
   #engine: SyncEngine | undefined
@@ -157,6 +159,11 @@ class Space implements IdentitySpace {
       open: () => tenants.keys(),
       onError: options.onError,
     })
+    this.#reloads = new RegionReloads({
+      spaces: () => this.#spaces(),
+      hints: options.hints,
+      onError: options.onError,
+    })
     this.runner = new RoutingShapeRunner(
       own.runner,
       () => tenants.currentSpace()?.runner,
@@ -167,7 +174,11 @@ class Space implements IdentitySpace {
     const path = new RoutingWritePath(own.writePath, () => tenants.currentSpace()?.writePath)
 
     this.writePath = {
-      run: (command, params, meta) => path.run(command, params, meta).andTee(() => this.#wrote()),
+      run: (command, params, meta) =>
+        path
+          .run(command, params, meta)
+          .andTee(() => this.#wrote())
+          .orTee((error) => this.#stale(error)),
     }
     this.#listening.push(options.hints.on((hint) => this.#hint(hint)))
     this.#followLeadership(options.leadership)
@@ -325,6 +336,7 @@ class Space implements IdentitySpace {
       onError: (error) => {
         if (this.#engine === engine) {
           this.#options.onError(error)
+          this.#stale(error)
         }
       },
     })
@@ -387,6 +399,17 @@ class Space implements IdentitySpace {
       case 'renew':
         this.#engine?.reconnect()
         break
+      // Another tab reset a region: open it again from the database.
+      case 'reset':
+        void this.#reloads.reloadStale()
+        break
+    }
+  }
+
+  /** A region was reset under this tab (by another one, which may not have said so): open it again. */
+  #stale(error: DataError): void {
+    if (error.code === 'data:REGION_STALE' && !this.#closing) {
+      void this.#reloads.reloadStale()
     }
   }
 
@@ -398,7 +421,10 @@ class Space implements IdentitySpace {
     for (const space of this.#spaces()) {
       void space.catchUp().match(
         () => undefined,
-        (error) => this.#options.onError(error),
+        (error) => {
+          this.#options.onError(error)
+          this.#stale(error)
+        },
       )
     }
   }

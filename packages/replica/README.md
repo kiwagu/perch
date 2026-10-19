@@ -165,7 +165,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
   into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
-  `settled`, `sign-out` and `renew` (a tab asks the leader to renew the keys) hints between tabs over a `BroadcastChannel` and ignores anything
+  `settled`, `sign-out`, `renew` (a tab asks the leader to renew the keys) and `reset` (a tab reset a region; the others open it again
+  from the database) hints between tabs over a `BroadcastChannel` and ignores anything
   else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;

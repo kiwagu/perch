@@ -42,6 +42,17 @@ describe('syncHints', () => {
     expect(received).toEqual(['renew'])
   })
 
+  it('a reset hint reaches the other tabs', () => {
+    const bus = new Set<FakeHintChannel>()
+    const sender = syncHints(new FakeHintChannel(bus))
+    const receiver = syncHints(new FakeHintChannel(bus))
+    const received: SyncHint[] = []
+
+    receiver.on((hint) => received.push(hint))
+    sender.post('reset')
+    expect(received).toEqual(['reset'])
+  })
+
   it('an unknown message on the channel is ignored', () => {
     const bus = new Set<FakeHintChannel>()
     const raw = new FakeHintChannel(bus)

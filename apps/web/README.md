@@ -43,7 +43,11 @@ modeling stage.
   the databases, or one that failed to open. The memberships are saved before their databases
   are counted, and a tab deletes none whose organisation the memberships saved for the identity
   still hold, so a tab following an older list leaves alone a database another tab counted and
-  opened for a newer one. The routes that act for the signed-in device go through
+  opened for a newer one. A region space can replace its document (`replace`: `reset` drops the
+  region's local copy, `reopen` opens it again from the database), refusing writes meanwhile;
+  the projector then re-reads the new document. When a tab resets a region the other tabs
+  reopen it (`RegionReloads`), on the `reset` hint or at their next touch of the region (a
+  catch-up or a write that meets `data:REGION_STALE`). The routes that act for the signed-in device go through
   `bearerCalls(baseUrl, { token, device, renew })`: the access token as `Authorization: Bearer`
   and the device's id as `X-Perch-Device`, the token renewed once on a 401, refusals mapped to
   `data:` errors (the gateway's code as the message of `data:WRITE_REJECTED`, a 429 among them,
