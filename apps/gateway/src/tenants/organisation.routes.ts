@@ -8,6 +8,8 @@ import { z } from '@workspace/zod'
 import { bearerCaller, readBody } from '../auth/auth.routes'
 import type { DeviceSessions } from '../auth/device-sessions'
 import type { IdentitySessions } from '../auth/identity-sessions'
+import type { RequestLimits } from '../limits/request-limits'
+import { tooMany } from '../limits/too-many'
 
 import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
 
@@ -33,10 +35,14 @@ const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/members(?:/([^/]+))?)?)?
 type Target =
   | { readonly kind: 'organisations' }
   | { readonly kind: 'members'; readonly key: string }
-  | { readonly kind: 'member'; readonly key: string; readonly identity: string }
+  | {
+      readonly kind: 'member'
+      readonly key: string
+      readonly identity: string
+    }
 
-/** Answers a request of the identity its access token signs in. */
-type Handler = (identity: IdentityId, request: Request) => Promise<Response>
+/** Answers a request of the identity its access token signs in, from the client address `from`. */
+type Handler = (identity: IdentityId, request: Request, from: string) => Promise<Response>
 
 /** What `pathname` names; an organisation's own path (`/organisations/:key`) is not served. */
 function targetOf(pathname: string): Target | undefined {
@@ -78,6 +84,8 @@ export interface OrganisationRoutesOptions {
    * failure out, so this is where it is told.
    */
   readonly onFailure: (error: DataError) => void
+  /** The invitation and organisation creation limits. */
+  readonly limits: Pick<RequestLimits, 'invite' | 'createOrganisation'>
 }
 
 /**
@@ -87,16 +95,19 @@ export interface OrganisationRoutesOptions {
  * renews its pair first.
  *
  * - `GET /organisations`: 200 `{ memberships }`.
- * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin.
+ * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
+ *   hour per identity.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
- * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin.
+ * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
+ *   per 10 minutes per inviting identity and 60 per client address, whatever the answer.
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
  *
  * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
  * token signs nobody in or whose device has no live session, 401 `unauthorized`; a request that
  * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
- * a refusal, its code with 400, 403, 404 or 409; a failure of the gateway, 500 `internal`, the
+ * a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited` with `Retry-After`,
+ * before the service is asked and counted only once the body follows its schema; a failure of the gateway, 500 `internal`, the
  * failure itself handed to `onFailure`. A request for another path is not answered here
  * (`undefined`), so the server can try its other routes.
  */
@@ -105,7 +116,7 @@ export function organisationRoutes(
   devices: Pick<DeviceSessions, 'bind'>,
   organisations: Organisations,
   options: OrganisationRoutesOptions,
-): (request: Request) => Promise<Response | undefined> {
+): (request: Request, from: string) => Promise<Response | undefined> {
   /** A refusal answers its code; a failure of the gateway answers without its cause, which `onFailure` hears. */
   function errorResponse(error: OrganisationError): Response {
     if ('kind' in error) {
@@ -130,6 +141,12 @@ export function organisationRoutes(
       return badRequest()
     }
 
+    const allowance = options.limits.createOrganisation(identity)
+
+    if (!allowance.allowed) {
+      return tooMany(allowance)
+    }
+
     // The identity goes last: it is the one the access token signs in, whatever the body holds.
     return (await organisations.create({ ...body.data, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
@@ -147,11 +164,17 @@ export function organisationRoutes(
 
   const invite =
     (key: string): Handler =>
-    async (actor, request) => {
+    async (actor, request, from) => {
       const body = inviteBody.safeParse(await readBody(request))
 
       if (!body.success) {
         return badRequest()
+      }
+
+      const allowance = options.limits.invite(actor, from)
+
+      if (!allowance.allowed) {
+        return tooMany(allowance)
       }
 
       return (await organisations.invite({ actor, key, email: body.data.email })).match(
@@ -198,7 +221,7 @@ export function organisationRoutes(
       .exhaustive()
   }
 
-  return async (request) => {
+  return async (request, from) => {
     const target = targetOf(new URL(request.url).pathname)
 
     if (!target) {
@@ -218,7 +241,7 @@ export function organisationRoutes(
     const caller = await bearerCaller(sessions, devices, request)
 
     return match(caller)
-      .with({ kind: 'caller' }, ({ identity }) => handler(identity, request))
+      .with({ kind: 'caller' }, ({ identity }) => handler(identity, request, from))
       .with({ kind: 'unauthorized' }, async () =>
         Response.json({ code: 'unauthorized' }, { status: 401 }),
       )

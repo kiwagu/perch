@@ -126,7 +126,8 @@ invite an identity; and `DELETE /organisations/:key/members/:identity` lets an a
 member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
 a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
 `not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
-`key-taken`, `already-member` and `self`; a failure of the gateway answers 500 (`internal`).
+`key-taken`, `already-member` and `self`; an invitation or a creation over its limit answers 429
+(`rate-limited`, see Limits); a failure of the gateway answers 500 (`internal`).
 
 The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
 and its device the same way. `GET /devices` lists the
@@ -235,6 +236,14 @@ refused is closed with 1013 (`too many renewals`, try again later): the client e
 only on 4000, 4001, 4400 and 4401, so it reconnects with its backoff and keeps its keys. The pair
 sign-out answers 429 `rate-limited` with `Retry-After`, revoking nothing. `POST /auth/sign-out`
 itself is not limited, only the renewal it may run.
+Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
+and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
+identity is charged first and the address only when the identity's limit allows. Every attempt
+counts whatever the answer (an unknown email's 404 included), once the body follows its schema
+(a 400 counts nothing); the limit is checked before the service is asked. Organisation creation,
+`POST /organisations`, is limited to 10 per identity in an hour (each one provisions a database),
+checked before anything is provisioned. A refusal answers 429 `rate-limited` with `Retry-After`
+and is not logged.
 
 ## Commands
 

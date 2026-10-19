@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
+import { idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
 import { RequestLimits, type SignInAttempt, type SignInOutcome } from './request-limits'
 
 const minute = 60_000
+
+const ann = idSchemas.identity.schema.parse('idn_ann')
+const bob = idSchemas.identity.schema.parse('idn_bob')
 
 /** Settles a sign-in the limits let through; one they refused fails the test. */
 function settle(attempt: SignInAttempt, outcome: SignInOutcome): void {
@@ -158,5 +162,65 @@ describe('RequestLimits', () => {
     }
 
     expect(limits.renewal('203.0.113.7', 'device-110').allowed).toBe(false)
+  })
+
+  it('takes 30 invitations of one identity within 10 minutes, from any addresses, and refuses the 31st with the rest of the window', async () => {
+    const { clock, limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect(limits.invite(ann, `203.0.113.${attempt}`)).toEqual({ allowed: true })
+    }
+
+    await clock.advance(4 * minute)
+    expect(limits.invite(ann, '203.0.113.99')).toEqual({ allowed: false, retryAfterMs: 6 * minute })
+    expect(limits.invite(bob, '203.0.113.99')).toEqual({ allowed: true })
+    await clock.advance(6 * minute)
+    expect(limits.invite(ann, '203.0.113.99')).toEqual({ allowed: true })
+  })
+
+  it('takes 60 invitations of one address across identities within 10 minutes and refuses the 61st', async () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      expect(limits.invite(attempt < 30 ? ann : bob, '203.0.113.7')).toEqual({ allowed: true })
+    }
+
+    expect(limits.invite(idSchemas.identity.schema.parse('idn_cat'), '203.0.113.7').allowed).toBe(
+      false,
+    )
+    expect(limits.invite(idSchemas.identity.schema.parse('idn_cat'), '203.0.113.8').allowed).toBe(
+      true,
+    )
+  })
+
+  it("leaves the address uncharged by an invitation its identity's limit refuses", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      limits.invite(ann, '203.0.113.7')
+    }
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect(limits.invite(ann, '203.0.113.7').allowed).toBe(false)
+    }
+
+    // The 30 refusals took nothing of the address's 60: 30 more fit.
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect(limits.invite(bob, '203.0.113.7')).toEqual({ allowed: true })
+    }
+  })
+
+  it('takes 10 organisation creations of one identity within an hour and refuses the 11th', async () => {
+    const { clock, limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(limits.createOrganisation(ann)).toEqual({ allowed: true })
+    }
+
+    await clock.advance(20 * minute)
+    expect(limits.createOrganisation(ann)).toEqual({ allowed: false, retryAfterMs: 40 * minute })
+    expect(limits.createOrganisation(bob)).toEqual({ allowed: true })
+    await clock.advance(40 * minute)
+    expect(limits.createOrganisation(ann)).toEqual({ allowed: true })
   })
 })

@@ -80,7 +80,10 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   const routes: readonly Route[] = [
     authRoutes(root.sessions, root.organisations, root.limits),
-    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, { onFailure }),
+    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, {
+      onFailure,
+      limits: root.limits,
+    }),
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
       limits: root.limits,

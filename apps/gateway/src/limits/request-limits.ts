@@ -1,3 +1,4 @@
+import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import { addressKey } from './address-key'
@@ -33,6 +34,27 @@ export const DEVICE_RENEWALS = { limit: 10, windowMs: 15 * minute } as const
  */
 export const ADDRESS_RENEWALS = { limit: 120, windowMs: minute } as const
 
+/**
+ * Invitations per inviting identity, 30 per 10 minutes, every attempt counted, an unknown email's
+ * included: an admin onboarding 50 people waits about 10 minutes for the last 20, and probing
+ * which emails have an account stays slow.
+ */
+export const IDENTITY_INVITES = { limit: 30, windowMs: 10 * minute } as const
+
+/**
+ * Invitations per client address, 60 per 10 minutes: one address cannot farm identities to
+ * multiply the per-identity limit.
+ */
+export const ADDRESS_INVITES = { limit: 60, windowMs: 10 * minute } as const
+
+/**
+ * Organisations created per identity, 10 per hour: each creation provisions a database.
+ */
+export const IDENTITY_ORGANISATIONS = {
+  limit: 10,
+  windowMs: 60 * minute,
+} as const
+
 export interface RequestLimitsOptions {
   readonly clock: Clock
 }
@@ -56,19 +78,47 @@ function emailKey(email: string): string {
 /**
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
- * each email, and the refresh-key renewals of each device and each client address.
+ * each email, the refresh-key renewals of each device and each client address, the invitations of
+ * each inviting identity and each client address, and the organisations each identity creates.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
   private readonly failedSignIns: FixedWindow
   private readonly deviceRenewals: FixedWindow
   private readonly addressRenewals: FixedWindow
+  private readonly identityInvites: FixedWindow
+  private readonly addressInvites: FixedWindow
+  private readonly identityOrganisations: FixedWindow
 
   constructor(options: RequestLimitsOptions) {
-    this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
-    this.failedSignIns = new FixedWindow({ ...FAILED_SIGN_INS, clock: options.clock })
-    this.deviceRenewals = new FixedWindow({ ...DEVICE_RENEWALS, clock: options.clock })
-    this.addressRenewals = new FixedWindow({ ...ADDRESS_RENEWALS, clock: options.clock })
+    this.credentialChecks = new FixedWindow({
+      ...CREDENTIAL_CHECKS,
+      clock: options.clock,
+    })
+    this.failedSignIns = new FixedWindow({
+      ...FAILED_SIGN_INS,
+      clock: options.clock,
+    })
+    this.deviceRenewals = new FixedWindow({
+      ...DEVICE_RENEWALS,
+      clock: options.clock,
+    })
+    this.addressRenewals = new FixedWindow({
+      ...ADDRESS_RENEWALS,
+      clock: options.clock,
+    })
+    this.identityInvites = new FixedWindow({
+      ...IDENTITY_INVITES,
+      clock: options.clock,
+    })
+    this.addressInvites = new FixedWindow({
+      ...ADDRESS_INVITES,
+      clock: options.clock,
+    })
+    this.identityOrganisations = new FixedWindow({
+      ...IDENTITY_ORGANISATIONS,
+      clock: options.clock,
+    })
   }
 
   /** Takes one credential check (a sign-up or a sign-in) of the client at `address`. */
@@ -110,5 +160,20 @@ export class RequestLimits {
     const ofDevice = this.deviceRenewals.take(device)
 
     return ofDevice.allowed ? this.addressRenewals.take(addressKey(address)) : ofDevice
+  }
+
+  /**
+   * Takes one invitation attempt of `identity` from the client at `address`, before the service is
+   * asked; the address is charged only when the identity's limit allows it.
+   */
+  invite(identity: IdentityId, address: string): Allowance {
+    const ofIdentity = this.identityInvites.take(identity)
+
+    return ofIdentity.allowed ? this.addressInvites.take(addressKey(address)) : ofIdentity
+  }
+
+  /** Takes one organisation creation of `identity`, before the organisation is provisioned. */
+  createOrganisation(identity: IdentityId): Allowance {
+    return this.identityOrganisations.take(identity)
   }
 }

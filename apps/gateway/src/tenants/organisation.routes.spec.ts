@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
@@ -12,6 +12,7 @@ import { z } from '@workspace/zod'
 import type { SignedIn } from '../auth/identity-sessions'
 import { createGatewayRoot, type GatewayRoot } from '../composition/root'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { RequestLimits } from '../limits/request-limits'
 
 import { organisationRoutes } from './organisation.routes'
 import { Organisations } from './organisations'
@@ -36,7 +37,12 @@ afterEach(async () => {
 })
 
 /** What the routes are given besides the services: they hand each failure to `failures`. */
-const routeOptions = { onFailure: (error: DataError) => failures.push(error) }
+function routeOptions(limits: RequestLimits) {
+  return { onFailure: (error: DataError) => failures.push(error), limits }
+}
+
+/** The client address a request comes from unless a test names another. */
+const ADDRESS = '203.0.113.1'
 
 interface Ask {
   /**
@@ -50,6 +56,8 @@ interface Ask {
   readonly device?: string | null
   /** The JSON body, or a text sent as it is. */
   readonly body?: unknown
+  /** The client address the request comes from, instead of `ADDRESS`. */
+  readonly from?: string
 }
 
 /** The device each identity of these tests signs up on. */
@@ -79,7 +87,9 @@ function request(method: string, path: string, ask: Ask = {}): Request {
     headers,
     ...(ask.body === undefined
       ? {}
-      : { body: typeof ask.body === 'string' ? ask.body : JSON.stringify(ask.body) }),
+      : {
+          body: typeof ask.body === 'string' ? ask.body : JSON.stringify(ask.body),
+        }),
   })
 }
 
@@ -115,11 +125,12 @@ async function openRoot(): Promise<GatewayRoot> {
  */
 async function harness() {
   const root = await openRoot()
+  const clock = manualClock(1_000)
   const routes = organisationRoutes(
     root.sessions,
     root.deviceSessions,
     root.organisations,
-    routeOptions,
+    routeOptions(new RequestLimits({ clock })),
   )
   const signUp = async (email: string) =>
     (
@@ -134,12 +145,16 @@ async function harness() {
 
   /** Sends the request to the routes and reads their answer. */
   const ask = async (method: string, path: string, options: Ask = {}) =>
-    answer(await routes(request(method, path, options)))
+    answer(await routes(request(method, path, options), options.from ?? ADDRESS))
 
   /** Ann creates acme, for a test to start from. */
   const founded = async () =>
     (
-      await root.organisations.create({ identity: ann.identity.id, key: 'acme', name: 'Acme' })
+      await root.organisations.create({
+        identity: ann.identity.id,
+        key: 'acme',
+        name: 'Acme',
+      })
     )._unsafeUnwrap()
 
   /** Ann invites bob into acme, for a test to start from. */
@@ -152,7 +167,7 @@ async function harness() {
       })
     )._unsafeUnwrap()
 
-  return { root, routes, ann, bob, cat, ask, founded, invited }
+  return { root, routes, clock, ann, bob, cat, ask, founded, invited }
 }
 
 /** A member as the member list answers it. */
@@ -244,7 +259,10 @@ describe('organisationRoutes', () => {
     await founded()
 
     expect(
-      await ask('POST', '/organisations', { as: bob, body: { key: 'acme', name: 'Acme too' } }),
+      await ask('POST', '/organisations', {
+        as: bob,
+        body: { key: 'acme', name: 'Acme too' },
+      }),
     ).toEqual({ status: 409, body: { code: 'key-taken' } })
   })
 
@@ -394,7 +412,9 @@ describe('organisationRoutes', () => {
     await invited()
 
     expect(
-      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, { as: ann }),
+      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, {
+        as: ann,
+      }),
     ).toEqual({ status: 204, body: undefined })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
@@ -412,7 +432,11 @@ describe('organisationRoutes', () => {
     await founded()
 
     for (const identity of ['bob', profileIdFactory.create()]) {
-      expect(await ask('DELETE', `/organisations/acme/members/${identity}`, { as: ann })).toEqual({
+      expect(
+        await ask('DELETE', `/organisations/acme/members/${identity}`, {
+          as: ann,
+        }),
+      ).toEqual({
         status: 400,
         body: { code: 'bad-request' },
       })
@@ -426,7 +450,9 @@ describe('organisationRoutes', () => {
     await invited()
 
     expect(
-      await ask('DELETE', `/organisations/acme/members/${ann.identity.id}`, { as: bob }),
+      await ask('DELETE', `/organisations/acme/members/${ann.identity.id}`, {
+        as: bob,
+      }),
     ).toEqual({ status: 403, body: { code: 'not-admin' } })
   })
 
@@ -434,7 +460,9 @@ describe('organisationRoutes', () => {
     const { ann, bob, ask } = await harness()
 
     expect(
-      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, { as: ann }),
+      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, {
+        as: ann,
+      }),
     ).toEqual({ status: 404, body: { code: 'no-such-tenant' } })
   })
 
@@ -444,7 +472,9 @@ describe('organisationRoutes', () => {
     await founded()
 
     expect(
-      await ask('DELETE', `/organisations/acme/members/${ann.identity.id}`, { as: ann }),
+      await ask('DELETE', `/organisations/acme/members/${ann.identity.id}`, {
+        as: ann,
+      }),
     ).toEqual({ status: 409, body: { code: 'self' } })
   })
 
@@ -468,7 +498,10 @@ describe('organisationRoutes', () => {
         body: { code: 'unauthorized' },
       })
       expect(
-        await ask('POST', '/organisations', { ...as, body: { key: 'acme', name: 'Acme' } }),
+        await ask('POST', '/organisations', {
+          ...as,
+          body: { key: 'acme', name: 'Acme' },
+        }),
       ).toEqual({ status: 401, body: { code: 'unauthorized' } })
     }
 
@@ -488,7 +521,12 @@ describe('organisationRoutes', () => {
       })
     }
 
-    expect(await ask('GET', '/organisations', { as: ann, device: 'device-unlisted' })).toEqual({
+    expect(
+      await ask('GET', '/organisations', {
+        as: ann,
+        device: 'device-unlisted',
+      }),
+    ).toEqual({
       status: 401,
       body: { code: 'unauthorized' },
     })
@@ -530,10 +568,12 @@ describe('organisationRoutes', () => {
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
       }),
-      routeOptions,
+      routeOptions(new RequestLimits({ clock: manualClock() })),
     )
 
-    expect(await answer(await routes(request('GET', '/organisations', { as: ann })))).toEqual({
+    expect(
+      await answer(await routes(request('GET', '/organisations', { as: ann }), ADDRESS)),
+    ).toEqual({
       status: 500,
       body: { code: 'internal' },
     })
@@ -550,7 +590,7 @@ describe('organisationRoutes', () => {
       ['GET', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
       ['POST', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
     ] as const) {
-      const response = await routes(request(method, path, { as: ann }))
+      const response = await routes(request(method, path, { as: ann }), ADDRESS)
 
       expect(await answer(response)).toEqual({
         status: 405,
@@ -565,9 +605,15 @@ describe('organisationRoutes', () => {
     const keys = ['ab', 'acme_2026', 'a'.repeat(32), 'a', '1acme', 'Acme', 'acme-corp']
 
     for (const key of [...keys, 'a'.repeat(33), 'a'.repeat(40), 'a'.repeat(41)]) {
-      const response = await routes(request('GET', `/organisations/${key}/members`, { as: ann }))
+      const response = await routes(
+        request('GET', `/organisations/${key}/members`, { as: ann }),
+        ADDRESS,
+      )
 
-      expect({ key, matched: response !== undefined }).toEqual({ key, matched: isTenantKey(key) })
+      expect({ key, matched: response !== undefined }).toEqual({
+        key,
+        matched: isTenantKey(key),
+      })
     }
   })
 
@@ -585,7 +631,256 @@ describe('organisationRoutes', () => {
       '/organisationsx',
       '/auth/sign-in',
     ]) {
-      expect(await routes(request('GET', path, { as: ann }))).toBeUndefined()
+      expect(await routes(request('GET', path, { as: ann }), ADDRESS)).toBeUndefined()
     }
+  })
+
+  describe('limits', () => {
+    const minute = 60_000
+
+    /** The body inviting the n-th email nobody has an account for: refused 404, still an attempt. */
+    const stranger = (n: number) => ({ email: `stranger-${n}@example.test` })
+
+    it("lets an admin's 30 invites within 10 minutes reach the service, unknown emails included, and answers the 31st 429 without calling it", async () => {
+      const { root, ann, ask, founded } = await harness()
+      const invite = vi.spyOn(root.organisations, 'invite')
+
+      await founded()
+
+      for (let n = 0; n < 30; n += 1) {
+        expect(
+          await ask('POST', '/organisations/acme/members', {
+            as: ann,
+            body: stranger(n),
+          }),
+        ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+      }
+
+      expect(invite).toHaveBeenCalledTimes(30)
+
+      const refused = await ask('POST', '/organisations/acme/members', {
+        as: ann,
+        body: stranger(30),
+      })
+
+      expect(refused).toEqual({ status: 429, body: { code: 'rate-limited' } })
+      expect(invite).toHaveBeenCalledTimes(30)
+    })
+
+    it('answers 429 with Retry-After in whole seconds', async () => {
+      const { routes, ann, founded } = await harness()
+
+      await founded()
+
+      for (let n = 0; n < 30; n += 1) {
+        await routes(
+          request('POST', '/organisations/acme/members', {
+            as: ann,
+            body: stranger(n),
+          }),
+          ADDRESS,
+        )
+      }
+
+      const response = await routes(
+        request('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(30),
+        }),
+        ADDRESS,
+      )
+
+      expect(response?.status).toBe(429)
+      expect(response?.headers.get('Retry-After')).toBe('600')
+    })
+
+    it('still lets another admin invite from another address when one is refused', async () => {
+      const { root, ann, bob, ask, founded } = await harness()
+
+      await founded()
+      ;(
+        await root.organisations.create({
+          identity: bob.identity.id,
+          key: 'bobco',
+          name: 'Bob Co',
+        })
+      )._unsafeUnwrap()
+
+      for (let n = 0; n <= 30; n += 1) {
+        await ask('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(n),
+        })
+      }
+
+      expect(
+        await ask('POST', '/organisations/bobco/members', {
+          as: bob,
+          from: '203.0.113.2',
+          body: stranger(0),
+        }),
+      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+    })
+
+    it('takes 60 invites from one address across three admins and answers the 61st 429', async () => {
+      const { root, ann, bob, cat, ask, founded } = await harness()
+      const invite = vi.spyOn(root.organisations, 'invite')
+
+      await founded()
+      ;(
+        await root.organisations.create({
+          identity: bob.identity.id,
+          key: 'bobco',
+          name: 'Bob Co',
+        })
+      )._unsafeUnwrap()
+      ;(
+        await root.organisations.create({
+          identity: cat.identity.id,
+          key: 'catco',
+          name: 'Cat Co',
+        })
+      )._unsafeUnwrap()
+
+      for (let n = 0; n < 30; n += 1) {
+        await ask('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(n),
+        })
+        await ask('POST', '/organisations/bobco/members', {
+          as: bob,
+          body: stranger(n),
+        })
+      }
+
+      expect(invite).toHaveBeenCalledTimes(60)
+      expect(
+        await ask('POST', '/organisations/catco/members', {
+          as: cat,
+          body: stranger(0),
+        }),
+      ).toEqual({ status: 429, body: { code: 'rate-limited' } })
+      expect(invite).toHaveBeenCalledTimes(60)
+      // The same admin from another address is let in: cat's own bucket was charged only once.
+      expect(
+        await ask('POST', '/organisations/catco/members', {
+          as: cat,
+          from: '203.0.113.9',
+          body: stranger(1),
+        }),
+      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+    })
+
+    it('counts nothing for an invitation whose body does not follow the schema', async () => {
+      const { root, ann, ask, founded } = await harness()
+      const invite = vi.spyOn(root.organisations, 'invite')
+
+      await founded()
+
+      for (let n = 0; n < 40; n += 1) {
+        expect(
+          await ask('POST', '/organisations/acme/members', {
+            as: ann,
+            body: { email: 'nope' },
+          }),
+        ).toEqual({ status: 400, body: { code: 'bad-request' } })
+      }
+
+      for (let n = 0; n < 30; n += 1) {
+        await ask('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(n),
+        })
+      }
+
+      expect(invite).toHaveBeenCalledTimes(30)
+    })
+
+    it('lets the admin invite again 10 minutes after the window started', async () => {
+      const { clock, ann, ask, founded } = await harness()
+
+      await founded()
+
+      for (let n = 0; n <= 30; n += 1) {
+        await ask('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(n),
+        })
+      }
+
+      await clock.advance(10 * minute)
+      expect(
+        await ask('POST', '/organisations/acme/members', {
+          as: ann,
+          body: stranger(31),
+        }),
+      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+    })
+
+    it('answers the 11th organisation an identity creates within an hour 429 and provisions nothing, while another identity still creates', async () => {
+      const { root, clock, ann, bob, ask } = await harness()
+      const create = vi.spyOn(root.organisations, 'create')
+
+      for (let n = 0; n < 10; n += 1) {
+        expect(
+          (
+            await ask('POST', '/organisations', {
+              as: ann,
+              body: { key: `org_${n}`, name: 'Org' },
+            })
+          ).status,
+        ).toBe(201)
+      }
+
+      expect(create).toHaveBeenCalledTimes(10)
+      expect(
+        await ask('POST', '/organisations', {
+          as: ann,
+          body: { key: 'org_10', name: 'Org' },
+        }),
+      ).toEqual({ status: 429, body: { code: 'rate-limited' } })
+      expect(create).toHaveBeenCalledTimes(10)
+      expect(
+        (
+          await ask('POST', '/organisations', {
+            as: bob,
+            body: { key: 'bobco', name: 'Bob' },
+          })
+        ).status,
+      ).toBe(201)
+      await clock.advance(60 * minute)
+      expect(
+        (
+          await ask('POST', '/organisations', {
+            as: ann,
+            body: { key: 'org_10', name: 'Org' },
+          })
+        ).status,
+      ).toBe(201)
+    })
+
+    it('counts nothing for a creation whose body does not follow the schema', async () => {
+      const { ann, ask } = await harness()
+
+      for (let n = 0; n < 12; n += 1) {
+        expect(
+          (
+            await ask('POST', '/organisations', {
+              as: ann,
+              body: { key: 'A', name: 'Org' },
+            })
+          ).status,
+        ).toBe(400)
+      }
+
+      expect(
+        (
+          await ask('POST', '/organisations', {
+            as: ann,
+            body: { key: 'acme', name: 'Acme' },
+          })
+        ).status,
+      ).toBe(201)
+    })
   })
 })
