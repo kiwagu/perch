@@ -1,11 +1,12 @@
 /**
  * What every step of the smoke test shares: a step that runs within its time and prints one
- * line, the checks it makes, and a device's hello that is welcomed.
+ * line, the checks it makes, a device's hello that is welcomed, and the updates it takes in.
  */
 
 import type { Result } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
+import type { RegionDoc } from '@workspace/replica'
 import { PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -82,6 +83,20 @@ export async function hello(
   check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
 
   return { device, welcome }
+}
+
+/** Takes the device's next `updates` into its document; answers with the update's head. */
+export async function takeUpdates(
+  device: SmokeDevice,
+  doc: RegionDoc,
+  snapshot: boolean,
+): Promise<number> {
+  const updates = await device.next('updates')
+
+  check(updates.snapshot === snapshot, `updates with snapshot ${updates.snapshot}`)
+  unwrap(await doc.importRemote(updates.bytes, updates.head))
+
+  return updates.head
 }
 
 /** The body of a route's refusal: the code that says why. */
