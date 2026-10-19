@@ -24,7 +24,9 @@ sign-in state machine; `presentation/` the pages, their views and the i18n catal
 - Behaviour: the name and the bio (at most 2000 characters) are saved together by one Save;
   the chosen language follows the identity across devices; signing out asks before losing
   changes this device could not send; the sign-in page says so when the gateway refused the
-  device's keys while changes remain to send after the next sign-in.
+  device's keys while changes remain to send after the next sign-in, and says "You were signed
+  out from another device." when this device was signed out from another one
+  (`user.sign-in.notice.signed-out-elsewhere`).
 
 ## Commands
 

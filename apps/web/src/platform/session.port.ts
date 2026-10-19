@@ -11,10 +11,12 @@ export interface SignOutOptions {
 
 /**
  * A word the session leaves for the sign-in page: `resend-after-sign-in` when the device was
- * signed out (its keys refused, or a write landing during its sign-out) while it held changes it
- * had not sent; they are kept on the device, and signing in again as the same identity sends them.
+ * signed out (its keys refused, signed out from another device, or a write landing during its
+ * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
+ * again as the same identity sends them. `signed-out-elsewhere` when another device of the
+ * identity signed this one out and nothing waited to be sent.
  */
-export type SessionNotice = 'resend-after-sign-in'
+export type SessionNotice = 'resend-after-sign-in' | 'signed-out-elsewhere'
 
 /** A change the gateway refused and this device undid: what the shell tells the user about. */
 export interface PushRejection {
@@ -34,6 +36,17 @@ export interface SessionPort {
    * when changes could not be sent and signing out would lose them.
    */
   signOut(options?: SignOutOptions): ResultAsync<'signed-out' | 'needs-confirmation', DataError>
+  /**
+   * "Sign out everywhere", called before the gateway is asked to sign every device of the
+   * identity out: it names the session open now and returns what to run once the gateway did,
+   * this device included. That signs the session out as when its channel hears so (4001),
+   * without waiting for a channel it may not have: its keys are dead and forgotten; its data goes
+   * unless it holds changes not sent yet, which stay for the next sign-in as the identity, and
+   * the sign-in page says which. It resolves once done, and changes nothing once that session
+   * has ended (signed out already, maybe with another account, or the same one, signed in
+   * since): a late answer signs out only the session that asked.
+   */
+  signingOutEverywhere(): () => ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */

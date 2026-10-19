@@ -12,7 +12,12 @@ modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
   is opened while nobody is signed in. Signing up or in goes through the gateway
-  (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin); the
+  (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin), naming the
+  device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
+  minted again when the stored value is not a device id of 1 to 64 characters) and a
+  label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
+  "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
+  same id in its hello and every organisation call sends it as `X-Perch-Device`. The
   identity, its keys and its memberships (`perch.session.memberships`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
@@ -37,33 +42,61 @@ modeling stage.
   the databases, or one that failed to open. The memberships are saved before their databases
   are counted, and a tab deletes none whose organisation the memberships saved for the identity
   still hold, so a tab following an older list leaves alone a database another tab counted and
-  opened for a newer one. `organisationsApi(baseUrl, { token, renew })` calls the gateway's `/organisations`
-  routes with the access token, renewing it once on a 401 and mapping refusals to `data:`
-  errors; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once. A token is renewed through the leading tab:
-  it connects again and the gateway answers a token that no longer works with a new pair;
-  another tab asks the leader with the `renew` hint and waits for the new access key in
-  storage (10 seconds at most). One tab per browser leads the identity's sync through a Web
-  Lock and runs the sync engine over the gateway's WebSocket (`/backend/sync`) for the private
-  region and every organisation's, keeping every renewed pair of keys; the tabs hint each
-  other over a BroadcastChannel, so each reads what the others wrote or imported. Signing out takes the lead, drains, has the gateway sign the device
-  out, then forgets the keys and the memberships and deletes the identity's database and
+  opened for a newer one. The routes that act for the signed-in device go through
+  `bearerCalls(baseUrl, { token, device, renew })`: the access token as `Authorization: Bearer`
+  and the device's id as `X-Perch-Device`, the token renewed once on a 401, refusals mapped to
+  `data:` errors (the gateway's code as the message of `data:WRITE_REJECTED`, any other status
+  named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
+  it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
+  creates its membership on the device at once. `devicesApi` is the `DEVICES` port over
+  `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
+  out, `current` for this device; the browser's own id is never sent back),
+  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. A token is renewed through the
+  leading tab: it connects again and the gateway answers a token that no longer works with a
+  new pair; another tab asks the leader with the `renew` hint and waits for the new access key
+  in storage (10 seconds at most). A renewal gives up at once when the leading tab's channel ended
+  for good (keys refused, or the device signed out from another one). One tab per browser leads the
+  identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
+  (`/backend/sync`) for the private region and every organisation's, keeping every renewed pair of
+  keys; the tabs hint each other over a BroadcastChannel, so each reads what the others wrote or
+  imported. Signing out takes the lead, drains, has the gateway sign the device out, then forgets
+  the keys and the memberships and deletes the identity's database and
   every organisation database the device holds for it, open or not, and the count of them; with
-  changes it could not send it asks first. While a sign-out runs, no tab of the browser takes a write (a
-  `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a minute,
-  hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
+  changes it could not send it asks first. A sign-out the gateway did not confirm (offline, or
+  giving unsent changes up, or kept by a frozen tab while offline) leaves the pair, whose grant
+  still works, with the device it signed out, in `perch.session.pending-revoke`: one list for
+  every account signed out on the browser, so another account's offline sign-out adds its pair
+  after the ones waiting (at most 8: one more drops the oldest, which is reported; a single pair
+  kept on its own reads as a list of one). The pairs are sent at once while the browser is
+  online, else at the next start online, and in any case before the next sign-in, one after the
+  other, to `POST /backend/auth/sign-out` (the pair in the body, its device in `X-Perch-Device`,
+  no bearer token), and each is forgotten on its own answer: once revoked (204), refused as dead
+  (401) or refused otherwise (any other 4xx, which the gateway will never take: reported); an
+  unreachable or failing (5xx) gateway leaves that pair for the next try. A pair whose send or
+  report throws is kept, the throw reported, and the pairs after it are sent all the same; a
+  send that fails, even by a throw, never stops the next one. While a sign-out runs, no tab of the browser
+  takes a write (a `sign-out` hint and the `perch.session.signing-out` mark, which lapses after a
+  minute, hold them back), and every write a tab admits holds the Web Lock `perch-write:<id>` shared
   until it is durable; before it reads what is unsent and deletes, the sign-out takes that
   lock exclusive, waiting for writes admitted earlier, and keeps the database (as after
-  refused keys) when it does not get it within 10 seconds. A change that still landed after
-  the final drain keeps the database. A
+  refused keys) when it does not get it within 10 seconds (`WriteBarrier`). A change that still
+  landed after the final drain keeps the database. A
   sign-out that asked the gateway in vain (no sign-out close) stops the engine's channel; when
   it leaves the person signed in, the leading tab syncs again on a new engine
   (`IdentitySpace.resumeSync()`), as a change of leader does. Keys
   the gateway refuses sign the device out locally, behind the same barrier and lock: the
   identity's database goes with them unless it holds changes not sent yet, in which case it
   stays (as after such a sign-out) and the sign-in page says to sign in again (as the same
-  identity) to send them. A write that waited for the lock goes on only into the space it was
-  admitted for, still open, and while no sign-out runs. A
+  identity) to send them. A device signed out from another one (its channel closed with 4001,
+  the transport's `revoked` ending) signs out the same way, and when its database goes the
+  sign-in page says "You were signed out from another device."; the device keeps its id, and
+  the dead pair is not left to revoke. A device that asked the gateway to sign every device out
+  signs out the same way as soon as the gateway answered (`SessionPort.signingOutEverywhere()`,
+  which names the asking session before the request goes), without waiting for a 4001 it may
+  never hear (no Web Locks, or no WebSocket); whichever of the two comes second finds nothing
+  left to do, and an answer that comes once the asking session has ended (another account, or
+  the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
+  space it was admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses stops the sync and keeps everything. A tab follows another
   tab's sign-out by closing its space. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
@@ -73,7 +106,7 @@ modeling stage.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
-  and the current organisation), for commands and for organisations,
+  and the current organisation), for commands, for organisations and for devices,
   notices the shell shows, the language state and the app-wide catalogs.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
@@ -81,11 +114,14 @@ modeling stage.
   - [user](src/features/user/README.md): accounts, sign-in and the identity's profile.
   - [organisation](src/features/organisation/README.md): memberships, members and the
     shared notes of the tenant region.
+  - [device](src/features/device/README.md): My devices, signing one device or every one
+    out.
 
 ## Key exports
 
 `./seeding`: `openClient({ gatewayUrl })`, a device of the application in Bun or Node (the
-composition root over an in-memory database, always leading its identity's sync) whose
+composition root over an in-memory database, always leading its identity's sync, named
+"Seed client" with an id minted into its memory storage) whose
 `ensureAccount` signs an account up or in through the gateway, writes its profile through
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
 reads the profile the gateway sends; it leaves each account without signing out. As the

@@ -14,6 +14,7 @@ export {
   type ChannelState,
   type DeviceCredentials,
   type EndReason,
+  endingOf,
   RECONNECT_DELAYS_MS,
   type SocketLike,
   type SyncTransport,

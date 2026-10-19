@@ -14,11 +14,13 @@ import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import { deviceLabel } from './device-label'
+import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, createAppRoot } from './root'
-import type { VisibilitySource } from './session'
+import type { VisibilitySource } from './session-options'
 import { browserStorage } from './storage'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -98,10 +100,14 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
       }),
     deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
+    deviceLabel: deviceLabel(navigator),
+    online: () => navigator.onLine,
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
+    devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
     transport: (context) =>
       new WebSocketTransport({
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
+        device: context.device,
         credentials: context.credentials,
         onTokens: context.onTokens,
         onMemberships: context.onMemberships,

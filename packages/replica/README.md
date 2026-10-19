@@ -47,14 +47,21 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (3), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (4), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
-  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; the
-  `welcome` carries the regions the device may name with their heads and the identity's
-  memberships, and a `memberships` message tells each later change of them. And the
-  membership contract the gateway and devices share: `membership` (an organisation's `id`,
-  `key` and `name` with the identity's role there) and `tenantRole` (`member` or `admin`), with
-  their types `Membership` and `TenantRole`.
+  Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
+  `hello` names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
+  `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
+  the regions the device may name with their heads and the identity's memberships, and a
+  `memberships` message tells each later change of them. `CLOSE` names the gateway's close
+  codes: `protocol` 4400, `unauthorized` 4401 (keys refused, or a device without a session: no
+  session row for the device it names, or a row that holds another grant), `forbidden` 4403,
+  `timeout` 4408, `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the
+  device's session was signed out, from another device, alone or with every device of its
+  identity: also at a hello whose keys still work). And the membership contract the gateway
+  and devices share: `membership` (an organisation's `id`, `key` and `name` with the
+  identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
+  and `TenantRole`.
 - `@workspace/replica/server`: `RegionLog.load(local, region)` resolves to the log and the
   region's document built from its snapshot and later rows; `accept(plan)` writes an
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)
@@ -114,13 +121,17 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   tells that such a sign-out stopped the channel, after which only a new engine syncs; `reconnect()`
   asks the transport to connect again at once, so the gateway welcomes the device anew with fresh keys).
   Its parts:
-  `WebSocketTransport` (hello with the stored keys, up after the welcome, reconnect after
+  `WebSocketTransport` (hello with the stored keys and the `device` it is given, up after the
+  welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
   the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`, the memberships of the welcome and of each
   `memberships` message to `onMemberships`, `onEnded` with an `EndReason` when the keys
-  (`unauthorized`) or the protocol (`protocol`) are refused or the device is signed out; the
-  engine stops syncing on a refused protocol and reports it) behind the `SyncTransport` port;
+  (`unauthorized`) or the protocol (`protocol`) are refused, the device is signed out
+  (`signed-out`) or signed out from another device (`revoked`, 4001), none followed by a
+  reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
+  engine stops syncing on a refused protocol and reports it, and stops its passes without a
+  report on `revoked`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; before each push, and on every full pass, `catchUpLocal()` imports the
   rows other tabs appended, and nothing is pushed while that fails, so an ack never moves the
@@ -144,7 +155,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the
-  given database and, per device, a `StubTransport` that behaves like the gateway's connection
+  given database and, per device (`transport(identity, device)`, the device `STUB_DEVICE`,
+  `test-device`, by default), a `StubTransport` that behaves like the gateway's connection
   without a network (welcomed with the identity's private region, where it is the owner, and,
   for each of the `memberships`, none by default, the organisation's region, where its batches
   are checked with the abilities of the membership's role), can go
@@ -154,7 +166,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   before its welcome), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
   the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
-  protocol, or signs the devices out), `rejections`, `signOuts`, `compactions` and `failures`
+  protocol, or signs the devices out), `closeChannels(identity, device, code)` (closes the
+  channels of one device of the identity, or of all of them when `device` is undefined, as the
+  gateway closes a device signed out from another one: a code that ends a channel ends it with
+  its reason, any other drops it and the device connects again), `rejections`, `signOuts`,
+  `compactions` and `failures`
   steer and observe it in tests. `FakeLocks` behaves like `navigator.locks` (per name,
   `shared` and `exclusive` modes granted in request order, `steal`, abort signals; `waiting(name,
   mode)` tells a test that a request waits) and

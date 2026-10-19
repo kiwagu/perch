@@ -52,10 +52,12 @@ const RENEW_MS = 10_000
 export class SessionOrganisations {
   readonly #options: SessionOrganisationsOptions
   readonly #listeners = new Set<() => void>()
-  /** Renewals waiting for the next keys this tab's channel takes. */
-  readonly #renewals = new Set<() => void>()
+  /** Renewals waiting for the next keys this tab's channel takes, or for its end. */
+  readonly #renewals = new Set<(renewed: boolean) => void>()
   /** The renewal under way and the space it renews for; a renewal asked meanwhile joins it. */
   #renewing: { readonly space: IdentitySpace; readonly renewed: Promise<boolean> } | undefined
+  /** The space whose channel the gateway ended for good: its keys are renewed no more. */
+  #ended: IdentitySpace | undefined
 
   constructor(options: SessionOrganisationsOptions) {
     this.#options = options
@@ -170,7 +172,20 @@ export class SessionOrganisations {
   /** This tab's channel took new keys. */
   renewed(): void {
     for (const renewal of [...this.#renewals]) {
-      renewal()
+      renewal(true)
+    }
+  }
+
+  /**
+   * This tab's channel ended for good: the gateway refused the keys or signed the device out, and
+   * the device signs out. A renewal waiting for new keys gives up at once, and so does every one
+   * asked for the same space from now on.
+   */
+  ended(): void {
+    this.#ended = this.#options.open()?.space
+
+    for (const renewal of [...this.#renewals]) {
+      renewal(false)
     }
   }
 
@@ -178,14 +193,15 @@ export class SessionOrganisations {
    * Has the gateway renew the device's keys, as a route that refused the access token asks: the
    * leading tab connects again, and the gateway answers a token that no longer works with a new
    * pair; another tab asks the leader with the `renew` hint. True once new keys came within 10
-   * seconds, to this tab's channel or, kept by the leader, into the storage. A renewal asked
-   * while one is under way joins it: a second hello would present the refresh key the first one
-   * spent, and the gateway would refuse the device.
+   * seconds, to this tab's channel or, kept by the leader, into the storage; false at once when
+   * this tab's channel ended for good. A renewal asked while one is under way joins it: a second
+   * hello would present the refresh key the first one spent, and the gateway would refuse the
+   * device.
    */
   renewKeys(): Promise<boolean> {
     const open = this.#options.open()
 
-    if (!open) {
+    if (!open || open.space === this.#ended) {
       return Promise.resolve(false)
     }
 
@@ -216,7 +232,7 @@ export class SessionOrganisations {
 
         resolve(renewed)
       }
-      const renewal = () => finish(true)
+      const renewal = (renewed: boolean) => finish(renewed)
 
       this.#renewals.add(renewal)
       stops.push(

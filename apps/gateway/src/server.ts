@@ -1,12 +1,14 @@
 /**
- * The gateway's HTTP and WebSocket server: health, sign-up, sign-in and the organisation routes
- * over HTTP, and the sync connection of each device over a WebSocket at `/sync`.
+ * The gateway's HTTP and WebSocket server: health, sign-up, sign-in, the organisation routes and
+ * the device routes over HTTP, and the sync connection of each device over a WebSocket at `/sync`.
  */
 
+import type { DataError } from '@workspace/data'
 import { ExceptionBase } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 
 import { authRoutes } from './auth/auth.routes'
+import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
 import { SyncConnection } from './sync/sync-connection'
 import { organisationRoutes } from './tenants/organisation.routes'
@@ -30,8 +32,8 @@ interface SocketData {
 }
 
 /**
- * The largest request body the server reads: a body is an email and a password, an
- * organisation's key and name, or an email.
+ * The largest request body the server reads: a body is an email, a password and a device, an
+ * organisation's key and name, an email, or a refresh key.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -65,12 +67,12 @@ class ServerPortException extends ExceptionBase {
 export function startServer(root: GatewayRoot, options: ServerOptions): RunningServer {
   const httpLog = createLogger('http')
   const syncLog = createLogger('sync')
+  // The code and the gateway's own message, never the cause: a database's text may hold anything.
+  const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   const routes = [
     authRoutes(root.sessions, root.organisations),
-    organisationRoutes(root.sessions, root.organisations, {
-      // The code and the gateway's own message, never the cause: a database's text may hold anything.
-      onFailure: (error) => httpLog.error({ code: error.code }, error.message),
-    }),
+    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, { onFailure }),
+    deviceRoutes(root.sessions, root.deviceSessions, root.connections, { onFailure }),
   ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,
@@ -110,6 +112,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       open(socket) {
         socket.data.connection = new SyncConnection(socket, {
           sessions: root.sessions,
+          devices: root.deviceSessions,
           hub: root.hub,
           schema: root.schema,
           organisations: root.organisations,

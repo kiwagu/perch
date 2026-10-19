@@ -6,31 +6,30 @@
  * the sweep of `@example.test` accounts.
  */
 
-import type { Result } from 'neverthrow'
-
-import type { DataError } from '@workspace/data'
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { RegionDoc, systemClock } from '@workspace/replica'
 import { CLOSE, type Membership, membership, PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import revokeGrantsStatement from '../src/auth/surql/grants-revoke-all.surql'
+import sessionsRevokedStatement from '../src/auth/surql/identity-sessions-revoked.surql'
 import { createGatewayRoot, type GatewayRoot } from '../src/composition/root'
-import { gatewayConfig, httpRpcUrl } from '../src/config'
-import { type RunningServer, startServer } from '../src/server'
+import { gatewayConfig } from '../src/config'
+import { startServer } from '../src/server'
 import { noteCreate, noteDelete, noteUpdate } from '../src/sync/__fixtures__/note'
 import { profileCreate, profileRename } from '../src/sync/__fixtures__/profile'
 
 import { SmokeDevice } from './smoke-device'
-import { call, postCredentials, type SignedIn } from './smoke-http'
+import { deviceSessionSteps } from './smoke-devices'
+import { callAs, postCredentials, type SignedIn } from './smoke-http'
+import { check, hello, type Opened, refusal, step, unwrap } from './smoke-steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
   username: 'gateway',
   password: 'gateway-stand-password',
 } as const
-
-const STEP_TIMEOUT_MS = 5_000
 
 const smokeConfig = gatewayConfig.pick({
   SURREAL_URL: true,
@@ -39,69 +38,6 @@ const smokeConfig = gatewayConfig.pick({
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
-
-/** What the run opened, to close at its end whatever happened. */
-interface Opened {
-  root?: GatewayRoot
-  server?: RunningServer
-  readonly devices: SmokeDevice[]
-}
-
-function check(condition: boolean, failure: string): void {
-  if (!condition) {
-    throw new Error(failure)
-  }
-}
-
-function unwrap<T>(result: Result<T, DataError>): T {
-  return result.match(
-    (value) => value,
-    (error) => {
-      throw new Error(`${error.code} ${error.message}`)
-    },
-  )
-}
-
-function within<T>(work: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const late = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`no answer within ${STEP_TIMEOUT_MS / 1000} s`)),
-      STEP_TIMEOUT_MS,
-    )
-  })
-
-  return Promise.race([work, late]).finally(() => clearTimeout(timer))
-}
-
-/** Runs one step within the step time and prints whether it passed; a failure ends the run. */
-async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
-  try {
-    const value = await within(run())
-
-    console.log(`smoke: ok   ${name}`)
-
-    return value
-  } catch (cause) {
-    console.log(`smoke: FAIL ${name}: ${cause instanceof Error ? cause.message : String(cause)}`)
-
-    throw cause
-  }
-}
-
-/** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
-async function hello(base: string, opened: Opened, { identity, tokens }: SignedIn) {
-  const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
-
-  opened.devices.push(device)
-  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens })
-
-  const welcome = await device.next('welcome')
-
-  check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
-
-  return { device, welcome }
-}
 
 async function welcomed(
   base: string,
@@ -137,9 +73,6 @@ const listedMembers = z.object({
   members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
 })
 
-/** The body of a route's refusal: the code that says why. */
-const refusal = z.object({ code: z.string() })
-
 /** Whether a welcome's regions name `region`. */
 function hasRegion(regions: readonly { readonly region: string }[], region: string): boolean {
   return regions.some((entry) => entry.region === region)
@@ -158,10 +91,9 @@ function keysOf(memberships: readonly Membership[]): string[] {
 async function organisationSteps(base: string, opened: Opened, owner: SignedIn): Promise<void> {
   const key = `smoke_${Date.now().toString(36)}`
   const region = `tenant:${key}`
-  const token = owner.tokens.access
 
   await step(`organisation ${key} created: 201 with the owner as admin`, async () => {
-    const answer = await call(base, 'POST', '/organisations', token, { key, name: 'Smoke' })
+    const answer = await callAs(base, 'POST', '/organisations', owner, { key, name: 'Smoke' })
 
     check(answer.status === 201, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
 
@@ -174,6 +106,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
     const signedUp = await postCredentials(base, '/auth/sign-up', {
       email: `smoke-${crypto.randomUUID()}@example.test`,
       password: crypto.randomUUID(),
+      device: { id: 'smoke-guest-device', label: 'Smoke guest' },
     })
 
     check(signedUp.memberships.length === 0, 'the new identity belongs to an organisation')
@@ -182,7 +115,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('the second identity invited: 200', async () => {
-    const answer = await call(base, 'POST', `/organisations/${key}/members`, token, {
+    const answer = await callAs(base, 'POST', `/organisations/${key}/members`, owner, {
       email: guest.identity.email,
     })
 
@@ -315,7 +248,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('invited device asked for the members: 403 not-admin', async () => {
-    const answer = await call(base, 'GET', `/organisations/${key}/members`, guest.tokens.access)
+    const answer = await callAs(base, 'GET', `/organisations/${key}/members`, guest)
 
     check(
       answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
@@ -342,11 +275,11 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 
   await step('the second identity removed: 204', async () => {
-    const answer = await call(
+    const answer = await callAs(
       base,
       'DELETE',
       `/organisations/${key}/members/${guest.identity.id}`,
-      token,
+      owner,
     )
 
     check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
@@ -373,7 +306,7 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   )
 
   await step('the members of the organisation no longer list the second identity', async () => {
-    const answer = await call(base, 'GET', `/organisations/${key}/members`, token)
+    const answer = await callAs(base, 'GET', `/organisations/${key}/members`, owner)
 
     check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
 
@@ -398,6 +331,63 @@ async function organisationSteps(base: string, opened: Opened, owner: SignedIn):
   })
 }
 
+/**
+ * The clause of the access method, on a fresh identity: its fresh token is accepted, the same
+ * token issued before `sessions_revoked_at` is refused, a refresh is not (its exchange carries
+ * no token), and the gateway's namespace user revokes the identity's grants, which refuses the
+ * refresh.
+ */
+async function sessionsRevokedSteps(base: string, root: GatewayRoot): Promise<void> {
+  const signedUp = await postCredentials(base, '/auth/sign-up', {
+    email: `smoke-${crypto.randomUUID()}@example.test`,
+    password: crypto.randomUUID(),
+    device: { id: 'smoke-device', label: 'Smoke' },
+  })
+  const { access, refresh } = signedUp.tokens
+  const identity = signedUp.identity.id
+
+  // The same token through the same calls: only the mark explains the refusal that follows.
+  await step('a fresh token is accepted before sessions_revoked_at', async () => {
+    const accepted = unwrap(await root.sessions.authenticate({ access }))
+
+    check(accepted.renewed === false, 'the token was renewed')
+  })
+
+  await step('sessions_revoked_at set by the namespace user', async () => {
+    await root.local.db.query(sessionsRevokedStatement, {
+      identity,
+      at: new Date(Date.now() + 5_000),
+    })
+  })
+
+  await step('a token issued before sessions_revoked_at is refused', async () => {
+    const refused = await root.sessions.authenticate({ access })
+
+    check(refused.isErr(), 'the token was accepted')
+  })
+
+  const renewed = await step('a refresh is not blocked by the clause', async () => {
+    const answer = unwrap(await root.sessions.authenticate({ access, refresh }))
+
+    if (!answer.renewed) {
+      throw new Error('the pair was not renewed')
+    }
+
+    return answer.tokens
+  })
+
+  await step(
+    "the namespace user revokes the identity's grants: the refresh is refused",
+    async () => {
+      await root.local.db.query(revokeGrantsStatement, { identity })
+
+      const refused = await root.sessions.authenticate(renewed)
+
+      check(refused.isErr(), 'the refresh was accepted')
+    },
+  )
+}
+
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   const root = await step(`gateway opened ${config.SURREAL_URL}`, async () =>
     unwrap(
@@ -408,7 +398,6 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
           username: config.GATEWAY_SURREAL_USER,
           password: config.GATEWAY_SURREAL_PASS,
         },
-        rpcUrl: httpRpcUrl(config.SURREAL_URL),
         clock: systemClock,
       }),
     ),
@@ -428,10 +417,16 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     password: crypto.randomUUID(),
   }
   const first = await step(`signed up ${credentials.email}`, () =>
-    postCredentials(base, '/auth/sign-up', credentials),
+    postCredentials(base, '/auth/sign-up', {
+      ...credentials,
+      device: { id: 'smoke-device-1', label: 'Smoke device 1' },
+    }),
   )
   const second = await step('signed in a second device', () =>
-    postCredentials(base, '/auth/sign-in', credentials),
+    postCredentials(base, '/auth/sign-in', {
+      ...credentials,
+      device: { id: 'smoke-device-2', label: 'Smoke device 2' },
+    }),
   )
   const region = `identity:${first.identity.id}`
   const profileId = profileIdFactory.create()
@@ -500,6 +495,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
       protocol: PROTOCOL_VERSION,
       access: 'not-a-token',
       refresh: first.tokens.refresh,
+      device: first.device,
     })
 
     const { code } = await device3.closed
@@ -507,6 +503,8 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
 
+  await sessionsRevokedSteps(base, root)
+  await deviceSessionSteps(base, opened)
   await organisationSteps(base, opened, second)
 }
 

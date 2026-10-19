@@ -3,10 +3,11 @@
 ## Role in the architecture
 
 The page frame every module renders into. It is painted before the local database finishes
-opening and carries the navigation (sign-in, or the profile and the organisation page), the
-language switch and the notices the session raises, such as a change the gateway refused and
-this device undid, so the change does not just vanish. The folder has no module manifest: the
-composition root mounts the shell around the router built from the modules' routes.
+opening and carries the navigation (sign-in, or the profile, the organisation page and My
+devices), the language switch and the notices the session raises, such as a change the
+gateway refused and this device undid, so the change does not just vanish. The folder has no
+module manifest: the composition root mounts the shell around the router built from the
+modules' routes.
 
 ## Surface
 

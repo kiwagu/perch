@@ -39,20 +39,35 @@ afterEach(async () => {
 const routeOptions = { onFailure: (error: DataError) => failures.push(error) }
 
 interface Ask {
-  /** The identity whose access token goes as `Authorization: Bearer <access>`. */
+  /**
+   * The identity whose access token goes as `Authorization: Bearer <access>`, from the device it
+   * signed up on (`X-Perch-Device`).
+   */
   readonly as?: SignedIn
   /** The `Authorization` header exactly as sent, for one a device should not send. */
   readonly authorization?: string
+  /** The `X-Perch-Device` header instead of the caller's device; `null` leaves it out. */
+  readonly device?: string | null
   /** The JSON body, or a text sent as it is. */
   readonly body?: unknown
+}
+
+/** The device each identity of these tests signs up on. */
+function deviceOf(email: string): string {
+  return `device-${email}`
 }
 
 function request(method: string, path: string, ask: Ask = {}): Request {
   const headers = new Headers()
   const authorization = ask.as ? `Bearer ${ask.as.tokens.access}` : ask.authorization
+  const device = ask.device === undefined && ask.as ? deviceOf(ask.as.identity.email) : ask.device
 
   if (authorization !== undefined) {
     headers.set('Authorization', authorization)
+  }
+
+  if (device !== undefined && device !== null) {
+    headers.set('X-Perch-Device', device)
   }
 
   if (ask.body !== undefined) {
@@ -84,7 +99,6 @@ async function openRoot(): Promise<GatewayRoot> {
     await createGatewayRoot({
       engines: nodeEngines(),
       url: 'mem://',
-      rpcUrl: 'http://127.0.0.1:8000/rpc',
       clock: manualClock(),
     })
   )._unsafeUnwrap()
@@ -100,9 +114,19 @@ async function openRoot(): Promise<GatewayRoot> {
  */
 async function harness() {
   const root = await openRoot()
-  const routes = organisationRoutes(root.sessions, root.organisations, routeOptions)
+  const routes = organisationRoutes(
+    root.sessions,
+    root.deviceSessions,
+    root.organisations,
+    routeOptions,
+  )
   const signUp = async (email: string) =>
-    (await root.sessions.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
+    (
+      await root.sessions.signUp(
+        { email, password: PASSWORD },
+        { id: deviceOf(email), label: 'Firefox on Linux' },
+      )
+    )._unsafeUnwrap()
   const ann = await signUp('ann@example.test')
   const bob = await signUp('bob@example.test')
   const cat = await signUp('cat@example.test')
@@ -434,7 +458,9 @@ describe('organisationRoutes', () => {
       // A refresh key is not taken in place of the access token it renews.
       `Bearer ${ann.tokens.refresh}`,
     ]) {
-      const as = authorization === undefined ? {} : { authorization }
+      // From a device of Ann's: only the token is wrong.
+      const device = deviceOf(ann.identity.email)
+      const as = authorization === undefined ? { device } : { authorization, device }
 
       expect(await ask('GET', '/organisations', as)).toEqual({
         status: 401,
@@ -448,6 +474,37 @@ describe('organisationRoutes', () => {
     expect(await ask('GET', '/organisations', { as: ann })).toEqual({
       status: 200,
       body: { memberships: [] },
+    })
+  })
+
+  it('answers 400 to a call that names no device, and 401 to a call of a device signed out', async () => {
+    const { root, ann, ask } = await harness()
+
+    for (const device of [null, '']) {
+      expect(await ask('GET', '/organisations', { as: ann, device })).toEqual({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+    }
+
+    expect(await ask('GET', '/organisations', { as: ann, device: 'device-unlisted' })).toEqual({
+      status: 401,
+      body: { code: 'unauthorized' },
+    })
+
+    const [row] = (await root.deviceSessions.list(ann.identity.id))._unsafeUnwrap()
+
+    ;(
+      await root.deviceSessions.revoke({
+        identity: ann.identity.id,
+        id: row?.id ?? expect.unreachable("Ann's device listed"),
+      })
+    )._unsafeUnwrap()
+
+    // The access token still works, but the device it comes from is signed out.
+    expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+      status: 401,
+      body: { code: 'unauthorized' },
     })
   })
 
@@ -466,6 +523,7 @@ describe('organisationRoutes', () => {
     // Organisations over a directory that is gone: the identity still signs in on the root's.
     const routes = organisationRoutes(
       root.sessions,
+      root.deviceSessions,
       new Organisations({
         directory,
         databases: root.databases,

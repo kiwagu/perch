@@ -70,6 +70,21 @@ describe('ShellView', () => {
     ).toBeNull()
   })
 
+  it('links a signed-in user to their devices, and nobody else', () => {
+    const { unmount } = renderShell()
+
+    expect(screen.queryByTestId('app-shell.nav.devices')).toBeNull()
+    unmount()
+
+    renderShell({ signedIn: true, activePath: '/devices' })
+
+    const devices = screen.getAllByTestId('app-shell.nav.devices')[0] as HTMLElement
+
+    expect(devices.getAttribute('href')).toBe('/devices')
+    expect(devices.getAttribute('aria-current')).toBe('page')
+    expect(devices.textContent).toBe(en['app.shell.nav.devices'])
+  })
+
   it('announces the current notice', () => {
     renderShell({ notice: { testId: 'user.profile.notice', text: 'Saved' } })
 

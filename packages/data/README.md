@@ -18,7 +18,10 @@ from a saved access token or through a refresh key that is replaced on every use
   `LocalDb` closes once however often `close()` is called; `destroy()` closes it and deletes
   what it stored (the browser's IndexedDB database of an `indxdb://` address; an in-memory
   database is gone once closed). `deleteLocalDb(url)` deletes what a database that is not open
-  stored, the same way, without opening it.
+  stored, the same way, without opening it. `createAuth` fails a call the database refused with
+  an auth code (`data:INVALID_CREDENTIALS`, `data:SIGN_UP_REJECTED`, `data:AUTH_FAILED`) and a
+  call it could not judge (the session did not open, the database could not be reached, the auth
+  object is closed) with `data:QUERY_FAILED`: only the first says the keys are dead.
 - `runAsOperator`: runs one SurrealQL text as a system user without applying the schema
   (a stand's namespaces, databases and system users), failing at once when the server
   does not answer.

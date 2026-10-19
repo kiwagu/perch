@@ -302,13 +302,14 @@ class Engine implements SyncEngine {
   /**
    * The channel ended for good. A refused protocol stops syncing and is reported: this
    * application is older than the gateway, and only a reload brings one that speaks its
-   * protocol; nothing on the device changes. Refused keys and a sign-out are the app's to act on.
+   * protocol; nothing on the device changes. A device signed out from another one stops syncing
+   * without a report: the transport tells the app, whose keys no longer work. Refused keys and a
+   * sign-out are the app's to act on.
    */
   #ended(reason: EndReason): void {
     match(reason)
       .with('protocol', () => {
-        this.#cadence.stop()
-        this.#drain.stop()
+        this.#stopPasses()
         this.#options.onError(
           dataError(
             'data:SYNC_STOPPED',
@@ -316,8 +317,15 @@ class Engine implements SyncEngine {
           ),
         )
       })
+      .with('revoked', () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
+  }
+
+  /** No pass and no drain runs any more: the channel will not come back. */
+  #stopPasses(): void {
+    this.#cadence.stop()
+    this.#drain.stop()
   }
 
   #channelChanged(state: ChannelState): void {
@@ -492,8 +500,9 @@ class Engine implements SyncEngine {
    * Resolves `signed-out` once the transport reports the channel ended with the sign-out (the
    * gateway revoked the grant and closed it). Anything else signed nothing out for sure and
    * resolves `offline`, the transport stopped so that it does not connect again: a channel
-   * that ends otherwise (refused keys or protocol), falls without ending (a gateway that failed
-   * to revoke the grant closes so), or is not closed within 10 seconds on the clock.
+   * that ends otherwise (refused keys or protocol, a sign-out from another device), falls
+   * without ending (a gateway that failed to revoke the grant closes so), or is not closed
+   * within 10 seconds on the clock.
    */
   #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
     const transport = this.#options.transport
@@ -514,7 +523,7 @@ class Engine implements SyncEngine {
           finish(
             match(reason)
               .with('signed-out', () => 'signed-out' as const)
-              .with(P.union('unauthorized', 'protocol'), () => 'offline' as const)
+              .with(P.union('unauthorized', 'protocol', 'revoked'), () => 'offline' as const)
               .exhaustive(),
           ),
         ),

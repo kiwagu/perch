@@ -3,11 +3,12 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 4
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
- * somebody else, a hello that did not come in time, and a sign-out.
+ * somebody else, a hello that did not come in time, a sign-out, and a device signed out from
+ * another device (one device, or every device of the identity).
  */
 export const CLOSE = {
   protocol: 4400,
@@ -15,7 +16,11 @@ export const CLOSE = {
   forbidden: 4403,
   timeout: 4408,
   signedOut: 4000,
+  revoked: 4001,
 } as const
+
+/** The id a device names itself with: the browser's own stable id, minted on first use. */
+export const deviceId = z.string().min(1).max(64)
 
 export const MAX_PUSH_UPDATES = 256
 
@@ -75,6 +80,8 @@ export const clientMessage = z.discriminatedUnion('type', [
     protocol: z.literal(PROTOCOL_VERSION),
     access: z.string().min(1),
     refresh: z.string().min(1).optional(),
+    /** The device saying hello; a hello without it breaks the protocol (4400). */
+    device: deviceId,
   }),
   z.object({ type: z.literal('subscribe'), region, vv: bytes.nullable() }),
   z.object({ type: z.literal('pull'), region, vv: bytes }),

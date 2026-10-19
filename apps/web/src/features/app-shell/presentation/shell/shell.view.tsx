@@ -38,6 +38,7 @@ export function ShellView(props: ShellViewProps) {
           label: t('app.shell.nav.organisation'),
           testId: 'app-shell.nav.organisation',
         },
+        { to: '/devices', label: t('app.shell.nav.devices'), testId: 'app-shell.nav.devices' },
       ]
     : [{ to: '/sign-in', label: t('app.shell.nav.sign-in'), testId: 'app-shell.nav.sign-in' }]
   const locales = SUPPORTED_LOCALES.map((locale) => ({

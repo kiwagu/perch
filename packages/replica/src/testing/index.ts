@@ -11,6 +11,7 @@ export {
   type GatewayStub,
   type GatewayStubOptions,
   gatewayStub,
+  STUB_DEVICE,
   type StubTransport,
 } from './gateway-stub'
 export { type ManualClock, manualClock } from './manual-clock'

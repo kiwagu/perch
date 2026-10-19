@@ -19,7 +19,7 @@ import { noteIdFactory } from '@workspace/ids'
 import { RegionDoc } from '@workspace/replica'
 
 import { noteCreate } from '../../src/sync/__fixtures__/note'
-import { call, postCredentials, type SignedIn } from '../smoke-http'
+import { callAs, postCredentials, type SignedIn } from '../smoke-http'
 
 import { LoadDevice } from './load-device'
 import {
@@ -183,6 +183,7 @@ async function signUp(run: Run, count: number): Promise<SignedIn[]> {
     postCredentials(run.base, '/auth/sign-up', {
       email: `load-${run.id}-${first + i}@example.test`,
       password: run.password,
+      device: { id: `load-${run.id}-${first + i}`, label: 'Load test device' },
     }),
   )
 
@@ -202,13 +203,12 @@ async function organise(run: Run, accounts: readonly SignedIn[]): Promise<string
     const group = accounts.slice(from, from + run.args.members)
     const creator = group[0] ?? fail('an empty group')
     const key = `load_${run.id}_${run.organisations++}`
-    const token = creator.tokens.access
-    const created = await call(run.base, 'POST', '/organisations', token, { key, name: key })
+    const created = await callAs(run.base, 'POST', '/organisations', creator, { key, name: key })
 
     if (created.status !== 201) fail(`organisation ${key}: ${created.status}`)
 
     for (const member of group.slice(1)) {
-      const invited = await call(run.base, 'POST', `/organisations/${key}/members`, token, {
+      const invited = await callAs(run.base, 'POST', `/organisations/${key}/members`, creator, {
         email: member.identity.email,
       })
 
@@ -316,7 +316,7 @@ async function openSim(
           }
         },
       },
-      { timeoutMs: HANDSHAKE_TIMEOUT_MS },
+      { timeoutMs: HANDSHAKE_TIMEOUT_MS, device: account.device },
     )
 
     timeout = setTimeout(

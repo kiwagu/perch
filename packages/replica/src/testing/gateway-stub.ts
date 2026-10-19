@@ -21,7 +21,7 @@ import { identityRegions } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
 import { singleDatabase } from '../server/region-databases'
 import { type Actor, RegionHub, type Subscriber } from '../server/region-hub'
-import type { ChannelState, EndReason, SyncTransport } from '../sync/transport'
+import { type ChannelState, type EndReason, endingOf, type SyncTransport } from '../sync/transport'
 
 export interface GatewayStubOptions {
   /** The gateway's database: the hub keeps the regions' logs there. */
@@ -54,8 +54,12 @@ export interface CompactionAnswer {
   readonly outcome: CompactionOutcome
 }
 
+/** The device a channel of the stub names itself with when the test names none. */
+export const STUB_DEVICE = 'test-device'
+
 export interface GatewayStub {
-  transport(identity: string): StubTransport
+  /** A channel of a device of `identity`, which names itself `device` (`test-device` by default). */
+  transport(identity: string, device?: string): StubTransport
   readonly hub: RegionHub
   /** Loses the next batch of the others that the hub sends this device. */
   dropNextFanOutTo(transport: SyncTransport): void
@@ -90,6 +94,13 @@ export interface GatewayStub {
    * keys (`unauthorized`) or signs the device out: the device hears why, then the channel falls.
    */
   endWith(reason: EndReason): void
+  /**
+   * Closes the channels of `identity` with `code`, those of `device` only when it is given, as
+   * the gateway closes the sockets of a device signed out from another one: a code that ends a
+   * channel (such as 4001) ends it for good with its reason, any other drops the connection and
+   * the device connects again.
+   */
+  closeChannels(identity: string, device: string | undefined, code: number): void
   /** How many rejects the devices were sent. */
   rejections(): number
   /** The outcomes of the compactions the devices proposed, in order. */
@@ -170,6 +181,7 @@ function sentToDevice(message: ServerMessage): ServerMessage {
 class DeviceChannel implements StubTransport {
   readonly #gateway: Gateway
   readonly #identity: string
+  readonly #device: string
   /** The regions the device may name, by id. */
   readonly #regions: ReadonlyMap<string, DeviceRegion>
   readonly #messageListeners = new Set<(message: ServerMessage) => void>()
@@ -182,9 +194,10 @@ class DeviceChannel implements StubTransport {
   #dropNextFanOut = false
   #reconnects = 0
 
-  constructor(gateway: Gateway, identity: string) {
+  constructor(gateway: Gateway, identity: string, device: string) {
     this.#gateway = gateway
     this.#identity = identity
+    this.#device = device
     const roles = new Map(
       gateway.memberships.map(({ tenant, role }) => [tenantRegionId(tenant.key), role]),
     )
@@ -246,6 +259,25 @@ class DeviceChannel implements StubTransport {
 
   dropNextFanOut(): void {
     this.#dropNextFanOut = true
+  }
+
+  /** Whether this is a channel of `identity`, and of `device` when one is named. */
+  belongsTo(identity: string, device: string | undefined): boolean {
+    return this.#identity === identity && (device === undefined || this.#device === device)
+  }
+
+  /** The gateway closes the connection: for good with a code that ends it, else the device comes back. */
+  closeWith(code: number): void {
+    const ending = endingOf(code)
+
+    if (ending) {
+      this.end(ending)
+
+      return
+    }
+
+    this.#disconnect()
+    this.#connect()
   }
 
   /** The gateway ends the channel for good; a device that is not started has no channel. */
@@ -570,8 +602,8 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
 
   return {
     hub,
-    transport(identity) {
-      const channel = new DeviceChannel(gateway, identity)
+    transport(identity, device = STUB_DEVICE) {
+      const channel = new DeviceChannel(gateway, identity, device)
 
       channels.push(channel)
 
@@ -619,6 +651,13 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     endWith(reason) {
       for (const channel of channels) {
         channel.end(reason)
+      }
+    },
+    closeChannels(identity, device, code) {
+      for (const channel of channels) {
+        if (channel.belongsTo(identity, device)) {
+          channel.closeWith(code)
+        }
       }
     },
     rejections: () => gateway.rejections,
