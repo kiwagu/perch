@@ -13,7 +13,7 @@ export type Allowance = { readonly allowed: true } | Refusal
 export type Reservation =
   | {
       readonly allowed: true
-      /** Uncounts the attempt, while the window that counted it still holds its key. */
+      /** Uncounts the attempt once, while the window that counted it still holds its key. */
       giveBack(): void
     }
   | Refusal
@@ -67,13 +67,18 @@ export class FixedWindow {
       return counted
     }
 
+    let given = false
+
     return {
       allowed: true,
       giveBack: () => {
-        // A window that restarted, or a key forgotten or evicted since, holds nothing of it.
-        if (this.live(key) === counted && counted.count > 0) {
+        // A window that restarted, or a key forgotten or evicted since, holds nothing of it; a
+        // reservation given back once holds nothing more.
+        if (!given && this.live(key) === counted && counted.count > 0) {
           counted.count -= 1
         }
+
+        given = true
       },
     }
   }

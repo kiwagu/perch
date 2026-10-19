@@ -65,7 +65,10 @@ export interface RequestLimitsOptions {
  */
 export type SignInOutcome = 'failed' | 'succeeded' | 'unjudged'
 
-/** A sign-in of an email let through, to settle once the database answered it; or its refusal. */
+/**
+ * A sign-in of an email let through, to settle once the database answered it (a second settle
+ * changes nothing); or its refusal.
+ */
 export type SignInAttempt =
   | { readonly allowed: true; settle(outcome: SignInOutcome): void }
   | { readonly allowed: false; readonly retryAfterMs: number }
@@ -140,9 +143,18 @@ export class RequestLimits {
       return reserved
     }
 
+    let settled = false
+
     return {
       allowed: true,
       settle: (outcome) => {
+        // A sign-in is settled once: a second settle of it changes nothing.
+        if (settled) {
+          return
+        }
+
+        settled = true
+
         if (outcome === 'succeeded') {
           this.failedSignIns.forget(key)
         } else if (outcome === 'unjudged') {

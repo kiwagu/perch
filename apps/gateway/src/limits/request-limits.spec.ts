@@ -95,6 +95,22 @@ describe('RequestLimits', () => {
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
+  it('settles a sign-in once: a second settle of the same sign-in changes nothing', () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    const last = limits.signInAttempt('ann@example.test')
+
+    settle(last, 'failed')
+    settle(last, 'unjudged')
+    settle(last, 'succeeded')
+
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
   it("clears an email's failures and sign-ins under way once one signs in, whatever its case", () => {
     const { limits } = limitsOn()
 

@@ -214,8 +214,10 @@ one argon2 run on the database), are limited to 20 per client address in 10 s; f
 successful sign-in. A sign-in holds one of its email's 10 places from the moment it is let
 through until the database answers, so parallel guesses are counted while under way: wrong
 credentials keep the place, a success clears the email's window, and an answer the database
-could not judge gives the place back. A body that fails its schema (400) counts nothing. A refusal answers 429 `{ "code": "rate-limited" }` with
-`Retry-After` in whole seconds (at least 1), before the database is asked, and is not logged.
+could not judge, or a call that threw instead of answering, gives the place back; each sign-in is
+settled once. A body that fails its schema (400) counts nothing. A refusal answers 429
+`{ "code": "rate-limited" }` with `Retry-After` in whole seconds (at least 1), before the database
+is asked, and is not logged.
 The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
 else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
 to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets none, every

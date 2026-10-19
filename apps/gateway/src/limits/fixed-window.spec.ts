@@ -76,6 +76,21 @@ describe('FixedWindow', () => {
     expect(window.take('a').allowed).toBe(false)
   })
 
+  it('gives a reservation back once, however often its holder asks', () => {
+    const { window } = windowOf(2, 10_000)
+    const first = window.reserve('a')
+
+    window.reserve('a')
+
+    if (first.allowed) {
+      first.giveBack()
+      first.giveBack()
+    }
+
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('a').allowed).toBe(false)
+  })
+
   it('gives nothing back to a window that restarted or a key that was forgotten since', async () => {
     const { clock, window } = windowOf(1, 10_000)
     const old = window.reserve('a')

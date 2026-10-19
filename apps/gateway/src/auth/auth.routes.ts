@@ -1,4 +1,4 @@
-import type { Result } from 'neverthrow'
+import type { Result, ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
@@ -151,6 +151,29 @@ function signInOutcome(checked: Result<SignedIn, DataError>): SignInOutcome {
 }
 
 /**
+ * Asks the service, then settles the sign-in `attempt` (if any) exactly once with what it
+ * answered, a throw included: a sign-in nobody answered was not judged, and gives its place back.
+ */
+async function settling(
+  attempt: SignInAttempt | undefined,
+  ask: () => ResultAsync<SignedIn, DataError>,
+): Promise<Result<SignedIn, DataError>> {
+  let outcome: SignInOutcome = 'unjudged'
+
+  try {
+    const checked = await ask()
+
+    outcome = signInOutcome(checked)
+
+    return checked
+  } finally {
+    if (attempt?.allowed) {
+      attempt.settle(outcome)
+    }
+  }
+}
+
+/**
  * Sign-up and sign-in over HTTP: `POST /auth/sign-up` and `POST /auth/sign-in` with
  * `{ email, password, device: { id, label } }` answer `{ identity, tokens, memberships }`, the
  * memberships being the organisations the identity belongs to once it is signed in; the device
@@ -159,8 +182,8 @@ function signInOutcome(checked: Result<SignedIn, DataError>): SignInOutcome {
  * its email's failed sign-ins and those still under way, both before the service is asked: either
  * refusal answers 429 `rate-limited` with `Retry-After`. A sign-in holds its place until the
  * database answers: wrong credentials keep it as a failure, a success clears the email's, and an
- * answer the database could not judge gives it back. A request for another path is not answered
- * here (`undefined`), so the server can try its other routes.
+ * answer the database could not judge, or a service call that threw, gives it back. A request for
+ * another path is not answered here (`undefined`), so the server can try its other routes.
  */
 export function authRoutes(
   sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
@@ -204,12 +227,7 @@ export function authRoutes(
       }
     }
 
-    const checked = await sessions[action]({ email, password }, device)
-
-    if (attempt?.allowed) {
-      attempt.settle(signInOutcome(checked))
-    }
-
+    const checked = await settling(attempt, () => sessions[action]({ email, password }, device))
     const result = await checked.asyncAndThen((signedIn) =>
       organisations
         .membershipsOf(signedIn.identity.id)

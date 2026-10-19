@@ -373,6 +373,53 @@ describe('authRoutes limits', () => {
     }
   })
 
+  it('gives the place of a sign-in back when the service throws instead of answering', async () => {
+    const stub = stubSessions()
+    let failing = true
+    const { ask } = limitedRoutes({
+      ...stub,
+      signIn: (input, device) => {
+        if (!failing) {
+          return stub.signIn(input, device)
+        }
+
+        throw new Error('the driver failed')
+      },
+    })
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await expect(ask(post('/auth/sign-in', annOnLaptop), addressOf(attempt))).rejects.toThrow(
+        'the driver failed',
+      )
+    }
+
+    failing = false
+
+    expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
+  })
+
+  it('gives the place of a sign-in back when its answer rejects instead of resolving', async () => {
+    const stub = stubSessions()
+    let failing = true
+    const { ask } = limitedRoutes({
+      ...stub,
+      signIn: (input, device) =>
+        failing
+          ? new ResultAsync(Promise.reject(new Error('the driver failed')))
+          : stub.signIn(input, device),
+    })
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await expect(ask(post('/auth/sign-in', annOnLaptop), addressOf(attempt))).rejects.toThrow(
+        'the driver failed',
+      )
+    }
+
+    failing = false
+
+    expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
+  })
+
   it('counts no failure of the email for a sign-in the database could not judge', async () => {
     const stub = stubSessions()
     let reachable = false
