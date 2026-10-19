@@ -43,6 +43,9 @@ pre-commit:
     - name: readmes of packages and modules
       run: . scripts/ensure-path.sh && bun run readme:check
 
+    - name: source file sizes
+      run: . scripts/ensure-path.sh && bun run refactor:ci
+
     - name: unit tests
       run: . scripts/ensure-path.sh && bun run test
 

@@ -31,6 +31,7 @@ alwaysApply: true
 - Compatibility switches, legacy paths, migrations: `poc-no-fallbacks.mdc`, `reset-mode-default.mdc`.
 - File and folder names: `entity-first-module-naming.mdc`.
 - A new package or feature module, or a change to a package's role, exports or scripts, or to a module's routes, shapes, commands or providers: `package-readme.mdc`.
+- A source file at or past 300 lines, or a failing size gate: `file-size-tiers.mdc`.
 - Before any commit: `security-review-before-commit.mdc`.
 - SurrealQL, schema and SurrealKit: vendor skills `.agents/skills/surrealql/`, `.agents/skills/surrealkit/`, `.agents/skills/surrealdb-js/`.
 
