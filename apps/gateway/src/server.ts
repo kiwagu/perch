@@ -27,8 +27,12 @@ export interface RunningServer {
   stop(): Promise<void>
 }
 
-/** What the server keeps on each WebSocket: the device's sync connection, once it opened. */
+/**
+ * What the server keeps on each WebSocket: the client address it came from, and the device's sync
+ * connection, once it opened.
+ */
 interface SocketData {
+  readonly from: string
   connection?: SyncConnection
 }
 
@@ -77,7 +81,10 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const routes: readonly Route[] = [
     authRoutes(root.sessions, root.organisations, root.limits),
     organisationRoutes(root.sessions, root.deviceSessions, root.organisations, { onFailure }),
-    deviceRoutes(root.sessions, root.deviceSessions, root.connections, { onFailure }),
+    deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
+      onFailure,
+      limits: root.limits,
+    }),
   ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,
@@ -90,14 +97,15 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
         return new Response('ok')
       }
 
+      // The front's X-Forwarded-For names the client; a request without one comes from its peer.
+      const from = clientAddress(request, bun.requestIP(request)?.address)
+
       if (pathname === '/sync') {
-        return bun.upgrade(request, { data: {} })
+        return bun.upgrade(request, { data: { from } })
           ? undefined
           : new Response('upgrade required', { status: 426 })
       }
 
-      // The front's X-Forwarded-For names the client; a request without one comes from its peer.
-      const from = clientAddress(request, bun.requestIP(request)?.address)
       const response = await firstAnswer(routes, request, from)
 
       if (!response) {
@@ -125,6 +133,8 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           organisations: root.organisations,
           connections: root.connections,
           clock: root.clock,
+          // A renewal at hello counts against the device and the address the socket came from.
+          renewals: (device) => () => root.limits.renewal(socket.data.from, device).allowed,
           log: syncLog,
         })
       },

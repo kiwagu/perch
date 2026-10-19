@@ -200,10 +200,11 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       const first = await signIn()
       const second = await signIn()
       const sessions = opened.root?.sessions ?? unreachableRoot()
-      const renewed = await sessions.authenticate({
-        access: 'stale',
-        refresh: first.tokens.refresh,
-      })
+      // The smoke's own gateway lets this renewal through: only the refresh key is under test.
+      const renewed = await sessions.authenticate(
+        { access: 'stale', refresh: first.tokens.refresh },
+        () => true,
+      )
 
       check(renewed.isErr(), "the tablet's first refresh key still renews")
 

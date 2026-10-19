@@ -10,6 +10,7 @@ export type DataErrorCode =
   | 'data:SYNC_STOPPED'
   | 'data:PUSH_REJECTED'
   | 'data:OFFLINE'
+  | 'data:RATE_LIMITED'
 
 export interface DataError {
   readonly code: DataErrorCode

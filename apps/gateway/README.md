@@ -64,7 +64,8 @@ Text the protocol refuses (4400, a hello of an older protocol or one that names 
 included), keys the database refused (4401), a region the device may not name (4403) and a hello
 that did not come within 10 seconds (4408, after which the device connects again) close the
 socket with the protocol's close codes; keys the database could not judge (it could not be
-reached) close it as a failed server (1011), and the device comes back with the same keys. A
+reached) close it as a failed server (1011), and the device comes back with the same keys, as it
+does after a hello closed with 1013 because the limits refused its renewal (see Limits). A
 device's sign-out leaves its regions, marks its row signed out, forgets the pairs parked for it
 and revokes its refresh grant through the database as the namespace user, as `POST
 /auth/sign-out` does, then closes the socket with 4000, which means the grant is revoked; a row
@@ -168,7 +169,8 @@ That row may then list the device as signed in until its next sign-in or a sign-
 devices; its grants are dead, so only a still valid access token of that session (at most 15
 minutes old) could reach the gateway. A pair the database refused, or that no device of
 the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
-itself has its new grant revoked whatever it answers. A request without its device or its pair
+itself has its new grant revoked whatever it answers. A renewal the limits refuse answers 429
+before the database is asked, with nothing revoked and the refresh key unspent (see Limits). A request without its device or its pair
 answers 400, before any key is checked; so does every call with an access token that names no
 valid device.
 
@@ -217,7 +219,17 @@ client shares the front's address. The gateway listens on `127.0.0.1` only, so n
 front and local tools can name an address (the smoke and the load test give each simulated
 device one of its own, `198.18.<a>.<b>` from a hash of its id). Each window table holds at most
 100 000 keys: expired keys are swept when it fills, and a table full of live keys refuses the
-keys it has not seen. `POST /auth/sign-out` itself is not limited.
+keys it has not seen.
+Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
+id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
+the address charged only when the device's limit allows. A renewal is counted when the access
+token was refused and a refresh key came with it, before the key is exchanged, so a refused one
+asks the database nothing and spends nothing (`data:RATE_LIMITED`); a working access token counts
+nothing. A hello's address is the one its upgrade request came from. A hello whose renewal is
+refused is closed with 1013 (`too many renewals`, try again later): the client ends its channel
+only on 4000, 4001, 4400 and 4401, so it reconnects with its backoff and keeps its keys. The pair
+sign-out answers 429 `rate-limited` with `Retry-After`, revoking nothing. `POST /auth/sign-out`
+itself is not limited, only the renewal it may run.
 
 ## Commands
 
@@ -245,7 +257,9 @@ keys it has not seen. `POST /auth/sign-out` itself is not limited.
   stand's key, the access token issued before it still accepted without a renewal; the limits of
   the credential routes, each from a device, so a simulated client address, of its own (21
   sign-ins of unknown emails within 10 s, the 21st answered 429 with `Retry-After`; 11 wrong
-  passwords for a further identity, the 11th answered 429); and on
+  passwords for a further identity, the 11th answered 429); the renewal limit of a device (11
+  hellos of one device with a dead access token and a made-up refresh key within 15 minutes,
+  the first 10 closed with 4401, the 11th with 1013, counted by the smoke's own gateway); and on
   another identity its device sessions: a hello under a
   device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
   laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out

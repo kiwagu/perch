@@ -14,8 +14,16 @@ import {
   grantIdOf,
   type IdentitySessions,
   keysRefused,
+  type RenewalGate,
 } from '../auth/identity-sessions'
 import { issuedAtOf } from '../auth/token-claims'
+
+/**
+ * The close code of a hello whose renewal a limit refused: try again later (RFC 6455). The client
+ * ends its channel only on 4000, 4001, 4400 and 4401, and reconnects with its backoff after any
+ * other close, so the device keeps its keys and says hello again.
+ */
+export const TRY_AGAIN_LATER = 1013
 
 /**
  * Keys a device's hello was accepted with: the identity, the pair the device holds once the
@@ -33,6 +41,7 @@ export interface Accepted {
  * The keys of the hello, accepted: as they came, renewed with the refresh key, or, when the
  * database refused the refresh key because a renewal the device never saw spent it, the pair
  * parked for the device and that key. A pair the device does not hold yet is to be delivered.
+ * Every renewal asks `renewal` first; one it refuses fails `data:RATE_LIMITED`, nothing spent.
  * Keys the database could not judge leave the parked pair where it is, and a parked pair it could
  * not judge is parked again: either waits for a hello the database can answer.
  */
@@ -43,11 +52,12 @@ export async function acceptKeys(
     readonly access: string
     readonly refresh?: string | undefined
   },
+  renewal: RenewalGate,
 ): Promise<Result<Accepted, DataError>> {
   const { device, access, refresh } = hello
-  const authenticated = await sessions.authenticate(
-    refresh === undefined ? { access } : { access, refresh },
-  )
+  const authenticated = await (refresh === undefined
+    ? sessions.authenticate({ access })
+    : sessions.authenticate({ access, refresh }, renewal))
 
   if (authenticated.isOk()) {
     const value = authenticated.value
@@ -72,7 +82,7 @@ export async function acceptKeys(
   }
 
   const { identity, tokens } = parked
-  const resumed = await sessions.authenticate(tokens)
+  const resumed = await sessions.authenticate(tokens, renewal)
 
   if (resumed.isErr() && !keysRefused(resumed.error)) {
     sessions.park({ identity, device, spentRefresh: refresh, tokens })

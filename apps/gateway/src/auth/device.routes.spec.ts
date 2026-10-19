@@ -8,12 +8,18 @@ import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
 import { DIRECTORY, NAMESPACE } from '../config'
+import type { Allowance } from '../limits/fixed-window'
 import { ConnectionRegistry } from '../sync/connections'
 
 import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
-import { type DeviceTokens, grantIdOf, IdentitySessions } from './identity-sessions'
+import {
+  type DeviceTokens,
+  grantIdOf,
+  IdentitySessions,
+  type RenewalGate,
+} from './identity-sessions'
 import deviceSignedOutStatement from './surql/device-signed-out.surql'
 import devicesOfStatement from './surql/devices-of.surql'
 import grantRevokeStatement from './surql/grant-revoke.surql'
@@ -27,6 +33,12 @@ const PASSWORD = 'pass-word-1'
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
 
 const phone = { id: 'device-phone', label: 'Safari on iPhone' }
+
+/** The client address every request comes from. */
+const FROM = '203.0.113.7'
+
+/** A gate that lets every renewal through. */
+const anyRenewal: RenewalGate = () => true
 
 /** A device as `GET /devices` lists it: neither its grant nor the browser's id goes out. */
 const listedDevice = z.strictObject({
@@ -136,6 +148,8 @@ const noContent = { status: 204, body: undefined }
 interface HarnessOptions {
   /** Runs before each statement sent to the directory; it may throw to make it fail. */
   readonly directoryQueries?: (text: string) => void
+  /** Answers each renewal the routes count, by client address and device; all allowed by default. */
+  readonly renewal?: (from: string, device: string) => Allowance
 }
 
 /**
@@ -174,18 +188,37 @@ async function harness(options: HarnessOptions = {}) {
   const connections = new ConnectionRegistry({ onFailure: (error) => failures.push(error) })
   /** How many times the routes checked keys: each opens an auth session on the database. */
   let authentications = 0
+  /** The renewals the routes counted, by client address and device. */
+  const renewalsAsked: Array<readonly [string, string]> = []
   const routes = deviceRoutes(
     {
-      authenticate: (tokens) => {
+      authenticate: (
+        tokens: { readonly access: string; readonly refresh?: string },
+        renewal?: RenewalGate,
+      ) => {
         authentications += 1
 
-        return sessions.authenticate(tokens)
+        return tokens.refresh === undefined
+          ? sessions.authenticate({ access: tokens.access })
+          : sessions.authenticate(
+              { access: tokens.access, refresh: tokens.refresh },
+              renewal ?? expect.unreachable('a refresh key without a gate'),
+            )
       },
       unpark: (identity, device) => sessions.unpark(identity, device),
     },
     devices,
     connections,
-    { onFailure: (error) => failures.push(error) },
+    {
+      onFailure: (error) => failures.push(error),
+      limits: {
+        renewal: (from, device) => {
+          renewalsAsked.push([from, device])
+
+          return options.renewal ? options.renewal(from, device) : { allowed: true }
+        },
+      },
+    },
   )
   const signIn = async (
     action: 'signUp' | 'signIn',
@@ -216,7 +249,7 @@ async function harness(options: HarnessOptions = {}) {
 
   /** Sends the request to the routes and reads their answer. */
   const ask = async (method: string, path: string, ask: Ask = {}) =>
-    answer(await routes(request(method, path, ask)))
+    answer(await routes(request(method, path, ask), FROM))
 
   /** Ann's devices as her laptop lists them. */
   const annsDevices = async () => {
@@ -238,7 +271,7 @@ async function harness(options: HarnessOptions = {}) {
 
   /** Whether `refresh` still renews a pair; a renewal spends it. */
   const renews = async (refresh: string) =>
-    (await sessions.authenticate({ access: 'stale', refresh })).isOk()
+    (await sessions.authenticate({ access: 'stale', refresh }, anyRenewal)).isOk()
 
   /** The ids of the refresh grants of `identity` that are not revoked. */
   const liveGrants = async (identity: IdentityId) => {
@@ -259,6 +292,7 @@ async function harness(options: HarnessOptions = {}) {
     renews,
     liveGrants,
     authentications: () => authentications,
+    renewalsAsked,
     ask,
     annsDevices,
     annsPhone,
@@ -303,14 +337,14 @@ describe('deviceRoutes', () => {
     for (const path of ['/devices', '/devices/dvs_x']) {
       const method = path === '/devices' ? 'GET' : 'DELETE'
 
-      expect(await answer(await routes(request(method, path, { device: laptop.id })))).toEqual(
-        unauthorized,
-      )
+      expect(
+        await answer(await routes(request(method, path, { device: laptop.id }), FROM)),
+      ).toEqual(unauthorized)
     }
 
     const forged = { ...annOnLaptop, tokens: { ...annOnLaptop.tokens, access: 'not-a-token' } }
 
-    expect(await answer(await routes(request('GET', '/devices', { as: forged })))).toEqual(
+    expect(await answer(await routes(request('GET', '/devices', { as: forged }), FROM))).toEqual(
       unauthorized,
     )
   })
@@ -362,7 +396,7 @@ describe('deviceRoutes', () => {
     expect(sockets.annPhone.ended).toEqual([CLOSE.revoked])
     expect(sockets.annLaptop.ended).toEqual([])
     expect(sockets.bobLaptop.ended).toEqual([])
-    expect((await sessions.authenticate(stale)).isErr()).toBe(true)
+    expect((await sessions.authenticate(stale, anyRenewal)).isErr()).toBe(true)
     // A pair parked for the device is gone with it.
     expect(
       sessions.parked({ device: phone.id, refresh: 'surreal-refresh-spent-key' }),
@@ -459,7 +493,7 @@ describe('deviceRoutes', () => {
     for (const caller of [annOnLaptop, annOnPhone]) {
       const stale = { access: 'stale', refresh: caller.tokens.refresh }
 
-      expect((await sessions.authenticate(stale)).isErr()).toBe(true)
+      expect((await sessions.authenticate(stale, anyRenewal)).isErr()).toBe(true)
     }
 
     const bobs = await ask('GET', '/devices', { as: bob })
@@ -619,6 +653,34 @@ describe('deviceRoutes', () => {
     expect(await liveGrants(annOnPhone.identity)).toEqual([grantIdOf(annOnLaptop.tokens.refresh)])
   })
 
+  it('answers 429 with Retry-After to a pair sign-out whose renewal the limit refuses, and revokes nothing', async () => {
+    const { routes, annsPhone, renews, sockets, renewalsAsked, annOnPhone } = await harness({
+      renewal: () => ({ allowed: false, retryAfterMs: 90_500 }),
+    })
+    const stale = { access: 'expired-access', refresh: annOnPhone.tokens.refresh }
+    const response = await routes(
+      request('POST', '/auth/sign-out', { device: phone.id, body: stale }),
+      FROM,
+    )
+
+    expect(response?.headers.get('Retry-After')).toBe('91')
+    expect(await answer(response)).toEqual({ status: 429, body: { code: 'rate-limited' } })
+    expect(renewalsAsked).toEqual([[FROM, phone.id]])
+    // The row stays as it was, and the refresh key was not spent.
+    expect((await annsPhone()).revokedAt).toBeNull()
+    expect(sockets.annPhone.ended).toEqual([])
+    expect(await renews(annOnPhone.tokens.refresh)).toBe(true)
+  })
+
+  it('counts no renewal for a pair sign-out whose access token works', async () => {
+    const { signOut, renewalsAsked, annOnPhone } = await harness({
+      renewal: () => expect.unreachable('the limit was asked'),
+    })
+
+    expect(await signOut(annOnPhone.tokens)).toEqual(noContent)
+    expect(renewalsAsked).toEqual([])
+  })
+
   it("answers 401 to a sign-out whose pair is not one of the identity's device pairs, and revokes nothing", async () => {
     const { signOut, renews, sockets, annOnPhone, bob } = await harness()
 
@@ -713,14 +775,14 @@ describe('deviceRoutes', () => {
       ['GET', '/auth/sign-out-everywhere', 'POST'],
       ['GET', '/auth/sign-out', 'POST'],
     ] as const) {
-      const response = await routes(request(method, path))
+      const response = await routes(request(method, path), FROM)
 
       expect(response?.status).toBe(405)
       expect(response?.headers.get('allow')).toBe(allow)
     }
 
     for (const path of ['/auth/sign-in', '/devices/a/b', '/organisations', '/health']) {
-      expect(await routes(request('GET', path))).toBeUndefined()
+      expect(await routes(request('GET', path), FROM)).toBeUndefined()
     }
   })
 })

@@ -133,7 +133,8 @@ describe('createGatewayRoot over a directory on disk', () => {
 
     expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
 
-    const renewed = (await second.sessions.authenticate(tokens))._unsafeUnwrap()
+    // Every renewal goes through: the limits are not under test here.
+    const renewed = (await second.sessions.authenticate(tokens, () => true))._unsafeUnwrap()
 
     expect(renewed.renewed).toBe(true)
     expect(renewed.identity).toEqual(identity)

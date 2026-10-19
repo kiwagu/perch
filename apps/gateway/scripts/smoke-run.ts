@@ -447,7 +447,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
 
-  await accessSteps(base, root, config.GATEWAY_JWT_KEY)
+  await accessSteps(base, root, config.GATEWAY_JWT_KEY, opened)
   await deviceSessionSteps(base, opened)
   await organisationSteps(base, opened, second)
 }

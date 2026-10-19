@@ -12,13 +12,16 @@ import { DIRECTORY, NAMESPACE } from '../config'
 
 import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { DeviceSessions, type DeviceTouch } from './device-sessions'
-import { grantIdOf, IdentitySessions } from './identity-sessions'
+import { grantIdOf, IdentitySessions, type RenewalGate } from './identity-sessions'
 import { issuedAtOf } from './token-claims'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
 
 /** The device Ann signs in on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
+
+/** A gate that lets every renewal through. */
+const anyRenewal: RenewalGate = () => true
 
 /** The access method identities sign in through, and the scope its tokens are issued for. */
 const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
@@ -190,7 +193,7 @@ describe('IdentitySessions', () => {
     const again = (
       await sessions.signIn({ email: 'ann@example.test', password: 'pass-word-1' }, laptop)
     )._unsafeUnwrap()
-    const device = (await sessions.authenticate(again.tokens))._unsafeUnwrap()
+    const device = (await sessions.authenticate(again.tokens, anyRenewal))._unsafeUnwrap()
 
     expect(up.identity.id).toMatch(/^idn_/)
     expect(up.identity).toEqual({ id: up.identity.id, email: ann.email })
@@ -205,7 +208,10 @@ describe('IdentitySessions', () => {
     const { identity, tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
 
     const device = (
-      await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+      await sessions.authenticate(
+        { access: 'expired.or.garbage', refresh: tokens.refresh },
+        anyRenewal,
+      )
     )._unsafeUnwrap()
 
     expect(device.renewed).toBe(true)
@@ -216,9 +222,44 @@ describe('IdentitySessions', () => {
     // The key it replaced is spent.
     expect(
       (
-        await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+        await sessions.authenticate(
+          { access: 'expired.or.garbage', refresh: tokens.refresh },
+          anyRenewal,
+        )
       )._unsafeUnwrapErr().code,
     ).toBe('data:AUTH_FAILED')
+  })
+
+  it('asks the gate only when the access token no longer works', async () => {
+    const sessions = await testSessions()
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    const device = (
+      await sessions.authenticate(tokens, () => expect.unreachable('the gate was asked'))
+    )._unsafeUnwrap()
+
+    expect(device.renewed).toBe(false)
+  })
+
+  it('fails data:RATE_LIMITED and spends nothing when the gate refuses the renewal', async () => {
+    const sessions = await testSessions()
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const stale = { access: 'expired.or.garbage', refresh: tokens.refresh }
+    let asked = 0
+
+    const refused = await sessions.authenticate(stale, () => {
+      asked += 1
+
+      return false
+    })
+
+    expect(refused._unsafeUnwrapErr()).toEqual({
+      code: 'data:RATE_LIMITED',
+      message: 'too many renewals',
+    })
+    expect(asked).toBe(1)
+    // The refresh key was not spent: the same pair renews once the gate lets it through.
+    expect((await sessions.authenticate(stale, anyRenewal))._unsafeUnwrap().renewed).toBe(true)
   })
 
   it('refuses wrong credentials and an unknown refresh key', async () => {
@@ -230,11 +271,13 @@ describe('IdentitySessions', () => {
       (await sessions.signIn({ ...ann, password: 'wrong' }, laptop))._unsafeUnwrapErr().code,
     ).toBe('data:INVALID_CREDENTIALS')
     expect(
-      (await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-unknown' })).isErr(),
+      (
+        await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-unknown' }, anyRenewal)
+      ).isErr(),
     ).toBe(true)
     expect(
       (
-        await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-unknown' })
+        await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-unknown' }, anyRenewal)
       )._unsafeUnwrapErr().code,
     ).toBe('data:AUTH_FAILED')
   })
@@ -290,9 +333,15 @@ describe('IdentitySessions', () => {
 
     const token = elsewhere.tokens()?.access ?? expect.unreachable('a token of the other access')
     const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
-    const refused = await sessions.authenticate({ access: token, refresh: tokens.refresh })
+    const refused = await sessions.authenticate(
+      { access: token, refresh: tokens.refresh },
+      anyRenewal,
+    )
     const renewed = (
-      await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+      await sessions.authenticate(
+        { access: 'expired.or.garbage', refresh: tokens.refresh },
+        anyRenewal,
+      )
     )._unsafeUnwrap()
 
     expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
@@ -311,13 +360,19 @@ describe('IdentitySessions', () => {
     const { identity, tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
     // The renewal spent the old key, so the new pair must reach the device too.
     const device = (
-      await sessions.authenticate({ access: 'expired.or.garbage', refresh: tokens.refresh })
+      await sessions.authenticate(
+        { access: 'expired.or.garbage', refresh: tokens.refresh },
+        anyRenewal,
+      )
     )._unsafeUnwrap()
     const renewed = device.renewed ? device.tokens : expect.unreachable('a renewed pair')
-    const again = await sessions.authenticate({
-      access: 'expired.or.garbage',
-      refresh: renewed.refresh,
-    })
+    const again = await sessions.authenticate(
+      {
+        access: 'expired.or.garbage',
+        refresh: renewed.refresh,
+      },
+      anyRenewal,
+    )
 
     expect(device.identity).toEqual(identity)
     expect(renewed.refresh).not.toBe(tokens.refresh)
@@ -342,7 +397,7 @@ describe('IdentitySessions', () => {
         .code,
       (await sessions.signIn(ann, laptop))._unsafeUnwrapErr().code,
       (await sessions.authenticate({ access: tokens.access }))._unsafeUnwrapErr().code,
-      (await sessions.authenticate(tokens))._unsafeUnwrapErr().code,
+      (await sessions.authenticate(tokens, anyRenewal))._unsafeUnwrapErr().code,
     ]
 
     expect(codes).toEqual(Array.from({ length: 4 }, () => 'data:QUERY_FAILED'))
@@ -375,7 +430,9 @@ describe('IdentitySessions', () => {
     expect((await sessions.signIn(ann, laptop)).isOk()).toBe(true)
     expect((await sessions.signIn({ ...ann, password: 'wrong' }, laptop)).isErr()).toBe(true)
     expect(
-      (await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-x' })).isErr(),
+      (
+        await sessions.authenticate({ access: 'x', refresh: 'surreal-refresh-x' }, anyRenewal)
+      ).isErr(),
     ).toBe(true)
 
     expect(opened()).toBe(4)
@@ -551,10 +608,14 @@ describe('IdentitySessions and the devices', () => {
     const second = (await sessions.signIn(ann, laptop))._unsafeUnwrap()
 
     expect(
-      (await sessions.authenticate({ access: 'stale', refresh: first.tokens.refresh })).isErr(),
+      (
+        await sessions.authenticate({ access: 'stale', refresh: first.tokens.refresh }, anyRenewal)
+      ).isErr(),
     ).toBe(true)
     expect(
-      (await sessions.authenticate({ access: 'stale', refresh: second.tokens.refresh })).isOk(),
+      (
+        await sessions.authenticate({ access: 'stale', refresh: second.tokens.refresh }, anyRenewal)
+      ).isOk(),
     ).toBe(true)
   })
 
@@ -578,7 +639,7 @@ describe('IdentitySessions and the devices', () => {
     const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
 
     const renewed = (
-      await sessions.authenticate({ access: 'stale', refresh: tokens.refresh })
+      await sessions.authenticate({ access: 'stale', refresh: tokens.refresh }, anyRenewal)
     )._unsafeUnwrap()
 
     expect(renewed.renewed).toBe(true)
