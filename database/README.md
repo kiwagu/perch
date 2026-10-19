@@ -20,7 +20,8 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   `_replica_peer`, `_replica_head`, `_replica_cursor`: snapshots, the update log numbered
   without gaps, the outbox, projected records, the identity each Loro peer of a region writes
   as (bound at its first accepted batch), the pull cursor; a number is unique per region in the
-  log and the outbox), closed to every record user and never replicated.
+  log and the outbox; on a device `_replica_head` also holds the region's generation, which a
+  reset of its local copy moves), closed to every record user and never replicated.
 - `schema/directory/`: `identity` (accounts and the `identity` record access with its refresh
   keys), `profile` (its owner reads it; only the gateway writes it, through replication; a bio
   holds at most 2000 characters), `tenant` (an organisation: its key of 2 to 32 lowercase

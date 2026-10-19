@@ -3,21 +3,26 @@ import { z } from '@workspace/zod'
 
 import type { PushRejection } from '../platform/session.port'
 
-/** What a refused push carries as its cause, read as the port's `PushRejection`. */
-const pushRejection = z.object({
+/** What a refused push, or the reload of a region whose refused push was refused again, carries as its cause. */
+const refusal = z.object({
   region: z.string(),
   batch: z.number(),
   reason: z.string(),
   detail: z.string(),
-}) satisfies z.ZodType<PushRejection>
+})
 
-/** The change the gateway refused, when `error` is a refused push that says which. */
+/**
+ * The change the gateway refused, when `error` is a refused push that says which, or the reload of
+ * a region whose undo the gateway refused too.
+ */
 export function rejectionOf(error: DataError): PushRejection | undefined {
-  if (error.code !== 'data:PUSH_REJECTED') {
+  if (error.code !== 'data:PUSH_REJECTED' && error.code !== 'data:REGION_RELOADED') {
     return undefined
   }
 
-  const rejection = pushRejection.safeParse(error.cause)
+  const parsed = refusal.safeParse(error.cause)
 
-  return rejection.success ? rejection.data : undefined
+  return parsed.success
+    ? { ...parsed.data, reloaded: error.code === 'data:REGION_RELOADED' }
+    : undefined
 }

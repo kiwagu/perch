@@ -6,7 +6,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
 import { CLOSE, type Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
-import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
+import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
 import type { PushRejection } from '../platform/session.port'
@@ -92,10 +92,18 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
+/** A device database on which every region reset fails, as on a broken database. */
+const refuseResets = (local: LocalDb) =>
+  interceptRegionResets(local, () => {
+    throw new Error('the database refuses the reset')
+  })
+
 /** Boots a session as a page load does, with `saved` kept from an earlier sign-in, and waits until its tab leads. */
 async function bootSession(options: {
   readonly saved: SignedInDevice | undefined
   readonly online?: boolean
+  /** Wraps the device's database connections, e.g. to make a query fail. */
+  readonly wrap?: (local: LocalDb) => LocalDb
 }) {
   const storage = memoryStorage()
 
@@ -103,7 +111,11 @@ async function bootSession(options: {
     saveDevice(storage, options.saved)
   }
 
-  const booted = await world({ storage, online: options.online ?? false })
+  const booted = await world({
+    storage,
+    online: options.online ?? false,
+    ...(options.wrap ? { wrap: options.wrap } : {}),
+  })
   const { session } = booted
 
   expect((await session.restore()).isOk()).toBe(true)
@@ -447,7 +459,8 @@ describe('SessionService', () => {
   })
 
   it('asks before signing out when the region stopped syncing with changes left in the outbox', async () => {
-    const booted = await bootSession({ saved: ann, online: true })
+    // A region whose reset fails stops with the changes the gateway refused.
+    const booted = await bootSession({ saved: ann, online: true, wrap: refuseResets })
     const { session, gateway, destroyed, failures, writeOffline } = booted
 
     gateway.rejectEverything()
@@ -475,20 +488,27 @@ describe('SessionService', () => {
 
     gateway.rejectEverything()
     await writeOffline()
-    await vi.waitFor(() => expect(heard).toHaveLength(1))
+    // Its rollback is refused too: the region is loaded again from the server, which the
+    // listeners hear of as well, and nothing stops.
+    await vi.waitFor(() => expect(heard).toHaveLength(2))
 
-    expect(heard[0]).toMatchObject({
-      region: `identity:${ann.identity.id}`,
-      reason: 'foreign-table',
-    })
-    expect(failures.map((failure) => failure.code)).toContain('data:PUSH_REJECTED')
+    const region = `identity:${ann.identity.id}`
+
+    expect(heard).toMatchObject([
+      { region, reason: 'foreign-table', reloaded: false },
+      { region, reason: 'foreign-table', reloaded: true },
+    ])
+    expect(failures.map((failure) => failure.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
 
     unsubscribe()
     failures.splice(0)
   })
 
   it('asks before signing out when the region stops syncing during the sign-out', async () => {
-    const booted = await bootSession({ saved: ann, online: true })
+    const booted = await bootSession({ saved: ann, online: true, wrap: refuseResets })
     const { session, gateway, destroyed, failures, writeOffline } = booted
 
     gateway.rejectEverything()
@@ -1554,7 +1574,7 @@ describe('SessionService devices', () => {
 
     saveDevice(storage, ann)
 
-    const booted = await world({ storage, auth, online: true })
+    const booted = await world({ storage, auth, online: true, wrap: refuseResets })
     const { session, stub, failures } = booted
 
     expect((await session.restore()).isOk()).toBe(true)

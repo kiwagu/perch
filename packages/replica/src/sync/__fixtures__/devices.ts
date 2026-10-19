@@ -9,6 +9,7 @@ import { profileSchema } from '../../__fixtures__/profile'
 import type { Membership } from '../../protocol'
 import { RegionDoc, type RegionRef } from '../../region-doc'
 import { privateRegionId } from '../../region-ref'
+import { replaceRegionDoc } from '../../region-replacement'
 import type { ReplicaSchema } from '../../schema'
 import { type GatewayStub, gatewayStub, type StubTransport } from '../../testing/gateway-stub'
 import { type ManualClock, manualClock } from '../../testing/manual-clock'
@@ -40,6 +41,7 @@ const SETTLE_MS = 60_000
 /** One device of the identity: its own database and region document, synced through the stub. */
 export interface Device {
   readonly local: LocalDb
+  /** The device's region document: another one once the engine replaced it. */
   readonly region: RegionDoc
   readonly transport: StubTransport
   readonly engine: SyncEngine
@@ -122,9 +124,10 @@ export async function openGateway(options: GatewayOptions = {}): Promise<Gateway
 export async function openDevice(gateway: Gateway, options: DeviceOptions = {}): Promise<Device> {
   const owner = options.identity ?? identity
   const local = (await openTestDb())._unsafeUnwrap()
-  const region = (
+  const database = options.wrap ? options.wrap(local) : local
+  let region = (
     await RegionDoc.open(
-      options.wrap ? options.wrap(local) : local,
+      database,
       options.region ?? { kind: 'private', id: privateRegionId(owner) },
     )
   )._unsafeUnwrap()
@@ -141,9 +144,23 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
     },
     onSettled: () => {},
     onError: (error) => errors.push(error),
+    // As the app does: the device's document is the one the engine syncs.
+    replaceRegion: (current, how) =>
+      replaceRegionDoc(database, current, how).andTee((next) => {
+        region = next
+      }),
     ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
   })
-  const device: Device = { local, region, transport, engine, errors, channel: () => channel }
+  const device: Device = {
+    local,
+    get region() {
+      return region
+    },
+    transport,
+    engine,
+    errors,
+    channel: () => channel,
+  }
 
   opened.find((entry) => entry.gateway === gateway)?.devices.push(device)
 
@@ -166,10 +183,13 @@ export async function settleAll(devices: readonly Device[]): Promise<void> {
 }
 
 /** Two started devices of one identity whose region holds the identity's profile, named Ann. */
-export async function twoDevices(options: GatewayOptions = {}) {
+export async function twoDevices(
+  options: GatewayOptions = {},
+  devices: Pick<DeviceOptions, 'wrap'> = {},
+) {
   const gateway = await openGateway(options)
-  const a = await openDevice(gateway)
-  const b = await openDevice(gateway)
+  const a = await openDevice(gateway, devices)
+  const b = await openDevice(gateway, devices)
   const settle = () => settleAll([a, b])
 
   a.engine.start()
@@ -191,7 +211,7 @@ export async function twoDevices(options: GatewayOptions = {}) {
  * A started device of Ann and one of Bob, both members of Acme, syncing the organisation's
  * region; each push carries at most `batchRows` rows, the protocol's limit by default.
  */
-export async function twoMembers(options: Pick<DeviceOptions, 'batchRows'> = {}) {
+export async function twoMembers(options: Pick<DeviceOptions, 'batchRows' | 'wrap'> = {}) {
   const gateway = await openGateway({ schema: replicaSchema, memberships: [acme] })
   const a = await openDevice(gateway, { ...options, identity: ann, region: acmeRegion })
   const b = await openDevice(gateway, { ...options, identity: bob, region: acmeRegion })

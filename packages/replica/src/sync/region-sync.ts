@@ -6,12 +6,13 @@ import type { Clock } from '../clock'
 import { MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
+import { LocalCatchUp } from './local-catch-up'
 import { ownBytes } from './message-bytes'
 import type { DrainTarget } from './outbox-drain'
 import { RegionCompaction } from './region-compaction'
 import { RegionPull } from './region-pull'
 import { type PushOutcome, RegionPush } from './region-push'
-import { RegionRollback } from './region-rollback'
+import { type Refusal, RegionRollback } from './region-rollback'
 import type { SyncTransport } from './transport'
 
 export interface RegionSyncOptions {
@@ -24,6 +25,8 @@ export interface RegionSyncOptions {
   /** Imported something from the server. */
   readonly onSettled: () => void
   readonly onError: (error: DataError) => void
+  /** The gateway refused a batch again after its rollback: the sync stopped, reporting nothing. */
+  readonly onReset: (refusal: Refusal) => void
   /**
    * How many outbox rows one push carries at most; 256 by default, the protocol's limit. The
    * push after a rollback carries every row up to the inverse, more when it takes more.
@@ -39,16 +42,16 @@ type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
  * message at a time, in the order they came) and pulls whenever an import leaves updates
  * waiting for history, until one completes; an import that fails pulls at once and again on
  * every full pass and reconnect, until the answer to a pull or a subscription imports in full.
- * It pushes the outbox one batch at a time; an
- * acknowledged batch leaves the outbox, a rejected one is rolled back by an inverse commit
- * and pushed again together with it, whatever the batch limit: the push after a rollback carries
- * every row up to the inverse, the rows other tabs queued in between included, as one update
- * when they are more than a push may carry. A batch rejected again after its rollback stops the
- * region's sync. A push or a pull answered with an error, or not answered within 30 seconds, is
- * given up for now and goes out again later (an unanswered one also has the transport connect
- * again); a subscription the gateway failed is sent again on
- * the next full pass or push. Once the server asks for a compaction and the region is quiet, it
- * proposes a full snapshot.
+ * It pushes the outbox one batch at a time; an acknowledged batch leaves the outbox, a rejected
+ * one is rolled back by an inverse commit and pushed again together with it, whatever the batch
+ * limit: the push after a rollback carries every row up to the inverse, the rows other tabs
+ * queued in between included, as one update when they are more than a push may carry. A batch
+ * rejected again after its rollback stops the sync without a report and asks for the region to
+ * be reloaded (`onReset`). A push or a pull answered with an error, or not answered within 30
+ * seconds, is given up for now and goes out again later (an unanswered one also has the
+ * transport connect again); a subscription the gateway failed is sent again on the next full
+ * pass or push. Once the server asks for a compaction and the region is quiet, it proposes a
+ * full snapshot.
  */
 export class RegionSync implements DrainTarget {
   readonly #region: RegionDoc
@@ -58,6 +61,7 @@ export class RegionSync implements DrainTarget {
   readonly #push: RegionPush
   readonly #rollback: RegionRollback
   readonly #compaction: RegionCompaction
+  readonly #localCatchUp: LocalCatchUp
   /** Settles once the server messages handed over so far are handled. */
   #queue: Promise<void> = Promise.resolve()
   /** A subscription went out on the current connection. */
@@ -67,8 +71,6 @@ export class RegionSync implements DrainTarget {
   /** The server has answered the subscription of the current connection. */
   #answered = false
   #stopped = false
-  /** The last import of the rows other tabs appended failed; reported once until one succeeds. */
-  #behindLocally = false
 
   constructor(options: RegionSyncOptions) {
     const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
@@ -83,6 +85,7 @@ export class RegionSync implements DrainTarget {
     this.#region = region
     this.#transport = transport
     this.#onError = onError
+    this.#localCatchUp = new LocalCatchUp(region, onError)
     this.#pull = new RegionPull({
       region,
       transport,
@@ -114,6 +117,10 @@ export class RegionSync implements DrainTarget {
       onError,
       push: this.#push,
       stop,
+      reset: (refusal) => {
+        this.retire()
+        options.onReset(refusal)
+      },
     })
   }
 
@@ -187,21 +194,8 @@ export class RegionSync implements DrainTarget {
    * Imports the rows other tabs appended to the local log; resolves false when that failed,
    * which is reported once until an import succeeds again. Every push and full pass asks for it.
    */
-  async catchUpLocal(): Promise<boolean> {
-    const caught = await this.#region.catchUpLocal()
-
-    if (caught.isOk()) {
-      this.#behindLocally = false
-
-      return true
-    }
-
-    if (!this.#behindLocally) {
-      this.#behindLocally = true
-      this.#onError(caught.error)
-    }
-
-    return false
+  catchUpLocal(): Promise<boolean> {
+    return this.#localCatchUp.run()
   }
 
   /** Pulls when the server's head is ahead of the cursor. */
@@ -234,6 +228,17 @@ export class RegionSync implements DrainTarget {
 
   stopped(): boolean {
     return this.#stopped
+  }
+
+  /**
+   * Stops for good without a report: the region's document is replaced. Ends a pull, forgets a
+   * compaction and lands the push as empty.
+   */
+  retire(): void {
+    this.#stopped = true
+    this.#pull.end()
+    this.#compaction.forget()
+    this.#push.land('empty')
   }
 
   async #dispatch(message: ServerMessage, epoch: number): Promise<void> {
@@ -297,8 +302,7 @@ export class RegionSync implements DrainTarget {
   }
 
   #stop(error: DataError): void {
-    this.#stopped = true
+    this.retire()
     this.#onError(error)
-    this.#push.land('empty')
   }
 }

@@ -11,6 +11,8 @@ export type DataErrorCode =
   | 'data:PUSH_REJECTED'
   | 'data:OFFLINE'
   | 'data:RATE_LIMITED'
+  | 'data:REGION_STALE'
+  | 'data:REGION_RELOADED'
 
 export interface DataError {
   readonly code: DataErrorCode

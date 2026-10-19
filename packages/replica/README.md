@@ -9,7 +9,9 @@ writes each touched record into the local database and announces the change, and
 local update is stored durably in the local database before it counts as persisted. The
 local database numbers each region's update log, so tabs sharing it never reuse a number (a
 number is unique per region; a write that lost its number to another tab's engine is sent
-again at once under the next one);
+again at once under the next one); a reset drops a region's local copy and moves it to a new
+generation, and a document of an earlier one can no longer write to the log or read from it
+(a document reads the generation before the copy it opens, so a reset meanwhile leaves it stale);
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
@@ -38,7 +40,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
-  an import.
+  an import. `stale()` tells whether another document of the region reset it since this one
+  opened (an in-memory document never is); every write and catch-up of such a document fails
+  `data:REGION_STALE`.
+- `replaceRegionDoc(local, current, how)` (`RegionReplacement`: `reset` or `reopen`): the
+  document that takes `current`'s place: `reset` drops the region's local copy (snapshot, update
+  log, outbox, cursor; every change not sent yet) and opens it empty, `reopen` opens again what
+  the database holds after another document reset it; `current` is closed once its successor
+  is open, and a reset the database refuses changes nothing.
 - `LoroWritePath`: implements the data layer's `WritePathPort`; a command succeeds only
   once its update is durable.
 - `Projector`: `start()` projects current records, deletes those the region projected
@@ -117,7 +126,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
-  push carries, 256 by default) returns a `SyncEngine` (`start`,
+  push carries, 256 by default; `replaceRegion(region, how)`, the app's document that takes a
+  region's place, below) returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
@@ -149,7 +159,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the ack of a first push moves the cursor; the push after a rollback carries every outbox row
   from the refused ones through their inverse, rows other tabs queued between included, whatever
   `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch
-  never goes out again without its undo);
+  never goes out again without its undo). A batch refused again after its rollback no longer
+  stops the region: the engine (`EngineRegions`) asks the app for a new document of the region
+  (`replaceRegion`, `reset`: `replaceRegionDoc` drops the local copy with every change not sent
+  yet), subscribes it without a version, so the gateway answers with a full snapshot, and
+  reports `data:REGION_RELOADED` once; the one `data:PUSH_REJECTED` of the first refusal stays
+  the only rejection. A region another tab reset (`data:REGION_STALE`) is opened again
+  (`reopen`); a replacement that fails stops the region as before (`data:SYNC_STOPPED`), and
+  `settled` waits for a replacement under way;
   `createOutboxDrain(target)` (one batch at a time, requests during a round fold into one more);
   `createCadence(clock, pass)` with `CADENCE_MS` (probes and full passes).
   `leadership(locks, lockName(identity))` makes one tab per browser the sync leader through a
@@ -157,7 +174,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
   into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
-  `settled`, `sign-out` and `renew` (a tab asks the leader to renew the keys) hints between tabs over a `BroadcastChannel` and ignores anything
+  `settled`, `sign-out`, `renew` (a tab asks the leader to renew the keys) and `reset` (a tab reset a region; the others open it again
+  from the database) hints between tabs over a `BroadcastChannel` and ignores anything
   else on it.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
@@ -182,6 +200,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `shared` and `exclusive` modes granted in request order, `steal`, abort signals; `waiting(name,
   mode)` tells a test that a request waits) and
   `FakeHintChannel` like a `BroadcastChannel` (synchronous), for the tabs of a browser.
+  `interceptRegionResets(local, before)` wraps a device database so each region reset first
+  goes through `before`, which may throw (the reset fails) or wait (the reset is held).
 - `Clock` (`now()`, `schedule(ms, run)` returning a cancel function) and `systemClock`.
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.

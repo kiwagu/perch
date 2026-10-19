@@ -7,6 +7,7 @@ import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
 import appendStatement from '../surql/replica-append.surql'
+import { interceptRegionResets } from '../testing/intercept-region-resets'
 import type { ManualClock } from '../testing/manual-clock'
 
 import {
@@ -198,7 +199,16 @@ describe('sync engine', () => {
   })
 
   it('keeps the device signed in when a region stops syncing with rows left in its outbox', async () => {
-    const { a, stub } = await twoDevices()
+    // A region whose reset fails stops with the rows the gateway refused.
+    const { a, stub } = await twoDevices(
+      {},
+      {
+        wrap: (local) =>
+          interceptRegionResets(local, () => {
+            throw new Error('the database refuses the reset')
+          }),
+      },
+    )
 
     stub.rejectEverything()
     a.transport.goOffline()
@@ -207,7 +217,8 @@ describe('sync engine', () => {
     const outcome = a.engine.signOut()
 
     // The channel comes back during the sign-out; the drain's batch is rejected, rolled back
-    // and rejected again, so the region stops with the rows and their inverse unsent.
+    // and rejected again, and the region, which cannot reload, stops with the rows and their
+    // inverse unsent.
     a.transport.goOnline()
 
     expect(await outcome).toBe('offline')
@@ -215,6 +226,27 @@ describe('sync engine', () => {
     expect(a.transport.online()).toBe(true)
     expect(a.errors.map((error) => error.code)).toContain('data:SYNC_STOPPED')
     expect((await a.region.outbox(10))._unsafeUnwrap().length).toBeGreaterThan(0)
+  })
+
+  it('signs out at the gateway once a reload dropped what the gateway refused', async () => {
+    const { a, stub } = await twoDevices()
+
+    stub.rejectEverything()
+    a.transport.goOffline()
+    writeName(a.region, 'Ana')
+
+    const outcome = a.engine.signOut()
+
+    // The batch is rejected, rolled back and rejected again: the region reloads from the server
+    // without what the gateway refused, and nothing is left to send.
+    a.transport.goOnline()
+
+    expect(await outcome).toBe('signed-out')
+    expect(stub.signOuts()).toBe(1)
+    expect(a.errors.map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
   })
 
   it('reports offline when the channel stays down for 5 seconds', async () => {
