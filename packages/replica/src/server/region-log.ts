@@ -7,6 +7,7 @@ import { messageOf } from '../failure'
 import type { CompactionOutcome } from '../protocol'
 
 import { acceptRefusal } from './accept-refusal'
+import type { BatchWriter } from './batch-writer'
 import acceptStatement from './surql/server-accept.surql'
 import compactStatement from './surql/server-compact.surql'
 import headStatement from './surql/server-head.surql'
@@ -66,7 +67,8 @@ function refusalOf(cause: unknown): CompactionOutcome | undefined {
 /**
  * The server's log of one region. Each accepted batch is stored with its projection in one
  * transaction, under the next number of the region's head row, so the log has no gaps and
- * holds only batches whose projection the schema accepted. Several processes may hold a log
+ * holds only batches whose projection the schema accepted, each Loro peer writing as one
+ * identity, the one whose batch it first came with. Several processes may hold a log
  * of the same region: the database issues the numbers, and a transaction that conflicts with
  * another process's is replayed. Within a process, the accepts and compactions of one log run
  * one at a time. A compaction replaces the rows up to a point with a snapshot of the server's
@@ -129,12 +131,17 @@ export class RegionLog {
    * Writes the batch's projection and its log row in one transaction; resolves to the batch's
    * seq. A record that belongs to another region (it exists without this region's marker, or a
    * deletion names one this region never projected) refuses the batch with a
-   * `data:WRITE_REJECTED` whose message starts with `ownership`.
+   * `data:WRITE_REJECTED` whose message starts with `ownership`. A batch that brings changes of a
+   * peer another identity's batch was accepted under refuses with a `data:WRITE_REJECTED` whose
+   * message starts with `peer`; otherwise each peer it brings is bound to `writer.identity` in the
+   * same transaction.
    */
-  accept(plan: AcceptPlan): ResultAsync<number, DataError> {
+  accept(plan: AcceptPlan, writer: BatchWriter): ResultAsync<number, DataError> {
     const { region } = this
     const vars = {
       region,
+      identity: writer.identity,
+      peers: writer.peers,
       upserts: plan.upserts,
       deletes: plan.deletes,
       bytes: plan.bytes,

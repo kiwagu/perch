@@ -1,7 +1,8 @@
 -- Teardown for seeded accounts: an operator task on a stand, not a product command.
 -- Removes the accounts addressed to the seed domain (only those of them at `$emails` when
 -- it is given) with their profiles and the server's copy of their private regions
--- (`identity:<account key>`): heads, snapshots, the update log and the projected keys.
+-- (`identity:<account key>`): heads, snapshots, the update log, the projected keys and the
+-- identities their Loro peers are bound to.
 -- Only seed data uses that domain, so real accounts never match. The organisations the
 -- accounts created go too: their memberships, their databases `t_<key>` and their rows in
 -- the directory; the accounts' memberships in organisations of others are deleted too.
@@ -45,4 +46,5 @@ FOR $region IN $regions {
   DELETE _replica_update WHERE region = $region;
 };
 DELETE _replica_projected WHERE region IN $regions;
+DELETE _replica_peer WHERE region IN $regions;
 DELETE identity WHERE id IN $accounts;

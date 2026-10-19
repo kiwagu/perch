@@ -2,10 +2,9 @@ import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { noteIdFactory } from '@workspace/ids'
-import { defineAbilityFor } from '@workspace/kernel'
 
 import bumpHeadStatement from '../__fixtures__/bump-head.surql'
-import { noteCreate, noteUpdate, replicaSchema } from '../__fixtures__/note'
+import { noteCreate, noteUpdate } from '../__fixtures__/note'
 
 import {
   actor,
@@ -13,6 +12,7 @@ import {
   editFrom,
   hubWithHistory,
   hubWithTwoSubscribers,
+  memberOf,
   nameInSnapshot,
   openDatabase,
   openHub,
@@ -23,18 +23,13 @@ import {
 } from './__fixtures__/hub'
 import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
 import { singleDatabase } from './region-databases'
-import type { Actor, Subscriber } from './region-hub'
+import type { Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
 import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
 
 afterEach(closeHubs)
-
-/** What a member of the organisation does through a subscription: the abilities its role gives. */
-function memberOf(id: string, role: 'member' | 'admin' = 'member'): Actor {
-  return { id, ability: defineAbilityFor({ id, role }, replicaSchema) }
-}
 
 describe('region hub', () => {
   it('acknowledges a push and sends it to the other subscribers of the region', async () => {

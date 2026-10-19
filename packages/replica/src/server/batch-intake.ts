@@ -7,6 +7,7 @@ import type { RejectReason, ServerMessage } from '../protocol'
 import type { ReplicaSchema } from '../schema'
 
 import { validateBatch } from './batch-validator'
+import { batchWriter } from './batch-writer'
 import type { Loaded, RegionState } from './held-regions'
 import type { Actor, Subscriber } from './subscription'
 
@@ -32,7 +33,8 @@ export interface PushedBatch {
 
 /**
  * Takes in a batch a subscribed device pushed, in the region's queue: checks it on a fork of the
- * region's document against `actor` and, when the log accepts it with its projection, imports it,
+ * region's document against `actor` and, when the log accepts it with its projection and binds the
+ * peers whose changes it brings to the pushing identity, imports it,
  * acknowledges it with its number and sends it to the region's other subscribers. A refused batch
  * is answered with a reject and changes nothing (`foreign-owner` when it writes a record of another
  * region); a batch the region already holds, delivered again, is acknowledged without a new log row.
@@ -85,7 +87,7 @@ export function takeInBatch(
   }
 
   return log
-    .accept(plan)
+    .accept(plan, batchWriter(actor.id, doc, fork))
     .andThen((head) => {
       // In a buffer of their own, as a message holds them (as `exportFrom` in the hub does).
       const bytes = new Uint8Array(plan.bytes)

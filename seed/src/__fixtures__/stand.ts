@@ -46,6 +46,7 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     '_replica_snapshot',
     '_replica_update',
     '_replica_projected',
+    '_replica_peer',
   ],
 }
 

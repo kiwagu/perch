@@ -21,14 +21,30 @@ const SCHEMA_VIOLATIONS: readonly RegExp[] = [
  */
 const OWNERSHIP_REFUSAL = /^An error occurred: ownership:(.+)$/
 
+/** What the accept transaction throws for a batch under a peer another identity writes as, `peer:<peer>`. */
+const PEER_REFUSAL = /^An error occurred: peer:(.+)$/
+
 function breaksSchemaRule(cause: unknown): boolean {
   const message = messageOf(cause)
 
   return SCHEMA_VIOLATIONS.some((pattern) => pattern.test(message))
 }
 
-/** The error a failed accept transaction of `region` stands for: a record of another region, a schema rule, or a failure. */
+/**
+ * The error a failed accept transaction of `region` stands for: a record of another region, a
+ * peer another identity writes as, a schema rule, or a failure.
+ */
 export function acceptRefusal(region: string, cause: unknown): DataError {
+  const peer = PEER_REFUSAL.exec(messageOf(cause))?.[1]
+
+  if (peer) {
+    return dataError(
+      'data:WRITE_REJECTED',
+      `peer: ${peer} writes as another identity in ${region}`,
+      cause,
+    )
+  }
+
   const foreign = OWNERSHIP_REFUSAL.exec(messageOf(cause))?.[1]
 
   if (foreign) {

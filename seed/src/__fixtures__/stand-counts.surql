@@ -33,7 +33,7 @@ RETURN {
     SELECT VALUE id FROM _replica_snapshot WHERE region IN $regions
   ) + array::len(SELECT VALUE id FROM _replica_update WHERE region IN $regions) + array::len(
     SELECT VALUE id FROM _replica_projected WHERE region IN $regions
-  ),
+  ) + array::len(SELECT VALUE id FROM _replica_peer WHERE region IN $regions),
   accepted: math::sum(
     SELECT VALUE head FROM _replica_head WHERE region IN $regions
   ),

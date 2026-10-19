@@ -17,9 +17,10 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
 
 - `schema/common/`: `fn::entity_id` (record keys in the workspace id format) and the replica's
   own tables (`_replica_snapshot`, `_replica_update`, `_replica_outbox`, `_replica_projected`,
-  `_replica_head`, `_replica_cursor`: snapshots, the update log numbered without gaps, the
-  outbox, projected records, the pull cursor; a number is unique per region in the log and the
-  outbox), closed to every record user and never replicated.
+  `_replica_peer`, `_replica_head`, `_replica_cursor`: snapshots, the update log numbered
+  without gaps, the outbox, projected records, the identity each Loro peer of a region writes
+  as (bound at its first accepted batch), the pull cursor; a number is unique per region in the
+  log and the outbox), closed to every record user and never replicated.
 - `schema/directory/`: `identity` (accounts and the `identity` record access with its refresh
   keys), `profile` (its owner reads it; only the gateway writes it, through replication; a bio
   holds at most 2000 characters), `tenant` (an organisation: its key of 2 to 32 lowercase

@@ -64,12 +64,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
 - `@workspace/replica/server`: `RegionLog.load(local, region)` resolves to the log and the
-  region's document built from its snapshot and later rows; `accept(plan)` writes an
+  region's document built from its snapshot and later rows; `accept(plan, writer)` writes an
   `AcceptPlan` (its `ProjectedRow` upserts, `DeletedRow` deletes, update bytes and version)
-  and its log row in one transaction and resolves to the batch's number, refusing a
-  projection that breaks a schema rule, or that writes a record of another region (one that
-  exists without this region's projection marker, or a deletion of one), with
-  `data:WRITE_REJECTED` (the latter's message starts with `ownership`); `compact(covers,
+  and its log row in one transaction and resolves to the batch's number, binding each Loro
+  peer the `BatchWriter` names (the peers whose changes the batch brings) to its pushing
+  identity in the same transaction, refusing a projection that breaks a schema rule, a record
+  of another region (one that exists without this region's projection marker, or a deletion of
+  one), or a batch of another identity under a bound peer, with `data:WRITE_REJECTED` (the
+  second's message starts with `ownership`, the third's with `peer`); `compact(covers,
   proposal, snapshotOf)` resolves to a `CompactionOutcome`: a proposal whose version matches the
   version stored with row `covers` is accepted, and the log stores the snapshot `snapshotOf`
   exports for that version, never the proposal; `head()`, `covers()`. `validateBatch(input)` applies a
