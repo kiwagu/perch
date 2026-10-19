@@ -13,6 +13,7 @@ import {
 } from '../protocol'
 import type { OutboxRow, RegionDoc } from '../region-doc'
 
+import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
 import type { DrainTarget } from './outbox-drain'
 import type { SyncTransport } from './transport'
 
@@ -37,13 +38,7 @@ type PushOutcome = 'sent' | 'empty' | 'down'
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
 
-/**
- * How long a push, a pull or a probe waits for its answer before it is given up for now, and
- * the connection with it: a connection that stopped answering is closed and made again.
- */
-export const ANSWER_TIMEOUT_MS = 30_000
-
-const NO_TIMEOUT = (): void => {}
+export { ANSWER_TIMEOUT_MS }
 
 /** A pushed batch waiting for its answer. */
 interface Flight {
