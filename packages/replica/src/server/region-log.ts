@@ -6,6 +6,7 @@ import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { messageOf } from '../failure'
 import type { CompactionOutcome } from '../protocol'
 
+import { acceptRefusal } from './accept-refusal'
 import acceptStatement from './surql/server-accept.surql'
 import compactStatement from './surql/server-compact.surql'
 import headStatement from './surql/server-head.surql'
@@ -49,36 +50,11 @@ interface StoredRow {
   readonly bytes: ArrayBuffer
 }
 
-/**
- * How SurrealDB words a write that breaks a schema rule: a field's type, a field's ASSERT,
- * a UNIQUE index, a READONLY field, or a field a SCHEMAFULL table does not define.
- */
-const SCHEMA_VIOLATIONS: readonly RegExp[] = [
-  /^Couldn't coerce value for field `/,
-  /, but field must conform to: /,
-  /^Database index `[^`]+` already contains /,
-  /^Found changed value for field `[^`]+`, with record `.+`, but field is readonly$/,
-  /^Found field '[^']+', but no such field exists for table /,
-]
-
 /** What the compaction transaction throws when the stored head row refuses the proposal. */
 const COMPACTION_REFUSALS: ReadonlyArray<readonly [thrown: string, CompactionOutcome]> = [
   ['compaction:beyond-head', 'beyond-head'],
   ['compaction:stale', 'stale'],
 ]
-
-/**
- * What the accept transaction throws for a record of another region, `ownership:<entry>`, as
- * SurrealDB reports a THROW: `An error occurred: <text>`. Anchored, so a record key that looks
- * like it, inside another error's message, is not taken for a refusal.
- */
-const OWNERSHIP_REFUSAL = /^An error occurred: ownership:(.+)$/
-
-function breaksSchemaRule(cause: unknown): boolean {
-  const message = messageOf(cause)
-
-  return SCHEMA_VIOLATIONS.some((pattern) => pattern.test(message))
-}
 
 /** The outcome a refused compaction stands for; SurrealDB reports a THROW as `An error occurred: <text>`. */
 function refusalOf(cause: unknown): CompactionOutcome | undefined {
@@ -167,21 +143,7 @@ export class RegionLog {
 
     return this.#serialize(() =>
       this.#transact(acceptStatement, vars)
-        .mapErr((cause) => {
-          const foreign = OWNERSHIP_REFUSAL.exec(messageOf(cause))?.[1]
-
-          if (foreign) {
-            return dataError(
-              'data:WRITE_REJECTED',
-              `ownership: ${foreign} is not a record of ${region}`,
-              cause,
-            )
-          }
-
-          return breaksSchemaRule(cause)
-            ? dataError('data:WRITE_REJECTED', `a batch of ${region} breaks a schema rule`, cause)
-            : dataError('data:WRITE_FAILED', `could not accept a batch of ${region}`, cause)
-        })
+        .mapErr((cause) => acceptRefusal(region, cause))
         .map((results) => {
           // Every statement of the transaction yields a result: RETURN's is the one before COMMIT's.
           this.#head = Number(results.at(-2))
