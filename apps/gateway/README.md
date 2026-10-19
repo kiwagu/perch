@@ -28,7 +28,7 @@ identity), so a device holds one live grant and a pair it left behind dies with 
 revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
 is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
 cannot be reached answers 500, here and on every route and hello below. Devices sync over
-a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 4 (the
+a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 5 (the
 pair is renewed with the refresh key when the access token no longer works, and the new pair is
 sent first).
 The hello is bound to the device's row: a renewal moves the row from the grant it spent to the

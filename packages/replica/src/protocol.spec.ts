@@ -46,13 +46,27 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 4 only', () => {
+  it('takes a hello of protocol 5 only', () => {
     const hello = (protocol: number) =>
       JSON.stringify({ type: 'hello', protocol, access: 'a', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(4)
-    expect(decodeMessage(clientMessage, hello(4)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(3)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(5)
+    expect(decodeMessage(clientMessage, hello(5)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(4)).isErr()).toBe(true)
+  })
+
+  it("decodes a reject that names a batch under another identity's peer", () => {
+    const reject: ServerMessage = {
+      type: 'reject',
+      region: 'tenant:acme',
+      batch: 3,
+      reason: 'foreign-peer',
+      detail: 'peer: 42 writes as another identity in tenant:acme',
+    }
+
+    expect(
+      decodeMessage(serverMessage, encodeMessage(serverMessage, reject))._unsafeUnwrap(),
+    ).toEqual(reject)
   })
 
   it('takes a hello that names its device in 1 to 64 characters', () => {

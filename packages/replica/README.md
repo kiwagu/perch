@@ -47,8 +47,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (4), `CLOSE`, `MAX_PUSH_UPDATES`,
-  `rejectReason`, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (5), `CLOSE`, `MAX_PUSH_UPDATES`,
+  `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
+  writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
   `hello` names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
   `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
