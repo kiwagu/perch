@@ -208,10 +208,11 @@ export class IdentitySessions {
   }
 
   /**
-   * Accepts the access token, or renews the pair with the refresh key when the token no longer
-   * works, once `renewal` lets it: a refresh key comes with its gate, and a renewal the gate
-   * refuses fails `data:RATE_LIMITED`, its key unspent. It records nothing: the caller binds the
-   * device to its row.
+   * Accepts the access token, or renews the pair with the refresh key when the database refused
+   * the token, once `renewal` lets it: a refresh key comes with its gate, and a renewal the gate
+   * refuses fails `data:RATE_LIMITED`, its key unspent. A token the database could not judge
+   * fails as it is, with no gate asked and nothing spent. It records nothing: the caller binds
+   * the device to its row.
    */
   authenticate(tokens: {
     readonly access: string
@@ -245,8 +246,14 @@ export class IdentitySessions {
           }),
         )
         .orElse((error) => {
-          if (refresh === undefined || renewal === undefined) {
+          // Only a token the database refused is renewed: one it could not judge may still work.
+          if (refresh === undefined || !keysRefused(error)) {
             return errAsync(error)
+          }
+
+          // The overloads give every refresh key its gate: one without is the gateway's failure.
+          if (renewal === undefined) {
+            return errAsync(unjudged('a refresh key came without its renewal gate'))
           }
 
           // Counted before the refresh key is exchanged: a refused renewal spends nothing.

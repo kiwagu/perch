@@ -804,6 +804,26 @@ describe('SyncConnection', () => {
     expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
   })
 
+  it('charges no renewal for a hello whose access token the database could not judge', async () => {
+    const asked: string[] = []
+    const fixture = await connect({
+      renewals: (device) => () => {
+        asked.push(device)
+
+        return true
+      },
+    })
+    const end = fixture.outage()
+
+    await hello(fixture.connection, { access: 'stale', refresh: fixture.ann.tokens.refresh })
+
+    expect(fixture.socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(reported.splice(0).map((error) => error.code)).toEqual(['data:QUERY_FAILED'])
+    expect(asked).toEqual([])
+
+    end()
+  })
+
   it('keeps the parked pair when the keys of a hello could not be judged', async () => {
     let duringRenewal = () => {}
     const fixture = await connect({ onAuthenticated: () => duringRenewal() })

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createAuth, type DataError, dataError, type LocalDb } from '@workspace/data'
@@ -12,7 +12,12 @@ import { DIRECTORY, NAMESPACE } from '../config'
 
 import liveGrantsStatement from './__fixtures__/grants-live.surql'
 import { DeviceSessions, type DeviceTouch } from './device-sessions'
-import { grantIdOf, IdentitySessions, type RenewalGate } from './identity-sessions'
+import {
+  type AuthenticatedDevice,
+  grantIdOf,
+  IdentitySessions,
+  type RenewalGate,
+} from './identity-sessions'
 import { issuedAtOf } from './token-claims'
 
 const ann = { email: 'ann@example.test', password: 'pass-word-1' }
@@ -259,6 +264,60 @@ describe('IdentitySessions', () => {
     })
     expect(asked).toBe(1)
     // The refresh key was not spent: the same pair renews once the gate lets it through.
+    expect((await sessions.authenticate(stale, anyRenewal))._unsafeUnwrap().renewed).toBe(true)
+  })
+
+  it('asks no gate and spends nothing when the database could not judge the access token', async () => {
+    const local = await testDb()
+    const sessions = sessionsOver(local)
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const stale = { access: 'expired.or.garbage', refresh: tokens.refresh }
+    // The check of the access token fails as an outage would; a refresh exchange would go through.
+    const unjudging = new IdentitySessions({
+      openAuth: () => {
+        const auth = createAuth(local, identityAccess)
+
+        return {
+          ...auth,
+          resume: (presented) =>
+            presented.refresh === undefined
+              ? errAsync(dataError('data:QUERY_FAILED', 'the database cannot be reached'))
+              : auth.resume(presented),
+        }
+      },
+      scope: identityAccess,
+      onFailure: (error) => reportedFailures.push(error),
+      devices: recordingDevices().devices,
+      clock: manualClock(),
+    })
+    let asked = 0
+
+    const failed = await unjudging.authenticate(stale, () => {
+      asked += 1
+
+      return true
+    })
+
+    expect(failed._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    expect(asked).toBe(0)
+    // The refresh key was not spent: the same pair renews once the database answers.
+    expect((await sessions.authenticate(stale, anyRenewal))._unsafeUnwrap().renewed).toBe(true)
+  })
+
+  it('fails a refresh key that came without a gate as unjudged, never as refused keys', async () => {
+    const sessions = await testSessions()
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const stale = { access: 'expired.or.garbage', refresh: tokens.refresh }
+    // The overloads give every refresh key its gate; a caller typed loosely can still leave it out.
+    const loose: {
+      authenticate(tokens: {
+        readonly access: string
+        readonly refresh?: string
+      }): ResultAsync<AuthenticatedDevice, DataError>
+    } = sessions
+
+    expect((await loose.authenticate(stale))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    // Nothing was spent.
     expect((await sessions.authenticate(stale, anyRenewal))._unsafeUnwrap().renewed).toBe(true)
   })
 

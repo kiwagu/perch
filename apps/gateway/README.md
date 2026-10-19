@@ -228,10 +228,11 @@ emails, addresses from many IPv6 /64s) lock everyone else out, while an evicted 
 a fresh window.
 Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
 id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
-the address charged only when the device's limit allows. A renewal is counted when the access
-token was refused and a refresh key came with it, before the key is exchanged, so a refused one
-asks the database nothing and spends nothing (`data:RATE_LIMITED`); a working access token counts
-nothing. A hello's address is the one its upgrade request came from. A hello whose renewal is
+the address charged only when the device's limit allows. A renewal is counted when the database
+refused the access token and a refresh key came with it, before the key is exchanged, so a
+refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a working access
+token counts nothing, and neither does one the database could not judge, which fails as it is (a
+hello closes as a failed server, the pair sign-out answers 500). A hello's address is the one its upgrade request came from. A hello whose renewal is
 refused is closed with 1013 (`too many renewals`, try again later): the client ends its channel
 only on 4000, 4001, 4400 and 4401, so it reconnects with its backoff and keeps its keys. The pair
 sign-out answers 429 `rate-limited` with `Retry-After`, revoking nothing. `POST /auth/sign-out`
