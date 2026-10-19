@@ -28,7 +28,10 @@ DEFINE INDEX OVERWRITE identity_email ON identity FIELDS email UNIQUE;
 -- Access tokens are short-lived; the refresh key that comes with them renews the
 -- session for up to 30 days, is replaced on every use and can be revoked. A token issued
 -- before the identity's `sessions_revoked_at` is refused; a refresh exchange carries no token,
--- so the clause does not block it: only revoking the identity's grants does.
+-- so the clause does not block it: only revoking the identity's grants does. Its tokens are
+-- signed with the key whoever applies the schema gives as `$jwt_key`: on a server the
+-- gateway's fixed key, so applying the schema again leaves every issued token valid; a
+-- database nobody signs in to from outside gets a key of its own at each apply.
 DEFINE ACCESS OVERWRITE identity ON DATABASE TYPE RECORD
   SIGNUP (
     CREATE type::record('identity', fn::entity_id('idn')) SET
@@ -43,6 +46,7 @@ DEFINE ACCESS OVERWRITE identity ON DATABASE TYPE RECORD
       AND crypto::argon2::compare(password, $password)
   )
   WITH REFRESH
+  WITH JWT ALGORITHM HS512 KEY $jwt_key
   AUTHENTICATE {
     IF $token.iat != NONE
       AND $auth.sessions_revoked_at != NONE

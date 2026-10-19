@@ -51,3 +51,8 @@ DEFINE FIELD OVERWRITE hash ON __seed TYPE string;
 DEFINE FIELD OVERWRITE applied_at ON __seed TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX OVERWRITE by_seed_key ON __seed FIELDS key UNIQUE;
+
+-- The suites' test databases sign their record users' tokens with a key of their own: the
+-- identity access method takes its key from $jwt_key, which a server's gateway passes when it
+-- applies the schema and nothing here stores.
+DEFINE PARAM OVERWRITE $jwt_key VALUE rand::string(64) PERMISSIONS NONE;

@@ -35,8 +35,11 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   token issued before it ("signed out everywhere"). A refresh exchange carries no token, so the
   clause does not block it: only revoking the identity's grants
   (`ACCESS identity ON DATABASE REVOKE WHERE subject.record = <identity>`, which the gateway's
-  namespace user may run) does. Redefining the access method rotates its key, so tokens issued
-  before a schema re-apply stop working.
+  namespace user may run) does. The access method signs its tokens with the key whoever applies
+  the schema gives as `$jwt_key`: a server applies it with the gateway's fixed key, so a schema
+  re-apply leaves every issued token valid; without a fixed key (a device's replica, a test) each
+  apply gives it a key of its own and earlier tokens stop working. Refresh grants survive a
+  redefinition, so a new key costs each device one renewal, not its session.
 - `schema/tenant/`: `member` (a member of the organisation keyed by the identity id, with its
   role; server-only) and `note` (the organisation's notes in the `tenant` region, each naming
   its author member, a text of at most 500 characters; only the gateway reads or writes it on
@@ -46,7 +49,10 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   into `src/replica.schema.gen.ts`, so every runtime that replicates reads the same one.
 - `tests/suites/*.toml`: SurrealKit suites, run on one ephemeral database that holds every
   schema folder: the permissions of `identity`, `profile`, `membership` (with `tenant`) and `device_session`, the
-  structure of the tenant tables (`tenant-structure`), and the generated suites of the shapes;
+  structure of the tenant tables (`tenant-structure`), and the generated suites of the shapes.
+  `setup.surql`, which SurrealKit runs in each test database before it applies the schema, gives
+  that database a random `$jwt_key` for the identity access method (test databases only: a
+  server's key is never stored as a parameter, which `INFO FOR DB` would print in clear);
   `tests/anonymous`: the unauthenticated-client check over raw HTTP.
 
 ## Commands
