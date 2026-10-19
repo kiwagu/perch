@@ -28,7 +28,8 @@ state machine and one file per policy (`profile-name.policy.ts`, `profile-bio.po
   changes this device could not send; the sign-in page says so when the gateway refused the
   device's keys while changes remain to send after the next sign-in, and says "You were signed
   out from another device." when this device was signed out from another one
-  (`user.sign-in.notice.signed-out-elsewhere`).
+  (`user.sign-in.notice.signed-out-elsewhere`); it also says to wait when the gateway limits
+  the attempts (`data:RATE_LIMITED`, `user.sign-in.error.rate-limited`).
 
 ## Commands
 

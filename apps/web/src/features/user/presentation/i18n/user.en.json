@@ -11,6 +11,7 @@
   "user.sign-in.notice.signed-out-elsewhere": "You were signed out from another device.",
   "user.sign-in.error.invalid-credentials": "Wrong email or password.",
   "user.sign-in.error.sign-up-rejected": "An account cannot be created with this email.",
+  "user.sign-in.error.rate-limited": "Too many attempts. Wait a few minutes and try again.",
   "user.sign-in.error.name-required": "Enter your name.",
   "user.sign-in.error.name-too-long": "Use at most 80 characters for the name.",
   "user.sign-in.error.failed": "Something went wrong. Try again.",

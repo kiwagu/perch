@@ -106,6 +106,7 @@ describe('OrganisationView without memberships', () => {
       ['organisation:NAME_REQUIRED', 'organisation.error.name-required'],
       ['organisation:NAME_TOO_LONG', 'organisation.error.name-too-long'],
       ['key-taken', 'organisation.error.key-taken'],
+      ['rate-limited', 'organisation.error.rate-limited'],
       ['not-a-member', 'organisation.error.failed'],
       ['data:OFFLINE', 'organisation.error.failed'],
     ]
@@ -344,6 +345,7 @@ describe('OrganisationView of an administrator', () => {
       ['no-such-identity', 'organisation.error.no-such-identity'],
       ['already-member', 'organisation.error.already-member'],
       ['not-admin', 'organisation.error.not-admin'],
+      ['rate-limited', 'organisation.error.rate-limited'],
       ['self', 'organisation.error.failed'],
     ]
 

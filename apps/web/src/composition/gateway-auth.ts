@@ -68,6 +68,7 @@ const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly mes
   new Map([
     [401, { code: 'data:INVALID_CREDENTIALS', message: 'wrong email or password' }],
     [409, { code: 'data:SIGN_UP_REJECTED', message: 'sign-up was rejected' }],
+    [429, { code: 'data:RATE_LIMITED', message: 'too many attempts' }],
   ])
 
 function readDevice(response: Response): ResultAsync<SignedInDevice, DataError> {
@@ -145,6 +146,13 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
 
       if (response.status === 401) {
         return errAsync(dataError('data:AUTH_FAILED', 'the gateway no longer takes the pair'))
+      }
+
+      // Asked to wait: the pair is still live, so this is not a refusal for good.
+      if (response.status === 429) {
+        return errAsync(
+          dataError('data:RATE_LIMITED', 'the gateway asks to wait before the sign-out'),
+        )
       }
 
       // Any other 4xx is a request the gateway will refuse however often it is sent.

@@ -34,6 +34,8 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
       return t('user.sign-in.error.invalid-credentials')
     case 'data:SIGN_UP_REJECTED':
       return t('user.sign-in.error.sign-up-rejected')
+    case 'data:RATE_LIMITED':
+      return t('user.sign-in.error.rate-limited')
     case 'profile:NAME_REQUIRED':
       return t('user.sign-in.error.name-required')
     case 'profile:NAME_TOO_LONG':

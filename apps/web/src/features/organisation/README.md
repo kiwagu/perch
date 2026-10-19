@@ -33,7 +33,7 @@ on the replica schema are applied on the device before a command runs
   member's own notes are marked "Yours", and a change the rules forbid is explained
   (`note:FORBIDDEN`). An administrator also sees the members, invites an existing account by
   email and removes a member. The page follows the memberships as they change, without a
-  reload.
+  reload. A refused change the gateway limits (`rate-limited`) is worded as "too many attempts".
 
 ## Commands
 

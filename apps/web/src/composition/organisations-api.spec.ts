@@ -111,6 +111,20 @@ describe('organisationsApi', () => {
     expect(refused.message).toBe('key-taken')
   })
 
+  it('maps 429 rate-limited to data:WRITE_REJECTED with the code as message', async () => {
+    const { fetcher } = fakeFetch(respond(429, { code: 'rate-limited' }))
+    const api = organisationsApi('/backend', {
+      token: () => 'access-1',
+      device: () => 'device-1',
+      renew: () => Promise.resolve(false),
+      fetcher,
+    })
+    const refused = (await api.create({ key: 'acme', name: 'Acme' }))._unsafeUnwrapErr()
+
+    expect(refused.code).toBe('data:WRITE_REJECTED')
+    expect(refused.message).toBe('rate-limited')
+  })
+
   it('a fetch that throws is data:OFFLINE', async () => {
     const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
     const api = organisationsApi('/backend', {

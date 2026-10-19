@@ -16,6 +16,8 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
       return t('organisation.error.no-such-identity')
     case 'already-member':
       return t('organisation.error.already-member')
+    case 'rate-limited':
+      return t('organisation.error.rate-limited')
     case 'not-admin':
       return t('organisation.error.not-admin')
     case 'note:FORBIDDEN':
