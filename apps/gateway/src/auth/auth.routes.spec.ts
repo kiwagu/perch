@@ -294,6 +294,39 @@ describe('authRoutes limits', () => {
     }
   })
 
+  it('answers 400 to an email of more than 254 characters and counts nothing for it', async () => {
+    const sessions = stubSessions()
+    const { ask } = limitedRoutes(sessions)
+    const domain = '@example.test'
+    /** An email of `length` characters of its own for the attempt numbered `n`. */
+    const emailOf = (n: number, length: number) =>
+      `${String(n).padStart(length - domain.length, 'b')}${domain}`
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const email = emailOf(attempt, 255)
+
+      expect(await answer(await ask(post('/auth/sign-in', { ...wrongPassword, email })))).toEqual({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+      expect(await answer(await ask(post('/auth/sign-up', { ...annOnLaptop, email })))).toEqual({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+    }
+
+    expect(sessions.calls).toEqual([])
+
+    for (let attempt = 0; attempt < 19; attempt += 1) {
+      expect((await ask(post('/auth/sign-in', annOnLaptop)))?.status).toBe(200)
+    }
+
+    // The longest email an address can have is taken as any other.
+    const longest = { ...wrongPassword, email: emailOf(0, 254) }
+
+    expect((await ask(post('/auth/sign-in', longest)))?.status).toBe(401)
+  })
+
   it('refuses a sign-in of an email after 10 wrong passwords from any addresses, whatever its case, without asking the service', async () => {
     const sessions = stubSessions()
     const { clock, ask } = limitedRoutes(sessions)

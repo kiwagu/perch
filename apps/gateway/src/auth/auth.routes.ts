@@ -14,9 +14,12 @@ import type { DeviceSessions } from './device-sessions'
 import { type IdentitySessions, keysRefused, type SignedIn } from './identity-sessions'
 import { issuedAtOf } from './token-claims'
 
-/** What a device sends to sign up or in: the credentials, and the device's id and label. */
+/**
+ * What a device sends to sign up or in: the credentials, and the device's id and label. An email
+ * is at most 254 characters, the longest an address can be, before a sign-in counts it as a key.
+ */
 const credentialsBody = z.object({
-  email: z.email(),
+  email: z.email().max(254),
   password: z.string().min(8).max(200),
   device: z.object({ id: deviceId, label: z.string().max(60) }),
 })

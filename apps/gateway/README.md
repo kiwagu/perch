@@ -6,8 +6,8 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
 routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
-`{ email, password, device: { id, label } }`, the device's own id of 1 to 64 characters and a
-label of at most 60, answering `{ identity, tokens, memberships }`, the memberships being the
+`{ email, password, device: { id, label } }`, an email of at most 254 characters, the device's
+own id of 1 to 64 characters and a label of at most 60, answering `{ identity, tokens, memberships }`, the memberships being the
 organisations the identity belongs to), each call on a database session of its own that is
 closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in records the
 device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
