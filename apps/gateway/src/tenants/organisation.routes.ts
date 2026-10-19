@@ -92,7 +92,7 @@ export interface OrganisationRoutesOptions {
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
- *   hour per identity.
+ *   hour per identity and 30 per client address.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
  * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
@@ -130,14 +130,14 @@ export function organisationRoutes(
       errorResponse,
     )
 
-  const create: Handler = async (identity, request) => {
+  const create: Handler = async (identity, request, from) => {
     const body = createBody.safeParse(await readBody(request))
 
     if (!body.success) {
       return badRequest()
     }
 
-    const allowance = options.limits.createOrganisation(identity)
+    const allowance = options.limits.createOrganisation(identity, from)
 
     if (!allowance.allowed) {
       return tooMany(allowance)

@@ -47,10 +47,14 @@ export const IDENTITY_INVITES = { limit: 30, windowMs: 10 * minute } as const
  */
 export const ADDRESS_INVITES = { limit: 60, windowMs: 10 * minute } as const
 
-/**
- * Organisations created per identity, 10 per hour: each creation provisions a database.
- */
+/** Organisations created per identity, 10 per hour: each creation provisions a database. */
 export const IDENTITY_ORGANISATIONS = { limit: 10, windowMs: 60 * minute } as const
+
+/**
+ * Organisations created per client address, 30 per hour: one address cannot farm identities to
+ * provision databases beyond the per-identity limit.
+ */
+export const ADDRESS_ORGANISATIONS = { limit: 30, windowMs: 60 * minute } as const
 
 export interface RequestLimitsOptions {
   readonly clock: Clock
@@ -79,7 +83,8 @@ function emailKey(email: string): string {
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
  * each email, the refresh-key renewals of each device and each client address, the invitations of
- * each inviting identity and each client address, and the organisations each identity creates.
+ * each inviting identity and each client address, and the organisations each identity and each
+ * client address create.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
@@ -89,6 +94,7 @@ export class RequestLimits {
   private readonly identityInvites: FixedWindow
   private readonly addressInvites: FixedWindow
   private readonly identityOrganisations: FixedWindow
+  private readonly addressOrganisations: FixedWindow
 
   constructor(options: RequestLimitsOptions) {
     this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
@@ -101,6 +107,7 @@ export class RequestLimits {
       ...IDENTITY_ORGANISATIONS,
       clock: options.clock,
     })
+    this.addressOrganisations = new FixedWindow({ ...ADDRESS_ORGANISATIONS, clock: options.clock })
   }
 
   /** Takes one credential check (a sign-up or a sign-in) of the client at `address`. */
@@ -163,8 +170,13 @@ export class RequestLimits {
     return ofIdentity.allowed ? this.addressInvites.take(addressKey(address)) : ofIdentity
   }
 
-  /** Takes one organisation creation of `identity`, before the organisation is provisioned. */
-  createOrganisation(identity: IdentityId): Allowance {
-    return this.identityOrganisations.take(identity)
+  /**
+   * Takes one organisation creation of `identity` from the client at `address`, before the
+   * organisation is provisioned; the address is charged only when the identity's limit allows it.
+   */
+  createOrganisation(identity: IdentityId, address: string): Allowance {
+    const ofIdentity = this.identityOrganisations.take(identity)
+
+    return ofIdentity.allowed ? this.addressOrganisations.take(addressKey(address)) : ofIdentity
   }
 }

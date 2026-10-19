@@ -226,17 +226,63 @@ describe('RequestLimits', () => {
     }
   })
 
-  it('takes 10 organisation creations of one identity within an hour and refuses the 11th', async () => {
+  it('takes 10 organisation creations of one identity within an hour, from any addresses, and refuses the 11th', async () => {
     const { clock, limits } = limitsOn()
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      expect(limits.createOrganisation(ann)).toEqual({ allowed: true })
+      expect(limits.createOrganisation(ann, `203.0.113.${attempt}`)).toEqual({ allowed: true })
     }
 
     await clock.advance(20 * minute)
-    expect(limits.createOrganisation(ann)).toEqual({ allowed: false, retryAfterMs: 40 * minute })
-    expect(limits.createOrganisation(bob)).toEqual({ allowed: true })
+    expect(limits.createOrganisation(ann, '203.0.113.99')).toEqual({
+      allowed: false,
+      retryAfterMs: 40 * minute,
+    })
+    expect(limits.createOrganisation(bob, '203.0.113.99')).toEqual({ allowed: true })
     await clock.advance(40 * minute)
-    expect(limits.createOrganisation(ann)).toEqual({ allowed: true })
+    expect(limits.createOrganisation(ann, '203.0.113.99')).toEqual({ allowed: true })
+  })
+
+  it('takes 30 organisation creations of one address across identities within an hour and refuses the 31st', async () => {
+    const { clock, limits } = limitsOn()
+    const identity = (n: number) => idSchemas.identity.schema.parse(`idn_${n}`)
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect(limits.createOrganisation(identity(attempt % 3), '203.0.113.7')).toEqual({
+        allowed: true,
+      })
+    }
+
+    await clock.advance(15 * minute)
+    expect(limits.createOrganisation(identity(3), '203.0.113.7')).toEqual({
+      allowed: false,
+      retryAfterMs: 45 * minute,
+    })
+    expect(limits.createOrganisation(identity(3), '203.0.113.8')).toEqual({ allowed: true })
+    await clock.advance(45 * minute)
+    expect(limits.createOrganisation(identity(4), '203.0.113.7')).toEqual({ allowed: true })
+  })
+
+  it("leaves the address uncharged by a creation its identity's limit refuses", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      limits.createOrganisation(ann, '203.0.113.7')
+    }
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect(limits.createOrganisation(ann, '203.0.113.7').allowed).toBe(false)
+    }
+
+    // The 20 refusals took nothing of the address's 30: 20 more fit.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const creator = idSchemas.identity.schema.parse(attempt < 10 ? 'idn_bob' : 'idn_cat')
+
+      expect(limits.createOrganisation(creator, '203.0.113.7')).toEqual({ allowed: true })
+    }
+
+    expect(
+      limits.createOrganisation(idSchemas.identity.schema.parse('idn_dan'), '203.0.113.7'),
+    ).toEqual({ allowed: false, retryAfterMs: 60 * minute })
   })
 })

@@ -117,7 +117,7 @@ async function openRoot(): Promise<GatewayRoot> {
 
 /**
  * The routes over a gateway on embedded databases, the directory and one per organisation, with
- * three identities signed up through its sessions: ann, bob and cat.
+ * three identities signed up through its sessions: ann, bob and cat; `signUp` signs up another.
  */
 export async function harness() {
   const root = await openRoot()
@@ -159,5 +159,5 @@ export async function harness() {
       })
     )._unsafeUnwrap()
 
-  return { root, routes, clock, ann, bob, cat, ask, founded, invited }
+  return { root, routes, clock, ann, bob, cat, signUp, ask, founded, invited }
 }

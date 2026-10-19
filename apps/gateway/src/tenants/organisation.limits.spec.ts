@@ -169,6 +169,43 @@ describe('organisationRoutes', () => {
       ).toBe(201)
     })
 
+    it('answers the 31st organisation created from one address within an hour 429 and provisions nothing, while another address still creates', async () => {
+      const { root, ann, bob, cat, signUp, ask } = await harness()
+      const dan = await signUp('dan@example.test')
+      const create = vi.spyOn(root.organisations, 'create')
+      /** Creates the organisation `key` as `creator`, from the address `from` or the default one. */
+      const creates = async (creator: typeof ann, key: string, from?: string) =>
+        ask('POST', '/organisations', {
+          as: creator,
+          body: { key, name: 'Org' },
+          ...(from === undefined ? {} : { from }),
+        })
+
+      for (let n = 0; n < 10; n += 1) {
+        expect((await creates(ann, `ann_${n}`)).status).toBe(201)
+      }
+
+      // Refused by ann's own limit: the address is not charged for it.
+      expect(await creates(ann, 'ann_10')).toEqual({ status: 429, body: { code: 'rate-limited' } })
+
+      for (const [name, creator] of [
+        ['bob', bob],
+        ['cat', cat],
+      ] as const) {
+        for (let n = 0; n < 10; n += 1) {
+          expect((await creates(creator, `${name}_${n}`)).status).toBe(201)
+        }
+      }
+
+      expect(create).toHaveBeenCalledTimes(30)
+      expect(await creates(dan, 'dan_0')).toEqual({
+        status: 429,
+        body: { code: 'rate-limited' },
+      })
+      expect(create).toHaveBeenCalledTimes(30)
+      expect((await creates(dan, 'dan_0', '203.0.113.2')).status).toBe(201)
+    })
+
     it('counts nothing for a creation whose body does not follow the schema', async () => {
       const { ann, ask } = await harness()
 

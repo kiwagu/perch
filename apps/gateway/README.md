@@ -248,9 +248,10 @@ and 60 per client address in 10 minutes, so probing which emails have an account
 identity is charged first and the address only when the identity's limit allows. Every attempt
 counts whatever the answer (an unknown email's 404 included), once the body follows its schema
 (a 400 counts nothing); the limit is checked before the service is asked. Organisation creation,
-`POST /organisations`, is limited to 10 per identity in an hour (each one provisions a database),
-checked before anything is provisioned. A refusal answers 429 `rate-limited` with `Retry-After`
-and is not logged.
+`POST /organisations`, is limited to 10 per identity and 30 per client address in an hour (each
+one provisions a database, and one address cannot farm identities past the identity's limit),
+the address charged only when the identity's limit allows, checked before anything is
+provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not logged.
 
 ## Commands
 
