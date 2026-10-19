@@ -67,8 +67,8 @@ function snapshotAt(doc: LoroDoc, version: VersionVector | undefined): Uint8Arra
  * authoritative document in memory, from the region's own database, held while the region is
  * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
  * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
- * checked on a fork of the document against the identity of the device that pushed it,
- * accepted by the log with its projection, then imported and sent to the region's other
+ * checked on a fork of the document against the identity of the device that pushed it, and its
+ * peers against the identities they write as, accepted by the log with its projection, then imported and sent to the region's other
  * subscribers. A region nobody subscribes to any more is dropped from memory after an idle
  * time, and its database released.
  */

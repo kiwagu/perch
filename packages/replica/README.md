@@ -13,8 +13,10 @@ again at once under the next one);
 updates from a server are stored before they are imported, and a cursor records how far
 the region has been pulled. On the server the same tables hold each region's authoritative
 log: a pushed batch is first applied to a fork of the region's document and checked there,
-then accepted together with its projection in one transaction, under a number without
-gaps, and a compaction replaces rows with the server's own snapshot of the region at that
+then accepted together with its projection and the binding of each Loro peer it writes as
+to the pushing identity in one transaction, under a number without gaps (a batch of another
+identity under a bound peer is refused, so no member can write as another member's device),
+and a compaction replaces rows with the server's own snapshot of the region at that
 row, once a device proposed one of the same version (the proposed bytes are never stored). A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
@@ -108,7 +110,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   (`Actor`: its identity id and its `Ability`); `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
-  ability refuses) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in
+  the region; every region document a device opens writes as a random peer of its own, so honest
+  devices never share one) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
@@ -189,9 +193,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 ## Commands
 
 - `bun run test`: unit tests of the write path, the schema, the protocol, the region
-  references, the batch validator,
+  references, the batch validator, the batch writer,
   the transport, the cadence, the outbox drain, the leader, the hints and the manual clock, and
-  functional tests of the projector, persistence, the server log, the region hub, region sync
+  functional tests of the projector, persistence, the server log, the batch intake, the region
+  hub, region sync
   and the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
 - `bun run measure`: the write path on this machine (1000 create commands, 1000 renames of one
   record, projecting 1000 records into an embedded database), printed as JSON.

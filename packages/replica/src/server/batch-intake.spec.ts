@@ -145,4 +145,28 @@ describe('batch intake', () => {
     expect(textOf(loaded.doc, id)).toBe('hello, edited')
     expect(textOf(bob.doc, id)).toBe('hello, edited')
   })
+
+  it("rejects as foreign-peer a batch that brings changes under a peer another identity's batch was accepted under: nothing stored, imported or sent", async () => {
+    const ann = join('idn_ann')
+    const bob = join('idn_bob')
+    const id = noteIdFactory.create()
+
+    await push(ann, 1, [noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' })])
+
+    const version = loaded.doc.version()
+    const borrowed = underPeerOf(ann.doc, bob.doc)
+
+    await push(bob, 1, [
+      noteCreate(borrowed, { id: noteIdFactory.create(), author: 'idn_bob', text: 'mine' }),
+    ])
+
+    expect(lastAnswer(bob)).toMatchObject({ type: 'reject', batch: 1, reason: 'foreign-peer' })
+    expect(lastAnswer(bob)).toHaveProperty(
+      'detail',
+      expect.stringMatching(/^peer: \d+ writes as another identity in tenant:acme$/),
+    )
+    expect(loaded.log.head()).toBe(1)
+    expect(loaded.doc.version().compare(version)).toBe(0)
+    expect(ann.received.filter((m) => m.type === 'updates')).toEqual([])
+  })
 })

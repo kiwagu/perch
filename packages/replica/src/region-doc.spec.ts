@@ -200,6 +200,21 @@ describe('RegionDoc persistence', () => {
     expect(reopened.persistedSeq()).toBe(3)
     expect(await counts()).toEqual({ snapshots: 1, updates: 1, outbox: 3 })
   })
+
+  // The gateway binds a peer to the identity of its first batch: honest documents never share one.
+  it('writes as a Loro peer of its own at each opening', async () => {
+    const first = await open()
+    const firstPeer = first.doc.peerIdStr
+
+    first.close()
+
+    const second = await open()
+
+    expect(second.doc.peerIdStr).not.toBe(firstPeer)
+    expect(RegionDoc.inMemory('tenant').doc.peerIdStr).not.toBe(
+      RegionDoc.inMemory('tenant').doc.peerIdStr,
+    )
+  })
 })
 
 describe('RegionDoc sync state', () => {
