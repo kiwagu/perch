@@ -18,7 +18,7 @@ export const gatewayConfig = z.object({
    */
   GATEWAY_JWT_KEY: z
     .string()
-    .min(64, { error: 'must be at least 64 characters, such as openssl rand -base64 64' }),
+    .min(64, { error: 'must be at least 64 characters, such as openssl rand -hex 64' }),
   LOG_LEVEL: z.string().optional(),
 })
 

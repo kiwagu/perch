@@ -72,7 +72,7 @@ describe('gatewayConfig.GATEWAY_JWT_KEY', () => {
     const parsed = gatewayConfig.safeParse({ ...env, GATEWAY_JWT_KEY: short })
 
     expect(parsed.error?.issues.map(({ path, message }) => [path.join('.'), message])).toEqual([
-      ['GATEWAY_JWT_KEY', 'must be at least 64 characters, such as openssl rand -base64 64'],
+      ['GATEWAY_JWT_KEY', 'must be at least 64 characters, such as openssl rand -hex 64'],
     ])
     expect(parsed.error?.message).not.toContain(short)
     expect(JSON.stringify(parsed.error?.issues)).not.toContain(short)

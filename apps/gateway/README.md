@@ -190,7 +190,8 @@ against a stand.
 Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
 which the gateway gives the directory schema when it applies it, so a schema applied again (at a
 restart after a schema change, or on a deployment) keeps every issued token valid. It is
-required, with no default and at least 64 characters: generate one with `openssl rand -base64 64`.
+required, with no default and at least 64 characters: generate one with `openssl rand -hex 64`
+(128 characters on one line).
 The local stands use a literal of the mcproc manifest (`stand_jwt_key`), for those stands only;
 everything else that opens a stand's directory (the smoke, the load test's gateway, the seed's
 sweep) applies the schema with that same key, from `mcproc exec`, or it would give the stand a

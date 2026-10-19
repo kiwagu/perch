@@ -32,4 +32,4 @@ the gateway's `/sync`). No dev server runs behind it.
   hand with a password of its own. So is the key the stands' gateways sign tokens with
   (`GATEWAY_JWT_KEY`): a literal of the mcproc manifest, `stand_jwt_key` in its `vars`, given to
   both gateway apps and to `mcproc exec`, for the local stands only; a real deployment sets a key
-  of its own (`openssl rand -base64 64`).
+  of its own (`openssl rand -hex 64`, one line of 128 characters).
