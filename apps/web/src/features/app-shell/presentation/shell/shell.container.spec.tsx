@@ -54,11 +54,27 @@ describe('ShellContainer', () => {
         batch: 1,
         reason: 'forbidden-action',
         detail: 'note/nte_1:update',
+        reloaded: false,
       }),
     )
 
     expect((await screen.findByTestId('app-shell.notice')).textContent).toBe(
       'The server refused a change and undid it on this device.',
+    )
+
+    // The undo was refused too: the region came back from the server without the later changes.
+    act(() =>
+      reject({
+        region: 'tenant:acme',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: 'note/nte_1:update',
+        reloaded: true,
+      }),
+    )
+
+    expect((await screen.findByTestId('app-shell.notice')).textContent).toBe(
+      'The server refused a change again, so it and the later changes not yet sent were undone on this device.',
     )
   })
 })

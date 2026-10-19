@@ -488,19 +488,20 @@ describe('SessionService', () => {
 
     gateway.rejectEverything()
     await writeOffline()
-    await vi.waitFor(() => expect(heard).toHaveLength(1))
+    // Its rollback is refused too: the region is loaded again from the server, which the
+    // listeners hear of as well, and nothing stops.
+    await vi.waitFor(() => expect(heard).toHaveLength(2))
 
-    expect(heard[0]).toMatchObject({
-      region: `identity:${ann.identity.id}`,
-      reason: 'foreign-table',
-    })
-    expect(failures.map((failure) => failure.code)).toContain('data:PUSH_REJECTED')
-    // Its rollback is refused too: the region is loaded again from the server, and stops nothing.
-    await vi.waitFor(() =>
-      expect(failures.map((failure) => failure.code)).toContain('data:REGION_RELOADED'),
-    )
-    expect(heard).toHaveLength(1)
-    expect(failures.map((failure) => failure.code)).not.toContain('data:SYNC_STOPPED')
+    const region = `identity:${ann.identity.id}`
+
+    expect(heard).toMatchObject([
+      { region, reason: 'foreign-table', reloaded: false },
+      { region, reason: 'foreign-table', reloaded: true },
+    ])
+    expect(failures.map((failure) => failure.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
 
     unsubscribe()
     failures.splice(0)

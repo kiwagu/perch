@@ -26,8 +26,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   useEffect(
     () =>
-      session.subscribeRejections(() =>
-        notify({ testId: 'app-shell.notice', text: t('app.shell.rejected') }),
+      session.subscribeRejections((rejection) =>
+        notify({
+          testId: 'app-shell.notice',
+          text: rejection.reloaded ? t('app.shell.reloaded') : t('app.shell.rejected'),
+        }),
       ),
     [session, notify, t],
   )

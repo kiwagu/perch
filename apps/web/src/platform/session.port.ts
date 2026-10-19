@@ -24,6 +24,12 @@ export interface PushRejection {
   readonly batch: number
   readonly reason: string
   readonly detail: string
+  /**
+   * The gateway refused the change again once it was undone: the device dropped its copy of the
+   * region, with the changes made after the refused one and not sent yet, and loaded it again
+   * from the server.
+   */
+  readonly reloaded: boolean
 }
 
 /** The signed-in user of the application and the transitions between users. */
@@ -65,7 +71,7 @@ export interface SessionPort {
   currentTenant(): Membership | undefined
   /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
   selectTenant(key: string): void
-  /** Hears each change the gateway refused and this device undid. */
+  /** Hears each change the gateway refused and this device undid, and again when that dropped later changes. */
   subscribeRejections(listener: (rejection: PushRejection) => void): () => void
 }
 

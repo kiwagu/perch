@@ -5,7 +5,8 @@
 The page frame every module renders into. It is painted before the local database finishes
 opening and carries the navigation (sign-in, or the profile, the organisation page and My
 devices), the language switch and the notices the session raises, such as a change the
-gateway refused and this device undid, so the change does not just vanish. The folder has no
+gateway refused and this device undid, so the change does not just vanish, and, when the gateway
+refused the undo too, that the later changes not sent yet went with it. The folder has no
 module manifest: the composition root mounts the shell around the router built from the
 modules' routes.
 
