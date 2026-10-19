@@ -5,7 +5,9 @@
 The platform's organisation module on the device: the identity's memberships, creating an
 organisation, the current organisation's members for an administrator, invitations and
 removals, and the shared notes of the current organisation as the first table of the tenant
-region. Reads and writes go to the current organisation's database. The write rules declared
+region. `domain/` holds the organisation entity (the name bound) and one file per rule
+(`tenant-key.rule.ts`, `organisation-name.rule.ts`); `application/` the organisation and
+notes services. Reads and writes go to the current organisation's database. The write rules declared
 on the replica schema are applied on the device before a command runs
 (`OrganisationService.ability()`), the same rule the gateway applies on its fork.
 

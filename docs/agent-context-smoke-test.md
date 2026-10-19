@@ -27,6 +27,7 @@ skill, to confirm that prompts still route to the narrowest relevant document.
 | Add a new workspace package for the gateway | process -> package-readme |
 | Add a feature module with a new page | process -> package-readme |
 | Add a handler to a 450-line service | process -> file-size-tiers |
+| Add a second validation function to a domain entity file | process -> one-unit-per-file |
 | Add a field to the profile table and expose it in a shape | process -> surrealql skill, then domain-context-first-analysis |
 | Write a permission test for the new table | process -> surrealkit skill |
 | Commit a change to the access method | process -> security-review-before-commit |

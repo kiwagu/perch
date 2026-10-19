@@ -52,7 +52,7 @@ import { memoryStorage } from './storage'
 
 export type { NoteRow } from '../features/organisation/application/notes.service'
 export type { ProfileRow } from '../features/user/application/profile.service'
-export { checkProfileName } from '../features/user/domain/profile.entity'
+export { checkProfileName } from '../features/user/domain/profile-name.rule'
 
 export interface ClientOptions {
   /** The gateway's address, such as `http://127.0.0.1:5181`; its sync WebSocket is `/sync` under it. */

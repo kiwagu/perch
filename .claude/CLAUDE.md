@@ -20,6 +20,7 @@ that applies to the task, starting with the router.
 @.cursor/rules/entity-first-module-naming.mdc
 @.cursor/rules/package-readme.mdc
 @.cursor/rules/file-size-tiers.mdc
+@.cursor/rules/one-unit-per-file.mdc
 
 ## Architecture and contracts
 

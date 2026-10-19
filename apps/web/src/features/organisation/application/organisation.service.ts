@@ -15,7 +15,8 @@ import type { Membership } from '@workspace/replica/protocol'
 
 import type { MemberView, OrganisationsPort } from '../../../platform/organisations.port'
 import type { SessionPort } from '../../../platform/session.port'
-import { checkOrganisationName, checkTenantKey } from '../domain/organisation.entity'
+import { checkOrganisationName } from '../domain/organisation-name.rule'
+import { checkTenantKey } from '../domain/tenant-key.rule'
 
 /** What the service needs of the session: who is signed in, the memberships and the organisation chosen on this browser. */
 export type OrganisationSession = Pick<

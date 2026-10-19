@@ -5,7 +5,9 @@
  *   - hexagonal layer boundaries (eslint-plugin-boundaries),
  *   - type-aware promise rules and the must-use-Result rule (typescript-eslint),
  *   - immutability and no-throw discipline in domain and application code
- *     (eslint-plugin-functional).
+ *     (eslint-plugin-functional),
+ *   - one class per file everywhere, and one exported function or class per file in
+ *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file).
  * No rule here may format tokens.
  */
 
@@ -16,8 +18,11 @@ import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 
 import { mustUseResult } from './rules/must-use-result.js'
+import { oneUnitPerFile } from './rules/one-unit-per-file.js'
 
-const workspace = { rules: { 'must-use-result': mustUseResult } }
+const workspace = {
+  rules: { 'must-use-result': mustUseResult, 'one-unit-per-file': oneUnitPerFile },
+}
 
 const paddingRules = [
   'error',
@@ -231,6 +236,23 @@ export const base = [
       'functional/immutable-data': 'error',
       'functional/prefer-readonly-type': 'error',
       'no-restricted-syntax': ['error', throwOnlyExceptions],
+    },
+  },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    ignores: [TESTS],
+    rules: {
+      // A file is named after the one class it holds; class expressions count too.
+      'max-classes-per-file': ['error', { max: 1 }],
+    },
+  },
+  {
+    files: ['**/domain/**/*.{ts,tsx}', '**/application/**/*.{ts,tsx}'],
+    ignores: [TESTS],
+    plugins: { workspace },
+    rules: {
+      // A business function or a class per file; small related helpers stay private to it.
+      'workspace/one-unit-per-file': 'error',
     },
   },
 ]
