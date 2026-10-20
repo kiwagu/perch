@@ -6,7 +6,8 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
 routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
-`{ email, password, device: { id, label } }`, an email of at most 254 characters, the device's
+`{ email, password, device: { id, label } }`, an email of at most 254 characters, taken in
+lower case, the device's
 own id of 1 to 64 characters and a label of at most 60, answering
 `{ identity, tokens, memberships }`, the memberships being the organisations the identity
 belongs to), each call on a database session of its own that is
@@ -237,9 +238,9 @@ starting at its key's first attempt; every gateway process keeps its own, so sev
 multiply them. Credential checks, `POST /auth/sign-up` and `POST /auth/sign-in` together (each
 one argon2 run on the database), are limited to 20 per client address in 10 s; failed sign-ins
 (answered `invalid-credentials`) to 10 per email in 15 minutes, cleared by a successful
-sign-in. An email counts exactly as it came, its case included, since the database matches an
-account's email exactly: the limit follows the account the database would match, and a case
-variant, another account, neither shares nor clears its failures. A sign-in holds one of its
+sign-in. An email counts in lower case, as the routes take it and the directory keeps and
+matches an account's (`account-email.ts`): an address in any case is one account, and its
+failures in any case share one limit. A sign-in holds one of its
 email's 10 places from the moment it is let through until the database answers, so parallel
 guesses are counted while under way: wrong credentials keep the place, a success clears the
 email's window, and an answer the database could not judge, or a call that threw instead of

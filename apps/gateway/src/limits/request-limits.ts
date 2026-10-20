@@ -17,7 +17,8 @@ export const CREDENTIAL_CHECKS = { limit: 20, windowMs: 10 * second } as const
  * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until the
  * database answers, cleared by a successful sign-in: online guessing against one account is held
  * to about 960 tries a day, refused before the database is asked, parallel guesses included. An
- * email is counted exactly as the database matches an account's, its case included.
+ * email is counted in lower case, as the routes take it and the directory matches an account's,
+ * so an address in any case shares one limit.
  */
 export const FAILED_SIGN_INS = { limit: 10, windowMs: 15 * minute } as const
 
@@ -116,9 +117,9 @@ export class RequestLimits {
    * Lets a sign-in of `email` through while its failed sign-ins and those under way are below the
    * limit, holding a place for it until it is settled: a failure keeps the place, a success
    * forgets the email's window (its failures and the places of those under way), and an answer
-   * the database could not judge gives the place back. The email is counted as it came, its case
-   * included: the database matches an account's email exactly, so a case variant is another
-   * account, and its success must not clear this one's failures.
+   * the database could not judge gives the place back. The email comes in lower case, as the
+   * routes take it and the directory matches it, so a sign-in in any case counts against one
+   * account.
    */
   signInAttempt(email: string): SignInAttempt {
     const reserved = this.failedSignIns.reserve(email)
