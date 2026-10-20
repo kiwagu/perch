@@ -4,7 +4,6 @@ Role: user
 Where: "/me" → "Sign out" in a first tab of device A, while a second tab of the same browser holds the account's local database open
 
 ## Test data
-- none
 
 ## Scenario: A sign-out ends even though another tab holds the data open, says so, and the data goes once that tab closes
 

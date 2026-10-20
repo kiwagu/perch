@@ -2,15 +2,22 @@ import { describe, expect, it } from 'vitest'
 
 import { siteStorage } from './site-storage'
 
-/** A working localStorage over a map; `drops` forgets every write, as a browser that keeps nothing. */
+interface MapStorageOptions {
+  /** Forgets every write, as a browser that keeps nothing. */
+  readonly drops?: boolean
+  /** Throws on every write, as a browser whose quota is none. */
+  readonly throws?: boolean
+  /** Runs after each write: another tab acting on the same storage meanwhile. */
+  readonly afterSet?: () => void
+}
+
+/** A working localStorage over a map, unless its options say otherwise. */
 class MapStorage implements Storage {
   readonly #values = new Map<string, string>()
-  readonly #drops: boolean
-  readonly #throws: boolean
+  readonly #options: MapStorageOptions
 
-  constructor(options: { readonly drops?: boolean; readonly throws?: boolean } = {}) {
-    this.#drops = options.drops ?? false
-    this.#throws = options.throws ?? false
+  constructor(options: MapStorageOptions = {}) {
+    this.#options = options
   }
 
   get length(): number {
@@ -34,13 +41,15 @@ class MapStorage implements Storage {
   }
 
   setItem(key: string, value: string): void {
-    if (this.#throws) {
+    if (this.#options.throws) {
       throw new DOMException('the quota is 0', 'QuotaExceededError')
     }
 
-    if (!this.#drops) {
+    if (!this.#options.drops) {
       this.#values.set(key, value)
     }
+
+    this.#options.afterSet?.()
   }
 }
 
@@ -61,6 +70,22 @@ describe('siteStorage', () => {
     }
 
     expect(siteStorage(blocked)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+  })
+
+  it("takes a storage another tab probes at the same moment: neither probe removes the other's value", () => {
+    const others: boolean[] = []
+    // Another tab probes the same storage between this probe's write and its read.
+    const store: Storage = new MapStorage({
+      afterSet: () => {
+        if (others.length === 0) {
+          others.push(true)
+          others.push(siteStorage({ localStorage: store }).isOk())
+        }
+      },
+    })
+
+    expect(siteStorage({ localStorage: store }).isOk()).toBe(true)
+    expect(others).toEqual([true, true])
   })
 
   it('refuses a page without localStorage', () => {

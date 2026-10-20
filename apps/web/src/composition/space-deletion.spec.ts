@@ -1,9 +1,9 @@
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
-import { manualClock } from '@workspace/replica/testing'
+import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
 import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import type { TenantDatabaseInventory } from './retained-tenant-databases'
@@ -34,7 +34,9 @@ const spaceOf = (identity: typeof ann, deleting: Promise<void>) => ({
   destroy: () => deleting,
 })
 
-function harness(options: { readonly refusedLocal?: readonly IdentityId[] } = {}) {
+function harness(
+  options: { readonly refusedLocal?: readonly IdentityId[]; readonly locks?: FakeLocks } = {},
+) {
   const storage = memoryStorage()
   const clock = manualClock()
   const failures: DataError[] = []
@@ -54,6 +56,7 @@ function harness(options: { readonly refusedLocal?: readonly IdentityId[] } = {}
   const deletion = new SpaceDeletion({
     storage,
     clock,
+    locks: options.locks ?? new FakeLocks(),
     deleteLocal: (identity) => {
       if (options.refusedLocal?.includes(identity)) {
         return errAsync(dataError('data:WRITE_FAILED', 'the browser would not delete it'))
@@ -150,10 +153,25 @@ describe('SpaceDeletion', () => {
     expect(failures.map(({ code }) => code)).toEqual(['data:WRITE_FAILED'])
   })
 
-  it('has an identity opened again wait for its delete this page runs, and lists it no more', async () => {
-    const { storage, clock, deletion } = harness()
+  it('opens an identity again only once its delete under way, in any tab, has ended', async () => {
+    // Two tabs of one browser share its locks and its storage.
+    const locks = new FakeLocks()
+    const { storage, clock, deletion } = harness({ locks })
+    const other = new SpaceDeletion({
+      storage,
+      clock,
+      locks,
+      deleteLocal: () => okAsync(undefined),
+      deleteTenantLocal: () => okAsync(undefined),
+      inventory: () => ({
+        keys: () => [],
+        add: () => {},
+        drop: () => {},
+        savedMemberships: () => [],
+      }),
+      onError: () => {},
+    })
     const deleting = deferred()
-
     const answer = deletion.destroy(spaceOf(ann, deleting.promise))
 
     await settle()
@@ -161,17 +179,51 @@ describe('SpaceDeletion', () => {
     expect((await answer)._unsafeUnwrap()).toBe('pending')
 
     let opened = false
-    const opening = deletion.beforeOpen(ann.id).then(() => {
+    const opening = other.open(ann.id, () => {
       opened = true
+
+      return okAsync('open')
     })
 
     await settle()
     expect(opened).toBe(false)
 
     deleting.resolve()
-    await opening
 
+    expect((await opening)._unsafeUnwrap()).toBe('open')
     expect(leftoverIdentities(storage)).toEqual([])
+  })
+
+  it('deletes nothing of an identity signed in again before its delete took the lock: its databases are in use', async () => {
+    const { storage, deletion } = harness()
+    let destroyed = false
+
+    saveDevice(storage, { identity: ann, tokens: { access: 'a', refresh: 'r' }, memberships: [] })
+
+    const answer = await deletion.destroy({
+      identity: ann,
+      close: () => Promise.resolve(),
+      destroy: () => {
+        destroyed = true
+
+        return Promise.resolve()
+      },
+    })
+
+    expect(answer._unsafeUnwrap()).toBe('in-use')
+    expect(destroyed).toBe(false)
+    expect(leftoverIdentities(storage)).toEqual([])
+  })
+
+  it('keeps listed an identity whose space destroyed itself but left an organisation database counted', async () => {
+    const { storage, deletion, inventory } = harness()
+
+    inventory(ann.id).add(['acme'])
+
+    const answer = await deletion.destroy(spaceOf(ann, Promise.resolve()))
+
+    expect(answer._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(leftoverIdentities(storage)).toEqual([ann.id])
   })
 
   it('starts the grace once the space closed: a slow close is no held-up delete', async () => {
@@ -189,13 +241,28 @@ describe('SpaceDeletion', () => {
     expect((await answer)._unsafeUnwrap()).toBe('deleted')
   })
 
-  it('takes an identity opened without a delete running off the list: its databases are in use', async () => {
+  it('takes an identity off the list once its space opened: its databases are in use', async () => {
     const { storage, deletion } = harness()
 
     addLeftoverIdentity(storage, ann.id)
-    await deletion.beforeOpen(ann.id)
 
+    expect((await deletion.open(ann.id, () => okAsync(undefined))).isOk()).toBe(true)
     expect(leftoverIdentities(storage)).toEqual([])
+  })
+
+  it('keeps an identity listed when its space does not open, for the next start to delete', async () => {
+    const { storage, deletion } = harness()
+
+    addLeftoverIdentity(storage, ann.id)
+
+    const opened = await deletion.open(ann.id, () =>
+      ResultAsync.fromPromise(Promise.reject(new Error('broken')), () =>
+        dataError('data:OPEN_FAILED', 'the database does not open'),
+      ),
+    )
+
+    expect(opened._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(leftoverIdentities(storage)).toEqual([ann.id])
   })
 
   it('deletes what the listed identities left, their own database and every organisation database counted for them, except the one signed in', async () => {

@@ -102,6 +102,7 @@ export class SessionService implements SessionPort {
     this.#deletion = new SpaceDeletion({
       storage: options.storage,
       clock: options.clock,
+      locks: options.locks,
       deleteLocal: options.deleteLocal,
       deleteTenantLocal: options.deleteTenantLocal,
       inventory: (identity) => this.#organisations.databases(identity),
@@ -377,10 +378,8 @@ export class SessionService implements SessionPort {
     this.#leaveAndTell()
     this.#options.onStep?.('open-db')
 
-    // A delete of the identity's databases this page runs ends first, as the browser would have it.
-    return ResultAsync.fromSafePromise(this.#deletion.beforeOpen(identity.id)).andThen(() =>
-      this.#openSpaceNow(identity, generation),
-    )
+    // A delete of the identity's databases under way in any tab ends first; none starts meanwhile.
+    return this.#deletion.open(identity.id, () => this.#openSpaceNow(identity, generation))
   }
 
   #openSpaceNow(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {

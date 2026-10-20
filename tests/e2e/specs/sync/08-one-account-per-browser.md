@@ -4,7 +4,6 @@ Role: user
 Where: "/sign-in" in two tabs of device A
 
 ## Test data
-- none
 
 ## Scenario: A tab left on the sign-in page follows the account another tab signs in, so the browser holds one account
 

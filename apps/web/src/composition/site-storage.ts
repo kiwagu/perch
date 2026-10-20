@@ -7,7 +7,8 @@ export interface SiteStorageSource {
   readonly localStorage: Storage | null
 }
 
-const PROBE_KEY = 'perch.storage.probe'
+/** Each probe writes a key of its own: another tab probing at the same moment removes only its own. */
+const probeKey = (): string => `perch.storage.probe.${crypto.randomUUID()}`
 
 const blocked = (cause?: unknown) =>
   dataError('data:OPEN_FAILED', 'this browser keeps no site data for this page', cause)
@@ -26,11 +27,13 @@ export function siteStorage(source: SiteStorageSource): Result<Storage, DataErro
       return err(blocked())
     }
 
-    store.setItem(PROBE_KEY, PROBE_KEY)
+    const key = probeKey()
 
-    const kept = store.getItem(PROBE_KEY) === PROBE_KEY
+    store.setItem(key, key)
 
-    store.removeItem(PROBE_KEY)
+    const kept = store.getItem(key) === key
+
+    store.removeItem(key)
 
     return kept ? ok(store) : err(blocked())
   } catch (cause: unknown) {

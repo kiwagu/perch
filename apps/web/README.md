@@ -150,7 +150,8 @@ composition root over an in-memory database, always leading its identity's sync,
 "Seed client" with an id minted into its memory storage) whose
 `ensureAccount` signs an account up or in through the gateway, writes its profile through
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
-reads the profile the gateway sends; it leaves each account without signing out. As the
+reads the profile the gateway sends; one device, it signs the account it is in out before it
+enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one that is already the
 account's is found), `ensureMember` invites an existing account by email, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls

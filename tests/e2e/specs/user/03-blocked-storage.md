@@ -4,7 +4,6 @@ Role: visitor
 Where: "/sign-in" in a browser that refuses the page its localStorage
 
 ## Test data
-- none
 
 ## Scenario: A browser that keeps no site data is told so instead of being sent to sign-in again and again
 

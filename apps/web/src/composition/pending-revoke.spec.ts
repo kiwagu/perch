@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 
@@ -95,9 +95,9 @@ describe('PendingRevoke', () => {
     pending.forgetKeys('live')
 
     expect(savedKeys(memory)).toBeUndefined()
-    await pending.send()
+    // Sent unasked: the browser is online.
+    await vi.waitFor(() => expect(left()).toEqual([]))
     expect(sent).toHaveLength(1)
-    expect(left()).toEqual([])
   })
 
   it('keeps keys that still work to revoke later while the browser is offline', () => {

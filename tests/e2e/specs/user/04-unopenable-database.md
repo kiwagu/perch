@@ -4,7 +4,6 @@ Role: user
 Where: "/me" → "Sign out on this device", once the account's local database is broken
 
 ## Test data
-- none
 
 ## Scenario: A device that cannot open the account's data offers to sign out on it, which leaves nothing of the account behind
 

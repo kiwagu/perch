@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { FakeLocks } from '@workspace/replica/testing'
 
+import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from './__fixtures__/session'
 import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
+import { spaceLockName } from './space-deletion'
 import {
   type MemoryStorage,
   memoryStorage,
@@ -191,5 +194,71 @@ describe('a saved identity whose database does not open', () => {
     expect(tab.session.current()?.id).toBe(ann.id)
     expect(storage.get('perch.session.identity')).toBeDefined()
     expect(tab.localsDeleted()).toEqual([])
+  })
+})
+
+describe('two tabs, one identity being deleted and signed in again', () => {
+  it("has the other tab's sign-in wait for the delete under way before it opens the databases again", async () => {
+    const shared = { storage: memoryStorage(), locks: new FakeLocks(), auth: fakeGatewayAuth() }
+    const held = deferred()
+    const a = await world({ ...shared, online: false, heldDeletes: held.promise })
+    const b = await world({ ...shared, online: false })
+
+    expect((await a.session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const ann = a.session.current() ?? expect.unreachable('signed in')
+
+    expect((await a.driveClock(a.session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+
+    let back = false
+    const again = b.session.signIn(annSignUp).andTee(() => {
+      back = true
+    })
+
+    // The other tab's open waits for the identity's lock, which the delete holds.
+    await vi.waitFor(() =>
+      expect(shared.locks.queue.map(({ name }) => name)).toContain(spaceLockName(ann.id)),
+    )
+    await settle()
+    expect(back).toBe(false)
+    expect(b.opened()).toEqual([])
+
+    held.resolve()
+
+    expect((await again).isOk()).toBe(true)
+    expect(b.opened()).toEqual([ann.id])
+    expect(leftoverIdentities(shared.storage)).toEqual([])
+  })
+
+  it('deletes nothing when the other tab signed the identity in again while this one was still closing', async () => {
+    const shared = { storage: memoryStorage(), locks: new FakeLocks(), auth: fakeGatewayAuth() }
+    const closing = deferred()
+    const a = await world({
+      ...shared,
+      online: false,
+      wrap: (local) => ({
+        ...local,
+        close: async () => {
+          await closing.promise
+          await local.close()
+        },
+      }),
+    })
+    const b = await world({ ...shared, online: false })
+
+    expect((await a.session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const ann = a.session.current() ?? expect.unreachable('signed in')
+    const signingOut = a.driveClock(a.session.signOut())
+
+    await vi.waitFor(() => expect(shared.storage.get('perch.session.identity')).toBeUndefined())
+    expect((await b.session.signIn(annSignUp)).isOk()).toBe(true)
+
+    closing.resolve()
+
+    expect((await signingOut)._unsafeUnwrap()).toBe('signed-out')
+    expect(a.destroyed()).toEqual([])
+    expect(b.session.current()?.id).toBe(ann.id)
+    expect(leftoverIdentities(shared.storage)).toEqual([])
   })
 })
