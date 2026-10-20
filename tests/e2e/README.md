@@ -45,6 +45,8 @@ accounts, each in a browser of its own):
 - `sync/07-blocked-delete`: a sign-out ends within 15 seconds although a second tab holds the
   account's database open, and the sign-in page says the data goes once the other tabs are
   closed; the database is gone within 10 seconds of closing that tab.
+- `sync/08-one-account-per-browser`: a tab left on the sign-in page follows the account another
+  tab signs in, onto "/me" within 5 seconds, and the browser keeps one account database.
 - `organisation/01-shared-notes`: user A creates an organisation and invites user B; B sees
   it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
   the members nor A's profile.

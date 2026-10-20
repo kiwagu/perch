@@ -14,6 +14,7 @@ import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
@@ -93,22 +94,27 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
   showSync({ leader: false, channel: 'down' })
 
   return createAppRoot({
+    // One tab at a time opens a database: two engines setting up a new one at once conflict.
     openLocal: (identity) =>
-      openLocalDb({
-        engines: wasmEngines(),
-        url: identityUrl(identity),
-        namespace: 'app',
-        database: 'identity',
-        schema: directorySchema,
-      }),
+      openOneAtATime(locks, identityUrl(identity), () =>
+        openLocalDb({
+          engines: wasmEngines(),
+          url: identityUrl(identity),
+          namespace: 'app',
+          database: 'identity',
+          schema: directorySchema,
+        }),
+      ),
     openTenantLocal: (identity, key) =>
-      openLocalDb({
-        engines: wasmEngines(),
-        url: tenantUrl(identity, key),
-        namespace: 'app',
-        database: 'tenant',
-        schema: tenantSchema,
-      }),
+      openOneAtATime(locks, tenantUrl(identity, key), () =>
+        openLocalDb({
+          engines: wasmEngines(),
+          url: tenantUrl(identity, key),
+          namespace: 'app',
+          database: 'tenant',
+          schema: tenantSchema,
+        }),
+      ),
     deleteLocal: (identity) => deleteLocalDb(identityUrl(identity)),
     deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),

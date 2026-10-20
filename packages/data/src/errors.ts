@@ -13,6 +13,7 @@ export type DataErrorCode =
   | 'data:RATE_LIMITED'
   | 'data:REGION_STALE'
   | 'data:REGION_RELOADED'
+  | 'data:OTHER_ACCOUNT'
 
 export interface DataError {
   readonly code: DataErrorCode

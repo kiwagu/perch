@@ -20,7 +20,7 @@ import {
   leftoverIdentities,
 } from './leftover-identities'
 import { RetainedTenantDatabases, type TenantDatabaseInventory } from './retained-tenant-databases'
-import { type KeyValueStorage, savedIdentity } from './storage'
+import { type KeyValueStorage, savedIdentity, saveNotice } from './storage'
 
 /**
  * How long a sign-out waits for its delete. Deleting a closed database takes moments, a little
@@ -57,8 +57,8 @@ export class SpaceDeletion {
 
   /**
    * Closes the space and deletes its databases: `deleted` once they are gone, `pending` when the
-   * delete is still held up after the grace, which leaves it going and the identity listed until
-   * it ends; a failure within the grace fails, and one after it is reported. The grace runs from
+   * delete is still held up after the grace, which leaves it going, the identity listed until it
+   * ends and the sign-in page a word; a failure within the grace fails, one after it is reported. The grace runs from
    * the close: it times the delete, which another tab can hold up, not the space's own close.
    */
   destroy(
@@ -143,6 +143,8 @@ export class SpaceDeletion {
       let answered = false
       const cancel = this.#options.clock.schedule(DELETE_GRACE_MS, () => {
         answered = true
+        // The sign-in page says the data goes once the other tabs are closed.
+        saveNotice(this.#options.storage, 'delete-pending')
         resolve(ok('pending'))
       })
 

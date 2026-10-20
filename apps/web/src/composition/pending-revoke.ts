@@ -62,22 +62,32 @@ export class PendingRevoke {
   }
 
   /**
+   * Leaves a pair the device was given but keeps no more (a sign-in it refused) to revoke: kept,
+   * and sent at once while the browser is online.
+   */
+  leave(tokens: { readonly access: string; readonly refresh: string }): void {
+    this.#add(tokens.access, tokens.refresh)
+
+    if (this.#options.online()) {
+      void this.send()
+    }
+  }
+
+  /**
    * Keeps the pair the device holds now to revoke later, after the pairs kept before, another
    * account's among them. More than 8 waiting drops the oldest, which is reported.
    */
   keep(): void {
-    const storage = this.#options.storage
-    const keys = savedKeys(storage)
+    const keys = savedKeys(this.#options.storage)
 
-    if (keys?.refresh === undefined) {
-      return
+    if (keys?.refresh !== undefined) {
+      this.#add(keys.access, keys.refresh)
     }
+  }
 
-    const dropped = addPendingRevoke(storage, {
-      access: keys.access,
-      refresh: keys.refresh,
-      device: deviceIdFrom(storage),
-    })
+  #add(access: string, refresh: string): void {
+    const storage = this.#options.storage
+    const dropped = addPendingRevoke(storage, { access, refresh, device: deviceIdFrom(storage) })
 
     if (dropped.length > 0) {
       this.#report(

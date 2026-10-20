@@ -82,6 +82,14 @@ describe('SignInView', () => {
     )
   })
 
+  it('asks to sign the other account out first when another one is signed in on this browser', () => {
+    renderView({ error: 'data:OTHER_ACCOUNT' })
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      'Another account is signed in on this browser. Sign it out first.',
+    )
+  })
+
   it('says nothing about how the last session ended unless the session left a notice', () => {
     renderView()
 

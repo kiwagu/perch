@@ -24,12 +24,25 @@ export function SignInContainer() {
   const notify = useNotify()
   const t = useT()
   const done = state.matches('done')
+  const busy = done || state.matches('submitting')
 
   useEffect(() => {
     if (notice) {
       session.clearNotice()
     }
   }, [notice, session])
+
+  // Another tab signed someone in (one account per browser): the page follows it to the profile,
+  // unless the sign-in is this page's own, which goes on to its welcome.
+  useEffect(
+    () =>
+      session.subscribe((user) => {
+        if (user && !busy) {
+          void navigate({ to: HOME_PATH })
+        }
+      }),
+    [session, busy, navigate],
+  )
 
   useEffect(() => {
     if (done) {

@@ -993,7 +993,7 @@ describe('SessionService', () => {
     expect(session.space()).toBeUndefined()
   })
 
-  it('runs overlapping sign-ins one after the other, so the later one owns the session and its keys', async () => {
+  it('runs overlapping sign-ins one after the other: a later one of another account waits, then is refused', async () => {
     const holding = holdingRegionLoads()
     const { session, storage, auth } = await world({ wrap: holding.wrap })
 
@@ -1014,11 +1014,13 @@ describe('SessionService', () => {
     expect(storage.get('perch.session.refresh')).toBe(bobsKey)
     holding.release()
 
+    // One account per browser: Bob is signed in once Ann's turn comes.
     expect((await first)._unsafeUnwrap().email).toBe(bobSignUp.email)
-    expect((await second)._unsafeUnwrap().email).toBe(annSignUp.email)
-    expect(session.current()?.email).toBe(annSignUp.email)
-    expect(session.space()?.identity.email).toBe(annSignUp.email)
-    expect(storage.get('perch.session.identity')).toContain(annSignUp.email)
+    expect((await second)._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
+    expect(session.current()?.email).toBe(bobSignUp.email)
+    expect(session.space()?.identity.email).toBe(bobSignUp.email)
+    expect(storage.get('perch.session.identity')).toContain(bobSignUp.email)
+    expect(storage.get('perch.session.refresh')).toBe(bobsKey)
   })
 
   it('attaches nothing after close, neither the transition running nor those waiting behind it', async () => {
@@ -1245,6 +1247,16 @@ describe('SessionService memberships', () => {
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['globex']))
     expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
+
+    // Bob's keys are refused with a change unsent too: his databases stay for his next sign-in,
+    // and nobody is signed in on the browser, which lets Ann sign in (one account per browser).
+    expect((await session.writePath.run(createProfile, aProfile(bob.identity.id))).isOk()).toBe(
+      true,
+    )
+    stub.endWith('unauthorized')
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    await settle()
+    expect(savedTenantDatabases(storage, bob.identity.id)).toEqual(['globex'])
 
     // Ann is removed from Acme while she is signed out: her next sign-in answers without it.
     answers.set(annSignUp.email, annIn([]))

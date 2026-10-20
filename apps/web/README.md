@@ -29,7 +29,9 @@ modeling stage.
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
   projector, write path), with a database of its own for each organisation the identity
   belongs to (`openTenantSpace`: `indxdb://app-identity-<id>-t_<key>`, region `tenant:<key>`;
-  `TenantSpaces` keeps them in step with the memberships). Reads and writes are routed by
+  `TenantSpaces` keeps them in step with the memberships). The tabs of a browser open a database
+  one at a time, under the Web Lock `perch-open:<database>` (`openOneAtATime`): two engines
+  setting up the same new database at once conflict and one open fails. Reads and writes are routed by
   region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
   and a command into the tenant region go to the current organisation (the one selected on
   this browser, otherwise the first by key; none refuses with `no organisation is selected`),
@@ -117,8 +119,12 @@ modeling stage.
   left to do, and an answer that comes once the asking session has ended (another account, or
   the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
-  protocol the gateway refuses stops the sync and keeps everything. A tab follows another
-  tab's sign-out by closing its space. The container's runner and write
+  protocol the gateway refuses stops the sync and keeps everything. One account per browser: a
+  tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
+  the space of the identity it saved (the sign-in page then moves to the profile, unless the
+  sign-in is its own); a sign-up or sign-in that finds another account saved is refused with
+  `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
+  another tab saved one meanwhile, whose new pair is then left to revoke. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). `<html data-boot-step>` shows the boot step; `data-sync-leader`

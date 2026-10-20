@@ -13,6 +13,7 @@
   "user.sign-in.error.invalid-credentials": "Correo o contraseña incorrectos.",
   "user.sign-in.error.sign-up-rejected": "No se puede crear una cuenta con este correo.",
   "user.sign-in.error.rate-limited": "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
+  "user.sign-in.error.other-account": "Otra cuenta tiene la sesión iniciada en este navegador. Ciérrala primero.",
   "user.sign-in.error.name-required": "Escribe tu nombre.",
   "user.sign-in.error.name-too-long": "Usa como máximo 80 caracteres para el nombre.",
   "user.sign-in.error.failed": "Algo salió mal. Inténtalo de nuevo.",

@@ -21,13 +21,14 @@ import type {
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
 import type { NamedDevice, SignedInDevice } from './gateway-auth'
 import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
+import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from './one-account'
 import type { OpenSpace, SpaceStatus } from './open-space'
 import { SessionOrganisations } from './organisations'
 import { type KeysLeft, PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
 import type { SessionOptions, TransportContext } from './session-options'
 import { sessionTransportContext } from './session-transport-context'
-import { type DeleteOutcome, SpaceDeletion } from './space-deletion'
+import { SpaceDeletion } from './space-deletion'
 import {
   deviceIdFrom,
   forgetDevice,
@@ -57,10 +58,10 @@ const closedDuringSignIn = () =>
  * for it; with changes that cannot be sent it asks first. A sign-out the gateway did not
  * confirm leaves the pair to revoke once online (`PendingRevoke`). Keys the gateway refuses,
  * or a sign-out from another device, sign the device out without it; the database goes too
- * unless it holds changes not sent yet, which wait for the next sign-in as the identity. The
- * tabs of a browser follow the saved identity: when another tab signs it out, this one closes
- * its space. While a sign-out runs, no tab of the browser takes a write: a write landing after
- * the final drain would go with the database.
+ * unless it holds changes not sent yet, which wait for the next sign-in as the identity. One
+ * account per browser: the tabs follow the saved identity, and a sign-in finding another account
+ * saved is refused. While a sign-out runs, no tab of the browser takes a write: a write landing
+ * after the final drain would go with the database.
  */
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
@@ -143,19 +144,11 @@ export class SessionService implements SessionPort {
   }
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
-    return this.#serially((generation) =>
-      this.#revokeLeftPair()
-        .andThen(() => this.#options.auth.signUp(input, this.#device()))
-        .andThen((device) => this.#enter(device, generation)),
-    )
+    return this.#signInAs(input.email, () => this.#options.auth.signUp(input, this.#device()))
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    return this.#serially((generation) =>
-      this.#revokeLeftPair()
-        .andThen(() => this.#options.auth.signIn(input, this.#device()))
-        .andThen((device) => this.#enter(device, generation)),
-    )
+    return this.#signInAs(input.email, () => this.#options.auth.signIn(input, this.#device()))
   }
 
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
@@ -223,7 +216,7 @@ export class SessionService implements SessionPort {
 
       this.#pendingRevoke.forgetKeys('live')
 
-      return this.#deletion.deleteUnopened(identity.id).map((outcome) => this.#noticeIf(outcome))
+      return this.#deletion.deleteUnopened(identity.id).map(() => undefined)
     })
   }
 
@@ -309,11 +302,21 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * Has a pair a sign-out left be revoked before a sign-in: the sign-in moves the device's
-   * session at the gateway to a new grant, after which the old pair matches it no more.
+   * Signs up or in through `ask`, refused at once while another account is signed in on this
+   * browser (one account per browser). The pairs sign-outs left are revoked first: the sign-in
+   * moves the device's session at the gateway to a new grant, after which they match it no more.
    */
-  #revokeLeftPair(): ResultAsync<void, never> {
-    return ResultAsync.fromSafePromise(this.#pendingRevoke.send())
+  #signInAs(
+    email: string,
+    ask: () => ResultAsync<SignedInDevice, DataError>,
+  ): ResultAsync<AuthUser, DataError> {
+    return this.#serially((generation) => {
+      const ready: ResultAsync<void, DataError> = otherAccountSaved(this.#options.storage, email)
+        ? errAsync(otherAccountSignedIn())
+        : ResultAsync.fromSafePromise(this.#pendingRevoke.send())
+
+      return ready.andThen(ask).andThen((device) => this.#enter(device, generation))
+    })
   }
 
   /** Starts a session transition; a transition that finishes after a later one began is dropped. */
@@ -348,6 +351,13 @@ export class SessionService implements SessionPort {
   #enter(device: SignedInDevice, generation: number): ResultAsync<AuthUser, DataError> {
     if (generation !== this.#generation) {
       return errAsync(closedDuringSignIn())
+    }
+
+    // Another tab signed someone else in meanwhile: this sign-in's new pair goes to be revoked.
+    if (otherIdentitySaved(this.#options.storage, device.identity.id)) {
+      this.#pendingRevoke.leave(device.tokens)
+
+      return errAsync(otherAccountSignedIn())
     }
 
     // The keys are kept first: the space's channel presents them as soon as this tab leads.
@@ -543,20 +553,13 @@ export class SessionService implements SessionPort {
 
     const deleted = this.#deletion
       .destroy(open.space)
-      .map((outcome) => this.#noticeIf(outcome))
+      .map(() => undefined)
       .andTee(tell)
       .orTee(tell)
 
     this.#retire(Promise.resolve(deleted).then(() => undefined))
 
     return deleted
-  }
-
-  /** A delete another tab holds up leaves the sign-in page a word: the data goes once that tab closes. */
-  #noticeIf(outcome: DeleteOutcome): void {
-    if (outcome === 'pending') {
-      saveNotice(this.#options.storage, 'delete-pending')
-    }
   }
 
   #transportContext(identity: IdentityId): TransportContext {
@@ -677,20 +680,27 @@ export class SessionService implements SessionPort {
     }
   }
 
-  /** Another tab changed the saved identity: this tab follows, closing a space that is no longer it. */
+  /**
+   * Another tab changed the saved identity: this tab follows, closing a space that is no longer
+   * it and, with none open, opening the space of the identity another tab signed in.
+   */
   #followElsewhere(): void {
     if (this.#closed) {
       return
     }
 
-    void this.#serially(() => {
+    void this.#serially((generation) => {
       const open = this.#open
+      const saved = savedIdentity(this.#options.storage)
 
-      if (open && savedIdentity(this.#options.storage)?.id !== open.space.identity.id) {
+      if (open && saved?.id !== open.space.identity.id) {
         this.#leaveAndTell()
       }
 
-      return okAsync(undefined)
+      // One account per browser: a tab with nobody signed in follows a sign-in made elsewhere.
+      return saved && !this.#open
+        ? this.#openSpace(saved, generation).map(() => undefined)
+        : okAsync(undefined)
     }).match(
       () => undefined,
       (error) => this.#options.onError(error),
