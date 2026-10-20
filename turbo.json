@@ -53,6 +53,9 @@
     "//#typecheck:root": {
       "cache": false
     },
+    "//#test:root": {
+      "cache": false
+    },
     "//#lint:root": {
       "cache": false
     },
