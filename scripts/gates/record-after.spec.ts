@@ -12,8 +12,16 @@ const RECORD_AFTER = fileURLToPath(new URL('./record-after.ts', import.meta.url)
 /** The checkouts the tests made, removed after each test. */
 const made: string[] = []
 
-const git = (cwd: string, ...args: string[]) =>
-  spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+/** Runs git in `cwd` without signing commits, and expects it to succeed. */
+function git(cwd: string, ...args: string[]): void {
+  const run = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  })
+
+  expect(run.status, `git ${args.join(' ')}: ${run.stderr}`).toBe(0)
+}
 
 /**
  * A checkout of its own with one commit, whose e2e launcher passes, or exits with the code in

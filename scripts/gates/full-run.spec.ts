@@ -4,8 +4,11 @@ import { readFileSync } from 'node:fs'
 import { FULL_RUN, isFullRun } from './full-run.ts'
 import { GATES } from './tree.ts'
 
-/** The root scripts that run the suites, by gate. */
-const SUITE_SCRIPT = { db: 'test:db', e2e: 'test:e2e' } as const
+/** The root script that runs each suite, and what it runs before the recorder's command. */
+const SUITE_SCRIPT = {
+  db: { name: 'test:db', before: 'mcproc exec --' },
+  e2e: { name: 'test:e2e', before: 'mcproc exec --memory 4G --note e2e --' },
+} as const
 
 const scripts = (): Readonly<Record<string, string>> => {
   const manifest: unknown = JSON.parse(
@@ -26,12 +29,16 @@ const scripts = (): Readonly<Record<string, string>> => {
 }
 
 describe('the full run of a suite', () => {
-  it.each(GATES)('is the command the %s script wraps, with nothing after it', (gate) => {
-    const script = scripts()[SUITE_SCRIPT[gate]] ?? ''
-    const wrapped = script.split(`record-after.ts ${gate} -- `)[1]
+  it.each(GATES)(
+    'is the command the %s script hands the recorder, with nothing after it',
+    (gate) => {
+      const { name, before } = SUITE_SCRIPT[gate]
 
-    expect(wrapped?.split(' ')).toEqual([...FULL_RUN[gate]])
-  })
+      expect(scripts()[name]).toBe(
+        `${before} bun run scripts/gates/record-after.ts ${gate} -- ${FULL_RUN[gate].join(' ')}`,
+      )
+    },
+  )
 
   it.each(GATES)('is the %s command itself', (gate) => {
     expect(isFullRun(gate, FULL_RUN[gate])).toBe(true)
