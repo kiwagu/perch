@@ -212,7 +212,25 @@ describe('SpaceDeletion', () => {
 
     expect(answer._unsafeUnwrap()).toBe('in-use')
     expect(destroyed).toBe(false)
-    expect(leftoverIdentities(storage)).toEqual([])
+    // Listed until the sign-in that saved it opens the space.
+    expect(leftoverIdentities(storage)).toEqual([ann.id])
+  })
+
+  it('keeps listed an identity whose delete it skipped for a sign-in whose open then failed', async () => {
+    const { storage, deletion } = harness()
+
+    saveDevice(storage, { identity: ann, tokens: { access: 'a', refresh: 'r' }, memberships: [] })
+
+    expect((await deletion.deleteUnopened(ann.id))._unsafeUnwrap()).toBe('in-use')
+
+    const opened = await deletion.open(ann.id, () =>
+      ResultAsync.fromPromise(Promise.reject(new Error('broken')), () =>
+        dataError('data:OPEN_FAILED', 'the database does not open'),
+      ),
+    )
+
+    expect(opened.isErr()).toBe(true)
+    expect(leftoverIdentities(storage)).toEqual([ann.id])
   })
 
   it('keeps listed an identity whose space destroyed itself but left an organisation database counted', async () => {

@@ -6,8 +6,9 @@
  * a sign-out waiting for good. Every tab opens an identity's space, and deletes its databases,
  * under the identity's Web Lock: an open waits for a delete under way, and a delete that comes
  * after the identity was signed in again finds its databases in use and deletes nothing. The
- * identity is listed before its databases are deleted and taken off once they are gone or in
- * use again, so a delete held up past the page's life, or one that failed, runs at the next start.
+ * identity is listed before its databases are deleted and taken off once they are gone or a
+ * space of it opened, so a delete held up past the page's life, one that failed, or one skipped
+ * for a sign-in whose open then failed runs at the next start.
  */
 
 import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
@@ -140,7 +141,8 @@ export class SpaceDeletion {
 
   /**
    * Runs a delete of the identity's databases under its lock, unless the identity is signed in on
-   * this browser again by then: its databases are in use, and it is listed no more. A delete that
+   * this browser again by then: its databases are about to be in use, and it stays listed until
+   * that sign-in's open succeeds (an open that fails leaves them to the next start). A delete that
    * succeeds takes the identity off the list; one that fails leaves it listed.
    */
   #deleteUnlessInUse(
@@ -153,8 +155,6 @@ export class SpaceDeletion {
       identity,
       () => {
         if (savedIdentity(storage)?.id === identity) {
-          dropLeftoverIdentity(storage, identity)
-
           return okAsync('in-use' as const)
         }
 
