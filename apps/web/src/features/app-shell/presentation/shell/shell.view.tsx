@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
+import { match } from 'ts-pattern'
 
 import { type Locale, SUPPORTED_LOCALES, useLocale, useT } from '@workspace/i18n'
 import { AppShell } from '@workspace/ui/components/platform/app-shell'
@@ -14,7 +15,8 @@ export interface ShellLinkProps {
 }
 
 export interface ShellViewProps {
-  readonly status: 'opening' | 'ready' | 'failed'
+  /** Where the start is: opening the data, ready, failed, or stopped because the browser keeps no site data. */
+  readonly status: 'opening' | 'ready' | 'failed' | 'storage-blocked'
   readonly signedIn: boolean
   readonly activePath: string
   readonly onLocaleChange: (locale: Locale) => void
@@ -52,7 +54,10 @@ export function ShellView(props: ShellViewProps) {
       </span>
     ) : (
       <p className="text-muted-foreground" data-testid="app-shell.opening" role="status">
-        {props.status === 'opening' ? t('app.shell.opening-db') : t('app.shell.failed')}
+        {match(props.status)
+          .with('opening', () => t('app.shell.opening-db'))
+          .with('storage-blocked', () => t('app.shell.storage-blocked'))
+          .otherwise(() => t('app.shell.failed'))}
       </p>
     )
 

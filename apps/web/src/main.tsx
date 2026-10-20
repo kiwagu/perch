@@ -17,7 +17,7 @@ import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
 
 type Boot =
-  | { readonly status: 'opening' | 'failed' }
+  | { readonly status: 'opening' | 'failed' | 'storage-blocked' }
   | {
       readonly status: 'ready'
       readonly services: AppServices
@@ -51,9 +51,13 @@ function bootOnce(): Promise<Boot> {
           services,
           router: createAppRouter({ modules, session: services.session, layout: Layout }),
         }),
-        () => ({ status: 'failed' }),
+        (failure) => ({
+          status: failure.kind === 'storage-blocked' ? 'storage-blocked' : 'failed',
+        }),
       ),
     )
+    // A start that throws (its code did not load) failed too: it does not open any more.
+    .catch((): Boot => ({ status: 'failed' }))
 
   return booting
 }

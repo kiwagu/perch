@@ -16,10 +16,12 @@ the port), which `bun run test:e2e` sets from the mcproc manifest through `mcpro
 serves the web app's production build (`apps/web/dist`, written by the launcher before each
 run; no dev server) and, under `/backend/`, the gateway on one origin.
 
-Specs are tagged `@smoke` (`user/`: sign up, rename) or `@full` (`sync/`: the slower specs
-of one account on several devices; `organisation/`: two accounts, each in a browser of its
-own):
+Specs are tagged `@smoke` (`user/`: sign up, rename, a browser that blocks site data) or
+`@full` (`sync/`: the slower specs of one account on several devices; `organisation/`: two
+accounts, each in a browser of its own):
 
+- `user/03-blocked-storage`: a browser that refuses the page its localStorage is told that it
+  keeps no data for Perch, and gets no sign-in form.
 - `sync/01-two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
 - `sync/02-offline-edit`: B edits offline while A edits online; both changes meet once B

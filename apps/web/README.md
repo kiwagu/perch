@@ -11,7 +11,9 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. Signing up or in goes through the gateway
+  is opened while nobody is signed in. The app starts only once the page's localStorage kept a
+  value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
+  says so, instead of forgetting who signed in and the device's id. Signing up or in goes through the gateway
   (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin; a 429 is
   `data:RATE_LIMITED`, and the sign-in page says to wait), naming the
   device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and

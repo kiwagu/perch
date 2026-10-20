@@ -64,7 +64,7 @@ export interface StorageEvents {
   removeEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
 }
 
-/** The browser's localStorage; when it is unavailable (private mode, blocked), nothing is kept. */
+/** The browser's localStorage, as `siteStorage` found it working; a write it then refuses is lost. */
 export function browserStorage(store: Storage, events: StorageEvents): KeyValueStorage {
   const attempt = <T>(run: () => T, fallback: T): T => {
     try {

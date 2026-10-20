@@ -71,6 +71,14 @@ export interface AppRootOptions {
   readonly onSyncState: (state: SyncState) => void
 }
 
+/**
+ * Why the application did not start: the browser keeps no site data (`storage-blocked`), or the
+ * session could not be restored (`open-failed`), with the error each time.
+ */
+export type BootFailure =
+  | { readonly kind: 'storage-blocked'; readonly error: DataError }
+  | { readonly kind: 'open-failed'; readonly error: DataError }
+
 /** What the application receives: ports, and the container that resolves them. */
 export interface AppServices {
   readonly container: Container
@@ -85,7 +93,7 @@ export interface AppServices {
   close(): Promise<void>
 }
 
-export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, DataError> {
+export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, BootFailure> {
   let last: BootStep | undefined
   const step = (name: BootStep): void => {
     if (name !== last) {
@@ -136,19 +144,22 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
 
   step('restore-session')
 
-  return session.restore().map(() => {
-    step('ready')
+  return session
+    .restore()
+    .mapErr((error): BootFailure => ({ kind: 'open-failed', error }))
+    .map(() => {
+      step('ready')
 
-    return {
-      container,
-      runner: session.runner,
-      writePath: session.writePath,
-      session,
-      commands,
-      organisations,
-      devices,
-      space: () => session.space(),
-      close: () => session.close(),
-    }
-  })
+      return {
+        container,
+        runner: session.runner,
+        writePath: session.writePath,
+        session,
+        commands,
+        organisations,
+        devices,
+        space: () => session.space(),
+        close: () => session.close(),
+      }
+    })
 }

@@ -6,9 +6,9 @@
  * stopped; `data-sync-leader` and `data-sync-channel` show the tab's sync role and channel.
  */
 
-import type { ResultAsync } from 'neverthrow'
+import { errAsync, type ResultAsync } from 'neverthrow'
 
-import { type DataError, deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
+import { deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
@@ -19,8 +19,9 @@ import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
-import { type AppServices, createAppRoot } from './root'
+import { type AppServices, type BootFailure, createAppRoot } from './root'
 import type { VisibilitySource } from './session-options'
+import { siteStorage } from './site-storage'
 import { browserStorage } from './storage'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -68,7 +69,14 @@ function documentVisibility(page: Document): VisibilitySource {
   }
 }
 
-export function bootBrowser(): ResultAsync<AppServices, DataError> {
+export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
+  const store = siteStorage(window)
+
+  // Without site storage nothing is kept: neither who is signed in nor the device's own id.
+  if (store.isErr()) {
+    return errAsync({ kind: 'storage-blocked', error: store.error })
+  }
+
   const html = document.documentElement
   const logger = createLogger('web')
   const showSync = (state: SyncState): void => {
@@ -117,7 +125,7 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     locks,
     hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
     clock: systemClock,
-    storage: browserStorage(window.localStorage, window),
+    storage: browserStorage(store.value, window),
     visibility: documentVisibility(document),
     logger: {
       info: (fields) => logger.info(fields, 'command'),

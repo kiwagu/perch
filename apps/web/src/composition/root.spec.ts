@@ -144,7 +144,10 @@ describe('createAppRoot', () => {
       openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
     })
 
-    expect(result._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(result._unsafeUnwrapErr()).toMatchObject({
+      kind: 'open-failed',
+      error: { code: 'data:OPEN_FAILED' },
+    })
     expect(steps).toEqual(['restore-session', 'open-db'])
   })
 

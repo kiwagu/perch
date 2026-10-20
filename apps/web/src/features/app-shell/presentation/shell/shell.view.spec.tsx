@@ -43,6 +43,15 @@ describe('ShellView', () => {
     expect(screen.queryByText('page')).toBeNull()
   })
 
+  it('says the browser keeps no site data when it blocks storage, and holds the page back', () => {
+    renderShell({ status: 'storage-blocked' })
+
+    expect(screen.getByTestId('app-shell.opening').textContent).toBe(
+      en['app.shell.storage-blocked'],
+    )
+    expect(screen.queryByText('page')).toBeNull()
+  })
+
   it('links to sign-in when signed out and to the profile when signed in', () => {
     const { unmount } = renderShell()
     const signedOut = screen.getAllByTestId('app-shell.nav.sign-in')

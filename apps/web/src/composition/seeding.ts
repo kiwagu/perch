@@ -364,7 +364,9 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},
-  }).map((services) => seedClient(services, failures))
+  })
+    .mapErr(({ error }) => error)
+    .map((services) => seedClient(services, failures))
 }
 
 /**
