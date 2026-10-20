@@ -19,6 +19,11 @@ export interface MembershipsListener {
    * whatever it is doing. Resolves once it closed.
    */
   end(code: number): Promise<void>
+  /**
+   * Another connection of the device took over: the socket closes at once, without signing the
+   * device out, and spends no key any more; the device connects again after such a close.
+   */
+  supersede(): void
 }
 
 export interface ConnectionRegistryOptions {
@@ -38,7 +43,8 @@ interface Entry {
  * memberships reaches every device it has connected, and a device signed out from another one
  * is closed wherever it is connected. Each close moves a revocation epoch, of the device or of the
  * whole identity: a hello reads the epoch once its keys are accepted and registers with it, so a
- * close that lands while the hello reads the device's row refuses the registration.
+ * close that lands while the hello reads the device's row refuses the registration. A device holds
+ * one live connection: the one a newer hello registers closes the older ones (`supersede`).
  */
 export class ConnectionRegistry {
   readonly #onFailure: (error: DataError) => void
@@ -86,6 +92,19 @@ export class ConnectionRegistry {
 
       if (entries.size === 0 && this.#byIdentity.get(identity) === entries) {
         this.#byIdentity.delete(identity)
+      }
+    }
+  }
+
+  /**
+   * Closes every live connection of `device` of `identity` but `keep`, which a newer hello of the
+   * device registered: a device holds one live socket, so an older one (a socket the device gave
+   * up that the gateway still holds) spends none of its keys. It signs nothing out: no epoch moves.
+   */
+  supersede(identity: IdentityId, device: string, keep: MembershipsListener): void {
+    for (const entry of this.#entriesOf(identity)) {
+      if (entry.device === device && entry.connection !== keep) {
+        entry.connection.supersede()
       }
     }
   }

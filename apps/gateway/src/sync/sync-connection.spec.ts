@@ -1,12 +1,11 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createAuth, type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
-import { NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
+import { noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -16,7 +15,6 @@ import {
   decodeMessage,
   encodeMessage,
   MAX_PUSH_UPDATES,
-  type Membership,
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
@@ -43,12 +41,7 @@ import { TenantDatabases } from '../tenants/tenant-databases'
 import { noteCreate, noteUpdate } from './__fixtures__/note'
 import { profileCreate } from './__fixtures__/profile'
 import { ConnectionRegistry } from './connections'
-import {
-  regionsFor,
-  type SocketLike,
-  SyncConnection,
-  type SyncConnectionDeps,
-} from './sync-connection'
+import { type SocketLike, SyncConnection, type SyncConnectionDeps } from './sync-connection'
 
 /** The access method identities sign in through, and the scope its tokens are issued for. */
 const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
@@ -73,16 +66,37 @@ const TRY_AGAIN_LATER = 1013
 const anyRenewal: RenewalGate = () => true
 
 /** A socket that records what the connection sent it, decoded, and how it was closed. */
+/** What a socket does with a message it is given: sends it, drops it (status 0), or throws. */
+type SendOutcome = 'sent' | 'dropped' | 'throws'
+
 class FakeSocket implements SocketLike {
   readonly sent: ServerMessage[] = []
   readonly closes: Array<readonly [number, string]> = []
+  readonly #outcome: (message: ServerMessage) => SendOutcome
+
+  constructor(outcome: (message: ServerMessage) => SendOutcome = () => 'sent') {
+    this.#outcome = outcome
+  }
 
   get closedWith(): readonly [number, string] | undefined {
     return this.closes[0]
   }
 
-  send(text: string): void {
-    this.sent.push(decodeMessage(serverMessage, text)._unsafeUnwrap())
+  send(text: string): number {
+    const message = decodeMessage(serverMessage, text)._unsafeUnwrap()
+    const outcome = this.#outcome(message)
+
+    if (outcome === 'throws') {
+      throw new Error('the socket is gone')
+    }
+
+    if (outcome === 'dropped') {
+      return 0
+    }
+
+    this.sent.push(message)
+
+    return text.length
   }
 
   close(code: number, reason: string): void {
@@ -137,6 +151,10 @@ interface ConnectOptions {
   readonly binding?: () => Promise<void>
   /** The gate of each hello's renewals, by device; every renewal goes through by default. */
   readonly renewals?: (device: string) => RenewalGate
+  /** Holds each move of the device's row to a renewed grant until it resolves. */
+  readonly rotating?: () => Promise<void>
+  /** What the socket does with each message it is given; it sends every one by default. */
+  readonly sends?: (message: ServerMessage) => SendOutcome
 }
 
 interface GatewayOptions {
@@ -245,7 +263,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   const logLines: string[] = []
   /** The regions the connection left at the hub, in order. */
   const unsubscribed: string[] = []
-  const socket = new FakeSocket()
+  const socket = new FakeSocket(options.sends)
   const connection = new SyncConnection(socket, {
     sessions: {
       authenticate: (
@@ -262,8 +280,13 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
                 ),
           )
           .andTee((authenticated) => options.onAuthenticated?.(authenticated)),
+      renew: (tokens, renewal) =>
+        ResultAsync.fromSafePromise(options.authenticating?.() ?? Promise.resolve())
+          .andThen(() => sessions.renew(tokens, renewal))
+          .andTee((renewed) => options.onAuthenticated?.(renewed)),
       park: (parking) => sessions.park(parking),
       parked: (presented) => sessions.parked(presented),
+      exclusively: (device, work) => sessions.exclusively(device, work),
       unpark: (identity, device) => sessions.unpark(identity, device),
     },
     devices: {
@@ -276,7 +299,10 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
         ResultAsync.fromSafePromise(options.binding?.() ?? Promise.resolve()).andThen(() =>
           devices.bind(device),
         ),
-      rotate: (rotation) => devices.rotate(rotation),
+      rotate: (rotation) =>
+        ResultAsync.fromSafePromise(options.rotating?.() ?? Promise.resolve()).andThen(() =>
+          devices.rotate(rotation),
+        ),
       revokeGrant: (grant) => {
         revokedGrants.push(grant)
 
@@ -815,6 +841,332 @@ describe('SyncConnection', () => {
     })
     expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
     expect(asked).toEqual([])
+  })
+
+  it('renews the pair the device asks for over its channel: new keys sent, its row moved to the new grant', async () => {
+    const { socket, connection, ann, devices, revokedGrants } = await connectedAsAnn()
+
+    await connection.receive(encode({ type: 'renew' }))
+
+    const [welcome, tokens, ...more] = socket.sent
+    const pair = tokens?.type === 'tokens' ? tokens : expect.unreachable('new keys')
+    const [row] = (await devices.list(ann.identity.id))._unsafeUnwrap()
+
+    expect(welcome?.type).toBe('welcome')
+    expect(more).toEqual([])
+    expect(socket.closes).toEqual([])
+    expect(pair.refresh).not.toBe(ann.tokens.refresh)
+    expect(row?.grant).toBe(grantIdOf(pair.refresh))
+
+    // The connection holds the new pair: its sign-out revokes the new grant.
+    await connection.receive(encode({ type: 'sign-out', scope: 'device' }))
+
+    expect(revokedGrants).toEqual([{ identity: ann.identity.id, grant: grantIdOf(pair.refresh) }])
+  })
+
+  it('renews again with the pair it renewed last', async () => {
+    const { socket, connection } = await connectedAsAnn()
+
+    await connection.receive(encode({ type: 'renew' }))
+    await connection.receive(encode({ type: 'renew' }))
+
+    const pairs = socket.sent.filter((message) => message.type === 'tokens')
+
+    expect(pairs).toHaveLength(2)
+    expect(new Set(pairs.map((pair) => pair.refresh)).size).toBe(2)
+    expect(socket.closes).toEqual([])
+  })
+
+  it('answers rate-limited to a renewal the limit refuses, keeps the connection and spends nothing', async () => {
+    let allowed = false
+    const fixture = await connectedAsAnn({ renewals: () => () => allowed })
+    const { socket, connection, region } = fixture
+
+    await connection.receive(encode({ type: 'renew' }))
+
+    expect(socket.sent.at(-1)).toEqual({
+      type: 'error',
+      code: 'rate-limited',
+      message: 'too many renewals',
+    })
+    expect(socket.closes).toEqual([])
+    // A refusal is not logged.
+    expect(fixture.logLines).toEqual([])
+
+    allowed = true
+    await connection.receive(encode({ type: 'renew' }))
+    await connection.receive(encode({ type: 'probe', regions: [region] }))
+
+    expect(types(socket.sent).slice(-2)).toEqual(['tokens', 'heads'])
+  })
+
+  it('closes 4001 a renewal for a device signed out from another one, and the new pair renews nothing', async () => {
+    let renewed: AuthenticatedDevice | undefined
+    const fixture = await connectedAsAnn({
+      onAuthenticated: (device) => {
+        renewed = device.renewed ? device : renewed
+      },
+    })
+    const { socket, connection, ann, devices, sessions } = fixture
+
+    ;(
+      await devices.signedOut({
+        identity: ann.identity.id,
+        grant: grantIdOf(ann.tokens.refresh) ?? 'none',
+      })
+    )._unsafeUnwrap()
+    await connection.receive(encode({ type: 'renew' }))
+
+    const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+    expect(socket.closes).toEqual([[CLOSE.revoked, 'signed out from another device']])
+    expect(types(socket.sent)).toEqual(['welcome'])
+    expect(
+      (await sessions.authenticate({ access: 'stale', refresh: pair.refresh }, anyRenewal)).isErr(),
+    ).toBe(true)
+  })
+
+  it('closes 4401 a renewal whose refresh key the database refuses', async () => {
+    const { socket, connection, ann, devices } = await connectedAsAnn()
+
+    ;(
+      await devices.revokeGrant({
+        identity: ann.identity.id,
+        grant: grantIdOf(ann.tokens.refresh) ?? 'none',
+      })
+    )._unsafeUnwrap()
+    await connection.receive(encode({ type: 'renew' }))
+
+    expect(socket.closes).toEqual([[CLOSE.unauthorized, 'the keys were not accepted']])
+    expect(types(socket.sent)).toEqual(['welcome'])
+  })
+
+  it('parks the pair a renewal made when the socket closed before it could go, for the next hello with the spent key', async () => {
+    let renewed: AuthenticatedDevice | undefined
+    let duringRenewal = (_: AuthenticatedDevice) => {}
+    const fixture = await connectedAsAnn({ onAuthenticated: (device) => duringRenewal(device) })
+
+    duringRenewal = (device) => {
+      renewed = device
+      fixture.connection.closed()
+    }
+    await fixture.connection.receive(encode({ type: 'renew' }))
+
+    const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+    expect(types(fixture.socket.sent)).toEqual(['welcome'])
+
+    const retry = open(fixture)
+
+    duringRenewal = () => {}
+    await hello(retry.connection, fixture.ann.tokens)
+
+    expect(retry.socket.sent[0]).toEqual({ type: 'tokens', ...pair })
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it.each([
+    ['expired', 'stale'],
+    ['still valid', undefined],
+  ] as const)(
+    'has a hello with the spent key and a %s access token wait for the renewal under way on the old socket, and hands it that pair',
+    async (_, access) => {
+      let release = () => {}
+      let hold: Promise<void> | undefined
+      let renewed: AuthenticatedDevice | undefined
+      const fixture = await connectedAsAnn({
+        rotating: () => hold ?? Promise.resolve(),
+        onAuthenticated: (device) => {
+          renewed = device.renewed ? device : renewed
+        },
+      })
+
+      hold = new Promise((resolve) => {
+        release = resolve
+      })
+
+      // The renewal spent the key and waits to move the row when the socket goes.
+      const renewing = fixture.connection.receive(encode({ type: 'renew' }))
+
+      await vi.waitFor(() => expect(renewed).toBeDefined())
+      fixture.connection.closed()
+
+      const retry = open(fixture)
+      const helloed = hello(retry.connection, {
+        access: access ?? fixture.ann.tokens.access,
+        refresh: fixture.ann.tokens.refresh,
+      })
+
+      // The hello goes as far as it can while the old socket's renewal is held.
+      await Promise.race([helloed, new Promise((resolve) => setTimeout(resolve, 200))])
+      release()
+      await renewing
+      await helloed
+
+      const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+      expect(retry.socket.closes).toEqual([])
+      expect(retry.socket.sent[0]).toEqual({ type: 'tokens', ...pair })
+      expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+    },
+  )
+
+  it("closes the device's older socket once a newer hello of it is welcomed, without signing it out", async () => {
+    const fixture = await connectedAsAnn()
+    const newer = open(fixture)
+
+    await hello(newer.connection, fixture.ann.tokens)
+
+    const [row] = (await fixture.devices.list(fixture.ann.identity.id))._unsafeUnwrap()
+
+    expect(fixture.socket.closes).toEqual([[1000, 'another connection of this device took over']])
+    expect(types(newer.socket.sent)).toEqual(['welcome'])
+    expect(newer.socket.closes).toEqual([])
+    expect(row?.revokedAt).toBeUndefined()
+    expect(fixture.connections.forIdentity(fixture.ann.identity.id)).toHaveLength(1)
+  })
+
+  it('has a renewal asked on an older socket wait for a newer hello of the device under way, then spend nothing', async () => {
+    let releaseAuth = () => {}
+    const fixture = await connectedAsAnn()
+    const authHold = new Promise<void>((resolve) => {
+      releaseAuth = resolve
+    })
+    const newer = open(fixture, { authenticating: () => authHold })
+    // The newer hello holds the device's keys while they are checked.
+    const helloed = hello(newer.connection, {
+      access: 'stale',
+      refresh: fixture.ann.tokens.refresh,
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // A renewal asked on the older socket meanwhile waits for the hello.
+    const renewing = fixture.connection.receive(encode({ type: 'renew' }))
+
+    releaseAuth()
+    await helloed
+    await renewing
+
+    const renewed = newer.socket.sent[0]
+    const pair = renewed?.type === 'tokens' ? renewed : expect.unreachable('the hello renewed')
+
+    expect(types(newer.socket.sent)).toEqual(['tokens', 'welcome'])
+    // The older socket was taken over before its renewal ran: it got nothing and spent nothing.
+    expect(fixture.socket.closes).toEqual([[1000, 'another connection of this device took over']])
+    expect(types(fixture.socket.sent)).toEqual(['welcome'])
+    expect(
+      (
+        await fixture.sessions.authenticate({ access: 'stale', refresh: pair.refresh }, anyRenewal)
+      ).isOk(),
+    ).toBe(true)
+  })
+
+  it('hands a renew the pair a newer hello of the device renewed with its key and could not deliver, asking no limit', async () => {
+    let renewed: AuthenticatedDevice | undefined
+    let asked = 0
+    // The older socket's limits refuse every renewal: the pair is the device's already.
+    const fixture = await connectedAsAnn({
+      renewals: () => () => {
+        asked += 1
+
+        return false
+      },
+    })
+    const newer = open(fixture, {
+      onAuthenticated: (device) => {
+        if (device.renewed) {
+          renewed = device
+          newer.connection.closed()
+        }
+      },
+    })
+
+    // The newer socket goes while its hello renews the pair: it is parked, and the older socket
+    // stays the device's.
+    await hello(newer.connection, { access: 'stale', refresh: fixture.ann.tokens.refresh })
+
+    const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+    expect(fixture.socket.closes).toEqual([])
+
+    await fixture.connection.receive(encode({ type: 'renew' }))
+
+    expect(fixture.socket.closes).toEqual([])
+    expect(fixture.socket.sent.at(-1)).toEqual({ type: 'tokens', ...pair })
+    expect(asked).toBe(0)
+  })
+
+  it.each(['dropped', 'throws'] as const)(
+    'parks the pair of a renewal whose tokens the socket %s, closes, and the next hello with the spent key takes it',
+    async (outcome) => {
+      let renewed: AuthenticatedDevice | undefined
+      const fixture = await connectedAsAnn({
+        sends: (message) => (message.type === 'tokens' ? outcome : 'sent'),
+        onAuthenticated: (device) => {
+          renewed = device.renewed ? device : renewed
+        },
+      })
+
+      await fixture.connection.receive(encode({ type: 'renew' }))
+
+      const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+      expect(fixture.socket.closes).toEqual([[1011, 'the gateway failed to handle the message']])
+
+      const retry = open(fixture)
+
+      await hello(retry.connection, fixture.ann.tokens)
+
+      expect(retry.socket.sent[0]).toEqual({ type: 'tokens', ...pair })
+      expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+    },
+  )
+
+  it('parks the pair a hello renewed when the socket dropped its tokens, and the next hello takes it', async () => {
+    let renewed: AuthenticatedDevice | undefined
+    const fixture = await connect({
+      sends: (message) => (message.type === 'tokens' ? 'dropped' : 'sent'),
+      onAuthenticated: (device) => {
+        renewed = device.renewed ? device : renewed
+      },
+    })
+    const stale = { access: 'stale', refresh: fixture.ann.tokens.refresh }
+
+    await hello(fixture.connection, stale)
+
+    const pair = renewed?.renewed ? renewed.tokens : expect.unreachable('a renewed pair')
+
+    expect(fixture.socket.sent).toEqual([])
+    expect(fixture.socket.closes).toEqual([[1011, 'the gateway failed to handle the message']])
+
+    const retry = open(fixture)
+
+    await hello(retry.connection, stale)
+
+    expect(retry.socket.sent[0]).toEqual({ type: 'tokens', ...pair })
+    expect(types(retry.socket.sent)).toEqual(['tokens', 'welcome'])
+  })
+
+  it('answers unauthorized to a renewal from a device that came without a refresh key, and keeps it', async () => {
+    const fixture = await connect()
+
+    await fixture.connection.receive(
+      encode({
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        access: fixture.ann.tokens.access,
+        device: DEVICE,
+      }),
+    )
+    await fixture.connection.receive(encode({ type: 'renew' }))
+
+    expect(fixture.socket.sent.at(-1)).toEqual({
+      type: 'error',
+      code: 'unauthorized',
+      message: 'no refresh key to renew with',
+    })
+    expect(fixture.socket.closes).toEqual([])
   })
 
   it('hands the spent key a pair parked for it while the keys of its hello were checked', async () => {
@@ -1711,32 +2063,5 @@ describe('SyncConnection', () => {
 
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
-  })
-})
-
-describe('regionsFor', () => {
-  const identity = identityIdFactory.create()
-  const other = identityIdFactory.create()
-  const membership = (key: string): Membership => ({
-    tenant: { id: tenantIdFactory.create(), key, name: key },
-    role: 'member',
-  })
-
-  it("makes the identity the owner of its private region and judges its organisation's region by its role", () => {
-    const regions = regionsFor(identity, [membership('acme')], replicaSchema)
-    const acme = regions.get('tenant:acme')?.actor.ability
-
-    expect(regions.get(`identity:${identity}`)?.actor).toEqual({
-      id: identity,
-      ability: OWNER_ABILITY,
-    })
-    expect(acme?.can('update', 'note', { author: `member:${identity}` })).toBe(true)
-    expect(acme?.can('update', 'note', { author: `member:${other}` })).toBe(false)
-  })
-
-  it('allows nothing in a tenant region whose membership names no organisation key', () => {
-    const regions = regionsFor(identity, [membership('Not A Key')], replicaSchema)
-
-    expect(regions.get('tenant:Not A Key')?.actor.ability).toBe(NO_ABILITY)
   })
 })

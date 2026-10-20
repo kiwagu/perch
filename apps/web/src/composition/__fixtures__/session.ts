@@ -251,6 +251,10 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
           context.onTokens({ access: message.access, refresh: message.refresh })
         }
 
+        if (message.type === 'error' && message.code === 'rate-limited') {
+          context.onRenewalRefused()
+        }
+
         if (message.type === 'welcome' || message.type === 'memberships') {
           context.onMemberships(message.memberships)
         }

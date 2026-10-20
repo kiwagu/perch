@@ -128,6 +128,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
         device: context.device,
         credentials: context.credentials,
         onTokens: context.onTokens,
+        onRenewalRefused: context.onRenewalRefused,
         onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,

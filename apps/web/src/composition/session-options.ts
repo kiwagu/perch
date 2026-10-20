@@ -26,6 +26,8 @@ export interface TransportContext {
   readonly device: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onTokens: (tokens: SignedInDevice['tokens']) => void
+  /** The gateway's limits refused a renewal the channel asked for. */
+  readonly onRenewalRefused: () => void
   readonly onMemberships: (memberships: readonly Membership[]) => void
   readonly onEnded: (reason: EndReason) => void
 }

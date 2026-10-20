@@ -28,7 +28,7 @@ identity), so a device holds one live grant and a pair it left behind dies with 
 revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
 is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
 cannot be reached answers 500, here and on every route and hello below. Devices sync over
-a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 5 (the
+a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 6 (the
 pair is renewed with the refresh key when the access token no longer works, and the new pair is
 sent first).
 The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
@@ -41,7 +41,24 @@ signed out, then signed in again) or naming no such second are closed with 4401 
 this device`), a device signed out with 4001, and a pair renewed for any of them is revoked at
 once. What this does not catch: a live access token presented under another live device of the
 same identity, whose session started before the token was issued, binds to that device until
-the token expires (at most 15 minutes); the list of devices never gives their ids away. A bound
+the token expires (at most 15 minutes); the list of devices never gives their ids away. A
+welcomed device may ask for a new pair over its open channel (`renew`, no payload: the
+connection holds the pair it renews, `channel-renewal.ts`): the same limits, refresh exchange and
+row move as a hello's renewal, the new pair sent as `tokens` and held from then on; a renewal the
+limits refuse is answered with an `error` of code `rate-limited` and the channel kept; refused
+keys close with 4401, a device signed out with 4001 (its new pair revoked at once); a socket that
+closed before the pair could go leaves it parked for the device's next hello. A device holds one
+live socket: the hello that registers closes the device's older sockets with 1000 (`another
+connection of this device took over`, `ConnectionRegistry.supersede`), which signs nothing out,
+and the device's key operations (a hello from its key check to its registration, and a `renew`)
+run one at a time across its sockets (`PendingPairs.exclusively`). So a hello finds parked the
+pair a renewal under way could not deliver, whatever its access token; a `renew` that waited for
+a newer hello of the device finds its socket closed and spends nothing; and a `renew` whose key a
+hello of the device spent takes the pair that hello parked, looked up first, so no renewal is
+tried or counted. A `tokens` message the socket drops
+(`send` answers 0) or throws on is parked the same way and the socket closed as a failed server
+(1011), at hello and over the channel. A pair sent to an older socket the device gave up, before a
+newer hello of it came, is lost with that socket, and the device signs in again. A bound
 device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
 belongs to and those memberships, the only regions it may name, and subscribes, pulls, pushes,

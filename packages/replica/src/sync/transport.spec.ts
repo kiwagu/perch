@@ -67,6 +67,7 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
   const clock = manualClock()
   const sockets: FakeSocket[] = []
   const events: string[] = []
+  let renewalsRefused = 0
   const received: ServerMessage[] = []
   const tokens: Array<{ readonly access: string; readonly refresh: string }> = []
   const memberships: Array<readonly Membership[]> = []
@@ -74,6 +75,9 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     url: 'wss://gateway.example.test/sync',
     credentials,
     onTokens: (pair) => tokens.push(pair),
+    onRenewalRefused: () => {
+      renewalsRefused += 1
+    },
     onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
@@ -109,7 +113,18 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     return socket()
   }
 
-  return { clock, sockets, events, received, tokens, memberships, transport, socket, connect }
+  return {
+    clock,
+    sockets,
+    events,
+    received,
+    tokens,
+    memberships,
+    transport,
+    socket,
+    connect,
+    renewalsRefused: () => renewalsRefused,
+  }
 }
 
 describe('WebSocket transport', () => {
@@ -198,6 +213,18 @@ describe('WebSocket transport', () => {
     connect().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
 
     expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
+  })
+
+  it('tells onRenewalRefused of a renewal the gateway refused, and keeps the channel up', () => {
+    const { connect, events, renewalsRefused } = harness()
+    const socket = connect()
+
+    socket.receive({ type: 'error', code: 'rate-limited', message: 'too many renewals' })
+    socket.receive({ type: 'error', code: 'internal', message: 'failed' })
+
+    expect(renewalsRefused()).toBe(1)
+    expect(events).toEqual(['up'])
+    expect(socket.closedWith).toBeUndefined()
   })
 
   it("hands the welcome's memberships and a later memberships message to onMemberships", () => {

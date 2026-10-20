@@ -19,11 +19,16 @@ function connection(answered: Promise<void> = Promise.resolve()) {
   const heard: Array<readonly Membership[]> = []
   const revoked: string[] = []
   const ended: number[] = []
+  const superseded = { count: 0 }
 
   return {
     heard,
     revoked,
     ended,
+    superseded,
+    supersede: () => {
+      superseded.count += 1
+    },
     memberships: async (next: readonly Membership[]) => {
       heard.push(next)
       await answered
@@ -75,6 +80,27 @@ function registryHeard(): ConnectionRegistry {
 }
 
 describe('ConnectionRegistry', () => {
+  it('supersedes the other connections of a device: closes them, keeps the one named, moves no epoch', () => {
+    const registry = registryHeard()
+    const ann = identityIdFactory.create()
+    const bob = identityIdFactory.create()
+    const older = connection()
+    const newer = connection()
+    const phone = connection()
+    const bobs = connection()
+    const epoch = registry.epoch(ann, 'laptop')
+
+    registry.add(ann, 'laptop', older, epoch)
+    registry.add(ann, 'laptop', newer, epoch)
+    registry.add(ann, 'phone', phone, registry.epoch(ann, 'phone'))
+    registry.add(bob, 'laptop', bobs, registry.epoch(bob, 'laptop'))
+    registry.supersede(ann, 'laptop', newer)
+
+    expect(older.superseded.count).toBe(1)
+    expect([newer, phone, bobs].map((each) => each.superseded.count)).toEqual([0, 0, 0])
+    expect(registry.epoch(ann, 'laptop')).toBe(epoch)
+  })
+
   it('answers add with a function that removes the connection', () => {
     const registry = registryHeard()
     const ann = identityIdFactory.create()

@@ -53,6 +53,8 @@ export interface WebSocketTransportOptions {
   /** The device's own id, named in every hello. */
   readonly device: string
   readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
+  /** Hears that the gateway's limits refused a renewal asked for over the channel (`renew`). */
+  readonly onRenewalRefused?: () => void
   /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
   readonly onMemberships?: (memberships: readonly Membership[]) => void
   /**
@@ -284,6 +286,10 @@ export class WebSocketTransport implements SyncTransport {
 
     if (message.type === 'tokens') {
       this.#options.onTokens({ access: message.access, refresh: message.refresh })
+    }
+
+    if (message.type === 'error' && message.code === 'rate-limited') {
+      this.#options.onRenewalRefused?.()
     }
 
     if (message.type === 'welcome' || message.type === 'memberships') {

@@ -176,6 +176,13 @@ export class SessionOrganisations {
     }
   }
 
+  /** The gateway's limits refused the renewal this tab's channel asked for: it gives up at once. */
+  renewalRefused(): void {
+    for (const renewal of [...this.#renewals]) {
+      renewal(false)
+    }
+  }
+
   /**
    * This tab's channel ended for good: the gateway refused the keys or signed the device out, and
    * the device signs out. A renewal waiting for new keys gives up at once, and so does every one
@@ -191,12 +198,11 @@ export class SessionOrganisations {
 
   /**
    * Has the gateway renew the device's keys, as a route that refused the access token asks: the
-   * leading tab connects again, and the gateway answers a token that no longer works with a new
-   * pair; another tab asks the leader with the `renew` hint. True once new keys came within 10
-   * seconds, to this tab's channel or, kept by the leader, into the storage; false at once when
-   * this tab's channel ended for good. A renewal asked while one is under way joins it: a second
-   * hello would present the refresh key the first one spent, and the gateway would refuse the
-   * device.
+   * leading tab asks for a new pair over its open channel (one that is down renews at the hello
+   * that brings it up); another tab asks the leader with the `renew` hint. True once new keys came
+   * within 10 seconds, to this tab's channel or, kept by the leader, into the storage; false at
+   * once when this tab's channel ended for good or the gateway's limits refused the renewal. A
+   * renewal asked while one is under way joins it: the refresh key works once.
    */
   renewKeys(): Promise<boolean> {
     const open = this.#options.open()
@@ -246,7 +252,7 @@ export class SessionOrganisations {
       )
 
       if (open.space.sync) {
-        open.space.reconnectSync()
+        open.space.renewSync()
       } else {
         open.hints.post('renew')
       }

@@ -55,10 +55,13 @@ export interface GatewayStub {
    */
   failNextSignOut(): Promise<void>
   /**
-   * The next device to connect is handed these keys before its welcome, as the gateway does
-   * when the access token a device presents no longer works and it renews the pair.
+   * The next renewal hands over these keys: before the welcome of the next device to connect,
+   * as the gateway does when the access token a device presents no longer works, or as the
+   * answer to the next renewal a device asks for over its channel.
    */
   renewAtNextHello(tokens: { readonly access: string; readonly refresh: string }): void
+  /** Every renewal a device asks for over its channel is refused from now on, as by the limits. */
+  refuseRenewals(): void
   /** How many sign-outs the devices sent. */
   signOuts(): number
   /**
@@ -114,6 +117,7 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     keepOpen: undefined,
     failSignOut: undefined,
     renewal: undefined,
+    refuseRenewals: false,
   }
   const channels: DeviceChannel[] = []
 
@@ -163,6 +167,9 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     },
     renewAtNextHello(tokens) {
       gateway.renewal = tokens
+    },
+    refuseRenewals() {
+      gateway.refuseRenewals = true
     },
     signOuts: () => gateway.signOuts,
     endWith(reason) {

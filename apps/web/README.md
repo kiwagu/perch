@@ -67,10 +67,11 @@ modeling stage.
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. A token is renewed through the
-  leading tab: it connects again and the gateway answers a token that no longer works with a
-  new pair; another tab asks the leader with the `renew` hint and waits for the new access key
-  in storage (10 seconds at most). A renewal gives up at once when the leading tab's channel ended
-  for good (keys refused, or the device signed out from another one). One tab per browser leads the
+  leading tab: it asks the gateway for a new pair over its open channel (`renew`), without
+  connecting again (a channel that is down renews at the hello that brings it up); another tab
+  asks the leader with the `renew` hint and waits for the new access key in storage (10 seconds at
+  most). A renewal gives up at once when the leading tab's channel ended for good (keys refused,
+  or the device signed out from another one) and when the gateway's limits refused it. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`) for the private region and every organisation's, keeping every renewed pair of
   keys; the tabs hint each other over a BroadcastChannel, so each reads what the others wrote or

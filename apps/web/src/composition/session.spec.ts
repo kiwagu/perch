@@ -1380,17 +1380,7 @@ describe('SessionService memberships', () => {
     stop()
   })
 
-  it('renewKeys in the leading tab connects again and resolves once the gateway handed new keys', async () => {
-    const { session, storage, gateway } = await bootSession({ saved: ann, online: true })
-
-    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
-
-    expect(await session.renewKeys()).toBe(true)
-    expect(storage.get('perch.session.token')).toBe('access-2')
-    expect(storage.get('perch.session.refresh')).toBe('refresh-2')
-  })
-
-  it('renewKeys asked again while a renewal is under way joins it: the leader connects again once', async () => {
+  it('renewKeys in the leading tab asks over its open channel and resolves once the gateway handed new keys', async () => {
     const { session, storage, gateway, transports } = await bootSession({
       saved: ann,
       online: true,
@@ -1398,9 +1388,55 @@ describe('SessionService memberships', () => {
 
     gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
 
-    // Two routes refused the access token at once: one hello renews the pair for both.
+    expect(await session.renewKeys()).toBe(true)
+    expect(storage.get('perch.session.token')).toBe('access-2')
+    expect(storage.get('perch.session.refresh')).toBe('refresh-2')
+    expect(transports().map((transport) => transport.renews())).toEqual([1])
+    expect(transports().map((transport) => transport.reconnects())).toEqual([0])
+  })
+
+  it('renewKeys while the channel is down waits for the hello that brings it up, which renews', async () => {
+    const { session, storage, gateway, transports } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+    const channel = transports().at(-1) ?? expect.unreachable('a channel')
+
+    channel.goOffline()
+
+    const renewing = session.renewKeys()
+
+    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+    channel.goOnline()
+
+    expect(await renewing).toBe(true)
+    expect(storage.get('perch.session.token')).toBe('access-2')
+    expect(channel.renews()).toBe(0)
+  })
+
+  it('renewKeys resolves false at once when the gateway refuses the renewal, and the device stays signed in', async () => {
+    const { session, gateway, clock } = await bootSession({ saved: ann, online: true })
+
+    gateway.refuseRenewals()
+
+    const started = clock.now()
+
+    expect(await session.renewKeys()).toBe(false)
+    expect(clock.now()).toBe(started)
+    expect(session.current()?.id).toBe(ann.identity.id)
+  })
+
+  it('renewKeys asked again while a renewal is under way joins it: the leader asks once', async () => {
+    const { session, storage, gateway, transports } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+
+    gateway.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+
+    // Two routes refused the access token at once: one renewal serves both.
     expect(await Promise.all([session.renewKeys(), session.renewKeys()])).toEqual([true, true])
-    expect(transports().map((transport) => transport.reconnects())).toEqual([1])
+    expect(transports().map((transport) => transport.renews())).toEqual([1])
     expect(storage.get('perch.session.token')).toBe('access-2')
   })
 

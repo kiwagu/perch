@@ -347,6 +347,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         device: context.device,
         credentials: context.credentials,
         onTokens: context.onTokens,
+        onRenewalRefused: context.onRenewalRefused,
         onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,

@@ -1,6 +1,7 @@
 /**
- * The pairs a hello renewed that its device cannot take: dropped at once when the device has no
- * session, or parked for the device's next hello with the refresh key the renewal spent.
+ * The pairs a renewal made that the device does not hold yet: delivered, dropped at once when the
+ * device has no session, or parked for the device's next hello with the refresh key it still holds
+ * when the socket could not take them.
  */
 
 import type { IdentityId } from '@workspace/ids'
@@ -42,6 +43,35 @@ export class HelloRenewals {
         'the grant of a pair renewed for a device without a session could not be revoked',
       )
     }
+  }
+
+  /**
+   * Hands the device a pair it does not hold yet through `send`. A pair the socket dropped, or
+   * one whose send threw, is parked for the device's next hello with the key it still holds.
+   * Answers whether the device got it.
+   */
+  deliver(
+    input: {
+      readonly identity: IdentityId
+      readonly device: string
+      readonly held: string | undefined
+      readonly tokens: DeviceTokens
+    },
+    send: (tokens: DeviceTokens) => boolean,
+  ): boolean {
+    let sent = false
+
+    try {
+      sent = send(input.tokens)
+    } catch {
+      sent = false
+    }
+
+    if (!sent && input.held !== undefined) {
+      this.park(input.identity, input.device, input.held, input.tokens)
+    }
+
+    return sent
   }
 
   /** Parks a pair the device could not take, for its next hello with the spent refresh key. */

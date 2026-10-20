@@ -8,8 +8,8 @@ import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys, saveKeys 
 
 /** What the session does with what the channel of one identity hears from the gateway. */
 export interface SessionChannelEvents {
-  /** The gateway renewed the keys, which are saved. */
-  readonly renewed: () => void
+  /** Hears how a renewal ended: new keys, saved; or a renewal the gateway's limits refused. */
+  readonly renewal: { renewed(): void; renewalRefused(): void }
   readonly memberships: (memberships: readonly Membership[]) => void
   /** The gateway refused the keys: they will not work again, and nothing renews them. */
   readonly refused: () => void
@@ -36,9 +36,10 @@ export function sessionTransportContext(
     onTokens: (tokens) => {
       if (saved()) {
         saveKeys(storage, tokens)
-        events.renewed()
+        events.renewal.renewed()
       }
     },
+    onRenewalRefused: () => events.renewal.renewalRefused(),
     onMemberships: events.memberships,
     onEnded: (reason) =>
       match(reason)

@@ -46,13 +46,22 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 5 only', () => {
+  it('takes a hello of protocol 6 only', () => {
     const hello = (protocol: number) =>
       JSON.stringify({ type: 'hello', protocol, access: 'a', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(5)
-    expect(decodeMessage(clientMessage, hello(5)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(4)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(6)
+    expect(decodeMessage(clientMessage, hello(6)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(5)).isErr()).toBe(true)
+  })
+
+  it('takes a renew that carries nothing: the gateway holds the pair it renews', () => {
+    expect(decodeMessage(clientMessage, JSON.stringify({ type: 'renew' }))._unsafeUnwrap()).toEqual(
+      { type: 'renew' },
+    )
+    expect(
+      decodeMessage(clientMessage, JSON.stringify({ type: 'renew', refresh: 'r' }))._unsafeUnwrap(),
+    ).toEqual({ type: 'renew' })
   })
 
   it("decodes a reject that names a batch under another identity's peer", () => {
@@ -125,6 +134,7 @@ describe('sync protocol', () => {
       { type: 'heads', regions: [{ region: 'identity:idn_a', head: 4 }], time: 2 },
       { type: 'compaction', region: 'identity:idn_a', covers: 4, outcome: 'accepted' },
       { type: 'error', code: 'protocol', message: 'bad' },
+      { type: 'error', code: 'rate-limited', message: 'too many renewals' },
     ]
 
     for (const message of messages) {

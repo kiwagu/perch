@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import {
@@ -15,7 +13,10 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { DeviceSessions } from './device-sessions'
+import { type PairKey, type ParkedPair, PendingPairs } from './pending-pairs'
 import { issuedAtOf, namesOtherScope, type TokenScope } from './token-claims'
+
+export type { ParkedPair } from './pending-pairs'
 
 /** The keys a device keeps: the short-lived access token and the refresh key that renews it. */
 export interface DeviceTokens {
@@ -49,12 +50,6 @@ export type AuthenticatedDevice =
  */
 export type RenewalGate = () => boolean
 
-/** A pair parked for a device, and the identity it signs in. */
-export interface ParkedPair {
-  readonly identity: IdentityId
-  readonly tokens: DeviceTokens
-}
-
 export interface IdentitySessionsOptions {
   /** Opens an auth session of its own on the central database, through its identity access method. */
   readonly openAuth: () => AuthPort
@@ -77,9 +72,6 @@ export interface IdentitySessionsOptions {
   readonly onFailure: (error: DataError) => void
 }
 
-/** How long a renewed pair the device could not take waits for its next hello. */
-const PARKED_MS = 60_000
-
 /** A refresh key of the database: `surreal-refresh-<grant id>-<secret>`. */
 const REFRESH_KEY = /^surreal-refresh-([^-]+)-.+$/
 
@@ -89,22 +81,6 @@ const REFRESH_KEY = /^surreal-refresh-([^-]+)-.+$/
  */
 export function grantIdOf(refresh: string): string | undefined {
   return REFRESH_KEY.exec(refresh)?.[1]
-}
-
-/** A pair parked for a device of an identity, until the moment it is no longer handed out. */
-interface Parked {
-  readonly identity: IdentityId
-  readonly device: string
-  readonly tokens: DeviceTokens
-  readonly until: number
-}
-
-/**
- * Where a pair is parked: the device and a digest of the refresh key the renewal spent, so the
- * key itself is never held.
- */
-function parkingOf(device: string, refresh: string): string {
-  return `${device}#${createHash('sha256').update(refresh).digest('hex')}`
 }
 
 function refused(message: string, cause?: unknown): DataError {
@@ -143,14 +119,12 @@ function signedIn(auth: AuthPort, identity: AuthUser): Result<SignedIn, DataErro
 function renew(
   auth: AuthPort,
   tokens: { readonly access: string; readonly refresh: string },
-): ResultAsync<AuthenticatedDevice, DataError> {
+): ResultAsync<Extract<AuthenticatedDevice, { readonly renewed: true }>, DataError> {
   return auth
     .resume(tokens)
     .andThen(identityOf)
     .andThen((identity) =>
-      pairOf(auth.tokens()).map(
-        (pair): AuthenticatedDevice => ({ identity, tokens: pair, renewed: true }),
-      ),
+      pairOf(auth.tokens()).map((pair) => ({ identity, tokens: pair, renewed: true as const })),
     )
 }
 
@@ -169,17 +143,16 @@ export class IdentitySessions {
   readonly #openAuth: () => AuthPort
   readonly #onFailure: (error: DataError) => void
   readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
-  readonly #clock: Clock
   readonly #scope: TokenScope
-  /** The pairs parked for a retry, by device and the digest of the spent refresh key. */
-  readonly #parked = new Map<string, Parked>()
+  /** The renewed pairs waiting for their device, and each device's turns of key operations. */
+  readonly #pairs: PendingPairs
 
   constructor(options: IdentitySessionsOptions) {
     this.#openAuth = options.openAuth
     this.#onFailure = options.onFailure
     this.#devices = options.devices
-    this.#clock = options.clock
     this.#scope = options.scope
+    this.#pairs = new PendingPairs(options.clock)
   }
 
   /** Signs an identity up on `device`, which is recorded with the grant of its pair. */
@@ -253,56 +226,46 @@ export class IdentitySessions {
   }
 
   /**
-   * Parks the renewed pair `tokens` that `device` could not take, for its next hello with the
-   * refresh key the renewal spent; it is handed out once, within 60 seconds.
+   * Renews the pair with its refresh key once `renewal` lets it, whether the access token still
+   * works or not: a device asked for new keys over its open channel. A renewal the gate refuses
+   * fails `data:RATE_LIMITED`, its key unspent; a key the database refuses fails as refused keys.
+   * It records nothing: the caller moves the device's row to the new grant.
    */
-  park(input: {
-    readonly identity: IdentityId
-    readonly device: string
-    readonly spentRefresh: string
-    readonly tokens: DeviceTokens
-  }): void {
-    const now = this.#clock.now()
-
-    for (const [key, parked] of this.#parked) {
-      if (parked.until <= now) {
-        this.#parked.delete(key)
-      }
+  renew(
+    tokens: DeviceTokens,
+    renewal: RenewalGate,
+  ): ResultAsync<Extract<AuthenticatedDevice, { readonly renewed: true }>, DataError> {
+    // The database would renew a pair of another database's record access: refuse it first.
+    if (namesOtherScope(tokens.access, this.#scope)) {
+      return errAsync(refused('the access token names another namespace, database or access'))
     }
 
-    this.#parked.set(parkingOf(input.device, input.spentRefresh), {
-      identity: input.identity,
-      device: input.device,
-      tokens: input.tokens,
-      until: now + PARKED_MS,
-    })
+    // Counted before the refresh key is exchanged: a refused renewal spends nothing.
+    if (!renewal()) {
+      return errAsync(dataError('data:RATE_LIMITED', 'too many renewals'))
+    }
+
+    return this.#withAuth((auth) => renew(auth, tokens))
   }
 
-  /**
-   * The pair parked for `device` and the spent refresh key it presents, taken out with the
-   * identity it signs in; `undefined` when none is parked or 60 s passed since it was last parked.
-   */
-  parked(input: { readonly device: string; readonly refresh: string }): ParkedPair | undefined {
-    const key = parkingOf(input.device, input.refresh)
-    const parked = this.#parked.get(key)
-
-    this.#parked.delete(key)
-
-    return parked && parked.until > this.#clock.now()
-      ? { identity: parked.identity, tokens: parked.tokens }
-      : undefined
+  /** Parks a renewed pair its device could not take (`PendingPairs.park`). */
+  park(input: Parameters<PendingPairs['park']>[0]): void {
+    this.#pairs.park(input)
   }
 
-  /**
-   * Forgets every pair parked for `device` of `identity`, or for every device of the identity when
-   * none is named: it was signed out.
-   */
+  /** Runs a key operation of the device once those before it ended (`PendingPairs.exclusively`). */
+  exclusively<T>(device: string, work: () => Promise<T>): Promise<T> {
+    return this.#pairs.exclusively(device, work)
+  }
+
+  /** Takes out the pair parked for the device and the key it presents (`PendingPairs.parked`). */
+  parked(input: PairKey): ParkedPair | undefined {
+    return this.#pairs.parked(input)
+  }
+
+  /** Forgets the pairs parked for a device, or every device, of the identity (`PendingPairs.unpark`). */
   unpark(identity: IdentityId, device?: string): void {
-    for (const [key, parked] of this.#parked) {
-      if (parked.identity === identity && (device === undefined || parked.device === device)) {
-        this.#parked.delete(key)
-      }
-    }
+    this.#pairs.unpark(identity, device)
   }
 
   /**

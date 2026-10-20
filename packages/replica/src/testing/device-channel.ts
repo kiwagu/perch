@@ -4,7 +4,7 @@ import type { ClientMessage, ServerMessage } from '../protocol'
 import { type ChannelState, type EndReason, endingOf } from '../sync/transport'
 
 import { compact, probe, pull, push, subscribe } from './stub-hub-requests'
-import { signOut, welcome } from './stub-session'
+import { renew, signOut, welcome } from './stub-session'
 import {
   type Connection,
   type DeviceRegion,
@@ -39,6 +39,7 @@ export class DeviceChannel implements StubTransport {
   #connection: Connection | undefined
   #dropNextFanOut = false
   #reconnects = 0
+  #renews = 0
 
   constructor(gateway: Gateway, identity: string, device: string) {
     this.#gateway = gateway
@@ -84,6 +85,10 @@ export class DeviceChannel implements StubTransport {
 
   reconnects(): number {
     return this.#reconnects
+  }
+
+  renews(): number {
+    return this.#renews
   }
 
   dropNextFanOut(): void {
@@ -235,6 +240,10 @@ export class DeviceChannel implements StubTransport {
 
     match(message)
       .with({ type: 'hello' }, () => {})
+      .with({ type: 'renew' }, () => {
+        this.#renews += 1
+        renew(gateway, connection)
+      })
       .with({ type: 'subscribe' }, (request) =>
         subscribe(gateway, connection, this.#regions.get(request.region), request),
       )

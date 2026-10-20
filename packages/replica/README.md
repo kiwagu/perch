@@ -58,14 +58,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (5), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (6), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
   `hello` names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
   `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
   the regions the device may name with their heads and the identity's memberships, and a
-  `memberships` message tells each later change of them. `CLOSE` names the gateway's close
+  `memberships` message tells each later change of them; a `renew` (no payload) asks for a new
+  pair over the open channel, answered by `tokens`, or by an `error` of code `rate-limited` when
+  the gateway's limits refuse the renewal. `CLOSE` names the gateway's close
   codes: `protocol` 4400, `unauthorized` 4401 (keys refused, or a device without a session: no
   session row for the device it names, or a row that holds another grant), `forbidden` 4403,
   `timeout` 4408, `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the
@@ -135,14 +137,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   other close after it asked, or none within 10 seconds, stops the transport and answers
   `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
-  tells that such a sign-out stopped the channel, after which only a new engine syncs; `reconnect()`
-  asks the transport to connect again at once, so the gateway welcomes the device anew with fresh keys).
+  tells that such a sign-out stopped the channel, after which only a new engine syncs; `renew()`
+  asks the gateway for new keys over the welcomed channel, and answers false,
+  sending nothing, while the channel is not up; a `rate-limited` answer is no error of any region).
   Its parts:
   `WebSocketTransport` (hello with the stored keys and the `device` it is given, up after the
   welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
-  the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`, the memberships of the welcome and of each
+  the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`,
+  a renewal the gateway's limits refused to `onRenewalRefused`, the memberships of the welcome and of each
   `memberships` message to `onMemberships`, `onEnded` with an `EndReason` when the keys
   (`unauthorized`) or the protocol (`protocol`) are refused, the device is signed out
   (`signed-out`) or signed out from another device (`revoked`, 4001), none followed by a
@@ -185,10 +189,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   without a network (welcomed with the identity's private region, where it is the owner, and,
   for each of the `memberships`, none by default, the organisation's region, where its batches
   are checked with the abilities of the membership's role), can go
-  offline and come back, and counts its `reconnects()`;
+  offline and come back, and counts its `reconnects()` and the renewals it asked for, `renews()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next device to connect a renewed pair
-  before its welcome), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
+  `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next renewal these keys: before the
+  welcome of the next device to connect, or as the answer to a `renew`; a `renew` without them is
+  not answered yet), `refuseRenewals` (every `renew` is answered `rate-limited`), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
   the channel open), `failNextSignOut` (closes as a gateway that could not
   revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
   protocol, or signs the devices out), `closeChannels(identity, device, code)` (closes the

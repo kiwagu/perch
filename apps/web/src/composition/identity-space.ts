@@ -87,8 +87,11 @@ export interface IdentitySpace {
   tenants(): readonly string[]
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
-  /** Has the leading tab's engine connect again at once; nothing happens while another tab leads. */
-  reconnectSync(): void
+  /**
+   * Has the leading tab's engine ask the gateway for new keys over its channel. Nothing happens
+   * while another tab leads, or while the channel is down: the hello that brings it up renews.
+   */
+  renewSync(): void
   /**
    * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
    * engine's channel: as on a change of leader, a new engine over a new channel replaces it
@@ -242,8 +245,8 @@ class Space implements IdentitySpace {
     }
   }
 
-  reconnectSync(): void {
-    this.#engine?.reconnect()
+  renewSync(): void {
+    this.#engine?.renew()
   }
 
   resumeSync(): void {
@@ -396,9 +399,9 @@ class Space implements IdentitySpace {
       // Another tab began a sign-out: the session holds this tab's writes back.
       case 'sign-out':
         break
-      // Another tab needs new keys: the gateway renews them when the leader connects again.
+      // Another tab needs new keys: the leader asks the gateway for them over its channel.
       case 'renew':
-        this.#engine?.reconnect()
+        this.#engine?.renew()
         break
       // Another tab reset a region: open it again from the database.
       case 'reset':

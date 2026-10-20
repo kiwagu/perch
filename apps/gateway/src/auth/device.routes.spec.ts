@@ -131,6 +131,7 @@ function listener() {
     ended,
     memberships: () => Promise.resolve(),
     revoke: () => Promise.resolve(),
+    supersede: () => {},
     end: (code: number) => {
       ended.push(code)
 

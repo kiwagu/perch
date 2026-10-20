@@ -3,7 +3,7 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 5
+export const PROTOCOL_VERSION = 6
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
@@ -96,6 +96,8 @@ export const clientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('probe'), regions: z.array(region).max(64) }),
   z.object({ type: z.literal('compact'), region, covers: head, snapshot: bytes }),
   z.object({ type: z.literal('sign-out'), scope: z.literal('device') }),
+  /** Asks for a new pair over the open channel; the gateway holds the pair it renews. */
+  z.object({ type: z.literal('renew') }),
 ])
 
 export const serverMessage = z.discriminatedUnion('type', [
@@ -117,7 +119,7 @@ export const serverMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('compaction'), region, covers: head, outcome: compactionOutcome }),
   z.object({
     type: z.literal('error'),
-    code: z.enum(['protocol', 'unauthorized', 'forbidden-region', 'internal']),
+    code: z.enum(['protocol', 'unauthorized', 'forbidden-region', 'internal', 'rate-limited']),
     message: z.string(),
   }),
 ])

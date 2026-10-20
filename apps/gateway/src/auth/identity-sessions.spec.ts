@@ -258,6 +258,35 @@ describe('IdentitySessions', () => {
     ).toBe('data:AUTH_FAILED')
   })
 
+  it('renews the pair on request, access token valid or not, and the spent key renews no more', async () => {
+    const sessions = await testSessions()
+    const { identity, tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    const device = (await sessions.renew(tokens, anyRenewal))._unsafeUnwrap()
+
+    expect(device.renewed).toBe(true)
+    expect(device.identity).toEqual(identity)
+    expect(device.tokens.access).toMatch(/^ey/)
+    expect(device.tokens.refresh).not.toBe(tokens.refresh)
+    expect((await sessions.renew(tokens, anyRenewal))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
+    expect((await sessions.authenticate(device.tokens, anyRenewal))._unsafeUnwrap().renewed).toBe(
+      false,
+    )
+  })
+
+  it('fails a requested renewal the gate refuses as rate-limited, its key unspent', async () => {
+    const sessions = await testSessions()
+    const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    expect((await sessions.renew(tokens, () => false))._unsafeUnwrapErr()).toEqual({
+      code: 'data:RATE_LIMITED',
+      message: 'too many renewals',
+    })
+    expect((await sessions.renew(tokens, anyRenewal))._unsafeUnwrap().renewed).toBe(true)
+  })
+
   it('asks the gate only when the access token no longer works', async () => {
     const sessions = await testSessions()
     const { tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()

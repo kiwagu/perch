@@ -26,6 +26,30 @@ export function welcome(
   })
 }
 
+/**
+ * The device asked for new keys over its channel: it is handed the pair a test named with
+ * `renewAtNextHello`; without one the stub answers nothing yet, as a gateway still at work;
+ * refused while the stub refuses renewals.
+ */
+export function renew(gateway: Gateway, connection: Connection): void {
+  if (gateway.refuseRenewals) {
+    connection.subscriber.send({
+      type: 'error',
+      code: 'rate-limited',
+      message: 'too many renewals',
+    })
+
+    return
+  }
+
+  const named = gateway.renewal
+
+  if (named) {
+    gateway.renewal = undefined
+    connection.subscriber.send({ type: 'tokens', ...named })
+  }
+}
+
 /** What a sign-out may do to the device's channel. */
 export interface SignOutChannel {
   /** The hub forgets the connection in every region the device may name. */

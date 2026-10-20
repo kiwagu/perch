@@ -70,10 +70,11 @@ export interface SyncEngine {
    */
   channelStopped(): boolean
   /**
-   * Connects again at once: the gateway welcomes the device anew and hands it fresh keys. A
-   * connection the gateway has not welcomed yet is left to the hello it says.
+   * Asks the gateway for new keys over the open channel; they come as `tokens`, or the gateway's
+   * limits refuse the renewal with a `rate-limited` error. False, and nothing sent, while the
+   * channel is not up and welcomed: the hello that welcomes it renews keys that no longer work.
    */
-  reconnect(): void
+  renew(): boolean
 }
 
 class Engine implements SyncEngine {
@@ -172,8 +173,8 @@ class Engine implements SyncEngine {
     return this.#signOutFlow.channelStopped()
   }
 
-  reconnect(): void {
-    this.#options.transport.reconnect()
+  renew(): boolean {
+    return this.#options.transport.send({ type: 'renew' })
   }
 
   signOut(): Promise<'signed-out' | 'offline'> {
@@ -198,6 +199,8 @@ class Engine implements SyncEngine {
 
         this.#settling.changed()
       })
+      // A renewal the gateway's limits refused answers no region: the transport tells the session.
+      .with({ type: 'error', code: 'rate-limited' }, () => {})
       .with({ type: 'error' }, (error) => {
         this.#options.onError(
           dataError(

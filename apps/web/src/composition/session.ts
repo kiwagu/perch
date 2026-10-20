@@ -563,7 +563,7 @@ export class SessionService implements SessionPort {
 
   #transportContext(identity: IdentityId): TransportContext {
     return sessionTransportContext(identity, this.#options.storage, {
-      renewed: () => this.#organisations.renewed(),
+      renewal: this.#organisations,
       memberships: (memberships) => {
         if (this.#open?.space.identity.id === identity) {
           void this.#organisations.apply(memberships)

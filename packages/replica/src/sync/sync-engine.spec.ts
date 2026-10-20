@@ -546,11 +546,33 @@ describe('sync engine', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
 
-  it('reconnect() asks the transport to connect again', async () => {
-    const { a } = await twoDevices()
+  it('renew() asks the gateway for new keys over the welcomed channel, and does nothing while it is down', async () => {
+    const { a, stub } = await twoDevices()
 
-    a.engine.reconnect()
+    stub.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
 
-    expect(a.transport.reconnects()).toBe(1)
+    expect(a.engine.renew()).toBe(true)
+    expect(a.transport.renews()).toBe(1)
+    expect(a.transport.reconnects()).toBe(0)
+
+    a.transport.goOffline()
+
+    expect(a.engine.renew()).toBe(false)
+    expect(a.transport.renews()).toBe(1)
+  })
+
+  it('takes a renewal the gateway refuses for no error: nothing is reported and the regions sync on', async () => {
+    const { a, b, stub, settle } = await twoDevices()
+
+    stub.refuseRenewals()
+
+    expect(a.engine.renew()).toBe(true)
+    await settle()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+    expect(a.errors).toEqual([])
   })
 })

@@ -836,7 +836,7 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
-  it('reconnectSync has the leader connect again, and so does a renew hint from another tab', async () => {
+  it('renewSync has the leader ask for new keys over its channel, and so does a renew hint from another tab', async () => {
     const gateway = await openGateway()
     const browser = await openBrowser()
     const leader = await openTab(gateway, browser)
@@ -845,16 +845,18 @@ describe('organisations in the identity space', () => {
     await leading(leader)
     await vi.waitFor(() => expect(leader.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
 
-    leader.space.reconnectSync()
-    // A follower has no channel of its own to connect again.
-    follower.space.reconnectSync()
+    leader.space.renewSync()
+    // A follower has no channel of its own to ask over.
+    follower.space.renewSync()
 
-    expect(leader.transports.map((transport) => transport.reconnects())).toEqual([1])
+    expect(leader.transports.map((transport) => transport.renews())).toEqual([1])
     expect(follower.transports).toEqual([])
 
     syncHints(new FakeHintChannel(browser.bus)).post('renew')
 
-    expect(leader.transports.map((transport) => transport.reconnects())).toEqual([2])
+    expect(leader.transports.map((transport) => transport.renews())).toEqual([2])
+    // The channel stays as it was: nothing connects again.
+    expect(leader.transports.map((transport) => transport.reconnects())).toEqual([0])
     expect([...leader.errors, ...follower.errors]).toEqual([])
   })
 })
