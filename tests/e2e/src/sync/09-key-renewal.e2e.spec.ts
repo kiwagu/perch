@@ -1,5 +1,5 @@
 // spec: tests/e2e/specs/sync/09-key-renewal.md
-import type { Page } from '@playwright/test'
+import type { Page, Response } from '@playwright/test'
 
 import { appReady, expect, signUp, test } from '../support/fixtures'
 import { keepAccessToken, keysKept } from '../support/storage'
@@ -42,8 +42,23 @@ const counted = (types: readonly string[], type: string): number =>
 const leading = (tabs: readonly Page[]): Promise<Array<string | null>> =>
   Promise.all(tabs.map((tab) => tab.locator('html').getAttribute('data-sync-leader')))
 
-/** Opens "/devices" from the shell and expects it to list this device alone, within 5 seconds. */
+/**
+ * Opens "/devices" from the shell and expects it to list this device alone within 5 seconds, its
+ * list of devices asked of the gateway twice: refused (401) with the access token kept, then
+ * answered (200) with the renewed one.
+ */
 async function expectDevicesListed(tab: Page): Promise<void> {
+  const answers: number[] = []
+  const listen = (response: Response) => {
+    if (response.request().method() === 'GET' && response.url().endsWith('/backend/devices')) {
+      answers.push(response.status())
+    }
+  }
+
+  tab.on('response', listen)
+
+  const started = Date.now()
+
   await tab.getByTestId('app-shell.nav.devices').click()
   await expect(tab).toHaveURL(/\/devices$/)
 
@@ -51,6 +66,21 @@ async function expectDevicesListed(tab: Page): Promise<void> {
 
   await expect(devices).toHaveCount(1, { timeout: 5_000 })
   await expect(devices.getByTestId('device.list.current')).toHaveText('This device')
+  expect(Date.now() - started, 'milliseconds from opening "/devices"').toBeLessThanOrEqual(5_000)
+  expect(answers, 'the answers to the list of devices').toEqual([401, 200])
+  tab.off('response', listen)
+}
+
+/**
+ * Expects the first tab to have sent `renew` and heard `tokens` `times` times so far; polled,
+ * since the test hears a socket's frames apart from the page.
+ */
+async function expectRenewals(traffic: SyncTraffic, times: number): Promise<void> {
+  await expect
+    .poll(() => [counted(traffic.sent, 'renew'), counted(traffic.received, 'tokens')], {
+      message: '"renew" sent and "tokens" heard by the first tab',
+    })
+    .toEqual([times, times])
 }
 
 test.describe("Renew the device's keys over its open sync channel", { tag: '@full' }, () => {
@@ -95,8 +125,7 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
       expect(kept.access, 'the access token kept').not.toBe(data.refusedAccessToken)
       expect(kept.access, 'the access token kept').not.toBe(signedUpKeys.access)
       expect(kept.refresh, 'the refresh key kept').not.toBe(signedUpKeys.refresh)
-      expect(counted(first.sent, 'renew'), '"renew" sent by the first tab').toBe(1)
-      expect(counted(first.received, 'tokens'), '"tokens" heard by the first tab').toBe(1)
+      await expectRenewals(first, 1)
       expect(first.sockets, 'sync sockets of the first tab').toBe(1)
 
       return kept
@@ -134,8 +163,7 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
       expect(kept.access, 'the access token kept').not.toBe(data.refusedAccessToken)
       expect(kept.access, 'the access token kept').not.toBe(renewedKeys.access)
       expect(kept.refresh, 'the refresh key kept').not.toBe(renewedKeys.refresh)
-      expect(counted(first.sent, 'renew'), '"renew" sent by the first tab').toBe(2)
-      expect(counted(first.received, 'tokens'), '"tokens" heard by the first tab').toBe(2)
+      await expectRenewals(first, 2)
       expect(first.sockets, 'sync sockets of the first tab').toBe(1)
       expect(secondTraffic.sockets, 'sync sockets of the second tab').toBe(0)
     })
