@@ -218,7 +218,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
         const id = profileIdFactory.create()
 
         return profiles
-          .createProfile({ id, identity: user.id, name: input.name, email: input.email })
+          .createProfile({ id, identity: user.id, name: input.name, email: user.email })
           .map(() => ({ id, bio: undefined, locale: undefined }))
       })
       .andThen((profile) =>

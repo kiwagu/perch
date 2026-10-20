@@ -50,7 +50,8 @@ export class SignInService {
           id: profileIdFactory.create(),
           identity: user.id,
           name: name.value,
-          email: form.email,
+          // As the account keeps it: in lower case, however it was typed.
+          email: user.email,
         })
         .map(() => user),
     )

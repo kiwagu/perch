@@ -231,6 +231,20 @@ describe('IdentitySessions', () => {
     expect(device.tokens).toEqual(again.tokens)
   })
 
+  // The directory itself matches an email in any case, whatever its callers hand it.
+  it('signs in the identity of an email written in another case', async () => {
+    const sessions = await testSessions()
+
+    const up = (
+      await sessions.signUp({ email: 'Ann@Example.Test', password: 'pass-word-1' }, laptop)
+    )._unsafeUnwrap()
+    const again = (
+      await sessions.signIn({ email: 'ANN@example.TEST', password: 'pass-word-1' }, laptop)
+    )._unsafeUnwrap()
+
+    expect(again.identity.id).toBe(up.identity.id)
+  })
+
   it('renews the pair with the refresh key when the access token is not accepted', async () => {
     const sessions = await testSessions()
     const { identity, tokens } = (await sessions.signUp(ann, laptop))._unsafeUnwrap()

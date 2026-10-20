@@ -57,6 +57,18 @@ describe('sign-in', () => {
     ])
   })
 
+  it('keeps the email in lower case in the account and its profile, however it was written', async () => {
+    expect((await signIn.signUp({ ...ann, email: 'Ann@Example.Test' })).isOk()).toBe(true)
+    expect(session.current()?.email).toBe('ann@example.test')
+    expect((await session.flush()).isOk()).toBe(true)
+
+    const identity = session.current()?.id ?? expect.unreachable('signed in')
+
+    expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
+      { email: 'ann@example.test' },
+    ])
+  })
+
   it('signs in to an existing account', async () => {
     expect((await signIn.signUp(ann)).isOk()).toBe(true)
     expect((await session.signOut()).isOk()).toBe(true)

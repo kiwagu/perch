@@ -373,6 +373,16 @@ describe('Organisations', () => {
     ])
   })
 
+  it('finds the identity to invite by its email in any case', async () => {
+    const { organisations, ann, bob, founded } = await harness()
+
+    await founded()
+
+    expect(
+      await organisations.invite({ actor: ann.id, key: 'acme', email: 'Bob@EXAMPLE.test' }),
+    ).toEqual(ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }))
+  })
+
   it('refuses an invite from a member who is not admin', async () => {
     const { organisations, bob, founded, invited } = await harness()
 

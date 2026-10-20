@@ -23,7 +23,8 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   log and the outbox; on a device `_replica_head` also holds the region's generation, which a
   reset of its local copy moves), closed to every record user and never replicated.
 - `schema/directory/`: `identity` (accounts and the `identity` record access with its refresh
-  keys), `profile` (its owner reads it; only the gateway writes it, through replication; a bio
+  keys; an email is kept and matched in lower case, so an address in any case is one account),
+  `profile` (its owner reads it; only the gateway writes it, through replication; a bio
   holds at most 2000 characters), `tenant` (an organisation: its key of 2 to 32 lowercase
   letters, digits and underscores, its name, namespace, database and status; closed to every
   record user) and `membership` (an identity's role in an organisation, `member` or `admin`; an
