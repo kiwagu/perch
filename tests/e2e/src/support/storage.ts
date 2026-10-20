@@ -1,7 +1,7 @@
 /**
  * What the app keeps in a page's browser: its IndexedDB databases, by the names the app gives
  * them (`app-identity-<identity>` for the signed-in identity, `app-identity-<identity>-t_<key>`
- * for each of its organisations).
+ * for each of its organisations), and the device's keys at the gateway in its localStorage.
  */
 
 import { expect, type Page } from '@playwright/test'
@@ -29,3 +29,16 @@ export async function identityDatabase(page: Page): Promise<string> {
 export async function organisationDatabase(page: Page, key: string): Promise<string> {
   return `${await identityDatabase(page)}-t_${key}`
 }
+
+/** The device's keys the page's browser keeps: the access token and the refresh key. */
+export const keysKept = (
+  page: Page,
+): Promise<{ readonly access: string | null; readonly refresh: string | null }> =>
+  page.evaluate(() => ({
+    access: localStorage.getItem('perch.session.token'),
+    refresh: localStorage.getItem('perch.session.refresh'),
+  }))
+
+/** Has the page's browser keep `access` as the device's access token, as a hand edit would. */
+export const keepAccessToken = (page: Page, access: string): Promise<void> =>
+  page.evaluate((value) => localStorage.setItem('perch.session.token', value), access)
