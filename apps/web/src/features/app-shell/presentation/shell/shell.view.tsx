@@ -5,6 +5,7 @@ import { type Locale, SUPPORTED_LOCALES, useLocale, useT } from '@workspace/i18n
 import { AppShell } from '@workspace/ui/components/platform/app-shell'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
+import { Button } from '@workspace/ui/components/ui/button'
 
 export interface ShellLinkProps {
   readonly to: string
@@ -21,6 +22,10 @@ export interface ShellViewProps {
   readonly activePath: string
   readonly onLocaleChange: (locale: Locale) => void
   readonly link?: ComponentType<ShellLinkProps>
+  /** Signs the saved account out on this device when its data could not be opened; offered while `failed`. */
+  readonly onSignOutHere?: (() => void) | undefined
+  /** That sign-out runs: the button waits for it. */
+  readonly signingOutHere?: boolean | undefined
   /** The latest message for the user, already translated. */
   readonly notice?: { readonly testId: string; readonly text: string } | undefined
   readonly children?: ReactNode
@@ -95,6 +100,18 @@ export function ShellView(props: ShellViewProps) {
         >
           {props.notice.text}
         </p>
+      ) : null}
+      {props.status === 'failed' && props.onSignOutHere ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={props.signingOutHere}
+          onClick={props.onSignOutHere}
+          data-testid="app-shell.sign-out-here"
+        >
+          {t('app.shell.sign-out-here')}
+        </Button>
       ) : null}
       {props.status === 'ready' ? props.children : null}
     </AppShell>

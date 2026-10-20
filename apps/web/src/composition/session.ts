@@ -27,6 +27,7 @@ import { type KeysLeft, PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
 import type { SessionOptions, TransportContext } from './session-options'
 import { sessionTransportContext } from './session-transport-context'
+import { type DeleteOutcome, SpaceDeletion } from './space-deletion'
 import {
   deviceIdFrom,
   forgetDevice,
@@ -70,6 +71,7 @@ export class SessionService implements SessionPort {
   readonly #organisations: SessionOrganisations
   readonly #barrier: WriteBarrier
   readonly #pendingRevoke: PendingRevoke
+  readonly #deletion: SpaceDeletion
   readonly #unlisten: Array<() => void>
   #open: OpenSpace | undefined
   #generation = 0
@@ -94,6 +96,14 @@ export class SessionService implements SessionPort {
       auth: options.auth,
       storage: options.storage,
       online: options.online,
+      onError: options.onError,
+    })
+    this.#deletion = new SpaceDeletion({
+      storage: options.storage,
+      clock: options.clock,
+      deleteLocal: options.deleteLocal,
+      deleteTenantLocal: options.deleteTenantLocal,
+      inventory: (identity) => this.#organisations.databases(identity),
       onError: options.onError,
     })
 
@@ -181,6 +191,9 @@ export class SessionService implements SessionPort {
         void this.#pendingRevoke.send()
       }
 
+      // What sign-outs left behind goes meanwhile: the databases of anyone but `identity`.
+      void this.#deletion.deleteLeftovers()
+
       if (identity) {
         return this.#openSpace(identity, generation)
       }
@@ -191,6 +204,26 @@ export class SessionService implements SessionPort {
       }
 
       return okAsync(undefined)
+    })
+  }
+
+  /**
+   * The saved identity's space did not open: signs it out on this device without it. Its keys
+   * are left to revoke (sent at once online) and its databases deleted, its own and every
+   * organisation one counted for it, with whatever they held that was not sent. Changes nothing
+   * while a space is open or nobody is saved.
+   */
+  signOutUnopened(): ResultAsync<void, DataError> {
+    return this.#serially(() => {
+      const identity = savedIdentity(this.#options.storage)
+
+      if (!identity || this.#open) {
+        return okAsync(undefined)
+      }
+
+      this.#pendingRevoke.forgetKeys('live')
+
+      return this.#deletion.deleteUnopened(identity.id).map((outcome) => this.#noticeIf(outcome))
     })
   }
 
@@ -334,6 +367,13 @@ export class SessionService implements SessionPort {
     this.#leaveAndTell()
     this.#options.onStep?.('open-db')
 
+    // A delete of the identity's databases this page runs ends first, as the browser would have it.
+    return ResultAsync.fromSafePromise(this.#deletion.beforeOpen(identity.id)).andThen(() =>
+      this.#openSpaceNow(identity, generation),
+    )
+  }
+
+  #openSpaceNow(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
     const status: SpaceStatus = { live: true }
     const lead = leadership(this.#options.locks, lockName(identity.id))
     const hints = this.#options.hints(identity.id)
@@ -484,30 +524,39 @@ export class SessionService implements SessionPort {
 
   /**
    * Forgets the device's identity and keys, leaving live keys to revoke, then deletes the
-   * identity's database. The other tabs hear the identity go and close their own spaces, which
-   * lets the store be deleted.
+   * identity's databases. The other tabs hear the identity go and close their own spaces, which
+   * lets the stores be deleted. A delete another tab still holds up after a few seconds goes on
+   * (`SpaceDeletion`), and the sign-in page says the data goes once the other tabs are closed;
+   * this tab hears of the sign-out once the delete answered, so that page reads the word.
    */
   #forgetSpace(open: OpenSpace, keys: KeysLeft): ResultAsync<void, DataError> {
     this.#pendingRevoke.forgetKeys(keys)
 
-    if (this.#open === open) {
+    const current = this.#open === open
+    const tell = () => current && this.#emit(undefined)
+
+    if (current) {
       this.#open = undefined
       open.status.live = false
       this.#options.onSyncState(NOT_SYNCING)
-      this.#emit(undefined)
     }
 
-    const destroying = open.space.destroy()
+    const deleted = this.#deletion
+      .destroy(open.space)
+      .map((outcome) => this.#noticeIf(outcome))
+      .andTee(tell)
+      .orTee(tell)
 
-    this.#retire(destroying)
+    this.#retire(Promise.resolve(deleted).then(() => undefined))
 
-    return ResultAsync.fromPromise(destroying, (cause) =>
-      dataError(
-        'data:WRITE_FAILED',
-        `could not delete the local data of ${open.space.identity.id}`,
-        cause,
-      ),
-    )
+    return deleted
+  }
+
+  /** A delete another tab holds up leaves the sign-in page a word: the data goes once that tab closes. */
+  #noticeIf(outcome: DeleteOutcome): void {
+    if (outcome === 'pending') {
+      saveNotice(this.#options.storage, 'delete-pending')
+    }
   }
 
   #transportContext(identity: IdentityId): TransportContext {

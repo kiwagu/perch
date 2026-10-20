@@ -9,6 +9,7 @@
   "user.sign-in.welcome": "Bienvenido",
   "user.sign-in.notice.resend-after-sign-in": "Algunos cambios hechos en este dispositivo no habían llegado al servidor cuando se cerró tu sesión. Inicia sesión de nuevo para enviarlos.",
   "user.sign-in.notice.signed-out-elsewhere": "Se cerró tu sesión desde otro dispositivo.",
+  "user.sign-in.notice.delete-pending": "Has cerrado sesión. Tus datos se borrarán de este dispositivo en cuanto cierres las demás pestañas de Perch.",
   "user.sign-in.error.invalid-credentials": "Correo o contraseña incorrectos.",
   "user.sign-in.error.sign-up-rejected": "No se puede crear una cuenta con este correo.",
   "user.sign-in.error.rate-limited": "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",

@@ -51,6 +51,13 @@ export interface TestWorldOptions {
   readonly auth?: GatewayAuth
   /** The organisations whose databases do not open on this device, by key. */
   readonly refusedTenants?: readonly string[]
+  /** The identities whose own databases do not open on this device. */
+  readonly refusedIdentities?: readonly IdentityId[]
+  /**
+   * What the deletes of the identity databases wait for, as when another tab holds a database
+   * open; they run at once by default.
+   */
+  readonly heldDeletes?: Promise<void>
 }
 
 /** The identity databases of one browser: its tabs open the same database for an identity. */
@@ -126,6 +133,8 @@ export interface TestWorld {
   opened(): IdentityId[]
   /** The identities whose databases were deleted, in order. */
   destroyed(): IdentityId[]
+  /** The identities whose databases were deleted while not open, in order. */
+  localsDeleted(): IdentityId[]
   /** The organisations whose databases were opened, by key, in order. */
   tenantsOpened(): string[]
   /** The organisations whose open databases were deleted, by key, in order. */
@@ -172,6 +181,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const states: SyncState[] = []
   const opened: IdentityId[] = []
   const destroyed: IdentityId[] = []
+  const localsDeleted: IdentityId[] = []
   const tenantsOpened: string[] = []
   const tenantsDestroyed: string[] = []
   const tenantsDeleted: Array<{ readonly identity: IdentityId; readonly key: string }> = []
@@ -182,21 +192,25 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const session = new SessionService({
     auth,
     openLocal: (identity) =>
-      (options.databases ? options.databases.open(identity) : openTestDb()).map(
-        (local): LocalDb => {
-          opened.push(identity)
+      (options.refusedIdentities?.includes(identity)
+        ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${identity}`))
+        : options.databases
+          ? options.databases.open(identity)
+          : openTestDb()
+      ).map((local): LocalDb => {
+        opened.push(identity)
 
-          const wrapped = options.wrap ? options.wrap(local) : local
+        const wrapped = options.wrap ? options.wrap(local) : local
 
-          return {
-            ...wrapped,
-            destroy: async () => {
-              destroyed.push(identity)
-              await local.destroy()
-            },
-          }
-        },
-      ),
+        return {
+          ...wrapped,
+          destroy: async () => {
+            destroyed.push(identity)
+            await options.heldDeletes
+            await local.destroy()
+          },
+        }
+      }),
     openTenantLocal: (_identity, key) =>
       options.refusedTenants?.includes(key)
         ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${key}`))
@@ -211,6 +225,11 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
               },
             }
           }),
+    deleteLocal: (identity) => {
+      localsDeleted.push(identity)
+
+      return okAsync(undefined)
+    },
     deleteTenantLocal: (identity, key) => {
       tenantsDeleted.push({ identity, key })
 
@@ -279,6 +298,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     states,
     opened: () => [...opened],
     destroyed: () => [...destroyed],
+    localsDeleted: () => [...localsDeleted],
     tenantsOpened: () => [...tenantsOpened],
     tenantsDestroyed: () => [...tenantsDestroyed],
     tenantsDeleted: () => tenantsDeleted.map(({ key }) => key),

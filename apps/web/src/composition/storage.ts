@@ -281,7 +281,7 @@ export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefin
 
 const NOTICE_KEY = 'perch.session.notice'
 
-const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere'])
+const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere', 'delete-pending'])
 
 /** Leaves the sign-in page a word about how the last session ended. */
 export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {

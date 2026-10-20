@@ -339,6 +339,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         schema: tenantSchema,
       }),
     // An in-memory database leaves nothing behind once it is closed.
+    deleteLocal: () => okAsync(undefined),
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: gatewayAuth(options.gatewayUrl, fetcher),
     // The client names itself with an id minted into its memory storage, as a browser does.

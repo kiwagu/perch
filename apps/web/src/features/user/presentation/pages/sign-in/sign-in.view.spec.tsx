@@ -114,6 +114,15 @@ describe('SignInView', () => {
     expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
   })
 
+  it('says the data leaves this device once the other tabs are closed when another tab held its delete up', () => {
+    renderView({ notice: 'delete-pending' })
+
+    expect(screen.getByTestId('user.sign-in.notice.delete-pending').textContent).toBe(
+      'You are signed out. Your data leaves this device once the other Perch tabs are closed.',
+    )
+    expect(screen.queryByTestId('user.sign-in.notice.signed-out-elsewhere')).toBeNull()
+  })
+
   it('says it in Spanish', () => {
     renderView({ notice: 'signed-out-elsewhere' }, 'es')
 

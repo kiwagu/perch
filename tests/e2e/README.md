@@ -16,12 +16,16 @@ the port), which `bun run test:e2e` sets from the mcproc manifest through `mcpro
 serves the web app's production build (`apps/web/dist`, written by the launcher before each
 run; no dev server) and, under `/backend/`, the gateway on one origin.
 
-Specs are tagged `@smoke` (`user/`: sign up, rename, a browser that blocks site data) or
+Specs are tagged `@smoke` (`user/`: sign up, rename, a browser that blocks site data, a
+database that will not open) or
 `@full` (`sync/`: the slower specs of one account on several devices; `organisation/`: two
 accounts, each in a browser of its own):
 
 - `user/03-blocked-storage`: a browser that refuses the page its localStorage is told that it
   keeps no data for Perch, and gets no sign-in form.
+- `user/04-unopenable-database`: once the account's local database is broken, the page says it
+  could not open the data and offers "Sign out on this device", which lands on sign-in with no
+  database and no saved account left.
 - `sync/01-two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
 - `sync/02-offline-edit`: B edits offline while A edits online; both changes meet once B
@@ -38,6 +42,9 @@ accounts, each in a browser of its own):
   with "You were signed out from another device." within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
+- `sync/07-blocked-delete`: a sign-out ends within 15 seconds although a second tab holds the
+  account's database open, and the sign-in page says the data goes once the other tabs are
+  closed; the database is gone within 10 seconds of closing that tab.
 - `organisation/01-shared-notes`: user A creates an organisation and invites user B; B sees
   it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
   the members nor A's profile.

@@ -13,7 +13,10 @@ modeling stage.
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
   is opened while nobody is signed in. The app starts only once the page's localStorage kept a
   value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
-  says so, instead of forgetting who signed in and the device's id. Signing up or in goes through the gateway
+  says so, instead of forgetting who signed in and the device's id. A saved identity whose
+  space does not open stops the start too, and the shell offers to sign out on this device
+  (`SessionService.signOutUnopened()`): its keys are left to revoke and its databases deleted,
+  so a database that will never open is no dead end. Signing up or in goes through the gateway
   (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin; a 429 is
   `data:RATE_LIMITED`, and the sign-in page says to wait), naming the
   device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
@@ -72,7 +75,13 @@ modeling stage.
   imported. Signing out takes the lead, drains, has the gateway sign the device out, then forgets
   the keys and the memberships and deletes the identity's database and
   every organisation database the device holds for it, open or not, and the count of them; with
-  changes it could not send it asks first. A sign-out the gateway did not confirm (offline, or
+  changes it could not send it asks first. The identity is listed in
+  `perch.session.leftover-identities` before its databases are deleted and taken off once they
+  are gone (`SpaceDeletion`); a delete another tab still holds up after 5 seconds (it keeps the
+  database open) goes on without the sign-out, whose tab then hears of it, and the sign-in page
+  says the data leaves the device once the other tabs are closed. Each start deletes the
+  databases of the identities still listed, but the one signed in, and opening an identity's
+  database waits for a delete of it that the page runs. A sign-out the gateway did not confirm (offline, or
   giving unsent changes up, or kept by a frozen tab while offline) leaves the pair, whose grant
   still works, with the device it signed out, in `perch.session.pending-revoke`: one list for
   every account signed out on the browser, so another account's offline sign-out adds its pair

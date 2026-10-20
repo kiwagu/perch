@@ -50,9 +50,12 @@ const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): str
 const directorySchema = schemaOf(commonFiles, directoryFiles)
 const tenantSchema = schemaOf(commonFiles, tenantFiles)
 
+/** Where the database of one identity lives in this browser. */
+const identityUrl = (identity: string): string => `indxdb://app-identity-${identity}`
+
 /** Where the database of one organisation of an identity lives in this browser. */
 const tenantUrl = (identity: string, key: string): string =>
-  `indxdb://app-identity-${identity}-${tenantDatabase(key)}`
+  `${identityUrl(identity)}-${tenantDatabase(key)}`
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -93,7 +96,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     openLocal: (identity) =>
       openLocalDb({
         engines: wasmEngines(),
-        url: `indxdb://app-identity-${identity}`,
+        url: identityUrl(identity),
         namespace: 'app',
         database: 'identity',
         schema: directorySchema,
@@ -106,6 +109,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
         database: 'tenant',
         schema: tenantSchema,
       }),
+    deleteLocal: (identity) => deleteLocalDb(identityUrl(identity)),
     deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     deviceLabel: deviceLabel(navigator),

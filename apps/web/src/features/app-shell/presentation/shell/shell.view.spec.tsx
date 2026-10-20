@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 
@@ -50,6 +50,35 @@ describe('ShellView', () => {
       en['app.shell.storage-blocked'],
     )
     expect(screen.queryByText('page')).toBeNull()
+  })
+
+  it('offers to sign out on this device when it could not open its data', () => {
+    const signOutHere = vi.fn()
+
+    renderShell({ status: 'failed', onSignOutHere: signOutHere })
+
+    expect(screen.getByTestId('app-shell.opening').textContent).toBe(en['app.shell.failed'])
+
+    const button = screen.getByTestId('app-shell.sign-out-here')
+
+    expect(button.textContent).toBe(en['app.shell.sign-out-here'])
+    fireEvent.click(button)
+    expect(signOutHere).toHaveBeenCalledOnce()
+  })
+
+  it('holds the button while the sign-out runs, and offers none without a way out', () => {
+    const { unmount } = renderShell({
+      status: 'failed',
+      onSignOutHere: () => {},
+      signingOutHere: true,
+    })
+
+    expect(screen.getByTestId('app-shell.sign-out-here').hasAttribute('disabled')).toBe(true)
+    unmount()
+
+    renderShell({ status: 'failed' })
+
+    expect(screen.queryByTestId('app-shell.sign-out-here')).toBeNull()
   })
 
   it('links to sign-in when signed out and to the profile when signed in', () => {
