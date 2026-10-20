@@ -14,6 +14,7 @@ import type { GatewayAuth } from './gateway-auth'
 import {
   addPendingRevoke,
   deviceIdFrom,
+  forgetDevice,
   forgetPendingRevoke,
   type KeyValueStorage,
   type PendingPair,
@@ -21,9 +22,18 @@ import {
   savedKeys,
 } from './storage'
 
+/**
+ * Whether the keys a sign-out forgets still work at the gateway: `live` when it did not revoke
+ * them (the device was offline), which leaves them to revoke later; `dead` when it revoked or
+ * refused them.
+ */
+export type KeysLeft = 'live' | 'dead'
+
 export interface PendingRevokeOptions {
   readonly auth: GatewayAuth
   readonly storage: KeyValueStorage
+  /** Whether the browser says it has a network: only then is a pair left to revoke sent unasked. */
+  readonly online: () => boolean
   readonly onError: (error: DataError) => void
 }
 
@@ -33,6 +43,22 @@ export class PendingRevoke {
 
   constructor(options: PendingRevokeOptions) {
     this.#options = options
+  }
+
+  /**
+   * Forgets who is signed in and the keys; keys that still work are left to revoke first, and
+   * sent at once while the browser is online.
+   */
+  forgetKeys(keys: KeysLeft): void {
+    if (keys === 'live') {
+      this.keep()
+    }
+
+    forgetDevice(this.#options.storage)
+
+    if (keys === 'live' && this.#options.online()) {
+      void this.send()
+    }
   }
 
   /**

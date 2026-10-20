@@ -1,5 +1,4 @@
 import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
-import { match, P } from 'ts-pattern'
 
 import {
   type AuthUser,
@@ -10,7 +9,7 @@ import {
 } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
-import { type Leadership, leadership, lockName, type SyncHints } from '@workspace/replica/sync'
+import { leadership, lockName } from '@workspace/replica/sync'
 
 import type {
   PushRejection,
@@ -22,10 +21,12 @@ import type {
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
 import type { NamedDevice, SignedInDevice } from './gateway-auth'
 import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
+import type { OpenSpace, SpaceStatus } from './open-space'
 import { SessionOrganisations } from './organisations'
-import { PendingRevoke } from './pending-revoke'
+import { type KeysLeft, PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
 import type { SessionOptions, TransportContext } from './session-options'
+import { sessionTransportContext } from './session-transport-context'
 import {
   deviceIdFrom,
   forgetDevice,
@@ -34,35 +35,12 @@ import {
   MEMBERSHIPS_KEY,
   saveDevice,
   savedIdentity,
-  savedKeys,
   savedNotice,
-  saveKeys,
   saveNotice,
 } from './storage'
 import { type HeardSignOut, WriteBarrier } from './write-barrier'
 
-/** Whether an open space still speaks for the tab: a space being closed reports nothing more. */
-interface SpaceStatus {
-  live: boolean
-}
-
-interface OpenSpace {
-  readonly space: IdentitySpace
-  readonly leadership: Leadership | undefined
-  readonly status: SpaceStatus
-  /** The hints between the tabs of the identity; the space closes them. */
-  readonly hints: SyncHints
-  readonly heard: HeardSignOut
-}
-
 type SignOutOutcome = 'signed-out' | 'needs-confirmation'
-
-/**
- * Whether the keys a sign-out forgets still work at the gateway: `live` when it did not revoke
- * them (the device was offline), which leaves them to revoke later; `dead` when it revoked or
- * refused them.
- */
-type KeysLeft = 'live' | 'dead'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
@@ -115,6 +93,7 @@ export class SessionService implements SessionPort {
     this.#pendingRevoke = new PendingRevoke({
       auth: options.auth,
       storage: options.storage,
+      online: options.online,
       onError: options.onError,
     })
 
@@ -509,7 +488,7 @@ export class SessionService implements SessionPort {
    * lets the store be deleted.
    */
   #forgetSpace(open: OpenSpace, keys: KeysLeft): ResultAsync<void, DataError> {
-    this.#forgetKeys(keys)
+    this.#pendingRevoke.forgetKeys(keys)
 
     if (this.#open === open) {
       this.#open = undefined
@@ -532,38 +511,19 @@ export class SessionService implements SessionPort {
   }
 
   #transportContext(identity: IdentityId): TransportContext {
-    const storage = this.#options.storage
-    const saved = () => savedIdentity(storage)?.id === identity
-
-    return {
-      identity,
-      device: deviceIdFrom(storage),
-      // Keys saved for another identity are not this channel's to present.
-      credentials: () => (saved() ? savedKeys(storage) : undefined),
-      onTokens: (tokens) => {
-        if (saved()) {
-          saveKeys(storage, tokens)
-          this.#organisations.renewed()
-        }
-      },
-      onMemberships: (memberships) => {
+    return sessionTransportContext(identity, this.#options.storage, {
+      renewed: () => this.#organisations.renewed(),
+      memberships: (memberships) => {
         if (this.#open?.space.identity.id === identity) {
           void this.#organisations.apply(memberships)
         }
       },
-      onEnded: (reason) =>
-        match(reason)
-          // Keys refused: they will not work again, and nothing renews them.
-          .with('unauthorized', () => {
-            this.#channelEnded(identity)
-            void this.#forced(() => this.#refused(identity))
-          })
-          .with('revoked', () => void this.#outElsewhere(identity))
-          // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
-          // refused protocol stops the sync engine, which reports it, and changes nothing here.
-          .with(P.union('signed-out', 'protocol'), () => {})
-          .exhaustive(),
-    }
+      refused: () => {
+        this.#channelEnded(identity)
+        void this.#forced(() => this.#refused(identity))
+      },
+      revoked: () => void this.#outElsewhere(identity),
+    })
   }
 
   /** The channel of `identity`, open on this tab, ended for good: its keys are renewed no more. */
@@ -661,29 +621,10 @@ export class SessionService implements SessionPort {
    */
   #keepForNextSignIn(open: OpenSpace, keys: KeysLeft): void {
     saveNotice(this.#options.storage, 'resend-after-sign-in')
-    this.#forgetKeys(keys)
+    this.#pendingRevoke.forgetKeys(keys)
 
     if (this.#open === open) {
       this.#leaveAndTell()
-    }
-  }
-
-  /**
-   * Forgets who is signed in and the keys; keys that still work are left to revoke first, and
-   * sent at once while the browser is online.
-   */
-  #forgetKeys(keys: KeysLeft): void {
-    if (keys === 'dead') {
-      forgetDevice(this.#options.storage)
-
-      return
-    }
-
-    this.#pendingRevoke.keep()
-    forgetDevice(this.#options.storage)
-
-    if (this.#options.online()) {
-      void this.#pendingRevoke.send()
     }
   }
 
