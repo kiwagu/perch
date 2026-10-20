@@ -47,6 +47,10 @@ accounts, each in a browser of its own):
   closed; the database is gone within 10 seconds of closing that tab.
 - `sync/08-one-account-per-browser`: a tab left on the sign-in page follows the account another
   tab signs in, onto "/me" within 5 seconds, and the browser keeps one account database.
+- `sync/09-key-renewal`: a route that refuses the access token (the test replaces it in the
+  browser's storage, as an expired one would be refused) has the tab that leads the sync renew
+  the keys with one `renew` over its open socket, from that tab and from a second tab; the route
+  answers with the new keys within 5 seconds, and no tab opens another sync socket.
 - `organisation/01-shared-notes`: user A creates an organisation and invites user B; B sees
   it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
   the members nor A's profile.
