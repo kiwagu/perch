@@ -64,7 +64,7 @@ export interface StorageEvents {
   removeEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
 }
 
-/** The browser's localStorage; when it is unavailable (private mode, blocked), nothing is kept. */
+/** The browser's localStorage, as `siteStorage` found it working; a write it then refuses is lost. */
 export function browserStorage(store: Storage, events: StorageEvents): KeyValueStorage {
   const attempt = <T>(run: () => T, fallback: T): T => {
     try {
@@ -281,7 +281,7 @@ export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefin
 
 const NOTICE_KEY = 'perch.session.notice'
 
-const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere'])
+const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere', 'delete-pending'])
 
 /** Leaves the sign-in page a word about how the last session ended. */
 export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {

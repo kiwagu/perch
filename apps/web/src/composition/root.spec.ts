@@ -54,6 +54,7 @@ async function boot(
 
       return openTestDb()
     },
+    deleteLocal: () => okAsync(undefined),
     openTenantLocal: () => openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
@@ -144,8 +145,34 @@ describe('createAppRoot', () => {
       openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
     })
 
-    expect(result._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(result._unsafeUnwrapErr()).toMatchObject({
+      kind: 'open-failed',
+      error: { code: 'data:OPEN_FAILED' },
+    })
     expect(steps).toEqual(['restore-session', 'open-db'])
+  })
+
+  it('offers to sign out on this device when the saved identity does not open, which forgets it and deletes its database', async () => {
+    const storage = memoryStorage()
+    const deleted: IdentityId[] = []
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [], {
+      openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
+      deleteLocal: (identity) => {
+        deleted.push(identity)
+
+        return okAsync(undefined)
+      },
+    })
+    const failure = result._unsafeUnwrapErr()
+    const signOutHere =
+      failure.kind === 'open-failed' ? failure.signOutHere : expect.unreachable('open-failed')
+
+    expect((await (signOutHere ?? expect.unreachable('offered'))()).isOk()).toBe(true)
+    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(deleted).toEqual([ann.identity.id])
   })
 
   it('names this device to the gateway: at sign-up with the label it is given, and on the organisation and device routes', async () => {

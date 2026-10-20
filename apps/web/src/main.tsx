@@ -6,18 +6,23 @@ import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
 
-import type { AppServices } from './composition/root'
+import type { AppServices, BootFailure } from './composition/root'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { NoticeProvider } from './platform/notices'
-import { createAppRouter } from './platform/router'
+import { createAppRouter, SIGN_IN_PATH } from './platform/router'
 import { ServicesProvider } from './platform/services'
 
 type Boot =
-  | { readonly status: 'opening' | 'failed' }
+  | { readonly status: 'opening' | 'storage-blocked' }
+  | {
+      readonly status: 'failed'
+      /** Signs the saved account out on this device, when its data is what did not open. */
+      readonly signOutHere?: Extract<BootFailure, { kind: 'open-failed' }>['signOutHere']
+    }
   | {
       readonly status: 'ready'
       readonly services: AppServices
@@ -51,15 +56,21 @@ function bootOnce(): Promise<Boot> {
           services,
           router: createAppRouter({ modules, session: services.session, layout: Layout }),
         }),
-        () => ({ status: 'failed' }),
+        (failure) =>
+          failure.kind === 'storage-blocked'
+            ? { status: 'storage-blocked' }
+            : { status: 'failed', signOutHere: failure.signOutHere },
       ),
     )
+    // A start that throws (its code did not load) failed too: it does not open any more.
+    .catch((): Boot => ({ status: 'failed' }))
 
   return booting
 }
 
 function App() {
   const [boot, setBoot] = useState<Boot>({ status: 'opening' })
+  const [signingOutHere, setSigningOutHere] = useState(false)
   const setLocale = useSetLocale()
 
   useEffect(() => {
@@ -77,12 +88,25 @@ function App() {
   }, [])
 
   if (boot.status !== 'ready') {
+    const signOutHere = boot.status === 'failed' ? boot.signOutHere : undefined
+    // Done or not, the account is signed out on this device: the page starts again on sign-in,
+    // and what could not be deleted yet goes at that start.
+    const leave = () => {
+      setSigningOutHere(true)
+      void signOutHere?.().match(
+        () => window.location.assign(SIGN_IN_PATH),
+        () => window.location.assign(SIGN_IN_PATH),
+      )
+    }
+
     return (
       <ShellView
         status={boot.status}
         signedIn={false}
         activePath={window.location.pathname}
         onLocaleChange={setLocale}
+        onSignOutHere={signOutHere ? leave : undefined}
+        signingOutHere={signingOutHere}
       />
     )
   }

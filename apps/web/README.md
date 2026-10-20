@@ -11,7 +11,12 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. Signing up or in goes through the gateway
+  is opened while nobody is signed in. The app starts only once the page's localStorage kept a
+  value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
+  says so, instead of forgetting who signed in and the device's id. A saved identity whose
+  space does not open stops the start too, and the shell offers to sign out on this device
+  (`SessionService.signOutUnopened()`): its keys are left to revoke and its databases deleted,
+  so a database that will never open is no dead end. Signing up or in goes through the gateway
   (`gatewayAuth`, `POST /backend/auth/sign-up|sign-in` on the page's own origin; a 429 is
   `data:RATE_LIMITED`, and the sign-in page says to wait), naming the
   device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
@@ -24,7 +29,9 @@ modeling stage.
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
   projector, write path), with a database of its own for each organisation the identity
   belongs to (`openTenantSpace`: `indxdb://app-identity-<id>-t_<key>`, region `tenant:<key>`;
-  `TenantSpaces` keeps them in step with the memberships). Reads and writes are routed by
+  `TenantSpaces` keeps them in step with the memberships). The tabs of a browser open a database
+  one at a time, under the Web Lock `perch-open:<database>` (`openOneAtATime`): two engines
+  setting up the same new database at once conflict and one open fails. Reads and writes are routed by
   region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
   and a command into the tenant region go to the current organisation (the one selected on
   this browser, otherwise the first by key; none refuses with `no organisation is selected`),
@@ -70,7 +77,13 @@ modeling stage.
   imported. Signing out takes the lead, drains, has the gateway sign the device out, then forgets
   the keys and the memberships and deletes the identity's database and
   every organisation database the device holds for it, open or not, and the count of them; with
-  changes it could not send it asks first. A sign-out the gateway did not confirm (offline, or
+  changes it could not send it asks first. The identity is listed in
+  `perch.session.leftover-identities` before its databases are deleted and taken off once they
+  are gone (`SpaceDeletion`); a delete another tab still holds up after 5 seconds (it keeps the
+  database open) goes on without the sign-out, whose tab then hears of it, and the sign-in page
+  says the data leaves the device once the other tabs are closed. Each start deletes the
+  databases of the identities still listed, but the one signed in, and opening an identity's
+  database waits for a delete of it that the page runs. A sign-out the gateway did not confirm (offline, or
   giving unsent changes up, or kept by a frozen tab while offline) leaves the pair, whose grant
   still works, with the device it signed out, in `perch.session.pending-revoke`: one list for
   every account signed out on the browser, so another account's offline sign-out adds its pair
@@ -106,8 +119,12 @@ modeling stage.
   left to do, and an answer that comes once the asking session has ended (another account, or
   the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
-  protocol the gateway refuses stops the sync and keeps everything. A tab follows another
-  tab's sign-out by closing its space. The container's runner and write
+  protocol the gateway refuses stops the sync and keeps everything. One account per browser: a
+  tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
+  the space of the identity it saved (the sign-in page then moves to the profile, unless the
+  sign-in is its own); a sign-up or sign-in that finds another account saved is refused with
+  `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
+  another tab saved one meanwhile, whose new pair is then left to revoke. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). `<html data-boot-step>` shows the boot step; `data-sync-leader`
@@ -133,7 +150,8 @@ composition root over an in-memory database, always leading its identity's sync,
 "Seed client" with an id minted into its memory storage) whose
 `ensureAccount` signs an account up or in through the gateway, writes its profile through
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
-reads the profile the gateway sends; it leaves each account without signing out. As the
+reads the profile the gateway sends; one device, it signs the account it is in out before it
+enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one that is already the
 account's is found), `ensureMember` invites an existing account by email, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls

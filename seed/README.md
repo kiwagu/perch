@@ -7,8 +7,8 @@ client is a device of the application running in Bun or Node (its composition ro
 in-memory database), so an account is signed up through the gateway's HTTP routes and its
 profile is written by the user module's services, the command bus and the Loro write path,
 then synced to the gateway over its WebSocket like any device's changes. The seed waits
-until the gateway has acknowledged everything and leaves each account without signing it
-out. Removing seed data is an operator task on a stand instead: the sweep connects to the
+until the gateway has acknowledged everything; as one device holding one account at a time, it
+signs the account it is in out before it enters the next. Removing seed data is an operator task on a stand instead: the sweep connects to the
 stand's SurrealDB as a system user on the gateway's database. All seed data uses addresses
 on `example.test`, which is how the sweep finds it. The catalog is standalone, so e2e tests
 generate their data from the same presets. Organisations are seeded after every account

@@ -23,7 +23,7 @@ export interface SignInViewProps {
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
    * another device signed it out.
    */
-  readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | undefined
+  readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
   readonly onSubmit: (values: SignInValues) => void
   readonly onToggleMode: () => void
 }
@@ -36,6 +36,8 @@ function errorText(t: ReturnType<typeof useT>, code: string): string {
       return t('user.sign-in.error.sign-up-rejected')
     case 'data:RATE_LIMITED':
       return t('user.sign-in.error.rate-limited')
+    case 'data:OTHER_ACCOUNT':
+      return t('user.sign-in.error.other-account')
     case 'profile:NAME_REQUIRED':
       return t('user.sign-in.error.name-required')
     case 'profile:NAME_TOO_LONG':
@@ -83,6 +85,13 @@ export function SignInView(props: SignInViewProps) {
               <Alert>
                 <AlertDescription data-testid="user.sign-in.notice.signed-out-elsewhere">
                   {t('user.sign-in.notice.signed-out-elsewhere')}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {props.notice === 'delete-pending' ? (
+              <Alert>
+                <AlertDescription data-testid="user.sign-in.notice.delete-pending">
+                  {t('user.sign-in.notice.delete-pending')}
                 </AlertDescription>
               </Alert>
             ) : null}

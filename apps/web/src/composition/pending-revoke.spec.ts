@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 
@@ -10,6 +10,7 @@ import {
   type KeyValueStorage,
   memoryStorage,
   pendingRevokes,
+  savedKeys,
   saveKeys,
 } from './storage'
 
@@ -30,6 +31,8 @@ interface HarnessOptions {
   readonly waiting?: ReadonlyArray<typeof pair>
   /** The refresh key of a pair whose send throws before it reaches the gateway. */
   readonly throwingSendOf?: string
+  /** Whether the browser says it has a network; it does by default. */
+  readonly online?: boolean
 }
 
 /**
@@ -67,6 +70,7 @@ function harness(answers: Array<() => Promise<Response>>, options: HarnessOption
       },
     },
     storage,
+    online: () => options.online ?? true,
     onError: (error) => {
       failures.push(error)
 
@@ -84,6 +88,40 @@ function harness(answers: Array<() => Promise<Response>>, options: HarnessOption
 }
 
 describe('PendingRevoke', () => {
+  it("forgets the device's keys, leaving keys that still work to revoke, sent at once online", async () => {
+    const { pending, memory, sent, left } = harness([noContent()], { waiting: [] })
+
+    saveKeys(memory, { access: 'access-3', refresh: 'refresh-3' })
+    pending.forgetKeys('live')
+
+    expect(savedKeys(memory)).toBeUndefined()
+    // Sent unasked: the browser is online.
+    await vi.waitFor(() => expect(left()).toEqual([]))
+    expect(sent).toHaveLength(1)
+  })
+
+  it('keeps keys that still work to revoke later while the browser is offline', () => {
+    const { pending, memory, sent, left } = harness([], { waiting: [], online: false })
+
+    saveKeys(memory, { access: 'access-3', refresh: 'refresh-3' })
+    pending.forgetKeys('live')
+
+    expect(savedKeys(memory)).toBeUndefined()
+    expect(sent).toHaveLength(0)
+    expect(left().map(({ refresh }) => refresh)).toEqual(['refresh-3'])
+  })
+
+  it('forgets dead keys without leaving them to revoke', () => {
+    const { pending, memory, sent, left } = harness([], { waiting: [] })
+
+    saveKeys(memory, { access: 'access-3', refresh: 'refresh-3' })
+    pending.forgetKeys('dead')
+
+    expect(savedKeys(memory)).toBeUndefined()
+    expect(sent).toHaveLength(0)
+    expect(left()).toEqual([])
+  })
+
   it('forgets the pair once the gateway revoked it (204) or refused it as dead (401)', async () => {
     for (const answer of [noContent(), respond(401, { code: 'unauthorized' })]) {
       const { pending, failures, sent, left } = harness([answer])

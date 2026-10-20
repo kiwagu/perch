@@ -15,14 +15,10 @@ import {
   type AuthUser,
   type DataError,
   dataError,
-  type LocalDb,
   openLocalDb,
-  ShapeRunner,
-  type ShapeRunnerPort,
   type SignInInput,
 } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { readSchema } from '@workspace/data/schema-files'
 import type { Locale } from '@workspace/i18n'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
@@ -55,6 +51,7 @@ export type { ProfileRow } from '../features/user/application/profile.service'
 export { checkProfileName } from '../features/user/domain/profile-name.rule'
 
 export type { Fetcher } from './gateway-auth'
+export { openStand, type Stand, type StandOptions } from './seed-stand'
 
 export interface ClientOptions {
   /** The gateway's address, such as `http://127.0.0.1:5181`; its sync WebSocket is `/sync` under it. */
@@ -122,27 +119,6 @@ export interface SeedClient {
   close(): Promise<void>
 }
 
-/** The stand behind a gateway: its address, the gateway's namespace and database, a system user. */
-export interface StandOptions {
-  /** The stand's address; `http(s)://` is turned into the WebSocket endpoint. */
-  readonly url: string
-  readonly namespace: string
-  readonly database: string
-  readonly credentials: { readonly username: string; readonly password: string }
-  /**
-   * The key the stand's gateway signs tokens with (`GATEWAY_JWT_KEY`): the directory schema is
-   * applied with it, so opening the stand never gives its access method another key.
-   */
-  readonly signingKey: string
-}
-
-/** The operator's connection to a stand, where seeded accounts are swept. */
-export interface Stand {
-  readonly local: LocalDb
-  readonly runner: ShapeRunnerPort
-  close(): Promise<void>
-}
-
 /** How long the client waits, each time, for the gateway to answer and acknowledge. */
 const SETTLE_MS = 15_000
 
@@ -206,9 +182,27 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
     )
   }
 
-  /** Signs in and waits for the first catch-up, which brings what the gateway holds. */
-  const enter = (signIn: ResultAsync<AuthUser, DataError>): ResultAsync<AuthUser, SeedError> =>
-    signIn.andThen((user) => settle().map(() => user))
+  /**
+   * Signs in and waits for the first catch-up, which brings what the gateway holds. The client is
+   * one device, which holds one account at a time: the account it is in signs out first.
+   */
+  const enter = (
+    signIn: () => ResultAsync<AuthUser, DataError>,
+  ): ResultAsync<AuthUser, SeedError> =>
+    (services.session.current() === undefined
+      ? okAsync<void, SeedError>(undefined)
+      : services.session
+          .signOut()
+          .andThen((outcome) =>
+            outcome === 'signed-out'
+              ? okAsync(undefined)
+              : errAsync(
+                  dataError('data:WRITE_FAILED', 'the account kept changes it could not send'),
+                ),
+          )
+    )
+      .andThen(signIn)
+      .andThen((user) => settle().map(() => user))
 
   const profileOf = (user: AuthUser): ResultAsync<ProfileRow | undefined, SeedError> =>
     profiles.read({ identity: user.id }).map(([row]) => row)
@@ -271,7 +265,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
     key: string,
     input: SignInInput,
   ): ResultAsync<OrganisationView, SeedError> =>
-    enter(services.session.signIn(input)).andThen(() => {
+    enter(() => services.session.signIn(input)).andThen(() => {
       services.session.selectTenant(key)
       const membership = services.session.currentTenant()
 
@@ -285,12 +279,12 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
     })
 
   return {
-    signIn: (input) => enter(services.session.signIn(input)),
+    signIn: (input) => enter(() => services.session.signIn(input)),
     ensureOrganisation,
     ensureMember,
     readOrganisation,
     ensureAccount: (input) =>
-      enter(
+      enter(() =>
         services.session
           .signUp(input)
           .orElse((error) =>
@@ -302,7 +296,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
         .andThen((user) => ensureProfile(user, input).map((profileId) => ({ user, profileId })))
         .andThen((seeded) => settle().map(() => seeded)),
     readAccount: (input) =>
-      enter(services.session.signIn(input)).andThen((user) =>
+      enter(() => services.session.signIn(input)).andThen((user) =>
         profileOf(user).map((profile) => ({ user, profile })),
       ),
     close: () => services.close(),
@@ -339,6 +333,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         schema: tenantSchema,
       }),
     // An in-memory database leaves nothing behind once it is closed.
+    deleteLocal: () => okAsync(undefined),
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: gatewayAuth(options.gatewayUrl, fetcher),
     // The client names itself with an id minted into its memory storage, as a browser does.
@@ -364,22 +359,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},
-  }).map((services) => seedClient(services, failures))
-}
-
-/**
- * Connects to a stand as its operator. The directory schema is applied as the gateway applies
- * it, with the gateway's signing key, which leaves a database that already has it alone; without
- * that key, the stand would be given a new one and every device's access token refused.
- */
-export function openStand(options: StandOptions): ResultAsync<Stand, DataError> {
-  return openLocalDb({
-    engines: remoteEngines(),
-    url: wsRpcUrl(options.url),
-    namespace: options.namespace,
-    database: options.database,
-    credentials: options.credentials,
-    schema: readSchema('directory'),
-    signingKey: options.signingKey,
-  }).map((local) => ({ local, runner: new ShapeRunner(local), close: () => local.close() }))
+  })
+    .mapErr(({ error }) => error)
+    .map((services) => seedClient(services, failures))
 }

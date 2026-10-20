@@ -33,7 +33,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { SessionService } from './session'
 import type { TransportContext, VisibilitySource } from './session-options'
-import { deviceIdFrom, type KeyValueStorage, savedKeys } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys } from './storage'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
 export type BootStep = 'restore-session' | 'open-db' | 'ready'
@@ -41,6 +41,8 @@ export type BootStep = 'restore-session' | 'open-db' | 'ready'
 export interface AppRootOptions {
   /** Opens the database of one identity: each identity has its own on the device. */
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
+  /** Deletes the database of one identity while it is not open. */
+  readonly deleteLocal: (identity: IdentityId) => ResultAsync<void, DataError>
   /** Opens the database of one organisation of an identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
   /** Deletes the database of one organisation of an identity while it is not open. */
@@ -71,6 +73,20 @@ export interface AppRootOptions {
   readonly onSyncState: (state: SyncState) => void
 }
 
+/**
+ * Why the application did not start: the browser keeps no site data (`storage-blocked`), or the
+ * session could not be restored (`open-failed`), with the error each time. When the saved
+ * identity's space did not open, `signOutHere` signs it out on this device without it
+ * (`SessionService.signOutUnopened`), so a database that will never open is no dead end.
+ */
+export type BootFailure =
+  | { readonly kind: 'storage-blocked'; readonly error: DataError }
+  | {
+      readonly kind: 'open-failed'
+      readonly error: DataError
+      readonly signOutHere?: () => ResultAsync<void, DataError>
+    }
+
 /** What the application receives: ports, and the container that resolves them. */
 export interface AppServices {
   readonly container: Container
@@ -85,7 +101,7 @@ export interface AppServices {
   close(): Promise<void>
 }
 
-export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, DataError> {
+export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, BootFailure> {
   let last: BootStep | undefined
   const step = (name: BootStep): void => {
     if (name !== last) {
@@ -98,6 +114,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     deviceLabel: options.deviceLabel,
     online: options.online,
     openLocal: options.openLocal,
+    deleteLocal: options.deleteLocal,
     openTenantLocal: options.openTenantLocal,
     deleteTenantLocal: options.deleteTenantLocal,
     schema: replicaSchema,
@@ -136,19 +153,27 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
 
   step('restore-session')
 
-  return session.restore().map(() => {
-    step('ready')
+  return session
+    .restore()
+    .mapErr(
+      (error): BootFailure =>
+        savedIdentity(options.storage)
+          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
+          : { kind: 'open-failed', error },
+    )
+    .map(() => {
+      step('ready')
 
-    return {
-      container,
-      runner: session.runner,
-      writePath: session.writePath,
-      session,
-      commands,
-      organisations,
-      devices,
-      space: () => session.space(),
-      close: () => session.close(),
-    }
-  })
+      return {
+        container,
+        runner: session.runner,
+        writePath: session.writePath,
+        session,
+        commands,
+        organisations,
+        devices,
+        space: () => session.space(),
+        close: () => session.close(),
+      }
+    })
 }

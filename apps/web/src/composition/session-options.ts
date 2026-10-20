@@ -43,6 +43,8 @@ export interface SessionOptions {
   /** Whether the browser says it has a network: only then is a pair left to revoke sent unasked. */
   readonly online: () => boolean
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
+  /** Deletes the database of one identity while it is not open. */
+  readonly deleteLocal: (identity: IdentityId) => ResultAsync<void, DataError>
   /** Opens the database of one organisation of an identity: each has its own on the device. */
   readonly openTenantLocal: (identity: IdentityId, key: string) => ResultAsync<LocalDb, DataError>
   /** Deletes the database of one organisation of an identity while it is not open. */

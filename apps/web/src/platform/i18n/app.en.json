@@ -1,7 +1,9 @@
 {
   "app.shell.title": "Perch",
   "app.shell.opening-db": "Opening your data on this device…",
-  "app.shell.failed": "This device could not open its data. Reload the page to try again.",
+  "app.shell.failed": "This device could not open your data. Reload the page to try again, or sign out on this device: changes it has not sent yet are lost.",
+  "app.shell.storage-blocked": "This browser does not let Perch keep data on this device. Allow site data for this site, then reload the page.",
+  "app.shell.sign-out-here": "Sign out on this device",
   "app.shell.nav.sign-in": "Sign in",
   "app.shell.nav.profile": "Profile",
   "app.shell.nav.organisation": "Organisation",

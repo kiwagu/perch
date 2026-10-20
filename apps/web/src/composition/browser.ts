@@ -6,21 +6,23 @@
  * stopped; `data-sync-leader` and `data-sync-channel` show the tab's sync role and channel.
  */
 
-import type { ResultAsync } from 'neverthrow'
+import { errAsync, type ResultAsync } from 'neverthrow'
 
-import { type DataError, deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
+import { deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
-import { type AppServices, createAppRoot } from './root'
+import { type AppServices, type BootFailure, createAppRoot } from './root'
 import type { VisibilitySource } from './session-options'
+import { siteStorage } from './site-storage'
 import { browserStorage } from './storage'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -49,9 +51,12 @@ const schemaOf = (...sets: ReadonlyArray<Readonly<Record<string, string>>>): str
 const directorySchema = schemaOf(commonFiles, directoryFiles)
 const tenantSchema = schemaOf(commonFiles, tenantFiles)
 
+/** Where the database of one identity lives in this browser. */
+const identityUrl = (identity: string): string => `indxdb://app-identity-${identity}`
+
 /** Where the database of one organisation of an identity lives in this browser. */
 const tenantUrl = (identity: string, key: string): string =>
-  `indxdb://app-identity-${identity}-${tenantDatabase(key)}`
+  `${identityUrl(identity)}-${tenantDatabase(key)}`
 
 function documentVisibility(page: Document): VisibilitySource {
   const current = (): Visibility => (page.visibilityState === 'hidden' ? 'hidden' : 'visible')
@@ -68,7 +73,14 @@ function documentVisibility(page: Document): VisibilitySource {
   }
 }
 
-export function bootBrowser(): ResultAsync<AppServices, DataError> {
+export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
+  const store = siteStorage(window)
+
+  // Without site storage nothing is kept: neither who is signed in nor the device's own id.
+  if (store.isErr()) {
+    return errAsync({ kind: 'storage-blocked', error: store.error })
+  }
+
   const html = document.documentElement
   const logger = createLogger('web')
   const showSync = (state: SyncState): void => {
@@ -82,22 +94,28 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
   showSync({ leader: false, channel: 'down' })
 
   return createAppRoot({
+    // One tab at a time opens a database: two engines setting up a new one at once conflict.
     openLocal: (identity) =>
-      openLocalDb({
-        engines: wasmEngines(),
-        url: `indxdb://app-identity-${identity}`,
-        namespace: 'app',
-        database: 'identity',
-        schema: directorySchema,
-      }),
+      openOneAtATime(locks, identityUrl(identity), () =>
+        openLocalDb({
+          engines: wasmEngines(),
+          url: identityUrl(identity),
+          namespace: 'app',
+          database: 'identity',
+          schema: directorySchema,
+        }),
+      ),
     openTenantLocal: (identity, key) =>
-      openLocalDb({
-        engines: wasmEngines(),
-        url: tenantUrl(identity, key),
-        namespace: 'app',
-        database: 'tenant',
-        schema: tenantSchema,
-      }),
+      openOneAtATime(locks, tenantUrl(identity, key), () =>
+        openLocalDb({
+          engines: wasmEngines(),
+          url: tenantUrl(identity, key),
+          namespace: 'app',
+          database: 'tenant',
+          schema: tenantSchema,
+        }),
+      ),
+    deleteLocal: (identity) => deleteLocalDb(identityUrl(identity)),
     deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     deviceLabel: deviceLabel(navigator),
@@ -117,7 +135,7 @@ export function bootBrowser(): ResultAsync<AppServices, DataError> {
     locks,
     hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
     clock: systemClock,
-    storage: browserStorage(window.localStorage, window),
+    storage: browserStorage(store.value, window),
     visibility: documentVisibility(document),
     logger: {
       info: (fields) => logger.info(fields, 'command'),

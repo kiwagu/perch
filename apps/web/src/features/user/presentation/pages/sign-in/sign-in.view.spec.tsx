@@ -82,6 +82,14 @@ describe('SignInView', () => {
     )
   })
 
+  it('asks to sign the other account out first when another one is signed in on this browser', () => {
+    renderView({ error: 'data:OTHER_ACCOUNT' })
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      'Another account is signed in on this browser. Sign it out first.',
+    )
+  })
+
   it('says nothing about how the last session ended unless the session left a notice', () => {
     renderView()
 
@@ -112,6 +120,15 @@ describe('SignInView', () => {
       'You were signed out from another device.',
     )
     expect(screen.queryByTestId('user.sign-in.notice.resend-after-sign-in')).toBeNull()
+  })
+
+  it('says the data leaves this device once the other tabs are closed when another tab held its delete up', () => {
+    renderView({ notice: 'delete-pending' })
+
+    expect(screen.getByTestId('user.sign-in.notice.delete-pending').textContent).toBe(
+      'You are signed out. Your data leaves this device once the other Perch tabs are closed.',
+    )
+    expect(screen.queryByTestId('user.sign-in.notice.signed-out-elsewhere')).toBeNull()
   })
 
   it('says it in Spanish', () => {
