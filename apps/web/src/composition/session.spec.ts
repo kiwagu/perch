@@ -1486,11 +1486,22 @@ describe('SessionService memberships', () => {
   })
 
   it('renewKeys in a following tab resolves false when no new keys come within 10 seconds', async () => {
-    const { b, storage } = await twoTabs({ online: true, hints: true })
+    const { a, b, storage } = await twoTabs({ online: true, hints: true })
     const before = storage.get('perch.session.token')
+    let renewed: boolean | undefined
+
+    void b.session.renewKeys().then((answer) => {
+      renewed = answer
+    })
 
     // The leader asks the gateway, which answers nothing.
-    expect(await b.driveClock(b.session.renewKeys())).toBe(false)
+    await vi.waitFor(() => expect(a.transports().at(-1)?.renews()).toBe(1))
+    await b.clock.advance(9_999)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(renewed).toBeUndefined()
+
+    await b.clock.advance(1)
+    await vi.waitFor(() => expect(renewed).toBe(false))
     expect(storage.get('perch.session.token')).toBe(before)
   })
 

@@ -144,8 +144,9 @@ describe('organisationsApi', () => {
     })
     const failure = (await api.create({ key: 'acme', name: 'Acme' }))._unsafeUnwrapErr()
 
+    // The status, never the body.
     expect(failure.code).toBe('data:AUTH_FAILED')
-    expect(failure.message).toContain('409')
+    expect(failure.message).toBe('the gateway answered 409 with something unexpected')
   })
 
   it('renews once only when the renewed token is refused too', async () => {

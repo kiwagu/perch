@@ -835,17 +835,28 @@ describe('organisations in the identity space', () => {
     const old = sent.at(-1) ?? expect.unreachable('the leader connected')
 
     await space.setMemberships([acme, globex])
+    await settled(space)
 
     const before = old.length
+    const current = sent.at(-1) ?? expect.unreachable('the new engine connected')
+    const sentByCurrent = current.length
 
-    // The new engine pushes, probes and settles; the old one is silent.
+    // A full cadence interval: a running engine probes and passes on its own, an old one left
+    // running would too. The new engine also pushes a write.
     expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
-    space.visibility('hidden')
-    space.visibility('visible')
+
+    // A second at a time, so that each probe is answered before its answer timeout.
+    for (let second = 0; second < 300; second += 1) {
+      await gateway.clock.advance(1_000)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
     await settled(space)
 
     expect(sent).toHaveLength(2)
     expect(old).toHaveLength(before)
+    expect(current.length).toBeGreaterThan(sentByCurrent)
+    expect(current.filter((message) => message.type === 'probe').length).toBeGreaterThan(0)
     expect(subscribed(sent.at(-1))).toEqual(
       expect.arrayContaining(['tenant:acme', 'tenant:globex', privateRegionId(ann.id)]),
     )
