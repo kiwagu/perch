@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 
+import { replicaSchema } from '../__fixtures__/note'
 import countsStatement from '../__fixtures__/replica-counts.surql'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
@@ -12,6 +13,8 @@ import { interceptRegionResets } from '../testing/intercept-region-resets'
 import type { ManualClock } from '../testing/manual-clock'
 
 import {
+  acmeRegion,
+  ann,
   closeDevices,
   type Device,
   identity,
@@ -446,6 +449,39 @@ describe('sync engine', () => {
     )
     expect(reader.region.recordJson(profileKey)).toMatchObject({ name: 'Anna' })
     expect([...writer.errors, ...reader.errors]).toEqual([])
+  })
+
+  it('leaves alone on a connection a region its welcome does not name: no subscription, no probe, nothing pushed', async () => {
+    // The device still holds the organisation's region; the gateway, which removed it from the
+    // organisation while it was offline, no longer welcomes it there.
+    const gateway = await openGateway({ schema: replicaSchema })
+    const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
+
+    writeName(device.region, 'Ann')
+    device.engine.start()
+    device.engine.localWrite()
+    // The tab comes back into view: a full pass probes and pushes.
+    device.engine.visibility('hidden')
+    device.engine.visibility('visible')
+    await device.engine.settled(60_000)
+
+    expect(device.channel()).toBe('up')
+    expect(device.errors).toEqual([])
+    // What it holds stays where it is, for the app to drop with the region.
+    expect((await device.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('answers a sign-out offline while a region its welcome left out holds what it has not sent', async () => {
+    const gateway = await openGateway({ schema: replicaSchema })
+    const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
+
+    writeName(device.region, 'Ann')
+    device.engine.start()
+    await device.engine.settled(60_000)
+
+    // The gateway could never take those rows: the sign-out leaves them for the app to weigh.
+    expect(await driven(gateway.clock, device.engine.signOut())).toBe('offline')
+    expect(device.errors).toEqual([])
   })
 
   it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {

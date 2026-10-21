@@ -8,7 +8,7 @@ import { err, ok, okAsync, type Result, type ResultAsync } from 'neverthrow'
 import type { AuthTokens, AuthUser, DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import type { DeviceBinding, DeviceSessions } from '../auth/device-sessions'
+import type { DeviceBinding, DeviceSessions } from '../../auth/device-sessions'
 import {
   type DeviceTokens,
   grantIdOf,
@@ -16,8 +16,8 @@ import {
   keysRefused,
   type ParkedPair,
   type RenewalGate,
-} from '../auth/identity-sessions'
-import { issuedAtOf } from '../auth/token-claims'
+} from '../../auth/identity-sessions'
+import { issuedAtOf } from '../../auth/token-claims'
 
 /**
  * The close code of a hello whose renewal a limit refused: try again later (RFC 6455). The client

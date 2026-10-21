@@ -33,8 +33,27 @@ const schema: SchemaModel = {
       idPrefix: 'nte',
       fields: { text: { kind: 'scalar', name: 'string' } },
     },
+    badge: {
+      region: 'public',
+      idPrefix: 'bdg',
+      fields: { label: { kind: 'scalar', name: 'string' } },
+    },
+    member: {
+      replicate: 'none',
+      fields: { role: { kind: 'scalar', name: 'string' } },
+    },
   },
 }
+
+/** The database each table of `schema` lives in, as the schema's folders say. */
+const databases: ReadonlyMap<string, readonly string[]> = new Map([
+  ['identity', ['directory']],
+  ['profile', ['directory']],
+  ['follows', ['directory']],
+  ['badge', ['directory']],
+  ['note', ['tenant']],
+  ['member', ['tenant']],
+])
 
 function project(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'collect-'))
@@ -59,7 +78,7 @@ describe('collect', () => {
       [`${page}/profile.commands.surql`]:
         '-- @command updateName($id: record<profile>, $name: string)\n-- @allow record\nUPDATE $id SET name = $name;\n',
     })
-    const { shapes, commands, problems } = await collect(root, schema)
+    const { shapes, commands, problems } = await collect(root, schema, databases)
 
     expect(problems).toEqual([])
     expect(shapes).toMatchObject([
@@ -98,7 +117,7 @@ describe('collect', () => {
       [`${page}/profile.container.tsx`]: '',
       [`${page}/profile.shape.surql`]: 'SELECT * FROM profile;\n',
     })
-    const { shapes, problems } = await collect(root, schema)
+    const { shapes, problems } = await collect(root, schema, databases)
 
     expect(shapes).toEqual([])
     expect(problems).toEqual([
@@ -116,7 +135,7 @@ describe('collect', () => {
         '-- @params $name: string\nSELECT name FROM profile WHERE identity.name = $name;\n',
     })
 
-    expect((await collect(root, schema)).problems).toEqual([
+    expect((await collect(root, schema, databases)).problems).toEqual([
       `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
@@ -128,7 +147,7 @@ describe('collect', () => {
       [`${page}/profile.shape.surql`]: 'SELECT name, identity FROM profile FETCH identity;\n',
     })
 
-    expect((await collect(root, schema)).problems).toEqual([
+    expect((await collect(root, schema, databases)).problems).toEqual([
       `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
@@ -140,7 +159,7 @@ describe('collect', () => {
       [`${page}/profile.shape.surql`]: 'SELECT in, out FROM follows FETCH in;\n',
     })
 
-    expect((await collect(root, schema)).problems).toEqual([
+    expect((await collect(root, schema, databases)).problems).toEqual([
       `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })
@@ -153,9 +172,47 @@ describe('collect', () => {
         '-- @params $note: record<note>\nSELECT name FROM profile WHERE name = $note.text;\n',
     })
 
-    expect((await collect(root, schema)).problems).toEqual([
-      `${page}/profile.shape.surql: reads tables of two databases: profile (private), note (tenant)`,
+    expect((await collect(root, schema, databases)).problems).toEqual([
+      `${page}/profile.shape.surql: reads tables of two databases: profile (directory), note (tenant)`,
     ])
+  })
+
+  it('refuses a server shape that reads server-only tables of two databases', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @server\n-- @params $member: record<member>\nSELECT name FROM identity WHERE name = $member.role;\n',
+    })
+
+    expect((await collect(root, schema, databases)).problems).toEqual([
+      `${page}/profile.shape.surql: reads tables of two databases: identity (directory), member (tenant)`,
+    ])
+  })
+
+  it('refuses a shape that reads a table no database of the schema defines, naming it', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $badge: record<badge>\nSELECT name FROM profile WHERE name = $badge.label;\n',
+    })
+    const withoutBadge = new Map([...databases].filter(([table]) => table !== 'badge'))
+
+    expect((await collect(root, schema, withoutBadge)).problems).toEqual([
+      `${page}/profile.shape.surql: reads table badge, which no database of the schema defines`,
+    ])
+  })
+
+  it('takes a shape that reads tables of two regions kept in one database', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $badge: record<badge>\nSELECT name FROM profile WHERE name = $badge.label;\n',
+    })
+
+    expect((await collect(root, schema, databases)).problems).toEqual([])
   })
 
   it('requires @server on a shape that reads a server-only table', async () => {
@@ -166,7 +223,7 @@ describe('collect', () => {
         '-- @params $id: record<identity>\nSELECT name FROM ONLY $id;\n',
     })
 
-    expect((await collect(root, schema)).problems).toEqual([
+    expect((await collect(root, schema, databases)).problems).toEqual([
       `${page}/profile.shape.surql: reads the server-only table identity; mark the shape -- @server or read a replicated table`,
     ])
   })

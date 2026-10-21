@@ -22,26 +22,27 @@ import {
 import { RegionHub } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
 
-import { DeviceSessions } from '../auth/device-sessions'
+import { DeviceSessions } from '../../auth/device-sessions'
 import {
   type AuthenticatedDevice,
   type DeviceTokens,
   grantIdOf,
   IdentitySessions,
   type RenewalGate,
-} from '../auth/identity-sessions'
-import { DIRECTORY, NAMESPACE } from '../config'
-import { Organisations } from '../tenants/organisations'
-import { regionDatabases } from '../tenants/region-databases'
-import memberRemoveStatement from '../tenants/surql/member-remove.surql'
-import membershipRemoveStatement from '../tenants/surql/membership-remove.surql'
-import membershipsOfStatement from '../tenants/surql/memberships-of.surql'
-import { TenantDatabases } from '../tenants/tenant-databases'
+} from '../../auth/identity-sessions'
+import { DIRECTORY, NAMESPACE } from '../../config'
+import { Organisations } from '../../tenants/organisations'
+import { regionDatabases } from '../../tenants/region-databases'
+import memberRemoveStatement from '../../tenants/surql/member-remove.surql'
+import membershipRemoveStatement from '../../tenants/surql/membership-remove.surql'
+import membershipsOfStatement from '../../tenants/surql/memberships-of.surql'
+import { TenantDatabases } from '../../tenants/tenant-databases'
+import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import { profileCreate } from '../__fixtures__/profile'
+import { ConnectionRegistry } from '../connections'
 
-import { noteCreate, noteUpdate } from './__fixtures__/note'
-import { profileCreate } from './__fixtures__/profile'
-import { ConnectionRegistry } from './connections'
-import { type SocketLike, SyncConnection, type SyncConnectionDeps } from './sync-connection'
+import { SyncConnection } from './connection'
+import type { SocketLike, SyncConnectionDeps } from './deps'
 
 /** The access method identities sign in through, and the scope its tokens are issued for. */
 const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
