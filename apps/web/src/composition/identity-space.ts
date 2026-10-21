@@ -289,14 +289,20 @@ class Space implements IdentitySpace {
     this.#options.tenantDatabases.drop(this.#tenants.keys())
   }
 
-  /** The organisations the identity belongs to whose database the device counts but did not open. */
+  /**
+   * The organisations the identity belongs to whose database the device counts but this space did
+   * not open: by the list it follows, or by a newer one another tab saved and opened from. The
+   * count is read first: a tab saves the memberships before it counts their databases.
+   */
   #unopened(): readonly string[] {
+    const counted = this.#options.tenantDatabases.keys()
+    const belongs = new Set([
+      ...keysOf(this.#tenants.memberships()),
+      ...keysOf(this.#options.tenantDatabases.savedMemberships()),
+    ])
     const open = new Set(this.#tenants.keys())
-    const counted = new Set(this.#options.tenantDatabases.keys())
 
-    return [...keysOf(this.#tenants.memberships())].filter(
-      (key) => !open.has(key) && counted.has(key),
-    )
+    return counted.filter((key) => belongs.has(key) && !open.has(key))
   }
 
   /** The identity's own region first, then each organisation's. */
