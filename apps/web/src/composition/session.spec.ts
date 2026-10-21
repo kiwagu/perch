@@ -354,6 +354,27 @@ describe('SessionService', () => {
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
+  it("asks before signing out offline while an organisation's region holds an unsent change", async () => {
+    const { session, destroyed, driveClock } = await bootSession({
+      saved: annIn([acme]),
+      online: false,
+    })
+
+    expect(
+      (
+        await session.writePath.run(createNote, {
+          id: noteIdFactory.create(),
+          author: ann.identity.id,
+          text: 'not sent',
+        })
+      ).isOk(),
+    ).toBe(true)
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(destroyed()).toEqual([])
+  })
+
   it('signs out offline without asking when nothing is unsent', async () => {
     const { session, destroyed, gateway, driveClock } = await bootSession({
       saved: ann,
@@ -1462,6 +1483,15 @@ describe('SessionService memberships', () => {
     storage.changeElsewhere('perch.session.token', 'access-2')
 
     expect(await renewing).toBe(true)
+  })
+
+  it('renewKeys in a following tab resolves false when no new keys come within 10 seconds', async () => {
+    const { b, storage } = await twoTabs({ online: true, hints: true })
+    const before = storage.get('perch.session.token')
+
+    // The leader asks the gateway, which answers nothing.
+    expect(await b.driveClock(b.session.renewKeys())).toBe(false)
+    expect(storage.get('perch.session.token')).toBe(before)
   })
 
   it('renewKeys in a following tab resolves false at once when another tab removes the access key', async () => {

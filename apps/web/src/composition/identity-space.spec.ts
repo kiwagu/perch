@@ -1,7 +1,13 @@
-import { okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type AuthUser, type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
+import {
+  type AuthUser,
+  type DataError,
+  dataError,
+  type LocalDb,
+  ShapeRunner,
+} from '@workspace/data'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import {
@@ -818,6 +824,65 @@ describe('organisations in the identity space', () => {
     // The sign-out did not reach the gateway: the session signs out locally, or asks first.
     expect(outcome).toBe('offline')
     expect(errors).toEqual([])
+  })
+
+  it('stops the old engine when a change of memberships replaces it: its channel sends nothing more', async () => {
+    const gateway = await openGateway([acme, globex])
+    const { space, sent, errors } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+
+    const old = sent.at(-1) ?? expect.unreachable('the leader connected')
+
+    await space.setMemberships([acme, globex])
+
+    const before = old.length
+
+    // The new engine pushes, probes and settles; the old one is silent.
+    expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
+    space.visibility('hidden')
+    space.visibility('visible')
+    await settled(space)
+
+    expect(sent).toHaveLength(2)
+    expect(old).toHaveLength(before)
+    expect(subscribed(sent.at(-1))).toEqual(
+      expect.arrayContaining(['tenant:acme', 'tenant:globex', privateRegionId(ann.id)]),
+    )
+    expect(errors).toEqual([])
+  })
+
+  it('closes its own database and answers the failure when an organisation database does not open', async () => {
+    const gateway = await openGateway([acme])
+    const own = (await openTestDb())._unsafeUnwrap()
+    let closed = false
+    const local: LocalDb = {
+      ...own,
+      close: async () => {
+        closed = true
+        await own.close()
+      },
+    }
+    const opened = await openIdentitySpace({
+      identity: ann,
+      openLocal: () => okAsync(local),
+      openTenantLocal: () =>
+        errAsync(dataError('data:OPEN_FAILED', 'the organisation database does not open')),
+      deleteTenantLocal: () => okAsync(undefined),
+      tenantDatabases: inventory(),
+      memberships: [acme],
+      tenant: undefined,
+      schema: replicaSchema,
+      transport: () => gateway.stub.transport(ann.id),
+      leadership: leadership(new FakeLocks(), lockName(ann.id)),
+      hints: syncHints(undefined),
+      clock: gateway.clock,
+      onState: () => {},
+      onError: () => {},
+    })
+
+    expect(opened._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(closed).toBe(true)
   })
 
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {
