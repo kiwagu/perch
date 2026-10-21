@@ -19,7 +19,7 @@ import { noteIdFactory } from '@workspace/ids'
 import { RegionDoc } from '@workspace/replica'
 
 import { noteCreate } from '../../src/sync/__fixtures__/note'
-import { callAs, postCredentials, type SignedIn } from '../smoke-http'
+import { callAs, postCredentials, type SignedIn } from '../smoke'
 
 import { LoadDevice } from './load-device'
 import {

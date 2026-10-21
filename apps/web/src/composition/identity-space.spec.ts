@@ -1,7 +1,13 @@
-import { okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type AuthUser, type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
+import {
+  type AuthUser,
+  type DataError,
+  dataError,
+  type LocalDb,
+  ShapeRunner,
+} from '@workspace/data'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import {
@@ -89,7 +95,12 @@ afterEach(async () => {
 
 /** The gateway stub, welcoming every device with `memberships`; its database projects both kinds of region. */
 /** A gateway stub; its database answers each query `lateMs` late, as a gateway under load would. */
-async function openGateway(memberships: readonly Membership[] = [], lateMs = 0): Promise<Gateway> {
+async function openGateway(
+  memberships: readonly Membership[] = [],
+  lateMs = 0,
+  /** Counts the gateway's queries, for a test that drives the clock only while none is in flight. */
+  queries?: QueryTracker,
+): Promise<Gateway> {
   const clock = manualClock()
   const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
   const opened = (await openTestDb({ schema }))._unsafeUnwrap()
@@ -97,7 +108,12 @@ async function openGateway(memberships: readonly Membership[] = [], lateMs = 0):
     lateMs > 0
       ? interceptQueries(opened, () => new Promise<void>((resolve) => setTimeout(resolve, lateMs)))
       : opened
-  const stub = gatewayStub({ local: server, schema: replicaSchema, clock, memberships })
+  const stub = gatewayStub({
+    local: queries ? queries.wrap(server) : server,
+    schema: replicaSchema,
+    clock,
+    memberships,
+  })
 
   cleanups.push(async () => {
     await stub.close()
@@ -276,9 +292,12 @@ async function openSpace(
     readonly openTenantLocal?: TenantDatabases['open']
     /** The organisation databases the device holds for Ann to begin with, by key. */
     readonly held?: readonly string[]
+    /** Counts the queries of the space's databases, its own and each organisation's. */
+    readonly queries?: QueryTracker
   },
 ) {
   const tenants = tenantDatabases()
+  const tracked = (local: LocalDb) => (options.queries ? options.queries.wrap(local) : local)
   const errors: DataError[] = []
   const sent: ClientMessage[][] = []
   /** The organisation databases deleted while not open, by key. */
@@ -287,8 +306,9 @@ async function openSpace(
   const space = (
     await openIdentitySpace({
       identity: ann,
-      openLocal: () => (options.local ? okAsync(options.local) : openTestDb()),
-      openTenantLocal: options.openTenantLocal ?? tenants.open,
+      openLocal: () => (options.local ? okAsync(options.local) : openTestDb()).map(tracked),
+      openTenantLocal: (identity, key) =>
+        (options.openTenantLocal ?? tenants.open)(identity, key).map(tracked),
       deleteTenantLocal: (_identity, key) => {
         deleted.push(key)
 
@@ -785,6 +805,114 @@ describe('organisations in the identity space', () => {
       'no organisation is selected',
     )
     expect(errors).toEqual([])
+  })
+
+  it('replaces the engine a sign-out drains through when the memberships change meanwhile, which ends the sign-out offline', async () => {
+    const gateway = await openGateway([acme])
+    const { space, errors, tenants } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+
+    const draining = space.sync
+
+    // A push of the private region stays unanswered: the sign-out drains it.
+    void gateway.stub.swallowNextPush()
+    expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
+
+    let outcome: string | undefined
+    const signingOut = space.signOut().then((answered) => {
+      outcome = answered
+    })
+
+    // The identity leaves the organisation meanwhile: a new engine of the regions left takes over.
+    await space.setMemberships([])
+    expect(tenants.destroyed).toEqual(['acme'])
+    expect(space.sync).not.toBe(draining)
+
+    while (outcome === undefined) {
+      await gateway.clock.advance(1_000)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await signingOut
+    // The sign-out did not reach the gateway: the session signs out locally, or asks first.
+    expect(outcome).toBe('offline')
+    expect(errors).toEqual([])
+  })
+
+  it.each([0, 100])(
+    'stops the old engine when a change of memberships replaces it: its channel sends nothing more (the gateway %i ms late)',
+    async (lateMs) => {
+      // The clock moves only while no query of the gateway or the space is in flight.
+      const queries = new QueryTracker()
+      const gateway = await openGateway([acme, globex], lateMs, queries)
+      const { space, sent, errors } = await openSpace(gateway, { memberships: [acme], queries })
+
+      await settled(space)
+
+      const old = sent.at(-1) ?? expect.unreachable('the leader connected')
+
+      await space.setMemberships([acme, globex])
+      await settled(space)
+
+      const before = old.length
+      const current = sent.at(-1) ?? expect.unreachable('the new engine connected')
+      const sentByCurrent = current.length
+      const probes = () => current.filter((message) => message.type === 'probe').length
+      const probedBefore = probes()
+
+      // A full cadence interval: a running engine probes and passes on its own, an old one left
+      // running would too. The new engine also pushes a write.
+      expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
+
+      // A second at a time, once no query is in flight: each probe and push is answered before
+      // its 30-second answer timeout, as with a real clock.
+      for (let second = 0; second < 300; second += 1) {
+        await queries.idle()
+        await gateway.clock.advance(1_000)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
+      await settled(space)
+
+      expect(sent).toHaveLength(2)
+      expect(old).toHaveLength(before)
+      expect(current.length).toBeGreaterThan(sentByCurrent)
+      expect(probes()).toBeGreaterThan(probedBefore)
+      expect(subscribed(sent.at(-1))).toEqual(
+        expect.arrayContaining(['tenant:acme', 'tenant:globex', privateRegionId(ann.id)]),
+      )
+      expect(errors).toEqual([])
+    },
+  )
+
+  it('opens without an organisation whose database does not open, reports it, and opens it at the next change', async () => {
+    const gateway = await openGateway([acme])
+    const tenants = tenantDatabases()
+    let broken = true
+    const { space, errors } = await openSpace(gateway, {
+      memberships: [acme],
+      openTenantLocal: (identity, key) =>
+        broken
+          ? errAsync(dataError('data:OPEN_FAILED', 'the organisation database does not open'))
+          : tenants.open(identity, key),
+    })
+
+    // Acme stays a membership, unavailable on this device: its region is not synced, and the
+    // changes its database may hold count as unsent, since nobody can read them.
+    expect(space.memberships()).toEqual([acme])
+    expect(space.tenants()).toEqual([])
+    expect(space.currentTenant()).toBeUndefined()
+    expect(errors.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
+    expect((await space.unsent())._unsafeUnwrap()).toBe(true)
+
+    broken = false
+    await space.setMemberships([acme])
+
+    expect(space.tenants()).toEqual(['acme'])
+    expect(space.currentTenant()).toBe('acme')
+    expect((await space.unsent())._unsafeUnwrap()).toBe(false)
+    await expect(space.close()).resolves.toBeUndefined()
   })
 
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {

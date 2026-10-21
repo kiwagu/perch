@@ -5,7 +5,7 @@ import type { OutboxRow, RegionDoc } from '../region-doc'
 
 import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
 import { batchUpdates, nextBatch } from './outbox-batch'
-import type { SyncTransport } from './transport'
+import type { RegionChannel } from './transport'
 
 export type PushOutcome = 'sent' | 'empty' | 'down'
 
@@ -38,7 +38,7 @@ export interface PushGate {
 
 export interface RegionPushOptions {
   readonly region: RegionDoc
-  readonly transport: SyncTransport
+  readonly transport: RegionChannel
   /** Times how long a push waits for its answer. */
   readonly clock: Clock
   readonly onError: (error: DataError) => void
@@ -58,7 +58,7 @@ export interface RegionPushOptions {
  */
 export class RegionPush {
   readonly #region: RegionDoc
-  readonly #transport: SyncTransport
+  readonly #transport: RegionChannel
   readonly #clock: Clock
   readonly #onError: (error: DataError) => void
   readonly #batchRows: number

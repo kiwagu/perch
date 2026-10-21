@@ -7,8 +7,8 @@
 import type { IdentityId } from '@workspace/ids'
 import type { Logger } from '@workspace/logger'
 
-import type { DeviceSessions } from '../auth/device-sessions'
-import { type DeviceTokens, grantIdOf, type IdentitySessions } from '../auth/identity-sessions'
+import type { DeviceSessions } from '../../auth/device-sessions'
+import { type DeviceTokens, grantIdOf, type IdentitySessions } from '../../auth/identity-sessions'
 
 export interface HelloRenewalsDeps {
   /** Where a pair is parked for the device's next hello. */

@@ -1,3 +1,5 @@
+import { type DataError, dataError } from '@workspace/data'
+
 /** The close code of a server that failed (RFC 6455): the device connects again. */
 export const SERVER_ERROR = 1011
 
@@ -21,3 +23,8 @@ export const REASON = {
   failed: 'the gateway failed to handle the message',
   superseded: 'another connection of this device took over',
 } as const
+
+/** A failure to answer the device: reported, and its socket closes as a failed server. */
+export function answerFailed(cause: unknown): DataError {
+  return dataError('data:WRITE_FAILED', 'the sync connection failed to answer', cause)
+}

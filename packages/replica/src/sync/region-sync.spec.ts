@@ -265,6 +265,81 @@ describe('region sync on its own', () => {
     expect(count('pull')).toBe(2)
   })
 
+  /** A database that holds `statement` once `holding` is set, until `release`; `reached` resolves once held. */
+  function holdOn(statement: string) {
+    let release = (): void => {}
+    let reach = (): void => {}
+    const gate = { holding: false }
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve
+    })
+    const wrap = (local: LocalDb) =>
+      interceptQueries(local, (text) => {
+        if (gate.holding && text === statement) {
+          reach()
+
+          return held
+        }
+      })
+
+    return { gate, wrap, reached, release }
+  }
+
+  it('sends nothing for its region once retired, though an import under way ends after it', async () => {
+    const hold = holdOn(importStatement)
+    const { sync, count, reconnects } = await alone({ persisted: true, wrap: hold.wrap })
+    const { gap } = serverHistory()
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+
+    // This update lacks its history: once imported, it would ask for a pull.
+    hold.gate.holding = true
+    const handled = sync.handle(updates(gap, 2))
+
+    await hold.reached
+    sync.retire()
+    hold.release()
+    await handled
+
+    expect(count('pull')).toBe(0)
+    expect(reconnects()).toBe(0)
+  })
+
+  it('sends nothing for its region once retired, though a compaction proposal under way ends after it', async () => {
+    const hold = holdOn(outboxReadStatement)
+    const { sync, count, region, lastBatch } = await alone({ persisted: true, wrap: hold.wrap })
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    writeName(region, 'Ann')
+
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+
+    // The ack asks for a compaction: the proposal reads the outbox before it goes out.
+    hold.gate.holding = true
+    const handled = sync.handle({
+      type: 'ack',
+      region: regionId,
+      batch: lastBatch(),
+      head: 1,
+      compact: true,
+    })
+
+    await hold.reached
+    sync.retire()
+    hold.release()
+    await handled
+    await pushed
+
+    expect(count('compact')).toBe(0)
+  })
+
   it('gives up on a pull whose answer never comes after 30 seconds, reports it once and reconnects', async () => {
     const { sync, count, errors, clock, reconnects } = await alone()
 

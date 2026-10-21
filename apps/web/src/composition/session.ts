@@ -23,10 +23,10 @@ import type { NamedDevice, SignedInDevice } from './gateway-auth'
 import { type IdentitySpace, openIdentitySpace, type SyncState } from './identity-space'
 import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from './one-account'
 import type { OpenSpace, SpaceStatus } from './open-space'
-import { SessionOrganisations } from './organisations'
 import { type KeysLeft, PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
 import type { SessionOptions, TransportContext } from './session-options'
+import { SessionOrganisations } from './session-organisations'
 import { sessionTransportContext } from './session-transport-context'
 import { SpaceDeletion } from './space-deletion'
 import {
@@ -271,9 +271,9 @@ export class SessionService implements SessionPort {
     this.#options.onError(error)
   }
 
-  /** Keeps the signed-in identity's new memberships and has its space follow them; see `SessionOrganisations.apply`. */
-  applyMemberships(next: readonly Membership[]): Promise<void> {
-    return this.#organisations.apply(next)
+  /** An organisation this device created joins the identity's memberships; see `SessionOrganisations.adopt`. */
+  adoptMembership(created: Membership): Promise<void> {
+    return this.#organisations.adopt(created)
   }
 
   /** Has the gateway renew the device's keys, through the leading tab; see `SessionOrganisations.renewKeys`. */
@@ -455,9 +455,7 @@ export class SessionService implements SessionPort {
     // engine answers `offline` without asking the gateway while anything stays unsent, a region
     // that stopped syncing included; what is unsent is then weighed here.
     const ended = ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
-      .andThen(() =>
-        ResultAsync.fromSafePromise(space.sync?.signOut() ?? Promise.resolve('offline' as const)),
-      )
+      .andThen(() => ResultAsync.fromSafePromise(space.signOut()))
       // What is unsent is read, and the database deleted, only once no tab writes any more.
       // Keys the gateway did not revoke are left to revoke, whichever way they are forgotten.
       .andThen((outcome) =>

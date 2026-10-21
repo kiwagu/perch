@@ -64,7 +64,11 @@ tried or counted. A `tokens` message the socket drops
 newer hello of it came, is lost with that socket, and the device signs in again. A bound
 device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
-belongs to and those memberships, the only regions it may name, and subscribes, pulls, pushes,
+belongs to and those memberships, the only regions it may name (an organisation whose database
+cannot be read is left out of the welcome and logged, its membership kept: the device syncs only
+the regions its welcome names, so it leaves that one alone until its next hello, though the
+connection would still serve it; the private region failing fails the hello,
+`src/sync/sync-connection/welcome-heads.ts`), and subscribes, pulls, pushes,
 probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database, and names them so
@@ -216,8 +220,9 @@ the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the dat
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
 `GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
 optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
-an issue that names it, never its value. `scripts/smoke.ts` is the entry point of the smoke test
-against a stand.
+an issue that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
+HTTP helpers the load test reuses).
 
 Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
 which the gateway gives the directory schema when it applies it, so a schema applied again (at a
@@ -313,12 +318,15 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
   `bun run test:db` sets it from the manifest), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives,
-  the owner editing that note as an admin, the invited device deleting its own note, its edit of
+  each device welcomed with its membership and role, the invited device writing a note into the
+  organisation's region that the owner's device receives, the owner editing that note as an
+  admin, the invited device deleting its own note, a late device of the owner subscribing to a
+  snapshot that holds the admin's note and not the deleted one, the invited device's edit of
   the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
   `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
   owner's next note still acknowledged and delivered, the member list refused to it with 403,
-  the removal that closes the region with 4403), on a further identity the clause of the access method: its fresh token accepted, the
+  the removal that closes the region with 4403, and the removed identity's sign-out, after
+  which its refresh key is refused with 4401), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
   that the refresh is refused; on a further identity the directory schema applied again with the

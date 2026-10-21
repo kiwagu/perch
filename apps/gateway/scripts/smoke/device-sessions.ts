@@ -6,9 +6,9 @@
 import { CLOSE, PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { SmokeDevice } from './smoke-device'
-import { call, callAs, postCredentials, type SignedIn } from './smoke-http'
-import { check, hello, type Opened, refusal, step } from './smoke-steps'
+import { SmokeDevice } from './device'
+import { call, callAs, postCredentials, type SignedIn } from './http'
+import { check, hello, type Opened, refusal, step } from './steps'
 
 /**
  * The devices as `GET /devices` lists them, every field of each named: a field the list must not

@@ -10,11 +10,11 @@ import type { RegionDoc } from '@workspace/replica'
 import { PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import type { GatewayRoot } from '../src/composition/root'
-import type { RunningServer } from '../src/server'
+import type { GatewayRoot } from '../../src/composition/root'
+import type { RunningServer } from '../../src/server'
 
-import { SmokeDevice } from './smoke-device'
-import type { SignedIn } from './smoke-http'
+import { SmokeDevice } from './device'
+import type { SignedIn } from './http'
 
 const STEP_TIMEOUT_MS = 5_000
 
@@ -83,6 +83,29 @@ export async function hello(
   check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
 
   return { device, welcome }
+}
+
+/**
+ * Opens a device of the identity whose hello carries an unreadable access key and its refresh
+ * key, so the gateway must renew the pair; settles with how the gateway closed it.
+ */
+export async function helloOnRefresh(
+  base: string,
+  opened: Opened,
+  { tokens, device: id }: SignedIn,
+) {
+  const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
+
+  opened.devices.push(device)
+  device.send({
+    type: 'hello',
+    protocol: PROTOCOL_VERSION,
+    access: 'not-a-token',
+    refresh: tokens.refresh,
+    device: id,
+  })
+
+  return device.closed
 }
 
 /** Takes the device's next `updates` into its document; answers with the update's head. */

@@ -45,6 +45,7 @@ describe('checkI18n', () => {
     const root = project({
       ...catalogs,
       'view.tsx':
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
         "t('x.y'); t('x.nope'); t(`x.${part}`); t('x.count', { count }); t(ok ? 'x.cond.a' : 'x.cond.b')",
       'other.ts': 't(name)',
     })

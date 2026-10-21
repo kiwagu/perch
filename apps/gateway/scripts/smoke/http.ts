@@ -34,6 +34,19 @@ export interface Answer {
   readonly body: unknown
 }
 
+/** A body as JSON when it parses, else as its text: a front may answer plain text for the gateway. */
+function bodyOf(text: string): unknown {
+  if (text === '') {
+    return undefined
+  }
+
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
+  }
+}
+
 /** The client address of a simulated device: `198.18.<a>.<b>` from a stable hash of its id. */
 function simulatedAddress(device: string): string {
   const hash = Bun.hash.crc32(device)
@@ -80,11 +93,7 @@ export async function call(
   })
   const text = await response.text()
 
-  return {
-    status: response.status,
-    headers: response.headers,
-    body: text === '' ? undefined : (JSON.parse(text) as unknown),
-  }
+  return { status: response.status, headers: response.headers, body: bodyOf(text) }
 }
 
 /** Calls a route of the gateway as `signedIn`: its access token, from its device. */
