@@ -46,6 +46,15 @@ function countingTenants(local: LocalDb) {
 }
 
 describe('regionDatabases', () => {
+  it("names the directory for every private region and its own database for an organisation's region", async () => {
+    const { tenants } = countingTenants(await openDb())
+    const databases = regionDatabases(await openDb(), tenants)
+
+    expect(databases.databaseOf({ kind: 'private', id: 'identity:idn_a' })).toBe('directory')
+    expect(databases.databaseOf({ kind: 'private', id: 'identity:idn_b' })).toBe('directory')
+    expect(databases.databaseOf({ kind: 'tenant', id: 'tenant:acme' })).toBe('t_acme')
+  })
+
   it('serves a private region from the directory, with nothing to release', async () => {
     const directory = await openDb()
     const { tenants, acquired } = countingTenants(await openDb())

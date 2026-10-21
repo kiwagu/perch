@@ -115,13 +115,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   The mergeable containers of a record's fields appear as roots in the operations and are
   exempt from that refusal when their path leads into the `records` map or when they have no
   path (their record is gone, or the field they belong to is not set).
-  `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
-  `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
-  database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
+  `RegionDatabases` is the port the hub keeps regions through: `databaseOf(region)` names the
+  database that keeps a region (the hub reads the heads of the regions of one name together, and
+  assumes no layout of its own), `acquire(region)` resolves to a `RegionDatabase` (`local`,
+  `release()`); `singleDatabase(local)` keeps every region in one database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
   that asks for a compaction, `onError`) holds a region's database from its load until it
   unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
-  (`Actor`: its identity id and its `Ability`); `push(region, subscriber, batch, updates)` answers
+  (`Actor`: its identity id and its `Ability`); a private region other than the actor's own is
+  refused `forbidden-region`, and a subscription after `close()` an internal error, neither
+  holding the region; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
   ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in
