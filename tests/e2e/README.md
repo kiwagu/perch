@@ -8,7 +8,8 @@ instruction spec in `specs/`; after every step a check fails the test when any o
 scrolls sideways. Each test signs up fresh accounts in fresh browser contexts, with
 data generated from the seed catalog. Key pages are compared with screenshots on `mobile`;
 the baselines are not committed: the first run on a machine writes them, later runs
-compare against them.
+compare against them; after an intended change of a page, `bun run test:e2e
+--update-snapshots=changed` rewrites the ones that differ.
 The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e` and the `caddy-e2e`
 front), not Playwright's web server, so `mcproc logs e2e` shows what a run saw. Tests open the
 front at `E2E_BASE_URL` (https://localhost:5493 in the main checkout; a worktree's slot shifts
@@ -83,6 +84,9 @@ a test asks), `appReady`, `signIn` (fails at once when the sign-in page shows it
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
+`src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
+page: `createOrganisation` (its creator then shows as "Administrator"), `inviteMember` and
+`expectInvited` (the notice "Invited" and the account in the members list).
 `src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
 note texts).
 

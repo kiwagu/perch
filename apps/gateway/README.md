@@ -216,8 +216,9 @@ the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the dat
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
 `GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
 optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
-an issue that names it, never its value. `scripts/smoke.ts` is the entry point of the smoke test
-against a stand.
+an issue that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
+HTTP helpers the load test reuses).
 
 Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
 which the gateway gives the directory schema when it applies it, so a schema applied again (at a
@@ -313,12 +314,15 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
   `bun run test:db` sets it from the manifest), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives,
-  the owner editing that note as an admin, the invited device deleting its own note, its edit of
+  each device welcomed with its membership and role, the invited device writing a note into the
+  organisation's region that the owner's device receives, the owner editing that note as an
+  admin, the invited device deleting its own note, a late device of the owner subscribing to a
+  snapshot that holds the admin's note and not the deleted one, the invited device's edit of
   the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
   `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
   owner's next note still acknowledged and delivered, the member list refused to it with 403,
-  the removal that closes the region with 4403), on a further identity the clause of the access method: its fresh token accepted, the
+  the removal that closes the region with 4403, and the removed identity's sign-out, after
+  which its refresh key is refused with 4401), on a further identity the clause of the access method: its fresh token accepted, the
   same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
   the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
   that the refresh is refused; on a further identity the directory schema applied again with the

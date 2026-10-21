@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Entry of the gateway's smoke test against a SurrealDB stand (see `smoke-run.ts`). The
+ * Entry of the gateway's smoke test against a SurrealDB stand (see `run.ts`). The
  * gateway imports `.surql` files, so their loader is registered before anything else loads:
  * the repository's bunfig preload applies only to commands started from its root.
  *
@@ -12,6 +12,6 @@
 
 import '@workspace/data/bun-plugin-surql'
 
-const { runSmoke } = await import('./smoke-run')
+const { runSmoke } = await import('./run')
 
 process.exit(await runSmoke(process.env))

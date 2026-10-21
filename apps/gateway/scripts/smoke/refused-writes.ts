@@ -7,11 +7,11 @@
 import { noteIdFactory } from '@workspace/ids'
 import { RegionDoc } from '@workspace/replica'
 
-import { noteCreate, noteUpdate } from '../src/sync/__fixtures__/note'
+import { noteCreate, noteUpdate } from '../../src/sync/__fixtures__/note'
 
-import type { SmokeDevice } from './smoke-device'
-import type { SignedIn } from './smoke-http'
-import { check, step, takeUpdates, unwrap } from './smoke-steps'
+import type { SmokeDevice } from './device'
+import type { SignedIn } from './http'
+import { check, step, takeUpdates, unwrap } from './steps'
 
 /** A member of the region as the smoke drives it: who signed in, its device and its document. */
 interface Member {
