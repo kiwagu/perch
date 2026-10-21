@@ -407,9 +407,10 @@ function abandon(options: IdentitySpaceOptions): void {
 
 /**
  * Opens the identity's database and its private region `identity:<id>`, and the database and
- * region `tenant:<key>` of each organisation it belongs to, projects each region into its
- * database and syncs them while this tab leads. The space owns the leadership and the hints it
- * is given: it stops them when it closes, or at once when it cannot open.
+ * region `tenant:<key>` of each organisation it belongs to (one that does not open is reported and
+ * left out), projects each region into its database and syncs them while this tab leads. The space
+ * owns the leadership and the hints it is given: it stops them when it closes, or at once when
+ * its own database cannot open.
  */
 export function openIdentitySpace(
   options: IdentitySpaceOptions,
@@ -440,12 +441,6 @@ export function openIdentitySpace(
         },
         options.memberships,
         options.tenant,
-      )
-        .map((tenants): IdentitySpace => new Space(own, tenants, options))
-        .orElse((error) => {
-          abandon(options)
-
-          return ResultAsync.fromSafePromise(own.close()).andThen(() => errAsync(error))
-        }),
+      ).map((tenants): IdentitySpace => new Space(own, tenants, options)),
     )
 }

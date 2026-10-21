@@ -3,7 +3,7 @@
  * knows which one the tenant region's reads and writes go to.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
@@ -22,7 +22,9 @@ export interface TenantSpacesOptions {
 /**
  * The databases of the organisations an identity belongs to, one per membership, and the one the
  * tenant region's reads and writes go to: the one selected while its database is open, otherwise
- * the first by key. Its listeners hear when another one becomes current, or none.
+ * the first by key. A database that does not open is reported and left out: its organisation stays
+ * a membership, unavailable on this device (not current, not synced), until a change of
+ * memberships asks for it again. Its listeners hear when another one becomes current, or none.
  */
 export class TenantSpaces {
   readonly #options: TenantSpacesOptions
@@ -44,24 +46,20 @@ export class TenantSpaces {
     this.#keepCurrent()
   }
 
-  /** Opens the database of each membership; when one does not open, those that did close again. */
+  /** Opens the database of each membership; one that does not open is reported and left out. */
   static open(
     options: TenantSpacesOptions,
     memberships: readonly Membership[],
     current: string | undefined,
-  ): ResultAsync<TenantSpaces, DataError> {
-    const opening = Promise.all(memberships.map(({ tenant }) => openOf(options, tenant.key)))
+  ): ResultAsync<TenantSpaces, never> {
+    const opening = openEach(
+      options,
+      memberships.map(({ tenant }) => tenant.key),
+    )
 
-    return ResultAsync.fromSafePromise(opening).andThen((results) => {
-      const opened = results.flatMap((result) => (result.isOk() ? [result.value] : []))
-      const [failure] = results.flatMap((result) => (result.isErr() ? [result.error] : []))
-
-      return failure === undefined
-        ? okAsync(new TenantSpaces(options, memberships, opened, current))
-        : ResultAsync.fromSafePromise(Promise.all(opened.map((tenant) => tenant.close()))).andThen(
-            () => errAsync(failure),
-          )
-    })
+    return ResultAsync.fromSafePromise(opening).map(
+      (opened) => new TenantSpaces(options, memberships, opened, current),
+    )
   }
 
   memberships(): readonly Membership[] {
@@ -122,29 +120,16 @@ export class TenantSpaces {
       this.#open.delete(tenant.key)
     }
 
-    const opened = await Promise.all(
-      coming.map((key) =>
-        openOf(this.#options, key).match(
-          (tenant): TenantSpace | undefined => tenant,
-          (error) => {
-            this.#options.onError(error)
-
-            return undefined
-          },
-        ),
-      ),
-    )
+    const opened = await openEach(this.#options, coming)
 
     for (const tenant of opened) {
-      if (tenant) {
-        this.#open.set(tenant.key, tenant)
-      }
+      this.#open.set(tenant.key, tenant)
     }
 
     this.#keepCurrent()
     this.#tellIfMoved(before)
 
-    return { changed: left.length > 0 || opened.some(Boolean), left }
+    return { changed: left.length > 0 || opened.length > 0, left }
   }
 
   /**
@@ -190,11 +175,28 @@ export class TenantSpaces {
   }
 }
 
-function openOf(options: TenantSpacesOptions, key: string): ResultAsync<TenantSpace, DataError> {
-  return openTenantSpace({
-    key,
-    openLocal: () => options.openLocal(options.identity, key),
-    schema: options.schema,
-    onError: options.onError,
-  })
+/** Opens the databases of the organisations `keys`; one that does not open is reported and left out. */
+async function openEach(
+  options: TenantSpacesOptions,
+  keys: readonly string[],
+): Promise<readonly TenantSpace[]> {
+  const opened = await Promise.all(
+    keys.map((key) =>
+      openTenantSpace({
+        key,
+        openLocal: () => options.openLocal(options.identity, key),
+        schema: options.schema,
+        onError: options.onError,
+      }).match(
+        (tenant): TenantSpace | undefined => tenant,
+        (error) => {
+          options.onError(error)
+
+          return undefined
+        },
+      ),
+    ),
+  )
+
+  return opened.filter((tenant): tenant is TenantSpace => tenant !== undefined)
 }
