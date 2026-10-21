@@ -21,8 +21,8 @@ state machine and one file per policy (`profile-name.policy.ts`, `profile-bio.po
   `updateLocale`. They run on the device through the command bus and replicate through the
   gateway like every command.
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`.
-- i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`); test ids
-  `user.sign-in.*` and `user.profile.*`.
+- i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
+- Anchors: screens `user.sign-in` and `user.profile` in `contract/screens.json`.
 - Behaviour: the name and the bio (at most 2000 characters) are saved together by one Save;
   the chosen language follows the identity across devices; signing out asks before losing
   changes this device could not send; the sign-in page says so when the gateway refused the

@@ -32,6 +32,7 @@ that applies to the task, starting with the router.
 
 @.cursor/rules/ui-primitive-hygiene.mdc
 @.cursor/rules/ui-i18n-direct-keys.mdc
+@.cursor/rules/ui-contract.mdc
 
 ## Vendor skills
 

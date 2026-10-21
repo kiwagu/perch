@@ -13,10 +13,10 @@ modules' routes.
 ## Surface
 
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation
-  and the notices. The test id `app-shell.ready` marks the mounted frame; the e2e fixtures
-  wait for it. Before it, `app-shell.opening` says where the start is: opening the data, a
-  browser that keeps no site data, or data that could not be opened, which offers
-  `app-shell.sign-out-here` ("Sign out on this device") when an account is saved.
+  and the notices. Before the frame is mounted, the shell says where the start is: opening the
+  data, a browser that keeps no site data, or data that could not be opened, which offers
+  "Sign out on this device" when an account is saved.
+- Anchors: screen `app-shell` in `contract/screens.json`.
 - No shapes or commands of its own: it reads the session, the language state and the
   notices through the platform ports.
 - i18n keys `app.shell.*` live in the app-wide catalog `src/platform/i18n/app.en.json`.

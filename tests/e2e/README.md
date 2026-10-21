@@ -109,5 +109,8 @@ note texts).
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,
   `--update-snapshots=missing`). `CI=1` runs one worker.
+- `bun run e2e:scaffold <scenario id>` (repository root): writes the test of a new scenario of
+  `contract/screens.json` from its steps, never over an existing file; `bun run e2e:coverage`
+  checks that every scenario has its test.
 - `mcproc stop e2e`: stops the `e2e` profile.
 - `bun run typecheck`, `bun run lint`.

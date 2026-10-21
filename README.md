@@ -121,7 +121,7 @@ Each workspace has a README with its role, key exports and commands.
 ## Gates
 
 - `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
-  coverage checks; the gate for a change. `bun run check --force` runs every task afresh
+  coverage checks, and the UI contract check (`contract:check`); the gate for a change. `bun run check --force` runs every task afresh
   instead of replaying turbo's cache.
 - `bun run test:db` with the `e2e` stand up: the schema permission suites, the seed and the
   gateway smoke test.

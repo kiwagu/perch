@@ -1,0 +1,91 @@
+---
+description: 'Use when: adding, renaming or removing an anchor (data-testid), adding a control, list, dialog or screen, changing contract/ or when a test or an agent cannot find an element.'
+alwaysApply: false
+globs: '**/presentation/**/*.tsx, packages/ui/src/**/*.tsx, contract/**'
+---
+
+# The UI contract comes first: anchors, codes and screens
+
+## Pyramid Layer
+
+- Layer: leaf (presentation, tests, the modeling thread), reached from the router
+  `process-check-rules-skills.mdc` and from the skill `.agents/skills/adding-ui-anchors/SKILL.md`.
+
+## Use This When
+
+- A view gains, renames or loses a `data-testid`, or a control, list, dialog or screen.
+- A file under `contract/` changes.
+- An e2e test or an agent cannot find an element on a page.
+
+## Stop Here If
+
+- `bun run contract:check` and `bun run contract:check:sources` are green, and the scenario of
+  `contract/screens.json` that reaches the element, with its test, is updated.
+
+## Descend To
+
+- The procedure, step by step: `.agents/skills/adding-ui-anchors/SKILL.md`.
+- The grammar and the closed lists (kinds, suffixes, attributes, states, codes, choice values,
+  screen names, roles, reserved anchors): `contract/vocabulary.md`. Never copy its tables.
+- Reading the screens map, locating an element, asking for a missing anchor:
+  `contract/README.md`. The tooling: `packages/ui-contract/README.md`.
+- Visible text: `ui-i18n-direct-keys.mdc`. The controls: `ui-primitive-hygiene.mdc`.
+
+## Core rule
+
+- **Three files are the source.** `contract/vocabulary.md`, `contract/screens.json` and
+  `contract/model.schema.json`. The contract changes first, the code and the tests follow it.
+  A word that is not in the vocabulary is a change of the vocabulary, never a local name. The
+  `contract/*.schema.json` files are generated (`bun run contract:schemas`), never edited by
+  hand; `contract/COVERAGE.md` is a note written by `bun run contract:coverage --write`.
+- **Grammar.** An anchor is the value of `data-testid`: 2 to 4 dot-separated kebab-case
+  segments, the screen name first, the kind last as the last dash-separated word of the last
+  segment (`user.sign-in.email-input`). The `Grammar` section of `contract/vocabulary.md` is
+  the definition.
+- **Unique.** Every anchor is declared once, in one screen, and marks one element on a page,
+  except an `item`, `row` or `option`, which marks every entry and tells them apart by
+  `data-id` (an entity) or `data-value` (a choice). No anchor equals another anchor plus a
+  suffix of the vocabulary: the entries of `device.list` are `device.list.session-item`, never
+  `device.list.item`.
+- **Four literal forms**, the only ones the sources check reads: the attribute
+  `data-testid="..."`; a JSX prop named `testId` or ending in `TestId`; a static
+  `testId: '...'` key; a `<NAME>_TEST_ID` constant. An anchor built at runtime (a template
+  with expressions, `+`, a conditional) is an error: choose between two literals.
+- **Derived names through `testIdFor` only.** A part a composite renders itself is
+  `<anchor>.<suffix>`, built with `testIdFor(base, suffix)` from
+  `@workspace/ui-contract/anchors`, the base given to the composite as its `testId` prop, the
+  suffix a literal of "Derived suffixes" and listed in the anchor's `derived`.
+- **Attributes.** `data-id` on an `item` or `row`, `data-value` on an `option`, a `badge` or a
+  mode `button`, `data-state` on a `status`, `list`, `section` or `item`, `data-code` on a
+  `message`, `error`, `toast` or `dialog`; their values come from the vocabulary.
+- **Codes, not text.** Tests and agents assert an anchor and its code, never the wording. A
+  contract code is kebab-case (`^[a-z]+(-[a-z0-9]+)*$`); a `data-code="..."` literal, a static
+  `code: '...'` key and a value of a `<NAME>_CODES` map count as contract codes when they have
+  that shape. A domain or bus code (`profile:NAME_REQUIRED`) is mapped to a contract code in
+  the presentation layer and never appears in `data-code`. Every code of the vocabulary is
+  used by an anchor.
+- **Reserved anchors** (`app-shell.status`, `app-shell.notice-message`, the navigation, the
+  language select: "Reserved anchors" of the vocabulary) belong to the shell; a feature never
+  declares them. A test starts once
+  `app-shell.status` carries `data-state="ready"` and the screen's container left `loading`.
+- **Screens.** A screen's `bindings` are its routes in the router's format: `path` in the
+  router's syntax, `params` and `search` as flat JSON Schema objects (`required` is what the
+  URL must carry; a parameter with a default is not required); the web app's
+  `routes-contract.spec.ts` compares them with the module routes on the input view. Its
+  `entry` anchors are where a test starts, some of them alternatives by state. An anchor's
+  `binding` is one action, model field or route, or an array of them; an action's params name
+  an anchor or a constant `{ "value": ... }`, and a `$id` parameter is implicit (minted).
+- **Scenarios** live in `screens.json` under `scenarios`, each paired by id with a test in
+  `tests/e2e/src/<id>.e2e.spec.ts`. A scenario's `devices` give the role each device acts as
+  by its end; every device starts as `guest`.
+- **The manifest** is built from the three files and served on every stand at
+  `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it
+  (`Cache-Control: no-store`; `PERCH_UI_MANIFEST=0` on a stand answers 404). On dev and e2e
+  builds (`PERCH_UI_HOOKS=1`), `window.__perch.ui.anchors()` lists the anchors a page renders
+  now.
+- **The checks.** `bun run contract:check` (in `bun run check` and the pre-commit hook): the
+  files against each other and the schema drift. `bun run contract:check:sources`: the
+  anchors and codes of `apps/web/src` and `packages/ui/src` against the contract.
+  `bun run contract:schemas -- --check`: the schemas against their Zod sources.
+  `bun run e2e:coverage`: every scenario has its test. A change to the contract hands over
+  the output of `bun run contract:diff main`.

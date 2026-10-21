@@ -26,6 +26,7 @@ alwaysApply: true
 - Untyped values, casts, `any`-typed library results: `no-any.mdc`.
 - User-visible text: `ui-i18n-direct-keys.mdc`.
 - UI controls and styling: `ui-primitive-hygiene.mdc`, then the vendor skill `.agents/skills/shadcn/SKILL.md`.
+- Anchors (data-testid), codes, the contract folder or the UI manifest: `ui-contract.mdc`, then the skill `.agents/skills/adding-ui-anchors/SKILL.md`.
 - Imports that load code lazily: `static-imports-only.mdc`.
 - New environment variables: `monorepo-env-minimalism.mdc`.
 - Compatibility switches, legacy paths, migrations: `poc-no-fallbacks.mdc`, `reset-mode-default.mdc`.

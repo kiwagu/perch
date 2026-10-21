@@ -24,7 +24,8 @@ on the replica schema are applied on the device before a command runs
   `OrganisationErrorLine` (the error code of a refused change as copy), in `presentation/components/`;
   the page's `useAction` hook sits beside its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
-- i18n namespace `organisation.*`; test ids `organisation.*`.
+- i18n namespace `organisation.*`.
+- Anchors: screen `organisation` in `contract/screens.json`.
 - Behaviour: without memberships the page offers to create an organisation (a key checked
   by the kernel's `isTenantKey`, a name of at most 80 characters); the creator becomes its
   administrator and the new organisation the current one. With several memberships the page
