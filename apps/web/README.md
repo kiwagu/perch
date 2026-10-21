@@ -146,7 +146,11 @@ modeling stage.
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
   lists every `data-testid` the page renders now with its kind, `data-state`, `data-code`,
   `data-id`, `data-value` and whether it is visible, with the page's URL
-  (`renderedAnchors(document, location)`, `installUiHelper(window)`).
+  (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
+  Zod object) validates the URL's search, drops a parameter equal to its default and carries
+  the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
+  route equals its binding in `contract/screens.json` (path, guard, history, retained
+  parameters, and the search schema as JSON Schema without its prose).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

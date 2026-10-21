@@ -17,6 +17,7 @@ import {
 import type { Shape } from '@workspace/data'
 import type { Container, Token } from '@workspace/di'
 import type { Catalog } from '@workspace/i18n'
+import type { z } from '@workspace/zod'
 
 import { useServices } from './services'
 
@@ -31,6 +32,12 @@ export interface RouteDef {
   readonly page: string
   /** Pages behind `authenticated` redirect to sign-in when nobody is signed in. */
   readonly guard?: 'authenticated' | 'guest'
+  /** The search parameters the page reads; one equal to its default leaves the URL. */
+  readonly search?: z.ZodObject<z.ZodRawShape>
+  /** The search parameters carried across navigations. */
+  readonly retain?: readonly string[]
+  /** Whether opening the page adds a history entry or replaces the current one. */
+  readonly history?: 'push' | 'replace'
 }
 
 export interface ModuleDef {
