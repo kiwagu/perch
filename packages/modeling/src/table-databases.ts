@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs'
+
 import { ResultAsync } from 'neverthrow'
 
-import type { DataError } from '@workspace/data'
+import { type DataError, dataError, openLocalDb } from '@workspace/data'
+import { nodeEngines } from '@workspace/data/engines/node'
 
-import { loadSchemaModel } from './schema-structure'
+import type { StructureInfo } from './schema-structure'
 
 /** A schema file: its path below the schema folder (`<database>/<name>.surql`) and its text. */
 export interface SchemaFile {
@@ -22,6 +25,36 @@ const COMMON = 'common'
 
 /** A schema file a database applies, with the folder it belongs to. */
 const LAYOUT = /^([^/]+)\/[^/]+\.surql$/
+
+const INFO_DB = readFileSync(new URL('./surql/info-db.surql', import.meta.url), 'utf8')
+
+/** The tables `schemaText` defines, as an embedded database it is applied to reports them. */
+function definedTables(database: string, schemaText: string): ResultAsync<string[], DataError> {
+  const failed = (cause: unknown) =>
+    dataError('data:QUERY_FAILED', `the schema of database ${database} could not be applied`, cause)
+
+  return openLocalDb({
+    engines: nodeEngines(),
+    url: 'mem://',
+    namespace: 'modeling',
+    database,
+    schema: schemaText,
+  })
+    .mapErr((error) => failed(error.cause ?? error.message))
+    .andThen((local) => {
+      const read = async (): Promise<string[]> => {
+        try {
+          const [db] = (await local.db.query(INFO_DB)) as [StructureInfo['db']]
+
+          return db.tables.map(({ name }) => name)
+        } finally {
+          await local.close()
+        }
+      }
+
+      return ResultAsync.fromPromise(read(), failed)
+    })
+}
 
 /**
  * The databases each table lives in, as each database itself defines them: a database's schema
@@ -56,9 +89,9 @@ export function tableDatabases(
 
   return ResultAsync.combine(
     databases.map((database) =>
-      loadSchemaModel([...texts(COMMON), ...texts(database)].join('\n')).map(({ model }) => ({
+      definedTables(database, [...texts(COMMON), ...texts(database)].join('\n')).map((tables) => ({
         database,
-        tables: Object.keys(model.tables),
+        tables,
       })),
     ),
   ).map((loaded) => {

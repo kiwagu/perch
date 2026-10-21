@@ -69,6 +69,17 @@ describe('tableDatabases', () => {
     ])
   })
 
+  it('names the database whose schema cannot be applied', async () => {
+    const failure = (
+      await tableDatabases([
+        { path: 'directory/shelf.surql', text: 'DEFINE TABLE shelf SCHEMAFULL;' },
+        { path: 'tenant/board.surql', text: 'DEFINE TABLE board SCHEMAFULL TYPO;' },
+      ])
+    )._unsafeUnwrapErr()
+
+    expect(failure.message).toBe('the schema of database tenant could not be applied')
+  })
+
   it('maps the real schema: directory, tenant, and the replica tables of both', async () => {
     const { databases, problems } = (await tableDatabases(realSchema()))._unsafeUnwrap()
 
