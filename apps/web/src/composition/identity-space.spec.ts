@@ -28,6 +28,7 @@ import { profileCommands } from '../features/user/presentation/pages/profile/pro
 
 import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
+import { QueryTracker } from './__fixtures__/query-tracker'
 import {
   type IdentitySpace,
   openIdentitySpace,
@@ -356,17 +357,29 @@ const REOPEN_WAIT = { timeout: 10_000 } as const
 /** A test that waits on reopens: room for both waits, so a failure says what it waited for. */
 const REOPEN_TEST_MS = 25_000
 
-/** Counts the region loads a tab makes from the store (opening or reopening a region). */
+/**
+ * Counts the region loads a tab makes from the store (opening or reopening a region), and tells
+ * when the tab's earlier work, a catch-up above all, has ended.
+ */
 function countingRegionLoads() {
   const state = { loads: 0 }
+  const queries = new QueryTracker()
   const wrap = (local: LocalDb) =>
-    interceptQueries(local, (text) => {
-      if (text.includes('FROM _replica_snapshot')) {
-        state.loads += 1
-      }
-    })
+    queries.wrap(
+      interceptQueries(local, (text) => {
+        if (text.includes('FROM _replica_snapshot')) {
+          state.loads += 1
+        }
+      }),
+    )
+  /** Resolves once the tab has no query in flight, and none follows on the next turn. */
+  const quiet = async () => {
+    await queries.idle()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await queries.idle()
+  }
 
-  return { wrap, state }
+  return { wrap, state, quiet }
 }
 
 /**
@@ -549,9 +562,10 @@ describe('openIdentitySpace', () => {
 
       // Offline, the leader does not load the region again from the server meanwhile.
       leaderOffline(leader)
+      // The follower's earlier catch-up ends first: one still under way could find the copy reset
+      // and reopen it, and the hint would then prove nothing.
+      await loads.quiet()
 
-      // Counted from before the reset: a catch-up of the follower still under way may find the
-      // copy reset and reopen it first, which the hint then finds done.
       const loaded = loads.state.loads
 
       await resetPrivateRegion(browser)
@@ -588,6 +602,8 @@ describe('openIdentitySpace', () => {
       )
 
       leaderOffline(leader)
+      // The follower's earlier catch-up ends first, so only the journal hint below has it look.
+      await loads.quiet()
 
       const loaded = loads.state.loads
 

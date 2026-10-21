@@ -331,15 +331,11 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       const settled = Promise.resolve(promise).finally(() => {
         done = true
       })
-      const ended = settled.then(
-        () => undefined,
-        () => undefined,
-      )
 
       // The clock moves only while no query is in flight: a wait runs out only once the database
       // work beside it answered, however slowly, as with a real clock.
       while (!done) {
-        await Promise.race([queries.idle(), ended])
+        await queries.idle(settled)
 
         if (done) {
           break

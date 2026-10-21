@@ -53,9 +53,20 @@ export class QueryTracker {
     return { ...database, db }
   }
 
-  /** Resolves once no query is in flight. */
-  async idle(): Promise<void> {
-    while (this.#inFlight > 0) {
+  /** Resolves once no query is in flight, or once `stop` settles, whichever comes first. */
+  async idle(stop?: PromiseLike<unknown>): Promise<void> {
+    let stopped = false
+
+    void stop?.then(
+      () => {
+        stopped = true
+      },
+      () => {
+        stopped = true
+      },
+    )
+
+    while (this.#inFlight > 0 && !stopped) {
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
   }
