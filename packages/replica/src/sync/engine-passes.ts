@@ -22,7 +22,7 @@ export interface EnginePassesOptions {
 /**
  * The passes the cadence runs. Each probes the heads of every region; a full pass also subscribes
  * again where the gateway failed a subscription, repeats outstanding pulls, imports what other tabs
- * wrote and drains the outbox. Heads name no probe, so each answer settles the oldest probe out; a
+ * wrote, drains the outbox and compacts the local logs grown long. Heads name no probe, so each answer settles the oldest probe out; a
  * probe not answered within 30 seconds is given up, reported, and the connection made again.
  */
 export class EnginePasses {
@@ -76,6 +76,7 @@ export class EnginePasses {
         await Promise.all([...this.#regions.values()].map(({ sync }) => sync.catchUpLocal()))
         this.#drain.request()
         await this.#drain.idle()
+        await Promise.all([...this.#regions.values()].map(({ sync }) => sync.compactLocal()))
       }
     } finally {
       this.#passing = false

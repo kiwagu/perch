@@ -3,10 +3,12 @@ import { match } from 'ts-pattern'
 import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
 import { MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
 import { LocalCatchUp } from './local-catch-up'
+import { LocalCompaction } from './local-compaction'
 import { ownBytes } from './message-bytes'
 import type { DrainTarget } from './outbox-drain'
 import { RegionCompaction } from './region-compaction'
@@ -32,6 +34,8 @@ export interface RegionSyncOptions {
    * push after a rollback carries every row up to the inverse, more when it takes more.
    */
   readonly batchRows?: number
+  /** How many rows past its snapshot the local log holds before it is compacted; 200 by default. */
+  readonly localCompactionRows?: number
 }
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
@@ -51,7 +55,8 @@ type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
  * seconds, is given up for now and goes out again later (an unanswered one also has the
  * transport connect again); a subscription the gateway failed is sent again on the next full
  * pass or push. Once the server asks for a compaction and the region is quiet, it proposes a
- * full snapshot.
+ * full snapshot; once the local log holds more rows past its snapshot than the limit, a full pass
+ * compacts it.
  */
 export class RegionSync implements DrainTarget {
   readonly #region: RegionDoc
@@ -62,6 +67,7 @@ export class RegionSync implements DrainTarget {
   readonly #rollback: RegionRollback
   readonly #compaction: RegionCompaction
   readonly #localCatchUp: LocalCatchUp
+  readonly #localCompaction: LocalCompaction
   /** Settles once the server messages handed over so far are handled. */
   #queue: Promise<void> = Promise.resolve()
   /** A subscription went out on the current connection. */
@@ -79,6 +85,12 @@ export class RegionSync implements DrainTarget {
       throw new RangeError(`batchRows must be an integer from 1 to ${MAX_PUSH_UPDATES}`)
     }
 
+    const localCompactionRows = options.localCompactionRows ?? COMPACTION_LOG_LIMIT
+
+    if (!Number.isInteger(localCompactionRows) || localCompactionRows < 0) {
+      throw new RangeError('localCompactionRows must be an integer from 0')
+    }
+
     const { region, transport, clock, onError } = options
     const stop = (error: DataError): void => this.#stop(error)
 
@@ -86,6 +98,7 @@ export class RegionSync implements DrainTarget {
     this.#transport = transport
     this.#onError = onError
     this.#localCatchUp = new LocalCatchUp(region, onError)
+    this.#localCompaction = new LocalCompaction(region, localCompactionRows, onError)
     this.#pull = new RegionPull({
       region,
       transport,
@@ -196,6 +209,16 @@ export class RegionSync implements DrainTarget {
    */
   catchUpLocal(): Promise<boolean> {
     return this.#localCatchUp.run()
+  }
+
+  /**
+   * Compacts the local log once it holds more rows past its snapshot than the limit; a failure is
+   * reported once until a compaction succeeds again. Every full pass asks for it.
+   */
+  async compactLocal(): Promise<void> {
+    if (!this.#stopped) {
+      await this.#localCompaction.run()
+    }
   }
 
   /** Pulls when the server's head is ahead of the cursor. */

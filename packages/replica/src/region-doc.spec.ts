@@ -393,6 +393,65 @@ describe('RegionDoc sync state', () => {
     expect(await counts()).toEqual({ snapshots: 1, updates: 0, outbox: 2 })
   })
 
+  it('hands a tab that read less than a compaction covers the snapshot first, then the rows after it', async () => {
+    const lagging = await open()
+    const first = await open()
+    const second = await open()
+    const thirdKey = 'profile/prf_0000000000000002.01m52pexcp'
+    const seen: string[] = []
+
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+    writeName(second, 'Beto', otherKey)
+    expect((await second.flush()).isOk()).toBe(true)
+    // The rows the lagging tab has not read yet go into the snapshot.
+    expect((await second.compact()).isOk()).toBe(true)
+    writeName(first, 'Cleo', thirdKey)
+    expect((await first.flush()).isOk()).toBe(true)
+    lagging.doc.subscribe((batch) => seen.push(batch.by))
+
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(lagging.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect(lagging.recordJson(thirdKey)).toMatchObject({ name: 'Cleo' })
+    // A projector follows imports only.
+    expect(new Set(seen)).toEqual(new Set(['import']))
+  })
+
+  it('opens a compacted region at what its snapshot covers', async () => {
+    const first = await open()
+
+    writeName(first, 'Ann')
+    writeName(first, 'Ana')
+    expect((await first.flush()).isOk()).toBe(true)
+    expect((await first.compact()).isOk()).toBe(true)
+
+    expect((await open()).persistedSeq()).toBe(2)
+  })
+
+  it('compacts once more rows than the limit built up past its snapshot, and not before', async () => {
+    const region = await open()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(region, name)
+    }
+
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
+
+    writeName(region, 'Annie')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(true)
+    expect(await counts()).toMatchObject({ snapshots: 1, updates: 0 })
+
+    // Counted from the new snapshot on.
+    writeName(region, 'Anny')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
+  })
+
   it('moves the cursor forward only, and keeps it across a reopen', async () => {
     const region = await open()
 

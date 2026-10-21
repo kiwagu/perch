@@ -4,6 +4,7 @@ import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
 import type { CompactionOutcome, ServerMessage } from '../protocol'
 import type { RegionRef } from '../region-doc'
 import type { ReplicaSchema } from '../schema'
@@ -89,7 +90,7 @@ export class RegionHub {
     })
     this.#intake = {
       schema: options.schema,
-      compactionLogLimit: options.compactionLogLimit ?? 200,
+      compactionLogLimit: options.compactionLogLimit ?? COMPACTION_LOG_LIMIT,
       send: (subscriber, message) => this.#send(subscriber, message),
     }
   }
