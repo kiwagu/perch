@@ -21,13 +21,14 @@ import { type DeviceTokens, keysRefused } from '../auth/identity-sessions'
 
 import { type ChannelRenewal, renewOnChannel } from './channel-renewal'
 import { signOutOnChannel } from './channel-sign-out'
-import type { ConnectedDevice, ConnectionState } from './connected-device'
+import type { ConnectedDevice, ConnectionState, Hello } from './connected-device'
 import { REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
 import type { ConnectionRegistry } from './connections'
 import { regionsFor, regionsOf } from './device-regions'
 import { acceptKeys, bindDevice, TRY_AGAIN_LATER } from './hello-keys'
 import { HelloRenewals } from './hello-renewals'
 import type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
+import { welcomeHeads } from './welcome-heads'
 
 /** The end of a device's WebSocket the connection writes to. */
 export type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
@@ -35,22 +36,19 @@ export type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
 /** How often at most a device is marked seen while it keeps talking. */
 const SEEN_EVERY_MS = 5 * 60_000
 
-/** The hello of a device. */
-type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
-
 /**
- * One device's WebSocket to the gateway. The device says hello with its keys first, within
- * the hello time; once they are accepted it is welcomed with its identity's private region,
- * the region of each organisation the identity belongs to and those memberships, and may
- * subscribe, pull, push, probe and compact in those regions only, each handed to the region
- * hub, which answers the device itself and checks its batches against the identity. Messages
- * are handled one at a time, in the order they came. A change of the identity's memberships
- * does not wait for them: the device leaves the regions it may no longer name at once, so a
- * message handled from then on that names one is refused and the hub sends it nothing more
- * there (what is under way finishes), may name the new ones, and is sent the memberships; a
- * revocation takes one region away the same way without a message. A change told while the
- * hello is under way applies right after the welcome. Text the protocol refuses closes the
- * socket, a hello that names no device among it; so does a region the device may not name and a
+ * One device's WebSocket to the gateway. The device says hello with its keys first, within the
+ * hello time; once they are accepted it is welcomed with its identity's private region, the region
+ * of each organisation the identity belongs to (one whose database cannot be read is left out until
+ * the next hello) and those memberships, and may subscribe, pull, push, probe and compact in those
+ * regions only, each handed to the region hub, which answers the device itself and checks its
+ * batches against the identity. Messages are handled one at a time, in the order they came. A
+ * change of the identity's memberships does not wait for them: the device leaves the regions it may
+ * no longer name at once, so a message handled from then on that names one is refused and the hub
+ * sends it nothing more there (what is under way finishes), may name the new ones, and is sent the
+ * memberships; a revocation takes one region away the same way without a message. A change told
+ * while the hello is under way applies right after the welcome. Text the protocol refuses closes
+ * the socket, a hello that names no device among it; so does a region the device may not name and a
  * sign-out, which marks the device's row signed out, forgets the pairs parked for it and revokes
  * its refresh grant through the database, as the sign-out route does: the sign-out close (4000)
  * means the grant is revoked, and a row that cannot be marked or a grant that cannot be revoked
@@ -58,14 +56,14 @@ type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
  * closed at once with 4001, whatever it is doing. Keys the database refuses close the hello with
  * 4401; keys it could not judge, as a failed server (1011), and a renewal the limits refused, with
  * 1013 (try again later): the device comes back with them.
- * A hello is bound to its device's row: a device without one is closed with 4401, a device
- * signed out with 4001, and a pair renewed for either is revoked at once; a renewal moves the row
- * to the new grant. A pair renewed at a hello whose socket closed before it could take it is
- * parked for the device's next hello with the spent refresh key, which is sent it before its
- * welcome. The device is marked seen at its hello and then at most every five minutes it talks.
- * A device holds one live socket: the hello that registers closes its older ones (1000), without
- * signing it out. Its key operations, a hello from its key check to its registration and a renewal
- * over the channel, run one at a time across its sockets, so no two spend one refresh key.
+ * A hello is bound to its device's row: a device without one is closed with 4401, a device signed
+ * out with 4001, and a pair renewed for either is revoked at once; a renewal moves the row to the
+ * new grant. A pair renewed at a hello whose socket closed before it could take it is parked for
+ * the device's next hello with the spent refresh key, which is sent it before its welcome. The
+ * device is marked seen at its hello and then at most every five minutes it talks. A device holds
+ * one live socket: the hello that registers closes its older ones (1000), without signing it out.
+ * Its key operations, a hello from its key check to its registration and a renewal over the
+ * channel, run one at a time across its sockets, so no two spend one refresh key.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
@@ -294,7 +292,7 @@ export class SyncConnection {
       tokens,
       regions: regionsFor(identity.id, memberships.value, this.#schema),
     }
-    const heads = await this.#hub.heads([...device.regions.keys()])
+    const heads = await welcomeHeads(this.#hub, device.regions, this.#log)
 
     if (this.#isClosed()) {
       return

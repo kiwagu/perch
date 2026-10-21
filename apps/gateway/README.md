@@ -64,7 +64,9 @@ tried or counted. A `tokens` message the socket drops
 newer hello of it came, is lost with that socket, and the device signs in again. A bound
 device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
-belongs to and those memberships, the only regions it may name, and subscribes, pulls, pushes,
+belongs to and those memberships, the only regions it may name (an organisation whose database
+cannot be read is left out of the welcome and logged, its membership kept, until the device's next
+hello; the private region failing fails the hello, `src/sync/welcome-heads.ts`), and subscribes, pulls, pushes,
 probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database, and names them so
