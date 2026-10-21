@@ -154,7 +154,8 @@ export interface TestWorld {
   setVisibility(state: Visibility): void
   /**
    * Moves the clock on until the promise settles, for waits the gateway does not end: a second at
-   * a time, each once no query of the test's databases is in flight.
+   * a time, each once no query of the test's databases is in flight. A query a test holds keeps
+   * the clock still, so release it first, or move the clock with `clock.advance` instead.
    */
   driveClock<T>(promise: PromiseLike<T>): Promise<T>
   close(): Promise<void>
@@ -330,11 +331,15 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       const settled = Promise.resolve(promise).finally(() => {
         done = true
       })
+      const ended = settled.then(
+        () => undefined,
+        () => undefined,
+      )
 
       // The clock moves only while no query is in flight: a wait runs out only once the database
       // work beside it answered, however slowly, as with a real clock.
       while (!done) {
-        await queries.idle()
+        await Promise.race([queries.idle(), ended])
 
         if (done) {
           break

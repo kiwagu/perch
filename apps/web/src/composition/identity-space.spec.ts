@@ -350,6 +350,50 @@ async function resetPrivateRegion(browser: Browser): Promise<void> {
 
 const leading = (tab: Tab) => vi.waitFor(() => expect(tab.space.sync).toBeDefined())
 
+/** How long a tab may take to reopen a region another tab reset, on a loaded machine too. */
+const REOPEN_WAIT = { timeout: 10_000 } as const
+
+/** A test that waits on reopens: room for both waits, so a failure says what it waited for. */
+const REOPEN_TEST_MS = 25_000
+
+/** Counts the region loads a tab makes from the store (opening or reopening a region). */
+function countingRegionLoads() {
+  const state = { loads: 0 }
+  const wrap = (local: LocalDb) =>
+    interceptQueries(local, (text) => {
+      if (text.includes('FROM _replica_snapshot')) {
+        state.loads += 1
+      }
+    })
+
+  return { wrap, state }
+}
+
+/**
+ * Writes into `tab`, which began to reopen its region on its own: a write refused while the
+ * region reopens (being reloaded) makes no change and is tried again; any other failure, a write
+ * into a stale copy above all, fails the test.
+ */
+async function writeOnceReopened(tab: Tab): Promise<void> {
+  const failed: DataError[] = []
+
+  await vi.waitFor(async () => {
+    const written = await tab.space.writePath.run(createProfile, profile('Bea'))
+
+    if (written.isErr()) {
+      failed.push(written.error)
+    }
+
+    expect(written.isOk()).toBe(true)
+  }, REOPEN_WAIT)
+  expect(
+    failed.filter(
+      (error) =>
+        error.code !== 'data:WRITE_REJECTED' || !error.message.endsWith('is being reloaded'),
+    ),
+  ).toEqual([])
+}
+
 const profile = (name: string) => ({
   id: profileIdFactory.create(),
   identity: ann.id,
@@ -491,7 +535,8 @@ describe('openIdentitySpace', () => {
       const gateway = await openGateway()
       const browser = await openBrowser()
       const leader = await openTab(gateway, browser)
-      const follower = await openTab(gateway, browser, { lateMs })
+      const loads = countingRegionLoads()
+      const follower = await openTab(gateway, browser, { lateMs, wrap: loads.wrap })
       const written = profile('Ann')
 
       await leading(leader)
@@ -504,53 +549,65 @@ describe('openIdentitySpace', () => {
 
       // Offline, the leader does not load the region again from the server meanwhile.
       leaderOffline(leader)
+
+      // Counted from before the reset: a catch-up of the follower still under way may find the
+      // copy reset and reopen it first, which the hint then finds done.
+      const loaded = loads.state.loads
+
       await resetPrivateRegion(browser)
       syncHints(new FakeHintChannel(browser.bus)).post('reset')
 
+      // The follower loads the region again before anything is written into it.
+      await vi.waitFor(() => expect(loads.state.loads).toBeGreaterThan(loaded), REOPEN_WAIT)
       await vi.waitFor(async () =>
         expect(
           (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
         ).toBeUndefined(),
       )
-      // A write refused while the region reopens makes no change.
-      await vi.waitFor(async () =>
-        expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(
-          true,
-        ),
-      )
+      await writeOnceReopened(follower)
     },
+    REOPEN_TEST_MS,
   )
 
-  it('a tab that missed the hint reopens the region at its next catch-up', async () => {
-    const gateway = await openGateway()
-    const browser = await openBrowser()
-    const leader = await openTab(gateway, browser)
-    const follower = await openTab(gateway, browser)
-    const written = profile('Ann')
+  it(
+    'a tab that missed the hint reopens the region at its next catch-up',
+    async () => {
+      const gateway = await openGateway()
+      const browser = await openBrowser()
+      const leader = await openTab(gateway, browser)
+      const loads = countingRegionLoads()
+      const follower = await openTab(gateway, browser, { wrap: loads.wrap })
+      const written = profile('Ann')
 
-    await leading(leader)
-    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toMatchObject({ name: 'Ann' }),
-    )
+      await leading(leader)
+      expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toMatchObject({ name: 'Ann' }),
+      )
 
-    leaderOffline(leader)
-    await resetPrivateRegion(browser)
-    syncHints(new FakeHintChannel(browser.bus)).post('journal')
+      leaderOffline(leader)
 
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toBeUndefined(),
-    )
-    // The leader reprojects the shared store too, so the old record can vanish while this tab
-    // still reopens and refuses writes; a refused write makes no change.
-    await vi.waitFor(async () =>
-      expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true),
-    )
-  })
+      const loaded = loads.state.loads
+
+      await resetPrivateRegion(browser)
+      syncHints(new FakeHintChannel(browser.bus)).post('journal')
+
+      // Its catch-up finds the copy reset and has the follower load the region again, before
+      // anything is written into it.
+      await vi.waitFor(() => expect(loads.state.loads).toBeGreaterThan(loaded), REOPEN_WAIT)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toBeUndefined(),
+      )
+      // The leader reprojects the shared store too, so the old record can vanish while this tab
+      // still reopens and refuses writes.
+      await writeOnceReopened(follower)
+    },
+    REOPEN_TEST_MS,
+  )
 
   it('the leader reloads a region whose rollback the gateway refused again, and its follower reopens it', async () => {
     const gateway = await openGateway()
