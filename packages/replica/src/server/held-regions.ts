@@ -59,12 +59,18 @@ export class HeldRegions {
   readonly #clock: Clock
   readonly #idleUnloadMs: number
   readonly #onError: (error: DataError) => void
+  #closed = false
 
   constructor(options: HeldRegionsOptions) {
     this.#databases = options.databases
     this.#clock = options.clock
     this.#idleUnloadMs = options.idleUnloadMs
     this.#onError = options.onError
+  }
+
+  /** `close` was called: no region is held or loaded from then on. */
+  get closed(): boolean {
+    return this.#closed
   }
 
   /** The region held under `regionId`, if any. */
@@ -204,9 +210,11 @@ export class HeldRegions {
 
   /**
    * Cancels the scheduled unloads, drops every region, waits for the work under way, then
-   * releases the databases of the regions it held.
+   * releases the databases of the regions it held; it holds no region from then on.
    */
   async close(): Promise<void> {
+    this.#closed = true
+
     const states = [...this.#regions.values()]
 
     this.#regions.clear()

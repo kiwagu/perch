@@ -67,8 +67,8 @@ with its identity's private region, the region `tenant:<key>` of each organisati
 belongs to and those memberships, the only regions it may name, and subscribes, pulls, pushes,
 probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
-region in the directory and a tenant region in its organisation's database
-(`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
+region in the directory and a tenant region in its organisation's database, and names them so
+(`src/tenants/region-databases.ts`, `databaseOf`: `directory`, `t_<key>`), and checks each batch against the device's identity: a
 note names its own member as its author, and nobody changes the author of a note. Each
 subscription carries the device's ability, built from its membership's role and the replica
 schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
@@ -130,7 +130,9 @@ heard them: the composition root has the registry tell the identity's devices. A
 the organisation's region from the removed identity's open connections as soon as the
 directory's membership is gone, before the member row is deleted and before the memberships are
 read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it. The changes of one identity's memberships (its
+all the same; asking again completes it. Until the revoke reaches the removed identity's
+connection, a batch its device pushes there may still be accepted: that window between the
+directory's commit and the revoke is inherent. The changes of one identity's memberships (its
 creations, the invites of it, its removals) run one after the other, each once the one before
 it and its notification have settled, so the directory and the organisation's database end as
 the last change left them and its devices hear the lists in that order. This holds within one

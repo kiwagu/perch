@@ -15,21 +15,21 @@ interface StoredHead {
 }
 
 /**
- * The heads the databases hold for regions not in memory, by region: one query per
- * database, which is released once it answered. A region the hub does not know is not asked.
+ * The heads the databases hold for regions not in memory, by region: one query per database
+ * the port names, which is released once it answered. A region the hub does not know is not
+ * asked.
  */
 export function storedHeads(
   databases: RegionDatabases,
   regionIds: readonly string[],
 ): ResultAsync<ReadonlyMap<string, number>, DataError> {
-  // Every private region lives in the same database; each tenant region has one of its own.
   const groups = new Map<string, { readonly ref: RegionRef; readonly ids: string[] }>()
 
   for (const id of regionIds) {
     const ref = regionRefOf(id)
-    const database = ref?.kind === 'private' ? 'directory' : ref?.id
 
-    if (ref && database) {
+    if (ref) {
+      const database = databases.databaseOf(ref)
       const group = groups.get(database) ?? { ref, ids: [] }
 
       group.ids.push(id)

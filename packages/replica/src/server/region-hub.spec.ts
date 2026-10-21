@@ -1,6 +1,7 @@
 import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { LocalDb } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
 
 import bumpHeadStatement from '../__fixtures__/bump-head.surql'
@@ -23,7 +24,7 @@ import {
   underPeerOf,
 } from './__fixtures__/hub'
 import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
-import { singleDatabase } from './region-databases'
+import { type RegionDatabases, singleDatabase } from './region-databases'
 import type { Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
 import acceptStatement from './surql/server-accept.surql'
@@ -31,6 +32,30 @@ import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
 
 afterEach(closeHubs)
+
+/** The fixture's database for every region, counting the holds taken on it and released. */
+function counting() {
+  const counts = { acquired: 0, released: 0 }
+  const databases = (local: LocalDb): RegionDatabases => {
+    const single = singleDatabase(local)
+
+    return {
+      databaseOf: (ref) => single.databaseOf(ref),
+      acquire: (ref) => {
+        counts.acquired += 1
+
+        return single.acquire(ref).map((database) => ({
+          local: database.local,
+          release: () => {
+            counts.released += 1
+          },
+        }))
+      },
+    }
+  }
+
+  return { counts, databases }
+}
 
 describe('region hub', () => {
   it('acknowledges a push and sends it to the other subscribers of the region', async () => {
@@ -293,23 +318,8 @@ describe('region hub', () => {
   })
 
   it("acquires the region's database on load and releases it on unload", async () => {
-    const counts = { acquired: 0, released: 0 }
-    const { hub, clock } = await openHub({
-      databases: (local) => ({
-        acquire: (ref) => {
-          counts.acquired += 1
-
-          return singleDatabase(local)
-            .acquire(ref)
-            .map((database) => ({
-              local: database.local,
-              release: () => {
-                counts.released += 1
-              },
-            }))
-        },
-      }),
-    })
+    const { counts, databases } = counting()
+    const { hub, clock } = await openHub({ databases })
     const a = subscriber('a')
 
     expect((await hub.subscribe(region, actor, a, null)).isOk()).toBe(true)
@@ -324,6 +334,118 @@ describe('region hub', () => {
     expect(counts).toEqual({ acquired: 1, released: 1 })
   })
 
+  it('releases the database of a region whose load fails, and keeps nothing loaded', async () => {
+    const { counts, databases } = counting()
+    const { hub, errors } = await openHub({
+      databases,
+      intercept: (text) => {
+        if (text === loadStatement) {
+          throw new Error('the database went away')
+        }
+      },
+    })
+    const a = subscriber('a')
+
+    expect((await hub.subscribe(region, actor, a, null)).isOk()).toBe(true)
+    expect(a.received).toEqual([expect.objectContaining({ type: 'error', code: 'internal' })])
+    expect(errors).toHaveLength(1)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+    expect(hub.loadedRegions()).toBe(0)
+  })
+
+  it('releases on close the database of every region it holds, once', async () => {
+    const { counts, databases } = counting()
+    const { hub } = await openHub({ databases })
+    const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+
+    expect((await hub.subscribe(region, actor, subscriber('a'), null)).isOk()).toBe(true)
+    expect((await hub.subscribe(acme, memberOf('idn_a'), subscriber('b'), null)).isOk()).toBe(true)
+    await hub.close()
+    await hub.close()
+
+    expect(counts).toEqual({ acquired: 2, released: 2 })
+  })
+
+  it('holds and loads nothing once closed: a subscription is answered with an internal error', async () => {
+    const { counts, databases } = counting()
+    const { hub } = await openHub({ databases })
+    const a = subscriber('a')
+
+    await hub.close()
+
+    expect((await hub.subscribe(region, actor, a, null)).isOk()).toBe(true)
+    // Whatever the subscription names: the closed hub answers it before anything else.
+    expect(
+      (await hub.subscribe({ kind: 'private', id: 'identity:idn_b' }, actor, a, null)).isOk(),
+    ).toBe(true)
+    expect((await hub.subscribe(region, actor, a, new Uint8Array([255]))).isOk()).toBe(true)
+    expect(a.received).toEqual([
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+    ])
+    expect(counts.acquired).toBe(0)
+    expect(hub.loadedRegions()).toBe(0)
+  })
+
+  it('refuses the private region of another identity as forbidden-region, holding nothing', async () => {
+    const { counts, databases } = counting()
+    const { hub } = await openHub({ databases })
+    const a = subscriber('a')
+    const others = { kind: 'private', id: 'identity:idn_b' } as const
+
+    expect((await hub.subscribe(others, actor, a, null)).isOk()).toBe(true)
+    expect(a.received).toEqual([
+      expect.objectContaining({ type: 'error', code: 'forbidden-region' }),
+    ])
+    expect(counts.acquired).toBe(0)
+
+    expect((await hub.push(others.id, a, 1, [editFrom(a.doc, 'Bea')])).isOk()).toBe(true)
+    expect(a.received.filter((m) => m.type === 'ack' || m.type === 'reject')).toEqual([])
+  })
+
+  it('releases what it acquired to read the heads, also when the read fails', async () => {
+    const { counts, databases } = counting()
+    let failing = false
+    const { hub } = await openHub({
+      databases,
+      intercept: (text) => {
+        if (failing && text === headsStatement) {
+          throw new Error('the database went away')
+        }
+      },
+    })
+
+    expect((await hub.heads([region.id, 'tenant:acme'])).isOk()).toBe(true)
+    failing = true
+    expect((await hub.heads([region.id, 'tenant:acme'])).isErr()).toBe(true)
+
+    expect(counts.acquired).toBeGreaterThan(0)
+    expect(counts.released).toBe(counts.acquired)
+  })
+
+  it('reads the heads of unloaded regions from the database the port names for each', async () => {
+    const ann = await openDatabase()
+    const bob = await openDatabase()
+
+    await ann.db.query(bumpHeadStatement, { region: 'identity:idn_ann', head: 3 })
+    await bob.db.query(bumpHeadStatement, { region: 'identity:idn_bob', head: 7 })
+
+    // Private regions kept in a database each: the hub assumes no layout of its own.
+    const { hub } = await openHub({
+      databases: () => ({
+        databaseOf: (ref) => ref.id,
+        acquire: (ref) =>
+          okAsync({ local: ref.id === 'identity:idn_ann' ? ann : bob, release: () => {} }),
+      }),
+    })
+
+    expect((await hub.heads(['identity:idn_ann', 'identity:idn_bob']))._unsafeUnwrap()).toEqual([
+      { region: 'identity:idn_ann', head: 3 },
+      { region: 'identity:idn_bob', head: 7 },
+    ])
+  })
+
   it("heads of unloaded regions are read from each region's own database", async () => {
     const directory = await openDatabase()
     const acme = await openDatabase()
@@ -335,6 +457,7 @@ describe('region hub', () => {
 
     const { hub } = await openHub({
       databases: () => ({
+        databaseOf: (ref) => (ref.kind === 'tenant' ? ref.id : 'directory'),
         acquire: (ref) =>
           okAsync({ local: ref.kind === 'tenant' ? acme : directory, release: () => {} }),
       }),
@@ -366,6 +489,10 @@ describe('region hub', () => {
       expect.objectContaining({ type: 'ack', batch: 1 }),
       expect.objectContaining({ type: 'reject', batch: 2, reason: 'foreign-owner' }),
     ])
+    // The other member receives the accepted batch, never the refused one.
+    expect(
+      ann.received.flatMap((m) => (m.type === 'updates' && !m.snapshot ? [m.head] : [])),
+    ).toEqual([1])
   })
 
   it("rejects a member's edit of another member's note as forbidden-action and acknowledges the admin's", async () => {
