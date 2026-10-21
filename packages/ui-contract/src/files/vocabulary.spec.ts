@@ -132,4 +132,43 @@ describe('parseVocabulary', () => {
       'no "Contract version: N" line',
     ])
   })
+  it('reports an empty mandatory cell by line, and leaves the Playwright cell optional', () => {
+    const markdown = fixture
+      .replace('| `ready` | the screen is rendered |', '| `ready` |  |')
+      .replace('| `data-state` | a `status` | an app state |', '| `data-state` |  | an app state |')
+      .replace('| `saved` | `sample.notice-message` |', '| `saved` | |')
+      .replace(
+        '| `sample.size-badge` | `small` | a small thing |',
+        '| `sample.size-badge` | `small` | |',
+      )
+      .replace('| `guest` | nobody signed in |', '| | nobody signed in |')
+
+    expect(parseVocabulary(markdown).problems).toEqual([
+      {
+        file: 'contract/vocabulary.md',
+        line: lineOf(markdown, '| `data-state` |'),
+        message: 'section "Attributes": the "On" cell is empty',
+      },
+      {
+        file: 'contract/vocabulary.md',
+        line: lineOf(markdown, '| `ready` |'),
+        message: 'section "App states": the "Meaning" cell is empty',
+      },
+      {
+        file: 'contract/vocabulary.md',
+        line: lineOf(markdown, '| `saved` |'),
+        message: 'section "Codes": the "Where" cell is empty',
+      },
+      {
+        file: 'contract/vocabulary.md',
+        line: lineOf(markdown, '| `sample.size-badge` |'),
+        message: 'section "Choice values": the "Meaning" cell is empty',
+      },
+      {
+        file: 'contract/vocabulary.md',
+        line: lineOf(markdown, '| | nobody signed in |'),
+        message: 'section "Roles": the "Role" cell is empty',
+      },
+    ])
+  })
 })

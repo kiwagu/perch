@@ -1,8 +1,9 @@
 /**
  * Reads `contract/vocabulary.md`: the closed lists of the contract, one `## ` section
  * each, as Markdown tables whose first cell is the key. The sections are fixed; a
- * missing, unknown or repeated section, a row with the wrong number of cells, a key
- * listed twice and a missing `Contract version: N` line are problems.
+ * missing, unknown or repeated section, a row with the wrong number of cells or with an
+ * empty cell (only the Playwright cell of a kind may stay empty), a key listed twice and a
+ * missing `Contract version: N` line are problems.
  */
 
 import { VOCABULARY_FILE } from './paths'
@@ -50,20 +51,23 @@ interface Row {
   readonly line: number
 }
 
-/** The number of cells each section's table has; the Grammar is prose. */
-const CELLS: Readonly<Record<Exclude<Section, 'Grammar'>, number>> = {
-  Kinds: 3,
-  'Derived suffixes': 2,
-  Attributes: 3,
-  'App states': 2,
-  'Container states': 2,
-  'Row states': 3,
-  Codes: 3,
-  'Choice values': 3,
-  'Screen names in use': 2,
-  Roles: 2,
-  'Reserved anchors': 2,
+/** The columns of each section's table; the Grammar is prose. */
+const COLUMNS: Readonly<Record<Exclude<Section, 'Grammar'>, readonly string[]>> = {
+  Kinds: ['Kind', 'Meaning', 'Playwright'],
+  'Derived suffixes': ['Suffix', 'Meaning'],
+  Attributes: ['Attribute', 'On', 'Meaning'],
+  'App states': ['State', 'Meaning'],
+  'Container states': ['State', 'Meaning'],
+  'Row states': ['State', 'Where', 'Meaning'],
+  Codes: ['Code', 'Where', 'Meaning'],
+  'Choice values': ['Anchor', 'Value', 'Meaning'],
+  'Screen names in use': ['Screen', 'Meaning'],
+  Roles: ['Role', 'Meaning'],
+  'Reserved anchors': ['Anchor', 'Meaning'],
 }
+
+/** The one column a row may leave empty: a kind no Playwright locator finds. */
+const OPTIONAL_COLUMN = { section: 'Kinds', column: 'Playwright' } as const
 
 const VERSION_LINE = /^Contract version: (\d+)$/m
 const SEPARATOR_ROW = /^\|[\s:|-]+\|$/
@@ -140,16 +144,29 @@ function tableOf(
 
   return (sections.get(section) ?? []).flatMap((row) => {
     const cells = cellsOf(row.text, unquoted)
+    const columns = COLUMNS[section]
 
-    if (cells.length !== CELLS[section]) {
+    if (cells.length !== columns.length) {
       problems.push({
         file: VOCABULARY_FILE,
         line: row.line,
-        message: `section "${section}": a row has ${cells.length} cell(s), expected ${CELLS[section]}`,
+        message: `section "${section}": a row has ${cells.length} cell(s), expected ${columns.length}`,
       })
 
       return []
     }
+
+    columns.forEach((column, index) => {
+      const optional = section === OPTIONAL_COLUMN.section && column === OPTIONAL_COLUMN.column
+
+      if (!optional && cells[index] === '') {
+        problems.push({
+          file: VOCABULARY_FILE,
+          line: row.line,
+          message: `section "${section}": the "${column}" cell is empty`,
+        })
+      }
+    })
 
     return [{ cells, line: row.line }]
   })
