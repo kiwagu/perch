@@ -19,6 +19,7 @@ import { emitModel, emitReplicaSchema, type GeneratedFile } from './emit-model'
 import { emitPagesModel, emitSurrealkitSuites } from './emit-reports'
 import { checkIdRegistry } from './id-registry'
 import { loadSchemaModel } from './schema-structure'
+import { tableDatabases } from './table-databases'
 
 export interface ModelOptions {
   readonly root: string
@@ -120,7 +121,11 @@ export async function runModel(options: ModelOptions): Promise<ModelResult> {
     return { problems: syntax, written: [] }
   }
 
-  const schemaText = schemaFiles.map((file) => readFileSync(file, 'utf8')).join('\n')
+  const schema = schemaFiles.map((file) => ({
+    path: relative(options.schemaDir, file).split('\\').join('/'),
+    text: readFileSync(file, 'utf8'),
+  }))
+  const schemaText = schema.map(({ text }) => text).join('\n')
   const loaded = await loadSchemaModel(schemaText)
 
   if (loaded.isErr()) {
@@ -134,7 +139,7 @@ export async function runModel(options: ModelOptions): Promise<ModelResult> {
 
   const { model, problems: schemaProblems } = loaded.value
   const registryProblems = checkIdRegistry(model, registry.prefixes)
-  const collected = await collect(options.root, model)
+  const collected = await collect(options.root, model, tableDatabases(schema))
   const problems = [...schemaProblems, ...registryProblems, ...collected.problems]
 
   if (problems.length > 0) {

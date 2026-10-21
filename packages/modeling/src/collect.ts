@@ -128,17 +128,25 @@ function place(root: string, file: string, role: 'shape' | 'commands'): Componen
   }
 }
 
-function readShape(placed: ComponentFile, text: string, schema: SchemaModel): ShapeFile {
+function readShape(
+  placed: ComponentFile,
+  text: string,
+  schema: SchemaModel,
+  databases: ReadonlyMap<string, readonly string[]>,
+): ShapeFile {
   const { header, body } = parseShapeFile(text)
   const ast = parseShape(body)
   const resultType = inferResultType(ast, header.params, schema)
   const tables = tablesOf(ast, header.params, schema)
-  const regions = new Set(
-    tables.map((table) => schema.tables[table]?.region).filter((region) => region !== undefined),
+  const where = (table: string): readonly string[] => databases.get(table) ?? []
+  // A shape runs on one database: every table it reads must live in it.
+  const shared = tables.reduce<readonly string[]>(
+    (common, table) => common.filter((database) => where(table).includes(database)),
+    tables.length > 0 ? where(tables[0] ?? '') : [],
   )
 
-  if (regions.size > 1) {
-    const named = tables.map((table) => `${table} (${schema.tables[table]?.region})`).join(', ')
+  if (tables.length > 0 && shared.length === 0) {
+    const named = tables.map((table) => `${table} (${where(table).join(', ')})`).join(', ')
 
     throw new ModelingException(`reads tables of two databases: ${named}`)
   }
@@ -180,7 +188,15 @@ function readCommands(placed: ComponentFile, text: string, schema: SchemaModel):
   return { ...placed, id, commands }
 }
 
-export async function collect(root: string, schema: SchemaModel): Promise<Collected> {
+/**
+ * Collects the shapes and commands under `root` against the schema; `databases` names the
+ * databases each table lives in (`tableDatabases`).
+ */
+export async function collect(
+  root: string,
+  schema: SchemaModel,
+  databases: ReadonlyMap<string, readonly string[]>,
+): Promise<Collected> {
   const shapes: ShapeFile[] = []
   const commands: CommandFile[] = []
   const problems: string[] = []
@@ -193,7 +209,7 @@ export async function collect(root: string, schema: SchemaModel): Promise<Collec
       const text = readFileSync(file, 'utf8')
 
       if (role === 'shape') {
-        shapes.push(readShape(placed, text, schema))
+        shapes.push(readShape(placed, text, schema, databases))
       } else {
         commands.push(readCommands(placed, text, schema))
       }
