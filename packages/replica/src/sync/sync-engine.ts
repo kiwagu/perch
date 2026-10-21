@@ -55,7 +55,9 @@ export interface SyncEngine {
    * the outbox is empty and every local update is durable, nothing waits for an answer (a push,
    * a pull, a probe, a compaction), no pass runs and no message is being handled; rejects after
    * `timeoutMs` on the clock. A region that stopped syncing counts as settled: its failure was
-   * reported. An update that cannot be made durable is reported once, and is never settled.
+   * reported. So does a region the welcome did not name, without a report: its unsent rows are not
+   * waited for, and a sign-out answers `offline` while it holds any. An update that cannot be made
+   * durable is reported once, and is never settled.
    */
   settled(timeoutMs: number): Promise<void>
   /**
@@ -188,9 +190,12 @@ class Engine implements SyncEngine {
 
   #receive(message: ServerMessage): void {
     match(message)
-      .with({ type: 'welcome' }, () => {
-        for (const { sync } of this.#regions.map.values()) {
-          sync.subscribe()
+      // Only the regions the welcome names may be named on this connection.
+      .with({ type: 'welcome' }, ({ regions }) => {
+        const named = new Set(regions.map(({ region }) => region))
+
+        for (const [id, { sync }] of this.#regions.map) {
+          sync.welcome(named.has(id))
         }
       })
       // The transport hands renewed keys and memberships to the app.

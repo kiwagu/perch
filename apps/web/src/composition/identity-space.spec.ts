@@ -787,6 +787,39 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
+  it('replaces the engine a sign-out drains through when the memberships change meanwhile, which ends the sign-out offline', async () => {
+    const gateway = await openGateway([acme])
+    const { space, errors, tenants } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+
+    const draining = space.sync
+
+    // A push of the private region stays unanswered: the sign-out drains it.
+    void gateway.stub.swallowNextPush()
+    expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
+
+    let outcome: string | undefined
+    const signingOut = space.signOut().then((answered) => {
+      outcome = answered
+    })
+
+    // The identity leaves the organisation meanwhile: a new engine of the regions left takes over.
+    await space.setMemberships([])
+    expect(tenants.destroyed).toEqual(['acme'])
+    expect(space.sync).not.toBe(draining)
+
+    while (outcome === undefined) {
+      await gateway.clock.advance(1_000)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await signingOut
+    // The sign-out did not reach the gateway: the session signs out locally, or asks first.
+    expect(outcome).toBe('offline')
+    expect(errors).toEqual([])
+  })
+
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {
     const gateway = await openGateway([acme])
     const tenants = tenantDatabases()

@@ -62,7 +62,10 @@ export class EnginePasses {
     this.#passing = true
 
     try {
-      if (this.#transport.send({ type: 'probe', regions: [...this.#regions.keys()] })) {
+      // A region the welcome did not name is not asked for.
+      const probed = [...this.#regions].flatMap(([id, { sync }]) => (sync.welcomed() ? [id] : []))
+
+      if (this.#transport.send({ type: 'probe', regions: probed })) {
         this.#awaitHeads()
       }
 

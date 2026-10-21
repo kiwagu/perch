@@ -110,9 +110,12 @@ export class EngineSettling {
     })
   }
 
-  /** Whether a region that stopped syncing still holds what it has not sent. */
+  /**
+   * Whether a region that does not sync (it stopped, or the welcome did not name it) still holds
+   * what it has not sent.
+   */
   async stoppedWithUnsent(): Promise<boolean> {
-    const stopped = [...this.#regions.values()].filter(({ sync }) => sync.stopped())
+    const stopped = [...this.#regions.values()].filter(({ sync }) => !sync.syncing())
     const unsent = await Promise.all(stopped.map(({ region }) => this.#holdsUnsent(region)))
 
     return unsent.some(Boolean)
@@ -121,7 +124,7 @@ export class EngineSettling {
   async #isSettled(): Promise<boolean> {
     await this.#drain.idle()
 
-    const syncing = [...this.#regions.values()].filter(({ sync }) => !sync.stopped())
+    const syncing = [...this.#regions.values()].filter(({ sync }) => sync.syncing())
     const unsent = await Promise.all(syncing.map(({ region }) => this.#holdsUnsent(region)))
 
     return (
