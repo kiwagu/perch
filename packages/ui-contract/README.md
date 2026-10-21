@@ -40,8 +40,10 @@ root export is build-time tooling for Bun.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
-    its codes (`data-code`, `code:` keys, `<NAME>_CODES` maps) and an anchor built at
-    runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
+    its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
+    maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
+    grammar is a problem) and an anchor built at runtime as a problem (`RUNTIME_ANCHOR`,
+    `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,

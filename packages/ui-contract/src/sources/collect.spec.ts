@@ -79,17 +79,30 @@ describe('collectFromSource', () => {
     expect(collected('attributes.tsx').derived).toEqual([{ suffix: 'item', line: 18 }])
   })
   it('reads the codes: a data-code literal, a code key and the literals of a <NAME>_CODES map', () => {
-    const { codes, literals, problems } = collected('codes.tsx')
+    const { codes, literals } = collected('codes.tsx')
 
     expect(codes).toEqual([
-      { code: 'saved', form: 'map', line: 2 },
-      { code: 'failed', form: 'map', line: 2 },
-      { code: 'not-a-code', form: 'key', line: 4 },
-      { code: 'saved', form: 'attribute', line: 9 },
-      { code: 'devices-read-failed', form: 'attribute', line: 10 },
+      { code: 'saved', form: 'map', line: 3 },
+      { code: 'failed', form: 'map', line: 4 },
+      { code: 'not-a-code', form: 'key', line: 9 },
+      { code: 'welcome', form: 'key', line: 13 },
+      { code: 'saved', form: 'attribute', line: 18 },
+      { code: 'devices-read-failed', form: 'attribute', line: 19 },
     ])
     expect(literals).toEqual([])
-    expect(problems).toEqual([])
+  })
+  it('leaves out a code key or a map value that is a domain code, not a kebab-case one', () => {
+    const { codes } = collected('codes.tsx')
+
+    expect(codes.map(({ code }) => code)).not.toContain('note:TEXT_REQUIRED')
+    expect(codes.map(({ code }) => code)).not.toContain('bus:FAILED')
+  })
+  it('refuses a data-code literal that is not a kebab-case code', () => {
+    const { problems } = collected('codes.tsx')
+
+    expect(problems.map(formatProblem)).toEqual([
+      'sources/codes.tsx:21: data-code "Bad:Code" is not a kebab-case code',
+    ])
   })
   it('does not parse a file without any of the words', () => {
     expect(collectFromSource('export const broken = {', 'sources/plain.ts')).toEqual({

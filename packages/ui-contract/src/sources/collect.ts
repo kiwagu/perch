@@ -4,7 +4,9 @@
  * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`; the
  * `data-code` attributes, `code:` keys and `<NAME>_CODES` maps. A name or a `testIdFor()`
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
- * problem, since no check can follow it.
+ * problem, since no check can follow it. A key or a map value is a contract code only in
+ * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
+ * while a `data-code` literal outside the grammar is a problem.
  */
 
 import { type Expression, parseSync, Visitor } from 'oxc-parser'
@@ -44,6 +46,9 @@ const WORDS = /data-testid|testId|TestId|_TEST_ID|data-code|code:|_CODES/
 const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
 const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
 
+/** The grammar of a contract code: `welcome`, `devices-read-failed`. */
+const CODE = /^[a-z]+(-[a-z0-9]+)*$/
+
 const isAnchorAttribute = (name: string): boolean =>
   name === 'data-testid' || name === 'testId' || name.endsWith('TestId')
 
@@ -80,8 +85,16 @@ export function collectFromSource(text: string, file: string): Collected {
   }
 
   const code = (value: string | undefined, form: CodeForm, at: number): void => {
-    if (value !== undefined) {
+    if (value === undefined) {
+      return
+    }
+
+    if (CODE.test(value)) {
       collected.codes.push({ code: value, form, line: line(at) })
+    } else if (form === 'attribute') {
+      const message = `data-code "${value}" is not a kebab-case code`
+
+      collected.problems.push({ file, line: line(at), message })
     }
   }
 
