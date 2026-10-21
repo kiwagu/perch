@@ -112,4 +112,21 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.save-button.option": no such anchor in screens.json',
     ])
   })
+  it('wants every permission role of the model to be a role of the vocabulary', () => {
+    const contract = sampleContract()
+    const thing = contract.model.entities['thing']
+
+    contract.vocabulary.roles['admin'] = 'an administrator'
+    Object.assign(thing ?? {}, {
+      can: {
+        member: { create: 'any', update: 'own', delete: 'own' },
+        admin: { create: 'any', update: 'any', delete: 'any' },
+        memebr: { update: 'own' },
+      },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+    ])
+  })
 })

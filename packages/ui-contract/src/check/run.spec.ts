@@ -82,4 +82,11 @@ describe('checkContract', () => {
       ),
     ])
   })
+  it('refuses a permission role of the model that the vocabulary does not list', () => {
+    edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
+
+    expect(printed()).toEqual([
+      'contract/model.schema.json:1: $defs.note["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+    ])
+  })
 })

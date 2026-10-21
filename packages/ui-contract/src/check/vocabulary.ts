@@ -1,12 +1,14 @@
 /**
- * Rule 1: `screens.json` speaks only the vocabulary's words. Every kind, derived suffix,
- * code, state, role and screen name it uses is listed in `vocabulary.md`; every choice
+ * Rule 1: `screens.json` and the model speak only the vocabulary's words. Every kind,
+ * derived suffix, code, state, role and screen name `screens.json` uses is listed in
+ * `vocabulary.md`, and so is every role the model grants a permission to; every choice
  * value belongs to an anchor that exists; every code listed is used somewhere; the
  * platform's status states and reserved anchors are the vocabulary's own.
  */
 
 import { screenOf } from '../anchors'
-import { type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
+import { MODEL_FILE, type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
+import { jsonPath } from '../files/problems'
 
 import {
   type Contract,
@@ -82,6 +84,17 @@ function screenProblems(contract: Contract): Problem[] {
     ),
   ])
 }
+
+/** The roles of every entity's `x-perch.can`, at their path in the model. */
+const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
+  Object.values(model.entities).flatMap((entity) =>
+    Object.keys(entity.can ?? {})
+      .filter((role) => !has(vocabulary.roles, role))
+      .map((role) => ({
+        file: MODEL_FILE,
+        message: `${jsonPath(['$defs', entity.name, 'x-perch', 'can', role])}: "${role}" is not a role of the vocabulary`,
+      })),
+  )
 
 function platformProblems({ vocabulary, screens }: Contract): Problem[] {
   const { actions, status, reserved } = screens.platform
@@ -188,6 +201,7 @@ function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
 
 export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...screenProblems(contract),
+  ...modelRoleProblems(contract),
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
