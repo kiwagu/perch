@@ -272,4 +272,52 @@ describe('TenantDatabases', () => {
     // Being closed is no failure of a database.
     expect(errors).toEqual([])
   })
+
+  it('closes on close a database evicted while it still opened, and waits for it', async () => {
+    const closed: LocalDb[] = []
+    const opened = recordingOpen(closed)
+    let letOpen = () => {}
+    const openHeld = new Promise<void>((resolve) => {
+      letOpen = resolve
+    })
+    const databases = new TenantDatabases({
+      open: () => ResultAsync.fromSafePromise(openHeld).andThen(() => opened()),
+      clock: manualClock(),
+      onError: () => {},
+    })
+    const opening = databases.acquire('acme')
+
+    databases.evict('acme')
+
+    let shut = false
+    const closing = databases.close().then(() => {
+      shut = true
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // The open has not ended yet: close waits for it.
+    expect(shut).toBe(false)
+    letOpen()
+    expect((await opening)._unsafeUnwrapErr()).toMatchObject({ code: 'data:OPEN_FAILED' })
+    await closing
+    expect(closed).toHaveLength(1)
+  })
+
+  it('closes on close a database evicted while a holder still holds it', async () => {
+    const closed: LocalDb[] = []
+    const databases = new TenantDatabases({
+      open: recordingOpen(closed),
+      clock: manualClock(),
+      onError: () => {},
+    })
+    const held = (await databases.acquire('acme'))._unsafeUnwrap()
+
+    databases.evict('acme')
+    await databases.close()
+    expect(closed).toEqual([held.local])
+    // Its holder letting it go later closes nothing twice.
+    held.release()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(closed).toHaveLength(1)
+  })
 })
