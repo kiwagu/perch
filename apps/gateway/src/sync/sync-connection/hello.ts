@@ -9,9 +9,11 @@
  * hello and then at most every five minutes it talks. A device holds one live socket: the hello
  * that registers closes its older ones (1000), without signing it out. Its key operations, a hello
  * from its key check to its registration and a renewal over the channel, run one at a time across
- * its sockets, so no two spend one refresh key.
+ * its sockets, so no two spend one refresh key. An organisation whose database cannot be read is
+ * left out of the welcome (`welcome-heads.ts`); the identity's own region failing fails the hello.
  */
 
+import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { CLOSE, type ClientMessage } from '@workspace/replica/protocol'
 import type { RegionHub } from '@workspace/replica/server'
@@ -29,6 +31,7 @@ import type { HelloRenewals } from './hello-renewals'
 import type { ConnectionHost } from './host'
 import { REASON } from './reasons'
 import type { RegionChanges } from './region-changes'
+import { welcomeHeads } from './welcome-heads'
 
 /** The hello of a device. */
 export type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
@@ -44,6 +47,8 @@ export interface ConnectionHelloDeps {
   readonly clock: Clock
   /** Who may write what in each region: the abilities of a member are built from it. */
   readonly schema: ReplicaSchema
+  /** Hears a region left out of the welcome. */
+  readonly log: Logger
 }
 
 export interface ConnectionHelloOptions {
@@ -67,6 +72,7 @@ export class ConnectionHello {
   readonly #renewalGate: ConnectionHelloDeps['renewals']
   readonly #clock: Clock
   readonly #schema: ReplicaSchema
+  readonly #log: Logger
   readonly #host: ConnectionHost
   readonly #listener: MembershipsListener
   readonly #registered: (unregister: () => void) => void
@@ -83,6 +89,7 @@ export class ConnectionHello {
     this.#renewalGate = deps.renewals
     this.#clock = deps.clock
     this.#schema = deps.schema
+    this.#log = deps.log
     this.#host = options.host
     this.#listener = options.listener
     this.#registered = options.registered
@@ -120,7 +127,7 @@ export class ConnectionHello {
       tokens,
       regions: regionsFor(identity.id, memberships.value, this.#schema),
     }
-    const heads = await this.#hub.heads([...device.regions.keys()])
+    const heads = await welcomeHeads(this.#hub, device.regions, this.#log)
 
     if (this.#host.isClosed()) {
       return

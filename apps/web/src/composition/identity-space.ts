@@ -11,7 +11,7 @@
  * still hold, though the list it follows may be older.
  */
 
-import { errAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
@@ -210,9 +210,18 @@ class Space implements IdentitySpace {
     return ResultAsync.combine(this.#spaces().map((space) => space.flush())).map(() => undefined)
   }
 
+  /**
+   * Whether the space holds changes not sent yet, once a change of memberships under way ended. A
+   * database the device holds for a membership but could not open counts: nobody can read what it
+   * holds.
+   */
   unsent(): ResultAsync<boolean, DataError> {
-    return ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
-      regions.some(Boolean),
+    return ResultAsync.fromSafePromise(this.#changing).andThen(() =>
+      this.#unopened().length > 0
+        ? okAsync(true)
+        : ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
+            regions.some(Boolean),
+          ),
     )
   }
 
@@ -252,8 +261,13 @@ class Space implements IdentitySpace {
     this.#leading.current?.renew()
   }
 
+  /**
+   * Has the gateway sign the device out once everything is sent. While a database the device
+   * holds for a membership did not open, the gateway is not asked (`offline`), as for a region
+   * that stopped syncing: what it holds may be unsent.
+   */
   signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#leading.signOut()
+    return this.#unopened().length > 0 ? Promise.resolve('offline') : this.#leading.signOut()
   }
 
   resumeSync(): void {
@@ -273,6 +287,22 @@ class Space implements IdentitySpace {
       this.#retained.deleteCounted(this.#options.tenantDatabases.keys()),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
+  }
+
+  /**
+   * The organisations the identity belongs to whose database the device counts but this space did
+   * not open: by the list it follows, or by a newer one another tab saved and opened from. The
+   * count is read first: a tab saves the memberships before it counts their databases.
+   */
+  #unopened(): readonly string[] {
+    const counted = this.#options.tenantDatabases.keys()
+    const belongs = new Set([
+      ...keysOf(this.#tenants.memberships()),
+      ...keysOf(this.#options.tenantDatabases.savedMemberships()),
+    ])
+    const open = new Set(this.#tenants.keys())
+
+    return counted.filter((key) => belongs.has(key) && !open.has(key))
   }
 
   /** The identity's own region first, then each organisation's. */
@@ -407,9 +437,10 @@ function abandon(options: IdentitySpaceOptions): void {
 
 /**
  * Opens the identity's database and its private region `identity:<id>`, and the database and
- * region `tenant:<key>` of each organisation it belongs to, projects each region into its
- * database and syncs them while this tab leads. The space owns the leadership and the hints it
- * is given: it stops them when it closes, or at once when it cannot open.
+ * region `tenant:<key>` of each organisation it belongs to (one that does not open is reported and
+ * left out), projects each region into its database and syncs them while this tab leads. The space
+ * owns the leadership and the hints it is given: it stops them when it closes, or at once when
+ * its own database cannot open.
  */
 export function openIdentitySpace(
   options: IdentitySpaceOptions,
@@ -440,12 +471,6 @@ export function openIdentitySpace(
         },
         options.memberships,
         options.tenant,
-      )
-        .map((tenants): IdentitySpace => new Space(own, tenants, options))
-        .orElse((error) => {
-          abandon(options)
-
-          return ResultAsync.fromSafePromise(own.close()).andThen(() => errAsync(error))
-        }),
+      ).map((tenants): IdentitySpace => new Space(own, tenants, options)),
     )
 }

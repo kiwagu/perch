@@ -886,37 +886,33 @@ describe('organisations in the identity space', () => {
     },
   )
 
-  it('closes its own database and answers the failure when an organisation database does not open', async () => {
+  it('opens without an organisation whose database does not open, reports it, and opens it at the next change', async () => {
     const gateway = await openGateway([acme])
-    const own = (await openTestDb())._unsafeUnwrap()
-    let closed = false
-    const local: LocalDb = {
-      ...own,
-      close: async () => {
-        closed = true
-        await own.close()
-      },
-    }
-    const opened = await openIdentitySpace({
-      identity: ann,
-      openLocal: () => okAsync(local),
-      openTenantLocal: () =>
-        errAsync(dataError('data:OPEN_FAILED', 'the organisation database does not open')),
-      deleteTenantLocal: () => okAsync(undefined),
-      tenantDatabases: inventory(),
+    const tenants = tenantDatabases()
+    let broken = true
+    const { space, errors } = await openSpace(gateway, {
       memberships: [acme],
-      tenant: undefined,
-      schema: replicaSchema,
-      transport: () => gateway.stub.transport(ann.id),
-      leadership: leadership(new FakeLocks(), lockName(ann.id)),
-      hints: syncHints(undefined),
-      clock: gateway.clock,
-      onState: () => {},
-      onError: () => {},
+      openTenantLocal: (identity, key) =>
+        broken
+          ? errAsync(dataError('data:OPEN_FAILED', 'the organisation database does not open'))
+          : tenants.open(identity, key),
     })
 
-    expect(opened._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
-    expect(closed).toBe(true)
+    // Acme stays a membership, unavailable on this device: its region is not synced, and the
+    // changes its database may hold count as unsent, since nobody can read them.
+    expect(space.memberships()).toEqual([acme])
+    expect(space.tenants()).toEqual([])
+    expect(space.currentTenant()).toBeUndefined()
+    expect(errors.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
+    expect((await space.unsent())._unsafeUnwrap()).toBe(true)
+
+    broken = false
+    await space.setMemberships([acme])
+
+    expect(space.tenants()).toEqual(['acme'])
+    expect(space.currentTenant()).toBe('acme')
+    expect((await space.unsent())._unsafeUnwrap()).toBe(false)
+    await expect(space.close()).resolves.toBeUndefined()
   })
 
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {

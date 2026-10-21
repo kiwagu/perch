@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -140,6 +140,24 @@ describe('OrganisationView of a member', () => {
     ).toEqual(['Hello', 'Plans'])
     expect(screen.queryByTestId('organisation.none')).toBeNull()
     expect(screen.queryByTestId('organisation.select')).toBeNull()
+  })
+
+  it("says the organisations' data could not be opened when memberships are listed but none is current", () => {
+    renderView({ organisations: [acme, globex], current: undefined, notes: undefined })
+
+    // A membership whose database did not open on this device: the account is a member.
+    expect(screen.getByTestId('organisation.unavailable').textContent).toBe(
+      en['organisation.unavailable'],
+    )
+    expect(screen.queryByTestId('organisation.none')).toBeNull()
+    expect(screen.queryByTestId('organisation.heading')).toBeNull()
+    cleanup()
+
+    renderView({ organisations: [acme], current: undefined, notes: undefined }, 'es')
+
+    expect(screen.getByTestId('organisation.unavailable').textContent).toBe(
+      es['organisation.unavailable'],
+    )
   })
 
   it('says when the organisation has no notes yet', () => {

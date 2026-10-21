@@ -1682,6 +1682,53 @@ describe('SyncConnection', () => {
     ])
   })
 
+  it('welcomes a member without the region of an organisation whose database cannot be read, and logs it', async () => {
+    const { gateway, anns, acme } = await withAcme(false)
+    const failure = dataError('data:OPEN_FAILED', 'could not open the database of acme')
+    const { socket, connection, logLines } = open(gateway, {
+      hub: {
+        heads: (regions) =>
+          regions.includes('tenant:acme') ? errAsync(failure) : gateway.hub.heads(regions),
+      },
+    })
+
+    await hello(connection, anns.tokens)
+
+    // The membership stays: the device knows the organisation and leaves its region alone.
+    expect(socket.sent).toEqual([
+      {
+        type: 'welcome',
+        identity: anns.identity.id,
+        regions: [{ region: `identity:${anns.identity.id}`, head: 0 }],
+        memberships: [acme],
+        time: 0,
+      },
+    ])
+    expect(socket.closedWith).toBeUndefined()
+    expect(logLines.map((line) => JSON.parse(line) as unknown)).toEqual([
+      expect.objectContaining({ level: 50, region: 'tenant:acme', code: 'data:OPEN_FAILED' }),
+    ])
+  })
+
+  it('closes as a failed server a hello whose own region cannot be read, whatever the organisations', async () => {
+    const { gateway, anns } = await withAcme(false)
+    const failure = dataError('data:QUERY_FAILED', 'could not read the heads of regions')
+    const { socket, connection } = open(gateway, {
+      hub: {
+        heads: (regions) =>
+          regions.includes(`identity:${anns.identity.id}`)
+            ? errAsync(failure)
+            : gateway.hub.heads(regions),
+      },
+    })
+
+    await hello(connection, anns.tokens)
+
+    expect(types(socket.sent)).toEqual(['error'])
+    expect(socket.closes.map(([code]) => code)).toEqual([SERVER_ERROR])
+    expect(reported.splice(0)).toEqual([failure])
+  })
+
   it('closes 4403 a subscribe to the region of an organisation the identity is not a member of', async () => {
     const { gateway, bobs } = await withAcme(false)
     const { socket, connection } = open(gateway)

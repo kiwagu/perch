@@ -39,7 +39,12 @@ modeling stage.
   organisation that becomes current (or reports that none is). A reload opens the saved identity's space
   without the network. The session follows the memberships (`SessionOrganisations`): from the
   sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
-  and from the other tabs through the storage; a new organisation's database opens, the
+  and from the other tabs through the storage; an organisation database that does not open, at
+  the start or at a change, is reported and left out (the organisation stays a membership,
+  unavailable on this device: not current, not selectable, not synced, and the changes it may hold
+  count as unsent, so a sign-out asks before it deletes it and never has the gateway revoke the
+  device meanwhile) until the next change of memberships asks for it again, so one broken
+  database never blocks the others; a new organisation's database opens, the
   database of one the identity left is deleted, and a leading tab syncs the regions on a new
   engine (`LeadingEngine`); a sign-out draining through the old one then ends `offline`. Every organisation database the device holds for the identity is counted in
   `perch.session.tenant-databases` (`{ [identity]: keys }`, each identity's count apart, so

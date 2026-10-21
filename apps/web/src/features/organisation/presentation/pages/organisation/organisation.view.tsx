@@ -315,7 +315,8 @@ function NotesCard(props: {
 
 /**
  * The organisation page: without memberships, a way to create the first organisation; with
- * them, the current organisation's notes for every member, and its members for an administrator.
+ * them, the current organisation's notes for every member, and its members for an administrator;
+ * with memberships none of whose databases opened on this device, a line that says so.
  */
 export function OrganisationView(props: OrganisationViewProps) {
   const t = useT()
@@ -359,6 +360,11 @@ export function OrganisationView(props: OrganisationViewProps) {
             {t('organisation.create.toggle')}
           </Button>
         </>
+      ) : props.organisations.length > 0 ? (
+        // Memberships, but no organisation's database opened on this device.
+        <p className="text-muted-foreground" role="status" data-testid="organisation.unavailable">
+          {t('organisation.unavailable')}
+        </p>
       ) : (
         <p className="text-muted-foreground" role="status" data-testid="organisation.none">
           {t('organisation.none')}

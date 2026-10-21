@@ -1306,6 +1306,55 @@ describe('SessionService memberships', () => {
     })
   })
 
+  it('a tab on an older list asks before its sign-out deletes the database of a membership another tab saved, opened and wrote into', async () => {
+    const storage = memoryStorage()
+    const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
+    const holding = holdingRegionLoads()
+
+    saveDevice(storage, annIn([acme]))
+
+    const a = await world(shared)
+
+    expect((await a.session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(a.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Tab B reads the memberships, Acme only, and starts to open; its region load waits.
+    const b = await world({ ...shared, gateway: a.gateway, wrap: holding.wrap })
+
+    holding.hold()
+
+    const restoring = b.session.restore()
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
+    // Tab A hears Ann join Globex, opens its database and writes a note there, offline: unsent.
+    a.contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(a.session.space()?.tenants()).toEqual(['acme', 'globex']))
+    a.session.selectTenant('globex')
+    expect(
+      (
+        await a.session.writePath.run(createNote, {
+          id: noteIdFactory.create(),
+          author: ann.identity.id,
+          text: 'At Globex, unsent',
+        })
+      ).isOk(),
+    ).toBe(true)
+
+    holding.release()
+    expect((await restoring).isOk()).toBe(true)
+    expect(b.session.space()?.tenants()).toEqual(['acme'])
+
+    // B follows the older list, yet Globex is counted and saved: what it holds counts as unsent.
+    expect((await b.driveClock(b.session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    await settle()
+    expect(b.tenantsDeleted()).toEqual([])
+    expect(b.tenantsDestroyed()).toEqual([])
+    expect(a.tenantsDestroyed()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+    await expect(b.session.close()).resolves.toBeUndefined()
+  })
+
   it('a tab that opens on an older list leaves the database of a membership another tab saved and opened meanwhile', async () => {
     const storage = memoryStorage()
     const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
@@ -1344,7 +1393,7 @@ describe('SessionService memberships', () => {
     await expect(b.session.close()).resolves.toBeUndefined()
   })
 
-  it('sign-out destroys inventoried tenant databases that are not open', async () => {
+  it('sign-out asks before it deletes an inventoried tenant database that did not open, and deletes it once told to forget', async () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
@@ -1363,10 +1412,65 @@ describe('SessionService memberships', () => {
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
 
-    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    // Globex's changes, if it holds any, cannot be read: the sign-out asks and deletes nothing.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+
+    expect((await driveClock(session.signOut({ forgetUnsent: true })))._unsafeUnwrap()).toBe(
+      'signed-out',
+    )
     expect(tenantsDestroyed()).toEqual(['acme'])
     expect(tenantsDeleted()).toEqual(['globex'])
     expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it('asks before an online sign-out while an inventoried tenant database did not open, without asking the gateway', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme, globex]))
+
+    const booted = await world({
+      storage,
+      online: true,
+      memberships: [acme, globex],
+      refusedTenants: ['globex'],
+    })
+    const { session, stub, tenantsDestroyed, tenantsDeleted, driveClock, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+
+    // Everything acme holds is sent, yet the gateway would revoke the device while globex's
+    // changes, if any, stay unreadable on it: the sign-out asks first.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(stub.signOuts()).toBe(0)
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(new Set(failures.splice(0).map(({ code }) => code))).toEqual(
+      new Set(['data:OPEN_FAILED']),
+    )
+  })
+
+  it('keeps the chosen organisation when the one picked did not open on this device', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme, globex]))
+
+    const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
+    const { session, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+    session.selectTenant('acme')
+    session.selectTenant('globex')
+
+    // Globex is unavailable here: acme stays current, and stays the choice the next start opens with.
+    expect(session.currentTenant()?.tenant.key).toBe('acme')
+    expect(storage.get('perch.session.tenant')).toBe('acme')
+    expect(failures.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
   })
 
   it('the sign-in page keeps nothing of the memberships after sign-out', async () => {

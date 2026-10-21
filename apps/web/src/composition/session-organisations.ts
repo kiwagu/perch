@@ -72,13 +72,20 @@ export class SessionOrganisations {
     return space?.memberships().find(({ tenant }) => tenant.key === key)
   }
 
-  /** Makes the organisation `key` current and keeps the choice; a key of no membership changes nothing. */
+  /**
+   * Makes the organisation `key` current and keeps the choice; a key of no membership changes
+   * nothing, and one whose database did not open on this device is not kept.
+   */
   select(key: string): void {
     const space = this.#options.open()?.space
 
     if (space?.memberships().some(({ tenant }) => tenant.key === key)) {
-      saveTenant(this.#options.storage, key)
       space.selectTenant(key)
+
+      if (space.currentTenant() === key) {
+        saveTenant(this.#options.storage, key)
+      }
+
       this.tell()
     }
   }

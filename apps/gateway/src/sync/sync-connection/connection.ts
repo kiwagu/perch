@@ -26,7 +26,8 @@ import { DeviceRequests } from './requests'
 /**
  * One device's WebSocket to the gateway. The device says hello with its keys first, within
  * the hello time; once they are accepted it is welcomed with its identity's private region,
- * the region of each organisation the identity belongs to and those memberships, and may
+ * the region of each organisation the identity belongs to (one whose database cannot be read is
+ * left out until the next hello) and those memberships, and may
  * subscribe, pull, push, probe and compact in those regions only, each handed to the region
  * hub, which answers the device itself and checks its batches against the identity. Messages
  * are handled one at a time, in the order they came. A change of the identity's memberships
