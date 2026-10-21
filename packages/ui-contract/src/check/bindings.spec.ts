@@ -125,4 +125,22 @@ describe('bindingsProblems', () => {
       'contract/screens.json:1: screens[1].flow.events[1].outcomes.success.route: "/nowhere" is the path of no binding',
     ])
   })
+  it('resolves a derived anchor of a param or a flow event only through its base derived', () => {
+    const contract = sampleContract()
+    const event = screenIn(contract, 'sample').flow?.events[0]
+
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.createThing',
+      params: { title: 'sample.title-input.item' },
+    }
+    Object.assign(event ?? {}, {
+      on: 'sample.save-button.confirm-button',
+      params: { title: 'sample.key-select.option' },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.title: "sample.title-input.item" is not a declared anchor`,
+      'contract/screens.json:1: screens[1].flow.events[0].on: "sample.save-button.confirm-button" is not a declared anchor',
+    ])
+  })
 })

@@ -1,10 +1,11 @@
 /**
  * The three contract files as the check reads them, and the lookups its rules share: the
- * declared anchors, a known anchor (declared, or a declared base with a suffix), the
- * states and choice values of the vocabulary, and a problem located in `screens.json`.
+ * declared anchors, a known anchor (declared, or a declared base with a suffix it lists in
+ * `derived`), the states and choice values of the vocabulary, and a problem located in
+ * `screens.json`.
  */
 
-import { isKnownAnchor } from '../anchors'
+import { baseOf } from '../anchors'
 import {
   type AnchorDef,
   type Model,
@@ -53,12 +54,24 @@ export const inScreens = (path: readonly PropertyKey[], message: string): Proble
   message: `${jsonPath(path)}: ${message}`,
 })
 
-/** Whether an anchor is declared, or derived from a declared base with a vocabulary suffix. */
+/**
+ * Whether an anchor is declared, or derived from a declared base with a suffix that base
+ * lists in `derived`: a suffix of the vocabulary alone names no element the base renders.
+ */
 export function knownAnchors(contract: Contract): (anchor: string) => boolean {
-  const declared = new Set(declaredAnchors(contract.screens).map(({ anchor }) => anchor))
+  const defs = new Map(declaredAnchors(contract.screens).map(({ anchor, def }) => [anchor, def]))
   const suffixes = Object.keys(contract.vocabulary.suffixes)
 
-  return (anchor) => isKnownAnchor(anchor, declared, suffixes)
+  return (anchor) => {
+    if (defs.has(anchor)) {
+      return true
+    }
+
+    const base = baseOf(anchor, suffixes)
+    const derived = base === undefined ? undefined : defs.get(base)?.derived
+
+    return base !== undefined && (derived ?? []).includes(anchor.slice(base.length + 1))
+  }
 }
 
 /** Every state of the vocabulary: app, container and row states. */

@@ -87,4 +87,18 @@ describe('searchProblems', () => {
       `${AT}.retain[1]: "sort" is not a search parameter`,
     ])
   })
+  it('takes a derived control only through a suffix its base lists in derived', () => {
+    const contract = sampleContract()
+
+    Object.assign(sampleBinding(contract).search?.properties['tab'] ?? {}, {
+      'x-perch': {
+        control: 'sample.mode-select.option',
+        values: { a: { control: 'sample.a-button.option' }, b: { control: 'sample.b-button' } },
+      },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.search.properties.tab["x-perch"].values.a.control: "sample.a-button.option" is not a declared anchor`,
+    ])
+  })
 })

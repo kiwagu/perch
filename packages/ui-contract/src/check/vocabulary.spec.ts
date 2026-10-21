@@ -103,4 +103,13 @@ describe('vocabularyProblems', () => {
       'contract/screens.json:1: platform.reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
     ])
   })
+  it('takes a choice-values anchor derived only through a suffix its base lists in derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.choiceValues['sample.save-button.option'] = { x: 'x' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: choice values of "sample.save-button.option": no such anchor in screens.json',
+    ])
+  })
 })

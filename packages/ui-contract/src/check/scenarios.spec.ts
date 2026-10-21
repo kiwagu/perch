@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, type Scenario } from '../files'
 
-import { sampleContract } from './contract.fixture'
+import { sampleContract, screenIn } from './contract.fixture'
 import { scenariosProblems } from './scenarios'
 
 const printed = (contract = sampleContract()): string[] =>
@@ -34,6 +34,7 @@ describe('scenariosProblems', () => {
     expect(printed(contract)).toEqual([
       'contract/screens.json:1: scenarios[0].where: [/elsewhere] is the path of no binding',
       'contract/screens.json:1: scenarios[0].scenario: [sample.gone-button] is not a declared anchor',
+      'contract/screens.json:1: scenarios[0].scenario: [sample.page.confirm-button] is not a declared anchor',
       'contract/screens.json:1: scenarios[0].steps[0]: [state:busy] is not a state of the vocabulary',
       'contract/screens.json:1: scenarios[0].steps[1]: [value:c] is not a choice value of the vocabulary',
       'contract/screens.json:1: scenarios[0].steps[1]: [value:kx] is not a choice value of the vocabulary',
@@ -57,6 +58,24 @@ describe('scenariosProblems', () => {
 
     expect(printed(contract)).toEqual([
       'contract/screens.json:1: scenarios[1].id: "sample/01-edit" is the id of another scenario',
+    ])
+  })
+  it('resolves a derived anchor only through a suffix its base lists in derived', () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').anchors['sample.sign-out-dialog'] = {
+      kind: 'dialog',
+      derived: ['confirm-button'],
+    }
+    firstScenario(contract).steps = [
+      'Click [sample.save-button.confirm-button]',
+      'Click [sample.sign-out-dialog.confirm-button]',
+      'Pick [sample.mode-select.option] or [sample.mode-select.item]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/screens.json:1: scenarios[0].steps[0]: [sample.save-button.confirm-button] is not a declared anchor',
+      'contract/screens.json:1: scenarios[0].steps[2]: [sample.mode-select.item] is not a declared anchor',
     ])
   })
 })

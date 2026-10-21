@@ -1,7 +1,8 @@
 /**
  * Rule 6: the scenarios speak of what the contract declares. Every bracket reference in
- * their text resolves (an anchor declared or derived from a declared base, the path of a
- * binding, a code, a state, a choice value or a value a pattern row matches), every device
+ * their text resolves (an anchor declared, or derived from a declared base with a suffix it
+ * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
+ * pattern row matches), every device
  * acts as a role of the vocabulary, and each id is used once.
  */
 

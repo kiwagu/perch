@@ -68,4 +68,18 @@ describe('checkContract', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('refuses a derived anchor of the repository whose base does not list the suffix', () => {
+    edit(SCREENS_FILE, (text) =>
+      text.replace(
+        '"Click [user.profile.save-button]"',
+        '"Click [user.profile.save-button.confirm-button]"',
+      ),
+    )
+
+    expect(printed()).toEqual([
+      expect.stringMatching(
+        /^contract\/screens\.json:1: scenarios\[\d+\]\.steps\[\d+\]: \[user\.profile\.save-button\.confirm-button\] is not a declared anchor$/,
+      ),
+    ])
+  })
 })

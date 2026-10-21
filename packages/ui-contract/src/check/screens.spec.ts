@@ -84,4 +84,17 @@ describe('screensProblems', () => {
       'contract/screens.json:1: screens[1].id: "sample" is the id of another screen',
     )
   })
+  it('takes an entry derived anchor only through a suffix its base lists in derived', () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').entry = [
+      'sample.page',
+      'sample.mode-select.option',
+      'sample.save-button.confirm-button',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/screens.json:1: screens[1].entry[2]: "sample.save-button.confirm-button" is not declared on this screen',
+    ])
+  })
 })

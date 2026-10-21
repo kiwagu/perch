@@ -125,4 +125,22 @@ describe('compareWithContract', () => {
       'c.tsx:9: built at runtime',
     ])
   })
+  it('refuses a derived literal even when its base lists the suffix in derived', () => {
+    const screens = structuredClone(SCREENS)
+    const select = screens.screens[0]?.anchors['sample.mode-select']
+
+    Object.assign(select ?? {}, { derived: ['option'] })
+
+    const collected = [
+      ...agreeing(),
+      source('b.tsx', {
+        literals: [{ anchor: 'sample.mode-select.option', form: 'attribute', line: 6 }],
+      }),
+    ]
+
+    expect(compareWithContract(collected, screens, vocabulary).map(formatProblem)).toEqual([
+      'b.tsx:6: "sample.mode-select.option" is not in contract/screens.json; add it there or rename it',
+      'b.tsx:6: "sample.mode-select.option" is "sample.mode-select" plus the suffix "option"; derive it with testIdFor()',
+    ])
+  })
 })
