@@ -1,5 +1,5 @@
 ---
-description: 'Use when: creating a workspace package or a feature module, or changing what a package is for, what it exports, which scripts it runs, or a module''s routes, shapes, commands or providers.'
+description: 'Use when: creating a workspace package, a feature module or a gateway module, or changing what a package is for, what it exports, which scripts it runs, or a module''s routes, shapes, commands or providers.'
 alwaysApply: true
 ---
 
@@ -12,7 +12,7 @@ alwaysApply: true
 ## Use This When
 
 - A new workspace appears under `apps/`, `packages/`, `tests/`, `database/` or `seed/`.
-- A new feature module appears under an application's `src/features/`.
+- A new feature module appears under an application's `src/features/`, or a new module under `apps/gateway/src/`.
 - A change alters a package's role, its key exports or its commands, or a module's routes, shapes, commands or providers.
 
 ## Stop Here If
