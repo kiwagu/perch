@@ -787,6 +787,35 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
+  it('keeps the engine a sign-out drains through when the memberships change meanwhile, and replaces it once sync resumes', async () => {
+    const gateway = await openGateway([acme])
+    const { space, errors } = await openSpace(gateway, { memberships: [acme], online: false })
+    const draining = space.sync
+    let outcome: string | undefined
+    const signingOut = space.signOut().then((answered) => {
+      outcome = answered
+    })
+
+    // The memberships change while the sign-out waits for the channel to drain through.
+    await space.setMemberships([acme, globex])
+    expect(space.sync).toBe(draining)
+
+    while (outcome === undefined) {
+      await gateway.clock.advance(1_000)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await signingOut
+    expect(outcome).toBe('offline')
+    expect(space.sync).toBe(draining)
+
+    // The person stays signed in: the space syncs on, on an engine of the new regions.
+    space.resumeSync()
+    expect(space.sync).not.toBe(draining)
+    expect(space.sync).toBeDefined()
+    expect(errors).toEqual([])
+  })
+
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {
     const gateway = await openGateway([acme])
     const tenants = tenantDatabases()

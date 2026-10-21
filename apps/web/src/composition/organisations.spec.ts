@@ -9,7 +9,7 @@ import type { MemberView } from '../platform/organisations.port'
 import { openTestWorld, type TestWorld } from './__fixtures__/session'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
-import { memoryStorage, saveDevice, savedMemberships } from './storage'
+import { memoryStorage, saveDevice, savedMemberships, saveMemberships } from './storage'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -79,6 +79,28 @@ describe('createOrganisations', () => {
     expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
     expect(session.space()?.tenants()).toEqual(['acme'])
     expect(tenantsOpened()).toEqual(['acme'])
+  })
+
+  it('create adds the membership to the newest list any tab kept, not to an older one the space still shows', async () => {
+    const { session, storage } = await annSignedIn()
+    const globex: Membership = {
+      tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
+      role: 'member',
+    }
+
+    // Another tab kept a newer list, which this tab's space has not followed yet.
+    saveMemberships(storage, ann.identity.id, [globex])
+
+    const organisations = createOrganisations(answering().api, session)
+
+    expect((await organisations.create({ key: 'acme', name: 'Acme' })).isOk()).toBe(true)
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(
+      session
+        .memberships()
+        .map(({ tenant }) => tenant.key)
+        .sort(),
+    ).toEqual(['acme', 'globex'])
   })
 
   it("answers members, invites and removals as the gateway did, leaving the session's memberships alone", async () => {

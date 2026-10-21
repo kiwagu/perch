@@ -1464,6 +1464,16 @@ describe('SessionService memberships', () => {
     expect(await renewing).toBe(true)
   })
 
+  it('renewKeys in a following tab resolves false at once when another tab removes the access key', async () => {
+    const { b, storage } = await twoTabs({ online: true, hints: true })
+    const renewing = b.session.renewKeys()
+
+    // Another tab signed out: the key is gone, not renewed.
+    storage.changeElsewhere('perch.session.token', undefined)
+
+    expect(await renewing).toBe(false)
+  })
+
   it.each(['unauthorized', 'revoked'] as const)(
     'renewKeys under way gives up at once, without waiting 10 seconds, when the gateway ends the channel (%s)',
     async (reason) => {

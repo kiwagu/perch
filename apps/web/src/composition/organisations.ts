@@ -153,6 +153,23 @@ export class SessionOrganisations {
     return this.#follow(space, next)
   }
 
+  /**
+   * An organisation this device created is a membership at once: it joins the memberships saved
+   * for the identity (the newest list any tab kept, which this tab's space may not have followed
+   * yet), in place of one of the same key, and the list is applied; see `apply`.
+   */
+  adopt(created: Membership): Promise<void> {
+    const space = this.#options.open()?.space
+
+    if (!space || !this.#stillSignedIn(space)) {
+      return Promise.resolve()
+    }
+
+    const saved = savedMemberships(this.#options.storage, space.identity.id)
+
+    return this.apply([...saved.filter(({ tenant }) => tenant.key !== created.tenant.key), created])
+  }
+
   /** Another tab kept new memberships of the identity this tab shows: its space follows them. */
   followSaved(): void {
     const space = this.#options.open()?.space
@@ -201,8 +218,9 @@ export class SessionOrganisations {
    * leading tab asks for a new pair over its open channel (one that is down renews at the hello
    * that brings it up); another tab asks the leader with the `renew` hint. True once new keys came
    * within 10 seconds, to this tab's channel or, kept by the leader, into the storage; false at
-   * once when this tab's channel ended for good or the gateway's limits refused the renewal. A
-   * renewal asked while one is under way joins it: the refresh key works once.
+   * once when this tab's channel ended for good, the gateway's limits refused the renewal, or
+   * another tab removed the access key (it signed out). A renewal asked while one is under way
+   * joins it: the refresh key works once.
    */
   renewKeys(): Promise<boolean> {
     const open = this.#options.open()
@@ -229,6 +247,9 @@ export class SessionOrganisations {
 
   /** Connects the leader again, or asks it to, and waits up to 10 seconds for the new keys. */
   #renew(open: OpenIdentity): Promise<boolean> {
+    const storage = this.#options.storage
+    const before = storage.get(ACCESS_KEY)
+
     return new Promise((resolve) => {
       const stops: Array<() => void> = []
       const finish = (renewed: boolean) => {
@@ -244,8 +265,17 @@ export class SessionOrganisations {
       stops.push(
         () => this.#renewals.delete(renewal),
         this.#options.clock.schedule(RENEW_MS, () => finish(false)),
-        this.#options.storage.onChangeElsewhere((key) => {
-          if (key === ACCESS_KEY) {
+        storage.onChangeElsewhere((key) => {
+          if (key !== ACCESS_KEY) {
+            return
+          }
+
+          // A key another tab removed was not renewed: that tab signed out.
+          const access = storage.get(ACCESS_KEY)
+
+          if (access === undefined) {
+            finish(false)
+          } else if (access !== before) {
             finish(true)
           }
         }),
@@ -274,10 +304,9 @@ export class SessionOrganisations {
   }
 }
 
-/** The memberships of the signed-in identity, and how a change of them reaches the device. */
+/** How an organisation the signed-in identity created becomes its membership on this device. */
 export interface MembershipsHolder {
-  memberships(): readonly Membership[]
-  applyMemberships(next: readonly Membership[]): Promise<void>
+  adoptMembership(created: Membership): Promise<void>
 }
 
 export function createOrganisations(
@@ -286,15 +315,11 @@ export function createOrganisations(
 ): OrganisationsPort {
   return {
     create: (input) =>
-      api.create(input).andThen((created) => {
-        const others = session
-          .memberships()
-          .filter(({ tenant }) => tenant.key !== created.tenant.key)
-
-        return ResultAsync.fromSafePromise(session.applyMemberships([...others, created])).map(
-          () => created,
-        )
-      }),
+      api
+        .create(input)
+        .andThen((created) =>
+          ResultAsync.fromSafePromise(session.adoptMembership(created)).map(() => created),
+        ),
     members: (key) => api.members(key),
     invite: (key, email) => api.invite(key, email),
     remove: (key, identity) => api.remove(key, identity),

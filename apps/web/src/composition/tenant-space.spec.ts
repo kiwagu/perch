@@ -171,6 +171,24 @@ describe('TenantSpaces', () => {
     expect(told).toBe(3)
   })
 
+  it('does not tell a listener that stopped listening while the others were told', async () => {
+    const { tenants } = await openTenants([acme, globex], 'acme')
+    const told: string[] = []
+    let unlistenSecond = (): void => {}
+
+    tenants.onChange(() => {
+      told.push('first')
+      unlistenSecond()
+    })
+    unlistenSecond = tenants.onChange(() => {
+      told.push('second')
+    })
+
+    tenants.select('globex')
+
+    expect(told).toEqual(['first'])
+  })
+
   it('closes the databases it opened when one organisation does not open', async () => {
     const opened: LocalDb[] = []
     const result = await TenantSpaces.open(
