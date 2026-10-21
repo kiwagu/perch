@@ -1,7 +1,7 @@
 import type { Result } from 'neverthrow'
 import { match } from 'ts-pattern'
 
-import { type DataError, dataError } from '@workspace/data'
+import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
@@ -21,12 +21,14 @@ import { type DeviceTokens, keysRefused } from '../auth/identity-sessions'
 import { type ChannelRenewal, renewOnChannel } from './channel-renewal'
 import { signOutOnChannel } from './channel-sign-out'
 import type { ConnectedDevice, ConnectionState } from './connected-device'
-import { REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
+import type { ConnectionHost } from './connection-host'
+import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
 import type { ConnectionRegistry } from './connections'
 import { regionsFor, regionsOf } from './device-regions'
 import { DeviceSeen } from './device-seen'
 import { acceptKeys, bindDevice, TRY_AGAIN_LATER } from './hello-keys'
 import { HelloRenewals } from './hello-renewals'
+import { RegionChanges } from './region-changes'
 import { RegionSubscriptions } from './region-subscriptions'
 import type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
 
@@ -80,16 +82,12 @@ export class SyncConnection {
   readonly #renewalGate: SyncConnectionDeps['renewals']
   readonly #subscriptions: RegionSubscriptions
   readonly #seen: DeviceSeen
+  readonly #changes: RegionChanges
   #state: ConnectionState
   /** Settles once every message so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
   /** Takes the connection out of the registry; nothing to take until the keys are accepted. */
   #unregister: () => void = () => {}
-  /** The changes of memberships told while the hello is under way, applied after the welcome. */
-  readonly #afterWelcome: Array<() => void> = []
-  /** Resolves once the hello settled: the device was welcomed, or the socket closed. */
-  readonly #helloSettled: Promise<void>
-  #settleHello: () => void = () => {}
 
   constructor(socket: SocketLike, deps: SyncConnectionDeps) {
     this.#socket = socket
@@ -109,8 +107,25 @@ export class SyncConnection {
       send: (message) => this.#send(message),
     })
     this.#seen = new DeviceSeen(deps)
-    this.#helloSettled = new Promise((resolve) => {
-      this.#settleHello = resolve
+
+    const host: ConnectionHost = {
+      device: () => (this.#state.kind === 'ready' ? this.#state.device : undefined),
+      ready: (device) => {
+        this.#state = { kind: 'ready', device }
+      },
+      isClosed: () => this.#isClosed(),
+      send: (message) => this.#send(message),
+      sendTokens: (identity, device, held, tokens) =>
+        this.#sendTokens(identity, device, held, tokens),
+      close: (code, reason) => this.#close(code, reason),
+      fail: (error) => this.#fail(error),
+    }
+
+    this.#changes = new RegionChanges({
+      host,
+      subscriptions: this.#subscriptions,
+      schema: deps.schema,
+      helloUnderWay: () => this.#state.kind === 'waiting',
     })
     this.#state = {
       kind: 'waiting',
@@ -133,7 +148,7 @@ export class SyncConnection {
    * while the hello is under way. Never rejects.
    */
   memberships(next: readonly Membership[]): Promise<void> {
-    return this.#change(() => this.#changeMemberships(next))
+    return this.#changes.memberships(next)
   }
 
   /**
@@ -143,9 +158,7 @@ export class SyncConnection {
    * welcome, before any later message is handled. Never rejects.
    */
   revoke(region: string): Promise<void> {
-    void this.#change(() => this.#leave(region))
-
-    return Promise.resolve()
+    return this.#changes.revoke(region)
   }
 
   /**
@@ -175,8 +188,7 @@ export class SyncConnection {
 
     this.#state = { kind: 'closed' }
     this.#unregister()
-    this.#afterWelcome.length = 0
-    this.#settleHello()
+    this.#changes.closed()
     this.#subscriptions.leaveAll()
   }
 
@@ -189,31 +201,6 @@ export class SyncConnection {
     return handled
   }
 
-  /**
-   * Applies a change of the device's regions now, outside the queue of messages; while the
-   * hello is under way it waits for the welcome. Resolves once applied, or the socket closed.
-   */
-  #change(apply: () => void): Promise<void> {
-    if (this.#state.kind === 'waiting') {
-      this.#afterWelcome.push(apply)
-
-      return this.#helloSettled
-    }
-
-    this.#guarded(apply)
-
-    return Promise.resolve()
-  }
-
-  /** Runs `apply`; a send that throws fails the connection, as in the queue. */
-  #guarded(apply: () => void): void {
-    try {
-      apply()
-    } catch (cause) {
-      this.#fail(dataError('data:WRITE_FAILED', 'the sync connection failed to answer', cause))
-    }
-  }
-
   async #handle(work: () => Promise<void>): Promise<void> {
     if (this.#state.kind === 'closed') {
       return
@@ -222,7 +209,7 @@ export class SyncConnection {
     try {
       await work()
     } catch (cause) {
-      this.#fail(dataError('data:WRITE_FAILED', 'the sync connection failed to answer', cause))
+      this.#fail(answerFailed(cause))
     }
   }
 
@@ -307,11 +294,7 @@ export class SyncConnection {
     })
 
     // What changed since the memberships were read applies before any later message is handled.
-    for (const apply of this.#afterWelcome.splice(0)) {
-      this.#guarded(apply)
-    }
-
-    this.#settleHello()
+    this.#changes.welcomed()
   }
 
   /**
@@ -427,36 +410,6 @@ export class SyncConnection {
     this.#connections.supersede(identity.id, deviceId, this)
 
     return { identity, tokens: accepted.value.tokens }
-  }
-
-  /** Leaves the regions the device may no longer name, replaces its regions and tells it. */
-  #changeMemberships(next: readonly Membership[]): void {
-    const state = this.#state
-
-    if (state.kind !== 'ready') {
-      return
-    }
-
-    const regions = regionsFor(state.device.identity.id, next, this.#schema)
-
-    this.#subscriptions.keepOnly(regions)
-    this.#state = { kind: 'ready', device: { ...state.device, regions } }
-    this.#send({ type: 'memberships', memberships: [...next] })
-  }
-
-  /** Takes `region` from the regions the device may name, and leaves it at the hub. */
-  #leave(region: string): void {
-    const state = this.#state
-
-    if (state.kind !== 'ready') {
-      return
-    }
-
-    const regions = new Map(state.device.regions)
-
-    regions.delete(region)
-    this.#state = { kind: 'ready', device: { ...state.device, regions } }
-    this.#subscriptions.leave(region)
   }
 
   async #serve(device: ConnectedDevice, message: ClientMessage): Promise<void> {
