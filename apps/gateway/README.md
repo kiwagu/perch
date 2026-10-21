@@ -116,7 +116,7 @@ the gateway defines; the directory holds each organisation (`tenant`) and who be
 `src/tenants`, built by the composition root over the directory, serve them; on shutdown the
 organisations' databases close after the region hub and before the directory. `TenantDatabases`
 keeps one connection per organisation database in use, shared by every holder and closed once
-nobody has held it for five minutes. `Organisations` creates an organisation (its directory
+nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
 unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin invite an existing identity by email and remove a member
