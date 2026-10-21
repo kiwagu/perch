@@ -15,7 +15,6 @@ import {
   type ServerMessage,
   serverMessage,
 } from '@workspace/replica/protocol'
-import type { Subscriber } from '@workspace/replica/server'
 
 import { type DeviceTokens, keysRefused } from '../auth/identity-sessions'
 
@@ -25,15 +24,14 @@ import type { ConnectedDevice, ConnectionState } from './connected-device'
 import { REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
 import type { ConnectionRegistry } from './connections'
 import { regionsFor, regionsOf } from './device-regions'
+import { DeviceSeen } from './device-seen'
 import { acceptKeys, bindDevice, TRY_AGAIN_LATER } from './hello-keys'
 import { HelloRenewals } from './hello-renewals'
+import { RegionSubscriptions } from './region-subscriptions'
 import type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
 
 /** The end of a device's WebSocket the connection writes to. */
 export type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
-
-/** How often at most a device is marked seen while it keeps talking. */
-const SEEN_EVERY_MS = 5 * 60_000
 
 /** The hello of a device. */
 type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
@@ -80,9 +78,8 @@ export class SyncConnection {
   readonly #onError: (error: DataError) => void
   readonly #renewals: HelloRenewals
   readonly #renewalGate: SyncConnectionDeps['renewals']
-  readonly #subscriber: Subscriber
-  /** The regions the device subscribed to, to leave when the socket closes. */
-  readonly #subscribed = new Set<string>()
+  readonly #subscriptions: RegionSubscriptions
+  readonly #seen: DeviceSeen
   #state: ConnectionState
   /** Settles once every message so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
@@ -93,8 +90,6 @@ export class SyncConnection {
   /** Resolves once the hello settled: the device was welcomed, or the socket closed. */
   readonly #helloSettled: Promise<void>
   #settleHello: () => void = () => {}
-  /** When the device was last marked seen, on the clock. */
-  #seenAt = 0
 
   constructor(socket: SocketLike, deps: SyncConnectionDeps) {
     this.#socket = socket
@@ -109,10 +104,11 @@ export class SyncConnection {
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
     this.#renewals = new HelloRenewals(deps)
     this.#renewalGate = deps.renewals
-    this.#subscriber = {
+    this.#subscriptions = new RegionSubscriptions(deps.hub, {
       id: crypto.randomUUID(),
       send: (message) => this.#send(message),
-    }
+    })
+    this.#seen = new DeviceSeen(deps)
     this.#helloSettled = new Promise((resolve) => {
       this.#settleHello = resolve
     })
@@ -181,12 +177,7 @@ export class SyncConnection {
     this.#unregister()
     this.#afterWelcome.length = 0
     this.#settleHello()
-
-    for (const region of this.#subscribed) {
-      this.#hub.unsubscribe(region, this.#subscriber.id)
-    }
-
-    this.#subscribed.clear()
+    this.#subscriptions.leaveAll()
   }
 
   /** Runs `work` once the work before it is done; never rejects. */
@@ -261,7 +252,7 @@ export class SyncConnection {
     }
 
     if (state.kind === 'ready') {
-      this.#seen(state.device)
+      this.#seen.talked(state.device)
       await this.#serve(state.device, message)
     }
   }
@@ -427,9 +418,9 @@ export class SyncConnection {
 
     // A renewal marked the device seen as it moved the row to the new grant.
     if (spent === undefined) {
-      this.#markSeen(identity.id, deviceId)
+      this.#seen.mark(identity.id, deviceId)
     } else {
-      this.#seenAt = this.#clock.now()
+      this.#seen.renewed()
     }
 
     // The device holds one live socket: an older one it gave up spends none of its keys.
@@ -448,12 +439,7 @@ export class SyncConnection {
 
     const regions = regionsFor(state.device.identity.id, next, this.#schema)
 
-    for (const region of [...this.#subscribed]) {
-      if (!regions.has(region)) {
-        this.#unsubscribe(region)
-      }
-    }
-
+    this.#subscriptions.keepOnly(regions)
     this.#state = { kind: 'ready', device: { ...state.device, regions } }
     this.#send({ type: 'memberships', memberships: [...next] })
   }
@@ -470,15 +456,7 @@ export class SyncConnection {
 
     regions.delete(region)
     this.#state = { kind: 'ready', device: { ...state.device, regions } }
-
-    if (this.#subscribed.has(region)) {
-      this.#unsubscribe(region)
-    }
-  }
-
-  #unsubscribe(region: string): void {
-    this.#hub.unsubscribe(region, this.#subscriber.id)
-    this.#subscribed.delete(region)
+    this.#subscriptions.leave(region)
   }
 
   async #serve(device: ConnectedDevice, message: ClientMessage): Promise<void> {
@@ -489,7 +467,7 @@ export class SyncConnection {
       return
     }
 
-    const subscriber = this.#subscriber
+    const subscriber = this.#subscriptions.subscriber
 
     await match(message)
       .with({ type: 'hello' }, async () => this.#close(CLOSE.protocol, REASON.helloTwice))
@@ -500,7 +478,7 @@ export class SyncConnection {
 
         // Checked above: the device may name the region.
         if (entry) {
-          this.#subscribed.add(region)
+          this.#subscriptions.add(region)
           this.#settle(await this.#hub.subscribe(entry.ref, entry.actor, subscriber, vv))
         }
       })
@@ -588,7 +566,7 @@ export class SyncConnection {
         }
 
         // The renewal marked the device seen as it moved the row to the new grant.
-        this.#seenAt = this.#clock.now()
+        this.#seen.renewed()
       }
     } else if (this.#isClosed()) {
       // Nobody is left to answer.
@@ -603,11 +581,7 @@ export class SyncConnection {
 
   /** Leaves the device's regions, signs it out (`signOutOnChannel`) and closes as it answers. */
   async #signOut(device: ConnectedDevice): Promise<void> {
-    for (const region of this.#subscribed) {
-      this.#hub.unsubscribe(region, this.#subscriber.id)
-    }
-
-    this.#subscribed.clear()
+    this.#subscriptions.leaveAll()
 
     const close = await signOutOnChannel(
       { sessions: this.#sessions, devices: this.#devices, log: this.#log },
@@ -615,27 +589,6 @@ export class SyncConnection {
     )
 
     this.#close(close.code, close.reason)
-  }
-
-  /** Marks the device seen when it was not for five minutes. */
-  #seen(device: ConnectedDevice): void {
-    if (this.#clock.now() - this.#seenAt >= SEEN_EVERY_MS) {
-      this.#markSeen(device.identity.id, device.id)
-    }
-  }
-
-  /**
-   * Marks the device seen now, without waiting: a failure is logged, with the identity and the
-   * code only, and changes nothing for the device.
-   */
-  #markSeen(identity: IdentityId, device: string): void {
-    this.#seenAt = this.#clock.now()
-    void this.#devices.seen({ identity, device }).match(
-      () => undefined,
-      (error) => {
-        this.#log.warn({ identity, code: error.code }, 'the device could not be marked seen')
-      },
-    )
   }
 
   /**
