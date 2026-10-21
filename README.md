@@ -126,7 +126,7 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
-- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file written by the first run on a checkout (also in `check` and in the pre-commit hook): afterwards a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails.
+- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file that the first run on a checkout writes from the sizes committed where HEAD left `main`, never from the working tree (also in `check` and in the pre-commit hook): a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails, so a branch's growth fails from its checkout's first run.
 - `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.
 - `bun run --filter @workspace/replica measure` and `measure:validation`: the replica's write
   path and what checking a pushed batch costs the server, on this machine.
