@@ -401,6 +401,30 @@
                               "boolean"
                             ]
                           },
+                          "minimum": {
+                            "description": "The smallest value of a number or an integer.",
+                            "type": "number"
+                          },
+                          "maximum": {
+                            "description": "The largest value of a number or an integer.",
+                            "type": "number"
+                          },
+                          "minLength": {
+                            "description": "The fewest characters of a string.",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxLength": {
+                            "description": "The most characters of a string.",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "pattern": {
+                            "description": "A regular expression (ECMA-262) every value of a string matches.",
+                            "type": "string"
+                          },
                           "description": {
                             "description": "What the parameter means.",
                             "type": "string"
@@ -524,6 +548,30 @@
                               "number",
                               "boolean"
                             ]
+                          },
+                          "minimum": {
+                            "description": "The smallest value of a number or an integer.",
+                            "type": "number"
+                          },
+                          "maximum": {
+                            "description": "The largest value of a number or an integer.",
+                            "type": "number"
+                          },
+                          "minLength": {
+                            "description": "The fewest characters of a string.",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxLength": {
+                            "description": "The most characters of a string.",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "pattern": {
+                            "description": "A regular expression (ECMA-262) every value of a string matches.",
+                            "type": "string"
                           },
                           "description": {
                             "description": "What the parameter means.",
@@ -1181,6 +1229,30 @@
                     "number",
                     "boolean"
                   ]
+                },
+                "minimum": {
+                  "description": "The smallest value of a number or an integer.",
+                  "type": "number"
+                },
+                "maximum": {
+                  "description": "The largest value of a number or an integer.",
+                  "type": "number"
+                },
+                "minLength": {
+                  "description": "The fewest characters of a string.",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "maxLength": {
+                  "description": "The most characters of a string.",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pattern": {
+                  "description": "A regular expression (ECMA-262) every value of a string matches.",
+                  "type": "string"
                 },
                 "description": {
                   "description": "What the parameter means.",

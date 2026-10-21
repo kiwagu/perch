@@ -19,7 +19,7 @@ import {
 } from './contract'
 
 /** The text fields of a scenario that carry bracket references, with their paths. */
-const textsOf = (scenario: Scenario): Array<{ text: string; at: PropertyKey[] }> => [
+export const textsOf = (scenario: Scenario): Array<{ text: string; at: PropertyKey[] }> => [
   { text: scenario.where, at: ['where'] },
   { text: scenario.scenario, at: ['scenario'] },
   ...scenario.steps.map((text, index) => ({ text, at: ['steps', index] })),

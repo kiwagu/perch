@@ -16,7 +16,7 @@ const SOURCE = /\.tsx?$/
 const EXCLUDED = /\.(spec|test)\.[^/]*$|\.d\.ts$|\.gen\.ts$|(^|\/)(__fixtures__|__snapshots__)\//
 
 /** The repository paths of the sources under the roots, sorted. */
-function sourcesOf(root: string): string[] {
+export function sourcePaths(root: string): string[] {
   const output = execFileSync(
     'git',
     ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...SOURCE_ROOTS],
@@ -30,4 +30,4 @@ function sourcesOf(root: string): string[] {
 }
 
 export const scanSources = (root: string): Collected[] =>
-  sourcesOf(root).map((path) => collectFromSource(readFileSync(join(root, path), 'utf8'), path))
+  sourcePaths(root).map((path) => collectFromSource(readFileSync(join(root, path), 'utf8'), path))

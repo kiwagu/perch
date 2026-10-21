@@ -34,6 +34,7 @@ export {
   type Binding,
   type BindingRef,
   CONTRACT_DIR,
+  COVERAGE_FILE,
   createValidator,
   ENTITY_SCHEMA_FILE,
   formatProblem,
@@ -63,6 +64,25 @@ export {
   validateAgainst,
   writeSchemas,
 } from './files'
+export {
+  CONTROL_TAGS,
+  COVERAGE_END,
+  COVERAGE_START,
+  type ContractChanges,
+  type Controls,
+  type CoverageMeasure,
+  contractAt,
+  countControls,
+  diffContracts,
+  FEATURES_DIR,
+  formatChanges,
+  measureCoverage,
+  renderCoverage,
+  replaceCoverageBlock,
+  totalsOf,
+  UI_KIT_DIR,
+  UI_KIT_MODULE,
+} from './handoff'
 export {
   buildManifest,
   emitManifest,

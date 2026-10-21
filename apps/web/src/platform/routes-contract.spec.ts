@@ -37,9 +37,21 @@ const META_KEYWORDS = new Set([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** Zod writes the safe-integer range on every `z.int()`; a contract writes `{ "type": "integer" }`. */
-const safeIntegerRange = (schema: Record<string, unknown>): boolean =>
-  schema['minimum'] === Number.MIN_SAFE_INTEGER && schema['maximum'] === Number.MAX_SAFE_INTEGER
+/**
+ * Zod writes the safe-integer limits on every `z.int()` for each bound the schema leaves
+ * open (`z.int().min(1)` still writes `maximum: MAX_SAFE_INTEGER`); a contract writes only
+ * the bounds it sets. On an integer, a bound equal to its safe limit is left out, each one
+ * on its own.
+ */
+const SAFE_LIMITS: Readonly<Record<string, number>> = {
+  minimum: Number.MIN_SAFE_INTEGER,
+  maximum: Number.MAX_SAFE_INTEGER,
+}
+
+const isSafeLimit = (schema: Record<string, unknown>, keyword: string): boolean =>
+  schema['type'] === 'integer' &&
+  Object.hasOwn(SAFE_LIMITS, keyword) &&
+  schema[keyword] === SAFE_LIMITS[keyword]
 
 /**
  * A JSON Schema without the keywords above. Only the values of `properties` are
@@ -51,12 +63,10 @@ function bare(schema: unknown): unknown {
     return schema
   }
 
-  const dropRange = safeIntegerRange(schema)
-
   return Object.fromEntries(
     Object.entries(schema)
       .filter(([keyword]) => !META_KEYWORDS.has(keyword))
-      .filter(([keyword]) => !(dropRange && (keyword === 'minimum' || keyword === 'maximum')))
+      .filter(([keyword]) => !isSafeLimit(schema, keyword))
       .map(([keyword, value]) =>
         keyword === 'properties' && isRecord(value)
           ? [keyword, Object.fromEntries(Object.entries(value).map(([name, p]) => [name, bare(p)]))]
@@ -115,6 +125,18 @@ describe('the search comparison', () => {
 
     expect(bare(contract)).toEqual(routeSearch(z.object({ page: z.int() })))
     expect(bare(contract)).not.toEqual(routeSearch(z.object({ page: z.int().min(1) })))
+  })
+
+  it('keeps the bound an integer sets and drops the safe limit Zod writes for the other', () => {
+    const contract = flatJsonSchema.parse({
+      type: 'object',
+      properties: { page: { type: 'integer', minimum: 1 } },
+      required: ['page'],
+      additionalProperties: false,
+    })
+
+    expect(bare(contract)).toEqual(routeSearch(z.object({ page: z.int().min(1) })))
+    expect(bare(contract)).not.toEqual(routeSearch(z.object({ page: z.int().min(2) })))
   })
 })
 

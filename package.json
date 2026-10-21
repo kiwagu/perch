@@ -22,6 +22,8 @@
     "contract:check": "ui-contract check",
     "contract:check:sources": "ui-contract check --sources",
     "contract:manifest": "ui-contract manifest",
+    "contract:diff": "ui-contract diff",
+    "contract:coverage": "ui-contract coverage",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",

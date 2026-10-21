@@ -66,12 +66,14 @@ describe('buildManifest', () => {
     expect(manifest.contract.instructions.readiness).toContain('sample.status')
   })
   it('builds a valid manifest from the contract of the repository', () => {
-    const real = buildManifest({ ...contractAt(REPOSITORY_ROOT), product: PRODUCT, now: NOW })
+    const repository = contractAt(REPOSITORY_ROOT)
+    const real = buildManifest({ ...repository, product: PRODUCT, now: NOW })
+    const declared = repository.screens.screens.flatMap((screen) => Object.keys(screen.anchors))
 
     expect(real.contract.instructions.readiness).toContain(
       '[data-testid="app-shell.status"][data-state="ready"]',
     )
-    expect(Object.keys(real.ids)).toHaveLength(67)
+    expect(Object.keys(real.ids).sort()).toEqual([...declared].sort())
     expect(manifestSchema.safeParse(real).error?.issues).toBeUndefined()
   })
 })

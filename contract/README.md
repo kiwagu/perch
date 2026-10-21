@@ -29,6 +29,10 @@ Beside them sit their schemas, generated from the Zod sources of `@workspace/ui-
 `screens.json`, `x-perch.schema.json` for the `x-perch` keyword of the model, and
 `manifest.schema.json` for the manifest.
 
+`COVERAGE.md` is a note, not a contract file: how many controls of each feature module carry
+an anchor, and the anchors and scenarios of each screen, written by
+`bun run contract:coverage --write` between its markers, with how it is counted.
+
 The manifest, `ui-manifest/manifest.json`, is built from these three files only and served
 at `/ui-manifest/manifest.json` on every stand. It is what a tool outside the repository
 reads: the vocabulary as tables, the screens verbatim, every anchor with its screen, the

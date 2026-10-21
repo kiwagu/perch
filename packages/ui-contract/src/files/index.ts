@@ -1,6 +1,7 @@
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
 export {
   CONTRACT_DIR,
+  COVERAGE_FILE,
   ENTITY_SCHEMA_FILE,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,

@@ -49,7 +49,8 @@ const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
 /** The grammar of a contract code: `welcome`, `devices-read-failed`. */
 const CODE = /^[a-z]+(-[a-z0-9]+)*$/
 
-const isAnchorAttribute = (name: string): boolean =>
+/** An attribute that carries an anchor: `data-testid`, `testId` or a `*TestId` prop. */
+export const isAnchorAttribute = (name: string): boolean =>
   name === 'data-testid' || name === 'testId' || name.endsWith('TestId')
 
 export function collectFromSource(text: string, file: string): Collected {

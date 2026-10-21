@@ -131,6 +131,16 @@ Each workspace has a README with its role, key exports and commands.
 
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
+- `bun run contract:check` (also in `check` and in the pre-commit hook) and
+  `bun run contract:check:sources`: the contract files against each other, then the anchors
+  and codes of the web app and the UI kit against them.
+- `bun run contract:schemas`: writes the JSON Schemas of the contract files from their Zod
+  sources (`-- --check` fails on drift).
+- `bun run contract:manifest`: builds the UI manifest from `contract/` into `ui-manifest/`.
+- `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
+  ref; a change to the contract hands over the output of `bun run contract:diff main`.
+- `bun run contract:coverage`: the controls carrying an anchor per feature module, and the
+  anchors and scenarios per screen; `--write` updates `contract/COVERAGE.md`.
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
