@@ -12,7 +12,8 @@ import type { IdentitySessions } from '../auth/identity-sessions'
 import type { RequestLimits } from '../limits/request-limits'
 import { tooMany } from '../limits/too-many'
 
-import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
+import type { OrganisationError, OrganisationRefusalCode } from './organisation-refusal'
+import type { Organisations } from './organisations'
 
 /** What a device sends to create an organisation. */
 const createBody = z.object({

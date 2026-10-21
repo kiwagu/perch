@@ -132,6 +132,9 @@ creations, the invites of it, its removals) run one after the other, each once t
 it and its notification have settled, so the directory and the organisation's database end as
 the last change left them and its devices hear the lists in that order. This holds within one
 gateway process; gateways in several processes would need a durable revision of the memberships.
+`Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
+rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes,
+and one device's key operations, one at a time.
 
 The organisation routes act for the identity a device's access token signs in, sent as
 `Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
