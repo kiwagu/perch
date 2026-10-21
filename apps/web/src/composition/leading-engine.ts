@@ -38,14 +38,17 @@ export interface LeadingEngineOptions {
 /**
  * The sync engine of a tab while it leads the identity's sync: a new engine over a new channel
  * each time the tab starts to lead (an engine never starts twice), none while another tab leads.
- * A change of the regions replaces it, except while a sign-out drains through it: `resume` then
- * replaces it once the sign-out ended. Work a stopped engine still had under way fails once the
+ * A change of the regions replaces it, except while a sign-out drains through it: the regions
+ * gone from the space then leave that engine at once (their databases are about to go), and
+ * `resume` replaces it once the sign-out ended. Work a stopped engine still had under way fails once the
  * database closes under it; that is not reported: what it did not store, the next leader pulls
  * again.
  */
 export class LeadingEngine {
   readonly #options: LeadingEngineOptions
   #engine: SyncEngine | undefined
+  /** The regions the current engine syncs, by id. */
+  #synced = new Set<string>()
   /** A sign-out drains through the engine: a change of the regions does not replace it. */
   #signingOut = false
   /** The regions changed while a sign-out drained: `resume` replaces the engine. */
@@ -69,8 +72,9 @@ export class LeadingEngine {
     }
 
     const options = this.#options
+    const regions = options.regions()
     const engine = createSyncEngine({
-      regions: options.regions(),
+      regions,
       transport: options.transport(),
       clock: options.clock,
       actor: options.actor,
@@ -89,6 +93,7 @@ export class LeadingEngine {
     })
 
     this.#engine = engine
+    this.#synced = new Set(regions.map((region) => region.ref.id))
     engine.visibility(this.#visibility)
     options.onState({ leader: true, channel: 'down' })
     engine.start()
@@ -96,7 +101,8 @@ export class LeadingEngine {
 
   /**
    * The regions changed: a leading tab replaces its engine with a new one over a new channel; a
-   * follower has none. The engine a sign-out drains through stays until it ended (`resume`).
+   * follower has none. The engine a sign-out drains through stays until it ended (`resume`); the
+   * regions gone from the space leave it at once, before their databases go.
    */
   relead(): void {
     const engine = this.#engine
@@ -106,6 +112,15 @@ export class LeadingEngine {
     }
 
     if (this.#signingOut) {
+      const kept = new Set(this.#options.regions().map((region) => region.ref.id))
+      const gone = [...this.#synced].filter((id) => !kept.has(id))
+
+      engine.leave(gone)
+
+      for (const id of gone) {
+        this.#synced.delete(id)
+      }
+
       this.#releadDue = true
 
       return

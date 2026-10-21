@@ -816,6 +816,56 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
+  it('drops from the engine a sign-out drains through the region of an organisation left meanwhile, before its database goes', async () => {
+    const gateway = await openGateway([acme])
+    const { space, errors, sent, tenants } = await openSpace(gateway, { memberships: [acme] })
+
+    await settled(space)
+
+    const draining = space.sync
+    const channel = sent.at(-1) ?? expect.unreachable('the leader connected')
+
+    // A push of the private region stays unanswered: the sign-out drains it for 10 seconds.
+    void gateway.stub.swallowNextPush()
+    expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
+
+    let outcome: string | undefined
+    const signingOut = space.signOut().then((answered) => {
+      outcome = answered
+    })
+
+    // The identity leaves the organisation while the sign-out drains: its database goes.
+    await space.setMemberships([])
+    expect(tenants.destroyed).toEqual(['acme'])
+    expect(space.sync).toBe(draining)
+
+    const since = channel.length
+
+    // A full pass before the drain ends names the left region nowhere.
+    space.visibility('hidden')
+    space.visibility('visible')
+
+    while (outcome === undefined) {
+      await gateway.clock.advance(1_000)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await signingOut
+
+    const left = 'tenant:acme'
+
+    expect(
+      channel
+        .slice(since)
+        .filter((message) =>
+          message.type === 'probe'
+            ? message.regions.includes(left)
+            : 'region' in message && message.region === left,
+        ),
+    ).toEqual([])
+    expect(errors).toEqual([])
+  })
+
   it('reports a change of memberships that fails, runs the next one and still closes', async () => {
     const gateway = await openGateway([acme])
     const tenants = tenantDatabases()

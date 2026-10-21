@@ -103,8 +103,9 @@ export class EngineRegions {
           this.#reloaded(id, refusal)
         }
 
-        // A stopped engine syncs nothing more; the next one opens over the app's document.
-        if (!this.#stopped) {
+        // A stopped engine syncs nothing more; the next one opens over the app's document. A region
+        // that left the engine meanwhile stays out.
+        if (!this.#stopped && this.#map.get(id) === current) {
           const sync = this.#syncOf(region)
 
           this.#map.set(id, { region, sync })
@@ -124,6 +125,24 @@ export class EngineRegions {
     )
 
     this.#options.track(replaced.finally(() => this.#replacing.delete(id)))
+  }
+
+  /**
+   * The regions named leave: each sync retires (its push lands as empty, its pull and compaction
+   * end) and leaves the map, so no pass, push, settling or sign-out counts it any more, and what
+   * it still reports is dropped. For regions whose documents are about to go.
+   */
+  leave(ids: readonly string[]): void {
+    for (const id of ids) {
+      const entry = this.#map.get(id)
+
+      if (entry) {
+        this.#map.delete(id)
+        entry.sync.retire()
+      }
+    }
+
+    this.#options.changed()
   }
 
   /** No replacement is swapped in any more. */

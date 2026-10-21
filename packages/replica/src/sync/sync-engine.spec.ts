@@ -471,6 +471,22 @@ describe('sync engine', () => {
     expect((await device.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 
+  it('stops syncing a region that left it and settles without it, sending nothing for it', async () => {
+    const gateway = await openGateway()
+    const device = await openDevice(gateway)
+
+    writeName(device.region, 'Ann')
+    device.engine.leave([regionId])
+    device.engine.start()
+    device.engine.localWrite()
+    await device.engine.settled(60_000)
+
+    expect((await gateway.stub.hub.heads([regionId]))._unsafeUnwrap()).toEqual([
+      { region: regionId, head: 0 },
+    ])
+    expect(device.errors).toEqual([])
+  })
+
   it('answers a sign-out offline while a region its welcome left out holds what it has not sent', async () => {
     const gateway = await openGateway({ schema: replicaSchema })
     const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
