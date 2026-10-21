@@ -1,6 +1,7 @@
 // spec: tests/e2e/specs/organisation/03-membership-change.md
 import { generate } from '../support/data'
 import { appReady, expect, pageLoads, signUp, test } from '../support/fixtures'
+import { createOrganisation, expectInvited } from '../support/organisation'
 import { databases, organisationDatabase } from '../support/storage'
 
 test.describe('Deliver an invitation and a removal to a signed-in device', { tag: '@full' }, () => {
@@ -35,10 +36,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation').click()
-        await page.getByTestId('organisation.create.key').fill(data.key)
-        await page.getByTestId('organisation.create.name').fill(data.name)
-        await page.getByTestId('organisation.create.submit').click()
-        await expect(page.getByTestId('organisation.heading')).toHaveText(data.name)
+        await createOrganisation(page, data)
         await page.getByTestId('organisation.notes.input').fill(data.noteByA)
         await page.getByTestId('organisation.notes.add').click()
         await expect(page.getByTestId('organisation.notes.text')).toHaveText([data.noteByA])
@@ -85,10 +83,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
       expect(latency, 'the delay from the invitation to device B').toBeGreaterThanOrEqual(0)
       expect(latency, 'the delay from the invitation to device B').toBeLessThanOrEqual(5_000)
       testInfo.annotations.push({ type: 'membership-change-ms', description: String(latency) })
-      await expect(page.getByTestId('organisation.invite.notice')).toHaveText('Invited')
-      await expect(
-        page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),
-      ).toBeVisible()
+      await expectInvited(page, userB.email)
 
       // Device B keeps the organisation in a database of its own, which the removal must delete.
       const name = await organisationDatabase(deviceB, data.key)

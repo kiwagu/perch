@@ -1,6 +1,7 @@
 // spec: tests/e2e/specs/organisation/01-shared-notes.md
 import { generate } from '../support/data'
 import { expect, pageLoads, signUp, test } from '../support/fixtures'
+import { createOrganisation, inviteMember } from '../support/organisation'
 
 test.describe('Share notes inside an organisation and keep private data private', {
   tag: '@full',
@@ -36,26 +37,17 @@ test.describe('Share notes inside an organisation and keep private data private'
         const loads = pageLoads(page)
 
         await page.getByTestId('app-shell.nav.organisation').click()
-        await page.getByTestId('organisation.create.key').fill(data.key)
-        await page.getByTestId('organisation.create.name').fill(data.name)
-        await page.getByTestId('organisation.create.submit').click()
         // Expected: after step 2 device A shows the organisation name in the heading and the
         // role "Administrator"
-        await expect(page.getByTestId('organisation.heading')).toHaveText(data.name)
-        await expect(page.getByTestId('organisation.role')).toHaveText('Administrator')
+        await createOrganisation(page, data)
 
         return { userA: account, loadsOfA: loads }
       })
 
     await test.step('3. On device A, enter the email of user B and click "Invite"', async () => {
-      await page.getByTestId('organisation.invite.email').fill(userB.email)
-      await page.getByTestId('organisation.invite.submit').click()
       // Expected: after step 3 device A shows the notification "Invited" and user B in the
       // members list
-      await expect(page.getByTestId('organisation.invite.notice')).toHaveText('Invited')
-      await expect(
-        page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),
-      ).toBeVisible()
+      await inviteMember(page, userB.email)
     })
 
     await test.step('4. On device A, enter the note by A and click "Add note"', async () => {

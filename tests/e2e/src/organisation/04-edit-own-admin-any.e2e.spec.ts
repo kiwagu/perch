@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 
 import { generate } from '../support/data'
 import { expect, pageLoads, signUp, test } from '../support/fixtures'
+import { createOrganisation, inviteMember } from '../support/organisation'
 
 const noteItem = (device: Page, text: string) =>
   device.getByTestId('organisation.notes.item').filter({ hasText: text })
@@ -42,22 +43,13 @@ test.describe('Edit only your own notes; an administrator edits any', {
         const loads = pageLoads(page)
 
         await page.getByTestId('app-shell.nav.organisation').click()
-        await page.getByTestId('organisation.create.key').fill(data.key)
-        await page.getByTestId('organisation.create.name').fill(data.name)
-        await page.getByTestId('organisation.create.submit').click()
-        await expect(page.getByTestId('organisation.heading')).toHaveText(data.name)
-        await expect(page.getByTestId('organisation.role')).toHaveText('Administrator')
+        await createOrganisation(page, data)
 
         return loads
       })
 
     await test.step('3. On device A, enter the email of user B and click "Invite"', async () => {
-      await page.getByTestId('organisation.invite.email').fill(userB.email)
-      await page.getByTestId('organisation.invite.submit').click()
-      await expect(page.getByTestId('organisation.invite.notice')).toHaveText('Invited')
-      await expect(
-        page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),
-      ).toBeVisible()
+      await inviteMember(page, userB.email)
     })
 
     await test.step('4. On device A, enter the note by A and click "Add note"', async () => {
