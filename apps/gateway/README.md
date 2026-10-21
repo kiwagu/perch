@@ -216,8 +216,9 @@ the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the dat
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
 `GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
 optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
-an issue that names it, never its value. `scripts/smoke.ts` is the entry point of the smoke test
-against a stand.
+an issue that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
+HTTP helpers the load test reuses).
 
 Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
 which the gateway gives the directory schema when it applies it, so a schema applied again (at a

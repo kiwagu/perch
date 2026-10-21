@@ -10,11 +10,11 @@ import type { RegionDoc } from '@workspace/replica'
 import { PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import type { GatewayRoot } from '../src/composition/root'
-import type { RunningServer } from '../src/server'
+import type { GatewayRoot } from '../../src/composition/root'
+import type { RunningServer } from '../../src/server'
 
-import { SmokeDevice } from './smoke-device'
-import type { SignedIn } from './smoke-http'
+import { SmokeDevice } from './device'
+import type { SignedIn } from './http'
 
 const STEP_TIMEOUT_MS = 5_000
 
