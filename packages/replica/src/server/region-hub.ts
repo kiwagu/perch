@@ -101,9 +101,9 @@ export class RegionHub {
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
    * it has no version. From then on the device receives every batch the others push, and the
    * batches it pushes are checked against `actor`: the identity id of the device and its ability.
-   * A private region is subscribed only by its own identity, `forbidden-region` for any other;
-   * once the hub is closed a subscription is answered with an internal error. Neither holds the
-   * region.
+   * Once the hub is closed any subscription is answered with an internal error, before anything
+   * else; a private region is subscribed only by its own identity, `forbidden-region` for any
+   * other. Neither holds the region.
    */
   subscribe(
     region: RegionRef,
@@ -111,6 +111,12 @@ export class RegionHub {
     subscriber: Subscriber,
     vv: Uint8Array | null,
   ): ResultAsync<void, DataError> {
+    if (this.#held.closed) {
+      this.#send(subscriber, { type: 'error', code: 'internal', message: 'the hub is closed' })
+
+      return okAsync(undefined)
+    }
+
     const from = vv === null ? ok(null) : decodeVersion(vv)
 
     if (from.isErr()) {
@@ -125,12 +131,6 @@ export class RegionHub {
         code: 'forbidden-region',
         message: `${region.id} is not the private region of ${actor.id}`,
       })
-
-      return okAsync(undefined)
-    }
-
-    if (this.#held.closed) {
-      this.#send(subscriber, { type: 'error', code: 'internal', message: 'the hub is closed' })
 
       return okAsync(undefined)
     }

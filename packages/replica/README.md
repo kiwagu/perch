@@ -122,9 +122,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   that asks for a compaction, `onError`) holds a region's database from its load until it
   unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
-  (`Actor`: its identity id and its `Ability`); a private region other than the actor's own is
-  refused `forbidden-region`, and a subscription after `close()` an internal error, neither
-  holding the region; `push(region, subscriber, batch, updates)` answers
+  (`Actor`: its identity id and its `Ability`); a subscription after `close()` is answered with
+  an internal error before anything else, and a private region other than the actor's own with
+  `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
   ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in

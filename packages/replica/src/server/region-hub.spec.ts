@@ -374,7 +374,16 @@ describe('region hub', () => {
     await hub.close()
 
     expect((await hub.subscribe(region, actor, a, null)).isOk()).toBe(true)
-    expect(a.received).toEqual([expect.objectContaining({ type: 'error', code: 'internal' })])
+    // Whatever the subscription names: the closed hub answers it before anything else.
+    expect(
+      (await hub.subscribe({ kind: 'private', id: 'identity:idn_b' }, actor, a, null)).isOk(),
+    ).toBe(true)
+    expect((await hub.subscribe(region, actor, a, new Uint8Array([255]))).isOk()).toBe(true)
+    expect(a.received).toEqual([
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+      expect.objectContaining({ type: 'error', code: 'internal' }),
+    ])
     expect(counts.acquired).toBe(0)
     expect(hub.loadedRegions()).toBe(0)
   })
