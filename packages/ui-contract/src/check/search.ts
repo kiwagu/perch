@@ -3,10 +3,17 @@
  * `params` or `search` property has a control under `x-perch.values` (and no other value
  * does), every control is a declared anchor, a `controlValue` is a choice value of its
  * control in the vocabulary, and `retain` names search parameters. That the schemas are
- * flat objects of primitives is the Zod schema's job (`flatJsonSchema`).
+ * flat objects of primitives is the Zod schema's job (`flatJsonSchema`); that each is a
+ * valid JSON Schema (a `pattern` that compiles, `required` without repeats) is Ajv's.
  */
 
-import type { Binding, Problem, Vocabulary } from '../files'
+import {
+  type Binding,
+  jsonSchemaProblems,
+  type Problem,
+  SCREENS_FILE,
+  type Vocabulary,
+} from '../files'
 
 import { type Contract, has, inScreens, isValueOf, knownAnchors, own } from './contract'
 
@@ -40,6 +47,18 @@ function controlValueProblems(
 
   return [inScreens(at, `"${value}" is not a choice value of "${control}"${borrowed}`)]
 }
+
+/** The problems of `schema` as a JSON Schema 2020-12, at its binding, naming its screen. */
+const validityProblems = (
+  screen: string,
+  schema: FlatSchema | undefined,
+  at: readonly PropertyKey[],
+): Problem[] =>
+  schema === undefined
+    ? []
+    : jsonSchemaProblems(SCREENS_FILE, schema).map(({ message }) =>
+        inScreens(at, `not a valid JSON Schema (screen "${screen}"): ${message}`),
+      )
 
 function schemaProblems(
   { vocabulary, known }: { vocabulary: Vocabulary; known: (anchor: string) => boolean },
@@ -89,7 +108,9 @@ export function searchProblems(contract: Contract): Problem[] {
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
+        ...validityProblems(screen.id, binding.params, [...at, 'params']),
         ...schemaProblems(lookups, binding.params, [...at, 'params']),
+        ...validityProblems(screen.id, binding.search, [...at, 'search']),
         ...schemaProblems(lookups, binding.search, [...at, 'search']),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)

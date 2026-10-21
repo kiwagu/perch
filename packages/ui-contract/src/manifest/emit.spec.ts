@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { formatProblem, VOCABULARY_FILE } from '../files'
+import { formatProblem, SCREENS_FILE, VOCABULARY_FILE } from '../files'
 
 import { emitManifest } from './emit'
 import { REPOSITORY_ROOT } from './manifest.fixture'
@@ -55,6 +55,34 @@ describe('emitManifest', () => {
 
     expect(emitManifest(root, out).map(formatProblem)).toEqual([
       'contract/vocabulary.md:1: code "spare" is documented but unused',
+    ])
+    expect(existsSync(out)).toBe(false)
+  })
+  it('writes nothing for a route schema that is not a valid JSON Schema', () => {
+    const root = join(temp, 'repository')
+    const out = join(temp, 'ui-manifest')
+    const screens = join(root, SCREENS_FILE)
+    const search = {
+      type: 'object',
+      properties: { next: { type: 'string', pattern: '[' } },
+      required: ['next', 'next'],
+      additionalProperties: false,
+    }
+
+    cpSync(join(REPOSITORY_ROOT, 'contract'), join(root, 'contract'), { recursive: true })
+    cpSync(join(REPOSITORY_ROOT, 'package.json'), join(root, 'package.json'))
+    writeFileSync(
+      screens,
+      readFileSync(screens, 'utf8').replace(
+        '{ "path": "/sign-in", "guard": "guest", "roles": ["guest"], "history": "push" }',
+        `{ "path": "/sign-in", "guard": "guest", "roles": ["guest"], "history": "push", "search": ${JSON.stringify(search)} }`,
+      ),
+    )
+
+    expect(emitManifest(root, out).map(formatProblem)).toEqual([
+      expect.stringMatching(
+        /^contract\/screens\.json:1: screens\[\d+\]\.bindings\[0\]\.search: not a valid JSON Schema \(screen "user\.sign-in"\): \/required: must NOT have duplicate items/,
+      ),
     ])
     expect(existsSync(out)).toBe(false)
   })

@@ -139,4 +139,22 @@ describe('searchProblems', () => {
       `${values}.mode.controlValue: "a": "sample.a-button" has no choice values in the vocabulary`,
     ])
   })
+  it('wants params and search to be valid JSON Schemas, naming the screen', () => {
+    const contract = sampleContract()
+    const binding = sampleBinding(contract)
+
+    binding.params = {
+      type: 'object',
+      properties: { key: { type: 'string', pattern: '[' } },
+      additionalProperties: false,
+    }
+    Object.assign(binding.search ?? {}, { required: ['tab', 'tab'] })
+
+    expect(printed(contract)).toEqual([
+      expect.stringMatching(
+        /^contract\/screens\.json:1: screens\[1\]\.bindings\[0\]\.params: not a valid JSON Schema \(screen "sample"\): the schema does not compile: Invalid regular expression/,
+      ),
+      `${AT}.search: not a valid JSON Schema (screen "sample"): /required: must NOT have duplicate items (items ## 1 and 0 are identical)`,
+    ])
+  })
 })

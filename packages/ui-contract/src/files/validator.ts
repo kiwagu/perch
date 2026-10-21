@@ -29,7 +29,11 @@ const problemsOf = (file: string, errors: ErrorObject[] | null | undefined): Pro
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-/** Whether `schema` is a valid JSON Schema 2020-12 document (the meta-schema). */
+/**
+ * Whether `schema` is a valid JSON Schema 2020-12 document: it matches the meta-schema, then
+ * it compiles, which the meta-schema alone does not prove (a `pattern` that is no regular
+ * expression).
+ */
 export function jsonSchemaProblems(file: string, schema: unknown): Problem[] {
   if (typeof schema !== 'object' || schema === null) {
     return [{ file, message: 'a JSON Schema is an object' }]
@@ -38,9 +42,19 @@ export function jsonSchemaProblems(file: string, schema: unknown): Problem[] {
   const ajv = createValidator()
 
   try {
-    return ajv.validateSchema(schema) === true ? [] : problemsOf(file, ajv.errors)
+    if (ajv.validateSchema(schema) !== true) {
+      return problemsOf(file, ajv.errors)
+    }
   } catch (error) {
     return [{ file, message: messageOf(error) }]
+  }
+
+  try {
+    ajv.compile(schema)
+
+    return []
+  } catch (error) {
+    return [{ file, message: `the schema does not compile: ${messageOf(error)}` }]
   }
 }
 
