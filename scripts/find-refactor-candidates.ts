@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { lstatSync, readFileSync } from 'node:fs'
 
 import {
   BASELINE_PATH,
@@ -72,6 +72,7 @@ function trackedFiles(scope: readonly string[]): string[] {
 function scan(options: Options): FileReport[] {
   return trackedFiles(options.scope)
     .filter((path) => isMeasured(path, options.includeTests))
+    .filter((path) => !lstatSync(path).isSymbolicLink())
     .map((path) => {
       const lines = countLines(readFileSync(path, 'utf8'))
 

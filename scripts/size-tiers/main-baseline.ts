@@ -3,7 +3,7 @@
  * threshold with its size as committed where HEAD left `main` (their merge base), never as it
  * is on disk. A checkout whose branch grew a file before the checkout's first run would
  * otherwise adopt that growth, and its commits would pass until the squash into main refused
- * them; read from main, every checkout enforces the same ceiling from its first commit.
+ * them; read from main, each fresh checkout starts from main's ceiling at its first commit.
  */
 
 import { type ExecFileSyncOptionsWithBufferEncoding, execFileSync } from 'node:child_process'
@@ -12,6 +12,9 @@ import { BASELINE_PATH, type Baseline } from './baseline-file.ts'
 import { countLines, isMeasured } from './measured-files.ts'
 
 export const MAIN = 'main'
+
+/** The tree mode of a symlink, which the size tiers do not measure. */
+const SYMLINK = '120000'
 
 export interface MainBaseline {
   /** The commit the sizes were read at. */
@@ -53,10 +56,11 @@ function measuredBlobs(commit: string, includeTests: boolean): Blob[] {
     .filter(Boolean)
     .flatMap((entry) => {
       const tab = entry.indexOf('\t')
-      const [, type, id = ''] = entry.slice(0, tab).split(' ')
+      const [mode, type, id = ''] = entry.slice(0, tab).split(' ')
       const path = entry.slice(tab + 1)
+      const measured = type === 'blob' && mode !== SYMLINK && isMeasured(path, includeTests)
 
-      return type === 'blob' && isMeasured(path, includeTests) ? [{ path, id }] : []
+      return measured ? [{ path, id }] : []
     })
 }
 

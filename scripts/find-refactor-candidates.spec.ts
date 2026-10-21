@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,6 +113,18 @@ describe('the size ratchet on a checkout without a baseline', () => {
 
     expect(run.status, run.stderr).toBe(0)
     expect(baselineOf(root)).toEqual({ 'src/big.ts': 410 })
+  })
+
+  it('measures a symlinked source file only at its target, on disk and in main alike', () => {
+    const root = checkout({ 'src/big.ts': 450 })
+
+    symlinkSync('big.ts', join(root, 'src/alias.ts'))
+    commit(root, 'alias')
+
+    const run = sizes(root, '--ci')
+
+    expect(run.status, run.stderr).toBe(0)
+    expect(baselineOf(root)).toEqual({ 'src/big.ts': 450 })
   })
 
   it('refuses to record growth since main when the baseline is updated', () => {

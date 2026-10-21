@@ -1,7 +1,9 @@
 /**
  * Which files the size tiers measure and how their lines are counted, the same for a file on
  * disk and for a file as committed. Declaration files, generated modules, fixtures, vendored
- * skills and (unless asked for) tests are not measured.
+ * skills and (unless asked for) tests are not measured, and neither are symlinks: git stores a
+ * symlink as its target path while the disk reads through it, so the target is measured at its
+ * own path only.
  */
 
 import { extname } from 'node:path'
