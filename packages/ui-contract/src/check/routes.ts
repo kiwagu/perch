@@ -65,7 +65,10 @@ export function parseRoutePath(path: string): { segments: RouteSegment[]; proble
     } else if (segment.kind !== 'static' && names.has(segment.name)) {
       problems.push(`parameter "${segment.name}" appears twice`)
     } else {
-      names.add(segment.name)
+      if (segment.kind === 'param' || segment.kind === 'optional') {
+        names.add(segment.name)
+      }
+
       segments.push(segment)
     }
   }

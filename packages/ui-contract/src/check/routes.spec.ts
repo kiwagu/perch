@@ -28,6 +28,23 @@ describe('parseRoutePath', () => {
       problems: [],
     })
   })
+  it('accepts a parameter named like a static segment', () => {
+    expect(parseRoutePath('/org/$org')).toEqual({
+      segments: [
+        { kind: 'static', name: 'org' },
+        { kind: 'param', name: 'org' },
+      ],
+      problems: [],
+    })
+    expect(parseRoutePath('/user/$user/notes')).toEqual({
+      segments: [
+        { kind: 'static', name: 'user' },
+        { kind: 'param', name: 'user' },
+        { kind: 'static', name: 'notes' },
+      ],
+      problems: [],
+    })
+  })
   it('refuses a path without a leading slash', () => {
     expect(parseRoutePath('org').problems).toEqual(['a route path starts with "/"'])
   })

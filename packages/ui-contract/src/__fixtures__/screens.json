@@ -28,7 +28,7 @@
           "source": { "entity": "thing", "order": "created_at", "direction": "asc" },
           "states": ["loading"]
         },
-        "sample.list.item": { "kind": "item", "dataId": "the thing's id" },
+        "sample.list.row-item": { "kind": "item", "dataId": "the thing's id" },
         "sample.sign-out-button": {
           "kind": "button",
           "binding": {

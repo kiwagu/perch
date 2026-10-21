@@ -8,7 +8,7 @@
 import { kindOf, screenOf } from '../anchors'
 import type { Problem } from '../files'
 
-import { type Contract, declaredAnchors, inScreens, knownAnchors } from './contract'
+import { type Contract, declaredAnchors, has, inScreens, knownAnchors } from './contract'
 
 function screenIdProblems({ screens }: Contract): Problem[] {
   const seen = new Set<string>()
@@ -57,7 +57,7 @@ function derivedNameProblems({ screens, vocabulary }: Contract): Problem[] {
 
     if (
       baseDef === undefined ||
-      !(suffix in vocabulary.suffixes || (baseDef.derived ?? []).includes(suffix))
+      !(has(vocabulary.suffixes, suffix) || (baseDef.derived ?? []).includes(suffix))
     ) {
       return []
     }

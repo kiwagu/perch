@@ -40,6 +40,13 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
     })),
   )
 
+/** Whether `record` has `key` as its own key (never a name of the object prototype). */
+export const has = (record: object, key: string): boolean => Object.hasOwn(record, key)
+
+/** The own entry `key` of `record`, if any. */
+export const own = <T>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.hasOwn(record, key) ? record[key] : undefined
+
 /** A problem of `screens.json` at a JSON path: `screens[0].anchors["x"].kind: ...`. */
 export const inScreens = (path: readonly PropertyKey[], message: string): Problem => ({
   file: SCREENS_FILE,

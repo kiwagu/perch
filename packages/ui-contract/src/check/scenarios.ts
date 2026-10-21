@@ -11,6 +11,7 @@ import { type Reference, referencesIn } from '../scenarios'
 import {
   bindingPaths,
   type Contract,
+  has,
   inScreens,
   isChoiceValue,
   knownAnchors,
@@ -38,7 +39,7 @@ function resolver(contract: Contract): (reference: Reference) => string | undefi
       case 'route':
         return paths.has(value) ? undefined : `${raw} is the path of no binding`
       case 'code':
-        return value in vocabulary.codes ? undefined : `${raw} is not a code of the vocabulary`
+        return has(vocabulary.codes, value) ? undefined : `${raw} is not a code of the vocabulary`
       case 'state':
         return states.has(value) ? undefined : `${raw} is not a state of the vocabulary`
       case 'value':
@@ -64,7 +65,7 @@ export function scenariosProblems(contract: Contract): Problem[] {
         ? [inScreens([...at, 'id'], `"${scenario.id}" is the id of another scenario`)]
         : []),
       ...Object.entries(scenario.devices).flatMap(([device, role]) =>
-        role in contract.vocabulary.roles
+        has(contract.vocabulary.roles, role)
           ? []
           : [inScreens([...at, 'devices', device], `"${role}" is not a role of the vocabulary`)],
       ),

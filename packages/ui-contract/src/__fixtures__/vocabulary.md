@@ -45,7 +45,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 
 | State | Where | Meaning |
 |---|---|---|
-| `current` | `sample.list.item` | this device |
+| `current` | `sample.list.row-item` | this device |
 
 ## Codes
 

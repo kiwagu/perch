@@ -58,6 +58,27 @@ describe('bindingsProblems', () => {
       `${AT}["sample.sign-out-button"].binding.params.everywhere: "everywhere" is not a parameter of "platform.sign-out"`,
     ])
   })
+  it('reports a name of the object prototype as unknown, never as found or thrown', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').binding = { model: 'thing.toString' }
+    anchorIn(contract, 'sample.save-button').binding = [
+      { action: 'platform.constructor' },
+      { action: 'thing.hasOwnProperty' },
+      { action: 'constructor.toString' },
+    ]
+    anchorIn(contract, 'sample.list').source = { entity: 'thing', order: 'valueOf' }
+    anchorIn(contract, 'sample.devices-list').source = { platform: 'toString' }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.title-input"].binding.model: entity "thing" has no field "toString"`,
+      `${AT}["sample.save-button"].binding[0].action: no platform action "constructor"`,
+      `${AT}["sample.save-button"].binding[1].action: entity "thing" has no action "hasOwnProperty"`,
+      `${AT}["sample.save-button"].binding[2].action: no entity "constructor" in the model`,
+      `${AT}["sample.list"].source.order: entity "thing" has no field "valueOf"`,
+      `${AT}["sample.devices-list"].source.platform: no platform action "toString"`,
+    ])
+  })
   it('leaves out the minted id and any parameter the view computes', () => {
     const contract = sampleContract()
 

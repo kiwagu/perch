@@ -9,7 +9,15 @@
 
 import type { AnchorDef, BindingRef, Problem } from '../files'
 
-import { bindingPaths, type Contract, declaredAnchors, inScreens, knownAnchors } from './contract'
+import {
+  bindingPaths,
+  type Contract,
+  declaredAnchors,
+  has,
+  inScreens,
+  knownAnchors,
+  own,
+} from './contract'
 
 type Params = Extract<BindingRef, { action: string }>['params']
 
@@ -22,7 +30,7 @@ function parametersOf(
 ): { parameters?: readonly string[]; problem?: string } {
   if (action.startsWith(PLATFORM)) {
     const name = action.slice(PLATFORM.length)
-    const platform = screens.platform.actions[name]
+    const platform = own(screens.platform.actions, name)
 
     return platform === undefined
       ? { problem: `no platform action "${name}"` }
@@ -30,8 +38,8 @@ function parametersOf(
   }
 
   const [entityName = '', actionName = ''] = action.split('.')
-  const entity = model.entities[entityName]
-  const found = entity?.actions[actionName]
+  const entity = own(model.entities, entityName)
+  const found = entity === undefined ? undefined : own(entity.actions, actionName)
 
   if (entity === undefined) {
     return { problem: `no entity "${entityName}" in the model` }
@@ -90,13 +98,13 @@ function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly Propert
   }
 
   const [entityName = '', field = ''] = ref.model.split('.')
-  const entity = lookups.contract.model.entities[entityName]
+  const entity = own(lookups.contract.model.entities, entityName)
 
   if (entity === undefined) {
     return [inScreens([...at, 'model'], `no entity "${entityName}" in the model`)]
   }
 
-  return field in entity.fields
+  return has(entity.fields, field)
     ? []
     : [inScreens([...at, 'model'], `entity "${entityName}" has no field "${field}"`)]
 }
@@ -109,18 +117,18 @@ function sourceProblems(contract: Contract, def: AnchorDef, at: readonly Propert
   }
 
   if ('platform' in source) {
-    return source.platform in contract.screens.platform.actions
+    return has(contract.screens.platform.actions, source.platform)
       ? []
       : [inScreens([...at, 'platform'], `no platform action "${source.platform}"`)]
   }
 
-  const entity = contract.model.entities[source.entity]
+  const entity = own(contract.model.entities, source.entity)
 
   if (entity === undefined) {
     return [inScreens([...at, 'entity'], `no entity "${source.entity}" in the model`)]
   }
 
-  return source.order === undefined || source.order in entity.fields
+  return source.order === undefined || has(entity.fields, source.order)
     ? []
     : [inScreens([...at, 'order'], `entity "${source.entity}" has no field "${source.order}"`)]
 }

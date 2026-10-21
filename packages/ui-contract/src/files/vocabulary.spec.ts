@@ -43,7 +43,7 @@ describe('parseVocabulary', () => {
     expect(vocabulary.appStates).toEqual({ ready: 'the screen is rendered' })
     expect(vocabulary.containerStates).toEqual({ loading: 'the data is being read' })
     expect(vocabulary.rowStates).toEqual({
-      current: { where: '`sample.list.item`', meaning: 'this device' },
+      current: { where: '`sample.list.row-item`', meaning: 'this device' },
     })
   })
   it('reads the codes with where they appear', () => {

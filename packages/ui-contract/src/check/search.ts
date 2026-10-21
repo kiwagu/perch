@@ -7,7 +7,7 @@
 
 import type { Binding, Problem } from '../files'
 
-import { type Contract, inScreens, knownAnchors } from './contract'
+import { type Contract, has, inScreens, knownAnchors } from './contract'
 
 type FlatSchema = NonNullable<Binding['search']>
 
@@ -29,7 +29,7 @@ function schemaProblems(
     return [
       ...control(perch?.control, [...here, 'x-perch', 'control']),
       ...enumValues
-        .filter((value) => !(value in values))
+        .filter((value) => !has(values, value))
         .map((value) =>
           inScreens(here, `the enum value "${value}" has no control under x-perch.values`),
         ),

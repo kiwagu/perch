@@ -11,6 +11,7 @@ import { type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
 import {
   type Contract,
   declaredAnchors,
+  has,
   inScreens,
   isPattern,
   knownAnchors,
@@ -27,7 +28,7 @@ const unlisted = (
   noun: string,
 ): Problem[] =>
   (values ?? []).flatMap((value, index) =>
-    (listed instanceof Set ? listed.has(value) : value in listed)
+    (listed instanceof Set ? listed.has(value) : has(listed, value))
       ? []
       : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
   )
@@ -39,7 +40,7 @@ function screenProblems(contract: Contract): Problem[] {
   const anchors = declaredAnchors(screens)
 
   return screens.screens.flatMap((screen, index) => [
-    ...(screen.id in vocabulary.screenNames
+    ...(has(vocabulary.screenNames, screen.id)
       ? []
       : [
           inScreens(
@@ -53,7 +54,7 @@ function screenProblems(contract: Contract): Problem[] {
         ...(screenOf(anchor, names) === undefined
           ? [inScreens(at, 'starts with no screen name of the vocabulary')]
           : []),
-        ...(def.kind in vocabulary.kinds
+        ...(has(vocabulary.kinds, def.kind)
           ? []
           : [inScreens([...at, 'kind'], `"${def.kind}" is not a kind of the vocabulary`)]),
         ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
@@ -109,7 +110,7 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
         ),
       ),
     ...reserved.flatMap((anchor, index) => [
-      ...(anchor in vocabulary.reserved
+      ...(has(vocabulary.reserved, anchor)
         ? []
         : [
             inScreens(
@@ -117,7 +118,7 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
               `"${anchor}" is not a reserved anchor of the vocabulary`,
             ),
           ]),
-      ...(frame !== undefined && anchor in frame.anchors
+      ...(frame !== undefined && has(frame.anchors, anchor)
         ? []
         : [
             inScreens(
