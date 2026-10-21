@@ -8,9 +8,9 @@
 import type { ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { ConnectionHost } from './connection-host'
-import { answerFailed } from './connection-reasons'
 import { regionsFor } from './device-regions'
+import type { ConnectionHost } from './host'
+import { answerFailed } from './reasons'
 import type { RegionSubscriptions } from './region-subscriptions'
 
 export interface RegionChangesOptions {

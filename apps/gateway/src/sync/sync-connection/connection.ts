@@ -10,21 +10,18 @@ import {
   serverMessage,
 } from '@workspace/replica/protocol'
 
-import type { DeviceTokens } from '../auth/identity-sessions'
+import type { DeviceTokens } from '../../auth/identity-sessions'
 
 import type { ConnectionState } from './connected-device'
-import { ConnectionHello } from './connection-hello'
-import type { ConnectionHost } from './connection-host'
-import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
-import { DeviceRequests } from './device-requests'
+import type { SocketLike, SyncConnectionDeps } from './deps'
 import { DeviceSeen } from './device-seen'
+import { ConnectionHello } from './hello'
 import { HelloRenewals } from './hello-renewals'
+import type { ConnectionHost } from './host'
+import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
 import { RegionChanges } from './region-changes'
 import { RegionSubscriptions } from './region-subscriptions'
-import type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
-
-/** The end of a device's WebSocket the connection writes to. */
-export type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
+import { DeviceRequests } from './requests'
 
 /**
  * One device's WebSocket to the gateway. The device says hello with its keys first, within
@@ -39,9 +36,9 @@ export type { SocketLike, SyncConnectionDeps } from './sync-connection-deps'
  * revocation takes one region away the same way without a message. A change told while the
  * hello is under way applies right after the welcome. Text the protocol refuses closes the
  * socket, a hello that names no device among it; so do a region the device may not name and a
- * sign-out (`device-requests.ts`). A device signed out from another one is closed at once with
+ * sign-out (`requests.ts`). A device signed out from another one is closed at once with
  * 4001, whatever it is doing. How a hello's keys are checked, bound to the device's row and handed
- * over, and how a device holds one live socket: `connection-hello.ts`.
+ * over, and how a device holds one live socket: `hello.ts`.
  */
 export class SyncConnection {
   readonly #socket: SocketLike

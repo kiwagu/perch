@@ -4,7 +4,7 @@ import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { ServerMessage } from '@workspace/replica/protocol'
 
-import type { DeviceTokens } from '../auth/identity-sessions'
+import type { DeviceTokens } from '../../auth/identity-sessions'
 
 import type { ConnectedDevice } from './connected-device'
 

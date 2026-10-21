@@ -17,17 +17,17 @@ import type { Clock } from '@workspace/replica'
 import { CLOSE, type ClientMessage } from '@workspace/replica/protocol'
 import type { RegionHub } from '@workspace/replica/server'
 
-import type { DeviceSessions } from '../auth/device-sessions'
-import type { IdentitySessions, RenewalGate } from '../auth/identity-sessions'
+import type { DeviceSessions } from '../../auth/device-sessions'
+import type { IdentitySessions, RenewalGate } from '../../auth/identity-sessions'
 
 import { type ChannelRenewal, renewOnChannel } from './channel-renewal'
 import { signOutOnChannel } from './channel-sign-out'
 import type { ConnectedDevice } from './connected-device'
-import type { ConnectionHost } from './connection-host'
-import { REASON } from './connection-reasons'
 import { regionsOf } from './device-regions'
 import type { DeviceSeen } from './device-seen'
 import type { HelloRenewals } from './hello-renewals'
+import type { ConnectionHost } from './host'
+import { REASON } from './reasons'
 import type { RegionSubscriptions } from './region-subscriptions'
 
 export interface DeviceRequestsDeps {

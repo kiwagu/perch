@@ -7,7 +7,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Logger } from '@workspace/logger'
 import type { Clock } from '@workspace/replica'
 
-import type { DeviceSessions } from '../auth/device-sessions'
+import type { DeviceSessions } from '../../auth/device-sessions'
 
 import type { ConnectedDevice } from './connected-device'
 
