@@ -25,6 +25,7 @@ import type { TransportContext } from '../session-options'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
 import { fakeGatewayAuth } from './gateway-auth'
+import { QueryTracker } from './query-tracker'
 
 export interface TestWorldOptions {
   /** The browser's storage; tabs of one browser share it. */
@@ -114,6 +115,8 @@ export interface TestGateway {
   readonly stub: GatewayStub
   readonly clock: ManualClock
   readonly server: LocalDb
+  /** The queries in flight on the gateway's database and every database a tab on it opens. */
+  readonly queries: QueryTracker
 }
 
 /** A session as the root wires it, over embedded databases, the gateway stub and a manual clock. */
@@ -149,7 +152,11 @@ export interface TestWorld {
   transports(): readonly StubTransport[]
   /** Tells the session the tab went to the background or came back. */
   setVisibility(state: Visibility): void
-  /** Moves the clock on until the promise settles, for waits the gateway does not end. */
+  /**
+   * Moves the clock on until the promise settles, for waits the gateway does not end: a second at
+   * a time, each once no query of the test's databases is in flight. A query a test holds keeps
+   * the clock still, so release it first, or move the clock with `clock.advance` instead.
+   */
   driveClock<T>(promise: PromiseLike<T>): Promise<T>
   close(): Promise<void>
 }
@@ -161,20 +168,22 @@ export const TEST_DEVICE_LABEL = 'Firefox on Linux'
 
 async function openTestGateway(memberships: readonly Membership[]): Promise<TestGateway> {
   const clock = manualClock()
+  const queries = new QueryTracker()
   const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
-  const server = (await openTestDb({ schema }))._unsafeUnwrap()
+  const server = queries.wrap((await openTestDb({ schema }))._unsafeUnwrap())
 
   return {
     stub: gatewayStub({ local: server, schema: replicaSchema, clock, memberships }),
     clock,
     server,
+    queries,
   }
 }
 
 export async function openTestWorld(options: TestWorldOptions = {}): Promise<TestWorld> {
   const memberships = options.memberships ?? []
   const gateway = options.gateway ?? (await openTestGateway(memberships))
-  const { stub, clock } = gateway
+  const { stub, clock, queries } = gateway
   const storage = options.storage ?? memoryStorage()
   const auth = options.auth ?? fakeGatewayAuth(memberships)
   const failures: DataError[] = []
@@ -200,7 +209,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       ).map((local): LocalDb => {
         opened.push(identity)
 
-        const wrapped = options.wrap ? options.wrap(local) : local
+        const wrapped = queries.wrap(options.wrap ? options.wrap(local) : local)
 
         return {
           ...wrapped,
@@ -218,7 +227,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
             tenantsOpened.push(key)
 
             return {
-              ...local,
+              ...queries.wrap(local),
               destroy: async () => {
                 tenantsDestroyed.push(key)
                 await local.destroy()
@@ -323,7 +332,15 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
         done = true
       })
 
+      // The clock moves only while no query is in flight: a wait runs out only once the database
+      // work beside it answered, however slowly, as with a real clock.
       while (!done) {
+        await queries.idle(settled)
+
+        if (done) {
+          break
+        }
+
         await clock.advance(1_000)
         await new Promise((resolve) => setTimeout(resolve, 0))
       }

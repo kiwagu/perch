@@ -2,7 +2,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type AuthUser, type DataError, type LocalDb, ShapeRunner } from '@workspace/data'
-import { openTestDb, readSchema } from '@workspace/data/testing'
+import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import {
   type IdentityId,
@@ -28,6 +28,7 @@ import { profileCommands } from '../features/user/presentation/pages/profile/pro
 
 import { createNote, organisationShape } from './__fixtures__/note'
 import { createProfile, profileById } from './__fixtures__/profile'
+import { QueryTracker } from './__fixtures__/query-tracker'
 import {
   type IdentitySpace,
   openIdentitySpace,
@@ -87,10 +88,15 @@ afterEach(async () => {
 })
 
 /** The gateway stub, welcoming every device with `memberships`; its database projects both kinds of region. */
-async function openGateway(memberships: readonly Membership[] = []): Promise<Gateway> {
+/** A gateway stub; its database answers each query `lateMs` late, as a gateway under load would. */
+async function openGateway(memberships: readonly Membership[] = [], lateMs = 0): Promise<Gateway> {
   const clock = manualClock()
   const schema = `${readSchema('directory')}\n${readSchema('tenant')}`
-  const server = (await openTestDb({ schema }))._unsafeUnwrap()
+  const opened = (await openTestDb({ schema }))._unsafeUnwrap()
+  const server =
+    lateMs > 0
+      ? interceptQueries(opened, () => new Promise<void>((resolve) => setTimeout(resolve, lateMs)))
+      : opened
   const stub = gatewayStub({ local: server, schema: replicaSchema, clock, memberships })
 
   cleanups.push(async () => {
@@ -168,16 +174,23 @@ function inventory(keys: readonly string[] = []): TenantDatabaseInventory & {
   }
 }
 
-/** Passes everything through to `transport`, keeping what the device sent. */
+/**
+ * Passes everything through to `transport`, keeping what the device sent: what the transport
+ * took, not a message it refused while the channel was not up yet.
+ */
 function recording(transport: SyncTransport, sent: ClientMessage[]): SyncTransport {
   return {
     start: () => transport.start(),
     stop: () => transport.stop(),
     reconnect: () => transport.reconnect(),
     send: (message) => {
-      sent.push(message)
+      const taken = transport.send(message)
 
-      return transport.send(message)
+      if (taken) {
+        sent.push(message)
+      }
+
+      return taken
     },
     onMessage: (listener) => transport.onMessage(listener),
     onChannel: (listener) => transport.onChannel(listener),
@@ -190,15 +203,36 @@ function subscribed(sent: readonly ClientMessage[] | undefined): string[] {
   return (sent ?? []).flatMap((message) => (message.type === 'subscribe' ? [message.region] : []))
 }
 
-/** A tab of the browser: its own view of the shared store, with its own change events, as each tab opens the store itself. */
-async function openTab(gateway: Gateway, browser: Browser): Promise<Tab> {
+/**
+ * A tab of the browser: its own view of the shared store, with its own change events, as each tab
+ * opens the store itself. Its queries answer `lateMs` late, as a tab of a loaded browser's would,
+ * pass through `wrap`, and closing it runs `close`, which does nothing by default.
+ */
+async function openTab(
+  gateway: Gateway,
+  browser: Browser,
+  options: {
+    readonly lateMs?: number
+    readonly wrap?: (local: LocalDb) => LocalDb
+    readonly close?: () => Promise<void>
+  } = {},
+): Promise<Tab> {
   const states: SyncState[] = []
   const errors: DataError[] = []
   const transports: StubTransport[] = []
+  const lateMs = options.lateMs ?? 0
+  const late =
+    lateMs > 0
+      ? interceptQueries(
+          browser.store,
+          () => new Promise<void>((resolve) => setTimeout(resolve, lateMs)),
+        )
+      : browser.store
+  const store = options.wrap ? options.wrap(late) : late
   const view: LocalDb = {
-    ...browser.store,
+    ...store,
     changes: new EventTarget(),
-    close: async () => {},
+    close: options.close ?? (async () => {}),
     destroy: async () => {},
   }
   const space = (
@@ -316,6 +350,62 @@ async function resetPrivateRegion(browser: Browser): Promise<void> {
 }
 
 const leading = (tab: Tab) => vi.waitFor(() => expect(tab.space.sync).toBeDefined())
+
+/** How long a tab may take to reopen a region another tab reset, on a loaded machine too. */
+const REOPEN_WAIT = { timeout: 10_000 } as const
+
+/** A test that waits on reopens: room for both waits, so a failure says what it waited for. */
+const REOPEN_TEST_MS = 25_000
+
+/**
+ * Counts the region loads a tab makes from the store (opening or reopening a region), and tells
+ * when the tab's earlier work, a catch-up above all, has ended.
+ */
+function countingRegionLoads() {
+  const state = { loads: 0 }
+  const queries = new QueryTracker()
+  const wrap = (local: LocalDb) =>
+    queries.wrap(
+      interceptQueries(local, (text) => {
+        if (text.includes('FROM _replica_snapshot')) {
+          state.loads += 1
+        }
+      }),
+    )
+  /** Resolves once the tab has no query in flight, and none follows on the next turn. */
+  const quiet = async () => {
+    await queries.idle()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await queries.idle()
+  }
+
+  return { wrap, state, quiet }
+}
+
+/**
+ * Writes into `tab`, which began to reopen its region on its own: a write refused while the
+ * region reopens (being reloaded) makes no change and is tried again; any other failure, a write
+ * into a stale copy above all, fails the test.
+ */
+async function writeOnceReopened(tab: Tab): Promise<void> {
+  const failed: DataError[] = []
+
+  await vi.waitFor(async () => {
+    const written = await tab.space.writePath.run(createProfile, profile('Bea'))
+
+    if (written.isErr()) {
+      failed.push(written.error)
+    }
+
+    expect(written.isOk()).toBe(true)
+  }, REOPEN_WAIT)
+  expect(
+    failed.filter(
+      (error) =>
+        error.code !== 'data:WRITE_REJECTED' || !error.message.endsWith('is being reloaded'),
+    ),
+  ).toEqual([])
+}
 
 const profile = (name: string) => ({
   id: profileIdFactory.create(),
@@ -450,60 +540,94 @@ describe('openIdentitySpace', () => {
     )
   })
 
-  it('a follower reopens a region another tab reset when it hears so', async () => {
-    const gateway = await openGateway()
-    const browser = await openBrowser()
-    const leader = await openTab(gateway, browser)
-    const follower = await openTab(gateway, browser)
-    const written = profile('Ann')
+  // The other tab reprojects the shared store too, so the old record can vanish while this tab
+  // still reopens and refuses writes: the test waits until the follower takes one again.
+  it.each([0, 30])(
+    'a follower reopens a region another tab reset when it hears so (the follower %i ms late)',
+    async (lateMs) => {
+      const gateway = await openGateway()
+      const browser = await openBrowser()
+      const leader = await openTab(gateway, browser)
+      const loads = countingRegionLoads()
+      const follower = await openTab(gateway, browser, { lateMs, wrap: loads.wrap })
+      const written = profile('Ann')
 
-    await leading(leader)
-    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toMatchObject({ name: 'Ann' }),
-    )
+      await leading(leader)
+      expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toMatchObject({ name: 'Ann' }),
+      )
 
-    // Offline, the leader does not load the region again from the server meanwhile.
-    leaderOffline(leader)
-    await resetPrivateRegion(browser)
-    syncHints(new FakeHintChannel(browser.bus)).post('reset')
+      // Offline, the leader does not load the region again from the server meanwhile.
+      // The leader's sync and the follower's earlier catch-up end first: a late import of the leader
+      // (its `settled` hint) or a catch-up still under way could find the copy reset and reopen
+      // the follower, and the hint would then prove nothing.
+      await settled(leader.space)
+      leaderOffline(leader)
+      await loads.quiet()
 
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toBeUndefined(),
-    )
-    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
-  })
+      const loaded = loads.state.loads
 
-  it('a tab that missed the hint reopens the region at its next catch-up', async () => {
-    const gateway = await openGateway()
-    const browser = await openBrowser()
-    const leader = await openTab(gateway, browser)
-    const follower = await openTab(gateway, browser)
-    const written = profile('Ann')
+      await resetPrivateRegion(browser)
+      syncHints(new FakeHintChannel(browser.bus)).post('reset')
 
-    await leading(leader)
-    expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toMatchObject({ name: 'Ann' }),
-    )
+      // The follower loads the region again before anything is written into it.
+      await vi.waitFor(() => expect(loads.state.loads).toBeGreaterThan(loaded), REOPEN_WAIT)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toBeUndefined(),
+      )
+      await writeOnceReopened(follower)
+    },
+    REOPEN_TEST_MS,
+  )
 
-    leaderOffline(leader)
-    await resetPrivateRegion(browser)
-    syncHints(new FakeHintChannel(browser.bus)).post('journal')
+  it(
+    'a tab that missed the hint reopens the region at its next catch-up',
+    async () => {
+      const gateway = await openGateway()
+      const browser = await openBrowser()
+      const leader = await openTab(gateway, browser)
+      const loads = countingRegionLoads()
+      const follower = await openTab(gateway, browser, { wrap: loads.wrap })
+      const written = profile('Ann')
 
-    await vi.waitFor(async () =>
-      expect(
-        (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
-      ).toBeUndefined(),
-    )
-    expect((await follower.space.writePath.run(createProfile, profile('Bea'))).isOk()).toBe(true)
-  })
+      await leading(leader)
+      expect((await leader.space.writePath.run(createProfile, written)).isOk()).toBe(true)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toMatchObject({ name: 'Ann' }),
+      )
+
+      // The leader's sync and the follower's earlier catch-up end first, so only the journal hint
+      // below has it look.
+      await settled(leader.space)
+      leaderOffline(leader)
+      await loads.quiet()
+
+      const loaded = loads.state.loads
+
+      await resetPrivateRegion(browser)
+      syncHints(new FakeHintChannel(browser.bus)).post('journal')
+
+      // Its catch-up finds the copy reset and has the follower load the region again, before
+      // anything is written into it.
+      await vi.waitFor(() => expect(loads.state.loads).toBeGreaterThan(loaded), REOPEN_WAIT)
+      await vi.waitFor(async () =>
+        expect(
+          (await follower.space.runner.read(profileById, { id: written.id }))._unsafeUnwrap(),
+        ).toBeUndefined(),
+      )
+      // The leader reprojects the shared store too, so the old record can vanish while this tab
+      // still reopens and refuses writes.
+      await writeOnceReopened(follower)
+    },
+    REOPEN_TEST_MS,
+  )
 
   it('the leader reloads a region whose rollback the gateway refused again, and its follower reopens it', async () => {
     const gateway = await openGateway()
@@ -606,33 +730,42 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
-  it('setMemberships with a new organisation opens its database and the engine syncs it', async () => {
-    const gateway = await openGateway([acme, globex])
-    const { space, tenants, errors, sent } = await openSpace(gateway, { memberships: [acme] })
+  // A gateway that welcomes late leaves the engine trying to subscribe before its channel is up:
+  // those sends are refused, and only what went out counts.
+  it.each([0, 20])(
+    'setMemberships with a new organisation opens its database and the engine syncs it (the gateway %i ms late)',
+    async (lateMs) => {
+      const gateway = await openGateway([acme, globex], lateMs)
+      const { space, tenants, errors, sent } = await openSpace(gateway, { memberships: [acme] })
 
-    await settled(space)
+      await settled(space)
 
-    const before = space.sync
+      const before = space.sync
 
-    await space.setMemberships([acme, globex])
+      await space.setMemberships([acme, globex])
 
-    expect(tenants.opened).toEqual(['acme', 'globex'])
-    expect(space.tenants()).toEqual(['acme', 'globex'])
-    expect(space.currentTenant()).toBe('acme')
-    expect(space.sync).toBeDefined()
-    expect(space.sync).not.toBe(before)
+      expect(tenants.opened).toEqual(['acme', 'globex'])
+      expect(space.tenants()).toEqual(['acme', 'globex'])
+      expect(space.currentTenant()).toBe('acme')
+      expect(space.sync).toBeDefined()
+      expect(space.sync).not.toBe(before)
 
-    space.selectTenant('globex')
+      space.selectTenant('globex')
 
-    expect(space.currentTenant()).toBe('globex')
-    expect((await space.writePath.run(createNote, aNote('Hi Globex'))).isOk()).toBe(true)
-    await settled(space)
+      expect(space.currentTenant()).toBe('globex')
+      expect((await space.writePath.run(createNote, aNote('Hi Globex'))).isOk()).toBe(true)
+      await settled(space)
 
-    expect(subscribed(sent.at(-1))).toEqual([`identity:${ann.id}`, 'tenant:acme', 'tenant:globex'])
-    expect(await headOf(gateway, 'tenant:globex')).toBe(1)
-    expect(await headOf(gateway, 'tenant:acme')).toBe(0)
-    expect(errors).toEqual([])
-  })
+      expect(subscribed(sent.at(-1))).toEqual([
+        `identity:${ann.id}`,
+        'tenant:acme',
+        'tenant:globex',
+      ])
+      expect(await headOf(gateway, 'tenant:globex')).toBe(1)
+      expect(await headOf(gateway, 'tenant:acme')).toBe(0)
+      expect(errors).toEqual([])
+    },
+  )
 
   it('setMemberships without an organisation closes and deletes its database and stops syncing it', async () => {
     const gateway = await openGateway([acme])
