@@ -77,6 +77,11 @@ export class RegionSync implements DrainTarget {
   /** The server has answered the subscription of the current connection. */
   #answered = false
   #stopped = false
+  /**
+   * The gateway's last welcome named the region, so the device may name it on this connection.
+   * A region it did not name (the identity left its organisation meanwhile) is left alone.
+   */
+  #welcomed = true
 
   constructor(options: RegionSyncOptions) {
     const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
@@ -115,7 +120,8 @@ export class RegionSync implements DrainTarget {
       onError,
       batchRows,
       gate: {
-        stopped: () => this.#stopped,
+        // A region the welcome did not name pushes nothing on this connection, as a stopped one.
+        stopped: () => this.#stopped || !this.#welcomed,
         subscribed: () => this.#subscribed,
         resubscribe: () => this.resubscribe(),
         catchUpLocal: () => this.catchUpLocal(),
@@ -142,11 +148,29 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
+   * The gateway welcomed the device, naming the region or not: a named region subscribes; one it
+   * did not name is left alone on this connection (nothing is sent for it, and it counts as
+   * quiet) until a welcome names it again.
+   */
+  welcome(named: boolean): void {
+    this.#welcomed = named
+
+    if (named) {
+      this.subscribe()
+    }
+  }
+
+  /** The last welcome named the region; see `welcome`. */
+  welcomed(): boolean {
+    return this.#welcomed
+  }
+
+  /**
    * After `welcome`: subscribe with the document's version. Its answer is the updates the
    * document lacks, so it also serves as the pull an incomplete import left outstanding.
    */
   subscribe(): void {
-    if (this.#stopped) {
+    if (this.#stopped || !this.#welcomed) {
       return
     }
 
@@ -230,18 +254,19 @@ export class RegionSync implements DrainTarget {
 
   /** Repeats the pull an incomplete or failed import left outstanding; every full pass asks for it. */
   retryPull(): void {
-    if (!this.#stopped) {
+    if (!this.#stopped && this.#welcomed) {
       this.#pull.retry()
     }
   }
 
   /**
    * Nothing waits for an answer, and the server has answered the subscription of this
-   * connection. A region that stopped syncing is quiet.
+   * connection. A region that stopped syncing is quiet, and so is one the welcome did not name.
    */
   quiet(): boolean {
     return (
       this.#stopped ||
+      !this.#welcomed ||
       (this.#answered &&
         !this.#push.inFlight() &&
         !this.#pull.pulling() &&
@@ -251,6 +276,11 @@ export class RegionSync implements DrainTarget {
 
   stopped(): boolean {
     return this.#stopped
+  }
+
+  /** Syncs on this connection: it neither stopped nor was left out of the welcome. */
+  syncing(): boolean {
+    return !this.#stopped && this.#welcomed
   }
 
   /**

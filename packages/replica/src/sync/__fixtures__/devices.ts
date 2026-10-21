@@ -33,7 +33,7 @@ export const acme: Membership = {
   role: 'member',
 }
 
-const acmeRegion: RegionRef = { kind: 'tenant', id: tenantRegionId(acme.tenant.key) }
+export const acmeRegion: RegionRef = { kind: 'tenant', id: tenantRegionId(acme.tenant.key) }
 
 /** How long a test waits for the devices to settle; the manual clock never gets there on its own. */
 const SETTLE_MS = 60_000

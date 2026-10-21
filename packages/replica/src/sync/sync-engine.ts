@@ -188,9 +188,12 @@ class Engine implements SyncEngine {
 
   #receive(message: ServerMessage): void {
     match(message)
-      .with({ type: 'welcome' }, () => {
-        for (const { sync } of this.#regions.map.values()) {
-          sync.subscribe()
+      // Only the regions the welcome names may be named on this connection.
+      .with({ type: 'welcome' }, ({ regions }) => {
+        const named = new Set(regions.map(({ region }) => region))
+
+        for (const [id, { sync }] of this.#regions.map) {
+          sync.welcome(named.has(id))
         }
       })
       // The transport hands renewed keys and memberships to the app.
