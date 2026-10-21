@@ -72,3 +72,25 @@ export function inviteInto(
     return new ResultAsync(invite())
   })
 }
+
+/** The account signs in on a new device and creates the organisation, or finds it, then leaves. */
+export function ensureOrganisationAs(
+  client: ClientOptions,
+  account: SignInInput,
+  organisation: { readonly key: string; readonly name: string },
+): ResultAsync<void, SeedError> {
+  return openClient(client).andThen((device) => {
+    const ensure = async () => {
+      const result = await device
+        .signIn(account)
+        .andThen(() => device.ensureOrganisation(organisation))
+        .map(() => undefined)
+
+      await device.close()
+
+      return result
+    }
+
+    return new ResultAsync(ensure())
+  })
+}

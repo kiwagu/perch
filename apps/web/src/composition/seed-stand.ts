@@ -36,6 +36,10 @@ export interface Stand {
   close(): Promise<void>
 }
 
+function standOf(local: LocalDb): Stand {
+  return { local, runner: new ShapeRunner(local), close: () => local.close() }
+}
+
 /**
  * Connects to a stand as its operator. The directory schema is applied as the gateway applies
  * it, with the gateway's signing key, which leaves a database that already has it alone; without
@@ -50,5 +54,24 @@ export function openStand(options: StandOptions): ResultAsync<Stand, DataError> 
     credentials: options.credentials,
     schema: readSchema('directory'),
     signingKey: options.signingKey,
-  }).map((local) => ({ local, runner: new ShapeRunner(local), close: () => local.close() }))
+  }).map(standOf)
+}
+
+/**
+ * Connects to the database `database` of an organisation on the stand as its operator. The
+ * organisation schema is applied as the gateway applies it, which leaves a database that already
+ * has it alone.
+ */
+export function openStandTenant(
+  options: StandOptions,
+  database: string,
+): ResultAsync<Stand, DataError> {
+  return openLocalDb({
+    engines: remoteEngines(),
+    url: wsRpcUrl(options.url),
+    namespace: options.namespace,
+    database,
+    credentials: options.credentials,
+    schema: readSchema('tenant'),
+  }).map(standOf)
 }

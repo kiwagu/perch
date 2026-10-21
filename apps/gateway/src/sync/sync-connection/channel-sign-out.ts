@@ -8,10 +8,10 @@ import type { IdentityId } from '@workspace/ids'
 import type { Logger } from '@workspace/logger'
 import { CLOSE } from '@workspace/replica/protocol'
 
-import type { DeviceSessions } from '../auth/device-sessions'
-import { grantIdOf, type IdentitySessions } from '../auth/identity-sessions'
+import type { DeviceSessions } from '../../auth/device-sessions'
+import { grantIdOf, type IdentitySessions } from '../../auth/identity-sessions'
 
-import { REASON, SERVER_ERROR } from './connection-reasons'
+import { REASON, SERVER_ERROR } from './reasons'
 
 /** How the socket of a device that signed out closes. */
 export interface SignOutClose {

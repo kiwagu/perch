@@ -4,11 +4,11 @@ import type { CompactionOutcome } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
 import { ownBytes } from './message-bytes'
-import type { SyncTransport } from './transport'
+import type { RegionChannel } from './transport'
 
 export interface RegionCompactionOptions {
   readonly region: RegionDoc
-  readonly transport: SyncTransport
+  readonly transport: RegionChannel
   readonly onError: (error: DataError) => void
 }
 
@@ -18,7 +18,7 @@ export interface RegionCompactionOptions {
  */
 export class RegionCompaction {
   readonly #region: RegionDoc
-  readonly #transport: SyncTransport
+  readonly #transport: RegionChannel
   readonly #onError: (error: DataError) => void
   /** A compaction proposal went out and its outcome has not arrived. */
   #compacting = false

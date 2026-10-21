@@ -14,7 +14,7 @@ import type { RenewalGate } from '../../src/auth/identity-sessions'
 import revokeGrantsStatement from '../../src/auth/surql/grants-revoke-all.surql'
 import sessionsRevokedStatement from '../../src/auth/surql/identity-sessions-revoked.surql'
 import type { GatewayRoot } from '../../src/composition/root'
-import { TRY_AGAIN_LATER } from '../../src/sync/hello-keys'
+import { TRY_AGAIN_LATER } from '../../src/sync/sync-connection'
 
 import { SmokeDevice } from './device'
 import { type Answer, type Credentials, call, postCredentials } from './http'
