@@ -190,6 +190,20 @@ describe('collect', () => {
     ])
   })
 
+  it('refuses a shape that reads a table no database of the schema defines, naming it', async () => {
+    const root = project({
+      'features/user/user.module.ts': '',
+      [`${page}/profile.container.tsx`]: '',
+      [`${page}/profile.shape.surql`]:
+        '-- @params $badge: record<badge>\nSELECT name FROM profile WHERE name = $badge.label;\n',
+    })
+    const withoutBadge = new Map([...databases].filter(([table]) => table !== 'badge'))
+
+    expect((await collect(root, schema, withoutBadge)).problems).toEqual([
+      `${page}/profile.shape.surql: reads table badge, which no database of the schema defines`,
+    ])
+  })
+
   it('takes a shape that reads tables of two regions kept in one database', async () => {
     const root = project({
       'features/user/user.module.ts': '',

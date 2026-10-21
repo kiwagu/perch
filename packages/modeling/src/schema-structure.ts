@@ -55,8 +55,7 @@ const REGIONS: ReadonlySet<string> = new Set(['private', 'public', 'tenant'])
 
 const CRDT_KINDS: ReadonlySet<string> = new Set(['text', 'list', 'counter'])
 
-/** A `DEFINE TABLE` statement at the start of a line, with the table's name. */
-export const DEFINE_TABLE = /^DEFINE\s+TABLE\s+(?:OVERWRITE\s+|IF\s+NOT\s+EXISTS\s+)?(\w+)/i
+const DEFINE_TABLE = /^DEFINE\s+TABLE\s+(?:OVERWRITE\s+|IF\s+NOT\s+EXISTS\s+)?(\w+)/i
 
 const DEFINE_FIELD =
   /^DEFINE\s+FIELD\s+(?:OVERWRITE\s+|IF\s+NOT\s+EXISTS\s+)?([\w.*]+)\s+ON\s+(?:TABLE\s+)?(\w+)/i

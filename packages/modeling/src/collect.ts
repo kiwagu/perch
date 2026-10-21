@@ -138,6 +138,12 @@ function readShape(
   const ast = parseShape(body)
   const resultType = inferResultType(ast, header.params, schema)
   const tables = tablesOf(ast, header.params, schema)
+  const unplaced = tables.find((table) => !databases.has(table))
+
+  if (unplaced !== undefined) {
+    throw new ModelingException(`reads table ${unplaced}, which no database of the schema defines`)
+  }
+
   const where = (table: string): readonly string[] => databases.get(table) ?? []
   // A shape runs on one database: every table it reads must live in it.
   const shared = tables.reduce<readonly string[]>(

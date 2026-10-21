@@ -13,9 +13,10 @@ TypeScript or React code.
   validates every `.surql` with `surreal db validate`, applies the schema (every file under
   the schema folder, all databases together) to an embedded database and reads its structure,
   cross-checks `-- @id` prefixes against the entity id registry, refuses a shape whose tables
-  share no database (one shape reads one database; `tableDatabases` takes each table's database
-  from the folder of the file that defines it, `common/` counting for every database), then
-  writes per component
+  share no database (one shape reads one database; `tableDatabases` applies each database's
+  schema, `common/` and then its own folder's files, to an embedded database of its own and reads
+  its tables back, and reports a schema file outside `<database>/<name>.surql`), then writes per
+  component
   `<name>.model.gen.ts` and `<name>.<role>.surql.d.ts`, plus `pages.model.json`, the
   `generated-<module>.toml` suites (shapes of the `tenant` region are left out: record users
   have no access to the tenant database on the server yet; a module with only such shapes

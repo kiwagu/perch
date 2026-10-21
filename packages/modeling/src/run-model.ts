@@ -138,9 +138,25 @@ export async function runModel(options: ModelOptions): Promise<ModelResult> {
   }
 
   const { model, problems: schemaProblems } = loaded.value
+  const located = await tableDatabases(schema)
+
+  if (located.isErr()) {
+    return {
+      problems: [
+        `a database's schema could not be applied: ${String(located.error.cause ?? located.error.message)}`,
+      ],
+      written: [],
+    }
+  }
+
   const registryProblems = checkIdRegistry(model, registry.prefixes)
-  const collected = await collect(options.root, model, tableDatabases(schema))
-  const problems = [...schemaProblems, ...registryProblems, ...collected.problems]
+  const collected = await collect(options.root, model, located.value.databases)
+  const problems = [
+    ...schemaProblems,
+    ...located.value.problems,
+    ...registryProblems,
+    ...collected.problems,
+  ]
 
   if (problems.length > 0) {
     return { problems, written: [] }
