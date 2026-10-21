@@ -1,9 +1,5 @@
-import type { Result } from 'neverthrow'
-import { match } from 'ts-pattern'
-
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import {
   CLOSE,
@@ -18,13 +14,12 @@ import {
 
 import { type DeviceTokens, keysRefused } from '../auth/identity-sessions'
 
-import { type ChannelRenewal, renewOnChannel } from './channel-renewal'
-import { signOutOnChannel } from './channel-sign-out'
 import type { ConnectedDevice, ConnectionState } from './connected-device'
 import type { ConnectionHost } from './connection-host'
 import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './connection-reasons'
 import type { ConnectionRegistry } from './connections'
-import { regionsFor, regionsOf } from './device-regions'
+import { regionsFor } from './device-regions'
+import { DeviceRequests } from './device-requests'
 import { DeviceSeen } from './device-seen'
 import { acceptKeys, bindDevice, TRY_AGAIN_LATER } from './hello-keys'
 import { HelloRenewals } from './hello-renewals'
@@ -50,11 +45,8 @@ type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
  * there (what is under way finishes), may name the new ones, and is sent the memberships; a
  * revocation takes one region away the same way without a message. A change told while the
  * hello is under way applies right after the welcome. Text the protocol refuses closes the
- * socket, a hello that names no device among it; so does a region the device may not name and a
- * sign-out, which marks the device's row signed out, forgets the pairs parked for it and revokes
- * its refresh grant through the database, as the sign-out route does: the sign-out close (4000)
- * means the grant is revoked, and a row that cannot be marked or a grant that cannot be revoked
- * closes the socket as a failed server (1011) instead. A device signed out from another one is
+ * socket, a hello that names no device among it; so do a region the device may not name and a
+ * sign-out (`device-requests.ts`). A device signed out from another one is
  * closed at once with 4001, whatever it is doing. Keys the database refuses close the hello with
  * 4401; keys it could not judge, as a failed server (1011), and a renewal the limits refused, with
  * 1013 (try again later): the device comes back with them.
@@ -76,13 +68,13 @@ export class SyncConnection {
   readonly #connections: ConnectionRegistry
   readonly #clock: Clock
   readonly #schema: ReplicaSchema
-  readonly #log: Logger
   readonly #onError: (error: DataError) => void
   readonly #renewals: HelloRenewals
   readonly #renewalGate: SyncConnectionDeps['renewals']
   readonly #subscriptions: RegionSubscriptions
   readonly #seen: DeviceSeen
   readonly #changes: RegionChanges
+  readonly #requests: DeviceRequests
   #state: ConnectionState
   /** Settles once every message so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
@@ -98,7 +90,6 @@ export class SyncConnection {
     this.#connections = deps.connections
     this.#clock = deps.clock
     this.#schema = deps.schema
-    this.#log = deps.log
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
     this.#renewals = new HelloRenewals(deps)
     this.#renewalGate = deps.renewals
@@ -126,6 +117,12 @@ export class SyncConnection {
       subscriptions: this.#subscriptions,
       schema: deps.schema,
       helloUnderWay: () => this.#state.kind === 'waiting',
+    })
+    this.#requests = new DeviceRequests(deps, {
+      host,
+      subscriptions: this.#subscriptions,
+      seen: this.#seen,
+      pairs: this.#renewals,
     })
     this.#state = {
       kind: 'waiting',
@@ -240,7 +237,7 @@ export class SyncConnection {
 
     if (state.kind === 'ready') {
       this.#seen.talked(state.device)
-      await this.#serve(state.device, message)
+      await this.#requests.serve(state.device, message)
     }
   }
 
@@ -410,148 +407,6 @@ export class SyncConnection {
     this.#connections.supersede(identity.id, deviceId, this)
 
     return { identity, tokens: accepted.value.tokens }
-  }
-
-  async #serve(device: ConnectedDevice, message: ClientMessage): Promise<void> {
-    if (!regionsOf(message).every((region) => device.regions.has(region))) {
-      this.#send({ type: 'error', code: 'forbidden-region', message: REASON.forbidden })
-      this.#close(CLOSE.forbidden, REASON.forbidden)
-
-      return
-    }
-
-    const subscriber = this.#subscriptions.subscriber
-
-    await match(message)
-      .with({ type: 'hello' }, async () => this.#close(CLOSE.protocol, REASON.helloTwice))
-      .with({ type: 'sign-out' }, () => this.#signOut(device))
-      .with({ type: 'renew' }, () => this.#renew(device))
-      .with({ type: 'subscribe' }, async ({ region, vv }) => {
-        const entry = device.regions.get(region)
-
-        // Checked above: the device may name the region.
-        if (entry) {
-          this.#subscriptions.add(region)
-          this.#settle(await this.#hub.subscribe(entry.ref, entry.actor, subscriber, vv))
-        }
-      })
-      .with({ type: 'pull' }, async ({ region, vv }) => {
-        this.#settle(await this.#hub.pull(region, subscriber, vv))
-      })
-      .with({ type: 'push' }, async ({ region, batch, updates }) => {
-        this.#settle(await this.#hub.push(region, subscriber, batch, updates))
-      })
-      .with({ type: 'compact' }, async ({ region, covers, snapshot }) => {
-        this.#settle(await this.#hub.compact(region, subscriber, covers, snapshot))
-      })
-      .with({ type: 'probe' }, async ({ regions }) => {
-        const heads = await this.#hub.heads(regions)
-
-        if (this.#isClosed()) {
-          return
-        }
-
-        if (heads.isErr()) {
-          this.#fail(heads.error)
-
-          return
-        }
-
-        this.#send({ type: 'heads', regions: [...heads.value], time: this.#clock.now() })
-      })
-      .exhaustive()
-  }
-
-  /**
-   * The device asked for new keys over its channel (`renewOnChannel`), as its one key operation
-   * under way: they are sent and held from then on; a renewal the limits refused is answered and
-   * the channel kept, and the rest close as at hello. A socket a newer hello of the device took
-   * over meanwhile spends nothing; one that closed meanwhile leaves the new pair parked for the
-   * device's next hello with the spent key.
-   */
-  async #renew(device: ConnectedDevice): Promise<void> {
-    await this.#sessions.exclusively(device.id, async () => {
-      if (this.#isClosed()) {
-        return
-      }
-
-      const spent = device.tokens.refresh
-      // A hello of the device spent the key and could not hand over its pair: the pair is the
-      // device's already, so no renewal is tried or counted.
-      const parked =
-        spent === undefined
-          ? undefined
-          : this.#sessions.parked({ device: device.id, refresh: spent })
-
-      this.#answerRenewal(
-        device,
-        spent,
-        parked
-          ? { kind: 'deliver', tokens: parked.tokens }
-          : await renewOnChannel(
-              { sessions: this.#sessions, devices: this.#devices, renewals: this.#renewals },
-              {
-                identity: device.identity,
-                device: device.id,
-                tokens: device.tokens,
-                renewal: this.#renewalGate(device.id),
-              },
-            ),
-      )
-    })
-  }
-
-  #answerRenewal(
-    device: ConnectedDevice,
-    spent: string | undefined,
-    outcome: ChannelRenewal,
-  ): void {
-    if (outcome.kind === 'deliver') {
-      const { tokens } = outcome
-
-      // A socket that closed meanwhile, or that cannot take them, leaves the new keys parked.
-      if (this.#sendTokens(device.identity.id, device.id, spent, tokens)) {
-        // Read now: a change of memberships may have replaced the device's regions meanwhile.
-        const state = this.#state
-
-        if (state.kind === 'ready') {
-          this.#state = { kind: 'ready', device: { ...state.device, tokens } }
-        }
-
-        // The renewal marked the device seen as it moved the row to the new grant.
-        this.#seen.renewed()
-      }
-    } else if (this.#isClosed()) {
-      // Nobody is left to answer.
-    } else if (outcome.kind === 'answer') {
-      this.#send(outcome.message)
-    } else if (outcome.kind === 'close') {
-      this.#close(outcome.code, outcome.reason)
-    } else {
-      this.#fail(outcome.error)
-    }
-  }
-
-  /** Leaves the device's regions, signs it out (`signOutOnChannel`) and closes as it answers. */
-  async #signOut(device: ConnectedDevice): Promise<void> {
-    this.#subscriptions.leaveAll()
-
-    const close = await signOutOnChannel(
-      { sessions: this.#sessions, devices: this.#devices, log: this.#log },
-      { identity: device.identity.id, device: device.id, refresh: device.tokens.refresh },
-    )
-
-    this.#close(close.code, close.reason)
-  }
-
-  /**
-   * The hub answers the device itself, failures included, and resolves without an error;
-   * an error it returns all the same was not expected.
-   */
-  #settle(result: Result<void, DataError>): void {
-    if (result.isErr()) {
-      this.#fail(result.error)
-    }
   }
 
   /** Reports a failure the connection did not expect, answers it and closes as a failed server. */
