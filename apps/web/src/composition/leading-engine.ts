@@ -38,21 +38,13 @@ export interface LeadingEngineOptions {
 /**
  * The sync engine of a tab while it leads the identity's sync: a new engine over a new channel
  * each time the tab starts to lead (an engine never starts twice), none while another tab leads.
- * A change of the regions replaces it, except while a sign-out drains through it: the regions
- * gone from the space then leave that engine at once (their databases are about to go), and
- * `resume` replaces it once the sign-out ended. Work a stopped engine still had under way fails once the
- * database closes under it; that is not reported: what it did not store, the next leader pulls
- * again.
+ * A change of the regions replaces it, also while a sign-out drains through it, which then ends
+ * `offline`. Work a stopped engine still had under way fails once the database closes under it;
+ * that is not reported: what it did not store, the next leader pulls again.
  */
 export class LeadingEngine {
   readonly #options: LeadingEngineOptions
   #engine: SyncEngine | undefined
-  /** The regions the current engine syncs, by id. */
-  #synced = new Set<string>()
-  /** A sign-out drains through the engine: a change of the regions does not replace it. */
-  #signingOut = false
-  /** The regions changed while a sign-out drained: `resume` replaces the engine. */
-  #releadDue = false
   #visibility: Visibility = 'visible'
   #stopped = false
 
@@ -72,9 +64,8 @@ export class LeadingEngine {
     }
 
     const options = this.#options
-    const regions = options.regions()
     const engine = createSyncEngine({
-      regions,
+      regions: options.regions(),
       transport: options.transport(),
       clock: options.clock,
       actor: options.actor,
@@ -93,36 +84,16 @@ export class LeadingEngine {
     })
 
     this.#engine = engine
-    this.#synced = new Set(regions.map((region) => region.ref.id))
     engine.visibility(this.#visibility)
     options.onState({ leader: true, channel: 'down' })
     engine.start()
   }
 
-  /**
-   * The regions changed: a leading tab replaces its engine with a new one over a new channel; a
-   * follower has none. The engine a sign-out drains through stays until it ended (`resume`); the
-   * regions gone from the space leave it at once, before their databases go.
-   */
+  /** The regions changed: a leading tab replaces its engine with a new one over a new channel; a follower has none. */
   relead(): void {
     const engine = this.#engine
 
     if (!engine) {
-      return
-    }
-
-    if (this.#signingOut) {
-      const kept = new Set(this.#options.regions().map((region) => region.ref.id))
-      const gone = [...this.#synced].filter((id) => !kept.has(id))
-
-      engine.leave(gone)
-
-      for (const id of gone) {
-        this.#synced.delete(id)
-      }
-
-      this.#releadDue = true
-
       return
     }
 
@@ -152,29 +123,13 @@ export class LeadingEngine {
   }
 
   /** Has the engine sign the device out (`SyncEngine.signOut`); `offline` while this tab does not lead. */
-  async signOut(): Promise<'signed-out' | 'offline'> {
-    const engine = this.#engine
-
-    if (!engine) {
-      return 'offline'
-    }
-
-    this.#signingOut = true
-
-    try {
-      return await engine.signOut()
-    } finally {
-      this.#signingOut = false
-    }
+  signOut(): Promise<'signed-out' | 'offline'> {
+    return this.#engine?.signOut() ?? Promise.resolve('offline')
   }
 
-  /**
-   * After a sign-out: a new engine replaces the one that drained when that sign-out asked the
-   * gateway in vain, which stopped its channel, or the regions changed while it ran.
-   */
+  /** After a sign-out that asked the gateway in vain, which stopped its channel: a new engine replaces it. */
   resume(): void {
-    if (this.#releadDue || this.#engine?.channelStopped()) {
-      this.#releadDue = false
+    if (this.#engine?.channelStopped()) {
       this.relead()
     }
   }

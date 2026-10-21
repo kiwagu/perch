@@ -164,9 +164,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and
-  makes a sign-out answer `offline` while it holds unsent rows; `leave(regionIds)` takes regions
-  whose documents are about to go out of a running engine (what still arrives for them is
-  dropped), and a retired region sends nothing more, not even from work under way; before each push, and on every full pass, `catchUpLocal()` imports the
+  makes a sign-out answer `offline` while it holds unsent rows; a retired region sends nothing
+  more, not even from work under way; before each push, and on every full pass, `catchUpLocal()` imports the
   rows other tabs appended, and nothing is pushed while that fails, so an ack never moves the
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and

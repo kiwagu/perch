@@ -41,7 +41,7 @@ modeling stage.
   sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
   and from the other tabs through the storage; a new organisation's database opens, the
   database of one the identity left is deleted, and a leading tab syncs the regions on a new
-  engine (`LeadingEngine`), except while a sign-out drains through the current one. Every organisation database the device holds for the identity is counted in
+  engine (`LeadingEngine`); a sign-out draining through the old one then ends `offline`. Every organisation database the device holds for the identity is counted in
   `perch.session.tenant-databases` (`{ [identity]: keys }`, each identity's count apart, so
   another identity signing in on this browser leaves it as it is) before it opens, and stops
   being counted once deleted; the count outlives the keys, so whenever the space opens or follows
@@ -107,8 +107,7 @@ modeling stage.
   landed after the final drain keeps the database. A
   sign-out that asked the gateway in vain (no sign-out close) stops the engine's channel; when
   it leaves the person signed in, the leading tab syncs again on a new engine
-  (`IdentitySpace.resumeSync()`), as a change of leader does, and so it does when the
-  memberships changed while the sign-out drained. Keys
+  (`IdentitySpace.resumeSync()`), as a change of leader does. Keys
   the gateway refuses sign the device out locally, behind the same barrier and lock: the
   identity's database goes with them unless it holds changes not sent yet, in which case it
   stays (as after such a sign-out) and the sign-in page says to sign in again (as the same

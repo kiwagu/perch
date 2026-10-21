@@ -787,45 +787,15 @@ describe('organisations in the identity space', () => {
     expect(errors).toEqual([])
   })
 
-  it('keeps the engine a sign-out drains through when the memberships change meanwhile, and replaces it once sync resumes', async () => {
+  it('replaces the engine a sign-out drains through when the memberships change meanwhile, which ends the sign-out offline', async () => {
     const gateway = await openGateway([acme])
-    const { space, errors } = await openSpace(gateway, { memberships: [acme], online: false })
-    const draining = space.sync
-    let outcome: string | undefined
-    const signingOut = space.signOut().then((answered) => {
-      outcome = answered
-    })
-
-    // The memberships change while the sign-out waits for the channel to drain through.
-    await space.setMemberships([acme, globex])
-    expect(space.sync).toBe(draining)
-
-    while (outcome === undefined) {
-      await gateway.clock.advance(1_000)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-
-    await signingOut
-    expect(outcome).toBe('offline')
-    expect(space.sync).toBe(draining)
-
-    // The person stays signed in: the space syncs on, on an engine of the new regions.
-    space.resumeSync()
-    expect(space.sync).not.toBe(draining)
-    expect(space.sync).toBeDefined()
-    expect(errors).toEqual([])
-  })
-
-  it('drops from the engine a sign-out drains through the region of an organisation left meanwhile, before its database goes', async () => {
-    const gateway = await openGateway([acme])
-    const { space, errors, sent, tenants } = await openSpace(gateway, { memberships: [acme] })
+    const { space, errors, tenants } = await openSpace(gateway, { memberships: [acme] })
 
     await settled(space)
 
     const draining = space.sync
-    const channel = sent.at(-1) ?? expect.unreachable('the leader connected')
 
-    // A push of the private region stays unanswered: the sign-out drains it for 10 seconds.
+    // A push of the private region stays unanswered: the sign-out drains it.
     void gateway.stub.swallowNextPush()
     expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
 
@@ -834,16 +804,10 @@ describe('organisations in the identity space', () => {
       outcome = answered
     })
 
-    // The identity leaves the organisation while the sign-out drains: its database goes.
+    // The identity leaves the organisation meanwhile: a new engine of the regions left takes over.
     await space.setMemberships([])
     expect(tenants.destroyed).toEqual(['acme'])
-    expect(space.sync).toBe(draining)
-
-    const since = channel.length
-
-    // A full pass before the drain ends names the left region nowhere.
-    space.visibility('hidden')
-    space.visibility('visible')
+    expect(space.sync).not.toBe(draining)
 
     while (outcome === undefined) {
       await gateway.clock.advance(1_000)
@@ -851,18 +815,8 @@ describe('organisations in the identity space', () => {
     }
 
     await signingOut
-
-    const left = 'tenant:acme'
-
-    expect(
-      channel
-        .slice(since)
-        .filter((message) =>
-          message.type === 'probe'
-            ? message.regions.includes(left)
-            : 'region' in message && message.region === left,
-        ),
-    ).toEqual([])
+    // The sign-out did not reach the gateway: the session signs out locally, or asks first.
+    expect(outcome).toBe('offline')
     expect(errors).toEqual([])
   })
 

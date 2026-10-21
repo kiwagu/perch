@@ -87,15 +87,15 @@ export interface IdentitySpace {
   renewSync(): void
   /**
    * Has the leading tab's engine sign the device out (`SyncEngine.signOut`); `offline` when this
-   * tab runs no engine. While it runs, a change of memberships keeps that engine: the engine of
-   * the new regions comes with `resumeSync`, if the space stays open.
+   * tab runs no engine. A change of memberships meanwhile replaces that engine, which ends the
+   * sign-out `offline`.
    */
   signOut(): Promise<'signed-out' | 'offline'>
   /**
-   * Has this tab sync again after a sign-out: as on a change of leader, a new engine over a new
-   * channel replaces the one that drained (an engine never starts twice) when that sign-out
-   * asked the gateway in vain, which stopped its channel, or the memberships changed while it
-   * ran. Nothing happens while another tab leads, or otherwise.
+   * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
+   * engine's channel: as on a change of leader, a new engine over a new channel replaces it
+   * (an engine never starts twice). Nothing happens while another tab leads, or while the
+   * engine's channel was not stopped.
    */
   resumeSync(): void
   /** Stops syncing and leading, persists and projects the last writes, closes every database. */

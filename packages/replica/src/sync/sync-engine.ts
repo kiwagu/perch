@@ -47,11 +47,6 @@ export interface SyncEngineOptions {
 export interface SyncEngine {
   start(): void
   stop(): void
-  /**
-   * Stops syncing the regions named, whose documents are about to go, while the engine goes on
-   * with the others (`EngineRegions.leave`).
-   */
-  leave(regionIds: readonly string[]): void
   visibility(state: 'visible' | 'hidden'): void
   /** A local write happened (here or, via a hint, in another tab): drain now. */
   localWrite(): void
@@ -61,9 +56,8 @@ export interface SyncEngine {
    * a pull, a probe, a compaction), no pass runs and no message is being handled; rejects after
    * `timeoutMs` on the clock. A region that stopped syncing counts as settled: its failure was
    * reported. So does a region the welcome did not name, without a report: its unsent rows are not
-   * waited for, and a sign-out answers `offline` while it holds any. A region that left the
-   * engine (`leave`) is not counted. An update that cannot be made durable is reported once, and
-   * is never settled.
+   * waited for, and a sign-out answers `offline` while it holds any. An update that cannot be made
+   * durable is reported once, and is never settled.
    */
   settled(timeoutMs: number): Promise<void>
   /**
@@ -151,10 +145,6 @@ class Engine implements SyncEngine {
     transport.start()
   }
 
-  leave(regionIds: readonly string[]): void {
-    this.#regions.leave(regionIds)
-  }
-
   stop(): void {
     this.#regions.stop()
     this.#cadence.stop()
@@ -239,8 +229,7 @@ class Engine implements SyncEngine {
 
         if (synced) {
           this.#settling.track(synced.sync.handle(regional))
-        } else if (!this.#regions.left(regional.region)) {
-          // What still arrives for a region that left the engine is dropped; this region never synced here.
+        } else {
           this.#options.onError(
             dataError(
               'data:QUERY_FAILED',

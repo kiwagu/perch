@@ -48,8 +48,6 @@ export class EngineRegions {
   readonly #map = new Map<string, SyncedRegion>()
   /** The regions being replaced. */
   readonly #replacing = new Set<string>()
-  /** The regions that left (`leave`): what still arrives or ends for them is dropped. */
-  readonly #left = new Set<string>()
   #stopped = false
 
   constructor(options: EngineRegionsOptions) {
@@ -101,13 +99,12 @@ export class EngineRegions {
 
     const replaced = this.#options.replaceRegion(current.region, how).match(
       (region) => {
-        if (refusal && !this.#left.has(id)) {
+        if (refusal) {
           this.#reloaded(id, refusal)
         }
 
-        // A stopped engine syncs nothing more; the next one opens over the app's document. A region
-        // that left the engine meanwhile stays out.
-        if (!this.#stopped && this.#map.get(id) === current) {
+        // A stopped engine syncs nothing more; the next one opens over the app's document.
+        if (!this.#stopped) {
           const sync = this.#syncOf(region)
 
           this.#map.set(id, { region, sync })
@@ -116,45 +113,17 @@ export class EngineRegions {
           this.#options.drain()
         }
       },
-      (error) => {
-        if (!this.#left.has(id)) {
-          this.#options.onError(
-            dataError(
-              'data:SYNC_STOPPED',
-              `could not replace the document of ${id} (${how}: ${error.message}); the region no longer syncs`,
-              error,
-            ),
-          )
-        }
-      },
+      (error) =>
+        this.#options.onError(
+          dataError(
+            'data:SYNC_STOPPED',
+            `could not replace the document of ${id} (${how}: ${error.message}); the region no longer syncs`,
+            error,
+          ),
+        ),
     )
 
     this.#options.track(replaced.finally(() => this.#replacing.delete(id)))
-  }
-
-  /**
-   * The regions named leave: each sync retires (its push lands as empty, its pull and compaction
-   * end) and leaves the map, so no pass, push, settling or sign-out counts it any more, and what
-   * it still reports is dropped. For regions whose documents are about to go.
-   */
-  leave(ids: readonly string[]): void {
-    for (const id of ids) {
-      const entry = this.#map.get(id)
-
-      this.#left.add(id)
-
-      if (entry) {
-        this.#map.delete(id)
-        entry.sync.retire()
-      }
-    }
-
-    this.#options.changed()
-  }
-
-  /** The region left the engine (`leave`). */
-  left(id: string): boolean {
-    return this.#left.has(id)
   }
 
   /** No replacement is swapped in any more. */
