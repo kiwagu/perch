@@ -30,7 +30,7 @@ export function DevicesContainer() {
       },
       () => {
         if (live) {
-          notify({ testId: 'device.notice', text: t('device.notice.read-failed') })
+          notify({ code: 'devices-read-failed', text: t('device.notice.read-failed') })
         }
       },
     )
@@ -42,7 +42,7 @@ export function DevicesContainer() {
 
   const failed = () => {
     setPending(false)
-    notify({ testId: 'device.notice', text: t('device.notice.sign-out-failed') })
+    notify({ code: 'device-sign-out-failed', text: t('device.notice.sign-out-failed') })
   }
 
   // Another device's sign-out comes back with the list read again (this device signs out from the

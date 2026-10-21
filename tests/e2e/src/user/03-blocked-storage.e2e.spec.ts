@@ -15,16 +15,20 @@ test.describe('Open the app in a browser that blocks site data', { tag: '@smoke'
       })
     })
 
-    await test.step('2. Open "/sign-in"', async () => {
+    await test.step('2. Open [/sign-in]', async () => {
       await page.goto('/sign-in')
     })
 
     // Expected:
-    // - After step 2 the page says that the browser keeps no data for it
-    await expect(page.getByTestId('app-shell.opening')).toHaveText(
-      'This browser does not let Perch keep data on this device. Allow site data for this site, then reload the page.',
+    // - After step 2 [app-shell.status] is in [state:storage-blocked]: the page says that this
+    //   browser does not let Perch keep data on this device, and to allow site data for this site,
+    //   then reload the page
+    await expect(page.getByTestId('app-shell.status')).toHaveAttribute(
+      'data-state',
+      'storage-blocked',
     )
-    // - The page shows no sign-in form
-    await expect(page.getByTestId('user.sign-in.email')).toHaveCount(0)
+    await expect(page.getByTestId('app-shell.status')).toBeVisible()
+    // - The page shows no [user.sign-in.form]
+    await expect(page.getByTestId('user.sign-in.form')).toHaveCount(0)
   })
 })

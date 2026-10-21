@@ -39,31 +39,32 @@ describe('ProfileView', () => {
   it('shows the name and the email', () => {
     renderView()
 
+    expect(screen.getByTestId('user.profile.form').tagName).toBe('FORM')
     expect(screen.getByTestId('user.profile.heading').textContent).toBe('Ann')
-    expect(field('user.profile.email').value).toBe('ann@example.test')
+    expect(field('user.profile.email-input').value).toBe('ann@example.test')
     expect(field('user.profile.name-input').value).toBe('Ann')
   })
 
   it('shows the bio under its label, empty while the profile has none', () => {
     renderView()
 
-    expect(field('user.profile.bio-input').value).toBe('')
-    expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-input'))
+    expect(field('user.profile.bio-textarea').value).toBe('')
+    expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 
   it('shows the stored bio', () => {
     renderView({ profile: { name: 'Ann', email: 'ann@example.test', bio: 'Hello' } })
 
-    expect(field('user.profile.bio-input').value).toBe('Hello')
+    expect(field('user.profile.bio-textarea').value).toBe('Hello')
   })
 
   it('saves the new name', () => {
     const { onSave } = renderView()
 
     fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
-    fireEvent.click(screen.getByTestId('user.profile.save'))
+    fireEvent.click(screen.getByTestId('user.profile.save-button'))
 
-    expect(screen.getByTestId('user.profile.save').textContent).toBe(en['user.profile.save'])
+    expect(screen.getByTestId('user.profile.save-button').textContent).toBe(en['user.profile.save'])
     expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: '' })
   })
 
@@ -71,8 +72,8 @@ describe('ProfileView', () => {
     const { onSave } = renderView()
 
     fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
-    fireEvent.change(field('user.profile.bio-input'), { target: { value: 'About me' } })
-    fireEvent.click(screen.getByTestId('user.profile.save'))
+    fireEvent.change(field('user.profile.bio-textarea'), { target: { value: 'About me' } })
+    fireEvent.click(screen.getByTestId('user.profile.save-button'))
 
     expect(onSave).toHaveBeenCalledOnce()
     expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: 'About me' })
@@ -83,10 +84,10 @@ describe('ProfileView', () => {
     const { rerender } = renderView({ profile })
 
     fireEvent.change(field('user.profile.name-input'), { target: { value: 'Ann draft' } })
-    fireEvent.change(field('user.profile.bio-input'), { target: { value: 'Bio draft' } })
+    fireEvent.change(field('user.profile.bio-textarea'), { target: { value: 'Bio draft' } })
     rerender({ profile: { ...profile, bio: 'Written elsewhere' } })
 
-    expect(field('user.profile.bio-input').value).toBe('Written elsewhere')
+    expect(field('user.profile.bio-textarea').value).toBe('Written elsewhere')
     expect(field('user.profile.name-input').value).toBe('Ann draft')
 
     rerender({ profile: { ...profile, name: 'Bea', bio: 'Written elsewhere' } })
@@ -96,12 +97,13 @@ describe('ProfileView', () => {
     // A stored value that comes back to an earlier one does not bring back the old draft.
     rerender({ profile: { ...profile, name: 'Bea' } })
 
-    expect(field('user.profile.bio-input').value).toBe('Hello')
+    expect(field('user.profile.bio-textarea').value).toBe('Hello')
   })
 
   it('explains a name the profile refuses', () => {
     renderView({ error: 'profile:NAME_REQUIRED' })
 
+    expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('name-required')
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.name-required'],
     )
@@ -111,17 +113,19 @@ describe('ProfileView', () => {
   it('takes at most 2000 characters of bio, and explains a bio the profile refuses', () => {
     renderView({ error: 'profile:BIO_TOO_LONG' })
 
-    expect(field('user.profile.bio-input').maxLength).toBe(2000)
+    expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
+    expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('bio-too-long')
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.bio-too-long'],
     )
-    expect(field('user.profile.bio-input').getAttribute('aria-invalid')).toBe('true')
+    expect(field('user.profile.bio-textarea').getAttribute('aria-invalid')).toBe('true')
     expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
   })
 
   it('explains a change that was not saved without blaming the name', () => {
     renderView({ error: 'data:WRITE_FAILED' })
 
+    expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('failed')
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.failed'],
     )
@@ -129,15 +133,21 @@ describe('ProfileView', () => {
   })
 
   it('says when the profile is still loading or missing', () => {
-    renderView({ status: 'loading', profile: undefined })
+    const { rerender } = renderView({ status: 'loading', profile: undefined })
 
+    expect(screen.getByTestId('user.profile.status').getAttribute('data-state')).toBe('loading')
     expect(screen.getByTestId('user.profile.status').textContent).toBe(en['user.profile.loading'])
+
+    rerender({ status: 'ready', profile: undefined })
+
+    expect(screen.getByTestId('user.profile.status').getAttribute('data-state')).toBe('empty')
+    expect(screen.getByTestId('user.profile.status').textContent).toBe(en['user.profile.missing'])
   })
 
   it('signs out', () => {
     const { onSignOut } = renderView()
 
-    fireEvent.click(screen.getByTestId('user.profile.sign-out'))
+    fireEvent.click(screen.getByTestId('user.profile.sign-out-button'))
 
     expect(onSignOut).toHaveBeenCalledOnce()
     expect(onSignOut).toHaveBeenCalledWith()
@@ -146,21 +156,23 @@ describe('ProfileView', () => {
   it('asks before signing out with changes this device has not sent', async () => {
     const { onSignOut, onCancelSignOut } = renderView({ confirmSignOut: true })
 
-    expect((await screen.findByRole('alertdialog')).textContent).toContain(
-      en['user.profile.sign-out-offline.title'],
-    )
+    const dialog = await screen.findByTestId('user.profile.sign-out-dialog')
+
+    expect(dialog.getAttribute('data-code')).toBe('unsent-changes')
+    expect(screen.getByRole('alertdialog')).toBe(dialog)
+    expect(dialog.textContent).toContain(en['user.profile.sign-out-offline.title'])
     expect(screen.getByRole('alertdialog').textContent).toContain(
       en['user.profile.sign-out-offline.body'],
     )
-    expect(screen.getByTestId('user.profile.sign-out-offline.confirm').textContent).toBe(
+    expect(screen.getByTestId('user.profile.sign-out-dialog.confirm-button').textContent).toBe(
       en['user.profile.sign-out-offline.confirm'],
     )
 
-    fireEvent.click(screen.getByTestId('user.profile.sign-out-offline.confirm'))
+    fireEvent.click(screen.getByTestId('user.profile.sign-out-dialog.confirm-button'))
 
     expect(onSignOut).toHaveBeenCalledWith({ forgetUnsent: true })
 
-    fireEvent.click(screen.getByTestId('user.profile.sign-out-offline.cancel'))
+    fireEvent.click(screen.getByTestId('user.profile.sign-out-dialog.cancel-button'))
 
     expect(onCancelSignOut).toHaveBeenCalledOnce()
   })
@@ -169,13 +181,13 @@ describe('ProfileView', () => {
     renderView()
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.queryByTestId('user.profile.sign-out-offline.confirm')).toBeNull()
+    expect(screen.queryByTestId('user.profile.sign-out-dialog.confirm-button')).toBeNull()
   })
 
   it('speaks Spanish', () => {
     renderView({}, 'es')
 
-    expect(screen.getByTestId('user.profile.save').textContent).toBe(es['user.profile.save'])
-    expect(screen.getByLabelText(es['user.profile.bio'])).toBe(field('user.profile.bio-input'))
+    expect(screen.getByTestId('user.profile.save-button').textContent).toBe(es['user.profile.save'])
+    expect(screen.getByLabelText(es['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 })

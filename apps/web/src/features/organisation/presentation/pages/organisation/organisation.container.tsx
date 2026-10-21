@@ -154,7 +154,7 @@ export function OrganisationContainer() {
       : organisations.invite(key, email).match(
           () => {
             report('members', undefined, key)
-            notify({ testId: 'organisation.invite.notice', text: t('organisation.invite.invited') })
+            notify({ code: 'invited', text: t('organisation.invite.invited') })
             setMembersRead((count) => count + 1)
 
             return true

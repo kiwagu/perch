@@ -12,10 +12,10 @@ The contract declares 5 screens, 67 anchors and 29 codes.
 | Module | Controls | Marked | Share |
 | --- | ---: | ---: | ---: |
 | app-shell | 3 | 3 | 100% |
-| device | 4 | 4 | 100% |
+| device | 3 | 3 | 100% |
 | organisation | 14 | 14 | 100% |
-| user | 12 | 12 | 100% |
-| ui kit | 2 | 0 | 0% |
+| user | 11 | 11 | 100% |
+| ui kit | 4 | 2 | 50% |
 | all | 35 | 33 | 94% |
 
 | Screen | Anchors | Scenarios |

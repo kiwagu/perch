@@ -59,13 +59,13 @@ async function expectDevicesListed(tab: Page): Promise<void> {
 
   const started = Date.now()
 
-  await tab.getByTestId('app-shell.nav.devices').click()
+  await tab.getByTestId('app-shell.nav.devices-link').click()
   await expect(tab).toHaveURL(/\/devices$/)
 
-  const devices = tab.getByTestId('device.list.item')
+  const devices = tab.getByTestId('device.list').getByTestId('device.list.session-item')
 
   await expect(devices).toHaveCount(1, { timeout: 5_000 })
-  await expect(devices.getByTestId('device.list.current')).toHaveText('This device')
+  await expect(devices).toHaveAttribute('data-state', 'current')
   expect(Date.now() - started, 'milliseconds from opening "/devices"').toBeLessThanOrEqual(5_000)
   expect(answers, 'the answers to the list of devices').toEqual([401, 200])
   tab.off('response', listen)
@@ -93,12 +93,12 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
     // Watched before the sign-up opens the first tab's sync socket.
     const first = syncTraffic(page)
 
-    await test.step('1. Sign up and wait for "/me" with the sync channel up', async () => {
+    await test.step('1. Sign up and wait for [/me] with the sync channel up', async () => {
       await signUp(page)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 10_000,
       })
-      // Expected: after step 1 the first tab leads the sync over one sync socket
+      // Expected: After step 1 the first tab leads the sync over one sync socket
       await expect(page.locator('html')).toHaveAttribute('data-sync-leader', '1')
       expect(first.sockets, 'sync sockets of the first tab').toBe(1)
       expect(counted(first.sent, 'renew'), '"renew" sent before any refusal').toBe(0)
@@ -113,11 +113,11 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
         return kept
       })
 
-    const renewedKeys = await test.step('3. Open "/devices"', async () => {
-      // Expected: within 5 seconds of step 3 "/devices" lists one device, marked "This device",
-      // and the browser keeps a new access token and a new refresh key; the first tab asked for
-      // them with one "renew" on its sync socket and got them as "tokens", and opened no other
-      // sync socket
+    const renewedKeys = await test.step('3. Open [/devices]', async () => {
+      // Expected: Within 5 seconds of step 3, on [/devices], [device.list] holds one
+      //   [device.list.session-item], in [state:current] (this device), and the browser keeps a new
+      //   access token and a new refresh key; the first tab asked for them with one "renew" on its
+      //   sync socket and got them as "tokens", and opened no other sync socket
       await expectDevicesListed(page)
 
       const kept = await keysKept(page)
@@ -132,15 +132,15 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
     })
 
     const { second, secondTraffic } =
-      await test.step('4. Open "/me" in a second tab of the same browser and wait for the app to be ready', async () => {
+      await test.step('4. Open [/me] in a second tab of the same browser and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
         const traffic = syncTraffic(tab)
 
         await tab.goto('/me')
         await appReady(tab)
         await expect(tab.getByTestId('user.profile.heading')).toBeVisible()
-        // Expected: after step 4 the first tab still leads the sync and the second tab holds no
-        // sync socket
+        // Expected: After step 4 the first tab still leads the sync and the second tab holds no
+        //   sync socket
         await expect.poll(() => leading([page, tab]), { timeout: 10_000 }).toEqual(['1', '0'])
         await expect(tab.locator('html')).toHaveAttribute('data-sync-channel', 'down')
         expect(traffic.sockets, 'sync sockets of the second tab').toBe(0)
@@ -152,10 +152,11 @@ test.describe("Renew the device's keys over its open sync channel", { tag: '@ful
       await keepAccessToken(second, data.refusedAccessToken)
     })
 
-    await test.step('6. In the second tab, open "/devices"', async () => {
-      // Expected: within 5 seconds of step 6 the second tab lists one device, marked "This
-      // device", and the browser keeps another new pair of keys; the first tab asked for it with
-      // a second "renew" on the same sync socket, and neither tab opened another sync socket
+    await test.step('6. In the second tab, open [/devices]', async () => {
+      // Expected: Within 5 seconds of step 6 the second tab's [device.list] holds one
+      //   [device.list.session-item], in [state:current] (this device), and the browser keeps
+      //   another new pair of keys; the first tab asked for it with a second "renew" on the same
+      //   sync socket, and neither tab opened another sync socket
       await expectDevicesListed(second)
 
       const kept = await keysKept(second)

@@ -61,17 +61,25 @@ async function openPage(): Promise<void> {
       </ServicesProvider>
     </I18nProvider>,
   )
-  await screen.findByTestId('app-shell.nav.devices')
+  await screen.findByTestId('app-shell.nav.devices-link')
 }
 
 /** The row of the device with `label`, once the list shows it. */
 async function row(label: string): Promise<HTMLElement> {
-  const rows = await screen.findAllByTestId('device.list.item')
+  const rows = await screen.findAllByTestId('device.list.session-item')
 
   return (
-    rows.find((each) => within(each).getByTestId('device.list.label').textContent === label) ??
+    rows.find((each) => within(each).getByTestId('device.list.label-cell').textContent === label) ??
     expect.unreachable(`a row for ${label}`)
   )
+}
+
+/** The shell's notice carries `code` and says `text`. */
+async function expectNotice(code: string, text: string): Promise<void> {
+  await waitFor(() =>
+    expect(screen.getByTestId('app-shell.notice-message').getAttribute('data-code')).toBe(code),
+  )
+  expect(screen.getByTestId('app-shell.notice-message').textContent).toBe(text)
 }
 
 describe('DevicesContainer', () => {
@@ -80,7 +88,7 @@ describe('DevicesContainer', () => {
 
     await openPage()
 
-    expect(await screen.findAllByTestId('device.list.item')).toHaveLength(2)
+    expect(await screen.findAllByTestId('device.list.session-item')).toHaveLength(2)
     expect(devices.calls).toEqual([['list']])
   })
 
@@ -88,10 +96,12 @@ describe('DevicesContainer', () => {
     devices = new FakeDevices()
 
     await openPage()
-    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke'))
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
 
-    expect(await within(await row(phone.label)).findByTestId('device.list.revoked')).toBeTruthy()
-    expect(within(await row(phone.label)).queryByTestId('device.list.revoke')).toBeNull()
+    expect(
+      await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+    expect(within(await row(phone.label)).queryByTestId('device.list.revoke-button')).toBeNull()
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']])
   })
 
@@ -100,11 +110,9 @@ describe('DevicesContainer', () => {
 
     await openPage()
     devices.refusal = rejected('no-such-device')
-    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke'))
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
 
-    expect((await screen.findByTestId('device.notice')).textContent).toBe(
-      en['device.notice.sign-out-failed'],
-    )
+    await expectNotice('device-sign-out-failed', en['device.notice.sign-out-failed'])
     await waitFor(() => expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']]))
   })
 
@@ -122,23 +130,22 @@ describe('DevicesContainer', () => {
 
       return list()
     }
-    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke'))
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
 
-    expect((await screen.findByTestId('device.notice')).textContent).toBe(
-      en['device.notice.sign-out-failed'],
-    )
+    await expectNotice('device-sign-out-failed', en['device.notice.sign-out-failed'])
     await waitFor(async () =>
       expect(
-        (within(await row(phone.label)).getByTestId('device.list.revoke') as HTMLButtonElement)
-          .disabled,
+        (
+          within(await row(phone.label)).getByTestId(
+            'device.list.revoke-button',
+          ) as HTMLButtonElement
+        ).disabled,
       ).toBe(false),
     )
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id]])
-    expect(screen.getByTestId('device.notice').textContent).toBe(
-      en['device.notice.sign-out-failed'],
-    )
+    await expectNotice('device-sign-out-failed', en['device.notice.sign-out-failed'])
   })
 
   it('says so when the devices cannot be read', async () => {
@@ -147,9 +154,8 @@ describe('DevicesContainer', () => {
 
     await openPage()
 
-    expect((await screen.findByTestId('device.notice')).textContent).toBe(
-      en['device.notice.read-failed'],
-    )
+    await expectNotice('devices-read-failed', en['device.notice.read-failed'])
+    expect(screen.getByTestId('device.page.status').getAttribute('data-state')).toBe('loading')
     expect(screen.getByTestId('device.page.status').textContent).toBe(en['device.page.loading'])
   })
 
@@ -158,8 +164,8 @@ describe('DevicesContainer', () => {
 
     await openPage()
     await row(phone.label)
-    fireEvent.click(screen.getByTestId('device.everywhere.open'))
-    fireEvent.click(await screen.findByTestId('device.everywhere.confirm'))
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
 
     await waitFor(() => expect(signedOutHere).toBe(1))
     expect(devices.calls).toEqual([['list'], ['everywhere']])
@@ -171,13 +177,13 @@ describe('DevicesContainer', () => {
     await openPage()
     await row(phone.label)
     devices.refusal = offline()
-    fireEvent.click(screen.getByTestId('device.everywhere.open'))
-    fireEvent.click(await screen.findByTestId('device.everywhere.confirm'))
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
 
-    expect((await screen.findByTestId('device.notice')).textContent).toBe(
-      en['device.notice.sign-out-failed'],
-    )
-    expect((screen.getByTestId('device.everywhere.open') as HTMLButtonElement).disabled).toBe(false)
+    await expectNotice('device-sign-out-failed', en['device.notice.sign-out-failed'])
+    expect(
+      (screen.getByTestId('device.everywhere.open-button') as HTMLButtonElement).disabled,
+    ).toBe(false)
     expect(signedOutHere).toBe(0)
   })
 })

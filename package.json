@@ -28,7 +28,7 @@
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
-    "check": "turbo run typecheck typecheck:root lint lint:root lint:surql test test:root model:check i18n:check refactor:ci readme:check e2e:coverage contract:check",
+    "check": "turbo run typecheck typecheck:root lint lint:root lint:surql test test:root model:check i18n:check refactor:ci readme:check e2e:coverage contract:check contract:check:sources",
     "typecheck:root": "tsc -p scripts/tsconfig.json",
     "test:root": "bun test ./scripts",
     "lint:root": "biome ci . && eslint scripts",

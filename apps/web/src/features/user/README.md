@@ -28,8 +28,9 @@ state machine and one file per policy (`profile-name.policy.ts`, `profile-bio.po
   changes this device could not send; the sign-in page says so when the gateway refused the
   device's keys while changes remain to send after the next sign-in, and says "You were signed
   out from another device." when this device was signed out from another one
-  (`user.sign-in.notice.signed-out-elsewhere`), and that the data leaves this device once the
-  other tabs are closed when one of them held its delete up (`user.sign-in.notice.delete-pending`);
+  (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
+  leaves this device once the other tabs are closed when one of them held its delete up (the
+  code `delete-pending`);
   it also says to wait when the gateway limits the attempts (`data:RATE_LIMITED`,
   `user.sign-in.error.rate-limited`), and to sign the other account out first while another one
   is signed in on this browser (`data:OTHER_ACCOUNT`, `user.sign-in.error.other-account`). An

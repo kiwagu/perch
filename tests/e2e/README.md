@@ -28,13 +28,13 @@ accounts, each in a browser of its own):
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
   `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in the manifest's `ids` with
   the same kind, or derived from one with a suffix it lists, and the helper reports the page's
-  URL. It fails until the application renders the contract's anchors (`app-shell.status`
-  among them).
+  URL with `app-shell.status` in `ready`.
 - `user/03-blocked-storage`: a browser that refuses the page its localStorage is told that it
   keeps no data for Perch, and gets no sign-in form.
 - `user/04-unopenable-database`: once the account's local database is broken, the page says it
-  could not open the data and offers "Sign out on this device", which lands on sign-in with no
-  database and no saved account left.
+  could not open the data (`app-shell.status` in `failed`) and offers
+  `app-shell.sign-out-here-button`, which lands on sign-in with no database and no saved
+  account left.
 - `sync/01-two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
 - `sync/02-offline-edit`: B edits offline while A edits online; both changes meet once B
@@ -48,12 +48,12 @@ accounts, each in a browser of its own):
   minutes, sends at most 2 sync frames a minute.
 - `sync/06-my-devices`: My devices lists the account's devices, this one marked and the other
   seen within the last minute; a device signed out from another one is on the sign-in page
-  with "You were signed out from another device." within 5 seconds and its database is gone;
+  with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
 - `sync/07-blocked-delete`: a sign-out ends within 15 seconds although a second tab holds the
   account's database open, and the sign-in page says the data goes once the other tabs are
-  closed; the database is gone within 10 seconds of closing that tab.
+  closed (`delete-pending`); the database is gone within 10 seconds of closing that tab.
 - `sync/08-one-account-per-browser`: a tab left on the sign-in page follows the account another
   tab signs in, onto "/me" within 5 seconds, and the browser keeps one account database.
 - `sync/09-key-renewal`: a route that refuses the access token (the test replaces it in the
@@ -87,15 +87,19 @@ check and its fixtures,
 `signedIn` (device A, signed up on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks) and `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
-a test asks), `appReady`, `signIn` (fails at once when the sign-in page shows its error),
-`signUp` and `pageLoads` (counts a page's full loads, for "without a reload").
+a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`), `signIn`
+(fails at once when the sign-in page shows its error, naming its code), `signUp`,
+`pageLoads` (counts a page's full loads, for "without a reload"), and `notice` and
+`signInNotice`, which locate `app-shell.notice-message` and `user.sign-in.notice-message` by
+their anchor and code together. Tests locate elements by their anchors and assert codes,
+states and values, never the page's wording.
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
-page: `createOrganisation` (its creator then shows as "Administrator"), `inviteMember` and
-`expectInvited` (the notice "Invited" and the account in the members list).
+page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
+and `expectInvited` (the notice `invited` and the account in the members list).
 `src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
 note texts).
 

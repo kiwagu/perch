@@ -3,7 +3,7 @@ import { createValidator, type Manifest, manifestSchema } from '@workspace/ui-co
 import { baseOf, type RenderedPage } from '@workspace/ui-contract/anchors'
 import { z } from '@workspace/zod'
 
-import { expect, test } from '../support/fixtures'
+import { appReady, expect, test } from '../support/fixtures'
 
 /** The rendered anchors the manifest does not declare: neither in `ids` nor derived from one. */
 function undeclared(manifest: Manifest, page: RenderedPage): string[] {
@@ -45,11 +45,9 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
       schema = z.record(z.string(), z.unknown()).parse(await schemaResponse.json())
     })
 
-    await test.step('2. Open "/sign-in" and wait for "app-shell.status" to reach "ready"', async () => {
+    await test.step('2. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto('/sign-in')
-      await page
-        .locator('[data-testid="app-shell.status"][data-state="ready"]')
-        .waitFor({ state: 'attached' })
+      await appReady(page)
     })
 
     let rendered: RenderedPage | undefined
@@ -67,15 +65,15 @@ test.describe('Read the UI manifest and the anchors of a running page', { tag: '
     const manifest = manifestSchema.parse(served)
 
     expect(manifest.contract.version).toBe(1)
-    // - After step 3 every anchor the helper reports is in the manifest's ids with the same
-    //   kind, or is derived from one of them with a suffix of that entry's derived
+    // - After step 3 every anchor the helper reports is in the manifest's ids with the same kind,
+    //   or is derived from one of them with a suffix of that entry's derived
     expect(rendered, 'the build installs window.__perch.ui').toBeDefined()
 
     const onPage = rendered ?? { url: '', anchors: [] }
 
     expect(undeclared(manifest, onPage)).toEqual([])
-    // - After step 3 the helper reports the page's URL, on "/sign-in", with "app-shell.status"
-    //   in "ready"
+    // - After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in
+    //   [state:ready]
     expect(onPage.url).toBe(page.url())
     expect(new URL(onPage.url).pathname).toBe('/sign-in')
     expect(onPage.anchors).toContainEqual(

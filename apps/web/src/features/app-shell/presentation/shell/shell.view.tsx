@@ -26,8 +26,8 @@ export interface ShellViewProps {
   readonly onSignOutHere?: (() => void) | undefined
   /** That sign-out runs: the button waits for it. */
   readonly signingOutHere?: boolean | undefined
-  /** The latest message for the user, already translated. */
-  readonly notice?: { readonly testId: string; readonly text: string } | undefined
+  /** The latest message for the user: its contract code and its text, already translated. */
+  readonly notice?: { readonly code: string; readonly text: string } | undefined
   readonly children?: ReactNode
 }
 
@@ -39,44 +39,58 @@ export function ShellView(props: ShellViewProps) {
   const Link = props.link ?? PlainLink
   const items = props.signedIn
     ? [
-        { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile' },
+        { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
         {
           to: '/org',
           label: t('app.shell.nav.organisation'),
-          testId: 'app-shell.nav.organisation',
+          testId: 'app-shell.nav.organisation-link',
         },
-        { to: '/devices', label: t('app.shell.nav.devices'), testId: 'app-shell.nav.devices' },
+        {
+          to: '/devices',
+          label: t('app.shell.nav.devices'),
+          testId: 'app-shell.nav.devices-link',
+        },
       ]
-    : [{ to: '/sign-in', label: t('app.shell.nav.sign-in'), testId: 'app-shell.nav.sign-in' }]
+    : [
+        {
+          to: '/sign-in',
+          label: t('app.shell.nav.sign-in'),
+          testId: 'app-shell.nav.sign-in-link',
+        },
+      ]
   const locales = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,
     label: locale === 'en' ? t('app.shell.locale.en') : t('app.shell.locale.es'),
   }))
-  const status =
-    props.status === 'ready' ? (
-      <span className="sr-only" data-testid="app-shell.ready">
-        {t('app.shell.sync.local')}
-      </span>
-    ) : (
-      <p className="text-muted-foreground" data-testid="app-shell.opening" role="status">
-        {match(props.status)
-          .with('opening', () => t('app.shell.opening-db'))
-          .with('storage-blocked', () => t('app.shell.storage-blocked'))
-          .otherwise(() => t('app.shell.failed'))}
-      </p>
-    )
+  // One status line: visually hidden once ready, the visible message otherwise.
+  const status = (
+    <p
+      className={props.status === 'ready' ? 'sr-only' : 'text-muted-foreground'}
+      data-testid="app-shell.status"
+      data-state={props.status}
+      role="status"
+    >
+      {match(props.status)
+        .with('ready', () => t('app.shell.sync.local'))
+        .with('opening', () => t('app.shell.opening-db'))
+        .with('storage-blocked', () => t('app.shell.storage-blocked'))
+        .with('failed', () => t('app.shell.failed'))
+        .exhaustive()}
+    </p>
+  )
 
   return (
     <AppShell
       brand={t('app.shell.title')}
       navigationLabel={t('app.shell.navigation')}
+      navigationTestId="app-shell.nav"
       actions={
         <OptionSelect
           label={t('app.shell.locale')}
           value={locale}
           options={locales}
           onChange={props.onLocaleChange}
-          testId="app-shell.locale"
+          testId="app-shell.locale-select"
         />
       }
       navigation={items.map((item) => (
@@ -96,7 +110,8 @@ export function ShellView(props: ShellViewProps) {
         <p
           className="text-sm text-muted-foreground"
           role="status"
-          data-testid={props.notice.testId}
+          data-testid="app-shell.notice-message"
+          data-code={props.notice.code}
         >
           {props.notice.text}
         </p>
@@ -108,7 +123,7 @@ export function ShellView(props: ShellViewProps) {
           className="self-start"
           disabled={props.signingOutHere}
           onClick={props.onSignOutHere}
-          data-testid="app-shell.sign-out-here"
+          data-testid="app-shell.sign-out-here-button"
         >
           {t('app.shell.sign-out-here')}
         </Button>

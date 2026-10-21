@@ -31,7 +31,6 @@ export default defineConfig({
     baseURL: BASE_URL,
     // The front's certificate is a local one (mkcert's, or self-signed without mkcert).
     ignoreHTTPSErrors: true,
-    testIdAttribute: 'data-testid',
     trace: 'retain-on-failure',
   },
   // Mobile first: every spec runs on a phone, then on a desktop.

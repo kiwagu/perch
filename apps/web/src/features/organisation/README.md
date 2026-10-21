@@ -20,9 +20,11 @@ on the replica schema are applied on the device before a command runs
   the tenant region. Creating an organisation, inviting an account by email and removing a
   member go through the gateway's `/organisations` routes via the `ORGANISATIONS` port, not
   through the replica.
-- Components: `OrganisationMembers` (the members card with the invite form) and
-  `OrganisationErrorLine` (the error code of a refused change as copy), in `presentation/components/`;
-  the page's `useAction` hook sits beside its view.
+- Components: `OrganisationCreate` (the form that creates an organisation),
+  `OrganisationNotes` (the notes card with its new note form), `OrganisationMembers` (the
+  members card with the invite form) and `OrganisationErrorLine` (a refused change as its
+  contract code and its copy), in `presentation/components/`; the page's `useAction` hook
+  sits beside its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screen `organisation` in `contract/screens.json`.

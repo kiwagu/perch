@@ -46,7 +46,7 @@ export function SignInContainer() {
 
   useEffect(() => {
     if (done) {
-      notify({ testId: 'user.sign-in.notice', text: t('user.sign-in.welcome') })
+      notify({ code: 'welcome', text: t('user.sign-in.welcome') })
       void navigate({ to: HOME_PATH })
     }
   }, [done, notify, navigate, t])

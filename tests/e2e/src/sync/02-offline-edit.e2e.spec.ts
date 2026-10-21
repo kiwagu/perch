@@ -1,6 +1,6 @@
 // scenario: sync/02-offline-edit
 import { generate } from '../support/data'
-import { appReady, expect, test } from '../support/fixtures'
+import { appReady, expect, notice, test } from '../support/fixtures'
 import { SyncNetwork } from '../support/network'
 
 /**
@@ -22,7 +22,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
       newName: generate.newName(),
     }
 
-    await test.step('1. On device A, open "/me" and wait for the app to be ready', async () => {
+    await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
       await page.goto('/me')
       await appReady(page)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
@@ -31,7 +31,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     })
 
     const { deviceB, network } =
-      await test.step('2. On device B, sign in with the same account and wait for "/me"', async () => {
+      await test.step('2. On device B, sign in with the same account and wait for [/me]', async () => {
         // The sync socket is routed before device B opens the app, so the test can drop it.
         const network = await SyncNetwork.attach(await secondDevice.open())
         const b = await secondDevice.signIn()
@@ -45,25 +45,26 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
 
     await test.step('3. Take device B offline', async () => {
       await network.goOffline()
-      // Expected: after step 3 the sync channel of device B is down
+      // Expected: After step 3 the sync channel of device B is down
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
     })
 
-    await test.step('4. On device B, enter the bio and click "Save"', async () => {
-      await deviceB.getByTestId('user.profile.bio-input').fill(data.bio)
-      await deviceB.getByTestId('user.profile.save').click()
-      // Expected: after step 4 device B shows the notification "Saved" and the bio, and its
-      // sync channel is still down
-      await expect(deviceB.getByTestId('user.profile.notice')).toHaveText('Saved')
-      await expect(deviceB.getByTestId('user.profile.bio-input')).toHaveValue(data.bio)
+    await test.step('4. On device B, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
+      await deviceB.getByTestId('user.profile.bio-textarea').fill(data.bio)
+      await deviceB.getByTestId('user.profile.save-button').click()
+      // Expected: After step 4 device B shows [app-shell.notice-message] carrying
+      //   [code:profile-saved] and the bio, and its sync channel is still down
+      await expect(notice(deviceB, 'profile-saved')).toBeVisible()
+      await expect(deviceB.getByTestId('user.profile.bio-textarea')).toHaveValue(data.bio)
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
     })
 
-    await test.step('5. On device A, enter the new name and click "Save"', async () => {
+    await test.step('5. On device A, enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
       await page.getByTestId('user.profile.name-input').fill(data.newName)
-      await page.getByTestId('user.profile.save').click()
-      // Expected: after step 5 device A shows the notification "Saved" and the new name
-      await expect(page.getByTestId('user.profile.notice')).toHaveText('Saved')
+      await page.getByTestId('user.profile.save-button').click()
+      // Expected: After step 5 device A shows [app-shell.notice-message] carrying
+      //   [code:profile-saved] and the new name
+      await expect(notice(page, 'profile-saved')).toBeVisible()
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.newName)
     })
 
@@ -81,7 +82,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
       await expect(device.getByTestId('user.profile.heading')).toHaveText(data.newName, {
         timeout: 10_000,
       })
-      await expect(device.getByTestId('user.profile.bio-input')).toHaveValue(data.bio, {
+      await expect(device.getByTestId('user.profile.bio-textarea')).toHaveValue(data.bio, {
         timeout: 10_000,
       })
     }

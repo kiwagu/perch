@@ -24,7 +24,9 @@ root export is build-time tooling for Bun.
     `params` and `search`, with the bounds `z.toJSONSchema` writes: `minimum`, `maximum`,
     `minLength`, `maxLength`, `pattern`), `scenarioSchema`, `entityDefinitionSchema`, `manifestSchema`.
     `SCHEMA_OUTPUTS`, `writeSchemas(root)` and `schemaDrift(root)` turn them into the
-    committed `contract/*.schema.json` (generated; Biome leaves them as written).
+    committed `contract/screens.schema.json`, `x-perch.schema.json` and
+    `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
+    authored).
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
@@ -102,8 +104,8 @@ root export is build-time tooling for Bun.
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or
-  `contract: sources agree with the contract (<n> anchors)`; not part of `bun run check`
-  yet).
+  `contract: sources agree with the contract (<n> anchors)`; part of `bun run check` and
+  the pre-commit hook).
 - From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
   manifest from the three files and writes it into `ui-manifest/` at the root, gitignored, or
   into `<dir>` relative to the working directory, which may be any folder under the root;

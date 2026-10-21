@@ -7,17 +7,18 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
     page,
     signedIn: _signedIn,
   }) => {
-    const database = await test.step('1. Open "/me" and wait for the app to be ready', async () => {
-      await page.goto('/me')
-      await appReady(page)
-      await expect(page.getByTestId('user.profile.heading')).toBeVisible()
+    const database =
+      await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
+        await page.goto('/me')
+        await appReady(page)
+        await expect(page.getByTestId('user.profile.heading')).toBeVisible()
 
-      const name = await identityDatabase(page)
+        const name = await identityDatabase(page)
 
-      await expect.poll(() => databases(page)).toContain(name)
+        await expect.poll(() => databases(page)).toContain(name)
 
-      return name
-    })
+        return name
+      })
 
     await test.step("2. Leave the app for another page of the same site and break the account's local database, so that the app can no longer open it", async () => {
       // The gateway's health answer is a page of the same origin that does not run the app.
@@ -45,26 +46,26 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
       await page.goto('about:blank')
     })
 
-    await test.step('3. Open "/me"', async () => {
+    await test.step('3. Open [/me]', async () => {
       await page.goto('/me')
-      // Expected: after step 3 the page says it could not open the data and offers to sign out
-      await expect(page.getByTestId('app-shell.opening')).toHaveText(
-        'This device could not open your data. Reload the page to try again, or sign out on this device: changes it has not sent yet are lost.',
-        { timeout: 15_000 },
-      )
-      await expect(page.getByTestId('app-shell.sign-out-here')).toHaveText(
-        'Sign out on this device',
-      )
+      // Expected: After step 3 [app-shell.status] is in [state:failed]: the page says this device
+      //   could not open the data, to reload the page to try again or sign out on this device, and
+      //   that changes it has not sent yet are lost; it offers [app-shell.sign-out-here-button]
+      await expect(page.getByTestId('app-shell.status')).toHaveAttribute('data-state', 'failed', {
+        timeout: 15_000,
+      })
+      await expect(page.getByTestId('app-shell.status')).toBeVisible()
+      await expect(page.getByTestId('app-shell.sign-out-here-button')).toBeVisible()
     })
 
-    await test.step('4. Click "Sign out on this device"', async () => {
-      await page.getByTestId('app-shell.sign-out-here').click()
+    await test.step('4. Click [app-shell.sign-out-here-button]', async () => {
+      await page.getByTestId('app-shell.sign-out-here-button').click()
     })
 
     // Expected:
-    // - Within 15 seconds of step 4 the page is on "/sign-in" and shows the sign-in form
+    // - Within 15 seconds of step 4 the page is on [/sign-in] and shows [user.sign-in.form]
     await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
-    await expect(page.getByTestId('user.sign-in.email')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('user.sign-in.form')).toBeVisible({ timeout: 15_000 })
     // - Within 15 seconds of step 4 the browser keeps no local database of the account and no
     //   longer names the account as signed in
     await expect.poll(() => databases(page), { timeout: 15_000 }).not.toContain(database)

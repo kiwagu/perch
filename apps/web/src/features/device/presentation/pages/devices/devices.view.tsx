@@ -2,16 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { useLocale, useT } from '@workspace/i18n'
 import type { DeviceSessionId } from '@workspace/ids'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@workspace/ui/components/ui/alert-dialog'
+import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 
@@ -35,45 +26,6 @@ export interface DevicesViewProps {
   readonly onSignOutEverywhere: () => void
 }
 
-function EverywhereConfirmation(props: {
-  readonly open: boolean
-  readonly onConfirm: () => void
-  readonly onCancel: () => void
-}) {
-  const t = useT()
-
-  return (
-    <AlertDialog
-      open={props.open}
-      onOpenChange={(open) => {
-        if (!open) {
-          props.onCancel()
-        }
-      }}
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('device.everywhere.title')}</AlertDialogTitle>
-          <AlertDialogDescription>{t('device.everywhere.body')}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="device.everywhere.cancel">
-            {t('device.everywhere.cancel')}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            type="button"
-            variant="destructive"
-            onClick={props.onConfirm}
-            data-testid="device.everywhere.confirm"
-          >
-            {t('device.everywhere.confirm')}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
 function DeviceRow(props: {
   readonly device: DeviceItem
   readonly when: (date: Date) => string
@@ -86,27 +38,29 @@ function DeviceRow(props: {
   return (
     <li
       className="flex flex-wrap items-center justify-between gap-2"
-      data-testid="device.list.item"
+      data-testid="device.list.session-item"
+      data-id={device.id}
+      data-state={device.current ? 'current' : device.revokedAt ? 'revoked' : undefined}
     >
       <div className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 font-medium break-words" data-testid="device.list.label">
+          <span className="min-w-0 font-medium break-words" data-testid="device.list.label-cell">
             {device.label}
           </span>
           {device.current ? (
             <span
               className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              data-testid="device.list.current"
+              data-testid="device.list.current-badge"
             >
               {t('device.list.current')}
             </span>
           ) : null}
         </span>
-        <span className="text-sm text-muted-foreground" data-testid="device.list.seen">
+        <span className="text-sm text-muted-foreground" data-testid="device.list.seen-cell">
           {t('device.list.seen', { when: props.when(device.lastSeenAt) })}
         </span>
         {device.revokedAt ? (
-          <span className="text-sm text-muted-foreground" data-testid="device.list.revoked">
+          <span className="text-sm text-muted-foreground" data-testid="device.list.revoked-cell">
             {t('device.list.revoked', { when: props.when(device.revokedAt) })}
           </span>
         ) : null}
@@ -117,7 +71,7 @@ function DeviceRow(props: {
           variant="outline"
           disabled={props.pending}
           onClick={() => props.onRevoke(device)}
-          data-testid="device.list.revoke"
+          data-testid="device.list.revoke-button"
         >
           {t('device.list.revoke')}
         </Button>
@@ -163,7 +117,12 @@ export function DevicesView(props: DevicesViewProps) {
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground" role="status" data-testid="device.page.status">
+          <p
+            className="text-muted-foreground"
+            role="status"
+            data-testid="device.page.status"
+            data-state="loading"
+          >
             {t('device.page.loading')}
           </p>
         )}
@@ -172,17 +131,24 @@ export function DevicesView(props: DevicesViewProps) {
           variant="destructive"
           disabled={pending}
           onClick={() => setConfirming(true)}
-          data-testid="device.everywhere.open"
+          data-testid="device.everywhere.open-button"
         >
           {t('device.everywhere.open')}
         </Button>
-        <EverywhereConfirmation
+        <ConfirmDialog
           open={confirming}
+          title={t('device.everywhere.title')}
+          description={t('device.everywhere.body')}
+          confirmLabel={t('device.everywhere.confirm')}
+          cancelLabel={t('device.everywhere.cancel')}
+          destructive
           onConfirm={() => {
             setConfirming(false)
             props.onSignOutEverywhere()
           }}
           onCancel={() => setConfirming(false)}
+          testId="device.everywhere.dialog"
+          code="sign-out-everywhere"
         />
       </CardContent>
     </Card>

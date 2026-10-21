@@ -1,16 +1,7 @@
 import { type SubmitEvent, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@workspace/ui/components/ui/alert-dialog'
+import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
@@ -45,56 +36,18 @@ export interface ProfileViewProps {
   readonly onCancelSignOut?: () => void
 }
 
-function errorText(t: ReturnType<typeof useT>, code: string): string {
+/** The contract code of a refused change, with its text. */
+function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
   switch (code) {
     case 'profile:NAME_REQUIRED':
-      return t('user.profile.error.name-required')
+      return { code: 'name-required', text: t('user.profile.error.name-required') }
     case 'profile:NAME_TOO_LONG':
-      return t('user.profile.error.name-too-long')
+      return { code: 'name-too-long', text: t('user.profile.error.name-too-long') }
     case 'profile:BIO_TOO_LONG':
-      return t('user.profile.error.bio-too-long')
+      return { code: 'bio-too-long', text: t('user.profile.error.bio-too-long') }
     default:
-      return t('user.profile.error.failed')
+      return { code: 'failed', text: t('user.profile.error.failed') }
   }
-}
-
-function SignOutConfirmation(props: {
-  readonly open: boolean
-  readonly onConfirm: () => void
-  readonly onCancel: () => void
-}) {
-  const t = useT()
-
-  return (
-    <AlertDialog
-      open={props.open}
-      onOpenChange={(open) => {
-        if (!open) {
-          props.onCancel()
-        }
-      }}
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('user.profile.sign-out-offline.title')}</AlertDialogTitle>
-          <AlertDialogDescription>{t('user.profile.sign-out-offline.body')}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="user.profile.sign-out-offline.cancel">
-            {t('user.profile.sign-out-offline.cancel')}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            type="button"
-            variant="destructive"
-            onClick={props.onConfirm}
-            data-testid="user.profile.sign-out-offline.confirm"
-          >
-            {t('user.profile.sign-out-offline.confirm')}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
 }
 
 /**
@@ -131,13 +84,14 @@ function ProfileForm(props: {
   const [bio, setBio] = useDraft(props.bio)
   const nameRefused = props.error !== undefined && NAME_CODES.has(props.error)
   const bioRefused = props.error === 'profile:BIO_TOO_LONG'
+  const error = props.error ? errorOf(t, props.error) : undefined
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     props.onSave({ name, bio })
   }
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} data-testid="user.profile.form">
       <FieldGroup>
         <Field data-invalid={nameRefused ? true : undefined}>
           <FieldLabel htmlFor={nameId}>{t('user.profile.name')}</FieldLabel>
@@ -158,14 +112,16 @@ function ProfileForm(props: {
             onChange={(event) => setBio(event.target.value)}
             maxLength={PROFILE_BIO_MAX}
             aria-invalid={bioRefused ? true : undefined}
-            data-testid="user.profile.bio-input"
+            data-testid="user.profile.bio-textarea"
           />
         </Field>
-        <Field data-invalid={props.error ? true : undefined}>
-          {props.error ? (
-            <FieldError data-testid="user.profile.error">{errorText(t, props.error)}</FieldError>
+        <Field data-invalid={error ? true : undefined}>
+          {error ? (
+            <FieldError data-testid="user.profile.error" data-code={error.code}>
+              {error.text}
+            </FieldError>
           ) : null}
-          <Button type="submit" disabled={props.saving} data-testid="user.profile.save">
+          <Button type="submit" disabled={props.saving} data-testid="user.profile.save-button">
             {t('user.profile.save')}
           </Button>
         </Field>
@@ -181,7 +137,12 @@ export function ProfileView(props: ProfileViewProps) {
 
   if (!profile) {
     return (
-      <p className="text-muted-foreground" role="status" data-testid="user.profile.status">
+      <p
+        className="text-muted-foreground"
+        role="status"
+        data-testid="user.profile.status"
+        data-state={props.status === 'ready' ? 'empty' : 'loading'}
+      >
         {props.status === 'ready' ? t('user.profile.missing') : t('user.profile.loading')}
       </p>
     )
@@ -198,7 +159,12 @@ export function ProfileView(props: ProfileViewProps) {
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor={emailId}>{t('user.profile.email')}</FieldLabel>
-            <Input id={emailId} value={profile.email} readOnly data-testid="user.profile.email" />
+            <Input
+              id={emailId}
+              value={profile.email}
+              readOnly
+              data-testid="user.profile.email-input"
+            />
           </Field>
           <ProfileForm
             name={profile.name}
@@ -211,15 +177,22 @@ export function ProfileView(props: ProfileViewProps) {
             type="button"
             variant="outline"
             onClick={() => props.onSignOut()}
-            data-testid="user.profile.sign-out"
+            data-testid="user.profile.sign-out-button"
           >
             {t('user.profile.sign-out')}
           </Button>
         </FieldGroup>
-        <SignOutConfirmation
+        <ConfirmDialog
           open={props.confirmSignOut ?? false}
+          title={t('user.profile.sign-out-offline.title')}
+          description={t('user.profile.sign-out-offline.body')}
+          confirmLabel={t('user.profile.sign-out-offline.confirm')}
+          cancelLabel={t('user.profile.sign-out-offline.cancel')}
+          destructive
           onConfirm={() => props.onSignOut({ forgetUnsent: true })}
           onCancel={() => props.onCancelSignOut?.()}
+          testId="user.profile.sign-out-dialog"
+          code="unsent-changes"
         />
       </CardContent>
     </Card>

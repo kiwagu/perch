@@ -74,6 +74,9 @@
     },
     "//#contract:check": {
       "cache": false
+    },
+    "//#contract:check:sources": {
+      "cache": false
     }
   }
 }

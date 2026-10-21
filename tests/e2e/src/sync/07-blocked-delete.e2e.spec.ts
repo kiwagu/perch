@@ -1,5 +1,5 @@
 // scenario: sync/07-blocked-delete
-import { appReady, expect, test } from '../support/fixtures'
+import { appReady, expect, signInNotice, test } from '../support/fixtures'
 import { databases, identityDatabase } from '../support/storage'
 
 test.describe('Sign out while another tab holds the data open', { tag: '@full' }, () => {
@@ -11,7 +11,7 @@ test.describe('Sign out while another tab holds the data open', { tag: '@full' }
     test.slow()
 
     const database =
-      await test.step('1. On device A, open "/me" in a first tab and wait for the app to be ready', async () => {
+      await test.step('1. On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]', async () => {
         await page.goto('/me')
         await appReady(page)
         await expect(page.getByTestId('user.profile.heading')).toBeVisible()
@@ -47,15 +47,14 @@ test.describe('Sign out while another tab holds the data open', { tag: '@full' }
         return second
       })
 
-    await test.step('3. In the first tab, click "Sign out"', async () => {
-      await page.getByTestId('user.profile.sign-out').click()
-      // Expected: within 15 seconds of step 3 the first tab is on "/sign-in" and says that the
-      // data leaves the device once the other tabs are closed
+    await test.step('3. In the first tab, click [user.profile.sign-out-button]', async () => {
+      await page.getByTestId('user.profile.sign-out-button').click()
+      // Expected: Within 15 seconds of step 3 the first tab is on [/sign-in] and
+      //   [user.sign-in.notice-message] carries [code:delete-pending]: the device is signed out,
+      //   and its data leaves it once the other Perch tabs are closed
       await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
-      await expect(page.getByTestId('user.sign-in.notice.delete-pending')).toHaveText(
-        'You are signed out. Your data leaves this device once the other Perch tabs are closed.',
-      )
-      // Expected: after step 3 the browser still keeps the account's local database
+      await expect(signInNotice(page, 'delete-pending')).toBeVisible()
+      // Expected: After step 3 the browser still keeps the account's local database
       expect(await databases(page)).toContain(database)
     })
 

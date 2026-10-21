@@ -446,9 +446,9 @@
       "anchors": {
         "organisation.page.status": {
           "kind": "status",
-          "description": "Says the account is a member of no organisation; not rendered otherwise.",
+          "description": "Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error); not rendered while an organisation is current.",
           "roles": ["identity"],
-          "states": ["empty"]
+          "states": ["empty", "error"]
         },
         "organisation.page.heading": {
           "kind": "heading",
@@ -664,7 +664,8 @@
       "states": {
         "loading": "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet.",
         "ready": "The heading, the role badge, the select with two memberships or more, the notes with the new note form, the members with the invite form for an administrator, and the toggle of the create form.",
-        "empty": "organisation.page.status in empty: no membership; the create form below it."
+        "empty": "organisation.page.status in empty: no membership; the create form below it.",
+        "error": "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
       },
       "flow": {
         "states": ["viewing", "creating", "editing"],

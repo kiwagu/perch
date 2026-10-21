@@ -49,7 +49,7 @@ test.describe('Stay quiet while idle', { tag: '@full' }, () => {
     })
 
     const start =
-      await test.step('1. Put the page\'s clock under the test\'s control, open "/me" and wait until the sync channel is up and the catch-up after opening has settled', async () => {
+      await test.step("1. Put the page's clock under the test's control, open [/me] and wait until the sync channel is up and the catch-up after opening has settled", async () => {
         page.on('console', (message) => {
           if (message.type() === 'error') {
             errors.push(
@@ -90,7 +90,8 @@ test.describe('Stay quiet while idle', { tag: '@full' }, () => {
     })
 
     // Expected:
-    // - The page reports no error, keeps checking in with the gateway, and sends at most the allowed number of sync frames per minute, on average over the idle time
+    // - The page reports no error, keeps checking in with the gateway, and sends at most the
+    //   allowed number of sync frames per minute, on average over the idle time
     const minutes = ((await page.evaluate(() => Date.now())) - start.at) / MINUTE_MS
     const sent = frames.sent - start.sent
     const rate = sent / minutes
