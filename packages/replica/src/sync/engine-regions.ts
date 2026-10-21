@@ -48,6 +48,8 @@ export class EngineRegions {
   readonly #map = new Map<string, SyncedRegion>()
   /** The regions being replaced. */
   readonly #replacing = new Set<string>()
+  /** The regions that left (`leave`): what still arrives or ends for them is dropped. */
+  readonly #left = new Set<string>()
   #stopped = false
 
   constructor(options: EngineRegionsOptions) {
@@ -99,7 +101,7 @@ export class EngineRegions {
 
     const replaced = this.#options.replaceRegion(current.region, how).match(
       (region) => {
-        if (refusal) {
+        if (refusal && !this.#left.has(id)) {
           this.#reloaded(id, refusal)
         }
 
@@ -114,14 +116,17 @@ export class EngineRegions {
           this.#options.drain()
         }
       },
-      (error) =>
-        this.#options.onError(
-          dataError(
-            'data:SYNC_STOPPED',
-            `could not replace the document of ${id} (${how}: ${error.message}); the region no longer syncs`,
-            error,
-          ),
-        ),
+      (error) => {
+        if (!this.#left.has(id)) {
+          this.#options.onError(
+            dataError(
+              'data:SYNC_STOPPED',
+              `could not replace the document of ${id} (${how}: ${error.message}); the region no longer syncs`,
+              error,
+            ),
+          )
+        }
+      },
     )
 
     this.#options.track(replaced.finally(() => this.#replacing.delete(id)))
@@ -136,6 +141,8 @@ export class EngineRegions {
     for (const id of ids) {
       const entry = this.#map.get(id)
 
+      this.#left.add(id)
+
       if (entry) {
         this.#map.delete(id)
         entry.sync.retire()
@@ -143,6 +150,11 @@ export class EngineRegions {
     }
 
     this.#options.changed()
+  }
+
+  /** The region left the engine (`leave`). */
+  left(id: string): boolean {
+    return this.#left.has(id)
   }
 
   /** No replacement is swapped in any more. */

@@ -15,7 +15,7 @@ import { RegionCompaction } from './region-compaction'
 import { RegionPull } from './region-pull'
 import { type PushOutcome, RegionPush } from './region-push'
 import { type Refusal, RegionRollback } from './region-rollback'
-import type { SyncTransport } from './transport'
+import type { RegionChannel, SyncTransport } from './transport'
 
 export interface RegionSyncOptions {
   readonly region: RegionDoc
@@ -60,7 +60,7 @@ type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
  */
 export class RegionSync implements DrainTarget {
   readonly #region: RegionDoc
-  readonly #transport: SyncTransport
+  readonly #transport: RegionChannel
   readonly #onError: (error: DataError) => void
   readonly #pull: RegionPull
   readonly #push: RegionPush
@@ -96,8 +96,18 @@ export class RegionSync implements DrainTarget {
       throw new RangeError('localCompactionRows must be an integer from 0')
     }
 
-    const { region, transport, clock, onError } = options
+    const { region, clock, onError } = options
     const stop = (error: DataError): void => this.#stop(error)
+    // Nothing goes out for the region once it no longer syncs on this connection (retired, or
+    // left out of the welcome), whatever work it had under way ends after that.
+    const transport: RegionChannel = {
+      send: (message) => this.syncing() && options.transport.send(message),
+      reconnect: () => {
+        if (this.syncing()) {
+          options.transport.reconnect()
+        }
+      },
+    }
 
     this.#region = region
     this.#transport = transport
@@ -284,11 +294,13 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
-   * Stops for good without a report: the region's document is replaced. Ends a pull, forgets a
-   * compaction and lands the push as empty.
+   * Stops for good without a report: the region's document is replaced, or the region left the
+   * engine. Ends a pull and the subscription, forgets a compaction and lands the push as empty;
+   * from then on nothing goes out for the region, not even from work it had under way.
    */
   retire(): void {
     this.#stopped = true
+    this.#subscribed = false
     this.#pull.end()
     this.#compaction.forget()
     this.#push.land('empty')

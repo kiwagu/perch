@@ -239,7 +239,8 @@ class Engine implements SyncEngine {
 
         if (synced) {
           this.#settling.track(synced.sync.handle(regional))
-        } else {
+        } else if (!this.#regions.left(regional.region)) {
+          // What still arrives for a region that left the engine is dropped; this region never synced here.
           this.#options.onError(
             dataError(
               'data:QUERY_FAILED',

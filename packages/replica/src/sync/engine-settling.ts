@@ -147,7 +147,8 @@ export class EngineSettling {
       .flush()
       .andTee(() => this.#failingFlush.delete(id))
       .orTee((error) => {
-        if (!this.#failingFlush.has(id)) {
+        // A region that left the engine meanwhile is not reported: its database is going.
+        if (this.#regions.get(id)?.region === region && !this.#failingFlush.has(id)) {
           this.#failingFlush.add(id)
           this.#onError(error)
         }

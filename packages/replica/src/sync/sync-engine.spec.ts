@@ -487,6 +487,19 @@ describe('sync engine', () => {
     expect(device.errors).toEqual([])
   })
 
+  it('drops what the gateway still sends for a region that left it, reporting nothing', async () => {
+    const { a, b, settle } = await twoDevices()
+
+    a.engine.leave([regionId])
+    // The gateway still has the device subscribed: it sends it the other device's batch.
+    writeName(b.region, 'Ana')
+    b.engine.localWrite()
+    await settle()
+
+    expect(a.errors).toEqual([])
+    expect(b.errors).toEqual([])
+  })
+
   it('answers a sign-out offline while a region its welcome left out holds what it has not sent', async () => {
     const gateway = await openGateway({ schema: replicaSchema })
     const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
