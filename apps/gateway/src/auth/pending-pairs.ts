@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
+import { KeyedTurns } from '../keyed-turns'
+
 import type { DeviceTokens } from './identity-sessions'
 
 /** How long a renewed pair the device could not take waits for its next hello. */
@@ -41,8 +43,8 @@ function keyOf(input: PairKey): string {
 export class PendingPairs {
   readonly #clock: Clock
   readonly #parked = new Map<string, Parked>()
-  /** The last key operation of each device, which the next one waits for. */
-  readonly #turns = new Map<string, Promise<void>>()
+  /** The key operations of each device, one at a time. */
+  readonly #turns = new KeyedTurns<string>()
 
   constructor(clock: Clock) {
     this.#clock = clock
@@ -79,22 +81,8 @@ export class PendingPairs {
    * are checked, renewed and handed out one operation at a time, across all its sockets, so no two
    * of them spend one single-use refresh key, and a pair one of them parks is there for the next.
    */
-  async exclusively<T>(device: string, work: () => Promise<T>): Promise<T> {
-    const turn = (this.#turns.get(device) ?? Promise.resolve()).then(work)
-    const ended = turn.then(
-      () => undefined,
-      () => undefined,
-    )
-
-    this.#turns.set(device, ended)
-
-    try {
-      return await turn
-    } finally {
-      if (this.#turns.get(device) === ended) {
-        this.#turns.delete(device)
-      }
-    }
+  exclusively<T>(device: string, work: () => Promise<T>): Promise<T> {
+    return this.#turns.run(device, work)
   }
 
   /**

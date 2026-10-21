@@ -365,6 +365,14 @@ describe('deviceRoutes', () => {
     expect(authentications()).toBe(0)
   })
 
+  it('names the Bearer scheme in WWW-Authenticate when it answers 401 to a call without a working access token', async () => {
+    const { routes } = await harness()
+    const refused = await routes(request('GET', '/devices', { device: laptop.id }), FROM)
+
+    expect(refused?.status).toBe(401)
+    expect(refused?.headers.get('WWW-Authenticate')).toBe('Bearer')
+  })
+
   it('answers 401 to a Bearer call of a device with no session row', async () => {
     const { ask, annOnLaptop, sockets } = await harness()
 

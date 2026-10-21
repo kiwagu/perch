@@ -26,7 +26,9 @@ expires (at most 15 minutes). Using it takes a stolen token issued in the same w
 second as both the sign-out and the new sign-in. A sign-in on a device whose row held another
 grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
 identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
-revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
+revoke that fails is reported and leaves the sign-in standing. A sign-up or sign-in whose
+memberships cannot be read answers 500 and is taken back: its device is marked signed out and its
+grant revoked, since its pair never reached the device. Only a refusal by the database
 is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
 cannot be reached answers 500, here and on every route and hello below. Devices sync over
 a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 6 (the
@@ -116,11 +118,12 @@ the gateway defines; the directory holds each organisation (`tenant`) and who be
 `src/tenants`, built by the composition root over the directory, serve them; on shutdown the
 organisations' databases close after the region hub and before the directory. `TenantDatabases`
 keeps one connection per organisation database in use, shared by every holder and closed once
-nobody has held it for five minutes. `Organisations` creates an organisation (its directory
+nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished is completed when the creator asks again), lists an identity's memberships in ready
+unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to an admin, answers what it refuses
+other than itself, lists the members with their emails to an admin (leaving out the rows of
+identities that are gone), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change, answering once they
 heard them: the composition root has the registry tell the identity's devices. A removal takes
@@ -132,6 +135,9 @@ creations, the invites of it, its removals) run one after the other, each once t
 it and its notification have settled, so the directory and the organisation's database end as
 the last change left them and its devices hear the lists in that order. This holds within one
 gateway process; gateways in several processes would need a durable revision of the memberships.
+`Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
+rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes,
+and one device's key operations, one at a time.
 
 The organisation routes act for the identity a device's access token signs in, sent as
 `Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
@@ -141,7 +147,9 @@ row (unknown, or signed out: its access token still works, its calls do not), or
 started after the token was issued, 401 (`unauthorized`). A refresh key is not taken over HTTP:
 a request with a valid device header but without an access token the database accepts answers
 401, and one whose token the database could not judge answers 500; a missing or invalid
-`X-Perch-Device` answers 400 first, before any token is checked. `GET /organisations` lists the
+`X-Perch-Device` answers 400 first, before any token is checked. Every such 401 names the scheme
+in `WWW-Authenticate: Bearer` (`src/auth/bearer-caller.ts`, shared with the device routes).
+`GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
 the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
 (403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
