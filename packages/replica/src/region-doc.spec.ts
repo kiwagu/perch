@@ -461,6 +461,9 @@ describe('RegionDoc sync state', () => {
     expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
     expect((await lagging.catchUpLocal()).isOk()).toBe(true)
     expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    // Its own save skipped, the former leader still reads past its snapshot through the newer one.
+    expect((await former.catchUpLocal()).isOk()).toBe(true)
+    expect(former.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
   })
 
   it('opens a compacted region at what its snapshot covers', async () => {
