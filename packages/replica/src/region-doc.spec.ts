@@ -22,6 +22,7 @@ import { replaceRegionDoc } from './region-replacement'
 import { RegionStore } from './region-store'
 import appendStatement from './surql/replica-append.surql'
 import loadStatement from './surql/replica-load.surql'
+import saveSnapshotStatement from './surql/replica-save-snapshot.surql'
 import { LoroWritePath } from './write-path'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
@@ -391,6 +392,110 @@ describe('RegionDoc sync state', () => {
     expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
     expect(await snapshotCovers()).toEqual([2])
     expect(await counts()).toEqual({ snapshots: 1, updates: 0, outbox: 2 })
+  })
+
+  it('hands a tab that read less than a compaction covers the snapshot first, then the rows after it', async () => {
+    const lagging = await open()
+    const first = await open()
+    const second = await open()
+    const thirdKey = 'profile/prf_0000000000000002.01m52pexcp'
+    const seen: string[] = []
+
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+    writeName(second, 'Beto', otherKey)
+    expect((await second.flush()).isOk()).toBe(true)
+    // The rows the lagging tab has not read yet go into the snapshot.
+    expect((await second.compact()).isOk()).toBe(true)
+    writeName(first, 'Cleo', thirdKey)
+    expect((await first.flush()).isOk()).toBe(true)
+    lagging.doc.subscribe((batch) => seen.push(batch.by))
+
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(lagging.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect(lagging.recordJson(thirdKey)).toMatchObject({ name: 'Cleo' })
+    // A projector follows imports only.
+    expect(new Set(seen)).toEqual(new Set(['import']))
+  })
+
+  it('keeps the newer snapshot when an older compaction saves after it', async () => {
+    let reached: () => void = () => {}
+    let release: () => void = () => {}
+    const saving = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // The tab that led the sync until now: its snapshot's save is held until another tab compacted further.
+    const late = interceptQueries(local, (text) => {
+      if (text === saveSnapshotStatement) {
+        reached()
+
+        return released
+      }
+    })
+    const lagging = await open()
+    const former = (await RegionDoc.open(late, ref))._unsafeUnwrap()
+    const leader = await open()
+
+    writeName(former, 'Ann')
+    expect((await former.flush()).isOk()).toBe(true)
+
+    const compacting = former.compact()
+
+    // The former leader's snapshot covers row 1; the leader's covers rows 1 and 2.
+    await saving
+    writeName(leader, 'Beto', otherKey)
+    expect((await leader.flush()).isOk()).toBe(true)
+    expect((await leader.compact()).isOk()).toBe(true)
+    release()
+    expect((await compacting).isOk()).toBe(true)
+
+    const reopened = await open()
+
+    expect(reopened.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    // Its own save skipped, the former leader still reads past its snapshot through the newer one.
+    expect((await former.catchUpLocal()).isOk()).toBe(true)
+    expect(former.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+  })
+
+  it('opens a compacted region at what its snapshot covers', async () => {
+    const first = await open()
+
+    writeName(first, 'Ann')
+    writeName(first, 'Ana')
+    expect((await first.flush()).isOk()).toBe(true)
+    expect((await first.compact()).isOk()).toBe(true)
+
+    expect((await open()).persistedSeq()).toBe(2)
+  })
+
+  it('compacts once more rows than the limit built up past its snapshot, and not before', async () => {
+    const region = await open()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(region, name)
+    }
+
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
+
+    writeName(region, 'Annie')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(true)
+    expect(await counts()).toMatchObject({ snapshots: 1, updates: 0 })
+
+    // Counted from the new snapshot on.
+    writeName(region, 'Anny')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
   })
 
   it('moves the cursor forward only, and keeps it across a reopen', async () => {

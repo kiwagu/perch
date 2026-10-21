@@ -78,6 +78,8 @@ export interface DeviceOptions {
   readonly region?: RegionRef
   /** How many outbox rows one push carries at most, the protocol's limit by default. */
   readonly batchRows?: number
+  /** How many local log rows past its snapshot a region holds before a full pass compacts it. */
+  readonly localCompactionRows?: number
 }
 
 const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> = []
@@ -150,6 +152,9 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
         region = next
       }),
     ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
+    ...(options.localCompactionRows === undefined
+      ? {}
+      : { localCompactionRows: options.localCompactionRows }),
   })
   const device: Device = {
     local,

@@ -29,6 +29,11 @@ export interface SyncEngineOptions {
   /** How many outbox rows one push of a region carries at most; 256 by default, the protocol's limit. */
   readonly batchRows?: number
   /**
+   * How many rows past its snapshot a region's local log holds before a full pass compacts it;
+   * 200 by default, as on the server.
+   */
+  readonly localCompactionRows?: number
+  /**
    * The document that takes a region's place: `reset` when the gateway refused its batch again
    * after the rollback (the engine then loads the region from the server), `reopen` when another
    * tab reset it. A failure stops that region's sync and is reported.

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 
+import countsStatement from '../__fixtures__/replica-counts.surql'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
@@ -12,6 +13,7 @@ import type { ManualClock } from '../testing/manual-clock'
 
 import {
   closeDevices,
+  type Device,
   identity,
   openDevice,
   openGateway,
@@ -41,6 +43,15 @@ async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 
   return settled
+}
+
+/** How many snapshots and update-log rows the device's database holds of the region. */
+async function localCounts(device: Device): Promise<{ snapshots: number; updates: number }> {
+  const [snapshots, updates] = (await device.local.db.query(countsStatement, {
+    region: regionId,
+  })) as number[][]
+
+  return { snapshots: snapshots?.[0] ?? 0, updates: updates?.[0] ?? 0 }
 }
 
 /** Moves the clock on a second at a time until the promise settles, for waits nothing else ends. */
@@ -379,6 +390,62 @@ describe('sync engine', () => {
 
     await vi.waitFor(() => expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Bea' }))
     follower.close()
+  })
+
+  it('compacts its local log on a full pass once it holds more rows than the limit past its snapshot, also offline', async () => {
+    const gateway = await openGateway()
+    const device = await openDevice(gateway, { localCompactionRows: 2 })
+
+    device.transport.goOffline()
+    device.engine.start()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(device.region, name)
+    }
+
+    expect((await device.region.flush()).isOk()).toBe(true)
+
+    // The tab comes back into view: a full pass.
+    device.engine.visibility('hidden')
+    device.engine.visibility('visible')
+
+    await vi.waitFor(async () =>
+      expect(await localCounts(device)).toEqual({ snapshots: 1, updates: 0 }),
+    )
+    expect((await device.region.outbox(10))._unsafeUnwrap()).toHaveLength(3)
+    expect(device.errors).toEqual([])
+  })
+
+  it('compacts the local log of a device that only reads, grown by the updates it imported', async () => {
+    const gateway = await openGateway()
+    const writer = await openDevice(gateway)
+    const reader = await openDevice(gateway, { localCompactionRows: 2 })
+    const settle = () => settleAll([writer, reader])
+
+    writer.engine.start()
+    reader.engine.start()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(writer.region, name)
+      writer.engine.localWrite()
+      await settle()
+    }
+
+    const imported = await localCounts(reader)
+
+    // The subscription's answer is a row too: past the limit of 2, with no snapshot yet.
+    expect(imported.snapshots).toBe(0)
+    expect(imported.updates).toBeGreaterThan(2)
+
+    // The tab comes back into view: a full pass.
+    reader.engine.visibility('hidden')
+    reader.engine.visibility('visible')
+
+    await vi.waitFor(async () =>
+      expect(await localCounts(reader)).toEqual({ snapshots: 1, updates: 0 }),
+    )
+    expect(reader.region.recordJson(profileKey)).toMatchObject({ name: 'Anna' })
+    expect([...writer.errors, ...reader.errors]).toEqual([])
   })
 
   it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {

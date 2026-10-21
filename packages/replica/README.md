@@ -33,14 +33,17 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 
 - `RegionDoc`: `inMemory(kind)`, `open(local, ref)` with persistence, `records()`,
   `recordMap(key)`, `recordJson(key)`, `flush()` (reports an update that could not be made
-  durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`,
-  `close()`. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
+  durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`
+  (saves a snapshot of the document and drops the log rows it covers; the outbox stays),
+  `compactIfLong(limit)` (compacts once the log holds more than `limit` rows past the snapshot,
+  and leaves it for later while imported updates wait for their history), `close()`. A document
+  opens from the snapshot and the rows after it. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
   the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
-  an import. `stale()` tells whether another document of the region reset it since this one
+  an import; when a compaction dropped rows it had not read, the snapshot comes first. `stale()` tells whether another document of the region reset it since this one
   opened (an in-memory document never is); every write and catch-up of such a document fails
   `data:REGION_STALE`.
 - `replaceRegionDoc(local, current, how)` (`RegionReplacement`: `reset` or `reopen`): the
@@ -128,7 +131,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
-  push carries, 256 by default; `replaceRegion(region, how)`, the app's document that takes a
+  push carries, 256 by default; `localCompactionRows`, how many rows past its snapshot a region's
+  local log holds before a full pass compacts it, 200 by default as on the server;
+  `replaceRegion(region, how)`, the app's document that takes a
   region's place, below) returns a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
@@ -224,7 +229,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   hub, region sync
   and the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
 - `bun run measure`: the write path on this machine (1000 create commands, 1000 renames of one
-  record, projecting 1000 records into an embedded database), printed as JSON.
+  record, projecting 1000 records into an embedded database) and the time to open a region
+  whose local log holds 1000 rows, then once it is compacted, printed as JSON.
 - `bun run measure:validation`: what checking a pushed batch costs the server, as a table: p50
   and p95 of `validateBatch` for 200 batches of 1 and of 20 changes on regions of 10, 100 and
   1000 profile records, the time of `doc.fork()` alone and the region's snapshot size.
