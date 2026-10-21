@@ -21,7 +21,7 @@ Run through this table after editing a rule in `.cursor/rules/` or a skill in
 | Add a "Saved" notice to the profile page | process -> ui-i18n-direct-keys |
 | Add a delete button with a confirmation menu | process -> ui-primitive-hygiene -> shadcn skill |
 | Add a delete button to the notes list and make it testable | process -> ui-contract -> adding-ui-anchors |
-| Describe a new screen for the modeling thread | process -> ui-contract |
+| Describe a new screen for the modeling thread | process -> ui-contract -> adding-ui-anchors |
 | An e2e test cannot find the invite button | process -> ui-contract |
 | Load the Spanish catalog only when the user picks Spanish | process -> static-imports-only |
 | Make the database port configurable per machine | process -> monorepo-env-minimalism |

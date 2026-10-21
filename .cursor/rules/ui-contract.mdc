@@ -35,9 +35,10 @@ globs: '**/presentation/**/*.tsx, packages/ui/src/**/*.tsx, contract/**'
 
 - **Three files are the source.** `contract/vocabulary.md`, `contract/screens.json` and
   `contract/model.schema.json`. The contract changes first, the code and the tests follow it.
-  A word that is not in the vocabulary is a change of the vocabulary, never a local name. The
-  `contract/*.schema.json` files are generated (`bun run contract:schemas`), never edited by
-  hand; `contract/COVERAGE.md` is a note written by `bun run contract:coverage --write`.
+  A word that is not in the vocabulary is a change of the vocabulary, never a local name.
+  `screens.schema.json`, `x-perch.schema.json` and `manifest.schema.json` beside them are
+  generated (`bun run contract:schemas`), never edited by hand (`model.schema.json` is
+  authored); `contract/COVERAGE.md` is a note written by `bun run contract:coverage --write`.
 - **Grammar.** An anchor is the value of `data-testid`: 2 to 4 dot-separated kebab-case
   segments, the screen name first, the kind last as the last dash-separated word of the last
   segment (`user.sign-in.email-input`). The `Grammar` section of `contract/vocabulary.md` is
@@ -80,9 +81,9 @@ globs: '**/presentation/**/*.tsx, packages/ui/src/**/*.tsx, contract/**'
   by its end; every device starts as `guest`.
 - **The manifest** is built from the three files and served on every stand at
   `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it
-  (`Cache-Control: no-store`; `PERCH_UI_MANIFEST=0` on a stand answers 404). On dev and e2e
-  builds (`PERCH_UI_HOOKS=1`), `window.__perch.ui.anchors()` lists the anchors a page renders
-  now.
+  (`Cache-Control: no-store`; `PERCH_UI_MANIFEST=0` on a stand answers 404). On a development build, and on a
+  production build made with `PERCH_UI_HOOKS=1` (the e2e stand's), `window.__perch.ui.anchors()`
+  lists the anchors a page renders now.
 - **The checks.** `bun run contract:check` (in `bun run check` and the pre-commit hook): the
   files against each other and the schema drift. `bun run contract:check:sources`: the
   anchors and codes of `apps/web/src` and `packages/ui/src` against the contract.

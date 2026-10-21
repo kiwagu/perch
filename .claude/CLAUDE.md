@@ -39,3 +39,10 @@ that applies to the task, starting with the router.
 Pinned in `skills-lock.json`, installed under `.agents/skills/`: `shadcn`,
 `surrealql`, `surrealql-functions`, `surrealkit`, `surrealdb-js`, `surrealdb-cli`.
 Restore them with `bunx skills experimental_install`.
+
+## Project skills
+
+`adding-ui-anchors` (`.agents/skills/adding-ui-anchors/SKILL.md`, linked from
+`.claude/skills/`): adding, renaming or removing an anchor, or describing a new screen, contract
+first. It lives beside the vendor skills but belongs to this repository, so it is not in
+`skills-lock.json`.

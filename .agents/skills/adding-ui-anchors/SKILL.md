@@ -32,16 +32,18 @@ description: "Add, rename or remove an anchor (data-testid) of the web app, or d
 ## Steps
 
 1. **Read what exists.** Open the screen in `contract/screens.json` (its `entry`, `anchors`,
-   `states` and `flow`). On the dev stand (`mcproc start dev`), run
+   `states` and `flow`). On the dev stand (`mcproc start dev`, a development build), run
    `window.__perch.ui.anchors()` in the page's console: the anchors the page renders now, with
    their kind, `data-state`, `data-code`, `data-id`, `data-value` and visibility. When the
    element already has an anchor, use it and stop.
-2. **Name it by the grammar** of `contract/vocabulary.md`: the screen name first, then
-   `<object>-<kind>` with a kind of "Kinds" (`organisation.notes.delete-button`). Check that
-   the name is free: `git grep -n '<anchor>' -- apps packages` prints nothing, the name is not
-   declared in `contract/screens.json`, and it is not another anchor plus a derived suffix
-   (the entries of `x.list` are `x.list.<object>-item`).
-3. **Declare it in `contract/screens.json`**, the contract first, then the code: under the
+2. **Name it by the grammar** of `contract/vocabulary.md`: the screen name first, an optional
+   middle segment for the part of the screen (`notes`), then `<object>-<kind>` with a kind of
+   "Kinds" (`organisation.notes.pin-button`). Check that the name is free:
+   `git grep -n '<anchor>' -- apps packages` prints nothing, the name is not declared in
+   `contract/screens.json`, and it is not another anchor plus a derived suffix: the entries of
+   a container `x.list` are `x.list.<object>-item`, never `x.list.item`.
+3. **Declare it in `contract/screens.json`**, the contract first, then the code (on a new
+   screen, step 5 comes first: the screen exists in the contract before its anchors): under the
    screen's `anchors`, its `kind`, a `description`, its `binding` (a model field, an action
    with its params, a route, or an array of them), its `codes`, `states`, `dataId` or
    `dataValue`, `derived` suffixes, `roles` and `own` as they apply. A new code, state or
@@ -76,5 +78,6 @@ description: "Add, rename or remove an anchor (data-testid) of the web app, or d
 - Declare or render a reserved anchor of the shell from a feature.
 - Declare one anchor on two screens, or mark two elements with one anchor that is not an
   `item`, `row` or `option`.
-- Edit `contract/*.schema.json` by hand, or copy the vocabulary's tables into another file.
+- Edit the generated `contract/screens.schema.json`, `x-perch.schema.json` or
+  `manifest.schema.json` by hand (`model.schema.json` is authored), or copy the vocabulary's tables into another file.
 - Change the code before the contract.
