@@ -57,7 +57,7 @@ export interface IdentitySessionsOptions {
    * Where each device an identity signs in on is recorded with the refresh grant its pair holds,
    * and where the grant it held before is revoked.
    */
-  readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
+  readonly devices: Pick<DeviceSessions, 'touch' | 'revokeGrant' | 'signedOut'>
   /** Where the identity access method issues tokens; a token issued elsewhere is refused. */
   readonly scope: TokenScope
   /** Times the pairs parked for a retry out. */
@@ -142,7 +142,7 @@ function renew(
 export class IdentitySessions {
   readonly #openAuth: () => AuthPort
   readonly #onFailure: (error: DataError) => void
-  readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant'>
+  readonly #devices: Pick<DeviceSessions, 'touch' | 'revokeGrant' | 'signedOut'>
   readonly #scope: TokenScope
   /** The renewed pairs waiting for their device, and each device's turns of key operations. */
   readonly #pairs: PendingPairs
@@ -256,6 +256,31 @@ export class IdentitySessions {
   /** Runs a key operation of the device once those before it ended (`PendingPairs.exclusively`). */
   exclusively<T>(device: string, work: () => Promise<T>): Promise<T> {
     return this.#pairs.exclusively(device, work)
+  }
+
+  /**
+   * Takes back a sign-up or sign-in whose answer could not be given, its pair never reaching the
+   * device: the device holding its grant is marked signed out, then the grant is revoked, so no
+   * live grant is left that no device holds. A failure is reported; the device's next sign-in
+   * revokes the grant all the same.
+   */
+  withdraw(signed: SignedIn): ResultAsync<void, never> {
+    const grant = grantIdOf(signed.tokens.refresh)
+
+    if (grant === undefined) {
+      return okAsync(undefined)
+    }
+
+    const identity = signed.identity.id
+
+    return this.#devices
+      .signedOut({ identity, grant })
+      .andThen(() => this.#devices.revokeGrant({ identity, grant }))
+      .orElse((error) => {
+        this.#onFailure(error)
+
+        return okAsync(undefined)
+      })
   }
 
   /** Takes out the pair parked for the device and the key it presents (`PendingPairs.parked`). */

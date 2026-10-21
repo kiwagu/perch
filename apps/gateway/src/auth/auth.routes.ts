@@ -1,4 +1,4 @@
-import type { Result, ResultAsync } from 'neverthrow'
+import { errAsync, type Result, type ResultAsync } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
@@ -98,7 +98,7 @@ async function settling(
  * another path is not answered here (`undefined`), so the server can try its other routes.
  */
 export function authRoutes(
-  sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
+  sessions: Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'>,
   organisations: Pick<Organisations, 'membershipsOf'>,
   limits: CredentialLimits,
 ): (request: Request, from: string) => Promise<Response | undefined> {
@@ -143,7 +143,9 @@ export function authRoutes(
     const result = await checked.asyncAndThen((signedIn) =>
       organisations
         .membershipsOf(signedIn.identity.id)
-        .map((memberships): SignedInWithMemberships => ({ ...signedIn, memberships })),
+        .map((memberships): SignedInWithMemberships => ({ ...signedIn, memberships }))
+        // The pair is not answered: the sign-in is taken back, its grant with it.
+        .orElse((error) => sessions.withdraw(signedIn).andThen(() => errAsync(error))),
     )
 
     return result.match(signedInResponse, errorResponse)

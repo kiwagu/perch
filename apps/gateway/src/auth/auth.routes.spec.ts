@@ -28,13 +28,21 @@ const signedIn: SignedIn = {
 }
 
 /** The sign-in service as the routes see it: Ann exists, with her password. */
-function stubSessions(): Pick<IdentitySessions, 'signUp' | 'signIn'> & {
+function stubSessions(): Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'> & {
   readonly calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]>
+  readonly withdrawn: SignedIn[]
 } {
   const calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]> = []
+  const withdrawn: SignedIn[] = []
 
   return {
     calls,
+    withdrawn,
+    withdraw: (signed) => {
+      withdrawn.push(signed)
+
+      return okAsync(undefined)
+    },
     signUp: (input, device) => {
       calls.push([input, device])
 
@@ -65,7 +73,7 @@ const annsAddress = '203.0.113.7'
  * from an address, Ann's by default.
  */
 function limitedRoutes(
-  sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
+  sessions: Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'>,
   organisations: Pick<Organisations, 'membershipsOf'> = noMemberships,
 ) {
   const clock = manualClock(1_000)
@@ -202,8 +210,9 @@ describe('authRoutes', () => {
     })
   })
 
-  it('answers 500 when the memberships of the identity cannot be read', async () => {
-    const { ask } = limitedRoutes(stubSessions(), {
+  it('answers 500 when the memberships of the identity cannot be read, and takes the sign-in back', async () => {
+    const sessions = stubSessions()
+    const { ask } = limitedRoutes(sessions, {
       membershipsOf: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is gone')),
     })
 
@@ -211,6 +220,8 @@ describe('authRoutes', () => {
       status: 500,
       body: { code: 'internal' },
     })
+    // Its pair never reached the device: no grant is left alive that nobody holds.
+    expect(sessions.withdrawn).toEqual([signedIn])
   })
 
   it('answers 405 to a method other than POST', async () => {
@@ -446,7 +457,7 @@ function heldSignIns(answer: () => Promise<Result<SignedIn, DataError>>) {
     release = resolve
   })
   const state = { arrived: 0 }
-  const sessions: Pick<IdentitySessions, 'signUp' | 'signIn'> = {
+  const sessions: Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'> = {
     ...stubSessions(),
     signIn: () => {
       state.arrived += 1

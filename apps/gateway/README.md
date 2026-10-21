@@ -26,7 +26,9 @@ expires (at most 15 minutes). Using it takes a stolen token issued in the same w
 second as both the sign-out and the new sign-in. A sign-in on a device whose row held another
 grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
 identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
-revoke that fails is reported and leaves the sign-in standing. Only a refusal by the database
+revoke that fails is reported and leaves the sign-in standing. A sign-up or sign-in whose
+memberships cannot be read answers 500 and is taken back: its device is marked signed out and its
+grant revoked, since its pair never reached the device. Only a refusal by the database
 is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
 cannot be reached answers 500, here and on every route and hello below. Devices sync over
 a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 6 (the
