@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { TEST_SIGNING_KEY } from '@workspace/data/testing'
 
-import { runSeed } from './seed'
+import { runSeed } from './run'
 
 describe('runSeed', () => {
   it("calls the gateway's routes through the fetcher it is given", async () => {
