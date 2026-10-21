@@ -7,17 +7,17 @@
 import type { AuthTokens, AuthUser, DataError } from '@workspace/data'
 import { CLOSE, type ServerMessage } from '@workspace/replica/protocol'
 
-import type { DeviceSessions } from '../auth/device-sessions'
+import type { DeviceSessions } from '../../auth/device-sessions'
 import {
   type DeviceTokens,
   type IdentitySessions,
   keysRefused,
   type RenewalGate,
-} from '../auth/identity-sessions'
+} from '../../auth/identity-sessions'
 
-import { REASON } from './connection-reasons'
 import { bindDevice } from './hello-keys'
 import type { HelloRenewals } from './hello-renewals'
+import { REASON } from './reasons'
 
 /**
  * What the connection does once a renewal over the channel ended: delivers the new pair; answers

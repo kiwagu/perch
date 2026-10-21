@@ -175,7 +175,10 @@ export class TenantSpaces {
   #tellIfMoved(before: TenantSpace | undefined): void {
     if (this.currentSpace() !== before) {
       for (const listener of [...this.#listeners]) {
-        listener()
+        // A listener that stopped listening while the others were told is not told.
+        if (this.#listeners.has(listener)) {
+          listener()
+        }
       }
     }
   }

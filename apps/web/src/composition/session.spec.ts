@@ -354,6 +354,27 @@ describe('SessionService', () => {
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
+  it("asks before signing out offline while an organisation's region holds an unsent change", async () => {
+    const { session, destroyed, driveClock } = await bootSession({
+      saved: annIn([acme]),
+      online: false,
+    })
+
+    expect(
+      (
+        await session.writePath.run(createNote, {
+          id: noteIdFactory.create(),
+          author: ann.identity.id,
+          text: 'not sent',
+        })
+      ).isOk(),
+    ).toBe(true)
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(destroyed()).toEqual([])
+  })
+
   it('signs out offline without asking when nothing is unsent', async () => {
     const { session, destroyed, gateway, driveClock } = await bootSession({
       saved: ann,
@@ -1462,6 +1483,36 @@ describe('SessionService memberships', () => {
     storage.changeElsewhere('perch.session.token', 'access-2')
 
     expect(await renewing).toBe(true)
+  })
+
+  it('renewKeys in a following tab resolves false when no new keys come within 10 seconds', async () => {
+    const { a, b, storage } = await twoTabs({ online: true, hints: true })
+    const before = storage.get('perch.session.token')
+    let renewed: boolean | undefined
+
+    void b.session.renewKeys().then((answer) => {
+      renewed = answer
+    })
+
+    // The leader asks the gateway, which answers nothing.
+    await vi.waitFor(() => expect(a.transports().at(-1)?.renews()).toBe(1))
+    await b.clock.advance(9_999)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(renewed).toBeUndefined()
+
+    await b.clock.advance(1)
+    await vi.waitFor(() => expect(renewed).toBe(false))
+    expect(storage.get('perch.session.token')).toBe(before)
+  })
+
+  it('renewKeys in a following tab resolves false at once when another tab removes the access key', async () => {
+    const { b, storage } = await twoTabs({ online: true, hints: true })
+    const renewing = b.session.renewKeys()
+
+    // Another tab signed out: the key is gone, not renewed.
+    storage.changeElsewhere('perch.session.token', undefined)
+
+    expect(await renewing).toBe(false)
   })
 
   it.each(['unauthorized', 'revoked'] as const)(

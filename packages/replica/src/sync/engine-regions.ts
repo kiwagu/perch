@@ -108,7 +108,8 @@ export class EngineRegions {
           const sync = this.#syncOf(region)
 
           this.#map.set(id, { region, sync })
-          sync.subscribe()
+          // On the current connection, as its welcome named the region or not.
+          sync.welcome(current.sync.welcomed())
           this.#options.drain()
         }
       },

@@ -70,6 +70,13 @@ export interface WebSocketTransportOptions {
 /** How long the transport waits before each reconnect in a row; the last delay repeats. */
 export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
 
+/**
+ * What one region's sync uses of the transport: it sends, and has a connection that stopped
+ * answering made again. `RegionSync` hands its parts a channel that refuses both once the region
+ * no longer syncs on this connection.
+ */
+export type RegionChannel = Pick<SyncTransport, 'send' | 'reconnect'>
+
 /** How long an open socket waits for the gateway's welcome before it is given up. */
 export const WELCOME_TIMEOUT_MS = 10_000
 

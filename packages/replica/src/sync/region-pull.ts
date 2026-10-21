@@ -5,11 +5,11 @@ import type { RegionDoc } from '../region-doc'
 
 import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
 import { ownBytes } from './message-bytes'
-import type { SyncTransport } from './transport'
+import type { RegionChannel } from './transport'
 
 export interface RegionPullOptions {
   readonly region: RegionDoc
-  readonly transport: SyncTransport
+  readonly transport: RegionChannel
   /** Times how long a pull waits for its answer. */
   readonly clock: Clock
   /** Imported something from the server. */
@@ -27,7 +27,7 @@ export interface RegionPullOptions {
  */
 export class RegionPull {
   readonly #region: RegionDoc
-  readonly #transport: SyncTransport
+  readonly #transport: RegionChannel
   readonly #clock: Clock
   readonly #onSettled: () => void
   readonly #onError: (error: DataError) => void

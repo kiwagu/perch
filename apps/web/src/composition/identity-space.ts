@@ -24,16 +24,15 @@ import {
 import type { IdentityId } from '@workspace/ids'
 import { type Clock, privateRegionId, type ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
-import {
-  type ChannelState,
-  createSyncEngine,
-  type Leadership,
-  type SyncEngine,
-  type SyncHint,
-  type SyncHints,
-  type SyncTransport,
+import type {
+  Leadership,
+  SyncEngine,
+  SyncHint,
+  SyncHints,
+  SyncTransport,
 } from '@workspace/replica/sync'
 
+import { FOLLOWING, LeadingEngine, type SyncState, type Visibility } from './leading-engine'
 import { RegionReloads } from './region-reloads'
 import {
   keysOf,
@@ -43,13 +42,7 @@ import {
 import { RoutingShapeRunner, RoutingWritePath } from './routing'
 import { openRegionSpace, type RegionSpace, TenantSpaces } from './tenant-space'
 
-export type Visibility = 'visible' | 'hidden'
-
-/** Whether this tab leads the browser's sync, and the state of its channel to the gateway. */
-export interface SyncState {
-  readonly leader: boolean
-  readonly channel: ChannelState
-}
+export type { SyncState, Visibility } from './leading-engine'
 
 export interface IdentitySpace {
   readonly identity: AuthUser
@@ -93,6 +86,12 @@ export interface IdentitySpace {
    */
   renewSync(): void
   /**
+   * Has the leading tab's engine sign the device out (`SyncEngine.signOut`); `offline` when this
+   * tab runs no engine. A change of memberships meanwhile replaces that engine, which ends the
+   * sign-out `offline`.
+   */
+  signOut(): Promise<'signed-out' | 'offline'>
+  /**
    * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
    * engine's channel: as on a change of leader, a new engine over a new channel replaces it
    * (an engine never starts twice). Nothing happens while another tab leads, or while the
@@ -134,8 +133,6 @@ export interface IdentitySpaceOptions {
   readonly onError: (error: DataError) => void
 }
 
-const FOLLOWING: SyncState = { leader: false, channel: 'down' }
-
 class Space implements IdentitySpace {
   readonly runner: ShapeRunnerPort
   readonly writePath: WritePathPort
@@ -145,8 +142,7 @@ class Space implements IdentitySpace {
   readonly #reloads: RegionReloads
   readonly #options: IdentitySpaceOptions
   readonly #listening: Array<() => void> = []
-  #engine: SyncEngine | undefined
-  #visibility: Visibility = 'visible'
+  readonly #leading: LeadingEngine
   #closing: Promise<void> | undefined
   /** The change of memberships under way, if any; the next one waits for it. It never rejects. */
   #changing: Promise<void> = Promise.resolve()
@@ -183,6 +179,19 @@ class Space implements IdentitySpace {
           .andTee(() => this.#wrote())
           .orTee((error) => this.#stale(error)),
     }
+    this.#leading = new LeadingEngine({
+      regions: () => this.#spaces().map((space) => space.region),
+      transport: options.transport,
+      clock: options.clock,
+      actor: options.identity.id,
+      hints: options.hints,
+      replaceRegion: (region, how) => this.#reloads.replace(region, how),
+      onState: options.onState,
+      onError: (error) => {
+        options.onError(error)
+        this.#stale(error)
+      },
+    })
     this.#listening.push(options.hints.on((hint) => this.#hint(hint)))
     this.#followLeadership(options.leadership)
     // The databases the device holds of organisations the identity left meanwhile go first.
@@ -194,7 +203,7 @@ class Space implements IdentitySpace {
   }
 
   get sync(): SyncEngine | undefined {
-    return this.#engine
+    return this.#leading.current
   }
 
   flush(): ResultAsync<void, DataError> {
@@ -236,23 +245,19 @@ class Space implements IdentitySpace {
   }
 
   visibility(state: Visibility): void {
-    this.#visibility = state
-
-    if (this.#engine) {
-      this.#engine.visibility(state)
-    } else if (state === 'visible') {
-      this.#options.hints.post('visible')
-    }
+    this.#leading.visibility(state)
   }
 
   renewSync(): void {
-    this.#engine?.renew()
+    this.#leading.current?.renew()
+  }
+
+  signOut(): Promise<'signed-out' | 'offline'> {
+    return this.#leading.signOut()
   }
 
   resumeSync(): void {
-    if (this.#engine?.channelStopped()) {
-      this.#relead()
-    }
+    this.#leading.resume()
   }
 
   close(): Promise<void> {
@@ -288,7 +293,7 @@ class Space implements IdentitySpace {
     const { changed, left } = await this.#tenants.change(next)
 
     if (changed) {
-      this.#relead()
+      this.#leading.relead()
     }
 
     this.#options.tenantDatabases.drop(await this.#tenants.delete(left))
@@ -308,74 +313,20 @@ class Space implements IdentitySpace {
       return
     }
 
-    this.#listening.push(leadership.onChange((leader) => (leader ? this.#lead() : this.#follow())))
+    this.#listening.push(
+      leadership.onChange((leader) => (leader ? this.#leading.lead() : this.#leading.follow())),
+    )
 
     if (leadership.isLeader()) {
-      this.#lead()
+      this.#leading.lead()
     } else {
       this.#options.onState(FOLLOWING)
     }
   }
 
-  /** This tab starts to lead: a new engine over a new channel (an engine never starts twice). */
-  #lead(): void {
-    if (this.#engine || this.#closing) {
-      return
-    }
-
-    const engine = createSyncEngine({
-      regions: this.#spaces().map((space) => space.region),
-      transport: this.#options.transport(),
-      clock: this.#options.clock,
-      actor: this.identity.id,
-      onState: ({ channel }) => {
-        if (this.#engine === engine) {
-          this.#options.onState({ leader: true, channel })
-        }
-      },
-      onSettled: () => this.#options.hints.post('settled'),
-      replaceRegion: (region, how) => this.#reloads.replace(region, how),
-      // Work a stopped engine still had under way fails once the database closes under it;
-      // that is not reported: what it did not store, the next leader pulls again.
-      onError: (error) => {
-        if (this.#engine === engine) {
-          this.#options.onError(error)
-          this.#stale(error)
-        }
-      },
-    })
-
-    this.#engine = engine
-    engine.visibility(this.#visibility)
-    this.#options.onState({ leader: true, channel: 'down' })
-    engine.start()
-  }
-
-  /** A leading tab replaces its engine with a new one over a new channel; a follower has none. */
-  #relead(): void {
-    const engine = this.#engine
-
-    if (!engine) {
-      return
-    }
-
-    this.#engine = undefined
-    engine.stop()
-    this.#lead()
-  }
-
-  /** Another tab leads now: this one stops syncing. */
-  #follow(): void {
-    const engine = this.#engine
-
-    this.#engine = undefined
-    engine?.stop()
-    this.#options.onState(FOLLOWING)
-  }
-
   /** A write of this tab is durable: the leader drains it, the other tabs read it from the log. */
   #wrote(): void {
-    this.#engine?.localWrite()
+    this.#leading.current?.localWrite()
     this.#options.hints.post('journal')
   }
 
@@ -384,24 +335,24 @@ class Space implements IdentitySpace {
       // Another tab wrote to the log: read it, and drain it when leading.
       case 'journal':
         this.#catchUp()
-        this.#engine?.localWrite()
+        this.#leading.current?.localWrite()
         break
       // The leader imported from the gateway into the log.
       case 'settled':
         this.#catchUp()
         break
       case 'visible':
-        this.#engine?.visibility('visible')
+        this.#leading.current?.visibility('visible')
         break
       case 'kick':
-        this.#engine?.localWrite()
+        this.#leading.current?.localWrite()
         break
       // Another tab began a sign-out: the session holds this tab's writes back.
       case 'sign-out':
         break
       // Another tab needs new keys: the leader asks the gateway for them over its channel.
       case 'renew':
-        this.#engine?.renew()
+        this.#leading.current?.renew()
         break
       // Another tab reset a region: open it again from the database.
       case 'reset':
@@ -438,10 +389,7 @@ class Space implements IdentitySpace {
       stop()
     }
 
-    const engine = this.#engine
-
-    this.#engine = undefined
-    engine?.stop()
+    this.#leading.stop()
     this.#options.leadership?.stop()
     this.#options.hints.close()
     // A change of memberships under way ends first: the databases it opens close with the others.

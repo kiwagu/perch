@@ -5,11 +5,10 @@ import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { RegionHub } from '@workspace/replica/server'
 
-import type { DeviceSessions } from '../auth/device-sessions'
-import type { IdentitySessions, RenewalGate } from '../auth/identity-sessions'
-import type { Organisations } from '../tenants/organisations'
-
-import type { ConnectionRegistry } from './connections'
+import type { DeviceSessions } from '../../auth/device-sessions'
+import type { IdentitySessions, RenewalGate } from '../../auth/identity-sessions'
+import type { Organisations } from '../../tenants/organisations'
+import type { ConnectionRegistry } from '../connections'
 
 export interface SocketLike {
   /** 0 when the socket dropped the message, -1 when it queued it, else the bytes it sent. */
