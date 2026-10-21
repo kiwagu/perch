@@ -2,9 +2,10 @@
 
 Contract version: 1
 
-The closed lists of the UI contract. Every anchor, kind, suffix, attribute, state, code,
-choice value, role and screen name that `screens.json` uses is listed here once; a name
-that is not here is a problem of the contract, not a new word.
+The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
+value, role and screen name that `screens.json` uses is listed here once (the anchors
+themselves are declared in `screens.json`); a name that is not here is a problem of the
+contract, not a new word.
 
 ## Grammar
 

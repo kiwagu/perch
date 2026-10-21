@@ -58,7 +58,7 @@
         },
         "app-shell.locale-select": {
           "kind": "select",
-          "description": "The language of the app; a choice applies at once, and while the profile is open it is stored in the profile, whose language wins when the profile first arrives on a device.",
+          "description": "The language of the app; a choice applies at once, and while the profile is open it is stored in the profile, whose stored language wins each time the profile page opens.",
           "binding": {
             "action": "profile.updateLocale",
             "params": { "locale": "app-shell.locale-select" }
@@ -101,7 +101,11 @@
             "outcomes": {
               "success": {
                 "route": "/sign-in",
-                "note": "The button waits while the sign-out runs."
+                "note": "The button waits while the sign-out runs; the page loads again on sign-in."
+              },
+              "failure": {
+                "route": "/sign-in",
+                "note": "A failed sign-out also loads the sign-in page again; no code is shown."
               }
             }
           }
