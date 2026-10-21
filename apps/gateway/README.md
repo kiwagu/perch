@@ -145,7 +145,9 @@ row (unknown, or signed out: its access token still works, its calls do not), or
 started after the token was issued, 401 (`unauthorized`). A refresh key is not taken over HTTP:
 a request with a valid device header but without an access token the database accepts answers
 401, and one whose token the database could not judge answers 500; a missing or invalid
-`X-Perch-Device` answers 400 first, before any token is checked. `GET /organisations` lists the
+`X-Perch-Device` answers 400 first, before any token is checked. Every such 401 names the scheme
+in `WWW-Authenticate: Bearer` (`src/auth/bearer-caller.ts`, shared with the device routes).
+`GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
 the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
 (403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
