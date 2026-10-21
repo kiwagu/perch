@@ -85,6 +85,29 @@ export async function hello(
   return { device, welcome }
 }
 
+/**
+ * Opens a device of the identity whose hello carries an unreadable access key and its refresh
+ * key, so the gateway must renew the pair; settles with how the gateway closed it.
+ */
+export async function helloOnRefresh(
+  base: string,
+  opened: Opened,
+  { tokens, device: id }: SignedIn,
+) {
+  const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
+
+  opened.devices.push(device)
+  device.send({
+    type: 'hello',
+    protocol: PROTOCOL_VERSION,
+    access: 'not-a-token',
+    refresh: tokens.refresh,
+    device: id,
+  })
+
+  return device.closed
+}
+
 /** Takes the device's next `updates` into its document; answers with the update's head. */
 export async function takeUpdates(
   device: SmokeDevice,

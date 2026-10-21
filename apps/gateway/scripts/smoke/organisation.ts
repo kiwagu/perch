@@ -1,8 +1,3 @@
-/**
- * The organisation path of the smoke test: an organisation, a second identity invited into it,
- * writes into the organisation's region from both, refusals, and the removal.
- */
-
 import { noteIdFactory } from '@workspace/ids'
 import { RegionDoc } from '@workspace/replica'
 import { CLOSE, type Membership, membership } from '@workspace/replica/protocol'
@@ -12,7 +7,16 @@ import { noteCreate, noteDelete, noteUpdate } from '../../src/sync/__fixtures__/
 
 import { callAs, postCredentials, type SignedIn } from './http'
 import { refusedWriteSteps } from './refused-writes'
-import { check, hello, type Opened, refusal, step, takeUpdates, unwrap } from './steps'
+import {
+  check,
+  hello,
+  helloOnRefresh,
+  type Opened,
+  refusal,
+  step,
+  takeUpdates,
+  unwrap,
+} from './steps'
 
 const createdOrganisation = z.object({ membership: membership })
 
@@ -25,8 +29,9 @@ function hasRegion(regions: readonly { readonly region: string }[], region: stri
   return regions.some((entry) => entry.region === region)
 }
 
-function keysOf(memberships: readonly Membership[]): string[] {
-  return memberships.map((entry) => entry.tenant.key)
+/** A welcome's memberships as `<key>:<role>`, the way the steps compare them. */
+function rolesOf(memberships: readonly Membership[]): string {
+  return memberships.map((entry) => `${entry.tenant.key}:${entry.role}`).join()
 }
 
 /**
@@ -39,6 +44,7 @@ export async function organisationSteps(
   base: string,
   opened: Opened,
   owner: SignedIn,
+  ownerCredentials: { readonly email: string; readonly password: string },
 ): Promise<void> {
   const key = `smoke_${Date.now().toString(36)}`
   const region = `tenant:${key}`
@@ -80,7 +86,7 @@ export async function organisationSteps(
       const { device, welcome } = await hello(base, opened, guest)
 
       check(
-        keysOf(welcome.memberships).join() === key,
+        rolesOf(welcome.memberships) === `${key}:member`,
         `welcomed with ${JSON.stringify(welcome.memberships)}`,
       )
       check(
@@ -104,6 +110,10 @@ export async function organisationSteps(
   const ownerDevice = await step('owner device subscribed to the organisation region', async () => {
     const { device, welcome } = await hello(base, opened, owner)
 
+    check(
+      rolesOf(welcome.memberships) === `${key}:admin`,
+      `welcomed with ${JSON.stringify(welcome.memberships)}`,
+    )
     check(hasRegion(welcome.regions, region), `no ${region} in ${JSON.stringify(welcome.regions)}`)
     device.subscribe(region)
     check((await takeUpdates(device, ownerDoc, true)) === 0, 'the snapshot is not at head 0')
@@ -183,6 +193,26 @@ export async function organisationSteps(
     check(ack.batch === 2 && ack.head === 4, `ack of batch ${ack.batch} at head ${ack.head}`)
   })
 
+  await step(
+    "a late device of the owner subscribed: the snapshot at head 4 holds the admin's note only",
+    async () => {
+      const late = await postCredentials(base, '/auth/sign-in', {
+        ...ownerCredentials,
+        device: { id: 'smoke-device-late', label: 'Smoke late device' },
+      })
+      const lateDoc = RegionDoc.inMemory('tenant', region)
+      const { device } = await hello(base, opened, late)
+
+      device.subscribe(region)
+      check((await takeUpdates(device, lateDoc, true)) === 4, 'the snapshot is not at head 4')
+      check(
+        lateDoc.recordJson(`note/${ownerNoteId}`)?.['text'] === 'From the admin',
+        "the snapshot misses the admin's note",
+      )
+      check(lateDoc.recordJson(`note/${noteId}`) === undefined, 'the snapshot holds a deleted note')
+    },
+  )
+
   await refusedWriteSteps({
     region,
     owner: { signedIn: owner, device: ownerDevice, doc: ownerDoc },
@@ -254,4 +284,14 @@ export async function organisationSteps(
 
     check(code === CLOSE.signedOut, `closed with ${code}`)
   })
+
+  // The sign-out ends the grant the invited device signed up with, not only this connection.
+  await step(
+    `the signed-out identity's refresh key is refused: closed with ${CLOSE.unauthorized}`,
+    async () => {
+      const { code } = await helloOnRefresh(base, opened, guest)
+
+      check(code === CLOSE.unauthorized, `closed with ${code}`)
+    },
+  )
 }

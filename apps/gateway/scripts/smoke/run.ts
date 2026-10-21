@@ -9,7 +9,7 @@
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { profileIdFactory } from '@workspace/ids'
 import { RegionDoc, systemClock } from '@workspace/replica'
-import { CLOSE, PROTOCOL_VERSION } from '@workspace/replica/protocol'
+import { CLOSE } from '@workspace/replica/protocol'
 import type { z } from '@workspace/zod'
 
 import { createGatewayRoot } from '../../src/composition/root'
@@ -18,11 +18,11 @@ import { startServer } from '../../src/server'
 import { profileCreate, profileRename } from '../../src/sync/__fixtures__/profile'
 
 import { accessSteps } from './access'
-import { SmokeDevice } from './device'
+import type { SmokeDevice } from './device'
 import { deviceSessionSteps } from './device-sessions'
 import { postCredentials, type SignedIn } from './http'
 import { organisationSteps } from './organisation'
-import { check, hello, type Opened, step, takeUpdates, unwrap } from './steps'
+import { check, hello, helloOnRefresh, type Opened, step, takeUpdates, unwrap } from './steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
@@ -157,25 +157,14 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   })
 
   await step(`the revoked refresh key is refused: closed with ${CLOSE.unauthorized}`, async () => {
-    const device3 = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
-
-    opened.devices.push(device3)
-    device3.send({
-      type: 'hello',
-      protocol: PROTOCOL_VERSION,
-      access: 'not-a-token',
-      refresh: first.tokens.refresh,
-      device: first.device,
-    })
-
-    const { code } = await device3.closed
+    const { code } = await helloOnRefresh(base, opened, first)
 
     check(code === CLOSE.unauthorized, `closed with ${code}`)
   })
 
   await accessSteps(base, root, config.GATEWAY_JWT_KEY, opened)
   await deviceSessionSteps(base, opened)
-  await organisationSteps(base, opened, second)
+  await organisationSteps(base, opened, second, credentials)
 }
 
 /** Runs the smoke test; resolves to the process's exit code. */
