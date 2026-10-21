@@ -3,10 +3,12 @@
 ## Role in the architecture
 
 End-to-end tests of the web application in a real browser, on two Playwright projects:
-`mobile` (Pixel 7) first, then `desktop` (1280x800). Each test pairs by name with an
-instruction spec in `specs/`; after every step a check fails the test when any open page
-scrolls sideways. Each test signs up fresh accounts in fresh browser contexts, with
-data generated from the seed catalog. Key pages are compared with screenshots on `mobile`;
+`mobile` (Pixel 7) first, then `desktop` (1280x800). Each test pairs by id with an
+instruction-style scenario of the contract, in `contract/screens.json` under `scenarios`: the
+scenario `user/01-sign-up` with `src/user/01-sign-up.e2e.spec.ts`, whose first line is
+`// scenario: user/01-sign-up` (`bun run e2e:coverage` checks the pairs); after every step a
+check fails the test when any open page scrolls sideways. Each test signs up fresh accounts in
+fresh browser contexts, with data generated from the seed catalog. Key pages are compared with screenshots on `mobile`;
 the baselines are not committed: the first run on a machine writes them, later runs
 compare against them; after an intended change of a page, `bun run test:e2e
 --update-snapshots=changed` rewrites the ones that differ.
@@ -73,8 +75,9 @@ the organisation and its note on device B).
 
 ## Key exports
 
-None; tests only. `specs/<feature>/*.md` are the specs, `src/<feature>/*.e2e.spec.ts`
-the tests. `src/support/fixtures.ts`: the `test` with the step check and its fixtures,
+None; tests only. `src/<feature>/*.e2e.spec.ts` are the tests; their scenarios are the
+`scenarios` of `contract/screens.json`. `src/support/fixtures.ts`: the `test` with the step
+check and its fixtures,
 `signedIn` (device A, signed up on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks) and `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when

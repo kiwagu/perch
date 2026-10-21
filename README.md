@@ -87,9 +87,9 @@ A branch gets a checkout of its own, with stands of its own, next to the reposit
 `bun run seed --reset` (dev stand) seeds the organisation `acme` with `ann` as its administrator
 and `beto` as a member, besides the demo accounts. Sign in as either one and open `/org` in the
 app: the organisation's name, your role and its shared notes; a note written by one member
-reaches the other's open page. The e2e specs in `tests/e2e/specs/organisation/` cover the
-sharing, an outsider and a change of membership across two accounts, and the gateway smoke
-test (`bun run test:db`) drives the organisation routes and the tenant region on the e2e stand.
+reaches the other's open page. The e2e scenarios `organisation/*` of `contract/screens.json`
+cover the sharing, an outsider and a change of membership across two accounts, and the gateway
+smoke test (`bun run test:db`) drives the organisation routes and the tenant region on the e2e stand.
 
 ## Workspaces
 

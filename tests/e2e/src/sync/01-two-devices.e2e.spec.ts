@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/01-two-devices.md
+// scenario: sync/01-two-devices
 import { generate } from '../support/data'
 import { appReady, expect, test } from '../support/fixtures'
 

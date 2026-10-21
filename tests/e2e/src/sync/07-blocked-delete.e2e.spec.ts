@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/07-blocked-delete.md
+// scenario: sync/07-blocked-delete
 import { appReady, expect, test } from '../support/fixtures'
 import { databases, identityDatabase } from '../support/storage'
 

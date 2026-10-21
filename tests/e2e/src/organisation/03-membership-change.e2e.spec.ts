@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/organisation/03-membership-change.md
+// scenario: organisation/03-membership-change
 import { generate } from '../support/data'
 import { appReady, expect, pageLoads, signUp, test } from '../support/fixtures'
 import { createOrganisation, expectInvited } from '../support/organisation'

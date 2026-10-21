@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/user/02-edit-profile-name.md
+// scenario: user/02-edit-profile-name
 import { generate } from '../support/data'
 import { appReady, expect, test } from '../support/fixtures'
 

@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/user/03-blocked-storage.md
+// scenario: user/03-blocked-storage
 import { expect, test } from '../support/fixtures'
 
 test.describe('Open the app in a browser that blocks site data', { tag: '@smoke' }, () => {

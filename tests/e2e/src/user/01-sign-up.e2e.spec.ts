@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/user/01-sign-up.md
+// scenario: user/01-sign-up
 import { generate } from '../support/data'
 import { appReady, expect, test } from '../support/fixtures'
 

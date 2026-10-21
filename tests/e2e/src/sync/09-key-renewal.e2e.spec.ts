@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/09-key-renewal.md
+// scenario: sync/09-key-renewal
 import type { Page, Response } from '@playwright/test'
 
 import { appReady, expect, signUp, test } from '../support/fixtures'

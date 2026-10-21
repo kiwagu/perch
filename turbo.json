@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["database/schema/**", "tests/e2e/specs/**"],
+  "globalDependencies": ["database/schema/**", "contract/**"],
   "globalPassThroughEnv": [
     "CI",
     "SURREAL_URL",

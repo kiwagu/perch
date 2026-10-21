@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/organisation/04-edit-own-admin-any.md
+// scenario: organisation/04-edit-own-admin-any
 import type { Page } from '@playwright/test'
 
 import { generate } from '../support/data'

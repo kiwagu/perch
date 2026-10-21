@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/06-my-devices.md
+// scenario: sync/06-my-devices
 import type { Page } from '@playwright/test'
 
 import { appReady, expect, signIn, test } from '../support/fixtures'

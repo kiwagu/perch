@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/user/04-unopenable-database.md
+// scenario: user/04-unopenable-database
 import { appReady, expect, test } from '../support/fixtures'
 import { databases, identityDatabase } from '../support/storage'
 

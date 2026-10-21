@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/05-idle-traffic.md
+// scenario: sync/05-idle-traffic
 import { appReady, expect, test } from '../support/fixtures'
 
 const MINUTE_MS = 60_000

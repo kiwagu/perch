@@ -1055,5 +1055,476 @@
       "states": ["opening", "ready", "failed", "storage-blocked"]
     }
   },
-  "scenarios": []
+  "scenarios": [
+    {
+      "id": "user/01-sign-up",
+      "title": "Sign up and see the profile",
+      "tags": ["smoke"],
+      "devices": {
+        "A": "guest"
+      },
+      "where": "[/sign-in] then [user.sign-in.toggle-button]",
+      "data": {
+        "Email": "generate",
+        "Password": "generate",
+        "Name": "generate"
+      },
+      "scenario": "A new user signs up and lands on the profile page",
+      "steps": [
+        "Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]",
+        "Click [user.sign-in.toggle-button]",
+        "Enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input]",
+        "Click [user.sign-in.submit-button]"
+      ],
+      "expected": [
+        "After step 4 [app-shell.notice-message] carries [code:welcome], the URL is [/me] and [user.profile.heading] shows the entered name",
+        "[user.profile.email-input] shows the entered email",
+        "Reloading the page keeps the user signed in and shows the same name"
+      ]
+    },
+    {
+      "id": "user/02-edit-profile-name",
+      "title": "Rename yourself on the profile page",
+      "tags": ["smoke"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/me] then [user.profile.save-button]",
+      "data": {
+        "New name": "generate"
+      },
+      "scenario": "A signed-in user changes their name and keeps it after a reload",
+      "steps": [
+        "Open [/me] and wait for [app-shell.status] to reach [state:ready]",
+        "Clear [user.profile.name-input]",
+        "Enter the new name into [user.profile.name-input]",
+        "Click [user.profile.save-button]"
+      ],
+      "expected": [
+        "After step 4 [app-shell.notice-message] carries [code:profile-saved]",
+        "[user.profile.heading] shows the new name",
+        "Reloading the page keeps the new name"
+      ]
+    },
+    {
+      "id": "user/03-blocked-storage",
+      "title": "Open the app in a browser that blocks site data",
+      "tags": ["smoke"],
+      "devices": {
+        "A": "guest"
+      },
+      "where": "[/sign-in] in a browser that refuses the page its localStorage",
+      "data": {},
+      "scenario": "A browser that keeps no site data is told so instead of being sent to sign-in again and again",
+      "steps": [
+        "Make the browser refuse the page its localStorage, as when site data is blocked",
+        "Open [/sign-in]"
+      ],
+      "expected": [
+        "After step 2 [app-shell.status] is in [state:storage-blocked]: the page says that this browser does not let Perch keep data on this device, and to allow site data for this site, then reload the page",
+        "The page shows no [user.sign-in.form]"
+      ]
+    },
+    {
+      "id": "user/04-unopenable-database",
+      "title": "Sign out of a device whose data will not open",
+      "tags": ["smoke"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/me] then [app-shell.sign-out-here-button], once the account's local database is broken",
+      "data": {},
+      "scenario": "A device that cannot open the account's data offers to sign out on it, which leaves nothing of the account behind",
+      "steps": [
+        "Open [/me] and wait for [app-shell.status] to reach [state:ready]",
+        "Leave the app for another page of the same site and break the account's local database, so that the app can no longer open it",
+        "Open [/me]",
+        "Click [app-shell.sign-out-here-button]"
+      ],
+      "expected": [
+        "After step 3 [app-shell.status] is in [state:failed]: the page says this device could not open the data, to reload the page to try again or sign out on this device, and that changes it has not sent yet are lost; it offers [app-shell.sign-out-here-button]",
+        "Within 15 seconds of step 4 the page is on [/sign-in] and shows [user.sign-in.form]",
+        "Within 15 seconds of step 4 the browser keeps no local database of the account and no longer names the account as signed in"
+      ]
+    },
+    {
+      "id": "sync/01-two-devices",
+      "title": "Keep one account in step on two devices",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity",
+        "B": "identity"
+      },
+      "where": "[/me] on device A, and [/me] on device B, another browser",
+      "data": {
+        "Bio": "generate",
+        "New name": "generate"
+      },
+      "scenario": "A bio written on one device and a name changed on another reach both devices",
+      "steps": [
+        "On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]",
+        "On device A, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]",
+        "On device B, sign in with the same account and wait for [/me]",
+        "On device B, enter the new name into [user.profile.name-input] and click [user.profile.save-button]"
+      ],
+      "expected": [
+        "After step 2 device A shows [app-shell.notice-message] carries [code:profile-saved]",
+        "After step 3 device B shows the bio entered on device A in [user.profile.bio-textarea]",
+        "Within 5 seconds of step 4 device A shows the new name in [user.profile.heading], without a reload",
+        "The time from the click on device B to the new name on device A is reported as \"sync-latency-ms\""
+      ]
+    },
+    {
+      "id": "sync/02-offline-edit",
+      "title": "Edit offline and catch up when back online",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity",
+        "B": "identity"
+      },
+      "where": "[/me] on device A, and [/me] on device B, another browser",
+      "data": {
+        "Bio": "generate",
+        "New name": "generate"
+      },
+      "scenario": "A bio written offline on one device and a name changed meanwhile on another reach both devices",
+      "steps": [
+        "On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]",
+        "On device B, sign in with the same account and wait for [/me]",
+        "Take device B offline",
+        "On device B, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]",
+        "On device A, enter the new name into [user.profile.name-input] and click [user.profile.save-button]",
+        "Bring device B back online"
+      ],
+      "expected": [
+        "After step 3 the sync channel of device B is down",
+        "After step 4 device B shows [app-shell.notice-message] carries [code:profile-saved] and the bio, and its sync channel is still down",
+        "After step 5 device A shows [app-shell.notice-message] carries [code:profile-saved] and the new name",
+        "After step 6 the sync channel of device B comes up again",
+        "Then both devices show the new name from device A and the bio from device B"
+      ]
+    },
+    {
+      "id": "sync/03-one-leader-per-browser",
+      "title": "Sync from one tab per browser",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity",
+        "B": "identity"
+      },
+      "where": "[/me] in two tabs of device A, and [/me] on device B, another browser",
+      "data": {
+        "New name": "generate",
+        "Second name": "generate",
+        "Bio": "generate"
+      },
+      "scenario": "Two tabs of one browser share one sync leader, both tabs' edits reach the other device, and the other tab takes over when the leader closes",
+      "steps": [
+        "On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]",
+        "On device A, open [/me] in a second tab and wait for [app-shell.status] to reach [state:ready]",
+        "On device B, sign in with the same account and wait for [/me]",
+        "In the tab of device A that does not lead the sync, enter the new name into [user.profile.name-input] and click [user.profile.save-button]",
+        "On device A, enter the second name into [user.profile.name-input] in the tab that leads the sync and the bio into [user.profile.bio-textarea] in the other tab, then click [user.profile.save-button] in both tabs at the same moment",
+        "Close the tab of device A that leads the sync"
+      ],
+      "expected": [
+        "After step 2 exactly one of the two tabs of device A leads the sync, and only that tab holds a sync channel",
+        "Within 5 seconds of step 4 device B shows the new name",
+        "Within 5 seconds of step 5 device B shows the second name and the bio: the edit of each tab arrives",
+        "Within 2 seconds of step 6 the remaining tab of device A leads the sync, and its sync channel then comes up"
+      ]
+    },
+    {
+      "id": "sync/04-sign-out",
+      "title": "Sign out of one device",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity",
+        "B": "identity"
+      },
+      "where": "[/me] then [user.profile.sign-out-button] on device A, and [/me] on device B, another browser",
+      "data": {
+        "Bio": "generate",
+        "New name": "generate",
+        "Unsent name": "generate"
+      },
+      "scenario": "Signing out deletes the device's data and leaves the other device signed in, and asks first while changes are unsent",
+      "steps": [
+        "On device A, open [/me], enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]",
+        "On device B, sign in with the same account and wait for [/me]",
+        "On device A, click [user.profile.sign-out-button]",
+        "On device B, enter the new name into [user.profile.name-input] and click [user.profile.save-button]",
+        "On device A, sign in again with the same account and wait for [/me]",
+        "Take device A offline, enter the unsent name into [user.profile.name-input] and click [user.profile.save-button]",
+        "On device A, click [user.profile.sign-out-button]",
+        "Click [user.profile.sign-out-dialog.cancel-button]"
+      ],
+      "expected": [
+        "After step 3 device A is on [/sign-in] and its browser keeps no local database of the account",
+        "After step 4 device B, still signed in, shows [app-shell.notice-message] carries [code:profile-saved]",
+        "After step 5 device A shows the profile the server holds: the new name from device B and the bio from step 1",
+        "After step 7 device A asks before deleting the change it could not send: [user.profile.sign-out-dialog] carries [code:unsent-changes]",
+        "After step 8 device A stays on [/me] with the unsent name, and its local database is kept"
+      ]
+    },
+    {
+      "id": "sync/05-idle-traffic",
+      "title": "Stay quiet while idle",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/me] in a visible tab left alone",
+      "data": {
+        "Idle minutes": "10",
+        "Frames per minute at most": "2"
+      },
+      "scenario": "A visible tab with its sync channel up sends few sync frames while nobody uses it",
+      "steps": [
+        "Put the page's clock under the test's control, open [/me] and wait until the sync channel is up and the catch-up after opening has settled",
+        "Leave the tab idle for the idle minutes of the page's time"
+      ],
+      "expected": [
+        "The page reports no error, keeps checking in with the gateway, and sends at most the allowed number of sync frames per minute, on average over the idle time",
+        "The measured rate is reported as \"idle-frames-per-minute\""
+      ]
+    },
+    {
+      "id": "sync/06-my-devices",
+      "title": "Sign a device out from another one, and everywhere",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity",
+        "B": "identity"
+      },
+      "where": "[/devices] on device A, and [/me] on device B, another browser",
+      "data": {
+        "Email": "generate",
+        "Password": "generate",
+        "Name": "generate"
+      },
+      "scenario": "A device signed out from another one leaves at once, signing out everywhere signs every device out, and the account signs in again after it",
+      "steps": [
+        "On device A, sign up and open [/devices]",
+        "On device B, sign in with the same account and wait for [/me]",
+        "On device A, reload [/devices]",
+        "On device A, click [device.list.revoke-button] on device B's [device.list.session-item]",
+        "On device B, sign in again with the same account and wait for [/me]",
+        "On device A, click [device.everywhere.open-button] and confirm with [device.everywhere.dialog.confirm-button]",
+        "On device A, sign in again with the same account and wait for [/me]"
+      ],
+      "expected": [
+        "After step 1 device A's [device.list] holds one [device.list.session-item], in [state:current] (this device)",
+        "After step 3 device A's [device.list] holds two [device.list.session-item]: device B's is not in [state:current] and its [device.list.seen-cell] is within the last minute",
+        "Within 5 seconds of step 4 device B is on [/sign-in], where [user.sign-in.notice-message] carries [code:signed-out-elsewhere], and its browser keeps no local database of the account; on device A, device B's [device.list.session-item] is in [state:revoked]",
+        "After step 6 device A is on [/sign-in], where [user.sign-in.notice-message] carries [code:signed-out-elsewhere]; within 5 seconds device B is on [/sign-in] with the same notice; a reload of either stays on [/sign-in]",
+        "After step 7 device A is on [/me] and its sync channel is up: the account signs in again after signing out everywhere"
+      ]
+    },
+    {
+      "id": "sync/07-blocked-delete",
+      "title": "Sign out while another tab holds the data open",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/me] then [user.profile.sign-out-button] in a first tab of device A, while a second tab of the same browser holds the account's local database open",
+      "data": {},
+      "scenario": "A sign-out ends even though another tab holds the data open, says so, and the data goes once that tab closes",
+      "steps": [
+        "On device A, open [/me] in a first tab and wait for [app-shell.status] to reach [state:ready]",
+        "On device A, open a second tab that holds the account's local database open and never lets it go, as a frozen tab would",
+        "In the first tab, click [user.profile.sign-out-button]",
+        "Close the second tab"
+      ],
+      "expected": [
+        "Within 15 seconds of step 3 the first tab is on [/sign-in] and [user.sign-in.notice-message] carries [code:delete-pending]: the device is signed out, and its data leaves it once the other Perch tabs are closed",
+        "After step 3 the browser still keeps the account's local database",
+        "Within 10 seconds of step 4 the browser keeps no local database of the account"
+      ]
+    },
+    {
+      "id": "sync/08-one-account-per-browser",
+      "title": "One account per browser",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/sign-in] in two tabs of device A",
+      "data": {},
+      "scenario": "A tab left on the sign-in page follows the account another tab signs in, so the browser holds one account",
+      "steps": [
+        "On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]",
+        "Click [user.profile.sign-out-button] and wait for [/sign-in]",
+        "On device A, open [/sign-in] in a second tab and wait for [app-shell.status] to reach [state:ready]",
+        "In the first tab, sign in again with the same account and wait for [/me]"
+      ],
+      "expected": [
+        "Within 5 seconds of step 4 the second tab is on [/me] and [user.profile.heading] shows the account's name",
+        "After step 4 the browser keeps exactly one local database of an account"
+      ]
+    },
+    {
+      "id": "sync/09-key-renewal",
+      "title": "Renew the device's keys over its open sync channel",
+      "tags": ["full"],
+      "devices": {
+        "A": "identity"
+      },
+      "where": "[/devices] in two tabs of one browser",
+      "data": {
+        "Email": "generate",
+        "Password": "generate",
+        "Name": "generate",
+        "Refused access token": "refused"
+      },
+      "scenario": "A route that refuses the access token has the tab that leads the sync renew the keys over its open channel, and the route answers with the new ones",
+      "steps": [
+        "Sign up and wait for [/me] with the sync channel up",
+        "In the browser's local storage, replace the value of \"perch.session.token\" with the refused access token",
+        "Open [/devices]",
+        "Open [/me] in a second tab of the same browser and wait for [app-shell.status] to reach [state:ready]",
+        "In the browser's local storage, replace the value of \"perch.session.token\" with the refused access token again",
+        "In the second tab, open [/devices]"
+      ],
+      "expected": [
+        "After step 1 the first tab leads the sync over one sync socket",
+        "Within 5 seconds of step 3, on [/devices], [device.list] holds one [device.list.session-item], in [state:current] (this device), and the browser keeps a new access token and a new refresh key; the first tab asked for them with one \"renew\" on its sync socket and got them as \"tokens\", and opened no other sync socket",
+        "After step 4 the first tab still leads the sync and the second tab holds no sync socket",
+        "Within 5 seconds of step 6 the second tab's [device.list] holds one [device.list.session-item], in [state:current] (this device), and the browser keeps another new pair of keys; the first tab asked for it with a second \"renew\" on the same sync socket, and neither tab opened another sync socket"
+      ]
+    },
+    {
+      "id": "organisation/01-shared-notes",
+      "title": "Share notes inside an organisation and keep private data private",
+      "tags": ["full"],
+      "devices": {
+        "A": "admin",
+        "B": "member"
+      },
+      "where": "[/org] on device A (user A) and [/org] on device B (user B, another browser)",
+      "data": {
+        "Organisation key": "generate",
+        "Organisation name": "generate",
+        "Note by A": "generate",
+        "Note by B": "generate",
+        "Bio of A": "generate"
+      },
+      "scenario": "Two members of one organisation see each other's notes and nothing private",
+      "steps": [
+        "On device B, sign up as user B and wait for [/me]",
+        "On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]",
+        "On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]",
+        "On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]",
+        "On device A, open [/me], enter the bio of A into [user.profile.bio-textarea], click [user.profile.save-button] and open [/org] again",
+        "On device B, open [/org]",
+        "On device B, enter the note by B into [organisation.notes.new-textarea] and click [organisation.notes.add-button]"
+      ],
+      "expected": [
+        "After step 2 device A shows the organisation name in [organisation.page.heading] and [organisation.page.role-badge] with [value:admin]",
+        "After step 3 device A shows [app-shell.notice-message] carrying [code:invited] and user B in [organisation.members.list]",
+        "After step 6 device B shows the organisation name in [organisation.page.heading], [organisation.page.role-badge] with [value:member] and the note by A in [organisation.notes.list], without an invitation page or a reload",
+        "Within 5 seconds of step 7 device A shows the note by B in [organisation.notes.list], without a reload; the delay is reported as \"note-sync-latency-ms\"",
+        "Device B shows no [organisation.members.list] and no [organisation.invite.form]",
+        "Device B shows nothing of user A's profile: its [/me] shows user B's own name in [user.profile.heading] and an empty [user.profile.bio-textarea]"
+      ]
+    },
+    {
+      "id": "organisation/02-outsider",
+      "title": "Keep an organisation invisible to accounts outside it",
+      "tags": ["full"],
+      "devices": {
+        "A": "admin",
+        "C": "identity"
+      },
+      "where": "[/org] on device A (user A) and [/org] on device C (user C, another browser)",
+      "data": {
+        "Organisation key": "generate",
+        "Organisation name": "generate",
+        "Note by A": "generate",
+        "Key of C's organisation": "generate",
+        "Name of C's organisation": "generate"
+      },
+      "scenario": "An account that was not invited sees no organisation and no notes",
+      "steps": [
+        "On device A, sign up as user A, open [/org], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]",
+        "On device C, sign up as user C and open [/org]",
+        "On device C, create C's own organisation with [organisation.create.submit-button]"
+      ],
+      "expected": [
+        "After step 2 device C shows [organisation.page.status] in [state:empty] (not a member of any organisation yet) and no [organisation.notes.item]",
+        "After step 3 device C shows C's organisation in [organisation.page.heading] with no [organisation.notes.item], and no [organisation.page.current-select] for another organisation",
+        "Device A still shows only its own organisation and the note by A in [organisation.notes.list]"
+      ]
+    },
+    {
+      "id": "organisation/03-membership-change",
+      "title": "Deliver an invitation and a removal to a signed-in device",
+      "tags": ["full"],
+      "devices": {
+        "A": "admin",
+        "B": "member"
+      },
+      "where": "[/org] on device A (user A, administrator) and [/org] on device B (user B, another browser)",
+      "data": {
+        "Organisation key": "generate",
+        "Organisation name": "generate",
+        "Note by A": "generate"
+      },
+      "scenario": "Device B gains the organisation when invited and loses it when removed, without a reload",
+      "steps": [
+        "On device B, sign up as user B and open [/org]",
+        "On device A, sign up as user A, create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]",
+        "On device A, invite user B with [organisation.invite.email-input] and [organisation.invite.submit-button]",
+        "On device A, click [organisation.members.remove-button] on user B's [organisation.members.item]"
+      ],
+      "expected": [
+        "After step 1 device B shows [organisation.page.status] in [state:empty] (not a member of any organisation yet)",
+        "Within 5 seconds of step 3 device B shows the organisation in [organisation.page.heading] and the note by A in [organisation.notes.list], without a reload; the delay is reported as \"membership-change-ms\"",
+        "Within 5 seconds of step 4 device B shows [organisation.page.status] in [state:empty] (not a member of any organisation yet) again, without a reload, and its organisation data is gone from the device: a reload of [/org] still shows no organisation",
+        "Device A shows [organisation.members.list] without user B"
+      ]
+    },
+    {
+      "id": "organisation/04-edit-own-admin-any",
+      "title": "Edit only your own notes; an administrator edits any",
+      "tags": ["full"],
+      "devices": {
+        "A": "admin",
+        "B": "member"
+      },
+      "where": "[/org] on device A (user A, administrator) and [/org] on device B (user B, member, another browser)",
+      "data": {
+        "Organisation key": "generate",
+        "Organisation name": "generate",
+        "Note by A": "generate",
+        "Note by B": "generate",
+        "Note by B, edited by B": "generate",
+        "Note by B, edited by A": "generate"
+      },
+      "scenario": "A member changes only its own notes, an administrator any, and both see every change",
+      "steps": [
+        "On device B, sign up as user B and wait for [/me]",
+        "On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]",
+        "On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]",
+        "On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]",
+        "On device B, open [/org]",
+        "On device B, enter the note by B into [organisation.notes.new-textarea] and click [organisation.notes.add-button]",
+        "On device B, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by B into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]",
+        "On device A, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by A into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]",
+        "On device B, click [organisation.notes.delete-button] on the note by B",
+        "On device A, click [organisation.notes.delete-button] on the note by A"
+      ],
+      "expected": [
+        "After step 5 device B shows the note by A without [organisation.notes.mine-badge], [organisation.notes.edit-button] or [organisation.notes.delete-button]",
+        "After step 6 device B shows the note by B with [organisation.notes.mine-badge], [organisation.notes.edit-button] and [organisation.notes.delete-button]",
+        "Within 5 seconds of step 7 device A shows the note by B edited by B, without a reload; the delay is reported as \"note-edit-sync-latency-ms\"",
+        "Device A shows [organisation.notes.edit-button] and [organisation.notes.delete-button] on both notes",
+        "Within 5 seconds of step 8 device B shows the note by B edited by A, without a reload",
+        "Within 5 seconds of step 9 device A shows only the note by A",
+        "After step 10 both devices show [organisation.notes.empty-message]",
+        "Neither device loaded a page since it signed up"
+      ]
+    }
+  ]
 }

@@ -1,11 +1,13 @@
-import { err, ok, type Result } from 'neverthrow'
+import { join } from 'node:path'
 
-import type { SpecDoc } from './parse'
+import type { Scenario } from '@workspace/ui-contract'
 
 export interface ScaffoldOptions {
-  /** The spec's path from the repository root, written into the test so each names the other. */
-  readonly specRelPath: string
+  /** The scenario's id, written into the test's first line so each names the other. */
+  readonly scenarioId: string
 }
+
+const GENERATE = 'generate'
 
 const quote = (text: string): string => `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 
@@ -16,36 +18,43 @@ const camel = (name: string): string =>
     .trim()
     .replace(/[^a-z0-9]+(.)/g, (_match, next: string) => next.toUpperCase())
 
+/** A single guest browser starts on a bare page; any other scenario starts signed in. */
+const fixturesOf = (devices: Scenario['devices']): string => {
+  const roles = Object.values(devices)
+
+  return roles.length === 1 && roles[0] === 'guest' ? '{ page }' : '{ page, signedIn }'
+}
+
 /**
- * The skeleton of a Playwright test for a spec: one `test.step` per spec step and
- * one failing soft assertion per expected result, so the test stays red until the
+ * The skeleton of a Playwright test for a scenario: one `test.step` per step and one
+ * failing soft assertion per expected result, so the test stays red until the
  * expectations are written (TDD at the e2e level).
  */
-export function scaffoldTest(spec: SpecDoc, options: ScaffoldOptions): string {
-  const fixtures = spec.role === 'guest' ? '{ page }' : '{ page, signedIn }'
-  const generates = spec.testData.some((datum) => datum.generate)
-  const data = spec.testData.map(
-    (datum) =>
-      `      ${camel(datum.name)}: ${datum.generate ? `generate.${camel(datum.name)}()` : quote(datum.value)},`,
+export function scaffoldTest(scenario: Scenario, options: ScaffoldOptions): string {
+  const entries = Object.entries(scenario.data)
+  const generates = entries.some(([, value]) => value === GENERATE)
+  const data = entries.map(
+    ([name, value]) =>
+      `      ${camel(name)}: ${value === GENERATE ? `generate.${camel(name)}()` : quote(value)},`,
   )
-  const steps = spec.steps.flatMap((step, index) => [
+  const steps = scenario.steps.flatMap((step, index) => [
     `    await test.step(${quote(`${index + 1}. ${step}`)}, async () => {`,
     `      // TODO: ${step}`,
     '    })',
     '',
   ])
-  const expected = spec.expected.flatMap((result) => [
+  const expected = scenario.expected.flatMap((result) => [
     `    // - ${result}`,
     `    expect.soft(false, ${quote(`TODO: ${result}`)}).toBe(true)`,
   ])
 
   return [
-    `// spec: ${options.specRelPath}`,
+    `// scenario: ${options.scenarioId}`,
     ...(generates ? ["import { generate } from '../support/data'"] : []),
     "import { expect, test } from '../support/fixtures'",
     '',
-    `test.describe(${quote(spec.title)}, () => {`,
-    `  test(${quote(spec.scenario)}, async (${fixtures}) => {`,
+    `test.describe(${quote(scenario.title)}, () => {`,
+    `  test(${quote(scenario.scenario)}, async (${fixturesOf(scenario.devices)}) => {`,
     ...(data.length > 0 ? ['    const data = {', ...data, '    }', ''] : []),
     ...steps,
     '    // Expected:',
@@ -56,11 +65,6 @@ export function scaffoldTest(spec: SpecDoc, options: ScaffoldOptions): string {
   ].join('\n')
 }
 
-/** The test that pairs with a spec: `<root>/specs/<feature>/<name>.md` → `<root>/src/<feature>/<name>.e2e.spec.ts`. */
-export function testPathFor(specPath: string): Result<string, string> {
-  const match = /^(.*)\/specs\/(.+)\.md$/.exec(specPath)
-
-  return match
-    ? ok(`${match[1]}/src/${match[2]}.e2e.spec.ts`)
-    : err(`not a spec under a specs/ folder: ${specPath}`)
-}
+/** The test that pairs with a scenario: `<testsDir>/<id>.e2e.spec.ts`. */
+export const testPathFor = (testsDir: string, scenarioId: string): string =>
+  join(testsDir, `${scenarioId}.e2e.spec.ts`)

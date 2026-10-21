@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/organisation/01-shared-notes.md
+// scenario: organisation/01-shared-notes
 import { generate } from '../support/data'
 import { expect, pageLoads, signUp, test } from '../support/fixtures'
 import { createOrganisation, inviteMember } from '../support/organisation'

@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/organisation/02-outsider.md
+// scenario: organisation/02-outsider
 import { generate } from '../support/data'
 import { appReady, expect, signUp, test } from '../support/fixtures'
 import { createOrganisation } from '../support/organisation'

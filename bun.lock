@@ -144,7 +144,7 @@
         "e2e-spec": "./src/cli.ts",
       },
       "dependencies": {
-        "neverthrow": "catalog:",
+        "@workspace/ui-contract": "workspace:*",
         "oxc-parser": "catalog:",
       },
       "devDependencies": {

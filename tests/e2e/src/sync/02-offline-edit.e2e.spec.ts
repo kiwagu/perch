@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/02-offline-edit.md
+// scenario: sync/02-offline-edit
 import { generate } from '../support/data'
 import { appReady, expect, test } from '../support/fixtures'
 import { SyncNetwork } from '../support/network'

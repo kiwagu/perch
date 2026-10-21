@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/03-one-leader-per-browser.md
+// scenario: sync/03-one-leader-per-browser
 import type { Page } from '@playwright/test'
 
 import { generate } from '../support/data'

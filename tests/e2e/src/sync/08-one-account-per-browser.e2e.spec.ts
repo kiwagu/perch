@@ -1,4 +1,4 @@
-// spec: tests/e2e/specs/sync/08-one-account-per-browser.md
+// scenario: sync/08-one-account-per-browser
 import { appReady, expect, signIn, test } from '../support/fixtures'
 import { databases } from '../support/storage'
 
