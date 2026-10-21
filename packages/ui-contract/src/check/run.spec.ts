@@ -1,0 +1,71 @@
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import {
+  formatProblem,
+  MODEL_FILE,
+  SCREENS_FILE,
+  SCREENS_SCHEMA_FILE,
+  VOCABULARY_FILE,
+} from '../files'
+
+import { checkContract } from './run'
+
+const ROOT = join(import.meta.dirname, '../../../..')
+
+let root: string
+
+const printed = (): string[] => checkContract(root).map(formatProblem)
+
+const edit = (file: string, change: (text: string) => string): void => {
+  const path = join(root, file)
+
+  writeFileSync(path, change(readFileSync(path, 'utf8')))
+}
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'ui-contract-check-'))
+  cpSync(join(ROOT, 'contract'), join(root, 'contract'), { recursive: true })
+})
+
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('checkContract', () => {
+  it('finds nothing in the contract of the repository', () => {
+    expect(checkContract(ROOT).map(formatProblem)).toEqual([])
+  })
+  it('stops at the problems of loading, sorted by file and line', () => {
+    rmSync(join(root, MODEL_FILE))
+    edit(VOCABULARY_FILE, (text) =>
+      text.replace('## Roles', '## Roles\n\n## Roles').replace('## Kinds', '## Kind list'),
+    )
+    edit(SCREENS_FILE, (text) => text.replace('"version": 1', '"version": "one"'))
+
+    expect(printed()).toEqual([
+      'contract/model.schema.json:1: cannot read the file',
+      'contract/screens.json:1: version: Invalid input: expected 1',
+      'contract/vocabulary.md:1: missing section "Kinds"',
+      expect.stringMatching(/^contract\/vocabulary\.md:\d+: unknown section "Kind list"$/),
+      expect.stringMatching(/^contract\/vocabulary\.md:\d+: section "Roles" appears twice$/),
+    ])
+  })
+  it('runs every rule and the schema drift once the files load', () => {
+    edit(VOCABULARY_FILE, (text) =>
+      text.replace(
+        '| `no-notes` |',
+        '| `spare` | `organisation.notes.empty-message` | a spare code |\n| `no-notes` |',
+      ),
+    )
+    edit(SCREENS_SCHEMA_FILE, (text) => `${text}\n`)
+
+    expect(printed()).toEqual([
+      'contract/screens.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
+      'contract/vocabulary.md:1: code "spare" is documented but unused',
+    ])
+  })
+})

@@ -28,6 +28,15 @@ root export is build-time tooling for Bun.
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
+  - The contract check: `checkContract(root)` loads the three files (stopping at their own
+    problems), then runs the cross-checks and `schemaDrift`, sorted by file and line;
+    `loadContract(root)` returns the loaded `Contract`. Each rule is a function of the
+    `Contract`: `versionProblems`, `vocabularyProblems` (every word of `screens.json` is in
+    the vocabulary, every code is used), `screensProblems` (anchors unique and never named
+    like a derived one, entry and names), `bindingsProblems` (model fields, actions and
+    their params, routes, sources, flow events), `routesProblems` with
+    `parseRoutePath(path)` (the router's path syntax), `searchProblems` (enum controls,
+    `retain`) and `scenariosProblems` (bracket references, roles, ids).
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
@@ -37,7 +46,12 @@ root export is build-time tooling for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar, the loaders, the schema writer and the references.
+- `bun run test`: the anchor grammar, the loaders, the schema writer, the references and
+  the contract check.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
+- From the root: `bun run contract:check` (the contract files against each other and the
+  schema drift; prints `file:line: message` per problem and exits 1, or a one-line
+  summary; part of `bun run check` and the pre-commit hook). `--sources` is accepted and
+  not implemented yet.

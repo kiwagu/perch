@@ -128,8 +128,8 @@ The `data-state` of an `item`.
 
 | State | Where | Meaning |
 |---|---|---|
-| `current` | `device.list.item` | this device |
-| `revoked` | `device.list.item` | the device was signed out; it stays listed for a while |
+| `current` | `device.list.session-item` | this device |
+| `revoked` | `device.list.session-item` | the device was signed out; it stays listed for a while |
 
 ## Codes
 

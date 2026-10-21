@@ -70,6 +70,9 @@
     },
     "//#e2e:coverage": {
       "cache": false
+    },
+    "//#contract:check": {
+      "cache": false
     }
   }
 }

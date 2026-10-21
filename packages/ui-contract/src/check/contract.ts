@@ -1,0 +1,84 @@
+/**
+ * The three contract files as the check reads them, and the lookups its rules share: the
+ * declared anchors, a known anchor (declared, or a declared base with a suffix), the
+ * states and choice values of the vocabulary, and a problem located in `screens.json`.
+ */
+
+import { isKnownAnchor } from '../anchors'
+import {
+  type AnchorDef,
+  type Model,
+  type Problem,
+  SCREENS_FILE,
+  type Screen,
+  type ScreensFile,
+  type Vocabulary,
+} from '../files'
+import { jsonPath } from '../files/problems'
+
+export interface Contract {
+  readonly vocabulary: Vocabulary
+  readonly screens: ScreensFile
+  readonly model: Model
+}
+
+export interface DeclaredAnchor {
+  readonly anchor: string
+  readonly def: AnchorDef
+  readonly screen: Screen
+  /** Where the anchor is declared: `screens[i].anchors["<anchor>"]`. */
+  readonly at: readonly PropertyKey[]
+}
+
+export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
+  screens.screens.flatMap((screen, index) =>
+    Object.entries(screen.anchors).map(([anchor, def]) => ({
+      anchor,
+      def,
+      screen,
+      at: ['screens', index, 'anchors', anchor],
+    })),
+  )
+
+/** A problem of `screens.json` at a JSON path: `screens[0].anchors["x"].kind: ...`. */
+export const inScreens = (path: readonly PropertyKey[], message: string): Problem => ({
+  file: SCREENS_FILE,
+  message: `${jsonPath(path)}: ${message}`,
+})
+
+/** Whether an anchor is declared, or derived from a declared base with a vocabulary suffix. */
+export function knownAnchors(contract: Contract): (anchor: string) => boolean {
+  const declared = new Set(declaredAnchors(contract.screens).map(({ anchor }) => anchor))
+  const suffixes = Object.keys(contract.vocabulary.suffixes)
+
+  return (anchor) => isKnownAnchor(anchor, declared, suffixes)
+}
+
+/** Every state of the vocabulary: app, container and row states. */
+export const statesOf = (vocabulary: Vocabulary): Set<string> =>
+  new Set([
+    ...Object.keys(vocabulary.appStates),
+    ...Object.keys(vocabulary.containerStates),
+    ...Object.keys(vocabulary.rowStates),
+  ])
+
+/** A choice value written as a pattern (`^[a-z]+$`) stands for every value it matches. */
+export const isPattern = (value: string): boolean => value.startsWith('^')
+
+const matches = (pattern: string, value: string): boolean => {
+  try {
+    return new RegExp(pattern).test(value)
+  } catch {
+    return false
+  }
+}
+
+/** Whether `value` is a row of some anchor's choice values, or matches a pattern row. */
+export const isChoiceValue = (vocabulary: Vocabulary, value: string): boolean =>
+  Object.values(vocabulary.choiceValues).some((rows) =>
+    Object.keys(rows).some((row) => row === value || (isPattern(row) && matches(row, value))),
+  )
+
+/** The paths of every binding of every screen. */
+export const bindingPaths = (screens: ScreensFile): Set<string> =>
+  new Set(screens.screens.flatMap((screen) => screen.bindings.map(({ path }) => path)))

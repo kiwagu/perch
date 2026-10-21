@@ -10,6 +10,20 @@ export {
   testIdFor,
 } from './anchors'
 export {
+  bindingsProblems,
+  type Contract,
+  checkContract,
+  loadContract,
+  parseRoutePath,
+  type RouteSegment,
+  routesProblems,
+  scenariosProblems,
+  screensProblems,
+  searchProblems,
+  versionProblems,
+  vocabularyProblems,
+} from './check'
+export {
   type AnchorBinding,
   type AnchorDef,
   type Binding,

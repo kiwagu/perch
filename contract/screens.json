@@ -817,7 +817,7 @@
           "description": "The devices of the account, the earliest signed in first: every device signed in, and those signed out within 30 days.",
           "source": { "platform": "devices.list" }
         },
-        "device.list.item": {
+        "device.list.session-item": {
           "kind": "item",
           "description": "One device: its label, when it was last seen and signed out, and its sign-out button.",
           "dataId": "device_session",
@@ -844,7 +844,7 @@
           "description": "Signs that device out; not on this device nor on a device signed out already; disabled while a sign-out runs.",
           "binding": {
             "action": "platform.devices.revoke",
-            "params": { "device": "device.list.item" }
+            "params": { "device": "device.list.session-item" }
           }
         },
         "device.everywhere.open-button": {
@@ -871,7 +871,7 @@
             "on": "device.list.revoke-button",
             "action": "platform.devices.revoke",
             "from": "viewing",
-            "params": { "device": "device.list.item" },
+            "params": { "device": "device.list.session-item" },
             "outcomes": {
               "success": {
                 "state": "viewing",

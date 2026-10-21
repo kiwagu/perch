@@ -1,0 +1,193 @@
+/**
+ * Rule 1: `screens.json` speaks only the vocabulary's words. Every kind, derived suffix,
+ * code, state, role and screen name it uses is listed in `vocabulary.md`; every choice
+ * value belongs to an anchor that exists; every code listed is used somewhere; the
+ * platform's status states and reserved anchors are the vocabulary's own.
+ */
+
+import { screenOf } from '../anchors'
+import { type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
+
+import {
+  type Contract,
+  declaredAnchors,
+  inScreens,
+  isPattern,
+  knownAnchors,
+  statesOf,
+} from './contract'
+
+const FRAME_SCREEN = 'app-shell'
+
+/** Each value of `values` that `listed` lacks, as a problem at `at[index]`. */
+const unlisted = (
+  values: readonly string[] | undefined,
+  at: readonly PropertyKey[],
+  listed: ReadonlySet<string> | Record<string, unknown>,
+  noun: string,
+): Problem[] =>
+  (values ?? []).flatMap((value, index) =>
+    (listed instanceof Set ? listed.has(value) : value in listed)
+      ? []
+      : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
+  )
+
+function screenProblems(contract: Contract): Problem[] {
+  const { vocabulary, screens } = contract
+  const names = Object.keys(vocabulary.screenNames)
+  const states = statesOf(vocabulary)
+  const anchors = declaredAnchors(screens)
+
+  return screens.screens.flatMap((screen, index) => [
+    ...(screen.id in vocabulary.screenNames
+      ? []
+      : [
+          inScreens(
+            ['screens', index, 'id'],
+            `"${screen.id}" is not a screen name of the vocabulary`,
+          ),
+        ]),
+    ...anchors
+      .filter((declared) => declared.screen === screen)
+      .flatMap(({ anchor, def, at }) => [
+        ...(screenOf(anchor, names) === undefined
+          ? [inScreens(at, 'starts with no screen name of the vocabulary')]
+          : []),
+        ...(def.kind in vocabulary.kinds
+          ? []
+          : [inScreens([...at, 'kind'], `"${def.kind}" is not a kind of the vocabulary`)]),
+        ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
+        ...unlisted(def.codes, [...at, 'codes'], vocabulary.codes, 'a code'),
+        ...unlisted(def.states, [...at, 'states'], states, 'a state'),
+        ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
+      ]),
+    ...screen.bindings.flatMap((binding, at) =>
+      unlisted(
+        binding.roles,
+        ['screens', index, 'bindings', at, 'roles'],
+        vocabulary.roles,
+        'a role',
+      ),
+    ),
+    ...(screen.flow?.events ?? []).flatMap((event, at) =>
+      (['success', 'failure'] as const).flatMap((outcome) =>
+        unlisted(
+          event.outcomes[outcome]?.codes,
+          ['screens', index, 'flow', 'events', at, 'outcomes', outcome, 'codes'],
+          vocabulary.codes,
+          'a code',
+        ),
+      ),
+    ),
+  ])
+}
+
+function platformProblems({ vocabulary, screens }: Contract): Problem[] {
+  const { actions, status, reserved } = screens.platform
+  const appStates = Object.keys(vocabulary.appStates)
+  const frame = screens.screens.find((screen) => screen.id === FRAME_SCREEN)
+
+  return [
+    ...Object.entries(actions).flatMap(([name, action]) => [
+      ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, 'a role'),
+      ...unlisted(action.codes, ['platform', 'actions', name, 'codes'], vocabulary.codes, 'a code'),
+    ]),
+    ...(status.states.join(',') === appStates.join(',')
+      ? []
+      : [
+          inScreens(
+            ['platform', 'status', 'states'],
+            `must equal the app states of the vocabulary, in order: ${appStates.join(', ')}`,
+          ),
+        ]),
+    ...Object.keys(vocabulary.reserved)
+      .filter((anchor) => !reserved.includes(anchor))
+      .map((anchor) =>
+        inScreens(
+          ['platform', 'reserved'],
+          `misses the reserved anchor "${anchor}" of the vocabulary`,
+        ),
+      ),
+    ...reserved.flatMap((anchor, index) => [
+      ...(anchor in vocabulary.reserved
+        ? []
+        : [
+            inScreens(
+              ['platform', 'reserved', index],
+              `"${anchor}" is not a reserved anchor of the vocabulary`,
+            ),
+          ]),
+      ...(frame !== undefined && anchor in frame.anchors
+        ? []
+        : [
+            inScreens(
+              ['platform', 'reserved', index],
+              `"${anchor}" is not an anchor of the ${FRAME_SCREEN} screen`,
+            ),
+          ]),
+    ]),
+  ]
+}
+
+const inVocabulary = (message: string): Problem => ({ file: VOCABULARY_FILE, message })
+
+function validPattern(pattern: string): boolean {
+  try {
+    new RegExp(pattern)
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+function choiceValueProblems(contract: Contract): Problem[] {
+  const known = knownAnchors(contract)
+
+  return Object.entries(contract.vocabulary.choiceValues).flatMap(([anchor, rows]) => {
+    const values = Object.keys(rows)
+    const patterns = values.filter(isPattern)
+
+    return [
+      ...patterns
+        .filter((pattern) => !validPattern(pattern))
+        .map((pattern) =>
+          inVocabulary(`choice values of "${anchor}": "${pattern}" is not a valid pattern`),
+        ),
+      ...(patterns.length > 0 && values.length > 1
+        ? [inVocabulary(`choice values of "${anchor}": a pattern is the only row of its anchor`)]
+        : []),
+      ...(known(anchor)
+        ? []
+        : [inVocabulary(`choice values of "${anchor}": no such anchor in screens.json`)]),
+    ]
+  })
+}
+
+/** The codes named by an anchor's `codes`, a flow outcome's `codes` or a platform action. */
+const usedCodes = (screens: ScreensFile): Set<string> =>
+  new Set([
+    ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
+    ...screens.screens.flatMap((screen) =>
+      (screen.flow?.events ?? []).flatMap(({ outcomes }) => [
+        ...(outcomes.success.codes ?? []),
+        ...(outcomes.failure?.codes ?? []),
+      ]),
+    ),
+    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
+  ])
+
+function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
+  const used = usedCodes(screens)
+
+  return Object.keys(vocabulary.codes)
+    .filter((code) => !used.has(code))
+    .map((code) => inVocabulary(`code "${code}" is documented but unused`))
+}
+
+export const vocabularyProblems = (contract: Contract): Problem[] => [
+  ...screenProblems(contract),
+  ...platformProblems(contract),
+  ...choiceValueProblems(contract),
+  ...unusedCodeProblems(contract),
+]
