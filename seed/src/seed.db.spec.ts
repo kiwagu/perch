@@ -3,9 +3,14 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { ClientOptions, Fetcher } from '@workspace/web/seeding'
 import { z } from '@workspace/zod'
 
-import { inviteInto, readOrganisation, signInAndRead } from './__fixtures__/device'
+import {
+  ensureOrganisationAs,
+  inviteInto,
+  readOrganisation,
+  signInAndRead,
+} from './__fixtures__/device'
 import { simulatedFront } from './__fixtures__/simulated-front'
-import { leftOnStand } from './__fixtures__/stand'
+import { leftOnStand, membersIn } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
 import { openStand, runSeed, type StandTarget, sweep } from './seed'
 
@@ -181,12 +186,28 @@ describe('seeding through the gateway', () => {
     expect(await leftOnStand(target, second)).toEqual(before)
   })
 
+  it('finds an organisation of its key only as its administrator', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    expect((await runSeed({ ...target, mode: demo, fetcher: client.fetcher })).isOk()).toBe(true)
+    const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
+    const account = accountFor(ann ?? expect.unreachable('a preset ann'), demo)
+    const organisation = { key: `mbr_${outsider.run}`, name: 'Outside member' }
+
+    expect((await inviteInto(client, outsider, organisation, account.email)).isOk()).toBe(true)
+    // Ann belongs to it as a member: the key is taken by someone else's organisation.
+    expect(
+      (await ensureOrganisationAs(client, account, organisation))._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_REJECTED', message: 'key-taken' })
+  })
+
   it('sweeps seeded identities with their profiles, region rows, memberships and organisation databases', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const manifest = (
       await runSeed({ ...target, mode: demo, fetcher: client.fetcher })
     )._unsafeUnwrap()
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
+    const annId = manifest.accounts['ann']?.id ?? expect.unreachable('the account ann')
+    const outside = `out_${outsider.run}`
 
     // An organisation of someone else that ann belongs to: only the sweep of ann's own memberships reaches it.
     expect(
@@ -194,11 +215,13 @@ describe('seeding through the gateway', () => {
         await inviteInto(
           client,
           outsider,
-          { key: `out_${outsider.run}`, name: 'Outside' },
+          { key: outside, name: 'Outside' },
           accountFor(ann ?? expect.unreachable('a preset ann'), demo).email,
         )
       ).isOk(),
     ).toBe(true)
+    expect(await membersIn(target, outside)).toHaveLength(2)
+    expect(await membersIn(target, outside)).toContain(annId)
     const before = await leftOnStand(target, manifest)
 
     expect(before).toMatchObject({
@@ -223,5 +246,8 @@ describe('seeding through the gateway', () => {
       regionRows: 0,
       accepted: 0,
     })
+    // The outsider's organisation keeps its own member row; ann's goes with her membership.
+    expect(await membersIn(target, outside)).toHaveLength(1)
+    expect(await membersIn(target, outside)).not.toContain(annId)
   })
 })
