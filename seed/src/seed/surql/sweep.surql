@@ -5,7 +5,8 @@
 -- identities their Loro peers are bound to.
 -- Only seed data uses that domain, so real accounts never match. The organisations the
 -- accounts created go too: their memberships, their databases `t_<key>` and their rows in
--- the directory; the accounts' memberships in organisations of others are deleted too.
+-- the directory; the accounts' memberships in organisations of others are deleted too (the
+-- seed removes their member rows in those organisations' databases first, database by database).
 LET $accounts = SELECT VALUE id
 FROM identity
 WHERE

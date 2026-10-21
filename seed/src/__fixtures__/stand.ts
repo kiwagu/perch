@@ -1,7 +1,8 @@
 import type { Shape } from '@workspace/data'
 
-import { openStand, type SeedManifest, type StandOptions } from '../seed'
+import { openStand, openStandTenant, type SeedManifest, type StandOptions } from '../seed'
 
+import membersText from './members.surql'
 import standCountsText from './stand-counts.surql'
 
 export interface LeftOnStand {
@@ -50,6 +51,14 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
   ],
 }
 
+const members: Shape<Record<string, never>, readonly string[]> = {
+  id: 'fixture.members',
+  kind: 'shape',
+  text: membersText,
+  params: [],
+  tables: ['member'],
+}
+
 /** Reads, as the stand's operator, what a seed run left there for the accounts of its manifest. */
 export async function leftOnStand(
   target: StandOptions,
@@ -71,6 +80,17 @@ export async function leftOnStand(
         ),
       })
     )._unsafeUnwrap()
+  } finally {
+    await stand.close()
+  }
+}
+
+/** Reads, as the stand's operator, the identity keys of the member rows in the database of organisation `key`. */
+export async function membersIn(target: StandOptions, key: string): Promise<readonly string[]> {
+  const stand = (await openStandTenant(target, `t_${key}`))._unsafeUnwrap()
+
+  try {
+    return (await stand.runner.read(members, {}))._unsafeUnwrap()
   } finally {
     await stand.close()
   }

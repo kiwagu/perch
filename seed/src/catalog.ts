@@ -87,8 +87,14 @@ export function organisationFor(preset: OrganisationPreset, mode: SeedMode): See
   }
 }
 
-/** Checks a catalog offline: its shape, that every ref is used once, and that organisations name accounts. */
-export function validateCatalog(candidate: unknown): Result<Catalog, readonly string[]> {
+/**
+ * Checks a catalog offline: its shape, that every ref is used once, that organisations name
+ * accounts, and that their keys are tenant keys, both their own and as a run of `mode` gives them.
+ */
+export function validateCatalog(
+  candidate: unknown,
+  mode: SeedMode = { kind: 'demo' },
+): Result<Catalog, readonly string[]> {
   const parsed = Catalog.safeParse(candidate)
 
   if (!parsed.success) {
@@ -114,9 +120,9 @@ export function validateCatalog(candidate: unknown): Result<Catalog, readonly st
     ...preset.members
       .filter((member) => !known.has(member))
       .map((member) => `organisation ${preset.ref}: member ${member} is no account`),
-    ...(isTenantKey(preset.key)
-      ? []
-      : [`organisation ${preset.ref}: key ${preset.key} is not a tenant key`]),
+    ...[...new Set([preset.key, organisationFor(preset, mode).key])]
+      .filter((key) => !isTenantKey(key))
+      .map((key) => `organisation ${preset.ref}: key ${key} is not a tenant key`),
   ])
   const refused = [...duplicates, ...problems]
 

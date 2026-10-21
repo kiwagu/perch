@@ -51,7 +51,7 @@ export type { ProfileRow } from '../features/user/application/profile.service'
 export { checkProfileName } from '../features/user/domain/profile-name.rule'
 
 export type { Fetcher } from './gateway-auth'
-export { openStand, type Stand, type StandOptions } from './seed-stand'
+export { openStand, openStandTenant, type Stand, type StandOptions } from './seed-stand'
 
 export interface ClientOptions {
   /** The gateway's address, such as `http://127.0.0.1:5181`; its sync WebSocket is `/sync` under it. */
@@ -103,8 +103,8 @@ export interface SeedClient {
   signIn(input: SignInInput): ResultAsync<AuthUser, SeedError>
   /**
    * Creates the organisation as the signed-in account, its administrator. An organisation that
-   * exists and is already the account's (the gateway completes its creator's interrupted
-   * provisioning on a retry) is found; any other refusal is an error.
+   * exists and that the account administers (the gateway completes its creator's interrupted
+   * provisioning on a retry) is found; one it only belongs to, and any other refusal, is an error.
    */
   ensureOrganisation(input: {
     readonly key: string
@@ -247,7 +247,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
         const found = error.code === 'data:WRITE_REJECTED' && error.message === 'key-taken'
         const existing = found ? membershipOf(input.key) : undefined
 
-        return existing ? okAsync(existing) : errAsync(error)
+        return existing?.role === 'admin' ? okAsync(existing) : errAsync(error)
       })
       .andThen((membership) => settle().map(() => membership))
 

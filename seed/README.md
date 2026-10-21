@@ -21,15 +21,20 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 - `catalog`, `accountFor(preset, mode)`, `organisationFor(preset, mode)`, `validateCatalog()`,
   `SEED_EMAIL_DOMAIN`: the presets (name, bio and language; organisations with their key,
   administrator and members, by account ref), the account data for a `demo` (same address every run) or `fresh`
-  (new address per run) seed, and the offline check of the catalog; `./catalog` exports them
-  alone, without the gateway client, for the e2e tests.
+  (new address per run) seed, and the offline check of the catalog (`validateCatalog(candidate,
+  mode?)`: the organisation keys must be tenant keys as given and as the run's mode suffixes
+  them); `./catalog` exports them alone, without the gateway client, for the e2e tests.
 - `runSeed(options)`: seeds every preset through the gateway at `gatewayUrl` and returns
   the manifest (`accounts`: ref to account id, email and profile id; `organisations`: ref to
-  organisation id, key and name); `demo` is idempotent, and `reset` sweeps the stand first.
+  organisation id, key and name); `demo` is idempotent, and `reset` sweeps the stand first. The
+  catalog is checked for the run's mode before anything (a `fresh` run id that makes a key too
+  long is refused). An organisation whose key exists is found only when its administrator seeds
+  it; a key taken by an organisation the account only belongs to is an error.
   `fetcher` replaces the global `fetch` for the gateway's HTTP routes (the CLI passes none).
 - `sweep(target, { emails? })`: removes the seeded accounts (or only those at `emails`)
   with the organisations they created (their databases `t_<key>`, memberships and directory
-  rows), their profiles and the server's copy of their regions (`_replica_head`,
+  rows), their memberships in organisations of others with the member rows in those
+  organisations' databases, their profiles and the server's copy of their regions (`_replica_head`,
   `_replica_snapshot`, `_replica_update`, `_replica_projected`, `_replica_peer`). Of a region
   the gateway keeps in memory only what a connected device subscribed to, unloaded 60 s after the last
   device left. Re-creating an organisation under the key of a swept one works: the gateway
@@ -38,7 +43,8 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 - `openStand(target)`: the operator's connection to a stand that the sweep runs on. Its target
   names the key the stand's gateway signs with (`signingKey`): the directory schema is applied
   with it, so a sweep never gives the stand's access method another key, which would refuse
-  every device's access token.
+  every device's access token. `openStandTenant(target, database)` connects to an
+  organisation's database the same way, with the organisation schema, for the member rows.
 
 ## Commands
 
