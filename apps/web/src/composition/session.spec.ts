@@ -365,38 +365,47 @@ describe('SessionService', () => {
     expect(gateway.signOuts()).toBe(0)
   })
 
-  it('asks before signing out while a change fails to persist, though the outbox reads empty', async () => {
-    let failAppend = false
-    const storage = memoryStorage()
+  // A database that answers late lets no wait of the sign-out run out before its checks: the
+  // clock the test drives moves on only while no query is in flight.
+  it.each([0, 25])(
+    'asks before signing out while a change fails to persist, though the outbox reads empty (each query %i ms late)',
+    async (lateMs) => {
+      let failAppend = false
+      const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+      saveDevice(storage, ann)
 
-    const booted = await world({
-      storage,
-      wrap: (local) =>
-        interceptQueries(local, (text) => {
-          if (failAppend && text.includes('_replica_outbox SET')) {
-            throw new Error('the disk is full')
-          }
-        }),
-    })
-    const { session, stub, destroyed, failures, driveClock } = booted
+      const booted = await world({
+        storage,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failAppend && text.includes('_replica_outbox SET')) {
+              throw new Error('the disk is full')
+            }
 
-    expect((await session.restore()).isOk()).toBe(true)
-    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+            return failAppend && lateMs > 0
+              ? new Promise<void>((resolve) => setTimeout(resolve, lateMs))
+              : undefined
+          }),
+      })
+      const { session, stub, destroyed, failures, driveClock } = booted
 
-    failAppend = true
+      expect((await session.restore()).isOk()).toBe(true)
+      await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
 
-    // The command hears that its change was not made durable; the change lives on in memory.
-    const written = await session.writePath.run(createProfile, aProfile())
+      failAppend = true
 
-    expect(written._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
-    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
-    expect(stub.signOuts()).toBe(0)
-    expect(destroyed()).toEqual([])
-    expect(session.current()?.id).toBe(ann.identity.id)
-    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
-  })
+      // The command hears that its change was not made durable; the change lives on in memory.
+      const written = await session.writePath.run(createProfile, aProfile())
+
+      expect(written._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+      expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+      expect(stub.signOuts()).toBe(0)
+      expect(destroyed()).toEqual([])
+      expect(session.current()?.id).toBe(ann.identity.id)
+      expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    },
+  )
 
   it('asks before signing out when the gateway never closes after the sign-out and a change landed meanwhile', async () => {
     const { session, stub, storage, destroyed, driveClock } = await bootSession({
@@ -1325,11 +1334,12 @@ describe('SessionService memberships', () => {
     expect((await session.restore()).isOk()).toBe(true)
     await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
 
-    // Globex's database does not open: it is no open space, yet the device may hold it.
+    // Globex's database does not open: it is no open space, yet the device may hold it. Both open
+    // at once, and globex's refusal comes before acme's database is open.
     contexts()[0]?.onMemberships([acme, globex])
     await vi.waitFor(() => expect(failures.map(({ code }) => code)).toEqual(['data:OPEN_FAILED']))
     failures.splice(0)
-    expect(session.space()?.tenants()).toEqual(['acme'])
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
 
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
