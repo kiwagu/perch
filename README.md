@@ -106,6 +106,7 @@ Each workspace has a README with its role, key exports and commands.
 - `database`: the shared schema, its permission suites and the generated replica schema.
 - `seed`: demo accounts seeded through the gateway like any device, and their sweep.
 - `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
+- `packages/ui-contract`: the anchor grammar of every `data-testid` and the UI contract tooling.
 - `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
   container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
   logger, the UI kit and the single Zod instance.
