@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { isTenantKey } from '@workspace/kernel'
 import { checkProfileName } from '@workspace/web/seeding'
 
 import { accountFor, catalog, organisationFor, validateCatalog } from './catalog'
@@ -55,7 +56,7 @@ describe('seed catalog', () => {
     const fresh = organisationFor(preset, { kind: 'fresh', run: Date.now().toString(36) })
 
     expect(fresh.key).toMatch(/^acme_[a-z0-9]+$/)
-    expect(fresh.key).toMatch(/^[a-z][a-z0-9_]{1,31}$/)
+    expect(isTenantKey(fresh.key)).toBe(true)
     expect(organisationFor(preset, { kind: 'fresh', run: 'r1' }).key).not.toBe(
       organisationFor(preset, { kind: 'fresh', run: 'r2' }).key,
     )
@@ -76,5 +77,22 @@ describe('seed catalog', () => {
     expect(check({ ...preset, key: 'Not-A-Key' })._unsafeUnwrapErr()).toContain(
       'organisation acme: key Not-A-Key is not a tenant key',
     )
+  })
+
+  it('refuses a key a fresh run makes too long, and a key valid only with a run suffix', () => {
+    const [acme] = catalog.organisations
+    const preset = acme ?? expect.unreachable('an organisation')
+    const run = 'r'.repeat(40)
+
+    expect(validateCatalog(catalog, { kind: 'fresh', run: 'r1' }).isOk()).toBe(true)
+    expect(validateCatalog(catalog, { kind: 'fresh', run })._unsafeUnwrapErr()).toEqual([
+      `organisation acme: key acme_${run} is not a tenant key`,
+    ])
+    expect(
+      validateCatalog(
+        { ...catalog, organisations: [{ ...preset, key: 'a' }] },
+        { kind: 'fresh', run: 'r1' },
+      )._unsafeUnwrapErr(),
+    ).toEqual(['organisation acme: key a is not a tenant key'])
   })
 })

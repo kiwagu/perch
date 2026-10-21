@@ -1,5 +1,4 @@
 import type { AuthTokens, AuthUser } from '@workspace/data'
-import type { ClientMessage } from '@workspace/replica/protocol'
 
 import type { DeviceRegion } from './device-regions'
 
@@ -16,9 +15,6 @@ export interface ConnectedDevice {
    */
   readonly regions: ReadonlyMap<string, DeviceRegion>
 }
-
-/** The hello of a device. */
-export type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
 
 /** Where a sync connection is: waiting for the hello, serving its device, or closed. */
 export type ConnectionState =

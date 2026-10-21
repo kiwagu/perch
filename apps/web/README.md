@@ -159,15 +159,15 @@ composition root over an in-memory database, always leading its identity's sync,
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
 reads the profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
-signed-in account, `ensureOrganisation` creates an organisation (one that is already the
-account's is found), `ensureMember` invites an existing account by email, and
+signed-in account, `ensureOrganisation` creates an organisation (one the account already
+administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
 of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
 by default), which a test talking to the gateway directly uses to name a client address in
 `X-Forwarded-For`, as the front would. `openStand()` is the operator's connection to a stand as a system user, where seeded
 accounts and the organisations they created are swept; it applies the directory schema with the
 key the stand's gateway signs with (`signingKey`, required), so opening a stand never changes
-that key. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
+that key. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands
