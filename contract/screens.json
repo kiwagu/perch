@@ -1,0 +1,1055 @@
+{
+  "$schema": "./screens.schema.json",
+  "version": 1,
+  "screens": [
+    {
+      "id": "app-shell",
+      "title": "Application frame",
+      "frame": true,
+      "bindings": [],
+      "flag": null,
+      "entry": ["app-shell.status", "app-shell.nav"],
+      "anchors": {
+        "app-shell.status": {
+          "kind": "status",
+          "description": "The readiness line of the app: one element whose state says where the start is; in ready it is a visually hidden text, otherwise the visible message.",
+          "states": ["opening", "ready", "failed", "storage-blocked"]
+        },
+        "app-shell.notice-message": {
+          "kind": "message",
+          "description": "The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.",
+          "codes": [
+            "welcome",
+            "profile-saved",
+            "invited",
+            "devices-read-failed",
+            "device-sign-out-failed",
+            "change-rejected",
+            "changes-reloaded"
+          ]
+        },
+        "app-shell.nav": {
+          "kind": "nav",
+          "description": "The main navigation: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current."
+        },
+        "app-shell.nav.profile-link": {
+          "kind": "link",
+          "description": "The link to the profile, shown to a signed-in account.",
+          "binding": { "route": "/me" },
+          "roles": ["identity", "member", "admin"]
+        },
+        "app-shell.nav.organisation-link": {
+          "kind": "link",
+          "description": "The link to the organisation page, shown to a signed-in account.",
+          "binding": { "route": "/org" },
+          "roles": ["identity", "member", "admin"]
+        },
+        "app-shell.nav.devices-link": {
+          "kind": "link",
+          "description": "The link to the devices of the account, shown to a signed-in account.",
+          "binding": { "route": "/devices" },
+          "roles": ["identity", "member", "admin"]
+        },
+        "app-shell.nav.sign-in-link": {
+          "kind": "link",
+          "description": "The link to sign-in, the only link a guest sees.",
+          "binding": { "route": "/sign-in" },
+          "roles": ["guest"]
+        },
+        "app-shell.locale-select": {
+          "kind": "select",
+          "description": "The language of the app; a choice applies at once, and while the profile is open it is stored in the profile, whose language wins when the profile first arrives on a device.",
+          "binding": {
+            "action": "profile.updateLocale",
+            "params": { "locale": "app-shell.locale-select" }
+          },
+          "dataValue": true,
+          "derived": ["option"]
+        },
+        "app-shell.sign-out-here-button": {
+          "kind": "button",
+          "description": "Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.",
+          "binding": { "action": "platform.sign-out" }
+        }
+      },
+      "states": {
+        "opening": "app-shell.status says the data is being opened; no screen is rendered.",
+        "ready": "The navigation, the language select and the open screen; app-shell.status is a visually hidden text.",
+        "failed": "app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.",
+        "storage-blocked": "app-shell.status says the browser keeps no site data; no screen and no sign-in form."
+      },
+      "flow": {
+        "states": ["opening", "ready", "failed", "storage-blocked"],
+        "initial": "opening",
+        "events": [
+          {
+            "on": "app-shell.locale-select",
+            "action": "profile.updateLocale",
+            "from": "ready",
+            "params": { "locale": "app-shell.locale-select" },
+            "outcomes": {
+              "success": {
+                "state": "ready",
+                "note": "The page renders in the chosen language at once; the profile stores it while /me is open."
+              }
+            }
+          },
+          {
+            "on": "app-shell.sign-out-here-button",
+            "action": "platform.sign-out",
+            "from": "failed",
+            "outcomes": {
+              "success": {
+                "route": "/sign-in",
+                "note": "The button waits while the sign-out runs."
+              }
+            }
+          }
+        ]
+      },
+      "wireframe": "- banner:\n  - text: Perch\n  - combobox \"Language\": English\n- main:\n  - text: Saved on this device\n- navigation \"Main navigation\":\n  - link \"Profile\"\n  - link \"Organisation\"\n  - link \"My devices\""
+    },
+    {
+      "id": "user.sign-in",
+      "title": "Sign in or create an account",
+      "bindings": [{ "path": "/sign-in", "guard": "guest", "roles": ["guest"], "history": "push" }],
+      "flag": null,
+      "entry": [
+        "user.sign-in.form",
+        "user.sign-in.email-input",
+        "user.sign-in.submit-button",
+        "user.sign-in.toggle-button"
+      ],
+      "anchors": {
+        "user.sign-in.form": {
+          "kind": "form",
+          "description": "The form of the page, in the mode sign-in or sign-up; its heading names the mode."
+        },
+        "user.sign-in.notice-message": {
+          "kind": "message",
+          "description": "Why the last session on this device ended, when the person should know; shown once, while the page stays open.",
+          "codes": ["resend-after-sign-in", "signed-out-elsewhere", "delete-pending"]
+        },
+        "user.sign-in.error": {
+          "kind": "error",
+          "description": "Why the last attempt failed; the next attempt or a switch of mode clears it.",
+          "codes": [
+            "invalid-credentials",
+            "sign-up-rejected",
+            "rate-limited",
+            "other-account",
+            "name-required",
+            "name-too-long",
+            "failed"
+          ]
+        },
+        "user.sign-in.email-input": {
+          "kind": "input",
+          "description": "The email of the account (type email).",
+          "binding": [
+            { "action": "platform.sign-in", "params": { "email": "user.sign-in.email-input" } },
+            { "action": "platform.sign-up", "params": { "email": "user.sign-in.email-input" } }
+          ]
+        },
+        "user.sign-in.password-input": {
+          "kind": "input",
+          "description": "The password of the account (type password).",
+          "binding": [
+            {
+              "action": "platform.sign-in",
+              "params": { "password": "user.sign-in.password-input" }
+            },
+            {
+              "action": "platform.sign-up",
+              "params": { "password": "user.sign-in.password-input" }
+            }
+          ]
+        },
+        "user.sign-in.name-input": {
+          "kind": "input",
+          "description": "The name of the new account; shown only in the mode sign-up.",
+          "binding": {
+            "action": "platform.sign-up",
+            "params": { "name": "user.sign-in.name-input" }
+          }
+        },
+        "user.sign-in.submit-button": {
+          "kind": "button",
+          "description": "Signs in, or in the mode sign-up creates the account; disabled while the attempt runs.",
+          "binding": [
+            {
+              "action": "platform.sign-in",
+              "params": {
+                "email": "user.sign-in.email-input",
+                "password": "user.sign-in.password-input"
+              }
+            },
+            {
+              "action": "platform.sign-up",
+              "params": {
+                "email": "user.sign-in.email-input",
+                "password": "user.sign-in.password-input",
+                "name": "user.sign-in.name-input"
+              }
+            }
+          ]
+        },
+        "user.sign-in.toggle-button": {
+          "kind": "button",
+          "description": "Switches between signing in and creating an account; its value is the mode it switches to.",
+          "dataValue": true
+        }
+      },
+      "states": {
+        "ready": "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
+      },
+      "flow": {
+        "states": ["sign-in", "sign-up", "submitting", "done"],
+        "initial": "sign-in",
+        "events": [
+          {
+            "on": "user.sign-in.toggle-button",
+            "from": "sign-in",
+            "outcomes": {
+              "success": {
+                "state": "sign-up",
+                "note": "The name input appears; the error is cleared."
+              }
+            }
+          },
+          {
+            "on": "user.sign-in.toggle-button",
+            "from": "sign-up",
+            "outcomes": {
+              "success": {
+                "state": "sign-in",
+                "note": "The name input goes; the error is cleared."
+              }
+            }
+          },
+          {
+            "on": "user.sign-in.submit-button",
+            "action": "platform.sign-in",
+            "from": "sign-in",
+            "params": {
+              "email": "user.sign-in.email-input",
+              "password": "user.sign-in.password-input"
+            },
+            "outcomes": {
+              "success": {
+                "route": "/me",
+                "codes": ["welcome"],
+                "state": "done",
+                "note": "The page is in submitting while the attempt runs."
+              },
+              "failure": {
+                "codes": ["invalid-credentials", "rate-limited", "other-account", "failed"],
+                "state": "sign-in"
+              }
+            }
+          },
+          {
+            "on": "user.sign-in.submit-button",
+            "action": "platform.sign-up",
+            "from": "sign-up",
+            "params": {
+              "email": "user.sign-in.email-input",
+              "password": "user.sign-in.password-input",
+              "name": "user.sign-in.name-input"
+            },
+            "outcomes": {
+              "success": {
+                "route": "/me",
+                "codes": ["welcome"],
+                "state": "done",
+                "note": "The account is created with its profile; the page is in submitting while the attempt runs."
+              },
+              "failure": {
+                "codes": [
+                  "sign-up-rejected",
+                  "rate-limited",
+                  "other-account",
+                  "name-required",
+                  "name-too-long",
+                  "failed"
+                ],
+                "state": "sign-up"
+              }
+            }
+          }
+        ]
+      },
+      "wireframe": "- heading \"Sign in\" [level=1]\n- textbox \"Email\"\n- textbox \"Password\"\n- button \"Sign in\"\n- button \"Create account\""
+    },
+    {
+      "id": "user.profile",
+      "title": "Profile",
+      "bindings": [
+        { "path": "/me", "guard": "authenticated", "roles": ["identity"], "history": "push" }
+      ],
+      "flag": null,
+      "entry": ["user.profile.heading", "user.profile.form", "user.profile.save-button"],
+      "anchors": {
+        "user.profile.status": {
+          "kind": "status",
+          "description": "Shown instead of the profile until it is read, and when the account has no profile.",
+          "states": ["loading", "empty"]
+        },
+        "user.profile.heading": {
+          "kind": "heading",
+          "description": "The name of the account, as stored.",
+          "binding": { "model": "profile.name" }
+        },
+        "user.profile.form": {
+          "kind": "form",
+          "description": "The name and the bio, saved together by one Save."
+        },
+        "user.profile.email-input": {
+          "kind": "input",
+          "description": "The email of the account, read-only.",
+          "binding": { "model": "profile.email" }
+        },
+        "user.profile.name-input": {
+          "kind": "input",
+          "description": "The name; its draft starts again from the stored name whenever that changes, here or on another device.",
+          "binding": { "model": "profile.name" }
+        },
+        "user.profile.bio-textarea": {
+          "kind": "textarea",
+          "description": "The bio, at most 2000 characters; its draft follows the stored bio as the name's does.",
+          "binding": { "model": "profile.bio" }
+        },
+        "user.profile.error": {
+          "kind": "error",
+          "description": "Why the last save failed, under the fields; the field it concerns is marked invalid.",
+          "codes": ["name-required", "name-too-long", "bio-too-long", "failed"]
+        },
+        "user.profile.save-button": {
+          "kind": "button",
+          "description": "Saves the name, then the bio, each only when it changed; disabled while the save runs.",
+          "binding": [
+            { "action": "profile.updateName", "params": { "name": "user.profile.name-input" } },
+            { "action": "profile.updateBio", "params": { "bio": "user.profile.bio-textarea" } }
+          ]
+        },
+        "user.profile.sign-out-button": {
+          "kind": "button",
+          "description": "Signs this device out; asks first when this device holds changes it has not sent.",
+          "binding": { "action": "platform.sign-out" }
+        },
+        "user.profile.sign-out-dialog": {
+          "kind": "dialog",
+          "description": "Asks whether to sign out and lose the changes not sent; its confirm-button signs out with forgetUnsent, its cancel-button closes it.",
+          "binding": {
+            "action": "platform.sign-out",
+            "params": { "forgetUnsent": { "value": true } }
+          },
+          "codes": ["unsent-changes"],
+          "derived": ["confirm-button", "cancel-button"]
+        }
+      },
+      "states": {
+        "loading": "user.profile.status in loading: the profile is being read.",
+        "ready": "user.profile.heading with the name, the email, the form with the name, the bio and Save, and the sign-out button.",
+        "empty": "user.profile.status in empty: the account has no profile."
+      },
+      "flow": {
+        "states": ["editing", "saving", "confirming"],
+        "initial": "editing",
+        "events": [
+          {
+            "on": "user.profile.save-button",
+            "from": "editing",
+            "outcomes": {
+              "success": {
+                "codes": ["profile-saved"],
+                "state": "editing",
+                "note": "One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; with nothing changed it still says profile-saved. The page is in saving meanwhile; the error is cleared."
+              },
+              "failure": {
+                "codes": ["name-required", "name-too-long", "bio-too-long", "failed"],
+                "state": "editing",
+                "note": "The first refused write stops the save; user.profile.error shows its code until a save succeeds."
+              }
+            }
+          },
+          {
+            "on": "user.profile.sign-out-button",
+            "action": "platform.sign-out",
+            "guard": "every change of this device reached the server",
+            "from": "editing",
+            "outcomes": {
+              "success": { "route": "/sign-in" },
+              "failure": {
+                "route": "/sign-in",
+                "note": "A failed sign-out also moves to the sign-in page; no code is shown."
+              }
+            }
+          },
+          {
+            "on": "user.profile.sign-out-button",
+            "action": "platform.sign-out",
+            "guard": "this device holds changes the server has not received",
+            "from": "editing",
+            "outcomes": {
+              "success": {
+                "codes": ["unsent-changes"],
+                "state": "confirming",
+                "note": "Nothing changes yet: user.profile.sign-out-dialog opens."
+              }
+            }
+          },
+          {
+            "on": "user.profile.sign-out-dialog.confirm-button",
+            "action": "platform.sign-out",
+            "from": "confirming",
+            "params": { "forgetUnsent": { "value": true } },
+            "outcomes": {
+              "success": {
+                "route": "/sign-in",
+                "note": "The changes not sent are lost."
+              },
+              "failure": { "route": "/sign-in" }
+            }
+          },
+          {
+            "on": "user.profile.sign-out-dialog.cancel-button",
+            "from": "confirming",
+            "outcomes": { "success": { "state": "editing", "note": "The dialog closes." } }
+          }
+        ]
+      },
+      "wireframe": "- heading /.+/ [level=1]\n- textbox \"Email\"\n- textbox \"Name\"\n- textbox \"Bio\"\n- button \"Save\"\n- button \"Sign out\""
+    },
+    {
+      "id": "organisation",
+      "title": "Organisation",
+      "bindings": [
+        {
+          "path": "/org",
+          "guard": "authenticated",
+          "roles": ["identity", "member", "admin"],
+          "history": "push"
+        }
+      ],
+      "flag": null,
+      "entry": [
+        "organisation.page.status",
+        "organisation.page.heading",
+        "organisation.notes.section",
+        "organisation.create.form"
+      ],
+      "anchors": {
+        "organisation.page.status": {
+          "kind": "status",
+          "description": "Says the account is a member of no organisation; not rendered otherwise.",
+          "roles": ["identity"],
+          "states": ["empty"]
+        },
+        "organisation.page.heading": {
+          "kind": "heading",
+          "description": "The name of the current organisation (platform data: the current membership).",
+          "roles": ["member", "admin"]
+        },
+        "organisation.page.role-badge": {
+          "kind": "badge",
+          "description": "The role of the signed-in account in the current organisation.",
+          "roles": ["member", "admin"],
+          "dataValue": true
+        },
+        "organisation.page.current-select": {
+          "kind": "select",
+          "description": "Chooses the current organisation; shown with two memberships or more, its options are the organisations by key.",
+          "binding": {
+            "action": "platform.organisations.select",
+            "params": { "key": "organisation.page.current-select" }
+          },
+          "roles": ["member", "admin"],
+          "dataValue": true,
+          "derived": ["option"]
+        },
+        "organisation.create.toggle-button": {
+          "kind": "button",
+          "description": "Opens or closes the create form; shown with a current organisation.",
+          "roles": ["member", "admin"]
+        },
+        "organisation.create.form": {
+          "kind": "form",
+          "description": "Creates an organisation; shown without memberships, or after the toggle button."
+        },
+        "organisation.create.key-input": {
+          "kind": "input",
+          "description": "The key of the new organisation: 2 to 32 lowercase letters, digits and underscores, starting with a letter.",
+          "binding": {
+            "action": "platform.organisations.create",
+            "params": { "key": "organisation.create.key-input" }
+          }
+        },
+        "organisation.create.name-input": {
+          "kind": "input",
+          "description": "The name of the new organisation, at most 80 characters.",
+          "binding": {
+            "action": "platform.organisations.create",
+            "params": { "name": "organisation.create.name-input" }
+          }
+        },
+        "organisation.create.error": {
+          "kind": "error",
+          "description": "Why the last creation failed.",
+          "codes": [
+            "key-invalid",
+            "name-required",
+            "name-too-long",
+            "key-taken",
+            "rate-limited",
+            "failed"
+          ]
+        },
+        "organisation.create.submit-button": {
+          "kind": "button",
+          "description": "Creates the organisation; disabled while it runs.",
+          "binding": {
+            "action": "platform.organisations.create",
+            "params": {
+              "key": "organisation.create.key-input",
+              "name": "organisation.create.name-input"
+            }
+          }
+        },
+        "organisation.notes.section": {
+          "kind": "section",
+          "description": "The content of the notes card of the current organisation.",
+          "roles": ["member", "admin"],
+          "states": ["loading", "ready", "empty"],
+          "source": { "entity": "note", "order": "created_at", "direction": "asc" }
+        },
+        "organisation.notes.list": {
+          "kind": "list",
+          "description": "The notes, oldest first; rendered when there is at least one.",
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.empty-message": {
+          "kind": "message",
+          "description": "Says the organisation has no notes yet.",
+          "roles": ["member", "admin"],
+          "codes": ["no-notes"]
+        },
+        "organisation.notes.item": {
+          "kind": "item",
+          "description": "One note: its text and the controls the rules allow, or its edit form.",
+          "roles": ["member", "admin"],
+          "dataId": "note"
+        },
+        "organisation.notes.text-cell": {
+          "kind": "cell",
+          "description": "The text of the note.",
+          "binding": { "model": "note.text" },
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.mine-badge": {
+          "kind": "badge",
+          "description": "Marks the notes the signed-in member wrote.",
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.edit-button": {
+          "kind": "button",
+          "description": "Opens the edit form of the note in its item; a member sees it on its own notes, an administrator on every note.",
+          "roles": ["member", "admin"],
+          "own": true
+        },
+        "organisation.notes.delete-button": {
+          "kind": "button",
+          "description": "Deletes the note; shown where the rules allow, as the edit button.",
+          "binding": {
+            "action": "note.deleteNote",
+            "params": { "id": "organisation.notes.item" }
+          },
+          "roles": ["member", "admin"],
+          "own": true
+        },
+        "organisation.notes.edit-textarea": {
+          "kind": "textarea",
+          "description": "The text of the note being edited, at most 500 characters.",
+          "binding": { "model": "note.text" },
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.save-button": {
+          "kind": "button",
+          "description": "Saves the edited text and closes the edit form.",
+          "binding": {
+            "action": "note.updateNote",
+            "params": {
+              "id": "organisation.notes.item",
+              "text": "organisation.notes.edit-textarea"
+            }
+          },
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.new-textarea": {
+          "kind": "textarea",
+          "description": "The text of a new note, at most 500 characters.",
+          "binding": { "model": "note.text" },
+          "roles": ["member", "admin"]
+        },
+        "organisation.notes.error": {
+          "kind": "error",
+          "description": "Why the last change of a note failed, under the new note.",
+          "roles": ["member", "admin"],
+          "codes": ["forbidden", "text-required", "text-too-long", "failed"]
+        },
+        "organisation.notes.add-button": {
+          "kind": "button",
+          "description": "Adds the new note by the signed-in member and empties the textarea.",
+          "binding": {
+            "action": "note.createNote",
+            "params": { "text": "organisation.notes.new-textarea" }
+          },
+          "roles": ["member", "admin"]
+        },
+        "organisation.members.list": {
+          "kind": "list",
+          "description": "The members of the current organisation; rendered once they are read.",
+          "roles": ["admin"],
+          "source": { "platform": "organisations.members" }
+        },
+        "organisation.members.item": {
+          "kind": "item",
+          "description": "One member, shown by its email.",
+          "roles": ["admin"],
+          "dataId": "identity"
+        },
+        "organisation.members.remove-button": {
+          "kind": "button",
+          "description": "Removes the member; not on the administrator's own row.",
+          "binding": {
+            "action": "platform.organisations.remove",
+            "params": { "identity": "organisation.members.item" }
+          },
+          "roles": ["admin"]
+        },
+        "organisation.invite.form": {
+          "kind": "form",
+          "description": "Invites an existing account by email, under the members.",
+          "roles": ["admin"]
+        },
+        "organisation.invite.email-input": {
+          "kind": "input",
+          "description": "The email of the account to invite (type email).",
+          "binding": {
+            "action": "platform.organisations.invite",
+            "params": { "email": "organisation.invite.email-input" }
+          },
+          "roles": ["admin"]
+        },
+        "organisation.invite.error": {
+          "kind": "error",
+          "description": "Why the last invitation, removal or read of the members failed.",
+          "roles": ["admin"],
+          "codes": ["no-such-identity", "already-member", "not-admin", "rate-limited", "failed"]
+        },
+        "organisation.invite.submit-button": {
+          "kind": "button",
+          "description": "Invites the account and empties the field; disabled while it runs.",
+          "binding": {
+            "action": "platform.organisations.invite",
+            "params": { "email": "organisation.invite.email-input" }
+          },
+          "roles": ["admin"]
+        }
+      },
+      "states": {
+        "loading": "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet.",
+        "ready": "The heading, the role badge, the select with two memberships or more, the notes with the new note form, the members with the invite form for an administrator, and the toggle of the create form.",
+        "empty": "organisation.page.status in empty: no membership; the create form below it."
+      },
+      "flow": {
+        "states": ["viewing", "creating", "editing"],
+        "initial": "viewing",
+        "events": [
+          {
+            "on": "organisation.create.toggle-button",
+            "from": "viewing",
+            "outcomes": { "success": { "state": "creating", "note": "The create form opens." } }
+          },
+          {
+            "on": "organisation.create.toggle-button",
+            "from": "creating",
+            "outcomes": { "success": { "state": "viewing", "note": "The create form closes." } }
+          },
+          {
+            "on": "organisation.create.submit-button",
+            "action": "platform.organisations.create",
+            "params": {
+              "key": "organisation.create.key-input",
+              "name": "organisation.create.name-input"
+            },
+            "outcomes": {
+              "success": {
+                "state": "viewing",
+                "note": "The caller is the administrator of the new organisation, which becomes current; the form empties and closes."
+              },
+              "failure": {
+                "codes": [
+                  "key-invalid",
+                  "name-required",
+                  "name-too-long",
+                  "key-taken",
+                  "rate-limited",
+                  "failed"
+                ]
+              }
+            }
+          },
+          {
+            "on": "organisation.page.current-select",
+            "action": "platform.organisations.select",
+            "params": { "key": "organisation.page.current-select" },
+            "outcomes": {
+              "success": {
+                "state": "viewing",
+                "note": "The page shows that organisation; the drafts and errors of the previous one are dropped."
+              }
+            }
+          },
+          {
+            "on": "organisation.notes.add-button",
+            "action": "note.createNote",
+            "params": { "text": "organisation.notes.new-textarea" },
+            "outcomes": {
+              "success": { "note": "The note appears last in the list; the textarea empties." },
+              "failure": { "codes": ["forbidden", "text-required", "text-too-long", "failed"] }
+            }
+          },
+          {
+            "on": "organisation.notes.edit-button",
+            "from": "viewing",
+            "outcomes": {
+              "success": {
+                "state": "editing",
+                "note": "The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button; each item edits on its own."
+              }
+            }
+          },
+          {
+            "on": "organisation.notes.save-button",
+            "action": "note.updateNote",
+            "from": "editing",
+            "params": {
+              "id": "organisation.notes.item",
+              "text": "organisation.notes.edit-textarea"
+            },
+            "outcomes": {
+              "success": { "state": "viewing", "note": "The item shows the new text." },
+              "failure": {
+                "codes": ["forbidden", "text-required", "text-too-long", "failed"],
+                "state": "editing"
+              }
+            }
+          },
+          {
+            "on": "organisation.notes.delete-button",
+            "action": "note.deleteNote",
+            "from": "viewing",
+            "params": { "id": "organisation.notes.item" },
+            "outcomes": {
+              "success": { "note": "The item leaves the list." },
+              "failure": { "codes": ["forbidden", "failed"] }
+            }
+          },
+          {
+            "on": "organisation.invite.submit-button",
+            "action": "platform.organisations.invite",
+            "params": { "email": "organisation.invite.email-input" },
+            "outcomes": {
+              "success": {
+                "codes": ["invited"],
+                "note": "The account is a member; the members are read again, and the account's own devices learn the membership without a reload."
+              },
+              "failure": {
+                "codes": [
+                  "no-such-identity",
+                  "already-member",
+                  "not-admin",
+                  "rate-limited",
+                  "failed"
+                ]
+              }
+            }
+          },
+          {
+            "on": "organisation.members.remove-button",
+            "action": "platform.organisations.remove",
+            "params": { "identity": "organisation.members.item" },
+            "outcomes": {
+              "success": {
+                "note": "The members are read again; the removed member's devices lose the organisation without a reload."
+              },
+              "failure": {
+                "codes": ["not-admin", "failed"],
+                "note": "Shown by organisation.invite.error."
+              }
+            }
+          }
+        ]
+      },
+      "wireframe": "- heading /.+/ [level=1]\n- paragraph: Administrator\n- heading \"Notes\" [level=2]\n- list:\n  - listitem:\n    - paragraph: /.+/\n    - text: Yours\n    - button \"Edit\"\n    - button \"Delete\"\n- textbox \"Write a note for everyone in the organisation\"\n- button \"Add note\"\n- heading \"Members\" [level=2]\n- list:\n  - listitem: /.+@.+/\n- textbox \"Email of an existing account\"\n- button \"Invite\"\n- button \"New organisation\""
+    },
+    {
+      "id": "device",
+      "title": "My devices",
+      "bindings": [
+        { "path": "/devices", "guard": "authenticated", "roles": ["identity"], "history": "push" }
+      ],
+      "flag": null,
+      "entry": ["device.page.status", "device.list", "device.everywhere.open-button"],
+      "anchors": {
+        "device.page.status": {
+          "kind": "status",
+          "description": "Says the devices are being read; replaced by the list once read.",
+          "states": ["loading"]
+        },
+        "device.list": {
+          "kind": "list",
+          "description": "The devices of the account, the earliest signed in first: every device signed in, and those signed out within 30 days.",
+          "source": { "platform": "devices.list" }
+        },
+        "device.list.item": {
+          "kind": "item",
+          "description": "One device: its label, when it was last seen and signed out, and its sign-out button.",
+          "dataId": "device_session",
+          "states": ["current", "revoked"]
+        },
+        "device.list.label-cell": {
+          "kind": "cell",
+          "description": "The label the device gave itself."
+        },
+        "device.list.current-badge": {
+          "kind": "badge",
+          "description": "Marks this device."
+        },
+        "device.list.seen-cell": {
+          "kind": "cell",
+          "description": "When the device was last seen."
+        },
+        "device.list.revoked-cell": {
+          "kind": "cell",
+          "description": "When the device was signed out; shown once it is."
+        },
+        "device.list.revoke-button": {
+          "kind": "button",
+          "description": "Signs that device out; not on this device nor on a device signed out already; disabled while a sign-out runs.",
+          "binding": {
+            "action": "platform.devices.revoke",
+            "params": { "device": "device.list.item" }
+          }
+        },
+        "device.everywhere.open-button": {
+          "kind": "button",
+          "description": "Opens the dialog that signs every device out; disabled while a sign-out runs."
+        },
+        "device.everywhere.dialog": {
+          "kind": "dialog",
+          "description": "Asks whether to sign every device out, this one included; its confirm-button does, its cancel-button closes it.",
+          "binding": { "action": "platform.sign-out-everywhere" },
+          "codes": ["sign-out-everywhere"],
+          "derived": ["confirm-button", "cancel-button"]
+        }
+      },
+      "states": {
+        "loading": "device.page.status in loading: the devices are being read; when the read fails, app-shell.notice-message says devices-read-failed and the status stays.",
+        "ready": "device.list with an item per device, this device marked, and the sign-out everywhere button."
+      },
+      "flow": {
+        "states": ["viewing", "confirming", "signing-out"],
+        "initial": "viewing",
+        "events": [
+          {
+            "on": "device.list.revoke-button",
+            "action": "platform.devices.revoke",
+            "from": "viewing",
+            "params": { "device": "device.list.item" },
+            "outcomes": {
+              "success": {
+                "state": "viewing",
+                "note": "That device signs out; the list is read again and shows it signed out. The page is in signing-out meanwhile."
+              },
+              "failure": {
+                "codes": ["device-sign-out-failed"],
+                "state": "viewing",
+                "note": "The list is read again, unless the gateway is out of reach."
+              }
+            }
+          },
+          {
+            "on": "device.everywhere.open-button",
+            "from": "viewing",
+            "outcomes": {
+              "success": {
+                "codes": ["sign-out-everywhere"],
+                "state": "confirming",
+                "note": "device.everywhere.dialog opens."
+              }
+            }
+          },
+          {
+            "on": "device.everywhere.dialog.confirm-button",
+            "action": "platform.sign-out-everywhere",
+            "from": "confirming",
+            "outcomes": {
+              "success": {
+                "route": "/sign-in",
+                "codes": ["signed-out-elsewhere"],
+                "note": "Every device of the account signs out, this one included; the sign-in page says resend-after-sign-in instead when this device held changes not sent yet."
+              },
+              "failure": { "codes": ["device-sign-out-failed"], "state": "viewing" }
+            }
+          },
+          {
+            "on": "device.everywhere.dialog.cancel-button",
+            "from": "confirming",
+            "outcomes": { "success": { "state": "viewing", "note": "The dialog closes." } }
+          }
+        ]
+      },
+      "wireframe": "- heading \"My devices\" [level=1]\n- list:\n  - listitem:\n    - text: /.+/\n    - text: This device\n    - text: /Last seen .+/\n  - listitem:\n    - text: /.+/\n    - text: /Last seen .+/\n    - button \"Sign out\"\n- button \"Sign out everywhere\""
+    }
+  ],
+  "platform": {
+    "actions": {
+      "sign-up": {
+        "description": "Creates an account with its profile and signs this device in.",
+        "params": {
+          "email": { "type": "string", "description": "The email of the new account." },
+          "password": { "type": "string", "description": "The password of the new account." },
+          "name": {
+            "type": "string",
+            "description": "The name of the profile, 1 to 80 characters."
+          }
+        },
+        "result": "the account is created with its profile, the device is signed in, the app moves to /me with code welcome",
+        "codes": [
+          "sign-up-rejected",
+          "rate-limited",
+          "other-account",
+          "name-required",
+          "name-too-long",
+          "failed"
+        ]
+      },
+      "sign-in": {
+        "description": "Signs this device in to an account.",
+        "params": {
+          "email": { "type": "string", "description": "The email of the account." },
+          "password": { "type": "string", "description": "The password of the account." }
+        },
+        "result": "the device is signed in, the app moves to /me with code welcome",
+        "codes": ["invalid-credentials", "rate-limited", "other-account", "failed"]
+      },
+      "sign-out": {
+        "description": "Signs this device out, after sending what it can.",
+        "params": {
+          "forgetUnsent": {
+            "type": "boolean",
+            "description": "Optional: sign out even though this device holds changes the server has not received; they are lost."
+          }
+        },
+        "result": "this device signs out, its local data goes, the app moves to /sign-in; with unsent changes and no forgetUnsent the sign-out asks first (dialog unsent-changes) and changes nothing",
+        "codes": ["failed"]
+      },
+      "sign-out-everywhere": {
+        "description": "Signs every device of the account out, this one included.",
+        "params": {},
+        "result": "every device of the account signs out, this one included; /sign-in shows signed-out-elsewhere",
+        "codes": ["device-sign-out-failed"]
+      },
+      "devices.list": {
+        "description": "Reads the devices of the account.",
+        "params": {},
+        "result": "the account's devices: for each its device session id, label, last seen, when it was revoked, and whether it is the current device",
+        "codes": ["devices-read-failed"]
+      },
+      "devices.revoke": {
+        "description": "Signs another device of the account out.",
+        "params": {
+          "device": { "type": "string", "description": "The device session id of that device." }
+        },
+        "result": "that device signs out; the list is read again",
+        "codes": ["device-sign-out-failed"]
+      },
+      "organisations.create": {
+        "description": "Creates an organisation.",
+        "params": {
+          "key": {
+            "type": "string",
+            "description": "The key of the organisation, ^[a-z][a-z0-9_]{1,31}$."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the organisation, 1 to 80 characters."
+          }
+        },
+        "result": "the organisation exists with the caller as admin and becomes current",
+        "codes": [
+          "key-invalid",
+          "name-required",
+          "name-too-long",
+          "key-taken",
+          "rate-limited",
+          "failed"
+        ]
+      },
+      "organisations.select": {
+        "description": "Makes one of the account's organisations current on this device.",
+        "params": {
+          "key": {
+            "type": "string",
+            "description": "The key of an organisation the account belongs to."
+          }
+        },
+        "result": "the organisation becomes current on this device (no server call); the choice is kept on this browser",
+        "codes": []
+      },
+      "organisations.members": {
+        "description": "Reads the members of the current organisation.",
+        "params": {},
+        "result": "its members with their identity id and email",
+        "codes": ["not-admin", "failed"],
+        "roles": ["admin"]
+      },
+      "organisations.invite": {
+        "description": "Adds an existing account to the current organisation by its email.",
+        "params": {
+          "email": { "type": "string", "description": "The email of an existing account." }
+        },
+        "result": "the account becomes a member; its own devices learn it without a reload",
+        "codes": ["no-such-identity", "already-member", "not-admin", "rate-limited", "failed"],
+        "roles": ["admin"]
+      },
+      "organisations.remove": {
+        "description": "Removes a member from the current organisation.",
+        "params": {
+          "identity": { "type": "string", "description": "The identity id of the member." }
+        },
+        "result": "the member is removed; its devices lose the organisation without a reload",
+        "codes": ["not-admin", "failed"],
+        "roles": ["admin"]
+      }
+    },
+    "reserved": [
+      "app-shell.status",
+      "app-shell.notice-message",
+      "app-shell.nav",
+      "app-shell.nav.sign-in-link",
+      "app-shell.nav.profile-link",
+      "app-shell.nav.organisation-link",
+      "app-shell.nav.devices-link",
+      "app-shell.locale-select",
+      "app-shell.sign-out-here-button"
+    ],
+    "status": {
+      "anchor": "app-shell.status",
+      "states": ["opening", "ready", "failed", "storage-blocked"]
+    }
+  },
+  "scenarios": []
+}
