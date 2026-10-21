@@ -43,6 +43,13 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   a dev server, so there is no hot module replacement: after a code change it rewrites
   `apps/web/dist` in 1-3 s, then reload the page. Until its first build finishes the front
   answers 404.
+- Both fronts serve the UI manifest, built from `contract/` by the web build, at
+  `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on the dev
+  stand, with `manifest.schema.json` and `model.schema.json` beside it; `Cache-Control:
+  no-store`). The mcproc var `ui_manifest` passes `PERCH_UI_MANIFEST` to both: `'0'` (in
+  `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404 there. Development
+  and e2e builds also install `window.__perch.ui.anchors()`, which lists the anchors a page
+  renders now.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,

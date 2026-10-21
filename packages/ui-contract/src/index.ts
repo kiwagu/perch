@@ -1,10 +1,15 @@
 export {
+  ANCHOR_ATTRIBUTES,
   ANCHOR_PATTERN,
   baseOf,
   CONTRACT_VERSION,
   isAnchor,
   isKnownAnchor,
   kindOf,
+  PAGE_HELPER,
+  type PerchPageHelper,
+  type RenderedAnchor,
+  type RenderedPage,
   screenOf,
   segmentsOf,
   testIdFor,
@@ -58,6 +63,18 @@ export {
   validateAgainst,
   writeSchemas,
 } from './files'
+export {
+  buildManifest,
+  emitManifest,
+  type Instructions,
+  instructionsOf,
+  MANIFEST_DIR,
+  type Manifest,
+  type ManifestInput,
+  type Product,
+  productInfo,
+  writeManifest,
+} from './manifest'
 export { type Reference, referencesIn, scenarioSchema } from './scenarios'
 export {
   actionParamsSchema,

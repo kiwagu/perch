@@ -17,7 +17,9 @@ Three authored files, edited by hand (or by a model in the modeling thread):
   (`bindings`), the anchors a test starts from (`entry`), every anchor it declares with
   its kind and binding, its states, its flow and a wireframe. The `platform` section lists
   the actions the platform offers every screen (signing in, organisations, devices), the
-  reserved anchors and the readiness line. `scenarios` holds the end-to-end scenarios.
+  reserved anchors and the readiness line. `scenarios` holds the end-to-end scenarios; a
+  scenario's `devices` give each device the role it acts as by the end of the scenario (the
+  role it reaches), and every device starts as `guest` unless a step signs it in.
 - `model.schema.json`: the data model, a JSON Schema 2020-12 document with one entry of
   `$defs` per entity and the contract's `x-perch` keyword (table, region, id prefix, owner,
   rules, actions, how each field merges).

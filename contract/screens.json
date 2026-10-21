@@ -1168,7 +1168,7 @@
         "On device B, enter the new name into [user.profile.name-input] and click [user.profile.save-button]"
       ],
       "expected": [
-        "After step 2 device A shows [app-shell.notice-message] carries [code:profile-saved]",
+        "After step 2 device A shows [app-shell.notice-message] carrying [code:profile-saved]",
         "After step 3 device B shows the bio entered on device A in [user.profile.bio-textarea]",
         "Within 5 seconds of step 4 device A shows the new name in [user.profile.heading], without a reload",
         "The time from the click on device B to the new name on device A is reported as \"sync-latency-ms\""
@@ -1198,8 +1198,8 @@
       ],
       "expected": [
         "After step 3 the sync channel of device B is down",
-        "After step 4 device B shows [app-shell.notice-message] carries [code:profile-saved] and the bio, and its sync channel is still down",
-        "After step 5 device A shows [app-shell.notice-message] carries [code:profile-saved] and the new name",
+        "After step 4 device B shows [app-shell.notice-message] carrying [code:profile-saved] and the bio, and its sync channel is still down",
+        "After step 5 device A shows [app-shell.notice-message] carrying [code:profile-saved] and the new name",
         "After step 6 the sync channel of device B comes up again",
         "Then both devices show the new name from device A and the bio from device B"
       ]
@@ -1261,7 +1261,7 @@
       ],
       "expected": [
         "After step 3 device A is on [/sign-in] and its browser keeps no local database of the account",
-        "After step 4 device B, still signed in, shows [app-shell.notice-message] carries [code:profile-saved]",
+        "After step 4 device B, still signed in, shows [app-shell.notice-message] carrying [code:profile-saved]",
         "After step 5 device A shows the profile the server holds: the new name from device B and the bio from step 1",
         "After step 7 device A asks before deleting the change it could not send: [user.profile.sign-out-dialog] carries [code:unsent-changes]",
         "After step 8 device A stays on [/me] with the unsent name, and its local database is kept"
@@ -1524,6 +1524,27 @@
         "Within 5 seconds of step 9 device A shows only the note by A",
         "After step 10 both devices show [organisation.notes.empty-message]",
         "Neither device loaded a page since it signed up"
+      ]
+    },
+    {
+      "id": "contract/01-manifest",
+      "title": "Read the UI manifest and the anchors of a running page",
+      "tags": ["smoke"],
+      "devices": {
+        "A": "guest"
+      },
+      "where": "The manifest the stand serves at /ui-manifest/manifest.json, then [/sign-in]",
+      "data": {},
+      "scenario": "A tool outside the repository reads the manifest the stand serves and matches it with the anchors a running page renders",
+      "steps": [
+        "Fetch the manifest from /ui-manifest/manifest.json on the stand, and its schema from /ui-manifest/manifest.schema.json beside it",
+        "Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]",
+        "Call the page helper window.__perch.ui.anchors()"
+      ],
+      "expected": [
+        "After step 1 the manifest is valid against its schema and names contract version 1",
+        "After step 3 every anchor the helper reports is in the manifest's ids with the same kind, or is derived from one of them with a suffix of that entry's derived",
+        "After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in [state:ready]"
       ]
     }
   ]

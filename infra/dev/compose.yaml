@@ -2,8 +2,8 @@
 # /backend/, the gateway, WebSocket upgrades included. Host networking lets Caddy reach the
 # gateway on 127.0.0.1; the site binds 127.0.0.1 only. The mcproc apps caddy-dev and caddy-e2e
 # each run this one service with `compose run --name <project>-caddy-<stand>` under the
-# checkout's compose project, with the stand's ports in FRONT_PORT and GATEWAY_PORT, so two
-# stands, or two checkouts, never share a container.
+# checkout's compose project, with the stand's ports in FRONT_PORT and GATEWAY_PORT and the
+# manifest switch in PERCH_UI_MANIFEST, so two stands, or two checkouts, never share a container.
 services:
   caddy:
     image: caddy:2.10.2-alpine
@@ -11,6 +11,7 @@ services:
     environment:
       - FRONT_PORT
       - GATEWAY_PORT
+      - PERCH_UI_MANIFEST
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro

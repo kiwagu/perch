@@ -1,16 +1,18 @@
 /**
  * JSON Schema 2020-12 through Ajv: meta-validation of a schema the contract carries (the
  * model, a route's parameters) and validation of data against a schema (the manifest).
- * `x-perch` is the contract's own keyword, so strict mode accepts it.
+ * `x-perch` is the contract's own keyword, so strict mode accepts it, and a `type` may list
+ * several types (`["string", "number", "boolean"]`), as the generated schemas write a union of
+ * primitives.
  */
 
-import { Ajv2020, type ErrorObject } from 'ajv/dist/2020'
+import { Ajv2020, type ErrorObject } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 
 import type { Problem } from './problems'
 
 export const createValidator = (): Ajv2020 => {
-  const ajv = new Ajv2020({ allErrors: true, strict: true })
+  const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true })
 
   addFormats(ajv)
   ajv.addKeyword('x-perch')

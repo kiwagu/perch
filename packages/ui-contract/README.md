@@ -50,12 +50,27 @@ root export is build-time tooling for Bun.
     the literals equal to the anchors of `screens.json`, no literal named like another plus
     a suffix, and every suffix and code in the vocabulary.
   - `sortProblems(problems)`: by file and line, stable.
+  - The manifest: `buildManifest({ vocabulary, screens, model, product, now? })` returns the
+    `Manifest` (typed from `manifestSchema`): the vocabulary as tables in `contract` with the
+    prose `instructions` for an agent (`instructionsOf`, the anchors and states taken from the
+    vocabulary and the platform section), the screens, the platform section and the scenarios
+    verbatim, `ids` (every declared anchor with its kind, its screen and its attributes),
+    `routeParams` and the model document. `productInfo(root)` names the product (the root
+    package's version, the commit checked out or null). `writeManifest(root, outDir, manifest)`
+    validates it against `contract/manifest.schema.json` with Ajv and returns the problems
+    without writing anything, or empties `outDir` (its last segment must be `ui-manifest`,
+    `MANIFEST_DIR`) and writes `manifest.json`, `manifest.schema.json` and `model.schema.json`.
+    `emitManifest(root, outDir)` loads the contract and does all three.
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  The page helper's contract: `PAGE_HELPER` (`__perch.ui`), `ANCHOR_ATTRIBUTES` (the
+  `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
+  `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
+  `Window` for any code that imports them.
 
 ## Commands
 
@@ -72,3 +87,8 @@ root export is build-time tooling for Bun.
   against the contract; prints `file:line: message` per problem and exits 1, or
   `contract: sources agree with the contract (<n> anchors)`; not part of `bun run check`
   yet).
+- From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
+  manifest from the three files and writes it into `ui-manifest/` at the root, gitignored, or
+  into `<dir>` relative to the working directory, which may be any folder under the root;
+  prints the problems and exits 1 when the manifest does not match its schema). The web app's
+  build runs it into `apps/web/dist/ui-manifest/`.

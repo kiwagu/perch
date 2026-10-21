@@ -19,7 +19,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["PERCH_UI_HOOKS"]
     },
     "dev": {
       "cache": false,

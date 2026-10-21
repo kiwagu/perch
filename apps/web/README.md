@@ -140,7 +140,13 @@ modeling stage.
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for organisations and for devices,
-  notices the shell shows, the language state and the app-wide catalogs.
+  notices the shell shows, the language state and the app-wide catalogs. `ui-contract.ts` is
+  the page helper of development and e2e builds: `main.tsx` installs it when the build
+  constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
+  `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
+  lists every `data-testid` the page renders now with its kind, `data-state`, `data-code`,
+  `data-id`, `data-value` and whether it is visible, with the page's URL
+  (`renderedAnchors(document, location)`, `installUiHelper(window)`).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
@@ -173,9 +179,13 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
 ## Commands
 
 - `bun run dev`: the build watcher, `vite build --watch --mode development`: rewrites `dist/`
-  (source maps, no minifying) on every change. There is no dev server: the local stands'
-  Caddy front serves `dist/`, so reload the page after a rebuild.
-- `bun run build`: production build into `dist/`.
+  (source maps, no minifying) on every change, then the UI manifest into `dist/ui-manifest/`
+  (`ui-contract manifest`; a change of a contract file rebuilds too). There is no dev server:
+  the local stands' Caddy front serves `dist/`, so reload the page after a rebuild.
+- `bun run build`: production build into `dist/`, then `ui-contract manifest --out
+  dist/ui-manifest`: the UI manifest built from `contract/`, with its schema and the model's
+  beside it, which the stands serve at `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build
+  installs the page helper.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.

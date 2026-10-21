@@ -20,10 +20,16 @@ serves the web app's production build (`apps/web/dist`, written by the launcher 
 run; no dev server) and, under `/backend/`, the gateway on one origin.
 
 Specs are tagged `@smoke` (`user/`: sign up, rename, a browser that blocks site data, a
-database that will not open) or
+database that will not open; `contract/`: the UI manifest) or
 `@full` (`sync/`: the slower specs of one account on several devices; `organisation/`: two
 accounts, each in a browser of its own):
 
+- `contract/01-manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
+  (`no-store`) is valid against the schema served beside it and names contract version 1; on
+  `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in the manifest's `ids` with
+  the same kind, or derived from one with a suffix it lists, and the helper reports the page's
+  URL. It fails until the application renders the contract's anchors (`app-shell.status`
+  among them).
 - `user/03-blocked-storage`: a browser that refuses the page its localStorage is told that it
   keeps no data for Perch, and gets no sign-in form.
 - `user/04-unopenable-database`: once the account's local database is broken, the page says it
@@ -98,7 +104,7 @@ note texts).
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
   memory lease (the run waits its turn when the host is short of memory) and with
   `E2E_BASE_URL` set; the launcher builds the dependencies and the web app's production
-  build through turbo (and stops when `apps/web/dist/index.html` is missing afterwards), starts
+  build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `sync/`,

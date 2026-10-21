@@ -15,6 +15,7 @@ import { AppI18n, useSetLocale } from './platform/i18n'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter, SIGN_IN_PATH } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { installUiHelper } from './platform/ui-contract'
 
 type Boot =
   | { readonly status: 'opening' | 'storage-blocked' }
@@ -116,6 +117,11 @@ function App() {
       <RouterProvider router={boot.router} />
     </ServicesProvider>
   )
+}
+
+// Development and e2e builds only: `window.__perch.ui.anchors()` for tests and agents.
+if (__PERCH_UI_HOOKS__) {
+  installUiHelper(window)
 }
 
 const root = document.getElementById('root')

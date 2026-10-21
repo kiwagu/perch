@@ -9,10 +9,18 @@
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
  *     fails when a committed schema is missing or differs from its source.
+ *   ui-contract manifest [--out <dir>]
+ *     builds the UI manifest from the three contract files and writes it, with its schema and
+ *     the model's beside it, into `<dir>` (default `ui-manifest`, relative to the working
+ *     directory; its last segment is `ui-manifest`). Runs from the root or any folder under it.
  */
 
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+
 import { type Contract, checkContract, loadContract } from './check'
-import { formatProblem, type Problem, schemaDrift, writeSchemas } from './files'
+import { formatProblem, type Problem, SCREENS_FILE, schemaDrift, writeSchemas } from './files'
+import { emitManifest, MANIFEST_DIR } from './manifest'
 import { compareWithContract, scanSources } from './sources'
 
 const summaryOf = ({ screens, vocabulary }: Contract): string => {
@@ -90,6 +98,39 @@ function schemas(argv: readonly string[]): number {
   return 0
 }
 
+/** The nearest folder at or above `from` that holds the contract. */
+function contractRoot(from: string): string | undefined {
+  for (let folder = from; ; folder = dirname(folder)) {
+    if (existsSync(join(folder, SCREENS_FILE))) {
+      return folder
+    }
+
+    if (dirname(folder) === folder) {
+      return undefined
+    }
+  }
+}
+
+function manifest(argv: readonly string[]): number {
+  const at = argv.indexOf('--out')
+  const out = resolve(at === -1 ? MANIFEST_DIR : (argv[at + 1] ?? ''))
+  const root = contractRoot(process.cwd())
+
+  if (root === undefined) {
+    console.error(`ui-contract: no ${SCREENS_FILE} here or in a folder above`)
+
+    return 1
+  }
+
+  if (reported(emitManifest(root, out))) {
+    return 1
+  }
+
+  console.log(`ui-contract: wrote ${join(out, 'manifest.json')}`)
+
+  return 0
+}
+
 function run(argv: readonly string[]): number {
   const [command, ...rest] = argv
 
@@ -98,8 +139,12 @@ function run(argv: readonly string[]): number {
       return check(rest)
     case 'schemas':
       return schemas(rest)
+    case 'manifest':
+      return manifest(rest)
     default:
-      console.error('ui-contract: use "check [--sources]" or "schemas [--check]"')
+      console.error(
+        'ui-contract: use "check [--sources]", "schemas [--check]" or "manifest [--out <dir>]"',
+      )
 
       return 1
   }

@@ -17,6 +17,8 @@ vars:
   gateway_e2e: '{{ 5191 + slot * 100 }}'    # the e2e gateway
   front: '{{ 5443 + slot * 100 }}'          # Caddy of the dev stand
   front_e2e: '{{ 5493 + slot * 100 }}'      # Caddy of the e2e stand
+  # both fronts serve the UI manifest at /ui-manifest/; '0' answers 404 there instead
+  ui_manifest: '1'
   # the stands' identity access key; a deployment sets its own GATEWAY_JWT_KEY
   stand_jwt_key: 'stand-only-signing-key-not-for-any-deployment-0123456789abcdefghijklmnop'
 # A start asks for memory first: an app's estimate is its `memory` or what a running sibling
@@ -130,7 +132,7 @@ apps:
     run: >-
       docker rm -f {{ project }}-caddy-dev >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
-      FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }}
+      FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }} PERCH_UI_MANIFEST={{ ui_manifest }}
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-dev caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
@@ -150,7 +152,7 @@ apps:
     run: >-
       docker rm -f {{ project }}-caddy-e2e >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
-      FRONT_PORT={{ front_e2e }} GATEWAY_PORT={{ gateway_e2e }}
+      FRONT_PORT={{ front_e2e }} GATEWAY_PORT={{ gateway_e2e }} PERCH_UI_MANIFEST={{ ui_manifest }}
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-e2e caddy
     # Caddy listens from its container, outside the app's processes, so the app declares

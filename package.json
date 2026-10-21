@@ -1,5 +1,6 @@
 {
   "name": "perch",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.3",
@@ -20,6 +21,7 @@
     "contract:schemas": "ui-contract schemas",
     "contract:check": "ui-contract check",
     "contract:check:sources": "ui-contract check --sources",
+    "contract:manifest": "ui-contract manifest",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
