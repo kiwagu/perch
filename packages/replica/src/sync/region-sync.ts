@@ -294,9 +294,9 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
-   * Stops for good without a report: the region's document is replaced, or the region left the
-   * engine. Ends a pull and the subscription, forgets a compaction and lands the push as empty;
-   * from then on nothing goes out for the region, not even from work it had under way.
+   * Stops for good without a report: the region's document is replaced. Ends a pull and the
+   * subscription, forgets a compaction and lands the push as empty; from then on nothing goes out
+   * for the region, not even from work it had under way.
    */
   retire(): void {
     this.#stopped = true
