@@ -83,8 +83,9 @@ export class Organisations {
 
   /**
    * Creates an organisation with `identity` as its admin. A key taken by another organisation
-   * is refused, except one the same identity began to create and never finished: that creation
-   * is completed. The name is trimmed first.
+   * is refused, except one the same identity began to create and never finished, or created and
+   * is still the admin of: that creation is completed, under the name it was stored with. The
+   * name is trimmed first.
    */
   create(input: {
     identity: IdentityId
@@ -239,15 +240,25 @@ export class Organisations {
       )
   }
 
-  /** The organisation `identity` began to create under `key` and never finished, if it did. */
+  /**
+   * The organisation `identity` began to create under `key`, for its creation to be completed:
+   * one still provisioning, or one ready whose creator is still its admin (telling the listeners
+   * failed). Any other organisation under the key is refused as taken.
+   */
   #unfinished(identity: IdentityId, key: string): ResultAsync<Tenant, OrganisationError> {
-    return this.#lookup
-      .tenantRow(key)
-      .andThen((row) =>
-        row && row.status === 'provisioning' && keyOf(row.created_by) === identity
-          ? okAsync(toTenant(row))
-          : errAsync(refused('key-taken')),
-      )
+    return this.#lookup.tenantRow(key).andThen((row): ResultAsync<Tenant, OrganisationError> => {
+      if (!row || keyOf(row.created_by) !== identity) {
+        return errAsync(refused('key-taken'))
+      }
+
+      const tenant = toTenant(row)
+
+      return row.status === 'provisioning'
+        ? okAsync(tenant)
+        : this.#lookup
+            .adminOf(identity, tenant)
+            .orElse((error) => errAsync('kind' in error ? refused('key-taken') : error))
+    })
   }
 
   /** Defines the organisation's database, adds its creator as admin there and marks it ready. */

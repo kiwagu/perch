@@ -51,7 +51,11 @@ export function keyOf(id: unknown): string {
   return String(fromDriverValue(id))
 }
 
-/** Whether the database refused a write because the unique index `index` already holds its value. */
+/**
+ * Whether the database refused a write because the unique index `index` already holds its value.
+ * The driver names no code for it (an `InternalError` of kind `Internal`, code 0), so its text is
+ * read: the same from the embedded engine and from the 3.3.4 server, pinned by the spec.
+ */
 export function takenIn(index: string, error: DataError): boolean {
   const message = error.cause instanceof Error ? error.cause.message : String(error.cause)
 

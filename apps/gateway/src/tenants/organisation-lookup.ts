@@ -1,6 +1,6 @@
-import { err, errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
+import { err, errAsync, okAsync, Result, type ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError, type LocalDb, recordId } from '@workspace/data'
+import { type DataError, type LocalDb, recordId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
@@ -100,7 +100,10 @@ export class OrganisationLookup {
     ).map(([role]) => role)
   }
 
-  /** The members with the emails the directory holds for their identities, in the same order. */
+  /**
+   * The members with the emails the directory holds for their identities, in the same order. A
+   * member row whose identity is gone (the seed's sweep leaves such rows) is left out.
+   */
   withEmails(key: string, rows: readonly MemberRow[]): ResultAsync<readonly Member[], DataError> {
     return Result.combine(
       rows.map((row) => identityIdOf(keyOf(row.id)).map((id) => ({ id, role: row.role }))),
@@ -113,18 +116,14 @@ export class OrganisationLookup {
           `could not read the identities of the members of ${key}`,
         ).map(([identities]) => ({ members, identities })),
       )
-      .andThen(({ members, identities }) => {
+      .map(({ members, identities }) => {
         const emails = new Map(identities.map((row) => [keyOf(row.id), row.email]))
 
-        return Result.combine(
-          members.map(({ id, role }) => {
-            const email = emails.get(id)
+        return members.flatMap(({ id, role }): Member[] => {
+          const email = emails.get(id)
 
-            return email === undefined
-              ? err(dataError('data:QUERY_FAILED', `member ${id} of ${key} has no identity`))
-              : ok<Member, DataError>({ identity: { id, email }, role })
-          }),
-        )
+          return email === undefined ? [] : [{ identity: { id, email }, role }]
+        })
       })
   }
 }

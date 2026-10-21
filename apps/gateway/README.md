@@ -118,9 +118,10 @@ organisations' databases close after the region hub and before the directory. `T
 keeps one connection per organisation database in use, shared by every holder and closed once
 nobody has held it for five minutes. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished is completed when the creator asks again), lists an identity's memberships in ready
+unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to an admin, answers what it refuses
+other than itself, lists the members with their emails to an admin (leaving out the rows of
+identities that are gone), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change, answering once they
 heard them: the composition root has the registry tell the identity's devices. A removal takes
