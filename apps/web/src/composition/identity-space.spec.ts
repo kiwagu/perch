@@ -898,17 +898,20 @@ describe('organisations in the identity space', () => {
           : tenants.open(identity, key),
     })
 
-    // Acme stays a membership, unavailable on this device: its region is not synced.
+    // Acme stays a membership, unavailable on this device: its region is not synced, and the
+    // changes its database may hold count as unsent, since nobody can read them.
     expect(space.memberships()).toEqual([acme])
     expect(space.tenants()).toEqual([])
     expect(space.currentTenant()).toBeUndefined()
     expect(errors.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
+    expect((await space.unsent())._unsafeUnwrap()).toBe(true)
 
     broken = false
     await space.setMemberships([acme])
 
     expect(space.tenants()).toEqual(['acme'])
     expect(space.currentTenant()).toBe('acme')
+    expect((await space.unsent())._unsafeUnwrap()).toBe(false)
     await expect(space.close()).resolves.toBeUndefined()
   })
 

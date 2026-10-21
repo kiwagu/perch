@@ -11,7 +11,7 @@
  * still hold, though the list it follows may be older.
  */
 
-import { errAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
@@ -210,9 +210,18 @@ class Space implements IdentitySpace {
     return ResultAsync.combine(this.#spaces().map((space) => space.flush())).map(() => undefined)
   }
 
+  /**
+   * Whether the space holds changes not sent yet, once a change of memberships under way ended. A
+   * database the device holds for a membership but could not open counts: nobody can read what it
+   * holds.
+   */
   unsent(): ResultAsync<boolean, DataError> {
-    return ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
-      regions.some(Boolean),
+    return ResultAsync.fromSafePromise(this.#changing).andThen(() =>
+      this.#unopened().length > 0
+        ? okAsync(true)
+        : ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
+            regions.some(Boolean),
+          ),
     )
   }
 
@@ -252,8 +261,13 @@ class Space implements IdentitySpace {
     this.#leading.current?.renew()
   }
 
+  /**
+   * Has the gateway sign the device out once everything is sent. While a database the device
+   * holds for a membership did not open, the gateway is not asked (`offline`), as for a region
+   * that stopped syncing: what it holds may be unsent.
+   */
   signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#leading.signOut()
+    return this.#unopened().length > 0 ? Promise.resolve('offline') : this.#leading.signOut()
   }
 
   resumeSync(): void {
@@ -273,6 +287,16 @@ class Space implements IdentitySpace {
       this.#retained.deleteCounted(this.#options.tenantDatabases.keys()),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
+  }
+
+  /** The organisations the identity belongs to whose database the device counts but did not open. */
+  #unopened(): readonly string[] {
+    const open = new Set(this.#tenants.keys())
+    const counted = new Set(this.#options.tenantDatabases.keys())
+
+    return [...keysOf(this.#tenants.memberships())].filter(
+      (key) => !open.has(key) && counted.has(key),
+    )
   }
 
   /** The identity's own region first, then each organisation's. */
