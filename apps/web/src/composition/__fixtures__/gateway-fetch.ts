@@ -40,5 +40,9 @@ export function fakeFetch(...answers: Array<() => Promise<Response>>) {
 export const respond = (status: number, body: unknown) => () =>
   Promise.resolve(Response.json(body, { status }))
 
+/** An answer whose body is `text`, not JSON. */
+export const respondText = (status: number, text: string) => () =>
+  Promise.resolve(new Response(text, { status, headers: { 'Content-Type': 'text/html' } }))
+
 /** An answer without a body (204). */
 export const noContent = () => () => Promise.resolve(new Response(null, { status: 204 }))
