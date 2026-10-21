@@ -24,6 +24,13 @@ describe('anchor grammar', () => {
     expect(screenOf('organisation.notes.item', screens)).toBe('organisation')
     expect(screenOf('organisational.x', screens)).toBeUndefined()
     expect(screenOf('device.list', screens)).toBeUndefined()
+    expect(screenOf('app-shell', screens)).toBe('app-shell')
+  })
+  it('prefers the longer of two nested screen names', () => {
+    const screens = ['user', 'user.sign-in']
+
+    expect(screenOf('user.sign-in.email-input', screens)).toBe('user.sign-in')
+    expect(screenOf('user.profile.heading', screens)).toBe('user')
   })
   it('splits segments', () => {
     expect(segmentsOf('a.b-c.d')).toEqual(['a', 'b-c', 'd'])

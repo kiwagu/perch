@@ -10,6 +10,7 @@
         "@types/bun": "catalog:",
         "@workspace/data": "workspace:*",
         "@workspace/eslint-config": "workspace:*",
+        "@workspace/ui-contract": "workspace:*",
         "@workspace/zod": "workspace:*",
         "eslint": "catalog:",
         "lefthook": "catalog:",

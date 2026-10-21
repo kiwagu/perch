@@ -11,7 +11,24 @@ root export is build-time tooling for Bun.
 
 ## Key exports
 
-- `.`: the tooling; today it re-exports `./anchors`.
+- `.`: the tooling, for Bun.
+  - Loaders of the three contract files, each returning problems (`file:line: message`
+    through `formatProblem`): `parseVocabulary(markdown)` (the closed lists of
+    `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
+    `loadScreens(root)` (`contract/screens.json` through `screensFileSchema`, problems named
+    by JSON path) and `loadModel(root)` (`contract/model.schema.json`, checked against the
+    JSON Schema 2020-12 meta-schema, then each `$defs` entity through
+    `entityDefinitionSchema`). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_FILE`,
+    `MODEL_FILE` and the three schema files.
+  - The Zod sources of the files: `screensFileSchema` and its parts, `flatJsonSchema` (route
+    `params` and `search`), `scenarioSchema`, `entityDefinitionSchema`, `manifestSchema`.
+    `SCHEMA_OUTPUTS`, `writeSchemas(root)` and `schemaDrift(root)` turn them into the
+    committed `contract/*.schema.json` (generated; Biome leaves them as written).
+  - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
+    `validateAgainst(file, schema, data)`.
+  - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
+  - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
@@ -20,10 +37,7 @@ root export is build-time tooling for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar and derived-anchor tests.
+- `bun run test`: the anchor grammar, the loaders, the schema writer and the references.
 - `bun run typecheck`, `bun run lint`.
-- From the root: `bun run contract:check` (the contract files against their schemas and
-  each other), `bun run contract:schemas` (the JSON Schemas of the contract files),
-  `bun run contract:manifest` (`ui-manifest/manifest.json` from the contract),
-  `bun run contract:diff <ref>` (the contract changes since a git ref, for a hand-over) and
-  `bun run contract:coverage` (how many controls carry an anchor, per module and screen).
+- From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
+  from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
