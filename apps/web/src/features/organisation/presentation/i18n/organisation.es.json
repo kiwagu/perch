@@ -1,5 +1,6 @@
 {
   "organisation.none": "Todavía no eres miembro de ninguna organización.",
+  "organisation.unavailable": "Los datos de tu organización no se pudieron abrir en este dispositivo.",
   "organisation.create.title": "Crear una organización",
   "organisation.create.key": "Clave",
   "organisation.create.key-hint": "Letras minúsculas, dígitos y guiones bajos, de 2 a 32 caracteres.",
