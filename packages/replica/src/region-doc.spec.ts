@@ -22,6 +22,7 @@ import { replaceRegionDoc } from './region-replacement'
 import { RegionStore } from './region-store'
 import appendStatement from './surql/replica-append.surql'
 import loadStatement from './surql/replica-load.surql'
+import saveSnapshotStatement from './surql/replica-save-snapshot.surql'
 import { LoroWritePath } from './write-path'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
@@ -418,6 +419,48 @@ describe('RegionDoc sync state', () => {
     expect(lagging.recordJson(thirdKey)).toMatchObject({ name: 'Cleo' })
     // A projector follows imports only.
     expect(new Set(seen)).toEqual(new Set(['import']))
+  })
+
+  it('keeps the newer snapshot when an older compaction saves after it', async () => {
+    let reached: () => void = () => {}
+    let release: () => void = () => {}
+    const saving = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // The tab that led the sync until now: its snapshot's save is held until another tab compacted further.
+    const late = interceptQueries(local, (text) => {
+      if (text === saveSnapshotStatement) {
+        reached()
+
+        return released
+      }
+    })
+    const lagging = await open()
+    const former = (await RegionDoc.open(late, ref))._unsafeUnwrap()
+    const leader = await open()
+
+    writeName(former, 'Ann')
+    expect((await former.flush()).isOk()).toBe(true)
+
+    const compacting = former.compact()
+
+    // The former leader's snapshot covers row 1; the leader's covers rows 1 and 2.
+    await saving
+    writeName(leader, 'Beto', otherKey)
+    expect((await leader.flush()).isOk()).toBe(true)
+    expect((await leader.compact()).isOk()).toBe(true)
+    release()
+    expect((await compacting).isOk()).toBe(true)
+
+    const reopened = await open()
+
+    expect(reopened.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
   })
 
   it('opens a compacted region at what its snapshot covers', async () => {
