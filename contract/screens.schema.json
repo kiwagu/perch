@@ -371,64 +371,182 @@
                 "binding": {
                   "anyOf": [
                     {
-                      "type": "object",
-                      "properties": {
-                        "model": {
-                          "type": "string",
-                          "pattern": "^[a-z_]+\\.[a-z_]+$",
-                          "description": "`entity.field`: a field of an entity of model.schema.json."
-                        }
-                      },
-                      "required": [
-                        "model"
-                      ],
-                      "additionalProperties": false,
-                      "description": "The anchor shows or edits a field of the model."
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "type": "string",
-                          "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
-                          "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
-                        },
-                        "params": {
-                          "description": "Per parameter of the action, the anchor whose value it takes.",
+                      "anyOf": [
+                        {
                           "type": "object",
-                          "propertyNames": {
-                            "type": "string"
+                          "properties": {
+                            "model": {
+                              "type": "string",
+                              "pattern": "^[a-z_]+\\.[a-z_]+$",
+                              "description": "`entity.field`: a field of an entity of model.schema.json."
+                            }
                           },
-                          "additionalProperties": {
-                            "type": "string",
-                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                            "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
-                          }
+                          "required": [
+                            "model"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor shows or edits a field of the model."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string",
+                              "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+                              "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
+                            },
+                            "params": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                    "description": "The anchor of the control whose value the parameter takes."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "description": "The constant: a string, a number or a boolean.",
+                                        "type": [
+                                          "string",
+                                          "number",
+                                          "boolean"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "value"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                  }
+                                ],
+                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                              },
+                              "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                            }
+                          },
+                          "required": [
+                            "action"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor runs an action."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "route": {
+                              "type": "string",
+                              "pattern": "^\\/",
+                              "description": "The path of a binding the anchor navigates to."
+                            }
+                          },
+                          "required": [
+                            "route"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor navigates to a route."
                         }
-                      },
-                      "required": [
-                        "action"
                       ],
-                      "additionalProperties": false,
-                      "description": "The anchor runs an action."
+                      "description": "What the anchor is bound to: a model field, an action or a route."
                     },
                     {
-                      "type": "object",
-                      "properties": {
-                        "route": {
-                          "type": "string",
-                          "pattern": "^\\/",
-                          "description": "The path of a binding the anchor navigates to."
-                        }
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "model": {
+                                "type": "string",
+                                "pattern": "^[a-z_]+\\.[a-z_]+$",
+                                "description": "`entity.field`: a field of an entity of model.schema.json."
+                              }
+                            },
+                            "required": [
+                              "model"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The anchor shows or edits a field of the model."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string",
+                                "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+                                "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
+                              },
+                              "params": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                      "description": "The anchor of the control whose value the parameter takes."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "description": "The constant: a string, a number or a boolean.",
+                                          "type": [
+                                            "string",
+                                            "number",
+                                            "boolean"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "value"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                    }
+                                  ],
+                                  "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                },
+                                "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                              }
+                            },
+                            "required": [
+                              "action"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The anchor runs an action."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "route": {
+                                "type": "string",
+                                "pattern": "^\\/",
+                                "description": "The path of a binding the anchor navigates to."
+                              }
+                            },
+                            "required": [
+                              "route"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The anchor navigates to a route."
+                          }
+                        ],
+                        "description": "What the anchor is bound to: a model field, an action or a route."
                       },
-                      "required": [
-                        "route"
-                      ],
-                      "additionalProperties": false,
-                      "description": "The anchor navigates to a route."
+                      "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
                   ],
-                  "description": "What the anchor is bound to: a model field, an action or a route."
+                  "description": "What the anchor is bound to: one binding, or several in a non-empty list."
                 },
                 "roles": {
                   "description": "The roles that see the element; absent: every role of the screen.",
@@ -571,6 +689,41 @@
                     "action": {
                       "description": "The action the event runs.",
                       "type": "string"
+                    },
+                    "params": {
+                      "description": "The parameters this path of the event passes to its action.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                            "description": "The anchor of the control whose value the parameter takes."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "description": "The constant: a string, a number or a boolean.",
+                                "type": [
+                                  "string",
+                                  "number",
+                                  "boolean"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "value"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                          }
+                        ],
+                        "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                      }
                     },
                     "guard": {
                       "description": "The condition under which the event applies.",

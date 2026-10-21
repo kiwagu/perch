@@ -16,10 +16,10 @@
         },
         "sample.save-button": {
           "kind": "button",
-          "binding": {
-            "action": "thing.updateThing",
-            "params": { "title": "sample.title-input" }
-          },
+          "binding": [
+            { "action": "thing.createThing", "params": { "title": "sample.title-input" } },
+            { "action": "thing.updateThing", "params": { "title": "sample.title-input" } }
+          ],
           "roles": ["member"],
           "codes": ["saved", "failed"]
         },
@@ -28,7 +28,14 @@
           "source": { "entity": "thing", "order": "created_at", "direction": "asc" },
           "states": ["loading"]
         },
-        "sample.list.item": { "kind": "item", "dataId": "the thing's id" }
+        "sample.list.item": { "kind": "item", "dataId": "the thing's id" },
+        "sample.sign-out-button": {
+          "kind": "button",
+          "binding": {
+            "action": "platform.sign-out",
+            "params": { "forgetUnsent": { "value": true } }
+          }
+        }
       },
       "flow": {
         "states": ["editing", "saving"],
@@ -38,6 +45,7 @@
             "on": "sample.save-button",
             "action": "thing.updateThing",
             "from": "editing",
+            "params": { "title": "sample.title-input" },
             "outcomes": { "success": { "codes": ["saved"] }, "failure": { "codes": ["failed"] } }
           }
         ]

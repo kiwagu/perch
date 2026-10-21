@@ -85,6 +85,17 @@ describe('loadModel', () => {
       '$defs.thing["x-perch"]: Invalid input: expected object, received undefined',
     ])
   })
+  it('treats a field of string enum values without a type as a string field', () => {
+    writeModel((document) => {
+      const properties = document.$defs['thing']?.['properties'] as Record<string, unknown>
+
+      properties['size'] = { enum: ['small', 'large'] }
+    })
+
+    expect(messages()).toEqual([
+      '$defs.thing.properties.size: a string field that is not readonly needs x-perch.crdt ("none" for last-writer-wins)',
+    ])
+  })
   it('reports a string field that is not readonly and has no crdt', () => {
     writeModel((document) => {
       const properties = document.$defs['thing']?.['properties'] as Record<string, unknown>

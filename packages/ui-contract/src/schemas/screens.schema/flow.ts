@@ -4,6 +4,8 @@ import { z } from '@workspace/zod'
 
 import { anchorSchema, codeSchema } from '../../names.schema'
 
+import { actionParamsSchema } from './params'
+
 const outcomeSchema = z
   .strictObject({
     route: z.string().optional().describe('The route the app moves to.'),
@@ -17,6 +19,9 @@ const eventSchema = z
   .strictObject({
     on: anchorSchema.describe('The anchor the event happens on.'),
     action: z.string().optional().describe('The action the event runs.'),
+    params: actionParamsSchema
+      .optional()
+      .describe('The parameters this path of the event passes to its action.'),
     guard: z.string().optional().describe('The condition under which the event applies.'),
     from: z.string().optional().describe('The flow state the event leaves.'),
     outcomes: z

@@ -88,6 +88,20 @@ describe('parseVocabulary', () => {
       },
     ])
   })
+  it('reports a section that appears twice by line', () => {
+    const markdown = `${fixture}\n## Roles\n\n| Role | Meaning |\n|---|---|\n| \`admin\` | an administrator |\n`
+
+    expect(parseVocabulary(markdown)).toMatchObject({
+      vocabulary: { roles: { guest: 'nobody signed in', member: 'a member of the organisation' } },
+      problems: [
+        {
+          file: 'contract/vocabulary.md',
+          line: markdown.split('\n').lastIndexOf('## Roles') + 1,
+          message: 'section "Roles" appears twice',
+        },
+      ],
+    })
+  })
   it('reports a row with the wrong number of cells by line', () => {
     const markdown = fixture.replace('| `ready` | the screen is rendered |', '| `ready` |')
 

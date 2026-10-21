@@ -11,10 +11,12 @@ export {
 export { formatProblem, type Problem } from './problems'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
+  type AnchorBinding,
   type AnchorDef,
   type Binding,
   type BindingRef,
   loadScreens,
+  type ParamValue,
   type Platform,
   type Scenario,
   type Screen,

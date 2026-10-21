@@ -56,6 +56,15 @@ describe('loadScreens', () => {
     expect(screens?.screens.map((screen) => screen.id)).toEqual(['sample'])
     expect(screens?.platform.actions['sign-out']?.codes).toEqual(['failed'])
     expect(screens?.scenarios[0]?.id).toBe('sample/01-edit')
+
+    const anchors = screens?.screens[0]?.anchors
+
+    expect(anchors?.['sample.save-button']?.binding).toHaveLength(2)
+    expect(anchors?.['sample.sign-out-button']?.binding).toEqual({
+      action: 'platform.sign-out',
+      params: { forgetUnsent: { value: true } },
+    })
+    expect(screens?.screens[0]?.flow?.events[0]?.params).toEqual({ title: 'sample.title-input' })
   })
   it('defaults the history of a binding to push', () => {
     expect(loadScreens(root).screens?.screens[0]?.bindings[0]?.history).toBe('push')

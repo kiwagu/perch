@@ -63,6 +63,13 @@ const entityPerchSchema = z
   })
   .describe('What the contract says about the entity beyond its shape.')
 
+/** A field of type string, or one without a type whose enum values are all strings. */
+const isStringField = (field: z.output<typeof entityFieldSchema>): boolean =>
+  field.type === 'string' ||
+  (field.type === undefined &&
+    field.enum !== undefined &&
+    field.enum.every((value) => typeof value === 'string'))
+
 export const entityDefinitionSchema = z
   .looseObject({
     type: z.literal('object').describe('Always "object".'),
@@ -76,7 +83,7 @@ export const entityDefinitionSchema = z
     for (const [name, field] of Object.entries(entity.properties)) {
       const perch = field['x-perch']
 
-      if (field.type === 'string' && perch?.readonly !== true && perch?.crdt === undefined) {
+      if (isStringField(field) && perch?.readonly !== true && perch?.crdt === undefined) {
         context.addIssue({
           code: 'custom',
           path: ['properties', name],

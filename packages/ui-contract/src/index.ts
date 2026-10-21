@@ -10,6 +10,7 @@ export {
   testIdFor,
 } from './anchors'
 export {
+  type AnchorBinding,
   type AnchorDef,
   type Binding,
   type BindingRef,
@@ -25,6 +26,7 @@ export {
   type Model,
   type ModelEntity,
   type ModelField,
+  type ParamValue,
   type Platform,
   type Problem,
   parseVocabulary,
@@ -43,6 +45,8 @@ export {
 } from './files'
 export { type Reference, referencesIn, scenarioSchema } from './scenarios'
 export {
+  actionParamsSchema,
+  anchorBindingSchema,
   anchorDefSchema,
   bindingRefSchema,
   bindingSchema,
@@ -51,6 +55,7 @@ export {
   flatJsonSchema,
   flowSchema,
   manifestSchema,
+  paramValueSchema,
   platformSchema,
   screenSchema,
   screensFileSchema,

@@ -1,8 +1,8 @@
 /**
  * Reads `contract/vocabulary.md`: the closed lists of the contract, one `## ` section
  * each, as Markdown tables whose first cell is the key. The sections are fixed; a
- * missing or unknown section, a row with the wrong number of cells, a key listed twice
- * and a missing `Contract version: N` line are problems.
+ * missing, unknown or repeated section, a row with the wrong number of cells, a key
+ * listed twice and a missing `Contract version: N` line are problems.
  */
 
 import { VOCABULARY_FILE } from './paths'
@@ -100,7 +100,13 @@ function readSections(markdown: string, problems: Problem[]): Map<Section, RawRo
       current = undefined
       header = true
 
-      if (isSection(heading)) {
+      if (isSection(heading) && sections.has(heading)) {
+        problems.push({
+          file: VOCABULARY_FILE,
+          line,
+          message: `section "${heading}" appears twice`,
+        })
+      } else if (isSection(heading)) {
         current = []
         sections.set(heading, current)
       } else {

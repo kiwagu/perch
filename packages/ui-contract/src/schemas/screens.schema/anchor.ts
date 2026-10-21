@@ -2,13 +2,9 @@
 
 import { z } from '@workspace/zod'
 
-import {
-  anchorSchema,
-  codeSchema,
-  kebabNameSchema,
-  roleSchema,
-  stateSchema,
-} from '../../names.schema'
+import { codeSchema, kebabNameSchema, roleSchema, stateSchema } from '../../names.schema'
+
+import { actionParamsSchema } from './params'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -35,10 +31,7 @@ export const bindingRefSchema = z
           .describe(
             '`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions).',
           ),
-        params: z
-          .record(z.string(), anchorSchema)
-          .optional()
-          .describe('Per parameter of the action, the anchor whose value it takes.'),
+        params: actionParamsSchema.optional(),
       })
       .describe('The anchor runs an action.'),
     z
@@ -48,6 +41,18 @@ export const bindingRefSchema = z
       .describe('The anchor navigates to a route.'),
   ])
   .describe('What the anchor is bound to: a model field, an action or a route.')
+
+export const anchorBindingSchema = z
+  .union([
+    bindingRefSchema,
+    z
+      .array(bindingRefSchema)
+      .min(1)
+      .describe(
+        'Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which.',
+      ),
+  ])
+  .describe('What the anchor is bound to: one binding, or several in a non-empty list.')
 
 export const sourceSchema = z
   .union([
@@ -75,7 +80,7 @@ export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
     description: z.string().optional().describe('What the element is, for a reader.'),
-    binding: bindingRefSchema.optional(),
+    binding: anchorBindingSchema.optional(),
     roles: z
       .array(roleSchema)
       .optional()
