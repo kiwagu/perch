@@ -1,9 +1,9 @@
 ---
-description: 'Use when: creating a file or a folder in a feature or a package.'
+description: 'Use when: creating a file or a folder in a feature or a package, turning a file into a folder of parts, or adding a module to the gateway.'
 alwaysApply: true
 ---
 
-# Entity-first file names
+# Entity-first file names, folders as units, modules on the gateway
 
 ## Pyramid Layer
 
@@ -12,10 +12,12 @@ alwaysApply: true
 ## Use This When
 
 - You are about to create a file or folder.
+- A file becomes a folder of parts (see `file-size-tiers.mdc` for when).
+- You add a module to the gateway, or import across two of its modules.
 
 ## Stop Here If
 
-- The name reads `<name>.<role>.<ext>` and sits in the layer folder that owns it.
+- The name reads `<name>.<role>.<ext>` and sits in the layer folder that owns it, and anything imported from a folder that has an `index.ts` comes through that index.
 
 ## Core rule
 
@@ -23,4 +25,7 @@ alwaysApply: true
 - Fixed roles in a feature: `module`, `shape`, `commands`, `model.gen`, `service`, `machine`, `container`, `view`, `spec`, `view.spec`, `stories`, plus `entity`, `port`, `rule` (one domain rule function, `profile-name.rule.ts`) and `policy` (one application business function, `locale-change.policy.ts`).
 - A component folder is kebab-case and has the component's name.
 - Feature layout: `<feature>/<feature>.module.ts`, `domain/`, `application/`, `presentation/pages/<page>/`, `presentation/components/<name>/`, `presentation/i18n/`.
+- A folder as a unit: when one file grows into several, they live in a folder named by what they share, without repeating that name inside (`region-sync/push.ts`, not `region-sync/region-push.ts`), with an `index.ts` that only re-exports the folder's public surface. A part keeps its role suffix when it has one (`members.view.tsx`, `invite.policy.ts`); a part that is an internal piece of one unit needs none (`push.ts`). Outside the folder, import the folder (`./region-sync`), never a file inside it. No folder for a single file.
+- The gateway is built from modules the same way: one folder per mechanism of the platform under `apps/gateway/src/` (`auth/`, `sync/`, `tenants/`, `limits/`), each with an `index.ts` as the only entry point for the rest of the server, its internals private to it, and its own README (`package-readme.mdc`). A module grows `domain/` and `application/` folders once it holds domain rules, not before. The composition root stays the only place that assembles adapters.
+- The index rule applies to folders that have an `index.ts`. Modules and folders that predate this rule have none and keep their flat layout: they are imported file by file, as today, until their next split gives them an index. A new module that needs something from such a module imports the file; it does not migrate the other module on the way.
 - Tests sit next to the code they test.
