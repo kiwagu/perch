@@ -101,4 +101,42 @@ describe('searchProblems', () => {
       `${AT}.search.properties.tab["x-perch"].values.a.control: "sample.a-button.option" is not a declared anchor`,
     ])
   })
+  it('wants a controlValue to be a choice value of its control, pattern rows included', () => {
+    const contract = sampleContract()
+    const locale = 'app-shell.locale-select.option'
+
+    screenIn(contract, 'app-shell').anchors['app-shell.locale-select'] = {
+      kind: 'select',
+      derived: ['option'],
+    }
+    contract.vocabulary.choiceValues[locale] = { en: 'English', es: 'Spanish' }
+    sampleBinding(contract).search = {
+      type: 'object',
+      properties: {
+        lang: {
+          type: 'string',
+          enum: ['en', 'fr', 'k', 'key', 'mode'],
+          'x-perch': {
+            values: {
+              en: { control: locale, controlValue: 'en' },
+              fr: { control: locale, controlValue: 'fr' },
+              k: { control: 'sample.mode-select.option', controlValue: 'k12' },
+              key: { control: 'sample.key-select.option', controlValue: 'k7' },
+              mode: { control: 'sample.a-button', controlValue: 'a' },
+            },
+          },
+        },
+      },
+      additionalProperties: false,
+    }
+    sampleBinding(contract).retain = []
+
+    const values = `${AT}.search.properties.lang["x-perch"].values`
+
+    expect(printed(contract)).toEqual([
+      `${values}.fr.controlValue: "fr" is not a choice value of "${locale}"`,
+      `${values}.k.controlValue: "k12" is not a choice value of "sample.mode-select.option"; it is one of "sample.key-select.option"`,
+      `${values}.mode.controlValue: "a": "sample.a-button" has no choice values in the vocabulary`,
+    ])
+  })
 })

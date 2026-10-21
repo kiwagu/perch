@@ -1,18 +1,48 @@
 /**
  * Rule 5: the route parameters a page sets have their controls. Every enum value of a
  * `params` or `search` property has a control under `x-perch.values` (and no other value
- * does), every control is a declared anchor, and `retain` names search parameters. That
- * the schemas are flat objects of primitives is the Zod schema's job (`flatJsonSchema`).
+ * does), every control is a declared anchor, a `controlValue` is a choice value of its
+ * control in the vocabulary, and `retain` names search parameters. That the schemas are
+ * flat objects of primitives is the Zod schema's job (`flatJsonSchema`).
  */
 
-import type { Binding, Problem } from '../files'
+import type { Binding, Problem, Vocabulary } from '../files'
 
-import { type Contract, has, inScreens, knownAnchors } from './contract'
+import { type Contract, has, inScreens, isValueOf, knownAnchors, own } from './contract'
 
 type FlatSchema = NonNullable<Binding['search']>
 
+/** What the anchor of a control lacks to choose `value`: its own choice values have no such row. */
+function controlValueProblems(
+  vocabulary: Vocabulary,
+  control: string,
+  value: string | undefined,
+  at: readonly PropertyKey[],
+): Problem[] {
+  if (value === undefined) {
+    return []
+  }
+
+  const rows = own(vocabulary.choiceValues, control)
+
+  if (rows === undefined) {
+    return [inScreens(at, `"${value}": "${control}" has no choice values in the vocabulary`)]
+  }
+
+  if (isValueOf(rows, value)) {
+    return []
+  }
+
+  const owner = Object.entries(vocabulary.choiceValues).find(([, other]) =>
+    isValueOf(other, value),
+  )?.[0]
+  const borrowed = owner === undefined ? '' : `; it is one of "${owner}"`
+
+  return [inScreens(at, `"${value}" is not a choice value of "${control}"${borrowed}`)]
+}
+
 function schemaProblems(
-  known: (anchor: string) => boolean,
+  { vocabulary, known }: { vocabulary: Vocabulary; known: (anchor: string) => boolean },
   schema: FlatSchema | undefined,
   at: readonly PropertyKey[],
 ): Problem[] {
@@ -38,13 +68,20 @@ function schemaProblems(
           ? []
           : [inScreens([...here, 'x-perch', 'values', value], `"${value}" is not an enum value`)]),
         ...control(choice.control, [...here, 'x-perch', 'values', value, 'control']),
+        ...controlValueProblems(vocabulary, choice.control, choice.controlValue, [
+          ...here,
+          'x-perch',
+          'values',
+          value,
+          'controlValue',
+        ]),
       ]),
     ]
   })
 }
 
 export function searchProblems(contract: Contract): Problem[] {
-  const known = knownAnchors(contract)
+  const lookups = { vocabulary: contract.vocabulary, known: knownAnchors(contract) }
 
   return contract.screens.screens.flatMap((screen, index) =>
     screen.bindings.flatMap((binding, number) => {
@@ -52,8 +89,8 @@ export function searchProblems(contract: Contract): Problem[] {
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
-        ...schemaProblems(known, binding.params, [...at, 'params']),
-        ...schemaProblems(known, binding.search, [...at, 'search']),
+        ...schemaProblems(lookups, binding.params, [...at, 'params']),
+        ...schemaProblems(lookups, binding.search, [...at, 'search']),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)
             ? []

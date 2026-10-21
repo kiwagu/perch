@@ -93,11 +93,13 @@ const matches = (pattern: string, value: string): boolean => {
   }
 }
 
+/** Whether `value` is one of the choice-value rows of an anchor, or matches its pattern row. */
+export const isValueOf = (rows: Readonly<Record<string, string>>, value: string): boolean =>
+  Object.keys(rows).some((row) => row === value || (isPattern(row) && matches(row, value)))
+
 /** Whether `value` is a row of some anchor's choice values, or matches a pattern row. */
 export const isChoiceValue = (vocabulary: Vocabulary, value: string): boolean =>
-  Object.values(vocabulary.choiceValues).some((rows) =>
-    Object.keys(rows).some((row) => row === value || (isPattern(row) && matches(row, value))),
-  )
+  Object.values(vocabulary.choiceValues).some((rows) => isValueOf(rows, value))
 
 /** The paths of every binding of every screen. */
 export const bindingPaths = (screens: ScreensFile): Set<string> =>
