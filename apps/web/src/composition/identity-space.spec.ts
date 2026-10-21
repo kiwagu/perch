@@ -561,9 +561,11 @@ describe('openIdentitySpace', () => {
       )
 
       // Offline, the leader does not load the region again from the server meanwhile.
+      // The leader's sync and the follower's earlier catch-up end first: a late import of the leader
+      // (its `settled` hint) or a catch-up still under way could find the copy reset and reopen
+      // the follower, and the hint would then prove nothing.
+      await settled(leader.space)
       leaderOffline(leader)
-      // The follower's earlier catch-up ends first: one still under way could find the copy reset
-      // and reopen it, and the hint would then prove nothing.
       await loads.quiet()
 
       const loaded = loads.state.loads
@@ -601,8 +603,10 @@ describe('openIdentitySpace', () => {
         ).toMatchObject({ name: 'Ann' }),
       )
 
+      // The leader's sync and the follower's earlier catch-up end first, so only the journal hint
+      // below has it look.
+      await settled(leader.space)
       leaderOffline(leader)
-      // The follower's earlier catch-up ends first, so only the journal hint below has it look.
       await loads.quiet()
 
       const loaded = loads.state.loads
