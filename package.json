@@ -19,6 +19,7 @@
     "e2e:coverage": "bun packages/e2e-spec/src/cli.ts coverage",
     "contract:schemas": "ui-contract schemas",
     "contract:check": "ui-contract check",
+    "contract:check:sources": "ui-contract check --sources",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",

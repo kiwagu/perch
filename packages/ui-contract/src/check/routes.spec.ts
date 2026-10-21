@@ -61,6 +61,11 @@ describe('parseRoutePath', () => {
     expect(parseRoutePath('/org/').problems).toEqual(['an empty segment'])
     expect(parseRoutePath('/a/$key/{-$key}').problems).toEqual(['parameter "key" appears twice'])
   })
+  it('counts the splat as the parameter "_splat" the router fills', () => {
+    expect(parseRoutePath('/files/$_splat/$').problems).toEqual([
+      'parameter "_splat" appears twice',
+    ])
+  })
 })
 
 const printed = (contract = sampleContract()): string[] =>

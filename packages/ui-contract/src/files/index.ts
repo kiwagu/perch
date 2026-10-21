@@ -8,7 +8,7 @@ export {
   SCREENS_SCHEMA_FILE,
   VOCABULARY_FILE,
 } from './paths'
-export { formatProblem, type Problem } from './problems'
+export { formatProblem, type Problem, sortProblems } from './problems'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
   type AnchorBinding,

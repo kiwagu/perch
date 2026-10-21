@@ -37,6 +37,17 @@ root export is build-time tooling for Bun.
     their params, routes, sources, flow events), `routesProblems` with
     `parseRoutePath(path)` (the router's path syntax), `searchProblems` (enum controls,
     `retain`) and `scenariosProblems` (bracket references, roles, ids).
+  - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
+    returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
+    `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
+    its codes (`data-code`, `code:` keys, `<NAME>_CODES` maps) and an anchor built at
+    runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
+    the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
+    `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
+    `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
+    the literals equal to the anchors of `screens.json`, no literal named like another plus
+    a suffix, and every suffix and code in the vocabulary.
+  - `sortProblems(problems)`: by file and line, stable.
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
@@ -46,12 +57,16 @@ root export is build-time tooling for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar, the loaders, the schema writer, the references and
-  the contract check.
+- `bun run test`: the anchor grammar, the loaders, the schema writer, the references, the
+  contract check and the sources check.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files against each other and the
   schema drift; prints `file:line: message` per problem and exits 1, or a one-line
-  summary; part of `bun run check` and the pre-commit hook). `--sources` is accepted and
-  not implemented yet.
+  summary; part of `bun run check` and the pre-commit hook).
+- From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
+  contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
+  against the contract; prints `file:line: message` per problem and exits 1, or
+  `contract: sources agree with the contract (<n> anchors)`; not part of `bun run check`
+  yet).

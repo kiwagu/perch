@@ -3,8 +3,8 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources]
- *     checks the three contract files under `contract/` against each other; `--sources`
- *     (the anchors of the sources against the contract) is not implemented yet.
+ *     checks the three contract files under `contract/` against each other; with
+ *     `--sources`, then the anchors and codes of the web app and the UI kit against them.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
@@ -12,7 +12,8 @@
  */
 
 import { type Contract, checkContract, loadContract } from './check'
-import { formatProblem, schemaDrift, writeSchemas } from './files'
+import { formatProblem, type Problem, schemaDrift, writeSchemas } from './files'
+import { compareWithContract, scanSources } from './sources'
 
 const summaryOf = ({ screens, vocabulary }: Contract): string => {
   const anchors = screens.screens.reduce(
@@ -29,30 +30,44 @@ const summaryOf = ({ screens, vocabulary }: Contract): string => {
   ].join(', ')
 }
 
-function check(argv: readonly string[]): number {
-  const root = process.cwd()
-
-  if (argv.includes('--sources')) {
-    console.error('ui-contract: check --sources is not implemented yet; checking the files only')
-  }
-
-  const problems = checkContract(root)
-
+const reported = (problems: readonly Problem[]): boolean => {
   for (const problem of problems) {
     console.error(formatProblem(problem))
   }
 
-  if (problems.length > 0) {
+  return problems.length > 0
+}
+
+function checkSources(root: string, { screens, vocabulary }: Contract): number {
+  const collected = scanSources(root)
+
+  if (reported(compareWithContract(collected, screens, vocabulary))) {
+    return 1
+  }
+
+  const anchors = new Set(collected.flatMap(({ literals }) => literals.map(({ anchor }) => anchor)))
+
+  console.log(`contract: sources agree with the contract (${anchors.size} anchors)`)
+
+  return 0
+}
+
+function check(argv: readonly string[]): number {
+  const root = process.cwd()
+
+  if (reported(checkContract(root))) {
     return 1
   }
 
   const { contract } = loadContract(root)
 
-  if (contract !== undefined) {
-    console.log(summaryOf(contract))
+  if (contract === undefined) {
+    return 1
   }
 
-  return 0
+  console.log(summaryOf(contract))
+
+  return argv.includes('--sources') ? checkSources(root, contract) : 0
 }
 
 function schemas(argv: readonly string[]): number {
@@ -66,17 +81,13 @@ function schemas(argv: readonly string[]): number {
     return 0
   }
 
-  const problems = schemaDrift(root)
-
-  for (const problem of problems) {
-    console.error(formatProblem(problem))
+  if (reported(schemaDrift(root))) {
+    return 1
   }
 
-  if (problems.length === 0) {
-    console.log('ui-contract: the schemas match their sources')
-  }
+  console.log('ui-contract: the schemas match their sources')
 
-  return problems.length === 0 ? 0 : 1
+  return 0
 }
 
 function run(argv: readonly string[]): number {

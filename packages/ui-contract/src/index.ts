@@ -51,6 +51,7 @@ export {
   type Screen,
   type ScreensFile,
   schemaDrift,
+  sortProblems,
   VOCABULARY_FILE,
   VOCABULARY_SECTIONS,
   type Vocabulary,
@@ -75,3 +76,12 @@ export {
   screensFileSchema,
   sourceSchema,
 } from './schemas'
+export {
+  type Collected,
+  collectFromSource,
+  compareWithContract,
+  RUNTIME_ANCHOR,
+  RUNTIME_SUFFIX,
+  SOURCE_ROOTS,
+  scanSources,
+} from './sources'

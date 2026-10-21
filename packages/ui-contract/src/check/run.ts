@@ -12,6 +12,7 @@ import {
   type Problem,
   parseVocabulary,
   schemaDrift,
+  sortProblems,
   VOCABULARY_FILE,
 } from '../files'
 
@@ -39,10 +40,6 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   return parseVocabulary(markdown)
 }
 
-/** Stable: problems of one file and line keep the order the rules found them in. */
-const sorted = (problems: readonly Problem[]): Problem[] =>
-  [...problems].sort((a, b) => a.file.localeCompare(b.file, 'en') || (a.line ?? 1) - (b.line ?? 1))
-
 /** The three files, or the problems that keep them from loading. */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
@@ -51,7 +48,7 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
   const problems = [...vocabularyLoad, ...screensLoad, ...modelLoad]
 
   return problems.length > 0 || screens === undefined || model === undefined
-    ? { problems: sorted(problems) }
+    ? { problems: sortProblems(problems) }
     : { contract: { vocabulary, screens, model }, problems: [] }
 }
 
@@ -72,5 +69,5 @@ export function checkContract(root: string): Problem[] {
     return problems
   }
 
-  return sorted([...RULES.flatMap((rule) => rule(contract)), ...schemaDrift(root)])
+  return sortProblems([...RULES.flatMap((rule) => rule(contract)), ...schemaDrift(root)])
 }

@@ -7,6 +7,10 @@ export interface Problem {
 
 export const formatProblem = (p: Problem): string => `${p.file}:${p.line ?? 1}: ${p.message}`
 
+/** Sorted by file and line; stable, so problems of one place keep the order they were found in. */
+export const sortProblems = (problems: readonly Problem[]): Problem[] =>
+  [...problems].sort((a, b) => a.file.localeCompare(b.file, 'en') || (a.line ?? 1) - (b.line ?? 1))
+
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
 /** A JSON path as a reader writes it: `screens[0].anchors["user.sign-in.form"].kind`. */
