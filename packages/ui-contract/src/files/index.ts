@@ -1,3 +1,4 @@
+export { filesUnder } from './files-under'
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
 export {
   CONTRACT_DIR,

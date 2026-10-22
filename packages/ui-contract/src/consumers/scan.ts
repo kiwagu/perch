@@ -1,14 +1,16 @@
 /**
- * Reads what the e2e tests name of the contract, as the consumers check reads it: the anchor
- * of a `getByTestId('<anchor>')` call; in any string or template literal the attribute
- * selectors `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and
- * `[data-value="..."]`, in double or single quotes; and the value a
+ * Reads what the e2e tests name of the contract, as the consumers check reads it: the anchor of
+ * a `getByTestId('<anchor>')` call; in any string or template literal the attribute selectors
+ * `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]`, in
+ * double or single quotes; and the value a
  * `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not`
- * included. Nothing else is read: a `data-id` is data, and no helper is followed (a
- * `notice(page, '<code>')` is not read). An anchor built at runtime (a `getByTestId` of
- * anything but a literal, a `data-testid` holding an expression) is a problem, since no check
- * can follow it; a code, a state or a value from an expression is a parameter of the test and
- * passes.
+ * included. An argument is a plain string or a template literal without `${}`, a TypeScript
+ * wrapper around it (`as const`, parentheses) changing nothing; a selector is located by the
+ * lines of the source, whatever escapes its literal holds. Nothing else is read: a `data-id` is
+ * data, and no helper is followed (a `notice(page, '<code>')` is not read). An anchor built at
+ * runtime (a `getByTestId` of anything but a literal, a `data-testid` holding an expression) is
+ * a problem, since no check can follow it; a code, a state or a value from an expression is a
+ * parameter of the test and passes.
  */
 
 import { readFileSync } from 'node:fs'
@@ -16,10 +18,11 @@ import { join, relative, resolve, sep } from 'node:path'
 
 import { type Argument, parseSync, Visitor } from 'oxc-parser'
 
-import type { Problem } from '../files'
-import { filesUnder } from '../files/files-under'
+import { filesUnder, type Problem } from '../files'
 import type { Reference } from '../scenarios'
-import { staticText } from '../sources/values'
+import { staticText } from '../sources'
+
+import { sourceOffset } from './source-offset'
 
 /** Where the e2e tests are, from the repository root. */
 export const CONSUMER_ROOT = 'tests/e2e/src'
@@ -50,10 +53,14 @@ const DATA = 'data-'
 
 const TEST_SOURCE = /\.ts$/
 
-/** A piece of a string or a template between its expressions, with its source offset. */
+/**
+ * A piece of a string or a template between its expressions: its cooked text, and the source
+ * offset its raw text starts at (after the opening quote, or after oxc's span of a template
+ * part opens on its backtick or `}`).
+ */
 interface Part {
   readonly text: string
-  readonly at: number
+  readonly start: number
 }
 
 const kindOf = (attribute: string): ConsumedLiteral['kind'] | undefined =>
@@ -63,8 +70,6 @@ const kindOf = (attribute: string): ConsumedLiteral['kind'] | undefined =>
       ? attribute
       : undefined
 
-const newlines = (text: string): number => text.split('\n').length - 1
-
 export function collectFromTest(text: string, file: string): Consumed {
   const consumed: Consumed = { file, literals: [], problems: [] }
 
@@ -72,7 +77,7 @@ export function collectFromTest(text: string, file: string): Consumed {
     return consumed
   }
 
-  const line = (offset: number): number => newlines(text.slice(0, offset)) + 1
+  const line = (offset: number): number => text.slice(0, offset).split('\n').length
   const { program, errors } = parseSync(file, text, { lang: 'ts', sourceType: 'module' })
   const [error] = errors
 
@@ -84,19 +89,19 @@ export function collectFromTest(text: string, file: string): Consumed {
     return consumed
   }
 
-  /** The line of the character at `index` of the parts joined by EXPRESSION. */
+  /** The source line of the character at `index` of the parts joined by EXPRESSION. */
   const lineIn = (parts: readonly Part[], index: number): number => {
     let from = 0
 
     for (const part of parts) {
       if (index <= from + part.text.length) {
-        return line(part.at) + newlines(part.text.slice(0, index - from))
+        return line(sourceOffset(text, part.start, index - from))
       }
 
       from += part.text.length + EXPRESSION.length
     }
 
-    return line(parts[0]?.at ?? 0)
+    return line(parts[0]?.start ?? 0)
   }
 
   /** A literal of `kind` at line `at`, or, built at runtime, a problem when it is an anchor. */
@@ -152,14 +157,14 @@ export function collectFromTest(text: string, file: string): Consumed {
     },
     Literal(node) {
       if (typeof node.value === 'string') {
-        selectors([{ text: node.value, at: node.start }])
+        selectors([{ text: node.value, start: node.start + 1 }])
       }
     },
     TemplateLiteral(node) {
       selectors(
         node.quasis.map((quasi) => ({
           text: quasi.value.cooked ?? quasi.value.raw,
-          at: quasi.start,
+          start: quasi.start + 1,
         })),
       )
     },

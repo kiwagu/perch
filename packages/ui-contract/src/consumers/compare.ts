@@ -5,8 +5,7 @@
  * scenarios check resolves its bracket references. The problems carry `file:line`, sorted.
  */
 
-import type { Contract } from '../check/contract'
-import { referenceResolver } from '../check/scenarios'
+import { type Contract, referenceResolver } from '../check'
 import { type Problem, sortProblems } from '../files'
 
 import type { Consumed } from './scan'

@@ -105,6 +105,40 @@ describe('collectFromTest', () => {
       { kind: 'anchor', value: 'sample.page', line: 3 },
     ])
   })
+  it('reads a static string in any form: quotes, a template without an expression, a TypeScript wrapper', () => {
+    const { literals } = collected('static.ts')
+
+    expect(literals).toEqual([
+      { kind: 'anchor', value: 'sample.list', line: 10 },
+      { kind: 'anchor', value: 'sample.thing-item', line: 11 },
+      { kind: 'state', value: 'loading', line: 13 },
+      { kind: 'state', value: 'current', line: 14 },
+    ])
+    expect(collectFromTest("page.getByTestId(('sample.page'))\n", 'a.ts').literals).toEqual([
+      { kind: 'anchor', value: 'sample.page', line: 1 },
+    ])
+  })
+  it('reports a template with an expression, a name or a call in place of an anchor, and skips one in place of a state', () => {
+    expect(collected('static.ts').problems.map(formatProblem)).toEqual([
+      `consumers/static.ts:15: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/static.ts:16: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/static.ts:17: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/static.ts:19: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+  })
+  it('locates a selector by the lines of the source: an escaped line feed is none, a line continuation is one', () => {
+    const escaped = `const s = '\\n[data-testid="sample.page"]'\nconst t = \`\\n[data-code="saved"]\`\n`
+    const continued = `const s = 'x \\\n[data-testid="sample.page"]'\nconst t = \`x \\\n[data-code="saved"]\`\n`
+
+    expect(collectFromTest(escaped, 'a.ts').literals).toEqual([
+      { kind: 'anchor', value: 'sample.page', line: 1 },
+      { kind: 'code', value: 'saved', line: 2 },
+    ])
+    expect(collectFromTest(continued, 'a.ts').literals).toEqual([
+      { kind: 'anchor', value: 'sample.page', line: 2 },
+      { kind: 'code', value: 'saved', line: 4 },
+    ])
+  })
   it('does not parse a file without any of the words', () => {
     expect(collectFromTest('export const broken = {', 'plain.ts')).toEqual({
       file: 'plain.ts',

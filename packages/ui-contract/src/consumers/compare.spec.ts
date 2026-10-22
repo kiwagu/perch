@@ -37,6 +37,9 @@ describe('compareConsumers', () => {
       'consumers/attributes.ts:15: "c" is not a choice value of the vocabulary',
     ])
   })
+  it('resolves a template without an expression and a wrapped string as it resolves a quoted one', () => {
+    expect(printed(['static.ts']).filter((line) => !line.endsWith(RUNTIME_TEST_ANCHOR))).toEqual([])
+  })
   it('keeps the anchors built at runtime, sorted with the rest by file and line', () => {
     expect(printed(['unknown.ts', 'runtime.ts', 'known.ts'])).toEqual([
       `consumers/runtime.ts:7: ${RUNTIME_TEST_ANCHOR}`,
