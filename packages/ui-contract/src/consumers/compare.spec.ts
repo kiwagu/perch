@@ -48,6 +48,12 @@ describe('compareConsumers', () => {
       `consumers/concatenated.ts:13: ${RUNTIME_TEST_ANCHOR}`,
     ])
   })
+  it('resolves a selector whose attribute name a + chain or an escape splits', () => {
+    expect(printed(['split-name.ts'])).toEqual([
+      `consumers/split-name.ts:7: ${RUNTIME_TEST_ANCHOR}`,
+      'consumers/split-name.ts:8: "sample.gone-page" is not a declared anchor',
+    ])
+  })
   it('keeps the anchors built at runtime, sorted with the rest by file and line', () => {
     expect(printed(['unknown.ts', 'runtime.ts', 'known.ts'])).toEqual([
       `consumers/runtime.ts:7: ${RUNTIME_TEST_ANCHOR}`,

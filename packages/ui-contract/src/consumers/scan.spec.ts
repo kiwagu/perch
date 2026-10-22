@@ -166,18 +166,33 @@ describe('collectFromTest', () => {
       `a.ts:2: ${RUNTIME_TEST_ANCHOR}`,
     ])
   })
-  it('does not parse a file without any of the words', () => {
-    expect(collectFromTest('export const broken = {', 'plain.ts')).toEqual({
+  it('reads a selector whose attribute name a + chain or an escape splits, in a file that spells no attribute name', () => {
+    const { literals, problems } = collected('split-name.ts')
+
+    expect(literals).toEqual([
+      { kind: 'anchor', value: 'sample.gone-page', line: 8 },
+      { kind: 'anchor', value: 'sample.page', line: 9 },
+      { kind: 'anchor', value: 'sample.list', line: 10 },
+    ])
+    expect(problems.map(formatProblem)).toEqual([
+      `consumers/split-name.ts:7: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+  })
+  it('reads nothing from a file that names nothing of the contract', () => {
+    expect(collectFromTest("export const total = 1 + 2 + 'x'\n", 'plain.ts')).toEqual({
       file: 'plain.ts',
       literals: [],
       problems: [],
     })
   })
-  it('reports a file it cannot parse', () => {
-    const { problems } = collectFromTest("page.getByTestId('sample.page'", 'broken.ts')
+  it('reports a file it cannot parse, whether or not it names the contract', () => {
+    const named = collectFromTest("page.getByTestId('sample.page'", 'broken.ts').problems
+    const plain = collectFromTest('export const broken = {', 'plain.ts').problems
 
-    expect(problems).toHaveLength(1)
-    expect(problems[0]?.message).toMatch(/^cannot parse the file: /)
+    expect([...named, ...plain].map(({ message }) => message)).toEqual([
+      expect.stringMatching(/^cannot parse the file: /),
+      expect.stringMatching(/^cannot parse the file: /),
+    ])
   })
 })
 

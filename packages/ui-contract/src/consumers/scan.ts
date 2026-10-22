@@ -43,9 +43,6 @@ export interface Consumed {
   readonly problems: Problem[]
 }
 
-/** A file without any of these words names nothing of the contract, and is not parsed. */
-const WORDS = /getByTestId|data-(testid|code|state|value)/
-
 /** An attribute selector the check reads; `\0` (`EXPRESSION`) in its value is an expression. */
 const SELECTOR = /\[data-(testid|code|state|value)=(["'])(.*?)\2\]/g
 
@@ -63,13 +60,12 @@ const kindOf = (attribute: string): ConsumedLiteral['kind'] | undefined =>
       ? attribute
       : undefined
 
+/**
+ * What one file names of the contract. Every file is parsed: its raw text cannot show a name
+ * that a `+` chain or an escape spells, only the folded text of each string can.
+ */
 export function collectFromTest(text: string, file: string): Consumed {
   const consumed: Consumed = { file, literals: [], problems: [] }
-
-  if (!WORDS.test(text)) {
-    return consumed
-  }
-
   const line = (offset: number): number => text.slice(0, offset).split('\n').length
   const { program, errors } = parseSync(file, text, { lang: 'ts', sourceType: 'module' })
   const [error] = errors
