@@ -320,6 +320,11 @@
             "minLength": 1,
             "description": "The title of the screen, for a reader."
           },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the screen is for: the task it serves and when it is shown."
+          },
           "frame": {
             "description": "The frame around every screen: it has no route of its own.",
             "type": "boolean"
@@ -1167,6 +1172,7 @@
         "required": [
           "id",
           "title",
+          "description",
           "bindings",
           "flag",
           "entry",

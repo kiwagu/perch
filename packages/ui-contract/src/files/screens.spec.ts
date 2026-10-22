@@ -34,6 +34,7 @@ const screenAt = (id: string, path?: string): string =>
   stringify({
     id,
     title: `The ${id} screen`,
+    description: `What the ${id} screen is for.`,
     ...(path === undefined ? { frame: true } : {}),
     flag: null,
     bindings: path === undefined ? [] : [{ path, roles: ['member'] }],
@@ -81,6 +82,13 @@ describe('loadScreens', () => {
       params: { forgetUnsent: { value: true } },
     })
     expect(screens?.screens[0]?.flow?.events[0]?.params).toEqual({ title: 'sample.title-input' })
+  })
+  it('refuses a screen without a description of what it is for', () => {
+    writeSample((screen) => {
+      delete screen['description']
+    })
+
+    expect(onlyMessage()).toContain('description')
   })
   it('defaults the history of a binding to push', () => {
     expect(loadScreens(root).screens?.screens[0]?.bindings[0]?.history).toBe('push')

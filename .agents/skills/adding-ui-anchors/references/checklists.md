@@ -12,7 +12,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    `contract/vocabulary.md`, added in the same change.
 3. **The screen file** `contract/screens/<pathname>.yaml`, named by its first binding's path
    (nested segments as folders), the editor hint on its first line, keys in the order `id`,
-   `title`, `flag`, `bindings`, `entry`.
+   `title`, `description` (what the screen is for), `flag`, `bindings`, `entry`.
 4. **The routes.** `bindings` in TanStack Router's format: `path`, `guard`, `roles`,
    `params` and `search` as flat JSON Schemas, `history`, `retain`. A state a test opens
    directly (a tab, a filter, a selection) is a path or search parameter, so the route is its

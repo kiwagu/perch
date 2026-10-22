@@ -93,7 +93,7 @@ their tests, in `tests/e2e/scenarios/` (see "Scenarios").
 The loader accepts any valid YAML. Files written by hand follow one layout, so they read
 alike:
 
-- keys in the order `id`, `title`, `frame` or `flag`, `bindings`, `entry`, then the rest;
+- keys in the order `id`, `title`, `description`, `frame` or `flag`, `bindings`, `entry`, then the rest;
 - flow style, on one line, for `bindings` and each binding with everything it holds: its
   `roles`, `params`, `search`, `history` and `retain`, nested maps included (the test
   fixture `packages/ui-contract/src/__fixtures__/contract/screens/sample/$key.yaml` has a
@@ -136,6 +136,10 @@ anchors:
 ```
 
 ## Reading a screen file
+
+A screen's `title` is what a reader calls it, and its `description` says what the screen is
+for: the task it serves and when it is shown, in one or two sentences, so an agent chooses
+the screen before it reads the anchors.
 
 A screen's `bindings` are its routes in the router's format: `path` (static segments,
 `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a

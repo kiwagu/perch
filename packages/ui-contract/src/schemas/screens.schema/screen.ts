@@ -12,6 +12,10 @@ export const screenSchema = z
   .strictObject({
     id: screenNameSchema,
     title: z.string().min(1).describe('The title of the screen, for a reader.'),
+    description: z
+      .string()
+      .min(1)
+      .describe('What the screen is for: the task it serves and when it is shown.'),
     frame: z
       .boolean()
       .optional()

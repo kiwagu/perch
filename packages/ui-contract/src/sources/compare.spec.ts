@@ -15,6 +15,7 @@ const SCREENS: ScreensFile = {
     {
       id: 'sample',
       title: 'One thing',
+      description: 'The one thing of the sample.',
       frame: true,
       bindings: [],
       flag: null,

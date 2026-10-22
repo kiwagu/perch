@@ -46,6 +46,7 @@ const SAMPLE_ANCHORS: Record<string, AnchorDef> = {
 const SAMPLE: Screen = {
   id: 'sample',
   title: 'One thing',
+  description: 'The one thing of the sample, shown and edited in place.',
   bindings: [
     {
       path: '/sample/$key',
@@ -93,6 +94,7 @@ const SAMPLE: Screen = {
 const APP_SHELL: Screen = {
   id: 'app-shell',
   title: 'Frame',
+  description: 'The frame of the sample.',
   frame: true,
   bindings: [],
   flag: null,

@@ -37,7 +37,7 @@ const SESSION = [
 ].join(' ')
 
 const SCREEN_MAP = [
-  '`screens` lists every screen once. Its `id` is the screen name its anchors start with.',
+  '`screens` lists every screen once. Its `id` is the screen name its anchors start with; its `title` is what a reader calls it and its `description` what it is for.',
   "`bindings` are its routes in the router's format (TanStack): `path` with static segments, `$param`, `{-$param}` (optional) and `$` (splat); `guard` (`guest` or `authenticated`); `roles`; `params` and `search` as flat JSON Schemas; `history` (`push` or `replace`); `retain` (search parameters kept across navigations). `frame: true` marks the frame around every screen, which has no route.",
   "Every binding `path` is a TanStack Router path in the router's own syntax, `params` are its path parameters and `search` its search parameters, and a route is a state address: the same path with the same search reaches the same state after a reload.",
   '`entry` lists the anchors present once the screen is open; some are alternatives by state, so wait for the one the state shows.',

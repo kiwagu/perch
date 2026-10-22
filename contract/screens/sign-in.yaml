@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=../screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
+description: "Where a visitor signs in with an existing account or creates one: the only screen a guest sees, and where a signed-out device returns."
 flag: null
 bindings: [ { path: /sign-in, guard: guest, roles: [ guest ], history: push } ]
 entry: [ user.sign-in.form, user.sign-in.email-input, user.sign-in.submit-button, user.sign-in.toggle-button ]

@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=../screen.schema.json
 id: organisation
 title: Organisation
+description: "The organisations the account belongs to: creating one, choosing the current one, its members and invitations for an administrator, and the notes every member shares."
 flag: null
 bindings: [ { path: /org, guard: authenticated, roles: [ identity, member, admin ], history: push } ]
 entry: [ organisation.page.status, organisation.page.heading, organisation.notes.section, organisation.create.form ]
