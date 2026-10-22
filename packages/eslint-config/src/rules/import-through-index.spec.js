@@ -51,6 +51,18 @@ describe('workspace/import-through-index', () => {
     ])
   })
 
+  it('counts a .surql file, an import() type and a dynamic import of a plain template', async () => {
+    for (const file of [
+      'units/reach-surql.ts',
+      'units/import-type.ts',
+      'units/dynamic-template.ts',
+    ]) {
+      const rules = (await messagesIn(file)).map((message) => message.rule)
+
+      expect(rules, file).toContain('workspace/import-through-index')
+    }
+  })
+
   it('lets anyone import the fixtures inside a folder: test data, not its internals', async () => {
     expect(await messagesIn('units/fixtures.ts')).toEqual([])
   })
@@ -93,6 +105,15 @@ describe('workspace/import-through-index', () => {
   it('lets a listed folder still reach inside another one, and nobody else', async () => {
     expect(await messagesIn('units/older/read.ts')).toEqual([])
     expect((await messagesIn('units/reach-inside.ts')).map((message) => message.rule)).toEqual([
+      'workspace/import-through-index',
+    ])
+  })
+
+  it('lets a reach-in name one importing file, and only that file', async () => {
+    const one = linter({ reachIn: [{ folder: units('region'), from: units('older/read.ts') }] })
+
+    expect(await messagesIn('units/older/read.ts', one)).toEqual([])
+    expect((await messagesIn('units/older/other.ts', one)).map((message) => message.rule)).toEqual([
       'workspace/import-through-index',
     ])
   })

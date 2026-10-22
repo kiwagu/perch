@@ -24,10 +24,13 @@ ship the JavaScript compiler API that typescript-eslint needs.
   function or class in a file; types, constants, schemas and private helpers are free.
 - `workspace/import-through-index`: reports an import that reaches inside a folder with an
   `index.ts` from outside it, or inside a module of a module root that has no index yet;
-  resolved by TypeScript, fixtures exempt.
+  every static import form counts (declarations, re-exports, `import()` types, dynamic
+  imports of a literal), resolved by TypeScript (workspace packages to their source, a
+  relative `.surql` at its path), fixtures exempt.
 - `importBoundaries({ modules, reachIn })`: the config block that gives the rule the
   repository's module roots (with their `flat` and `outside` folders) and its `reachIn`
-  entries, by absolute path; the root `eslint.config.js` uses it.
+  entries (a folder or one file that may still import inside another folder), by absolute
+  path; the root `eslint.config.js` uses it.
 
 ## Commands
 

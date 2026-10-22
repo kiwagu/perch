@@ -14,19 +14,23 @@
  * `__fixtures__`) is test data shared by a package's tests, not a unit's internals: anyone may
  * import one.
  *
- * Reach-ins (option `reachIn`): a `{ folder, from }` lets the files under `from` still import
- * files inside `folder`, where going through its index would close an import cycle that only
- * a later split removes. Nobody else gains anything, and an entry whose folder has no index
- * any more, or whose `from` is gone, fails the run, so the list only shrinks.
+ * Reach-ins (option `reachIn`): a `{ folder, from }` lets `from` (a folder, or one file)
+ * still import files inside `folder`, where going through its index would close an import
+ * cycle, or where a test drives another unit's internals, until a later split removes the
+ * need. Nobody else gains anything, and an entry whose folder has no index any more, or
+ * whose `from` is gone, fails the run, so the list only shrinks.
  *
- * Imports are resolved by TypeScript, so path aliases and workspace packages count as
- * relative imports do; an import TypeScript cannot resolve, or one into an installed
- * library, is not checked. Needs type information (typescript-eslint `projectService`);
- * without it the rule stays silent.
+ * Every statically known import counts: declarations, re-exports, `import('...')` types and
+ * dynamic imports of a literal. Imports are resolved by TypeScript, so path aliases and
+ * workspace packages (followed to their source through the symlink) count as relative
+ * imports do; a relative import TypeScript leaves to an ambient declaration (a `.surql`
+ * file) is taken at its path. An import that resolves into `node_modules` (an installed
+ * library) or nowhere is not checked. Needs type information (typescript-eslint
+ * `projectService`); without it the rule stays silent.
  */
 
 import { existsSync, statSync } from 'node:fs'
-import { basename, dirname, join, relative, sep } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 
 import ts from 'typescript'
 
@@ -48,17 +52,19 @@ function resolveImport(program, specifier, importer) {
 
   const { resolvedModule } = ts.resolveModuleName(specifier, importer, options, ts.sys, cache)
 
-  if (
-    !resolvedModule ||
-    resolvedModule.isExternalLibraryImport ||
-    resolvedModule.resolvedFileName.includes(`${sep}node_modules${sep}`)
-  ) {
-    return undefined
+  // A workspace package is marked external too, but resolves to its source outside node_modules.
+  if (resolvedModule) {
+    const file = resolvedModule.resolvedFileName
+
+    return file.includes(`${sep}node_modules${sep}`) ? undefined : file
   }
 
-  return resolvedModule.resolvedFileName
+  const local = specifier.startsWith('.') ? resolve(dirname(importer), specifier) : undefined
+
+  return local && isFile(local) ? local : undefined
 }
 
+const isFile = (path) => existsSync(path) && statSync(path).isFile()
 const hasIndex = (dir) => existsSync(join(dir, 'index.ts'))
 const isWorkspace = (dir) => existsSync(join(dir, 'package.json'))
 const isInside = (path, dir) => path === dir || path.startsWith(`${dir}${sep}`)
@@ -138,7 +144,7 @@ function reachInsOf(options) {
       )
     }
 
-    if (!isFolder(from)) {
+    if (!existsSync(from)) {
       throw new Error(
         `workspace/import-through-index: ${from} is gone: take its reach-in into ${folder} off the list`,
       )
@@ -146,6 +152,19 @@ function reachInsOf(options) {
 
     return { folder, from }
   })
+}
+
+/** The text of an import's source when it is known statically: a string or a plain template. */
+function specifierOf(source) {
+  if (source?.type === 'Literal' && typeof source.value === 'string') {
+    return source.value
+  }
+
+  if (source?.type === 'TemplateLiteral' && source.expressions.length === 0) {
+    return source.quasis[0]?.value.cooked ?? undefined
+  }
+
+  return undefined
 }
 
 /** A path as an import would write it from `fromDir`. */
@@ -212,18 +231,20 @@ export const importThroughIndex = {
     const importerDir = dirname(importer)
 
     function check(source) {
-      if (source?.type !== 'Literal' || typeof source.value !== 'string') {
+      const specifier = specifierOf(source)
+
+      if (specifier === undefined) {
         return
       }
 
-      const target = resolveImport(program, source.value, importer)
+      const target = resolveImport(program, specifier, importer)
       const unit = target && outermostUnit(target, importerDir, roots)
 
       if (
         !unit ||
         target === join(unit.dir, 'index.ts') ||
         FIXTURE.test(relative(unit.dir, target)) ||
-        reachIns.some((entry) => entry.folder === unit.dir && isInside(importerDir, entry.from))
+        reachIns.some((entry) => entry.folder === unit.dir && isInside(importer, entry.from))
       ) {
         return
       }
@@ -231,7 +252,7 @@ export const importThroughIndex = {
       context.report({
         node: source,
         messageId: unit.kind,
-        data: { specifier: source.value, unit: asSpecifier(importerDir, unit.dir) },
+        data: { specifier, unit: asSpecifier(importerDir, unit.dir) },
       })
     }
 
@@ -240,6 +261,7 @@ export const importThroughIndex = {
       ExportNamedDeclaration: (node) => check(node.source),
       ExportAllDeclaration: (node) => check(node.source),
       ImportExpression: (node) => check(node.source),
+      TSImportType: (node) => check(node.argument?.literal ?? node.argument),
     }
   },
 }

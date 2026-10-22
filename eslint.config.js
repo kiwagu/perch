@@ -18,14 +18,19 @@ export default [
         outside: ['composition'],
       },
     ],
-    // Folders that still import inside another one, as its index would close an import
-    // cycle. An entry leaves at the split that ends the cycle; none is ever added.
+    // Folders or files that still import inside another folder. An entry leaves at the
+    // split that ends its need; none is ever added.
     reachIn: [
       {
         // The contract files load scenarios, and the scenario parser reads YAML and reports
-        // problems with the helpers of the contract files.
+        // problems with the helpers of the contract files: their index would close a cycle.
         folder: path('./packages/ui-contract/src/files'),
         from: path('./packages/ui-contract/src/scenarios'),
+      },
+      {
+        // The sync engine's spec fails the server's accept and load by their statements.
+        folder: path('./packages/replica/src/server'),
+        from: path('./packages/replica/src/sync/sync-engine.spec.ts'),
       },
     ],
   }),

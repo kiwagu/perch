@@ -269,8 +269,8 @@ export const base = [
 /**
  * The import-through-index rule with the repository's own layout, by absolute paths:
  * `modules` lists folders of modules (`{ root, flat, outside }`: the modules that predate the
- * rule and the folders that are not modules), `reachIn` the folders that may still import
- * inside another one (`{ folder, from }`). See the rule for the details.
+ * rule and the folders that are not modules), `reachIn` the folders or files that may still
+ * import inside another folder (`{ folder, from }`). See the rule for the details.
  */
 export function importBoundaries({ modules = [], reachIn = [] }) {
   return {
