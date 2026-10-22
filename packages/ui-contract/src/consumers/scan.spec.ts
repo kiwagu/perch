@@ -139,6 +139,33 @@ describe('collectFromTest', () => {
       { kind: 'code', value: 'saved', line: 4 },
     ])
   })
+  it('reads a + chain of strings as one string, and an anchor an expression completes as built at runtime', () => {
+    const { literals, problems } = collected('concatenated.ts')
+
+    expect(literals).toEqual([
+      { kind: 'anchor', value: 'sample.gone-page', line: 8 },
+      { kind: 'anchor', value: 'sample.page', line: 9 },
+      { kind: 'anchor', value: 'sample.save-button', line: 10 },
+      { kind: 'anchor', value: 'sample.list', line: 12 },
+    ])
+    expect(problems.map(formatProblem)).toEqual([
+      `consumers/concatenated.ts:7: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/concatenated.ts:11: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/concatenated.ts:13: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+  })
+  it('reports a data-testid selector an expression completes, in a template or a + chain over lines, at the line of its bracket', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
+    const template = 'const s = `[data-testid=${quote}${id}${quote}]`\n'
+    const chain = "const s =\n  '[data-testid=\"' +\n  id +\n  '\"]'\n"
+
+    expect(collectFromTest(template, 'a.ts').problems.map(formatProblem)).toEqual([
+      `a.ts:1: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+    expect(collectFromTest(chain, 'a.ts').problems.map(formatProblem)).toEqual([
+      `a.ts:2: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+  })
   it('does not parse a file without any of the words', () => {
     expect(collectFromTest('export const broken = {', 'plain.ts')).toEqual({
       file: 'plain.ts',

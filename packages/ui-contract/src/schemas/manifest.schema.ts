@@ -1,8 +1,9 @@
 /**
- * `ui-manifest/manifest.json`, the published contract built from the three files of
- * `contract/` and the scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with
- * instructions for an agent, the screens verbatim, every declared anchor with its screen, the
- * platform, the scenarios parsed and the model.
+ * `ui-manifest/manifest.json`, the published contract built from the contract folder (the
+ * vocabulary, the screen files, the platform file and the model) and the scenario files of
+ * `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an agent, the screens
+ * verbatim, every declared anchor with its screen, the platform, the scenarios parsed and the
+ * model.
  */
 
 import { z } from '@workspace/zod'

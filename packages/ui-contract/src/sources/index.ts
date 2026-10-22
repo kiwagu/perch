@@ -8,4 +8,4 @@ export {
   ignoreMarkers,
 } from './ignore'
 export { SOURCE_ROOTS, scanSources } from './scan'
-export { staticText } from './values'
+export { unwrap } from './values'

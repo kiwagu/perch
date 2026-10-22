@@ -89,16 +89,18 @@ for Bun.
     template literal the `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]`
     and `[data-value="..."]` selectors, in double or single quotes; and the value a
     `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not`
-    included; each argument a plain string or a template literal without `${}` (a TypeScript
-    wrapper such as `as const` changes nothing), each selector at its line in the source,
-    whatever escapes its literal holds. A `data-id` is data and is not read, and neither is
-    a helper call such as `notice(page, '<code>')`; an anchor built at runtime is a problem
-    (`RUNTIME_TEST_ANCHOR`), a code, a state or a value from an expression passes.
-    `scanConsumers(root, tests?)` collects the `.ts` files under `CONSUMER_ROOT`
-    (`tests/e2e/src`) or the folder given; `compareConsumers(consumed, contract)` wants
-    every anchor known (declared, or derived from a declared base with a suffix it lists in
-    `derived`), every code, state and choice value in the vocabulary, as the scenarios check
-    resolves its bracket references.
+    included; each argument a plain string or a template literal without `${}`, or a `+`
+    chain of them read as the one string it folds to (a TypeScript wrapper such as
+    `as const` changes nothing), each selector at its line in the source, whatever escapes
+    its literal holds, a `+` chain read whole as a template is. A `data-id` is data and is
+    not read, and neither is a helper call such as `notice(page, '<code>')`; an anchor built
+    at runtime (a `data-testid` selector whose value or closing quote an expression
+    supplies, a `getByTestId` of anything else) is a problem (`RUNTIME_TEST_ANCHOR`), a
+    code, a state or a value from an expression passes. `scanConsumers(root, tests?)`
+    collects the `.ts` files under `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given;
+    `compareConsumers(consumed, contract)` wants every anchor known (declared, or derived
+    from a declared base with a suffix it lists in `derived`), every code, state and choice
+    value in the vocabulary, as the scenarios check resolves its bracket references.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
     returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in

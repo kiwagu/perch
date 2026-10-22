@@ -1,8 +1,8 @@
 /**
- * The manifest, built from the three files of `contract/` and the scenario files of
- * `tests/e2e/scenarios/` only: the vocabulary as tables with instructions, the screens and
- * the platform section verbatim, the scenarios parsed, every declared anchor by name with
- * its screen, and the model document.
+ * The manifest, built only from the contract folder (the vocabulary, the screen files, the
+ * platform file and the model) and the scenario files of `tests/e2e/scenarios/`: the
+ * vocabulary as tables with instructions, the screens and the platform section verbatim, the
+ * scenarios parsed, every declared anchor by name with its screen, and the model document.
  */
 
 import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'

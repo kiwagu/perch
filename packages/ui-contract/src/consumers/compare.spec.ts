@@ -40,6 +40,14 @@ describe('compareConsumers', () => {
   it('resolves a template without an expression and a wrapped string as it resolves a quoted one', () => {
     expect(printed(['static.ts']).filter((line) => !line.endsWith(RUNTIME_TEST_ANCHOR))).toEqual([])
   })
+  it('resolves a + chain of strings as the string it folds to, and refuses one an expression completes', () => {
+    expect(printed(['concatenated.ts'])).toEqual([
+      `consumers/concatenated.ts:7: ${RUNTIME_TEST_ANCHOR}`,
+      'consumers/concatenated.ts:8: "sample.gone-page" is not a declared anchor',
+      `consumers/concatenated.ts:11: ${RUNTIME_TEST_ANCHOR}`,
+      `consumers/concatenated.ts:13: ${RUNTIME_TEST_ANCHOR}`,
+    ])
+  })
   it('keeps the anchors built at runtime, sorted with the rest by file and line', () => {
     expect(printed(['unknown.ts', 'runtime.ts', 'known.ts'])).toEqual([
       `consumers/runtime.ts:7: ${RUNTIME_TEST_ANCHOR}`,
