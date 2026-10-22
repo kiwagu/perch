@@ -11,6 +11,8 @@ import {
   type Activity,
   type AnchorDef,
   type BindingRef,
+  jsonPath,
+  type Lines,
   type Model,
   PLATFORM_FILE,
   type Problem,
@@ -18,7 +20,6 @@ import {
   type ScreensFile,
   type Vocabulary,
 } from '../files'
-import { jsonPath, type Lines } from '../files/problems'
 import type { Scenario } from '../scenarios'
 
 export interface Contract {

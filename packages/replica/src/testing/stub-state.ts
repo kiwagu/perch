@@ -18,8 +18,8 @@ import {
 import type { RegionRef } from '../region-doc'
 import { identityRegions } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
-import type { Actor, RegionHub, Subscriber } from '../server/region-hub'
-import type { SyncTransport } from '../sync/transport'
+import type { Actor, RegionHub, Subscriber } from '../server'
+import type { SyncTransport } from '../sync'
 
 /** A device's channel to the stub, which the test can take offline and bring back. */
 export interface StubTransport extends SyncTransport {

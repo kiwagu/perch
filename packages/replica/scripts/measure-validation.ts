@@ -18,8 +18,8 @@
 import { LoroDoc, LoroMap, LoroText } from 'loro-crdt'
 
 import { recordKey } from '../src/keys'
+import { validateBatch } from '../src/server'
 import { input, owner } from '../src/server/__fixtures__/batch'
-import { validateBatch } from '../src/server/batch-validator'
 
 const RECORD_COUNTS = [10, 100, 1000] as const
 const CHANGES_PER_BATCH = [1, 20] as const

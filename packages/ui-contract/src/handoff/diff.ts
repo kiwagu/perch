@@ -10,8 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { type Contract, loadContract } from '../check'
-import { declaredAnchors } from '../check/contract'
+import { type Contract, declaredAnchors, loadContract } from '../check'
 import {
   ACTIVITIES_DIR,
   type Activity,

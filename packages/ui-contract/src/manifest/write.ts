@@ -9,8 +9,7 @@
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
-import { MANIFEST_SCHEMA_FILE, MODEL_FILE, type Problem, validateAgainst } from '../files'
-import { readJson } from '../files/read-json'
+import { MANIFEST_SCHEMA_FILE, MODEL_FILE, type Problem, readJson, validateAgainst } from '../files'
 
 import type { Manifest } from './manifest.types'
 

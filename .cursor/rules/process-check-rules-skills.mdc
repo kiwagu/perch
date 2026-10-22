@@ -30,7 +30,7 @@ alwaysApply: true
 - Imports that load code lazily: `static-imports-only.mdc`.
 - New environment variables: `monorepo-env-minimalism.mdc`.
 - Compatibility switches, legacy paths, migrations: `poc-no-fallbacks.mdc`, `reset-mode-default.mdc`.
-- File and folder names, a file turning into a folder of parts, a new gateway module: `entity-first-module-naming.mdc`.
+- File and folder names, a file turning into a folder of parts, a new gateway module, an import-through-index lint error: `entity-first-module-naming.mdc`.
 - A new package or feature module, or a change to a package's role, exports or scripts, or to a module's routes, shapes, commands or providers: `package-readme.mdc`.
 - A source file at or past 300 lines, or a failing size gate: `file-size-tiers.mdc`.
 - A new class, a new domain or application function, or a one-unit lint error: `one-unit-per-file.mdc`.

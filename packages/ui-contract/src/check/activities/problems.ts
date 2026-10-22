@@ -20,10 +20,11 @@ import {
   type ActivityTransition,
   type AnchorDef,
   activityFile,
+  jsonPath,
+  lineAt,
   type Problem,
   type Screen,
 } from '../../files'
-import { jsonPath, lineAt } from '../../files/problems'
 import {
   type Contract,
   declaredAnchors,

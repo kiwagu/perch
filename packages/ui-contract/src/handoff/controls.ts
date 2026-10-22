@@ -23,13 +23,15 @@ import {
 
 import { type Problem, sortProblems } from '../files'
 import {
+  attributeValue,
   IGNORE_NO_CONTROL,
   IGNORE_WITHOUT_ELEMENT,
   type IgnoreMarker,
   ignoreMarkers,
+  isAnchorAttribute,
+  staticText,
+  unwrap,
 } from '../sources'
-import { isAnchorAttribute } from '../sources/collect'
-import { attributeValue, staticText, unwrap } from '../sources/values'
 
 /** A control by its line, its tag and, when a static one is at hand, its label. */
 export interface ControlPlace {

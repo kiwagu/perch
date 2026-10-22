@@ -6,7 +6,7 @@
  */
 
 import { baseOf } from '../anchors'
-import { declaredAnchors, locate } from '../check/contract'
+import { declaredAnchors, locate } from '../check'
 import {
   type Problem,
   SCREENS_DIR,

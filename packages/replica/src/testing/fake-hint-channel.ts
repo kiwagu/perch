@@ -1,4 +1,4 @@
-import type { HintChannel } from '../sync/hints'
+import type { HintChannel } from '../sync'
 
 type Handler = (event: { readonly data: unknown }) => void
 

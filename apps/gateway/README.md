@@ -4,213 +4,23 @@
 
 The server process in front of the central SurrealDB database (namespace `app`, database
 `directory`), and that database's only client: it connects as its own namespace user
-and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
-routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in` with
-`{ email, password, device: { id, label } }`, an email of at most 254 characters, taken in
-lower case, the device's
-own id of 1 to 64 characters and a label of at most 60, answering
-`{ identity, tokens, memberships }`, the memberships being the organisations the identity
-belongs to), each call on a database session of its own that is
-closed when the call ends; `GET /health` answers `ok`. Every sign-up and sign-in records the
-device in the directory's `device_session` (`DeviceSessions`, `src/auth/device-sessions.ts`):
-one row per identity and device with its label, the id of the refresh grant its pair holds now
-(the second segment of the refresh key, `surreal-refresh-<grant>-<secret>`, read by
-`grantIdOf`), when its current session started (`started_at`: the second the sign-in's access
-token was issued in, read from the token's `iat` by `issuedAtOf`, `src/auth/token-claims.ts`),
-when it was seen last and whether it was signed out; a sign-in whose device cannot be recorded
-fails and has the grant it minted revoked, and signing in again clears the mark, starts a new
-session and forgets a pair parked for the device. A token carries only the second it was issued
-in, so tokens of one second are not told apart: a token of the previous session issued in the
-very second the device was signed out and signed in again binds to the new session until it
-expires (at most 15 minutes). Using it takes a stolen token issued in the same wall-clock
-second as both the sign-out and the new sign-in. A sign-in on a device whose row held another
-grant revokes that grant (`REVOKE WHERE subject.record = … AND grant.id = …`, scoped to the
-identity), so a device holds one live grant and a pair it left behind dies with the sign-in; a
-revoke that fails is reported and leaves the sign-in standing. A sign-up or sign-in whose
-memberships cannot be read answers 500 and is taken back: its device is marked signed out and its
-grant revoked, since its pair never reached the device. Only a refusal by the database
-is the caller's fault (401 `invalid-credentials`, 409 `sign-up-rejected`): a database that
-cannot be reached answers 500, here and on every route and hello below. Devices sync over
-a WebSocket at `/sync`: a device says hello with its keys and its device id at protocol 6 (the
-pair is renewed with the refresh key when the access token no longer works, and the new pair is
-sent first).
-The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
-new one, only while the row holds the spent grant and is not signed out; any other hello reads
-the row. The access token the hello is accepted with (as it came, renewed or parked) must belong
-to the row's current session: the database verified it, and the gateway reads the second it was
-issued in from its payload. A device without a row, a renewal whose row holds another grant, and
-a token issued before the row's session started (one of an earlier session: the device was
-signed out, then signed in again) or naming no such second are closed with 4401 (`no session for
-this device`), a device signed out with 4001, and a pair renewed for any of them is revoked at
-once. What this does not catch: a live access token presented under another live device of the
-same identity, whose session started before the token was issued, binds to that device until
-the token expires (at most 15 minutes); the list of devices never gives their ids away. A
-welcomed device may ask for a new pair over its open channel (`renew`, no payload: the
-connection holds the pair it renews, `channel-renewal.ts`): the same limits, refresh exchange and
-row move as a hello's renewal, the new pair sent as `tokens` and held from then on; a renewal the
-limits refuse is answered with an `error` of code `rate-limited` and the channel kept; refused
-keys close with 4401, a device signed out with 4001 (its new pair revoked at once); a socket that
-closed before the pair could go leaves it parked for the device's next hello. A device holds one
-live socket: the hello that registers closes the device's older sockets with 1000 (`another
-connection of this device took over`, `ConnectionRegistry.supersede`), which signs nothing out,
-and the device's key operations (a hello from its key check to its registration, and a `renew`)
-run one at a time across its sockets (`PendingPairs.exclusively`). So a hello finds parked the
-pair a renewal under way could not deliver, whatever its access token; a `renew` that waited for
-a newer hello of the device finds its socket closed and spends nothing; and a `renew` whose key a
-hello of the device spent takes the pair that hello parked, looked up first, so no renewal is
-tried or counted. A `tokens` message the socket drops
-(`send` answers 0) or throws on is parked the same way and the socket closed as a failed server
-(1011), at hello and over the channel. A pair sent to an older socket the device gave up, before a
-newer hello of it came, is lost with that socket, and the device signs in again. A bound
-device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
-with its identity's private region, the region `tenant:<key>` of each organisation the identity
-belongs to and those memberships, the only regions it may name (an organisation whose database
-cannot be read is left out of the welcome and logged, its membership kept: the device syncs only
-the regions its welcome names, so it leaves that one alone until its next hello, though the
-connection would still serve it; the private region failing fails the hello,
-`src/sync/sync-connection/welcome-heads.ts`), and subscribes, pulls, pushes,
-probes and compacts there through the region hub, the server's copy of the replicated regions, which
-answers it and sends each accepted batch to the region's other devices. The hub keeps a private
-region in the directory and a tenant region in its organisation's database, and names them so
-(`src/tenants/region-databases.ts`, `databaseOf`: `directory`, `t_<key>`), and checks each batch against the device's identity: a
-note names its own member as its author, and nobody changes the author of a note. Each
-subscription carries the device's ability, built from its membership's role and the replica
-schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
-deletes only its own notes, an admin any, and the hub rejects any other write as
-`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
-role applies to a device's subscriptions from its next subscribe or hello. The hub also refuses
-a batch that brings changes under a Loro peer another identity's batch was accepted under in the
-region (`foreign-peer`), so no member can write as another member's device and stop it.
-A connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
-accepted; when an identity's memberships change, each of its connections leaves the regions it
-may no longer name at once, without waiting for the device's messages under way (one handled
-from then on that names such a region closes the socket with 4403, and the hub sends it nothing
-more there), and is sent a `memberships` message; it subscribes to a new organisation's region
-itself. A change told while a connection's hello is under way applies right after its welcome.
-Text the protocol refuses (4400, a hello of an older protocol or one that names no device
-included), keys the database refused (4401), a region the device may not name (4403) and a hello
-that did not come within 10 seconds (4408, after which the device connects again) close the
-socket with the protocol's close codes; keys the database could not judge (it could not be
-reached) close it as a failed server (1011), and the device comes back with the same keys, as it
-does after a hello closed with 1013 because the limits refused its renewal (see Limits). A
-device's sign-out leaves its regions, marks its row signed out, forgets the pairs parked for it
-and revokes its refresh grant through the database as the namespace user, as `POST
-/auth/sign-out` does, then closes the socket with 4000, which means the grant is revoked; a row
-that cannot be marked or a grant that cannot be revoked closes the socket with 1011 (`revoke
-failed`) instead, and the device sends its sign-out again through the route. A device signed
-out from another device is closed with 4001 at once, whatever
-it is doing, also while its hello is under way: the registry knows each connection's identity
-and device (`ConnectionRegistry.close(identity, device, code)`, every device of the identity
-when none is named), and each close moves a revocation epoch of the device or of the identity.
-A hello reads the epoch once its keys are accepted, before it reads the row, and registers with
-it: a sign-out that lands meanwhile refuses the registration (4001), one before it is seen by
-the read. A connection that fails to close is reported and the others are closed all the same.
-A renewed pair the socket closed before it could take is parked, for 60 seconds after the last
-hello that held it (one that takes it and parks it again, below, starts them over), under
-the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
-kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
-device`: the device's next hello with that spent key is handed the parked pair once (`tokens`,
-before its welcome) and welcomed, looked up before its keys are checked, so no renewal is tried
-or counted; a pair is never handed to another device, and signing the device out or signing in
-on it again forgets it; a hello whose keys the database could not judge leaves it parked, and
-one that could not judge the parked pair, or whose renewal of it the limits refused, parks it
-again. Keys, tokens and grant ids never reach its logs.
+and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
+sign devices up, in and out, list and sign out an identity's devices, and serve organisations
+and their members; devices sync over a WebSocket at `/sync`; `GET /health` answers `ok`.
 
-Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
-the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
-(`membership`), and the organisation's database holds its `member` rows. Two services in
-`src/tenants`, built by the composition root over the directory, serve them; on shutdown the
-organisations' databases close after the region hub and before the directory. `TenantDatabases`
-keeps one connection per organisation database in use, shared by every holder and closed once
-nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
-rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
-organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to an admin (leaving out the rows of
-identities that are gone), answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
-and tells its listeners an identity's new memberships whenever they change, answering once they
-heard them: the composition root has the registry tell the identity's devices. A removal takes
-the organisation's region from the removed identity's open connections as soon as the
-directory's membership is gone, before the member row is deleted and before the memberships are
-read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it. Until the revoke reaches the removed identity's
-connection, a batch its device pushes there may still be accepted: that window between the
-directory's commit and the revoke is inherent. The changes of one identity's memberships (its
-creations, the invites of it, its removals) run one after the other, each once the one before
-it and its notification have settled, so the directory and the organisation's database end as
-the last change left them and its devices hear the lists in that order. This holds within one
-gateway process; gateways in several processes would need a durable revision of the memberships.
-`Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
-rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes,
-and one device's key operations, one at a time.
+The source is one module per mechanism of the platform under `src/`, each with its own README
+for its role, surface and commands. `src/server.ts` routes each request to its module and
+`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
+time (one identity's membership changes, one device's key operations). The modules that
+predate the index rule have no `index.ts` yet and are imported file by file.
 
-The organisation routes act for the identity a device's access token signs in, sent as
-`Authorization: Bearer <access>`, on the device it names in the `X-Perch-Device` header, which
-every call with an access token must carry: a call without a valid device id answers 400
-(`bad-request`), checked before any call to the database, and a device without a live session
-row (unknown, or signed out: its access token still works, its calls do not), or whose session
-started after the token was issued, 401 (`unauthorized`). A refresh key is not taken over HTTP:
-a request with a valid device header but without an access token the database accepts answers
-401, and one whose token the database could not judge answers 500; a missing or invalid
-`X-Perch-Device` answers 400 first, before any token is checked. Every such 401 names the scheme
-in `WWW-Authenticate: Bearer` (`src/auth/bearer-caller.ts`, shared with the device routes).
-`GET /organisations` lists the
-caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
-the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
-(403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
-invite an identity; and `DELETE /organisations/:key/members/:identity` lets an admin remove a
-member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
-a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
-`not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
-`key-taken`, `already-member` and `self`; an invitation or a creation over its limit answers 429
-(`rate-limited`, see Limits); a failure of the gateway answers 500 (`internal`).
-
-The device routes (`src/auth/device.routes.ts`) act for the identity of the Bearer access token
-and its device the same way. `GET /devices` lists the
-caller's devices, the earliest first, `{ devices: [{ id, label, createdAt, lastSeenAt,
-revokedAt, current }] }` (times as ISO strings, `revokedAt` null for a device signed in,
-`current` for the device named in the header; a device signed out from another one stays
-listed for 30 days; neither the grant a device holds nor the device id its header names is
-ever sent: a hello binds by that id, so a live access token must not learn the other devices'
-ids). `DELETE /devices/:id` signs one
-device of the caller out (204): its row is marked revoked, its refresh grant is revoked
-(`ACCESS identity ON DATABASE REVOKE WHERE subject.record = … AND grant.id = …`, the grant id
-going as a parameter: `REVOKE GRANT` takes none), a pair parked for it is forgotten and its
-sockets are closed with 4001; an id that is not one of the caller's devices answers 404
-(`no-such-device`). `POST /auth/sign-out-everywhere` signs every device of the caller out, the
-asking one included (204): the identity's `sessions_revoked_at` is set to the start of the
-current second, so every token issued in an earlier second is refused and a sign-in right after
-the sign-out works (a token carries only the second it was issued in; one issued earlier in that
-same second stays valid until it expires, but its grant is revoked and its row marked, so its
-hello and its Bearer calls are refused all the same, unless its device signs in again in that
-very second: the window named with `started_at` above), every refresh grant of the identity is
-revoked, every device row is marked revoked, every parked pair is forgotten and every socket is
-closed with 4001. A sign-out that
-fails after its first write still closes what it signed out before it answers 500. `POST
-/auth/sign-out` takes the pair in its body, `{ access, refresh }`, with `X-Perch-Device` and no
-`Authorization`: the pair is the credential, so a device can revoke a pair it could not revoke
-while offline even once its access token expired. The pair must sign an identity in (renewed
-when its access token no longer works) and its refresh grant must be one of the identity's
-devices: that row is marked signed out (a row marked already stays as it is), a pair parked for
-it is forgotten, the device's sockets are closed with 4001, and the grant the pair holds (the
-renewed one when renewed) is revoked through the database as the namespace user (`REVOKE WHERE
-subject.record = … AND grant.id = …`, scoped to the identity), 204; a pair whose device was
-signed out from another one already (its row marked, its grant revoked) answers 204 as well.
-Every step may be asked again: a failure answers 500 and the device keeps the pair to try
-again, and its retry marks the row and revokes the grant anew; a pair the database could not
-judge answers 500 too, with nothing marked. A renewal spends the pair's refresh key, so a pair
-the route renewed would be refused if asked again: the row's mark is tried three times (after
-100, then 200 ms), and when it still fails the route closes the device the header names (its
-parked pairs forgotten, its sockets closed with 4001), revokes the renewed grant and answers 500.
-That row may then list the device as signed in until its next sign-in or a sign-out from My
-devices; its grants are dead, so only a still valid access token of that session (at most 15
-minutes old) could reach the gateway. A pair the database refused, or that no device of
-the identity holds, answers 401 (`unauthorized`) and revokes nothing; a pair the route renewed
-itself has its new grant revoked whatever it answers. A renewal the limits refuse answers 429
-before the database is asked, with nothing revoked and the refresh key unspent (see Limits). A
-request without its device or its pair answers 400, before any key is checked; so does every
-call with an access token that names no valid device.
+- [auth](src/auth/README.md): sign-up, sign-in and sign-out, device sessions, tokens and the
+  Bearer caller.
+- [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
+  connections.
+- [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
+  and their routes.
+- [limits](src/limits/README.md): the request limits and the 429 they answer.
 
 ## Key exports
 
@@ -237,71 +47,6 @@ To rotate it, set a new value and restart the gateway: the schema is applied aga
 key, earlier access tokens are refused, and each device renews its pair once with its refresh
 key at its next hello; nobody is signed out. The organisations' databases have no access method
 of their own yet; when they get one, it takes its key from this variable too.
-
-Token scope: an access token issued for another namespace, database or access method is refused
-before the database is asked (`data:AUTH_FAILED`, by `namesOtherScope` in
-`src/auth/token-claims.ts`), since the database would accept a record access token of another
-database and switch the session to it. Its claims are read under every name SurrealDB 3.3 takes
-them by: the `NS`, `DB` and `AC` it issues, `ns`, `db` and `ac`, and the namespaced
-`https://surrealdb.com/ns` (or `/namespace`), `/db` (or `/database`) and `/ac` (or `/access`);
-any of them that names another scope, or a scope named only in part, refuses the token. Such a
-token is never renewed: a refresh key presented beside it is not spent. A payload without any of
-these claims goes to the database as before.
-
-Limits (`RequestLimits`, `src/limits/`): fixed windows in the gateway process's memory, each
-starting at its key's first attempt; every gateway process keeps its own, so several processes
-multiply them. Credential checks, `POST /auth/sign-up` and `POST /auth/sign-in` together (each
-one argon2 run on the database), are limited to 20 per client address in 10 s; failed sign-ins
-(answered `invalid-credentials`) to 10 per email in 15 minutes, cleared by a successful
-sign-in. An email counts in lower case, as the routes take it and the directory keeps and
-matches an account's (`account-email.ts`): an address in any case is one account, and its
-failures in any case share one limit. A sign-in holds one of its
-email's 10 places from the moment it is let through until the database answers, so parallel
-guesses are counted while under way: wrong credentials keep the place, a success clears the
-email's window, and an answer the database could not judge, or a call that threw instead of
-answering, gives the place back; each sign-in is settled once. A body that fails its schema
-(400) counts nothing. A refusal answers 429 `{ "code": "rate-limited" }` with `Retry-After` in
-whole seconds (at least 1), before the database is asked, and is not logged.
-The client address is the rightmost `X-Forwarded-For` entry when it is an IPv4 or IPv6 address,
-else the socket's peer; an IPv6 address counts by its /64. The front must set `X-Forwarded-For`
-to the address it saw, as Caddy's `reverse_proxy` does; behind a front that sets none, every
-client shares the front's address. Behind a load balancer in front of Caddy, Caddy sees the
-balancer and, even when it trusts it, appends the balancer's address last, so Caddy must name the
-balancer in its `trusted_proxies` (with `trusted_proxies_strict`) and send the client's address
-on with `header_up X-Forwarded-For {client_ip}`, or every client shares the balancer's buckets.
-The gateway listens on `127.0.0.1` only, so nothing but the front and local tools can name an
-address (the smoke and the load test give each simulated device one of its own,
-`198.18.<a>.<b>` from a hash of its id). Each window table holds at most
-100 000 keys, in the order their windows started: an unseen key at a full table evicts the window
-that started first, even a live one, and is let in. Availability wins over a marginal gain:
-refusing unseen keys would let anyone who fills a table with cheap requests (sign-ins of unknown
-emails, addresses from many IPv6 /64s) lock everyone else out, while an evicted key only starts
-a fresh window.
-Refresh-key renewals, at hello and inside `POST /auth/sign-out`, are limited to 10 per device (the
-id the hello or `X-Perch-Device` names) in 15 minutes and to 120 per client address in a minute,
-the address charged only when the device's limit allows, and a renewal the address refuses gives
-the device's attempt back (once, while the device's window still holds it): behind one address
-whose devices all renew at once, as after a night when every access token expired, the devices the
-address holds back retry with their reconnect backoff without spending their own limit, so 500 of
-them all renew within about four minutes instead of being held for 15 minutes. A renewal is counted
-when the database refused the access token and a refresh key came with it, before the key is
-exchanged, so a refused one asks the database nothing and spends nothing (`data:RATE_LIMITED`); a
-working access token counts nothing, and neither does one the database could not judge, which fails
-as it is (a hello closes as a failed server, the pair sign-out answers 500). A hello's address is
-the one its upgrade request came from. A hello whose renewal is refused is closed with 1013 (`too
-many renewals`, try again later): the client ends its channel only on 4000, 4001, 4400 and 4401, so
-it reconnects with its backoff and keeps its keys. The pair sign-out answers 429 `rate-limited`
-with `Retry-After`, revoking nothing. `POST /auth/sign-out` itself is not limited, only the renewal
-it may run.
-Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
-and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
-identity is charged first and the address only when the identity's limit allows. Every attempt
-counts whatever the answer (an unknown email's 404 included), once the body follows its schema
-(a 400 counts nothing); the limit is checked before the service is asked. Organisation creation,
-`POST /organisations`, is limited to 10 per identity and 30 per client address in an hour (each
-one provisions a database, and one address cannot farm identities past the identity's limit),
-the address charged only when the identity's limit allows, checked before anything is
-provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not logged.
 
 ## Commands
 

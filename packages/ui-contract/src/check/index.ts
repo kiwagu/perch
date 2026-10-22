@@ -1,6 +1,13 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
-export { bindingRefsOf, type Contract, own } from './contract'
+export {
+  bindingRefsOf,
+  type Contract,
+  declaredAnchors,
+  locate,
+  modelTargetOf,
+  own,
+} from './contract'
 export {
   type DeepTarget,
   deepEnteredOf,
@@ -21,7 +28,7 @@ export {
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'
-export { referenceResolver, scenariosProblems } from './scenarios'
+export { referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
 export { versionProblems } from './version'

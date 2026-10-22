@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { FakeHintChannel } from '../testing/fake-hint-channel'
+import { FakeHintChannel } from '../testing'
 
 import { type SyncHint, syncHints } from './hints'
 
