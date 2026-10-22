@@ -16,7 +16,7 @@ modules' routes.
   and the notices. Before the frame is mounted, the shell says where the start is: opening the
   data, a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved.
-- Anchors: screen `app-shell` in `contract/screens.json`.
+- Anchors: screen `app-shell` in `contract/screens/__root.yaml`.
 - No shapes or commands of its own: it reads the session, the language state and the
   notices through the platform ports.
 - i18n keys `app.shell.*` live in the app-wide catalog `src/platform/i18n/app.en.json`.

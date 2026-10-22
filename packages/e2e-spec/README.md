@@ -2,16 +2,20 @@
 
 ## Role in the architecture
 
-Tooling for instruction-style e2e scenarios. The scenarios live in the contract:
-`contract/screens.json` under `scenarios`, each a short instruction a person could follow by
-hand (title, tags, the role of each device, where it starts, test data, the scenario in one
-sentence, steps, expected results). Their text names the user interface through bracket
-references that `bun run contract:check` resolves against the contract: `[<anchor>]` (a
-declared anchor or a derived one), `[/path]` (the path of a binding), `[code:<code>]`,
-`[state:<state>]` and `[value:<value>]`. Each scenario pairs by its id with a Playwright test:
-`user/01-sign-up` with `tests/e2e/src/user/01-sign-up.e2e.spec.ts`, whose first line is
-`// scenario: user/01-sign-up`. The tooling turns a scenario into a failing test skeleton and
-checks that scenarios and tests stay in step.
+Tooling for the instruction-style e2e scenarios. Each scenario is one Markdown file,
+`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md`, a short instruction a person could
+follow by hand: a YAML front matter with `tags`, `devices` (the role each device acts as) and
+`data`, then the title, where it starts, the scenario in one sentence, the steps and the
+expected results. Its text names the user interface through bracket references that
+`bun run contract:check` resolves against the contract: `[<anchor>]` (a declared anchor or a
+derived one), `[/path]` (the path of a binding), `[code:<code>]`, `[state:<state>]` and
+`[value:<value>]`. Each scenario pairs by its id, the file's path without `.md`, with a
+Playwright test at the same path under `tests/e2e/src`: `user/base/sign-up` with
+`tests/e2e/src/user/base/sign-up.e2e.spec.ts`, whose first line is
+`// scenario: user/base/sign-up`. The files are parsed by `loadScenarios` of
+`@workspace/ui-contract`, which the contract check and the manifest share; this package
+turns a scenario into a failing test skeleton and checks that scenarios and tests stay in
+step.
 
 ## Key exports
 
@@ -30,9 +34,9 @@ checks that scenarios and tests stay in step.
 
 ## Commands
 
-- `bun run e2e:scaffold <entity>/<layer>/<slug>` (repository root): writes
-  `tests/e2e/src/<entity>/<layer>/<slug>.e2e.spec.ts` from the scenario with that id, never
-  over an existing file.
+- `bun run e2e:scaffold <entity>/<layer>/[<area>/]<slug>` (repository root): writes
+  `tests/e2e/src/<id>.e2e.spec.ts` from the scenario with that id, never over an existing
+  file.
 - `bun run e2e:coverage`: the pairing check (`--root=. --tests=tests/e2e/src`), part of
   `bun run check`.
 - `bun run test`, `bun run typecheck`, `bun run lint`.

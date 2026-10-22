@@ -23,6 +23,9 @@ Run through this table after editing a rule in `.cursor/rules/` or a skill in
 | Add a delete button to the notes list and make it testable | process -> ui-contract -> adding-ui-anchors |
 | Describe a new screen for the modeling thread | process -> ui-contract -> adding-ui-anchors |
 | An e2e test cannot find the invite button | process -> ui-contract |
+| Show a new field of the profile on the profile page | process -> ui-contract -> adding-ui-anchors (the model first), then surrealql skill |
+| Write an e2e scenario for removing a member | process -> ui-contract -> adding-ui-anchors |
+| Keep a button that no test drives off the coverage | process -> ui-contract |
 | Load the Spanish catalog only when the user picks Spanish | process -> static-imports-only |
 | Make the database port configurable per machine | process -> monorepo-env-minimalism |
 | Keep the old profile table working while adding the new one | process -> reset-mode-default, poc-no-fallbacks |

@@ -3,16 +3,23 @@
 ## Role in the architecture
 
 The contract between the user interface and everything that drives it: tests, agents and
-the people who model screens. It holds the anchor grammar every `data-testid` follows
-(2 to 5 dot-separated kebab-case segments: the screen name first, the kind last, as in
-`user.sign-in.email-input`) and the tooling around the `contract/` folder at the root. The
-`./anchors` subpath is pure and browser-safe, so views and the UI kit may import it; the
-root export is build-time tooling for Bun.
+the people and models who design screens. The contract is authored first, in the
+`contract/` folder at the root (the vocabulary, one YAML file per screen named by its
+pathname, the platform file and the model) and in the scenario files of
+`tests/e2e/scenarios/`; the model is the source of completeness and each screen unfolds it.
+This package loads those files and checks them against each other, holds the web app's and
+the kit's JSX (`--sources`) and the e2e tests (`--consumers`) to them, builds the manifest,
+measures coverage (the model first, then the controls) and prints the hand-over diff. It
+also holds the anchor grammar every `data-testid` follows: 2 to 4 dot-separated kebab-case
+segments for a declared anchor and one more for a derived part, the screen name first and the
+kind last, as in `user.sign-in.email-input`. The `./anchors` subpath is pure and
+browser-safe, so views and the UI kit may import it; the root export is build-time tooling
+for Bun.
 
 ## Key exports
 
 - `.`: the tooling, for Bun.
-  - Loaders of the three contract files and of the scenarios, each returning problems
+  - Loaders of the contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
     `loadScreens(root)` (every `.yaml` file under `contract/screens`, sorted by path, one screen
@@ -45,7 +52,7 @@ root export is build-time tooling for Bun.
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
-  - The contract check: `checkContract(root)` loads the three files and the scenarios
+  - The contract check: `checkContract(root)` loads the contract files and the scenarios
     (stopping at their own problems), then runs the cross-checks and `schemaDrift`, sorted by
     file and line;
     `loadContract(root)` returns the loaded `Contract`. Each rule is a function of the
@@ -165,7 +172,7 @@ root export is build-time tooling for Bun.
   `contract: the e2e tests agree with the contract (<n> anchors)`; part of `bun run check`
   and the pre-commit hook).
 - From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
-  manifest from the three files and the scenarios and writes it into `ui-manifest/` at the
+  manifest from the contract files and the scenarios and writes it into `ui-manifest/` at the
   root, gitignored, or into `<dir>` relative to the working directory, which may be any
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into

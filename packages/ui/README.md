@@ -4,10 +4,16 @@
 
 The visual primitives every view is built from: shadcn components on Base UI with
 Tailwind CSS v4, mobile first. The package holds no text, no translations and no domain
-knowledge; copy and data arrive through props. Dark colors follow the system setting. A
-composite takes its anchor (`data-testid`) as a `testId` prop and builds the anchors of the
-parts it renders itself with `testIdFor(testId, '<suffix>')` from
-`@workspace/ui-contract/anchors`, the only dependency on the UI contract.
+knowledge; copy and data arrive through props. Dark colors follow the system setting.
+Every primitive spreads its props onto its element, so a call site passes `data-testid` and
+the other contract attributes directly. A composite takes its anchor (`data-testid`) as a
+`testId` prop and builds the anchors of the parts it renders itself with
+`testIdFor(testId, '<suffix>')` from `@workspace/ui-contract/anchors`, the only dependency
+on the UI contract; a part with a screen-level name of its own is a named prop
+(`navigationTestId`). The anchor goes on the semantic element, the dialog's own box rather
+than its portal or overlay. A control that is not a test target carries a
+`// ui-contract-ignore-self: <reason>` marker right before it, as the inner buttons of
+`AlertDialogCancel` and of the sheet's close do.
 
 ## Key exports
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Perch data model",
-  "description": "The entities the screens read and write. The platform's own tables (accounts, organisations, memberships, device sessions) are not modeled here: the screens reach them through the platform actions of screens.json.",
+  "description": "The entities the screens read and write. The platform's own tables (accounts, organisations, memberships, device sessions) are not modeled here: the screens reach them through the platform actions of platform.yaml.",
   "$defs": {
     "profile": {
       "type": "object",
