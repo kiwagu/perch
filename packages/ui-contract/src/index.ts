@@ -149,6 +149,7 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
+  transitionSchema,
 } from './schemas'
 export {
   type Collected,
