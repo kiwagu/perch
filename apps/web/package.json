@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "dev": "vite build --watch --mode development",
+    "dev": "vite --mode development",
     "build": "vite build && ui-contract manifest --out dist/ui-manifest",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",

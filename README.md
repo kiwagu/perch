@@ -29,7 +29,7 @@ by mcproc (pm2 underneath).
 
 | Stand | Profile | Open | SurrealDB | Gateway | Web app |
 |---|---|---|---|---|---|
-| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | build watcher |
+| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | Vite dev server (127.0.0.1:5180) |
 | tests | `e2e` | https://localhost:5493 | 127.0.0.1:8010 | 127.0.0.1:5191 | production build |
 
 These are the main checkout's addresses, slot 0 of the manifest's `vars`; a worktree made with
@@ -39,17 +39,17 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
 
 - `mcproc start dev`, then open https://localhost:5443; `mcproc stop dev` stops the stand. The
   gateway waits for its database and defines its namespace user there before it starts. The
-  `web` app is a build watcher (`vite build --watch` in development mode, with source maps), not
-  a dev server, so there is no hot module replacement: after a code change it rewrites
-  `apps/web/dist` in 1-3 s, then reload the page. Until its first build finishes the front
-  answers 404.
-- Both fronts serve the UI manifest, built from `contract/` and the scenario files by the web
-  build, at `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on
+  `web` app is the Vite dev server behind the front: an edit reaches the page by hot module
+  replacement, and an edit of its config restarts it. The gateway and the front are restarted
+  on a change of their sources or configuration, so a running stand follows the tree, a
+  landing included. Until the dev server listens the front answers 502.
+- Both fronts serve the UI manifest, built from `contract/` and the scenario files (by the dev
+  server on the dev stand, by the web build on the e2e stand), at `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on
   the dev stand, with `manifest.schema.json` and `model.schema.json` beside it;
   `Cache-Control: no-store`). The mcproc var `ui_manifest` passes `PERCH_UI_MANIFEST` to
   both: `'0'` (in `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404
-  there. Development and e2e builds also install `window.__perch.ui.anchors()`, which lists
-  the anchors a page renders now.
+  there. The dev server and the e2e build also install `window.__perch.ui.anchors()`, which
+  lists the anchors a page renders now.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
