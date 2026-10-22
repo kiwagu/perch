@@ -64,68 +64,89 @@ anchors:
 states:
   ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
 flow:
-  states:
-    - sign-in
-    - sign-up
-    - submitting
-    - done
   initial: sign-in
-  events:
-    - on: user.sign-in.toggle-button
-      from: sign-in
-      outcomes:
-        success:
-          state: sign-up
-          note: The name input appears; the error is cleared.
-    - on: user.sign-in.toggle-button
-      from: sign-up
-      outcomes:
-        success:
-          state: sign-in
-          note: The name input goes; the error is cleared.
-    - on: user.sign-in.submit-button
-      action: platform.sign-in
-      from: sign-in
-      params:
-        email: user.sign-in.email-input
-        password: user.sign-in.password-input
-      outcomes:
-        success:
-          route: /me
-          codes:
-            - welcome
-          state: done
-          note: The page is in submitting while the attempt runs.
-        failure:
-          codes:
-            - invalid-credentials
-            - rate-limited
-            - other-account
-            - failed
-          state: sign-in
-    - on: user.sign-in.submit-button
-      action: platform.sign-up
-      from: sign-up
-      params:
-        email: user.sign-in.email-input
-        password: user.sign-in.password-input
-        name: user.sign-in.name-input
-      outcomes:
-        success:
-          route: /me
-          codes:
-            - welcome
-          state: done
-          note: The account is created with its profile; the page is in submitting while the attempt runs.
-        failure:
-          codes:
-            - sign-up-rejected
-            - rate-limited
-            - other-account
-            - name-required
-            - name-too-long
-            - failed
-          state: sign-up
+  states:
+    sign-in:
+      description: The form in the mode sign-in.
+      on:
+        user.sign-in.toggle-button:
+          target: sign-up
+          description: The name input appears; the error is cleared.
+        user.sign-in.submit-button:
+          target: signing-in
+    sign-up:
+      description: The form in the mode sign-up, with the name input.
+      on:
+        user.sign-in.toggle-button:
+          target: sign-in
+          description: The name input goes; the error is cleared.
+        user.sign-in.submit-button:
+          target: signing-up
+    signing-in:
+      description: The attempt to sign in runs; the submit button is disabled meanwhile.
+      invoke:
+        src: platform.sign-in
+        input:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+        onDone:
+          target: done
+          actions:
+            - type: show
+              params:
+                anchor: app-shell.notice-message
+                codes:
+                  - welcome
+            - type: navigate
+              params:
+                to: /me
+        onError:
+          target: sign-in
+          actions:
+            - type: show
+              params:
+                anchor: user.sign-in.error
+                codes:
+                  - invalid-credentials
+                  - rate-limited
+                  - other-account
+                  - failed
+    signing-up:
+      description: The attempt to create the account runs; the submit button is disabled meanwhile.
+      invoke:
+        src: platform.sign-up
+        input:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+          name: user.sign-in.name-input
+        onDone:
+          target: done
+          description: The account is created with its profile.
+          actions:
+            - type: show
+              params:
+                anchor: app-shell.notice-message
+                codes:
+                  - welcome
+            - type: navigate
+              params:
+                to: /me
+        onError:
+          target: sign-up
+          actions:
+            - type: show
+              params:
+                anchor: user.sign-in.error
+                codes:
+                  - sign-up-rejected
+                  - rate-limited
+                  - other-account
+                  - name-required
+                  - name-too-long
+                  - failed
+    done:
+      description: The app has moved to /me.
+      type: final
 wireframe: |-
   - heading "Sign in" [level=1]
   - textbox "Email"

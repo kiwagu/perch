@@ -62,8 +62,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   of that file.
 - `platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
-  screen may run (signing up, in and out, organisations, devices), the reserved anchors and
-  the readiness line.
+  screen may run (signing up, in and out, organisations, devices), the events it raises
+  in a flow (the local data opened, or could not be), the reserved anchors and the
+  readiness line.
 - `model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -182,9 +183,48 @@ values), `derived` (the suffixes it renders), `roles` (who sees it; absent: ever
 screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
 come from).
 
-A screen's `states` say what is visible in each container state; its `flow` lists its
-states and, per event on an anchor, the action it runs and what follows (a route, codes, a
-new state). The `wireframe` is the default state in Playwright's aria snapshot grammar.
+A screen's `states` say what is visible in each container state. The `wireframe` is the
+default state in Playwright's aria snapshot grammar.
+
+A screen's `flow` is an XState v5 machine config, in the subset `createMachine` takes as
+written: the app carries it into `setup({ guards, actions, actors }).createMachine(flow)`
+unchanged, as it carries a binding into the router.
+
+- `initial` and `states`, a flat map. A state has a `description`, `type: final` where the
+  flow ends (the app has left the screen, or stops), `entry` and `exit` effects, `on` and
+  `invoke`.
+- `on` maps an event to one transition, or to a list of guarded ones in XState's order, the
+  one without a guard last. An event is the user acting on a declared anchor (a derived one
+  through its base's `derived`), or a platform event of `platform.yaml` `events`
+  (`platform.opened`). A transition has a `target` (absent: the machine stays where it is),
+  a `guard`, `actions` and a `description`.
+- A guard is a camelCase name that the root `meta.guards` declares with what it holds
+  (`holdsUnsentChanges: this device holds changes the server has not received`); the app
+  implements it.
+- The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
+  codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
+  { to, search } }`, the app moves to that binding. The app implements both.
+- An `invoke` runs a model or a platform action while the machine is in its state: `src`
+  names it as a binding does, `input` maps each parameter to the anchor whose value it
+  takes or to a constant `{ value: ... }`, and `onDone` and `onError` say what follows its
+  success and its failure. Every `input` key is a parameter of the action; a parameter left
+  out is the implementation's to compute (a minted `$id`, the `author`). An event that runs
+  an action is a transition into such a state, named for what it does (`signing-in`,
+  `saving-name`, `inviting`).
+- A state that a route reaches says so in `meta.address`: its `path`, a binding of the
+  screen, and its `search`. The route owns the addressable state, what a link or a reload
+  restores; the machine owns the transient one (signing in, confirming, failed). No state
+  declares an address yet.
+
+Nothing else of XState is in the subset: no `context`, `after`, `always`, nested or parallel
+states, targets by `#id` or `.child`, or actions named by a string. A page whose areas are
+independent (the organisation page's create form, notes and members) describes one area at
+a time until the subset has parallel regions. The flow's states are the machine's; the
+screen's `states` stay the container states. `contract:check` holds the flow to the
+contract, and `apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState: a
+pure walk with `initialTransition` and `transition` reaches every state and takes every
+transition and every guarded branch to its target with its effects, and an app's own
+machine for a screen (`user.sign-in`) has the config of its flow.
 
 ## Anchors
 
@@ -415,7 +455,9 @@ gap is fixed in the contract files first, never worked around in a test.
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists,
-  and every path parses in the router's syntax; the versions agree; the generated schemas
+  and every path parses in the router's syntax; every flow names states, events, guards,
+  actions, anchors with their codes and bindings that exist, reaches each of its states
+  and leaves each one that is not final; the versions agree; the generated schemas
   equal their Zod sources; every bracket reference of a scenario resolves, and every device
   acts as a role of the vocabulary.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
@@ -435,7 +477,8 @@ gap is fixed in the contract files first, never worked around in a test.
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
 
 Beside them, `bun run e2e:coverage` (in `bun run check`) pairs every scenario with its test,
-and the web app's tests hold the module routes and the real router to the bindings.
+and the web app's tests hold the module routes and the real router to the bindings, and
+XState and the app's machines to the flows.
 
 ## The manifest
 

@@ -1010,159 +1010,1114 @@
           "flow": {
             "type": "object",
             "properties": {
-              "states": {
-                "minItems": 1,
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "The states of the screen."
+              "id": {
+                "description": "The id of the machine; absent, the app names the machine by the screen id.",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$"
+              },
+              "description": {
+                "description": "What the flow is, for a reader.",
+                "type": "string"
               },
               "initial": {
                 "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
                 "description": "The state the screen opens in."
               },
-              "events": {
-                "type": "array",
-                "items": {
+              "meta": {
+                "description": "What the contract says of the flow beyond XState: its guards.",
+                "type": "object",
+                "properties": {
+                  "guards": {
+                    "description": "The guards by name, each with what it holds.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$",
+                      "description": "A guard: a camelCase name of the flow `meta.guards`."
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "states": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "description": "A state of the flow, a key of its `states`: `sign-in`, `signing-in`."
+                },
+                "additionalProperties": {
                   "type": "object",
                   "properties": {
-                    "on": {
-                      "type": "string",
-                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                      "description": "The anchor the event happens on."
-                    },
-                    "action": {
-                      "description": "The action the event runs.",
+                    "description": {
+                      "description": "What the state is, for a reader.",
                       "type": "string"
                     },
-                    "params": {
-                      "description": "The parameters this path of the event passes to its action.",
+                    "type": {
+                      "description": "The flow ends in this state.",
+                      "type": "string",
+                      "const": "final"
+                    },
+                    "meta": {
+                      "description": "What the contract says of the state beyond XState: its address.",
                       "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                            "description": "The anchor of the control whose value the parameter takes."
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "description": "The constant: a string, a number or a boolean.",
+                      "properties": {
+                        "address": {
+                          "description": "The route that reaches this state: a link or a reload restores it.",
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "description": "The path of a binding of the screen.",
+                              "type": "string",
+                              "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$"
+                            },
+                            "search": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "description": "A string, a number or a boolean.",
                                 "type": [
                                   "string",
                                   "number",
                                   "boolean"
                                 ]
-                              }
-                            },
-                            "required": [
-                              "value"
-                            ],
-                            "additionalProperties": false,
-                            "description": "A constant the parameter always takes: `{ \"value\": true }`."
-                          }
-                        ],
-                        "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
-                      }
-                    },
-                    "guard": {
-                      "description": "The condition under which the event applies.",
-                      "type": "string"
-                    },
-                    "from": {
-                      "description": "The flow state the event leaves.",
-                      "type": "string"
-                    },
-                    "outcomes": {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "object",
-                          "properties": {
-                            "route": {
-                              "description": "The route the app moves to.",
-                              "type": "string"
-                            },
-                            "codes": {
-                              "description": "The codes the page shows.",
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                                "description": "A code of the vocabulary (data-code)."
-                              }
-                            },
-                            "state": {
-                              "description": "The flow state the screen moves to.",
-                              "type": "string"
-                            },
-                            "note": {
-                              "description": "Anything else that happens.",
-                              "type": "string"
-                            }
-                          },
-                          "additionalProperties": false,
-                          "description": "What follows when the action succeeds."
-                        },
-                        "failure": {
-                          "description": "What follows when the action fails.",
-                          "type": "object",
-                          "properties": {
-                            "route": {
-                              "description": "The route the app moves to.",
-                              "type": "string"
-                            },
-                            "codes": {
-                              "description": "The codes the page shows.",
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                                "description": "A code of the vocabulary (data-code)."
-                              }
-                            },
-                            "state": {
-                              "description": "The flow state the screen moves to.",
-                              "type": "string"
-                            },
-                            "note": {
-                              "description": "Anything else that happens.",
-                              "type": "string"
+                              },
+                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
                             }
                           },
                           "additionalProperties": false
                         }
                       },
+                      "additionalProperties": false
+                    },
+                    "entry": {
+                      "description": "The effects on entering the state.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "show",
+                                "description": "The effect: an anchor shows a code."
+                              },
+                              "params": {
+                                "type": "object",
+                                "properties": {
+                                  "anchor": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                    "description": "The anchor that shows the code."
+                                  },
+                                  "codes": {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                      "description": "A code of the vocabulary (data-code)."
+                                    },
+                                    "description": "The codes it may show: its data-code is one of them."
+                                  }
+                                },
+                                "required": [
+                                  "anchor",
+                                  "codes"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Which anchor, and the codes it may show."
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "params"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The anchor shows one of the codes."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "navigate",
+                                "description": "The effect: the app moves to a binding."
+                              },
+                              "params": {
+                                "type": "object",
+                                "properties": {
+                                  "to": {
+                                    "type": "string",
+                                    "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                    "description": "The path of the binding the app moves to."
+                                  },
+                                  "search": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {
+                                      "description": "A string, a number or a boolean.",
+                                      "type": [
+                                        "string",
+                                        "number",
+                                        "boolean"
+                                      ]
+                                    },
+                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                  }
+                                },
+                                "required": [
+                                  "to"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Which binding, and its search."
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "params"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The app moves to that binding."
+                          }
+                        ],
+                        "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      }
+                    },
+                    "exit": {
+                      "description": "The effects on leaving the state.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "show",
+                                "description": "The effect: an anchor shows a code."
+                              },
+                              "params": {
+                                "type": "object",
+                                "properties": {
+                                  "anchor": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                    "description": "The anchor that shows the code."
+                                  },
+                                  "codes": {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                      "description": "A code of the vocabulary (data-code)."
+                                    },
+                                    "description": "The codes it may show: its data-code is one of them."
+                                  }
+                                },
+                                "required": [
+                                  "anchor",
+                                  "codes"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Which anchor, and the codes it may show."
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "params"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The anchor shows one of the codes."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "navigate",
+                                "description": "The effect: the app moves to a binding."
+                              },
+                              "params": {
+                                "type": "object",
+                                "properties": {
+                                  "to": {
+                                    "type": "string",
+                                    "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                    "description": "The path of the binding the app moves to."
+                                  },
+                                  "search": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {
+                                      "description": "A string, a number or a boolean.",
+                                      "type": [
+                                        "string",
+                                        "number",
+                                        "boolean"
+                                      ]
+                                    },
+                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                  }
+                                },
+                                "required": [
+                                  "to"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Which binding, and its search."
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "params"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The app moves to that binding."
+                          }
+                        ],
+                        "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      }
+                    },
+                    "on": {
+                      "description": "Per event, what follows: an anchor (the user acts on it) or a platform event of platform.events.",
+                      "type": "object",
+                      "propertyNames": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^platform\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "A platform event: `platform.<name>`, an event of platform.events."
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                            "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                          }
+                        ]
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "target": {
+                                "description": "The state the machine moves to; absent: it stays where it is.",
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9-]*$"
+                              },
+                              "guard": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                "description": "A guard: a camelCase name of the flow `meta.guards`."
+                              },
+                              "actions": {
+                                "minItems": 1,
+                                "type": "array",
+                                "items": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "show",
+                                          "description": "The effect: an anchor shows a code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows the code."
+                                            },
+                                            "codes": {
+                                              "minItems": 1,
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                "description": "A code of the vocabulary (data-code)."
+                                              },
+                                              "description": "The codes it may show: its data-code is one of them."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor",
+                                            "codes"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor, and the codes it may show."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows one of the codes."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "navigate",
+                                          "description": "The effect: the app moves to a binding."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "to": {
+                                              "type": "string",
+                                              "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                              "description": "The path of the binding the app moves to."
+                                            },
+                                            "search": {
+                                              "type": "object",
+                                              "propertyNames": {
+                                                "type": "string"
+                                              },
+                                              "additionalProperties": {
+                                                "description": "A string, a number or a boolean.",
+                                                "type": [
+                                                  "string",
+                                                  "number",
+                                                  "boolean"
+                                                ]
+                                              },
+                                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                            }
+                                          },
+                                          "required": [
+                                            "to"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which binding, and its search."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The app moves to that binding."
+                                    }
+                                  ],
+                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                },
+                                "description": "The effects, in order."
+                              },
+                              "description": {
+                                "description": "What happens, for a reader.",
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "One transition."
+                          },
+                          {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "target": {
+                                  "description": "The state the machine moves to; absent: it stays where it is.",
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9-]*$"
+                                },
+                                "guard": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "A guard: a camelCase name of the flow `meta.guards`."
+                                },
+                                "actions": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "show",
+                                            "description": "The effect: an anchor shows a code."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anchor": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                "description": "The anchor that shows the code."
+                                              },
+                                              "codes": {
+                                                "minItems": 1,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                  "description": "A code of the vocabulary (data-code)."
+                                                },
+                                                "description": "The codes it may show: its data-code is one of them."
+                                              }
+                                            },
+                                            "required": [
+                                              "anchor",
+                                              "codes"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which anchor, and the codes it may show."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The anchor shows one of the codes."
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "navigate",
+                                            "description": "The effect: the app moves to a binding."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "to": {
+                                                "type": "string",
+                                                "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                                "description": "The path of the binding the app moves to."
+                                              },
+                                              "search": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
+                                                },
+                                                "additionalProperties": {
+                                                  "description": "A string, a number or a boolean.",
+                                                  "type": [
+                                                    "string",
+                                                    "number",
+                                                    "boolean"
+                                                  ]
+                                                },
+                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                              }
+                                            },
+                                            "required": [
+                                              "to"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which binding, and its search."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The app moves to that binding."
+                                      }
+                                    ],
+                                    "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  },
+                                  "description": "The effects, in order."
+                                },
+                                "description": {
+                                  "description": "What happens, for a reader.",
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "description": "One transition."
+                            },
+                            "description": "Guarded transitions in order: the first whose guard holds is taken."
+                          }
+                        ],
+                        "description": "One transition, or a list of guarded ones, the unguarded one last."
+                      }
+                    },
+                    "invoke": {
+                      "type": "object",
+                      "properties": {
+                        "src": {
+                          "type": "string",
+                          "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+                          "description": "The action the state runs, as a binding names it."
+                        },
+                        "input": {
+                          "description": "Per parameter, the anchor whose value it takes or a constant.",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "The anchor of the control whose value the parameter takes."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "description": "The constant: a string, a number or a boolean.",
+                                    "type": [
+                                      "string",
+                                      "number",
+                                      "boolean"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              }
+                            ],
+                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          }
+                        },
+                        "onDone": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "target": {
+                                  "description": "The state the machine moves to; absent: it stays where it is.",
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9-]*$"
+                                },
+                                "guard": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "A guard: a camelCase name of the flow `meta.guards`."
+                                },
+                                "actions": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "show",
+                                            "description": "The effect: an anchor shows a code."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anchor": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                "description": "The anchor that shows the code."
+                                              },
+                                              "codes": {
+                                                "minItems": 1,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                  "description": "A code of the vocabulary (data-code)."
+                                                },
+                                                "description": "The codes it may show: its data-code is one of them."
+                                              }
+                                            },
+                                            "required": [
+                                              "anchor",
+                                              "codes"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which anchor, and the codes it may show."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The anchor shows one of the codes."
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "navigate",
+                                            "description": "The effect: the app moves to a binding."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "to": {
+                                                "type": "string",
+                                                "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                                "description": "The path of the binding the app moves to."
+                                              },
+                                              "search": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
+                                                },
+                                                "additionalProperties": {
+                                                  "description": "A string, a number or a boolean.",
+                                                  "type": [
+                                                    "string",
+                                                    "number",
+                                                    "boolean"
+                                                  ]
+                                                },
+                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                              }
+                                            },
+                                            "required": [
+                                              "to"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which binding, and its search."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The app moves to that binding."
+                                      }
+                                    ],
+                                    "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  },
+                                  "description": "The effects, in order."
+                                },
+                                "description": {
+                                  "description": "What happens, for a reader.",
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "description": "One transition."
+                            },
+                            {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "target": {
+                                    "description": "The state the machine moves to; absent: it stays where it is.",
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]*$"
+                                  },
+                                  "guard": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "A guard: a camelCase name of the flow `meta.guards`."
+                                  },
+                                  "actions": {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "show",
+                                              "description": "The effect: an anchor shows a code."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "The anchor that shows the code."
+                                                },
+                                                "codes": {
+                                                  "minItems": 1,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                    "description": "A code of the vocabulary (data-code)."
+                                                  },
+                                                  "description": "The codes it may show: its data-code is one of them."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor",
+                                                "codes"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which anchor, and the codes it may show."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "The anchor shows one of the codes."
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "navigate",
+                                              "description": "The effect: the app moves to a binding."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "to": {
+                                                  "type": "string",
+                                                  "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                                  "description": "The path of the binding the app moves to."
+                                                },
+                                                "search": {
+                                                  "type": "object",
+                                                  "propertyNames": {
+                                                    "type": "string"
+                                                  },
+                                                  "additionalProperties": {
+                                                    "description": "A string, a number or a boolean.",
+                                                    "type": [
+                                                      "string",
+                                                      "number",
+                                                      "boolean"
+                                                    ]
+                                                  },
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                }
+                                              },
+                                              "required": [
+                                                "to"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which binding, and its search."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "The app moves to that binding."
+                                        }
+                                      ],
+                                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                    },
+                                    "description": "The effects, in order."
+                                  },
+                                  "description": {
+                                    "description": "What happens, for a reader.",
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "One transition."
+                              },
+                              "description": "Guarded transitions in order: the first whose guard holds is taken."
+                            }
+                          ],
+                          "description": "What follows when the action succeeds."
+                        },
+                        "onError": {
+                          "description": "What follows when the action fails.",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "target": {
+                                  "description": "The state the machine moves to; absent: it stays where it is.",
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9-]*$"
+                                },
+                                "guard": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "A guard: a camelCase name of the flow `meta.guards`."
+                                },
+                                "actions": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "show",
+                                            "description": "The effect: an anchor shows a code."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anchor": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                "description": "The anchor that shows the code."
+                                              },
+                                              "codes": {
+                                                "minItems": 1,
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                  "description": "A code of the vocabulary (data-code)."
+                                                },
+                                                "description": "The codes it may show: its data-code is one of them."
+                                              }
+                                            },
+                                            "required": [
+                                              "anchor",
+                                              "codes"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which anchor, and the codes it may show."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The anchor shows one of the codes."
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "navigate",
+                                            "description": "The effect: the app moves to a binding."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "to": {
+                                                "type": "string",
+                                                "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                                "description": "The path of the binding the app moves to."
+                                              },
+                                              "search": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
+                                                },
+                                                "additionalProperties": {
+                                                  "description": "A string, a number or a boolean.",
+                                                  "type": [
+                                                    "string",
+                                                    "number",
+                                                    "boolean"
+                                                  ]
+                                                },
+                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                              }
+                                            },
+                                            "required": [
+                                              "to"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which binding, and its search."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The app moves to that binding."
+                                      }
+                                    ],
+                                    "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  },
+                                  "description": "The effects, in order."
+                                },
+                                "description": {
+                                  "description": "What happens, for a reader.",
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "description": "One transition."
+                            },
+                            {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "target": {
+                                    "description": "The state the machine moves to; absent: it stays where it is.",
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]*$"
+                                  },
+                                  "guard": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "A guard: a camelCase name of the flow `meta.guards`."
+                                  },
+                                  "actions": {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "show",
+                                              "description": "The effect: an anchor shows a code."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "The anchor that shows the code."
+                                                },
+                                                "codes": {
+                                                  "minItems": 1,
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                                    "description": "A code of the vocabulary (data-code)."
+                                                  },
+                                                  "description": "The codes it may show: its data-code is one of them."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor",
+                                                "codes"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which anchor, and the codes it may show."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "The anchor shows one of the codes."
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "navigate",
+                                              "description": "The effect: the app moves to a binding."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "to": {
+                                                  "type": "string",
+                                                  "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                                                  "description": "The path of the binding the app moves to."
+                                                },
+                                                "search": {
+                                                  "type": "object",
+                                                  "propertyNames": {
+                                                    "type": "string"
+                                                  },
+                                                  "additionalProperties": {
+                                                    "description": "A string, a number or a boolean.",
+                                                    "type": [
+                                                      "string",
+                                                      "number",
+                                                      "boolean"
+                                                    ]
+                                                  },
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                }
+                                              },
+                                              "required": [
+                                                "to"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which binding, and its search."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "The app moves to that binding."
+                                        }
+                                      ],
+                                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                    },
+                                    "description": "The effects, in order."
+                                  },
+                                  "description": {
+                                    "description": "What happens, for a reader.",
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "One transition."
+                              },
+                              "description": "Guarded transitions in order: the first whose guard holds is taken."
+                            }
+                          ]
+                        }
+                      },
                       "required": [
-                        "success"
+                        "src",
+                        "onDone"
                       ],
                       "additionalProperties": false,
-                      "description": "What follows the event."
+                      "description": "The action the state runs while the machine is in it."
                     }
                   },
-                  "required": [
-                    "on",
-                    "outcomes"
-                  ],
                   "additionalProperties": false,
-                  "description": "One event of the flow."
+                  "description": "One state of the flow."
                 },
-                "description": "The events and their outcomes."
+                "description": "The states by name."
               }
             },
             "required": [
-              "states",
               "initial",
-              "events"
+              "states"
             ],
             "additionalProperties": false,
-            "description": "The flow of the screen."
+            "description": "The flow of the screen: an XState v5 machine config."
           },
           "wireframe": {
             "description": "A text sketch of the layout.",
@@ -1672,6 +2627,17 @@
             "description": "One platform action."
           },
           "description": "The platform actions by name: `platform.<name>` in a binding."
+        },
+        "events": {
+          "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "reserved": {
           "type": "array",

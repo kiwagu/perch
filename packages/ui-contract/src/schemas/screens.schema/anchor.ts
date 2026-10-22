@@ -13,6 +13,14 @@ export const platformActionNameSchema = z
   .regex(PLATFORM_ACTION)
   .describe('A platform action: `sign-in`, `organisations.create`.')
 
+/** An action a binding runs or a flow invokes: an entity action or a platform action. */
+export const actionNameSchema = z
+  .string()
+  .regex(/^(platform\.[a-z.-]+|[a-z_]+\.[a-zA-Z]+)$/)
+  .describe(
+    '`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions).',
+  )
+
 export const bindingRefSchema = z
   .union([
     z
@@ -25,12 +33,7 @@ export const bindingRefSchema = z
       .describe('The anchor shows or edits a field of the model.'),
     z
       .strictObject({
-        action: z
-          .string()
-          .regex(/^(platform\.[a-z.-]+|[a-z_]+\.[a-zA-Z]+)$/)
-          .describe(
-            '`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions).',
-          ),
+        action: actionNameSchema,
         params: actionParamsSchema.optional(),
       })
       .describe('The anchor runs an action.'),

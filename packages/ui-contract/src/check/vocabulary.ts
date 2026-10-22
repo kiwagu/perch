@@ -77,16 +77,6 @@ function screenProblems(contract: Contract): Problem[] {
         'a role',
       ),
     ),
-    ...(screen.flow?.events ?? []).flatMap((event, at) =>
-      (['success', 'failure'] as const).flatMap((outcome) =>
-        unlisted(
-          event.outcomes[outcome]?.codes,
-          ['screens', index, 'flow', 'events', at, 'outcomes', outcome, 'codes'],
-          vocabulary.codes,
-          'a code',
-        ),
-      ),
-    ),
   ])
 }
 
@@ -185,16 +175,13 @@ function choiceValueProblems(contract: Contract): Problem[] {
   })
 }
 
-/** The codes named by an anchor's `codes`, a flow outcome's `codes` or a platform action. */
+/**
+ * The codes named by an anchor's `codes` or a platform action; a flow shows only codes its
+ * anchors carry (rule 8).
+ */
 const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
-    ...screens.screens.flatMap((screen) =>
-      (screen.flow?.events ?? []).flatMap(({ outcomes }) => [
-        ...(outcomes.success.codes ?? []),
-        ...(outcomes.failure?.codes ?? []),
-      ]),
-    ),
     ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
   ])
 

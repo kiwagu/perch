@@ -41,20 +41,30 @@ anchors:
         forgetUnsent:
           value: true
 flow:
-  states:
-    - editing
-    - saving
   initial: editing
-  events:
-    - on: sample.save-button
-      action: thing.updateThing
-      from: editing
-      params:
-        title: sample.title-input
-      outcomes:
-        success:
-          codes:
-            - saved
-        failure:
-          codes:
-            - failed
+  states:
+    editing:
+      on:
+        sample.save-button:
+          target: saving
+    saving:
+      invoke:
+        src: thing.updateThing
+        input:
+          title: sample.title-input
+        onDone:
+          target: editing
+          actions:
+            - type: show
+              params:
+                anchor: sample.save-button
+                codes:
+                  - saved
+        onError:
+          target: editing
+          actions:
+            - type: show
+              params:
+                anchor: sample.save-button
+                codes:
+                  - failed

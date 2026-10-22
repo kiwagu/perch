@@ -41,6 +41,9 @@ for Bun.
     `Scenario`, or returns its problems with their lines (`ScenarioProblem`);
     `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
+    `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine`
+    takes as written, its `effectSchema` and `transitionSchema`, with the types `Flow`,
+    `FlowState`, `FlowTransition` and `Effect`),
     `flatJsonSchema` (route `params` and `search`, with the bounds `z.toJSONSchema` writes:
     `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed
     scenario), `entityDefinitionSchema`, `manifestSchema`.
@@ -59,7 +62,10 @@ for Bun.
     `Contract`: `versionProblems`, `vocabularyProblems` (every word of the screens is in
     the vocabulary, every code is used), `screensProblems` (anchors unique and never named
     like a derived one, entry and names), `bindingsProblems` (model fields, actions and
-    their params, routes, sources, flow events), `routesProblems` with
+    their params, routes, sources), `flowProblems` (a flow names states, events, guards,
+    actions with their `input`, anchors with their codes and bindings that exist, reaches
+    every state, leaves every state that is not final, and puts the one transition without
+    a guard last), `routesProblems` with
     `parseRoutePath(path)` (the router's path syntax), `searchProblems` (enum controls,
     `retain`) and `scenariosProblems` (bracket references and roles, as problems of each
     scenario's file).

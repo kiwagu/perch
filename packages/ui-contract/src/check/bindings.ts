@@ -1,95 +1,16 @@
 /**
- * Rule 3: what anchors and flow events are bound to exists. `model: entity.field` names a
- * field of an entity of the model; `action` names an entity action or a platform action,
- * and its `params` keys are that action's parameters, each taking a declared anchor or a
- * constant (a parameter left out is the view's to compute, and `$id` is minted); `route`
- * is the path of a binding; a `source` names an entity and its order field, or a platform
- * action.
+ * Rule 3: what anchors are bound to exists. `model: entity.field` names a field of an
+ * entity of the model; `action` names an entity action or a platform action, and its
+ * `params` keys are that action's parameters, each taking a declared anchor or a constant
+ * (a parameter left out is the view's to compute, and `$id` is minted); `route` is the path
+ * of a binding; a `source` names an entity and its order field, or a platform action. What
+ * a flow names is rule 8's (`flow.ts`).
  */
 
 import type { AnchorDef, BindingRef, Problem } from '../files'
 
-import {
-  bindingPaths,
-  bindingRefsOf,
-  type Contract,
-  declaredAnchors,
-  entityMemberOf,
-  has,
-  type InScreens,
-  knownAnchors,
-  locate,
-  own,
-  PLATFORM_ACTION,
-} from './contract'
-
-type Params = Extract<BindingRef, { action: string }>['params']
-
-/** The parameters of an action, or the problem that it does not exist. */
-function parametersOf(
-  { model, screens }: Contract,
-  action: string,
-): { parameters?: readonly string[]; problem?: string } {
-  if (action.startsWith(PLATFORM_ACTION)) {
-    const name = action.slice(PLATFORM_ACTION.length)
-    const platform = own(screens.platform.actions, name)
-
-    return platform === undefined
-      ? { problem: `no platform action "${name}"` }
-      : { parameters: Object.keys(platform.params) }
-  }
-
-  const { entity: entityName, member: actionName } = entityMemberOf(action)
-  const entity = own(model.entities, entityName)
-  const found = entity === undefined ? undefined : own(entity.actions, actionName)
-
-  if (entity === undefined) {
-    return { problem: `no entity "${entityName}" in the model` }
-  }
-
-  return found === undefined
-    ? { problem: `entity "${entityName}" has no action "${actionName}"` }
-    : { parameters: Object.keys(found.params) }
-}
-
-/** The contract with the lookups every binding needs, built once. */
-interface Lookups {
-  readonly contract: Contract
-  readonly known: (anchor: string) => boolean
-  readonly paths: ReadonlySet<string>
-  readonly inScreens: InScreens
-}
-
-function actionProblems(
-  { contract, known, inScreens }: Lookups,
-  action: string,
-  params: Params,
-  at: readonly PropertyKey[],
-): Problem[] {
-  const { parameters, problem } = parametersOf(contract, action)
-
-  if (parameters === undefined) {
-    return [inScreens([...at, 'action'], problem ?? '')]
-  }
-
-  return Object.entries(params ?? {}).flatMap(([key, value]) => [
-    ...(parameters.includes(key)
-      ? []
-      : [inScreens([...at, 'params', key], `"${key}" is not a parameter of "${action}"`)]),
-    ...(typeof value !== 'string' || known(value)
-      ? []
-      : [inScreens([...at, 'params', key], `"${value}" is not a declared anchor`)]),
-  ])
-}
-
-const routeProblems = (
-  { paths, inScreens }: Lookups,
-  route: string | undefined,
-  at: readonly PropertyKey[],
-): Problem[] =>
-  route === undefined || paths.has(route)
-    ? []
-    : [inScreens(at, `"${route}" is the path of no binding`)]
+import { bindingRefsOf, type Contract, declaredAnchors, entityMemberOf, has, own } from './contract'
+import { actionProblems, type Lookups, lookupsOf, routeProblems } from './lookups'
 
 function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly PropertyKey[]): Problem[] {
   if ('route' in ref) {
@@ -97,7 +18,10 @@ function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly Propert
   }
 
   if ('action' in ref) {
-    return actionProblems(lookups, ref.action, ref.params, at)
+    return actionProblems(lookups, ref.action, ref.params, {
+      action: [...at, 'action'],
+      params: [...at, 'params'],
+    })
   }
 
   const { inScreens } = lookups
@@ -150,40 +74,5 @@ function anchorProblems(lookups: Lookups): Problem[] {
   ])
 }
 
-function flowProblems(lookups: Lookups): Problem[] {
-  const { known, inScreens } = lookups
-
-  return lookups.contract.screens.screens.flatMap((screen, index) =>
-    (screen.flow?.events ?? []).flatMap((event, number) => {
-      const at = ['screens', index, 'flow', 'events', number]
-
-      return [
-        ...(known(event.on)
-          ? []
-          : [inScreens([...at, 'on'], `"${event.on}" is not a declared anchor`)]),
-        ...(event.action === undefined
-          ? []
-          : actionProblems(lookups, event.action, event.params, at)),
-        ...(['success', 'failure'] as const).flatMap((outcome) =>
-          routeProblems(lookups, event.outcomes[outcome]?.route, [
-            ...at,
-            'outcomes',
-            outcome,
-            'route',
-          ]),
-        ),
-      ]
-    }),
-  )
-}
-
-export function bindingsProblems(contract: Contract): Problem[] {
-  const lookups: Lookups = {
-    contract,
-    known: knownAnchors(contract),
-    paths: bindingPaths(contract.screens),
-    inScreens: locate(contract.screens),
-  }
-
-  return [...anchorProblems(lookups), ...flowProblems(lookups)]
-}
+export const bindingsProblems = (contract: Contract): Problem[] =>
+  anchorProblems(lookupsOf(contract))

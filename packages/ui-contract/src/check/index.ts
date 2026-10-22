@@ -1,5 +1,6 @@
 export { bindingsProblems } from './bindings'
 export type { Contract } from './contract'
+export { flowProblems } from './flow'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'
 export { referenceResolver, scenariosProblems } from './scenarios'

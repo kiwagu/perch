@@ -32,8 +32,10 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 10. **The states.** `data-state` on every container whose data arrives after the page; the
     screen's `states` say what each state shows.
 11. **The rest of the screen.** `entry` (the anchors a test starts from, alternatives by
-    state included), the `flow` (its states and, per event, the action and the outcomes) and
-    the `wireframe` (the default state as an aria snapshot).
+    state included), the `flow` (an XState machine config: its states, per event on an
+    anchor the transition with its `target`, `guard` and effects `show` and `navigate`, an
+    `invoke` state per action with its `onDone` and `onError`; `flows-machine.spec.ts` runs
+    it in XState) and the `wireframe` (the default state as an aria snapshot).
 12. **The scenario.** At least one file under `tests/e2e/scenarios/<entity>/base/` that opens
     the screen, written from the contract alone; `bun run e2e:scaffold <id>` writes its test.
 13. **The code.** The module route equals the binding (`routes-contract.spec.ts`) and the
@@ -55,7 +57,8 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 3. **The screen file.** An anchor binds it: `binding: { model: <entity>.<field> }`, or
    `{ action: <entity>.<action>, params: { ... } }` with each parameter naming the anchor
    whose value it takes. The codes of its failures go into the anchor's `codes` and the
-   vocabulary's "Codes"; its event goes into the `flow`.
+   vocabulary's "Codes"; its event goes into the `flow` as a transition into a state that
+   invokes the action, whose `onError` shows those codes on the anchor that carries them.
 4. **The scenario.** A step that uses it and an expected result with a code, a state or a
    value, in brackets.
 5. **The code and the tests.** The view renders the anchor; the database side follows its own

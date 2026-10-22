@@ -17,11 +17,14 @@ import {
   type anchorDefSchema,
   type bindingRefSchema,
   type bindingSchema,
+  type effectSchema,
+  type flowSchema,
   type paramValueSchema,
   platformFileSchema,
   type platformSchema,
   screenFileSchema,
   type screenSchema,
+  type transitionSchema,
 } from '../schemas'
 
 import { filesUnder } from './files-under'
@@ -37,6 +40,10 @@ export type BindingRef = z.infer<typeof bindingRefSchema>
 export type AnchorBinding = z.infer<typeof anchorBindingSchema>
 export type ParamValue = z.infer<typeof paramValueSchema>
 export type Platform = z.infer<typeof platformSchema>
+export type Flow = z.infer<typeof flowSchema>
+export type FlowState = Flow['states'][string]
+export type FlowTransition = z.infer<typeof transitionSchema>
+export type Effect = z.infer<typeof effectSchema>
 export type PlatformFile = z.infer<typeof platformFileSchema>
 
 /** The screen files and the platform file, assembled: the shape every rule reads. */

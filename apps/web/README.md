@@ -155,7 +155,10 @@ modeling stage.
   `routes-router.spec.ts` builds every binding on the real router (a sample per parameter
   of its path, the least search its schema accepts), matches it back to the same route,
   parameters and search with the defaults applied, and holds the binding's `params` to the
-  parameters of its path.
+  parameters of its path. `flows-machine.spec.ts` runs every screen's `flow` in XState:
+  `setup({ guards, actions, actors }).createMachine(flow)` with stubs, walked purely
+  (`flows-machine.walk.ts`) through every state, transition and guarded branch, and holds
+  the app's own machine for a screen (`user.sign-in`) to its flow.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

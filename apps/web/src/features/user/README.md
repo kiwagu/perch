@@ -8,7 +8,9 @@ written on the device and kept in step across devices through the gateway. Layer
 `domain/` holds the profile entity (schema and bounds) and one file per rule
 (`profile-name.rule.ts`, `profile-bio.rule.ts`); `application/` the `SignInService` over the
 session port, the `ProfileService` over the shape runner and the command bus, the sign-in
-state machine and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
+machine (the flow of `contract/screens/sign-in.yaml`: the mode is its state, an attempt
+invokes `platform.sign-in` or `platform.sign-up`, and it emits `show` and `navigate` for the
+page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 `locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
 
 ## Surface

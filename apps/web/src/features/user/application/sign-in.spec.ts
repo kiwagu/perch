@@ -32,15 +32,16 @@ afterEach(async () => {
 
 const start = () => createActor(createSignInMachine(signIn)).start()
 
+/** The attempt has ended: the machine is done, or back in a mode with the failure's code. */
 const settled = (actor: ReturnType<typeof start>) =>
-  waitFor(actor, (state) => state.matches('done') || state.matches('failed'))
+  waitFor(actor, (state) => state.matches('done') || state.context.error !== undefined)
 
 describe('sign-in', () => {
   it('creates an account with its profile and signs the user in', async () => {
     const actor = start()
 
-    actor.send({ type: 'TOGGLE_MODE' })
-    actor.send({ type: 'SUBMIT', form: ann })
+    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send({ type: 'user.sign-in.submit-button', form: ann })
 
     expect((await settled(actor)).value).toBe('done')
 
@@ -75,7 +76,7 @@ describe('sign-in', () => {
 
     const actor = start()
 
-    actor.send({ type: 'SUBMIT', form: { ...ann, name: '' } })
+    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, name: '' } })
 
     expect((await settled(actor)).value).toBe('done')
     expect(session.current()?.email).toBe(ann.email)
@@ -87,15 +88,15 @@ describe('sign-in', () => {
 
     const actor = start()
 
-    actor.send({ type: 'SUBMIT', form: { ...ann, password: 'wrong-password' } })
+    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, password: 'wrong-password' } })
 
     const failed = await settled(actor)
 
-    expect(failed.value).toBe('failed')
+    expect(failed.value).toBe('sign-in')
     expect(failed.context.error).toBe('data:INVALID_CREDENTIALS')
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'SUBMIT', form: ann })
+    actor.send({ type: 'user.sign-in.submit-button', form: ann })
 
     expect((await waitFor(actor, (state) => state.matches('done'))).context.error).toBeUndefined()
   })
@@ -108,17 +109,49 @@ describe('sign-in', () => {
     expect((await signIn.signIn(ann))._unsafeUnwrapErr().code).toBe('data:INVALID_CREDENTIALS')
   })
 
+  it('asks its host to show the welcome, then to move to the profile', async () => {
+    const actor = start()
+    const asked: unknown[] = []
+
+    actor.on('show', (event) => asked.push(event))
+    actor.on('navigate', (event) => asked.push(event))
+    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+
+    expect((await settled(actor)).value).toBe('done')
+    expect(asked).toEqual([
+      { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
+      { type: 'navigate', to: '/me' },
+    ])
+  })
+
+  it('goes back to the mode it failed in, and a switch of mode clears the reason', async () => {
+    const actor = start()
+
+    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, name: ' ' } })
+
+    const failed = await settled(actor)
+
+    expect(failed.value).toBe('sign-up')
+    expect(failed.context.error).toBe('profile:NAME_REQUIRED')
+
+    actor.send({ type: 'user.sign-in.toggle-button' })
+
+    expect(actor.getSnapshot()).toMatchObject({ value: 'sign-in', context: { error: undefined } })
+  })
+
   it('switches between signing in and creating an account', () => {
     const actor = start()
 
-    expect(actor.getSnapshot().context.mode).toBe('sign-in')
+    expect(actor.getSnapshot().value).toBe('sign-in')
 
-    actor.send({ type: 'TOGGLE_MODE' })
+    actor.send({ type: 'user.sign-in.toggle-button' })
 
-    expect(actor.getSnapshot().context.mode).toBe('sign-up')
+    expect(actor.getSnapshot().value).toBe('sign-up')
 
-    actor.send({ type: 'TOGGLE_MODE' })
+    actor.send({ type: 'user.sign-in.toggle-button' })
 
-    expect(actor.getSnapshot().context.mode).toBe('sign-in')
+    expect(actor.getSnapshot().value).toBe('sign-in')
   })
 })

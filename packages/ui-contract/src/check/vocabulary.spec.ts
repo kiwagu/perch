@@ -31,18 +31,16 @@ describe('vocabularyProblems', () => {
       'contract/screens/sample/$key.yaml:1: anchors["sample.page"].roles[0]: "owner" is not a role of the vocabulary',
     ])
   })
-  it('checks the roles of bindings and platform actions and the codes of flows and actions', () => {
+  it('checks the roles of bindings and platform actions and the codes of actions', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')
     const action = contract.screens.platform.actions['devices.list']
 
     Object.assign(sample.bindings[0] ?? {}, { roles: ['visitor'] })
-    Object.assign(sample.flow?.events[0]?.outcomes.failure ?? {}, { codes: ['oops'] })
     Object.assign(action ?? {}, { roles: ['root'], codes: ['devices-read-failed', 'nope'] })
 
     expect(printed(contract)).toEqual([
       'contract/screens/sample/$key.yaml:1: bindings[0].roles[0]: "visitor" is not a role of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: flow.events[0].outcomes.failure.codes[0]: "oops" is not a code of the vocabulary',
       'contract/platform.yaml:1: actions["devices.list"].roles[0]: "root" is not a role of the vocabulary',
       'contract/platform.yaml:1: actions["devices.list"].codes[1]: "nope" is not a code of the vocabulary',
     ])
@@ -72,7 +70,7 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.gone-select.option": no such anchor in the screens',
     ])
   })
-  it('reports a code no anchor, flow outcome or platform action uses', () => {
+  it('reports a code no anchor or platform action uses', () => {
     const contract = sampleContract()
 
     contract.vocabulary.codes['spare'] = { where: 'nowhere', meaning: 'nothing' }

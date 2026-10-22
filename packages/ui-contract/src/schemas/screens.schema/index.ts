@@ -1,7 +1,20 @@
-export { anchorBindingSchema, anchorDefSchema, bindingRefSchema, sourceSchema } from './anchor'
+export {
+  actionNameSchema,
+  anchorBindingSchema,
+  anchorDefSchema,
+  bindingRefSchema,
+  sourceSchema,
+} from './anchor'
 export { bindingSchema } from './binding'
 export { platformFileSchema, screenFileSchema } from './file'
-export { flowSchema } from './flow'
+export {
+  effectSchema,
+  flowSchema,
+  flowStateNameSchema,
+  guardNameSchema,
+  platformEventNameSchema,
+  transitionSchema,
+} from './flow'
 export { actionParamsSchema, paramValueSchema } from './params'
 export { platformSchema } from './platform'
 export { screenSchema } from './screen'

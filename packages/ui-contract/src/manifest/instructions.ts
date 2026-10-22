@@ -42,7 +42,9 @@ const SCREEN_MAP = [
   "Every binding `path` is a TanStack Router path in the router's own syntax, `params` are its path parameters and `search` its search parameters, and a route is a state address: the same path with the same search reaches the same state after a reload.",
   '`entry` lists the anchors present once the screen is open; some are alternatives by state, so wait for the one the state shows.',
   `\`anchors\` maps each declared anchor to its \`kind\`, \`binding\`, \`codes\` (its \`${CODE}\` values), \`dataId\` (what its \`${DATA_ID}\` holds), \`dataValue\` (it or its options carry a \`${VALUE}\` of \`contract.choiceValues\`), \`states\` (its \`${STATE}\` values), \`derived\` (the suffixes it renders as \`<anchor>.<suffix>\`), \`roles\` (who sees it; absent: every role of the screen), \`own\` (shown only on the entries the member owns) and \`source\` (where a list's entries come from).`,
-  "A screen's `states` say what each container state shows, its `flow` lists its states and, per event on an anchor, the action it runs and its outcomes (a route, codes, a state), and its `wireframe` is the default state as a Playwright aria snapshot.",
+  "A screen's `states` say what each container state shows, and its `wireframe` is the default state as a Playwright aria snapshot.",
+  "A screen's `flow` is an XState v5 machine config: `initial`, `states` with `on` (an event is the user acting on that anchor, or a platform event of `platform.events`), `target`, `guard` (a name of `meta.guards`), `actions` (effects `show` and `navigate`), `invoke` (a model or platform action with its `input`, `onDone`, `onError`), `type: final`, and `meta.address` on a state a route reaches.",
+  'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged, implementing the guards it names, the two effects and an actor per `invoke.src`.',
   `\`ids\` holds the same anchors flat, each with its screen. On a development or e2e build, \`window.${PAGE_HELPER}.anchors()\` lists the anchors the page renders now, with their attributes and visibility.`,
 ].join(' ')
 

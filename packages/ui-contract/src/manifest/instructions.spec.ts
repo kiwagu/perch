@@ -27,6 +27,12 @@ describe('instructionsOf', () => {
       'a route is a state address: the same path with the same search reaches the same state after a reload',
     )
   })
+  it('says a flow is an XState machine config, carried into the app unchanged', () => {
+    expect(instructions.screenMap).toContain("A screen's `flow` is an XState v5 machine config")
+    expect(instructions.screenMap).toContain(
+      'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged',
+    )
+  })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
       expect(text.length).toBeGreaterThan(80)

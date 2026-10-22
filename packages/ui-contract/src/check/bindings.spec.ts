@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { formatProblem } from '../files'
 
 import { bindingsProblems } from './bindings'
-import { anchorIn, sampleContract, screenIn } from './contract.fixture'
+import { anchorIn, sampleContract } from './contract.fixture'
 
 const printed = (contract = sampleContract()): string[] =>
   bindingsProblems(contract).map(formatProblem)
@@ -108,39 +108,16 @@ describe('bindingsProblems', () => {
       `${AT}["sample.devices-list"].source.platform: no platform action "devices.all"`,
     ])
   })
-  it('checks the action, the params, the anchor and the route of a flow event', () => {
+  it('resolves a derived anchor of a param only through its base derived', () => {
     const contract = sampleContract()
-    const flow = screenIn(contract, 'sample').flow
-
-    flow?.events.push({
-      on: 'sample.gone-button',
-      action: 'thing.updateThing',
-      params: { size: { value: 3 } },
-      outcomes: { success: { route: '/nowhere' }, failure: { route: '/sample/$key' } },
-    })
-
-    expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: flow.events[1].on: "sample.gone-button" is not a declared anchor',
-      'contract/screens/sample/$key.yaml:1: flow.events[1].params.size: "size" is not a parameter of "thing.updateThing"',
-      'contract/screens/sample/$key.yaml:1: flow.events[1].outcomes.success.route: "/nowhere" is the path of no binding',
-    ])
-  })
-  it('resolves a derived anchor of a param or a flow event only through its base derived', () => {
-    const contract = sampleContract()
-    const event = screenIn(contract, 'sample').flow?.events[0]
 
     anchorIn(contract, 'sample.save-button').binding = {
       action: 'thing.createThing',
       params: { title: 'sample.title-input.item' },
     }
-    Object.assign(event ?? {}, {
-      on: 'sample.save-button.confirm-button',
-      params: { title: 'sample.key-select.option' },
-    })
 
     expect(printed(contract)).toEqual([
       `${AT}["sample.save-button"].binding.params.title: "sample.title-input.item" is not a declared anchor`,
-      'contract/screens/sample/$key.yaml:1: flow.events[0].on: "sample.save-button.confirm-button" is not a declared anchor',
     ])
   })
 })

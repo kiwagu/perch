@@ -57,32 +57,60 @@ states:
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
 flow:
-  states:
-    - opening
-    - ready
-    - failed
-    - storage-blocked
   initial: opening
-  events:
-    - on: app-shell.locale-select
-      action: profile.updateLocale
-      from: ready
-      params:
-        locale: app-shell.locale-select
-      outcomes:
-        success:
-          state: ready
-          note: The page renders in the chosen language at once; the profile stores it while /me is open.
-    - on: app-shell.sign-out-here-button
-      action: platform.sign-out
-      from: failed
-      outcomes:
-        success:
-          route: /sign-in
-          note: The button waits while the sign-out runs; the page loads again on sign-in.
-        failure:
-          route: /sign-in
-          note: A failed sign-out also loads the sign-in page again; no code is shown.
+  states:
+    opening:
+      description: The local data is being opened; no screen is rendered.
+      on:
+        platform.opened:
+          target: ready
+        platform.open-failed:
+          target: failed
+        platform.storage-blocked:
+          target: storage-blocked
+    ready:
+      description: The frame with the open screen.
+      on:
+        app-shell.locale-select:
+          target: storing-locale
+    storing-locale:
+      description: The profile stores the chosen language.
+      invoke:
+        src: profile.updateLocale
+        input:
+          locale: app-shell.locale-select
+        onDone:
+          target: ready
+          description: The page renders in the chosen language at once; the profile stores it while /me is open.
+    failed:
+      description: The saved account's data could not be opened; no screen is rendered.
+      on:
+        app-shell.sign-out-here-button:
+          target: signing-out
+    signing-out:
+      description: The sign-out runs; the button waits meanwhile.
+      invoke:
+        src: platform.sign-out
+        onDone:
+          target: signed-out
+          description: The page loads again on sign-in.
+          actions:
+            - type: navigate
+              params:
+                to: /sign-in
+        onError:
+          target: signed-out
+          description: A failed sign-out also loads the sign-in page again; no code is shown.
+          actions:
+            - type: navigate
+              params:
+                to: /sign-in
+    storage-blocked:
+      description: The browser keeps no site data, so the app stops with a message.
+      type: final
+    signed-out:
+      description: The app has moved to /sign-in.
+      type: final
 wireframe: |-
   - banner:
     - text: Perch

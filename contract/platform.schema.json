@@ -82,6 +82,17 @@
       },
       "description": "The platform actions by name: `platform.<name>` in a binding."
     },
+    "events": {
+      "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "reserved": {
       "type": "array",
       "items": {

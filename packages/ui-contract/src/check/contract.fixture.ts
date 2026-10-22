@@ -3,7 +3,7 @@
  * on it, and a spec changes one thing and asserts the one problem that follows.
  */
 
-import type { AnchorDef, Screen } from '../files'
+import type { AnchorDef, Flow, FlowState, Screen } from '../files'
 
 import type { Contract } from './contract'
 
@@ -23,7 +23,7 @@ const SAMPLE_ANCHORS: Record<string, AnchorDef> = {
       { action: 'thing.updateThing', params: { id: 'sample.thing-item', title: { value: 'x' } } },
     ],
     roles: ['member'],
-    codes: ['saved'],
+    codes: ['saved', 'failed'],
   },
   'sample.list': {
     kind: 'list',
@@ -78,16 +78,41 @@ const SAMPLE: Screen = {
   entry: ['sample.page'],
   anchors: SAMPLE_ANCHORS,
   flow: {
-    states: ['editing'],
     initial: 'editing',
-    events: [
-      {
-        on: 'sample.save-button',
-        action: 'thing.updateThing',
-        params: { title: 'sample.title-input' },
-        outcomes: { success: { route: '/sample/$key' }, failure: { codes: ['failed'] } },
+    meta: { guards: { titleGiven: 'the title input holds a title' } },
+    states: {
+      editing: {
+        on: {
+          'sample.save-button': [
+            { guard: 'titleGiven', target: 'saving' },
+            {
+              actions: [
+                { type: 'show', params: { anchor: 'sample.save-button', codes: ['failed'] } },
+              ],
+            },
+          ],
+        },
       },
-    ],
+      saving: {
+        invoke: {
+          src: 'thing.updateThing',
+          input: { title: 'sample.title-input' },
+          onDone: {
+            target: 'editing',
+            actions: [
+              { type: 'show', params: { anchor: 'sample.save-button', codes: ['saved'] } },
+              { type: 'navigate', params: { to: '/sample/$key', search: { tab: 'a' } } },
+            ],
+          },
+          onError: {
+            target: 'editing',
+            actions: [
+              { type: 'show', params: { anchor: 'sample.save-button', codes: ['failed'] } },
+            ],
+          },
+        },
+      },
+    },
   },
 }
 
@@ -203,4 +228,26 @@ export function anchorIn(contract: Contract, anchor: string): AnchorDef {
   }
 
   return def
+}
+
+/** The flow of the sample screen, for a spec to change. */
+export function flowIn(contract: Contract): Flow {
+  const { flow } = screenIn(contract, 'sample')
+
+  if (flow === undefined) {
+    throw new Error('the sample screen has no flow')
+  }
+
+  return flow
+}
+
+/** The state `name` of the sample screen's flow, for a spec to change. */
+export function flowStateIn(contract: Contract, name: string): FlowState {
+  const state = flowIn(contract).states[name]
+
+  if (state === undefined) {
+    throw new Error(`no flow state ${name}`)
+  }
+
+  return state
 }

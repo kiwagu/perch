@@ -81,7 +81,9 @@ describe('loadScreens', () => {
       action: 'platform.sign-out',
       params: { forgetUnsent: { value: true } },
     })
-    expect(screens?.screens[0]?.flow?.events[0]?.params).toEqual({ title: 'sample.title-input' })
+    expect(screens?.screens[0]?.flow?.states['saving']?.invoke?.input).toEqual({
+      title: 'sample.title-input',
+    })
   })
   it('refuses a screen without a description of what it is for', () => {
     writeSample((screen) => {

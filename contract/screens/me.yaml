@@ -62,66 +62,141 @@ states:
   ready: user.profile.heading with the name, the email, the form with the name, the bio and Save, and the sign-out button.
   empty: "user.profile.status in empty: the account has no profile."
 flow:
-  states:
-    - editing
-    - saving
-    - confirming
   initial: editing
-  events:
-    - on: user.profile.save-button
-      from: editing
-      outcomes:
-        success:
-          codes:
-            - profile-saved
-          state: editing
-          note: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; with nothing changed it still says profile-saved. The page is in saving meanwhile; the error is cleared.
-        failure:
-          codes:
-            - name-required
-            - name-too-long
-            - bio-too-long
-            - failed
-          state: editing
-          note: The first refused write stops the save; user.profile.error shows its code until a save succeeds.
-    - on: user.profile.sign-out-button
-      action: platform.sign-out
-      guard: every change of this device reached the server
-      from: editing
-      outcomes:
-        success:
-          route: /sign-in
-        failure:
-          route: /sign-in
-          note: A failed sign-out also moves to the sign-in page; no code is shown.
-    - on: user.profile.sign-out-button
-      action: platform.sign-out
-      guard: this device holds changes the server has not received
-      from: editing
-      outcomes:
-        success:
-          codes:
-            - unsent-changes
-          state: confirming
-          note: "Nothing changes yet: user.profile.sign-out-dialog opens."
-    - on: user.profile.sign-out-dialog.confirm-button
-      action: platform.sign-out
-      from: confirming
-      params:
-        forgetUnsent:
-          value: true
-      outcomes:
-        success:
-          route: /sign-in
-          note: The changes not sent are lost.
-        failure:
-          route: /sign-in
-    - on: user.profile.sign-out-dialog.cancel-button
-      from: confirming
-      outcomes:
-        success:
-          state: editing
-          note: The dialog closes.
+  meta:
+    guards:
+      nameChanged: the name input differs from the stored name
+      bioChanged: the bio input differs from the stored bio
+      holdsUnsentChanges: this device holds changes the server has not received
+  states:
+    editing:
+      description: The form with the stored name and bio, or the drafts of them.
+      on:
+        user.profile.save-button:
+          - target: saving-name
+            guard: nameChanged
+          - target: saving-bio
+            guard: bioChanged
+          - description: With nothing changed, Save still says profile-saved.
+            actions:
+              - type: show
+                params:
+                  anchor: app-shell.notice-message
+                  codes:
+                    - profile-saved
+        user.profile.sign-out-button:
+          target: signing-out
+    saving-name:
+      description: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; the error is cleared, and Save is disabled meanwhile.
+      invoke:
+        src: profile.updateName
+        input:
+          name: user.profile.name-input
+        onDone:
+          - target: saving-bio
+            guard: bioChanged
+          - target: editing
+            actions:
+              - type: show
+                params:
+                  anchor: app-shell.notice-message
+                  codes:
+                    - profile-saved
+        onError:
+          target: editing
+          description: The first refused write stops the save; user.profile.error shows its code until a save succeeds.
+          actions:
+            - type: show
+              params:
+                anchor: user.profile.error
+                codes:
+                  - name-required
+                  - name-too-long
+                  - bio-too-long
+                  - failed
+    saving-bio:
+      description: profile.updateBio runs, after the name when that changed too; Save is disabled meanwhile.
+      invoke:
+        src: profile.updateBio
+        input:
+          bio: user.profile.bio-textarea
+        onDone:
+          target: editing
+          actions:
+            - type: show
+              params:
+                anchor: app-shell.notice-message
+                codes:
+                  - profile-saved
+        onError:
+          target: editing
+          description: user.profile.error shows the code until a save succeeds.
+          actions:
+            - type: show
+              params:
+                anchor: user.profile.error
+                codes:
+                  - name-required
+                  - name-too-long
+                  - bio-too-long
+                  - failed
+    signing-out:
+      description: The sign-out runs; it asks first when this device holds changes the server has not received.
+      invoke:
+        src: platform.sign-out
+        onDone:
+          - target: confirming
+            guard: holdsUnsentChanges
+            description: "Nothing changes yet: user.profile.sign-out-dialog opens."
+            actions:
+              - type: show
+                params:
+                  anchor: user.profile.sign-out-dialog
+                  codes:
+                    - unsent-changes
+          - target: signed-out
+            actions:
+              - type: navigate
+                params:
+                  to: /sign-in
+        onError:
+          target: signed-out
+          description: A failed sign-out also moves to the sign-in page; no code is shown.
+          actions:
+            - type: navigate
+              params:
+                to: /sign-in
+    confirming:
+      description: user.profile.sign-out-dialog asks whether to sign out and lose the changes not sent.
+      on:
+        user.profile.sign-out-dialog.confirm-button:
+          target: signing-out-anyway
+        user.profile.sign-out-dialog.cancel-button:
+          target: editing
+          description: The dialog closes.
+    signing-out-anyway:
+      description: The sign-out runs with forgetUnsent.
+      invoke:
+        src: platform.sign-out
+        input:
+          forgetUnsent:
+            value: true
+        onDone:
+          target: signed-out
+          description: The changes not sent are lost.
+          actions:
+            - type: navigate
+              params:
+                to: /sign-in
+        onError:
+          target: signed-out
+          actions:
+            - type: navigate
+              params:
+                to: /sign-in
+    signed-out:
+      description: The app has moved to /sign-in.
+      type: final
 wireframe: |-
   - heading /.+/ [level=1]
   - textbox "Email"

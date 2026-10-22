@@ -1,6 +1,6 @@
 # Anchor patterns
 
-One example per situation, each from a file of our kit or views. `testIdFor(base, suffix)`
+One example per situation, each from a file of our kit, views or machines. `testIdFor(base, suffix)`
 from `@workspace/ui-contract/anchors` returns `<base>.<suffix>`; it is the only way to build a
 derived anchor. Every anchor below is declared in its screen file first.
 
@@ -254,3 +254,91 @@ render={
 `-self` ignores the element alone; without it the marker covers the element and everything
 inside. Among JSX children the marker is the only content of a comment container:
 `{/* ui-contract-ignore: <reason> */}`.
+
+## 12. A machine from the flow
+
+A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
+that config with the implementations added. From `contract/screens/sign-in.yaml` (lines
+85-113), the state that signs in:
+
+```yaml
+signing-in:
+  invoke:
+    src: platform.sign-in
+    input:
+      email: user.sign-in.email-input
+      password: user.sign-in.password-input
+    onDone:
+      target: done
+      actions:
+        - type: show
+          params:
+            anchor: app-shell.notice-message
+            codes:
+              - welcome
+        - type: navigate
+          params:
+            to: /me
+    onError:
+      target: sign-in
+      actions:
+        - type: show
+          params:
+            anchor: user.sign-in.error
+            codes:
+              - invalid-credentials
+              - rate-limited
+              - other-account
+              - failed
+```
+
+And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 72-121): an actor
+per `invoke.src`, the two effects, the same states, events, targets and effects; what the
+app adds is its own (the `error` in context, `clearError`, the `input` built from the
+submit event):
+
+```ts
+return setup({
+  types: { context: {} as SignInContext, events: {} as SignInEvent, emitted: {} as SignInEmitted },
+  actors: {
+    'platform.sign-in': attempt(service, 'sign-in'),
+    'platform.sign-up': attempt(service, 'sign-up'),
+  },
+  actions: {
+    show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
+      if (params.anchor === SIGN_IN_ERROR) {
+        enqueue.assign({ error: failureOf(event) })
+      } else {
+        enqueue.emit({ type: 'show', ...params })
+      }
+    }),
+    navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
+    clearError: assign({ error: undefined }),
+  },
+}).createMachine({
+  // ...
+  'signing-in': {
+    entry: 'clearError',
+    invoke: {
+      src: 'platform.sign-in',
+      input: formInput,
+      onDone: {
+        target: 'done',
+        actions: [
+          { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
+          { type: 'navigate', params: { to: '/me' } },
+        ],
+      },
+      // onError: back to 'sign-in', showing the codes on user.sign-in.error
+    },
+  },
+})
+```
+
+The events are the anchors the user acts on (`{ type: 'user.sign-in.submit-button', form }`),
+and the mode is the state (`sign-in`, `sign-up`), not context. An actor resolves with its
+result and rejects with the failure, so `onDone` and `onError` are the action's success and
+failure. The page sends the events and does what the machine emits: the sign-in container
+(`presentation/pages/sign-in/sign-in.container.tsx`, lines 50-62) notifies the welcome on
+`show` and moves on `navigate`. `apps/web/src/platform/flows-machine.spec.ts` holds the
+machine's config to the flow; a new app machine for a screen joins its `APP_MACHINES`.

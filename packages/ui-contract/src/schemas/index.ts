@@ -7,6 +7,7 @@ export {
   anchorDefSchema,
   bindingRefSchema,
   bindingSchema,
+  effectSchema,
   flowSchema,
   paramValueSchema,
   platformFileSchema,
@@ -14,4 +15,5 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
+  transitionSchema,
 } from './screens.schema'

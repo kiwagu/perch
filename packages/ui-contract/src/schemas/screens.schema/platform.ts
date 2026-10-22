@@ -1,4 +1,7 @@
-/** What the platform offers every screen: its actions, its reserved anchors, its status line. */
+/**
+ * What the platform offers every screen: its actions, the events it raises in a flow, its
+ * reserved anchors, its status line.
+ */
 
 import { z } from '@workspace/zod'
 
@@ -6,6 +9,7 @@ import {
   anchorSchema,
   baseAnchorSchema,
   codeSchema,
+  kebabNameSchema,
   roleSchema,
   stateSchema,
 } from '../../names.schema'
@@ -36,6 +40,12 @@ export const platformSchema = z
     actions: z
       .record(platformActionNameSchema, platformActionSchema)
       .describe('The platform actions by name: `platform.<name>` in a binding.'),
+    events: z
+      .record(kebabNameSchema, z.string())
+      .optional()
+      .describe(
+        'The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.',
+      ),
     reserved: z
       .array(baseAnchorSchema)
       .describe('The anchors the shell owns; a feature never declares them.'),
