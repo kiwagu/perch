@@ -1,6 +1,8 @@
 # dependencies and build output
 node_modules/
 dist/
+# the dev stand's build (apps/web), apart from the e2e stand's dist/
+dist-dev/
 # the UI manifest `bun run contract:manifest` writes at the root
 ui-manifest/
 .turbo/

@@ -1,5 +1,4 @@
-import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -14,90 +13,49 @@ const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
   fileURLToPath(new URL(`../../${path}`, import.meta.url)),
 )
 
-const MANIFEST_PATH = '/ui-manifest/'
-
-/** What `ui-contract manifest --out` writes. */
-const MANIFEST_FILES = new Set(['manifest.json', 'manifest.schema.json', 'model.schema.json'])
-
 // `bun run build` writes the UI manifest into dist/ui-manifest with `ui-contract manifest`
-// once Vite is done. The dev server writes it into its cache folder when it starts and after
-// every change of a contract file or of a scenario, and serves it under /ui-manifest/; a
-// change that fails the contract check keeps the last manifest and logs why.
-function uiManifestInDev(): Plugin {
+// once Vite is done. The development watcher empties dist/ on its first build, so there the
+// same command runs after every build, and a change of a contract file or of a scenario (the
+// folders of the contract and of the scenario files are watched, at any depth) rebuilds.
+function uiManifestOnWatch(): Plugin {
+  let root = ''
+  let outDir = ''
+
   return {
-    name: 'perch:ui-manifest-in-dev',
-    apply: 'serve',
-    configureServer(server) {
-      const out = resolve(server.config.cacheDir, 'ui-manifest')
-      // One run at a time: a change during a run asks for one more run after it.
-      let running = false
-      let again = false
-      const write = (): void => {
-        if (running) {
-          again = true
-
-          return
+    name: 'perch:ui-manifest-on-watch',
+    apply: 'build',
+    configResolved(config) {
+      root = config.root
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    buildStart() {
+      if (this.meta.watchMode) {
+        for (const file of MANIFEST_INPUTS) {
+          this.addWatchFile(file)
         }
-
-        running = true
-
-        const run = spawn('ui-contract', ['manifest', '--out', out], {
-          cwd: server.config.root,
-          stdio: ['ignore', 'ignore', 'pipe'],
-        })
-        let errors = ''
-
-        run.stderr.on('data', (chunk: Buffer) => {
-          errors += chunk.toString()
-        })
-        run.on('close', (code) => {
-          if (code !== 0) {
-            server.config.logger.error(`ui-contract manifest failed: ${errors.trim()}`)
-          }
-
-          running = false
-
-          if (again) {
-            again = false
-            write()
-          }
-        })
+      }
+    },
+    writeBundle() {
+      if (!this.meta.watchMode) {
+        return
       }
 
-      write()
-      server.watcher.add(MANIFEST_INPUTS)
-      server.watcher.on('all', (_event, file) => {
-        if (MANIFEST_INPUTS.some((input) => file.startsWith(input))) {
-          write()
-        }
+      const out = join(outDir, 'ui-manifest')
+      const run = spawnSync('ui-contract', ['manifest', '--out', out], {
+        cwd: root,
+        encoding: 'utf8',
       })
-      // Only the files the manifest command writes; anything else under the path, or a file
-      // not written yet, is a 404, never the app's index.html.
-      server.middlewares.use(MANIFEST_PATH, (request, response) => {
-        const name = (request.url ?? '').split('?')[0]?.replace(/^\//, '') ?? ''
-        const file = join(out, name)
 
-        response.setHeader('Cache-Control', 'no-store')
-
-        if (!MANIFEST_FILES.has(name) || !existsSync(file) || !statSync(file).isFile()) {
-          response.statusCode = 404
-          response.end()
-
-          return
-        }
-
-        response.setHeader('Content-Type', 'application/json')
-        response.end(readFileSync(file))
-      })
+      if (run.status !== 0) {
+        this.error(`ui-contract manifest failed: ${run.error?.message ?? run.stderr}`)
+      }
     },
   }
 }
 
-const frontPort = process.env['FRONT_PORT']
-
 export default defineConfig(({ mode }) => ({
-  plugins: [surqlPlugin(), wasm(), react(), tailwindcss(), uiManifestInDev()],
-  // The page helper `window.__perch.ui` (src/platform/ui-contract.ts): in the dev server,
+  plugins: [surqlPlugin(), wasm(), react(), tailwindcss(), uiManifestOnWatch()],
+  // The page helper `window.__perch.ui` (src/platform/ui-contract.ts): in development builds,
   // and in a production build made with PERCH_UI_HOOKS=1 (the e2e launcher's).
   define: {
     __PERCH_UI_HOOKS__: JSON.stringify(
@@ -113,20 +71,12 @@ export default defineConfig(({ mode }) => ({
       ...(mode === 'test' ? [] : [{ find: /^loro-crdt$/, replacement: 'loro-crdt/bundler' }]),
     ],
   },
-  // WASM packages are served as they are: pre-bundling breaks their initialisation order,
-  // and they initialise with top-level await.
-  optimizeDeps: { exclude: ['@surrealdb/wasm', '@surrealdb/wasm-native', 'loro-crdt'] },
-  build: { target: 'esnext' },
-  worker: { format: 'es' },
-  // `bun run dev`: the dev server, opened through the stand's Caddy front
-  // (https://localhost:<FRONT_PORT>), which hands the HMR socket to it as well. Vite restarts
-  // it when this file changes.
-  server: {
-    host: '127.0.0.1',
-    port: Number(process.env['WEB_DEV_PORT'] ?? 5180),
-    strictPort: true,
-    ...(frontPort === undefined
-      ? {}
-      : { hmr: { protocol: 'wss', host: 'localhost', clientPort: Number(frontPort) } }),
+  // `bun run dev` rebuilds in development mode on every change (`vite build --watch`, into
+  // dist-dev/): readable output with source maps, served by the dev stand's Caddy front.
+  build: {
+    target: 'esnext',
+    sourcemap: mode === 'development',
+    minify: mode !== 'development',
   },
+  worker: { format: 'es' },
 }))

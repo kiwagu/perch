@@ -108,6 +108,7 @@ const literalTranslationKeys = {
 export const ignores = {
   ignores: [
     '**/dist/**',
+    '**/dist-dev/**',
     '**/node_modules/**',
     '**/coverage/**',
     '**/playwright-report/**',

@@ -1,10 +1,10 @@
-# Same-origin front of a local stand: the web app and, under /backend/, the gateway, WebSocket
-# upgrades included. The e2e stand serves the build (apps/web/dist, read-only); the dev stand
-# proxies to the Vite dev server (WEB_SOURCE=dev, WEB_DEV_PORT). Host networking lets Caddy reach
-# both on 127.0.0.1; the site binds 127.0.0.1 only. The mcproc apps caddy-dev and caddy-e2e each
-# run this one service with `compose run --name <project>-caddy-<stand>` under the checkout's
-# compose project, with the stand's ports in FRONT_PORT and GATEWAY_PORT and the manifest switch
-# in PERCH_UI_MANIFEST, so two stands, or two checkouts, never share a container.
+# Same-origin front of a local stand: the web app's build (read-only: apps/web/dist for the e2e
+# stand, apps/web/dist-dev, the dev watcher's, for the dev stand, by WEB_DIST) and, under
+# /backend/, the gateway, WebSocket upgrades included. Host networking lets Caddy reach the
+# gateway on 127.0.0.1; the site binds 127.0.0.1 only. The mcproc apps caddy-dev and caddy-e2e
+# each run this one service with `compose run --name <project>-caddy-<stand>` under the
+# checkout's compose project, with the stand's ports in FRONT_PORT and GATEWAY_PORT and the
+# manifest switch in PERCH_UI_MANIFEST, so two stands, or two checkouts, never share a container.
 services:
   caddy:
     image: caddy:2.10.2-alpine
@@ -13,9 +13,7 @@ services:
       - FRONT_PORT
       - GATEWAY_PORT
       - PERCH_UI_MANIFEST
-      - WEB_SOURCE
-      - WEB_DEV_PORT
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
-      - ../../apps/web/dist:/srv/web:ro
+      - ../../apps/web/${WEB_DIST:-dist}:/srv/web:ro

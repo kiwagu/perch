@@ -249,7 +249,7 @@ for Bun.
   root, gitignored, or into `<dir>` relative to the working directory, which may be any
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into
-  `apps/web/dist/ui-manifest/`.
+  `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the activities and the

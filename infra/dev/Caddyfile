@@ -3,17 +3,30 @@
 	auto_https off
 }
 
-# What a site serves as the web app, chosen by WEB_SOURCE. `build` (the default): the build in
-# /srv/web, a single-page app; any path that is not a file gets index.html, and the route keeps
-# the written order, so the headers see the path after try_files and a deep link served as
-# index.html is revalidated like index.html itself. `dev`: the Vite dev server on
-# 127.0.0.1:WEB_DEV_PORT, the HMR socket included, which also serves the UI manifest.
-(web-build) {
+# One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
+# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT), and
+# PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there).
+https://localhost:{$FRONT_PORT} {
+	bind 127.0.0.1
+	tls /certs/localhost.pem /certs/localhost-key.pem
+	root * /srv/web
+	encode zstd gzip
+
+	@shell path / /index.html
+
+	# The UI manifest the build ships, for tests and agents; PERCH_UI_MANIFEST=0 switches it off.
+	@manifestOff expression `"{$PERCH_UI_MANIFEST:1}" == "0"`
 	handle /ui-manifest/* {
 		header Cache-Control "no-store"
 		respond @manifestOff 404
 		file_server
 	}
+	handle_path /backend/* {
+		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
+	}
+	# The web app's build, a single-page app: any path that is not a file gets index.html.
+	# The route keeps the written order, so the headers see the path after try_files and a
+	# deep link served as index.html is revalidated like index.html itself.
 	handle {
 		route {
 			try_files {path} /index.html
@@ -22,34 +35,4 @@
 			file_server
 		}
 	}
-}
-
-(web-dev) {
-	handle /ui-manifest/* {
-		respond @manifestOff 404
-		reverse_proxy 127.0.0.1:{$WEB_DEV_PORT:5180}
-	}
-	handle {
-		reverse_proxy 127.0.0.1:{$WEB_DEV_PORT:5180}
-	}
-}
-
-# One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
-# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT, and for the
-# dev stand WEB_SOURCE=dev with WEB_DEV_PORT), and PERCH_UI_MANIFEST (1, the default, serves
-# /ui-manifest/; 0 answers 404 there).
-https://localhost:{$FRONT_PORT} {
-	bind 127.0.0.1
-	tls /certs/localhost.pem /certs/localhost-key.pem
-	root * /srv/web
-	encode zstd gzip
-
-	@shell path / /index.html
-	# The UI manifest, for tests and agents; PERCH_UI_MANIFEST=0 switches it off.
-	@manifestOff expression `"{$PERCH_UI_MANIFEST:1}" == "0"`
-
-	handle_path /backend/* {
-		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
-	}
-	import web-{$WEB_SOURCE:build}
 }

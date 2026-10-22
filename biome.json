@@ -10,6 +10,7 @@
       "**",
       "!.agents",
       "!**/dist",
+      "!**/dist-dev",
       "!**/*.gen.ts",
       "!**/*.surql.d.ts",
       "!**/pages.model.json",

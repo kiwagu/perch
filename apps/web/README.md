@@ -141,7 +141,7 @@ modeling stage.
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for organisations and for devices,
   notices the shell shows, the language state and the app-wide catalogs. `ui-contract.ts` is
-  the page helper of the dev server and the e2e build: `main.tsx` installs it when the build
+  the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
   lists every `data-testid` the page renders now with its kind, `data-state`, `data-code`,
@@ -196,13 +196,12 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
 
 ## Commands
 
-- `bun run dev`: the Vite dev server on 127.0.0.1 (`WEB_DEV_PORT`, default 5180), opened
-  through the dev stand's Caddy front (`FRONT_PORT` points the HMR client at it): hot module
-  replacement on an edit, a restart of its own on a change of `vite.config.ts`. It serves the
-  UI manifest at `/ui-manifest/` from its cache folder, written by `ui-contract manifest` when
-  it starts and again on a change under `contract/` or `tests/e2e/scenarios/`; a change that
-  fails the contract check keeps the last manifest and logs why. It writes nothing into
-  `dist/`.
+- `bun run dev`: the build watcher, `vite build --watch --mode development --outDir dist-dev`:
+  rewrites `dist-dev/` (source maps, no minifying) on every change, then the UI manifest into
+  `dist-dev/ui-manifest/`
+  (`ui-contract manifest`; a change of a file under `contract/` or `tests/e2e/scenarios/`
+  rebuilds too). There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
   contract check passes, with its schema and the model's beside it, which the stands serve at

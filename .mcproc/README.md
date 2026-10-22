@@ -19,23 +19,22 @@ of the checkout it runs in.
   (`exp_backoff_restart_delay`), and the next change brings it back. Both sign tokens with the
   manifest's stand-only key, `stand_jwt_key` in `vars`, as `GATEWAY_JWT_KEY`.
 
-- `web` (profile `dev`): the web application's Vite dev server on 127.0.0.1:5180, opened
-  through `caddy-dev`, which hands it the HMR socket too: an edit reaches the open page as a hot
-  update, an edit of `apps/web/vite.config.ts` restarts the server by itself, and pm2 restarts
-  it on a change of `bun.lock` or of the surql plugin the config imports. It serves the UI
-  manifest, rebuilt on a change under `contract/` or `tests/e2e/scenarios/`. Each signed-in
-  identity's database runs in the browser; signing up or in and syncing go through the gateway
-  under `/backend/` of the same front.
+- `web` (profile `dev`, kind `build`): the web application's build watcher, `vite build
+  --watch` in development mode. It listens on no port: every source change rewrites
+  `apps/web/dist-dev` in 1-3 s (`mcproc wait web --until log:built` after an edit), and a reload
+  of the page shows it. The watcher reads its config only when it starts, so pm2 restarts it on
+  a change of `vite.config.ts` (and the surql plugin it imports), `package.json` or `bun.lock`. Each signed-in identity's database runs in the browser; signing up or in
+  and syncing go through the gateway under `/backend/` of the same front.
 
 - `caddy-dev` (profile `dev`) and `caddy-e2e` (profile `e2e`): Caddy in docker on
-  https://localhost:5443 and https://localhost:5493, the web app and, under `/backend/`, the
-  gateway on one origin (`infra/dev/`). Open the stands there. `caddy-dev` proxies to the dev
-  server (`WEB_SOURCE=dev`), starts after `web` and `gateway` (start order only), answers 502
-  until the dev server listens, and pm2 restarts it on a change of the Caddyfile or the compose
-  file. `caddy-e2e` serves the production build in `apps/web/dist`, which only the e2e launcher
-  writes: the `e2e` profile has no web app of its own; `bun run test:e2e` writes the build, then
-  starts the profile with `--reload` (apps already online restart, so a run never meets a stale
-  stand) and waits for it.
+  https://localhost:5443 and https://localhost:5493, a web build and, under `/backend/`, the
+  gateway on one origin (`infra/dev/`). Open the stands there. `caddy-dev` serves the
+  watcher's `apps/web/dist-dev`, starts after `web` and `gateway` (start order only), answers
+  404 until the watcher's first build, and pm2 restarts it on a change of the Caddyfile or the
+  compose file. `caddy-e2e` serves `apps/web/dist`, which only the e2e launcher writes, so the
+  two stands never overwrite each other's build: the `e2e` profile has no web app of its own;
+  `bun run test:e2e` writes the production build, then starts the profile with `--reload` (apps
+  already online restart, so a run never meets a stale stand) and waits for it.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
 no persistence. Apps in containers (SurrealDB, Caddy) declare only a url: their ports are held
