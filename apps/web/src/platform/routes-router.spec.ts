@@ -4,7 +4,8 @@
  * schema accepts, matches the binding's route again with the same parameters, and its search
  * reads back with the schema's defaults applied. The parameters the binding declares are the
  * ones its path has. So a route is a state address: the same path with the same search
- * reaches the same state after a reload.
+ * reaches the same state after a reload. Every sampled search satisfies the binding's schema;
+ * a parameter the sampler builds no value of skips the binding's search case, named.
  */
 
 import { join } from 'node:path'
@@ -92,10 +93,76 @@ function numberWithin(parameter: Parameter): number {
   )
 }
 
+/** Plain characters, `^draft$` (anchors optional): the value is the pattern itself. */
+const LITERAL = /^\^?([\w-]+)\$?$/
+
+/**
+ * One character class repeated, `^[a-z]+$` or `^\d{3}$` (anchors optional): `\d` or `\w`, or
+ * the first character of a class that is not negated, then the quantifier and its bounds.
+ */
+const REPEATED = /^\^?(?:\\([dw])|\[([^\]^\\])[^\]]*\])(\+|\*|\{(\d+)(,(\d*))?\})\$?$/
+
+/** A character of each shorthand class. */
+const SHORTHAND: Readonly<Record<string, string>> = { d: '0', w: 'a' }
+
+/** The repetitions a quantifier allows: `+`, `*`, `{n}`, `{n,}` or `{n,m}`. */
+function repetitions(quantifier: string, fewest = '0', range?: string, most = ''): number[] {
+  if (quantifier === '+') {
+    return [1, Number.POSITIVE_INFINITY]
+  }
+
+  if (range === undefined) {
+    return quantifier === '*' ? [0, Number.POSITIVE_INFINITY] : [Number(fewest), Number(fewest)]
+  }
+
+  return [Number(fewest), most === '' ? Number.POSITIVE_INFINITY : Number(most)]
+}
+
+/**
+ * The shortest length a string takes within `[fewest, most]` and the parameter's `minLength`
+ * and `maxLength`: at least 1 unless `minLength` allows 0.
+ */
+function lengthWithin(parameter: Parameter, fewest = 0, most = Number.POSITIVE_INFINITY): number {
+  return Math.min(
+    Math.max(fewest, parameter.minLength ?? 1),
+    most,
+    parameter.maxLength ?? Number.POSITIVE_INFINITY,
+  )
+}
+
+/**
+ * A string of the parameter's lengths that its `pattern` accepts, when the pattern is plain
+ * characters or one class repeated; none for any other pattern.
+ */
+function stringOf(parameter: Parameter): string | undefined {
+  const { pattern } = parameter
+
+  if (pattern === undefined) {
+    return 'a'.repeat(lengthWithin(parameter))
+  }
+
+  const literal = LITERAL.exec(pattern)?.[1]
+
+  if (literal !== undefined) {
+    return literal
+  }
+
+  const [, shorthand, first, quantifier = '', fewest, range, most] = REPEATED.exec(pattern) ?? []
+  const character = shorthand === undefined ? first : SHORTHAND[shorthand]
+
+  if (character === undefined) {
+    return undefined
+  }
+
+  const [low, high] = repetitions(quantifier, fewest, range, most)
+
+  return character.repeat(lengthWithin(parameter, low, high))
+}
+
 /** A value of a parameter's type, the first of its `enum` when it has one. */
-function sampleOf(parameter: Parameter): Value {
-  const byType: Readonly<Record<Parameter['type'], Value>> = {
-    string: PARAM_SAMPLE,
+function sampleOf(parameter: Parameter): Value | undefined {
+  const byType: Readonly<Record<Parameter['type'], Value | undefined>> = {
+    string: stringOf(parameter),
     integer: numberWithin(parameter),
     number: numberWithin(parameter),
     boolean: true,
@@ -104,24 +171,42 @@ function sampleOf(parameter: Parameter): Value {
   return parameter.enum?.[0] ?? byType[parameter.type]
 }
 
-/** The least search a schema accepts: a value per required parameter without a default. */
-function minimalSearch(search: Search): Record<string, Value> {
+/**
+ * The least search a schema accepts, a value per required parameter without a default, each
+ * one checked against its own schema; or, when the sampler builds no value a parameter's
+ * schema accepts, which parameter and why.
+ */
+function minimalSearch(
+  search: Search,
+): { readonly search: Record<string, Value> } | { readonly unsampled: string } {
   const required = new Set(search?.required ?? [])
-
-  return Object.fromEntries(
-    Object.entries(search?.properties ?? {})
-      .filter(([name, parameter]) => required.has(name) && parameter.default === undefined)
-      .map(([name, parameter]) => [name, sampleOf(parameter)]),
+  const needed = Object.entries(search?.properties ?? {}).filter(
+    ([name, parameter]) => required.has(name) && parameter.default === undefined,
   )
+  const sent: Record<string, Value> = {}
+
+  for (const [name, parameter] of needed) {
+    const value = sampleOf(parameter)
+
+    if (value === undefined || validateAgainst(name, parameter, value).length > 0) {
+      const of = parameter.pattern === undefined ? 'its schema' : `the pattern ${parameter.pattern}`
+
+      return { unsampled: `no value of \`${name}\` derived for ${of}` }
+    }
+
+    sent[name] = value
+  }
+
+  return { search: sent }
 }
 
-/** The search a route reads from the least one: the schema's defaults and the values sent. */
-function searchRead(search: Search): Record<string, Value> {
+/** The search a route reads from the one sent: the schema's defaults, then the values sent. */
+function searchRead(search: Search, sent: Record<string, Value>): Record<string, Value> {
   const defaults = Object.entries(search?.properties ?? {}).flatMap(([name, parameter]) =>
     parameter.default === undefined ? [] : [[name, parameter.default] as const],
   )
 
-  return { ...Object.fromEntries(defaults), ...minimalSearch(search) }
+  return { ...Object.fromEntries(defaults), ...sent }
 }
 
 /** The parameters of a match, without the splat's older name when it repeats `_splat`. */
@@ -139,6 +224,7 @@ interface Matched {
   readonly fullPath: string
   readonly params: Readonly<Record<string, unknown>>
   readonly search: Readonly<Record<string, unknown>>
+  readonly searchError: unknown
 }
 
 /** What the router answers for a location it built. */
@@ -149,12 +235,15 @@ interface Reached {
   readonly fullPath: string | undefined
   readonly params: Record<string, unknown>
   readonly search: Record<string, unknown>
+  /** Why the route refused the search, if it did. */
+  readonly searchError?: unknown
 }
 
 /**
  * Where the router takes a path: the location it builds with the parameters and the search,
  * then the deepest route it matches for that location, its search read back from the URL's
- * text the way a reload reads it. A search the route refuses throws.
+ * text the way a reload reads it. A refused search is reported, not thrown, so the path
+ * checks do not depend on it.
  */
 function visit(
   router: ReturnType<typeof routerOf>,
@@ -164,9 +253,7 @@ function visit(
 ): Reached {
   const location = router.buildLocation({ to: path, params, search })
   const match: Matched | undefined = router
-    .matchRoutes(location.pathname, router.options.parseSearch(location.searchStr), {
-      throwOnError: true,
-    })
+    .matchRoutes(location.pathname, router.options.parseSearch(location.searchStr))
     .at(-1)
 
   return {
@@ -175,6 +262,7 @@ function visit(
     fullPath: match?.fullPath,
     params: paramsOf(match?.params ?? {}),
     search: { ...match?.search },
+    searchError: match?.searchError,
   }
 }
 
@@ -188,13 +276,42 @@ function parameterNames(
   binding: Binding,
 ): { path: string[]; declared: string[]; reported: string[] } {
   const [built = {}] = paramForms(binding.path)
-  const reached = visit(router, binding.path, built, minimalSearch(binding.search))
+  const reached = visit(router, binding.path, built, {})
 
   return {
     path: Object.keys(built).sort(),
     declared: Object.keys(binding.params?.properties ?? {}).sort(),
     reported: Object.keys(reached.params).sort(),
   }
+}
+
+/**
+ * The search case of a binding: the least search its schema accepts satisfies that schema
+ * (Ajv), the router takes it without refusal and reads it back with the defaults applied. A
+ * parameter the sampler builds no value of skips the case, the note naming it.
+ */
+function searchCase(
+  router: ReturnType<typeof routerOf>,
+  binding: Binding,
+  skip: (note: string) => never,
+): void {
+  const sample = minimalSearch(binding.search)
+
+  if ('unsampled' in sample) {
+    skip(`${binding.path}: ${sample.unsampled}`)
+  }
+
+  const [present = {}] = paramForms(binding.path)
+  const reached = visit(router, binding.path, present, sample.search)
+  const problems = binding.search
+    ? validateAgainst(binding.path, binding.search, sample.search)
+    : []
+
+  expect(problems.map(formatProblem), `the search sampled for ${binding.path}`).toEqual([])
+  expect(reached.searchError, `the refusal of ${reached.searchStr}`).toBeUndefined()
+  expect(reached.search, `the search ${binding.path} reads back`).toEqual(
+    searchRead(binding.search, sample.search),
+  )
 }
 
 const { screens, problems } = loadScreens(ROOT)
@@ -226,6 +343,17 @@ const SampleModule = defineModule({
         between: z.int().min(-5).max(-1),
         around: z.int().min(-3).max(3),
         above: z.number().min(2.5),
+      }),
+    },
+    {
+      path: '/find',
+      page: 'Page',
+      search: z.object({
+        q: z.string().max(5),
+        name: z.string().min(3),
+        slug: z.string().regex(/^[a-z]+$/),
+        code: z.string().regex(/^\d{3}$/),
+        kind: z.string().regex(/^draft$/),
       }),
     },
   ],
@@ -273,7 +401,7 @@ describe('the round trip', () => {
     ])
   })
 
-  it('sends a value per required parameter and reads the defaults back', () => {
+  it('sends a value per required parameter and reads the defaults back', ({ skip }) => {
     const list = bindingSchema.parse({
       path: '/list',
       roles: ['identity'],
@@ -288,15 +416,15 @@ describe('the round trip', () => {
       },
     })
 
-    expect(minimalSearch(list.search)).toEqual({ page: 1 })
-    expect(visit(sampleRouter, list.path, {}, minimalSearch(list.search))).toMatchObject({
+    expect(minimalSearch(list.search)).toEqual({ search: { page: 1 } })
+    expect(visit(sampleRouter, list.path, {}, { page: 1 })).toMatchObject({
       searchStr: '?page=1',
-      search: searchRead(list.search),
+      search: { tab: 'a', page: 1 },
     })
-    expect(searchRead(list.search)).toEqual({ tab: 'a', page: 1 })
+    searchCase(sampleRouter, list, skip)
   })
 
-  it('sends a number within the bounds of its schema', () => {
+  it('sends a number within the bounds of its schema', ({ skip }) => {
     const range = bindingSchema.parse({
       path: '/range',
       roles: ['identity'],
@@ -312,11 +440,57 @@ describe('the round trip', () => {
         additionalProperties: false,
       },
     })
-    const search = minimalSearch(range.search)
 
-    expect(search).toEqual({ below: -2, between: -1, around: 0, above: 2.5 })
-    expect(validateAgainst('/range', range.search ?? {}, search).map(formatProblem)).toEqual([])
-    expect(visit(sampleRouter, range.path, {}, search).search).toEqual(search)
+    expect(minimalSearch(range.search)).toEqual({
+      search: { below: -2, between: -1, around: 0, above: 2.5 },
+    })
+    searchCase(sampleRouter, range, skip)
+  })
+
+  it('sends a string within the lengths and the pattern of its schema', ({ skip }) => {
+    const find = bindingSchema.parse({
+      path: '/find',
+      roles: ['identity'],
+      search: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', maxLength: 5 },
+          name: { type: 'string', minLength: 3 },
+          slug: { type: 'string', pattern: '^[a-z]+$' },
+          code: { type: 'string', pattern: '^\\d{3}$' },
+          kind: { type: 'string', pattern: '^draft$' },
+        },
+        required: ['q', 'name', 'slug', 'code', 'kind'],
+        additionalProperties: false,
+      },
+    })
+
+    expect(minimalSearch(find.search)).toEqual({
+      search: { q: 'a', name: 'aaa', slug: 'a', code: '000', kind: 'draft' },
+    })
+    searchCase(sampleRouter, find, skip)
+  })
+
+  /** A pattern beyond plain characters and one repeated class. */
+  const odd = bindingSchema.parse({
+    path: '/odd',
+    roles: ['identity'],
+    search: {
+      type: 'object',
+      properties: { q: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
+      required: ['q'],
+      additionalProperties: false,
+    },
+  })
+
+  it('names the parameter and the pattern it derives no value of', () => {
+    expect(minimalSearch(odd.search)).toEqual({
+      unsampled: 'no value of `q` derived for the pattern ^[a-z]+-\\d+$',
+    })
+  })
+
+  it('skips the search case of a pattern it derives no value of', ({ skip }) => {
+    searchCase(sampleRouter, odd, skip)
   })
 
   it('tells a path parameter the binding forgot or invented', () => {
@@ -373,9 +547,9 @@ describe('the bindings of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.each(bindings)('%s matches its route again with its parameters', (path, binding) => {
+  it.each(bindings)('%s matches its route again with its parameters', (path) => {
     for (const params of paramForms(path)) {
-      const reached = visit(router, path, params, minimalSearch(binding.search))
+      const reached = visit(router, path, params, {})
 
       expect(trimPathRight(reached.fullPath ?? ''), `the route ${reached.pathname} matches`).toBe(
         trimPathRight(path),
@@ -394,11 +568,10 @@ describe('the bindings of the contract on the router', () => {
     )
   })
 
-  it.each(bindings)('%s builds its search and reads it back with the defaults', (path, binding) => {
-    const [present = {}] = paramForms(path)
-
-    expect(visit(router, path, present, minimalSearch(binding.search)).search).toEqual(
-      searchRead(binding.search),
-    )
-  })
+  it.for(bindings)(
+    '%s builds its search and reads it back with the defaults',
+    ([, binding], { skip }) => {
+      searchCase(router, binding, skip)
+    },
+  )
 })
