@@ -2,16 +2,7 @@
 id: sample
 title: One thing, edited
 flag: null
-bindings:
-  - path: /sample/$key
-    guard: authenticated
-    roles: [ member ]
-    params:
-      type: object
-      properties:
-        key:
-          type: string
-      additionalProperties: false
+bindings: [ { path: /sample/$key, guard: authenticated, roles: [ member ], params: { type: object, properties: { key: { type: string } }, additionalProperties: false } } ]
 entry: [ sample.page, sample.title-input ]
 anchors:
   sample.page:
