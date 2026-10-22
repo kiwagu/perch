@@ -154,8 +154,37 @@ visitor; `authenticated`: only a signed-in account), the `roles` it serves, `par
 is a TanStack Router path in the router's own syntax, `params` are its path parameters and
 `search` its search parameters, and a route is a state address: the same path with the same
 search reaches the same state after a reload. The application's router builds and matches
-every binding (`apps/web/src/platform/routes-router.spec.ts`), and the module routes equal
-the bindings (`routes-contract.spec.ts` beside it).
+every binding (`apps/web/src/platform/routes-router.spec.ts`, a parameter's first example
+its sample), and the module routes equal the bindings (`routes-contract.spec.ts` beside it).
+
+A parameter of `params` or `search` may carry `examples`: fake values it accepts, of its
+type (`key: { type: string, examples: [ thg_01hzx9k2 ] }`); `contract:check` holds each one
+to the parameter's schema. `bun run contract:routes` (`ui-contract routes [--json]`) prints
+the routes of the screen files in four sections: the table (path, screen, guard, roles,
+history, params, search, file), one example link per binding, where each route is reached
+from (the anchors linking to it with `binding.route`, the screens whose flow navigates to
+it, the activity states at that address) and the tree as the router holds it, `__root
+(app-shell)` with each route under it, a route under the binding whose path is the longest
+proper prefix of its own on whole segments. The example link is built from the binding:
+
+- the path: each `$param` at its parameter's first example, else its first `enum` value,
+  else a sample of its type (its name, 1, or true); a `{-$param}` at its first example, or
+  its segment left out without one; a splat `$` left out with its segment (no parameter can
+  be named `_splat`, so it takes no example); each value through `encodeURIComponent`;
+- the search: every key in its declared order at its `default`, else its first `enum`
+  value, else its first example, a key with none left out; written as TanStack Router's
+  default `stringifySearch` writes it: a string bare unless it parses as JSON, then quoted
+  (`"123"` is `%22123%22`), a number or a boolean as JSON, the whole form-encoded the way
+  `URLSearchParams` encodes it (a space is `+`).
+
+So a binding `/org/$org` whose `org` has `examples: [ org_01hzx9k2 ]` and whose `search` has
+`view` (default `read`) and `page` (default `1`) has the example
+`/org/org_01hzx9k2?view=read&page=1`. The example shows every search key with its default on
+purpose; the app's own links leave out a value equal to its default, and both forms reach
+the same state. The manifest carries the link as `example` on each binding, and
+`apps/web/src/platform/routes-examples.spec.ts` holds every example to the real router (the
+path it builds, the search string it writes, and the route, parameters and search it
+matches for the link) and the router's route tree to the tree of the screen folder.
 
 A screen's `entry` lists the anchors a test starts from on the screen. Some of them are
 alternatives by state, so a test waits for the one its state shows, never for all of them:
@@ -551,7 +580,8 @@ gap is fixed in the contract files first, never worked around in a test.
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists,
-  and every path parses in the router's syntax; every flow names states, events, guards,
+  every path parses in the router's syntax, and every example of a route parameter matches
+  that parameter; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
@@ -587,7 +617,8 @@ the scenarios, only after the contract check passes, and validates it against
 `PERCH_UI_MANIFEST=0` on a stand answers 404 there.
 
 It is what a tool outside the repository reads: the vocabulary as tables with prose
-instructions for an agent, the screens, the platform section and the activities verbatim,
+instructions for an agent, the screens (each binding with its `example` link), the platform
+section and the activities verbatim,
 the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
 its kind, its screen and its attributes, one entry per line, so a search for an anchor in
 the manifest shows its facts.

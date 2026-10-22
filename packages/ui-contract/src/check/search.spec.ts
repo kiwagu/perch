@@ -139,6 +139,38 @@ describe('searchProblems', () => {
       `${values}.mode.controlValue: "a": "sample.a-button" has no choice values in the vocabulary`,
     ])
   })
+  it('holds every example to its own parameter, in params and in search', () => {
+    const contract = sampleContract()
+    const binding = sampleBinding(contract)
+
+    binding.params = {
+      type: 'object',
+      properties: {
+        key: { type: 'string', pattern: '^thg_', examples: ['thg_01hzx9k2', 'key_1', 12] },
+      },
+      additionalProperties: false,
+    }
+    Object.assign(binding.search?.properties['tab'] ?? {}, { examples: ['a', 'c'] })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.key.examples[1]: "key_1" does not match its parameter: must match pattern "^thg_"`,
+      `${AT}.params.properties.key.examples[2]: 12 does not match its parameter: must be string`,
+      `${AT}.search.properties.tab.examples[1]: "c" does not match its parameter: must be equal to one of the allowed values`,
+    ])
+  })
+  it('leaves the examples of a schema that is not valid to its validity problem', () => {
+    const contract = sampleContract()
+
+    sampleBinding(contract).params = {
+      type: 'object',
+      properties: { key: { type: 'string', pattern: '[', examples: ['thg_01hzx9k2'] } },
+      additionalProperties: false,
+    }
+
+    expect(printed(contract)).toEqual([
+      expect.stringMatching(/bindings\[0\]\.params: not a valid JSON Schema/),
+    ])
+  })
   it('wants params and search to be valid JSON Schemas, naming the screen', () => {
     const contract = sampleContract()
     const binding = sampleBinding(contract)

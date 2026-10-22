@@ -41,4 +41,17 @@ describe('flatJsonSchema', () => {
 
     expect(parsed.success).toBe(false)
   })
+  it('takes the examples of a parameter, one value at least', () => {
+    const schema = (examples: unknown[]) => ({
+      type: 'object',
+      properties: { key: { type: 'string', examples } },
+      additionalProperties: false,
+    })
+
+    expect(
+      flatJsonSchema.parse(schema(['thg_01hzx9k2', 'thg_01hzxa7q'])).properties['key'],
+    ).toEqual({ type: 'string', examples: ['thg_01hzx9k2', 'thg_01hzxa7q'] })
+    expect(flatJsonSchema.safeParse(schema([])).success).toBe(false)
+    expect(flatJsonSchema.safeParse(schema([{ id: 1 }])).success).toBe(false)
+  })
 })

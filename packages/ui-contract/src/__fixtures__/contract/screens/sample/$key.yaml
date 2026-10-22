@@ -3,7 +3,7 @@ id: sample
 title: One thing, edited
 description: The one thing of the sample, shown and edited in place; the proof of the contract's rules.
 flag: null
-bindings: [ { path: /sample/$key, guard: authenticated, roles: [ member ], params: { type: object, properties: { key: { type: string } }, additionalProperties: false } } ]
+bindings: [ { path: /sample/$key, guard: authenticated, roles: [ member ], params: { type: object, properties: { key: { type: string, examples: [ thg_01hzx9k2 ] } }, additionalProperties: false } } ]
 entry: [ sample.page, sample.title-input ]
 anchors:
   sample.page:

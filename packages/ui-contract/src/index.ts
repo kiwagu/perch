@@ -130,6 +130,18 @@ export {
   writeManifest,
 } from './manifest'
 export {
+  exampleOf,
+  type ReachedFrom,
+  ROOT_ROUTE,
+  type RouteExample,
+  type RouteNode,
+  type RouteRow,
+  type RoutesView,
+  renderRoutes,
+  routesOf,
+  routeTree,
+} from './routes'
+export {
   formatScenario,
   parseScenario,
   type Reference,

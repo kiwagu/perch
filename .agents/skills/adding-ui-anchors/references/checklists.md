@@ -16,7 +16,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 4. **The routes.** `bindings` in TanStack Router's format: `path`, `guard`, `roles`,
    `params` and `search` as flat JSON Schemas, `history`, `retain`. A state a test opens
    directly (a tab, a filter, a selection) is a path or search parameter, so the route is its
-   address.
+   address. A path parameter carries `examples`, fake values it accepts
+   (`examples: [ org_01hzx9k2 ]`), so the binding's example link is concrete; check it with
+   `bun run contract:routes`.
 5. **The root.** A container that scopes the screen: a page `status`, a `form` or a
    `section`.
 6. **The controls.** Every control a test or an agent drives (button, link, input,

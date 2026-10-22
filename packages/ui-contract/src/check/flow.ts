@@ -47,7 +47,7 @@ const listOf = (transitions: Transitions): readonly FlowTransition[] =>
   Array.isArray(transitions) ? transitions : [transitions]
 
 /** Every transition a state may take: on its events, and when its invoke ends. */
-const transitionsOf = (state: FlowState): FlowTransition[] => [
+export const transitionsOf = (state: FlowState): FlowTransition[] => [
   ...Object.values(state.on ?? {}).flatMap(listOf),
   ...(state.invoke === undefined
     ? []

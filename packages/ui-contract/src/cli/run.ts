@@ -27,12 +27,20 @@
  *     markers of `contract/COVERAGE.md`, prints the measure as JSON, or lists the unmarked
  *     and the ignored controls as `file:line: <element>`. A coverage-ignore marker it cannot
  *     apply, or that ignores no control, is printed as a problem, and nothing is written.
+ *   ui-contract routes [--json]
+ *     prints the routes of the screen files: the table (path, screen, guard, roles, history,
+ *     params, search, file), one example link per binding (each path parameter from its
+ *     `examples`, every search key at its default, written as the router writes a link:
+ *     `/sample/thg_01hzx9k2`, `/org?view=read&page=1`), where each route is reached from
+ *     (links, the flows' `navigate`, the activities' states) and the tree under `__root`;
+ *     or all of it as JSON.
  */
 
 import { check } from './check'
 import { coverage } from './coverage'
 import { diff } from './diff'
 import { manifest } from './manifest'
+import { routes } from './routes'
 import { schemas } from './schemas'
 
 function dispatch(argv: readonly string[]): number {
@@ -49,9 +57,11 @@ function dispatch(argv: readonly string[]): number {
       return diff(rest)
     case 'coverage':
       return coverage(rest)
+    case 'routes':
+      return routes(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]" or "coverage [--write] [--json] [--unmarked]"',
+        'ui-contract: use "check [--sources] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write] [--json] [--unmarked]" or "routes [--json]"',
       )
 
       return 1

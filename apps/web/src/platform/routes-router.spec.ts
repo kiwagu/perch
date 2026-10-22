@@ -4,13 +4,14 @@
  * schema accepts, matches the binding's route again with the same parameters, and its search
  * reads back with the schema's defaults applied. The parameters the binding declares are the
  * ones its path has. So a route is a state address: the same path with the same search
- * reaches the same state after a reload. Every sampled search satisfies the binding's schema;
- * a parameter the sampler builds no value of skips the binding's search case, named.
+ * reaches the same state after a reload. A parameter's first example is its sample, before
+ * any value the sampler builds; every sampled search satisfies the binding's schema; a
+ * parameter the sampler builds no value of skips the binding's search case, named.
  */
 
 import { join } from 'node:path'
 
-import { createMemoryHistory, trimPathRight } from '@tanstack/react-router'
+import { trimPathRight } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -25,8 +26,8 @@ import { z } from '@workspace/zod'
 
 import { modules } from '../modules'
 
-import { defineModule, type ModuleDef } from './module'
-import { createAppRouter } from './router'
+import { type AppRouter, type Matched, matchAt, routerOf, SPLAT } from './__fixtures__/router'
+import { defineModule } from './module'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 
@@ -36,36 +37,28 @@ const PARAM_SAMPLE = 'sample-value'
 /** The value a splat is built with: it spans segments. */
 const SPLAT_SAMPLE = 'a/b'
 
-/** The router's name for the value of a splat. */
-const SPLAT = '_splat'
-
-/** The router reports a splat's value under `_splat` and again under `*`, its older name. */
-const SPLAT_ALIAS = '*'
-
 type Value = string | number | boolean
 type Search = Binding['search']
 type Parameter = NonNullable<Search>['properties'][string]
 
-/** A router of `of` on a memory history, with nobody signed in; nothing renders it. */
-function routerOf(of: readonly ModuleDef[]) {
-  return createAppRouter({
-    modules: of,
-    session: { current: () => undefined, subscribe: () => () => {} },
-    layout: () => null,
-    history: createMemoryHistory({ initialEntries: ['/'] }),
-  })
-}
-
 /**
- * The path parameters a path is built with, taken from the path itself, never from what a
- * binding declares: a sample per `$param` and `{-$param}`, and the splat's value under
- * `_splat` when it ends in `$`; with an optional parameter, also the form without it.
+ * The path parameters a path is built with, named by the path itself, never by what a
+ * binding declares: per `$param` and `{-$param}` the first example `params` gives it, else a
+ * sample, and the splat's value under `_splat` when it ends in `$`; with an optional
+ * parameter, also the form without it.
  */
-function paramForms(path: string): Record<string, string>[] {
+function paramForms(path: string, params?: Binding['params']): Record<string, string>[] {
   const { segments } = parseRoutePath(path)
+  const firstExample = (name: string): string | undefined => {
+    const example = params?.properties[name]?.examples?.[0]
+
+    return example === undefined ? undefined : String(example)
+  }
   const present: Record<string, string> = Object.fromEntries(
     segments.flatMap(({ kind, name }) =>
-      kind === 'static' ? [] : [[name, kind === 'splat' ? SPLAT_SAMPLE : PARAM_SAMPLE] as const],
+      kind === 'static'
+        ? []
+        : [[name, kind === 'splat' ? SPLAT_SAMPLE : (firstExample(name) ?? PARAM_SAMPLE)] as const],
     ),
   )
   const optional = new Set(
@@ -80,7 +73,7 @@ function paramForms(path: string): Record<string, string>[] {
 /**
  * A number within a parameter's `minimum` and `maximum`, whole for an `integer`: 0 when the
  * bounds hold it, else the bound nearest to 0. (A binding's flat schema has no exclusive
- * bounds or `examples`: it refuses them.)
+ * bounds: it refuses them.)
  */
 function numberWithin(parameter: Parameter): number {
   const whole = parameter.type === 'integer'
@@ -159,7 +152,7 @@ function stringOf(parameter: Parameter): string | undefined {
   return character.repeat(lengthWithin(parameter, low, high))
 }
 
-/** A value of a parameter's type, the first of its `enum` when it has one. */
+/** A value of a parameter: its first example, else the first of its `enum`, else one of its type. */
 function sampleOf(parameter: Parameter): Value | undefined {
   const byType: Readonly<Record<Parameter['type'], Value | undefined>> = {
     string: stringOf(parameter),
@@ -168,7 +161,7 @@ function sampleOf(parameter: Parameter): Value | undefined {
     boolean: true,
   }
 
-  return parameter.enum?.[0] ?? byType[parameter.type]
+  return parameter.examples?.[0] ?? parameter.enum?.[0] ?? byType[parameter.type]
 }
 
 /**
@@ -209,34 +202,10 @@ function searchRead(search: Search, sent: Record<string, Value>): Record<string,
   return { ...Object.fromEntries(defaults), ...sent }
 }
 
-/** The parameters of a match, without the splat's older name when it repeats `_splat`. */
-function paramsOf(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  const { [SPLAT_ALIAS]: alias, ...named } = params
-
-  return alias === named[SPLAT] ? named : { ...params }
-}
-
-/**
- * The fields of a route match this spec reads: the router types them `any`, its route tree
- * being built at runtime.
- */
-interface Matched {
-  readonly fullPath: string
-  readonly params: Readonly<Record<string, unknown>>
-  readonly search: Readonly<Record<string, unknown>>
-  readonly searchError: unknown
-}
-
-/** What the router answers for a location it built. */
-interface Reached {
+/** What the router answers for a location it built: the location, then what it matches. */
+interface Reached extends Matched {
   readonly pathname: string
   readonly searchStr: string
-  /** The full path of the deepest route the location matches. */
-  readonly fullPath: string | undefined
-  readonly params: Record<string, unknown>
-  readonly search: Record<string, unknown>
-  /** Why the route refused the search, if it did. */
-  readonly searchError?: unknown
 }
 
 /**
@@ -246,23 +215,17 @@ interface Reached {
  * checks do not depend on it.
  */
 function visit(
-  router: ReturnType<typeof routerOf>,
+  router: AppRouter,
   path: string,
   params: Record<string, string>,
   search: Record<string, Value>,
 ): Reached {
   const location = router.buildLocation({ to: path, params, search })
-  const match: Matched | undefined = router
-    .matchRoutes(location.pathname, router.options.parseSearch(location.searchStr))
-    .at(-1)
 
   return {
     pathname: location.pathname,
     searchStr: location.searchStr,
-    fullPath: match?.fullPath,
-    params: paramsOf(match?.params ?? {}),
-    search: { ...match?.search },
-    searchError: match?.searchError,
+    ...matchAt(router, location.pathname, location.searchStr),
   }
 }
 
@@ -272,10 +235,10 @@ function visit(
  * built from the path's own.
  */
 function parameterNames(
-  router: ReturnType<typeof routerOf>,
+  router: AppRouter,
   binding: Binding,
 ): { path: string[]; declared: string[]; reported: string[] } {
-  const [built = {}] = paramForms(binding.path)
+  const [built = {}] = paramForms(binding.path, binding.params)
   const reached = visit(router, binding.path, built, {})
 
   return {
@@ -290,18 +253,14 @@ function parameterNames(
  * (Ajv), the router takes it without refusal and reads it back with the defaults applied. A
  * parameter the sampler builds no value of skips the case, the note naming it.
  */
-function searchCase(
-  router: ReturnType<typeof routerOf>,
-  binding: Binding,
-  skip: (note: string) => never,
-): void {
+function searchCase(router: AppRouter, binding: Binding, skip: (note: string) => never): void {
   const sample = minimalSearch(binding.search)
 
   if ('unsampled' in sample) {
     skip(`${binding.path}: ${sample.unsampled}`)
   }
 
-  const [present = {}] = paramForms(binding.path)
+  const [present = {}] = paramForms(binding.path, binding.params)
   const reached = visit(router, binding.path, present, sample.search)
   const problems = binding.search
     ? validateAgainst(binding.path, binding.search, sample.search)
@@ -471,6 +430,44 @@ describe('the round trip', () => {
     searchCase(sampleRouter, find, skip)
   })
 
+  it('builds a parameter with its first example, before any sample', ({ skip }) => {
+    const org = bindingSchema.parse({
+      path: '/org/$key',
+      roles: ['identity'],
+      params: {
+        type: 'object',
+        properties: { key: { type: 'string', examples: ['org_01hzx9k2', 'org_01hzxa7q'] } },
+        additionalProperties: false,
+      },
+    })
+    const find = bindingSchema.parse({
+      path: '/find',
+      roles: ['identity'],
+      search: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', maxLength: 5, examples: ['beta'] },
+          name: { type: 'string', minLength: 3 },
+          slug: { type: 'string', pattern: '^[a-z]+$' },
+          code: { type: 'string', pattern: '^\\d{3}$', examples: ['123'] },
+          kind: { type: 'string', pattern: '^draft$' },
+        },
+        required: ['q', 'name', 'slug', 'code', 'kind'],
+        additionalProperties: false,
+      },
+    })
+
+    expect(paramForms(org.path, org.params)).toEqual([{ key: 'org_01hzx9k2' }])
+    expect(visit(sampleRouter, org.path, { key: 'org_01hzx9k2' }, {})).toMatchObject({
+      pathname: '/org/org_01hzx9k2',
+      params: { key: 'org_01hzx9k2' },
+    })
+    expect(minimalSearch(find.search)).toEqual({
+      search: { q: 'beta', name: 'aaa', slug: 'a', code: '123', kind: 'draft' },
+    })
+    searchCase(sampleRouter, find, skip)
+  })
+
   /** A pattern beyond plain characters and one repeated class. */
   const odd = bindingSchema.parse({
     path: '/odd',
@@ -547,8 +544,8 @@ describe('the bindings of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.each(bindings)('%s matches its route again with its parameters', (path) => {
-    for (const params of paramForms(path)) {
+  it.each(bindings)('%s matches its route again with its parameters', (path, binding) => {
+    for (const params of paramForms(path, binding.params)) {
       const reached = visit(router, path, params, {})
 
       expect(trimPathRight(reached.fullPath ?? ''), `the route ${reached.pathname} matches`).toBe(

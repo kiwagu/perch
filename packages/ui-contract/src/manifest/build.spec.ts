@@ -56,7 +56,10 @@ describe('buildManifest', () => {
     })
   })
   it('carries the screens, the platform, the activities, the scenarios and the model verbatim', () => {
-    expect(manifest.screens).toEqual(contract.screens.screens)
+    const withoutBindings = (screens: readonly { bindings: unknown }[]) =>
+      screens.map(({ bindings: _bindings, ...screen }) => screen)
+
+    expect(withoutBindings(manifest.screens)).toEqual(withoutBindings(contract.screens.screens))
     expect(manifest.activities.map((activity) => activity.id)).toEqual(['thing'])
     expect(manifest.activities).toEqual(contract.activities)
     expect(manifest.platform).toEqual(contract.screens.platform)
@@ -65,6 +68,11 @@ describe('buildManifest', () => {
     expect(manifest.routeParams).toEqual({
       '/sample/$key': contract.screens.screens[0]?.bindings[0]?.params,
     })
+  })
+  it('gives each binding of a screen its example link', () => {
+    const [binding] = contract.screens.screens[0]?.bindings ?? []
+
+    expect(manifest.screens[0]?.bindings).toEqual([{ ...binding, example: '/sample/thg_01hzx9k2' }])
   })
   it('takes the readiness anchor of its instructions from the platform section', () => {
     expect(manifest.contract.instructions.readiness).toContain('sample.status')

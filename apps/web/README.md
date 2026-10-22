@@ -153,9 +153,12 @@ modeling stage.
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
   `routes-router.spec.ts` builds every binding on the real router (a sample per parameter
-  of its path, the least search its schema accepts), matches it back to the same route,
-  parameters and search with the defaults applied, and holds the binding's `params` to the
-  parameters of its path. `flows-machine.spec.ts` runs every screen's `flow` in XState:
+  of its path, its first example when it has one, the least search its schema accepts),
+  matches it back to the same route, parameters and search with the defaults applied, and
+  holds the binding's `params` to the parameters of its path; `routes-examples.spec.ts` holds
+  each binding's example link to the router (the path it builds, the search string it
+  writes, the route, parameters and search it matches) and the router's route tree to the
+  tree of the screen folder, both specs on the router of `__fixtures__/router.ts`. `flows-machine.spec.ts` runs every screen's `flow` in XState:
   `setup({ guards, actions, actors }).createMachine(flow)` with stubs, walked purely
   (`flows-machine.walk.ts`) through every state, transition and guarded branch, and holds
   the app's own machine for a screen (`user.sign-in`) to its flow;

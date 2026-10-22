@@ -98,6 +98,19 @@
                         "boolean"
                       ]
                     },
+                    "examples": {
+                      "description": "Fake values of the parameter, each one it accepts; the first fills the example link.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string, number or boolean value.",
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean"
+                        ]
+                      }
+                    },
                     "minimum": {
                       "description": "The smallest value of a number or an integer.",
                       "type": "number"
@@ -245,6 +258,19 @@
                         "number",
                         "boolean"
                       ]
+                    },
+                    "examples": {
+                      "description": "Fake values of the parameter, each one it accepts; the first fills the example link.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string, number or boolean value.",
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean"
+                        ]
+                      }
                     },
                     "minimum": {
                       "description": "The smallest value of a number or an integer.",

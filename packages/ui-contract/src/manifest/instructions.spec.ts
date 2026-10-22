@@ -27,6 +27,10 @@ describe('instructionsOf', () => {
       'a route is a state address: the same path with the same search reaches the same state after a reload',
     )
   })
+  it("says what a binding's example link is and that the app's own links are shorter", () => {
+    expect(instructions.screenMap).toContain('`example`')
+    expect(instructions.screenMap).toContain('leave out a value equal to its default')
+  })
   it('says a flow is an XState machine config, carried into the app unchanged', () => {
     expect(instructions.screenMap).toContain("A screen's `flow` is an XState v5 machine config")
     expect(instructions.screenMap).toContain(

@@ -57,7 +57,8 @@ for Bun.
     visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
     types `Activity`, `ActivityState` and `ActivityTransition`), `flatJsonSchema` (route
     `params` and `search`, with the bounds `z.toJSONSchema` writes: `minimum`, `maximum`,
-    `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed scenario),
+    `minLength`, `maxLength`, `pattern`; and `examples`, fake values of a parameter for the
+    route's example link), `scenarioSchema` (the parsed scenario),
     `entityDefinitionSchema`, `manifestSchema`. `SCHEMA_OUTPUTS`, `writeSchemas(root)` and
     `schemaDrift(root)` turn them into the committed `contract/screen.schema.json`,
     `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
@@ -81,7 +82,8 @@ for Bun.
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
-    (enum controls, `retain`) and `scenariosProblems` (bracket references, roles and the
+    (enum controls, `retain`, and each example of a parameter against that parameter, Ajv's
+    reasons at `bindings[i].params.properties.<name>.examples[j]`) and `scenariosProblems` (bracket references, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
@@ -127,8 +129,9 @@ for Bun.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section), the screens, the platform
-    section and the activities verbatim, the scenarios parsed, `ids` (every declared anchor
+    states taken from the vocabulary and the platform section), the screens verbatim with
+    each binding's `example` link (`exampleOf`), the platform section and the activities
+    verbatim, the scenarios parsed, `ids` (every declared anchor
     with its kind, its screen and its attributes), `routeParams` and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
@@ -169,6 +172,20 @@ for Bun.
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
     between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
+  - The routes view: `exampleOf(binding)` returns its `RouteExample`, the `params` and
+    `search` it is built with and the `link`, a deep link with fake data written the way
+    TanStack Router writes a link: each `$param` at its first example (else its first `enum`
+    value, else its name, 1 or true by its type), a `{-$param}` at its first example or left
+    out, a splat `$` left out, each through `encodeURIComponent`; every search key in order
+    at its `default`, else its first `enum` value or example, a string bare unless it parses
+    as JSON (then quoted), a number or a boolean as JSON, form-encoded as `URLSearchParams`
+    does. `routesOf(contract)` returns the `RoutesView`: per binding sorted by path a
+    `RouteRow` (its screen, guard, roles, history, parameter and search names, file,
+    `example` and `ReachedFrom`: the anchors linking to it, the screens whose flow navigates
+    to it, the activity states at its address) and the `tree`; `routeTree(screens)` the
+    `RouteNode`s, `ROOT_ROUTE` (`__root`, with the frame's screen) first, then each binding
+    depth first under the binding whose path is the longest proper prefix of its own on
+    whole segments; `renderRoutes(view)` prints the four sections of `ui-contract routes`.
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
@@ -184,7 +201,8 @@ for Bun.
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
   schema writer, the references, the contract check, the sources check, the consumers check,
-  the coverage-ignore markers, the manifest, the hand-over diff and the coverage note.
+  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note and the
+  routes view.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
@@ -226,3 +244,8 @@ for Bun.
   with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
   writing nothing). Not part of `bun run check`: the note is a report.
+- From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
+  screen files in four sections, the table (path, screen, guard, roles, history, params,
+  search, file), one example link per binding, where each route is reached from and the
+  tree under `__root`; or the `RoutesView` as JSON with `--json`). Not part of
+  `bun run check`: it is a view.

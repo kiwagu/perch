@@ -2,8 +2,8 @@
  * `ui-manifest/manifest.json`, the published contract built from the contract folder (the
  * vocabulary, the screen files, the platform file, the activities and the model) and the
  * scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an
- * agent, the screens verbatim, every declared anchor with its screen, the platform, the
- * activities verbatim, the scenarios parsed and the model.
+ * agent, the screens verbatim with an example link on each binding, every declared anchor
+ * with its screen, the platform, the activities verbatim, the scenarios parsed and the model.
  */
 
 import { z } from '@workspace/zod'
@@ -21,7 +21,7 @@ import { scenarioSchema } from '../scenarios'
 
 import { activitySchema } from './activity.schema'
 import { flatJsonSchema } from './flat-json-schema'
-import { anchorBindingSchema, platformSchema, screenSchema } from './screens.schema'
+import { anchorBindingSchema, bindingSchema, platformSchema, screenSchema } from './screens.schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>
@@ -123,6 +123,22 @@ const idSchema = z
   })
   .describe('One declared anchor, as a test looks it up.')
 
+/** A screen as the manifest carries it: as written, each binding with its example link. */
+const manifestScreenSchema = screenSchema.safeExtend({
+  bindings: z
+    .array(
+      bindingSchema.extend({
+        example: z
+          .string()
+          .min(1)
+          .describe(
+            'A deep link to the route with fake data, as the router writes it: each path parameter at its first example, every search key at its default (else its first enum value or example).',
+          ),
+      }),
+    )
+    .describe('The routes of the screen, each with its example link.'),
+})
+
 export const manifestSchema = z
   .strictObject({
     $schema: z
@@ -144,8 +160,10 @@ export const manifestSchema = z
       .describe('The product the manifest describes.'),
     contract: contractSchema,
     screens: z
-      .array(screenSchema)
-      .describe('The screens of `contract/screens/`, verbatim: routes, anchors, flows.'),
+      .array(manifestScreenSchema)
+      .describe(
+        'The screens of `contract/screens/`, verbatim: routes with their example links, anchors, flows.',
+      ),
     routeParams: z
       .record(z.string(), flatJsonSchema)
       .describe('The path parameters by route path, for the routes that have any.'),

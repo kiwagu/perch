@@ -1,13 +1,15 @@
 /**
  * The manifest, built only from the contract folder (the vocabulary, the screen files, the
  * platform file, the activities and the model) and the scenario files of
- * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens, the
- * platform section and the activities verbatim, the scenarios parsed, every declared anchor
- * by name with its screen, and the model document.
+ * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
+ * with an example link on each binding, the platform section and the activities verbatim,
+ * the scenarios parsed, every declared anchor by name with its screen, and the model
+ * document.
  */
 
 import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'
 import type { Activity, Model, Screen, ScreensFile, Vocabulary } from '../files'
+import { exampleOf } from '../routes'
 import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
@@ -60,6 +62,13 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
   )
 }
 
+/** The screens as written, each binding with its example link (`exampleOf`). */
+const screensOf = (screens: readonly Screen[]): Manifest['screens'] =>
+  screens.map((screen) => ({
+    ...screen,
+    bindings: screen.bindings.map((binding) => ({ ...binding, example: exampleOf(binding).link })),
+  }))
+
 const routeParamsOf = (screens: readonly Screen[]): Manifest['routeParams'] =>
   Object.fromEntries(
     screens.flatMap((screen) =>
@@ -107,7 +116,7 @@ export function buildManifest({
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
-    screens: screens.screens,
+    screens: screensOf(screens.screens),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens.screens),
     platform: screens.platform,

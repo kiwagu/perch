@@ -20,8 +20,9 @@ const ROOT = join(import.meta.dirname, '../../../..')
 
 /**
  * Schema keywords the comparison leaves out: prose for the contract's readers
- * (`description`, `title`), the controls that set a parameter (`x-perch`), the
- * dialect (`$schema`, written by `z.toJSONSchema`, left out by a binding) and
+ * (`description`, `title`), the fake values of its example links (`examples`), the
+ * controls that set a parameter (`x-perch`), the dialect (`$schema`, written by
+ * `z.toJSONSchema`, left out by a binding) and
  * `additionalProperties`: the contract pins it to `false` for its authors, while
  * the router's `z.object` is tolerant at runtime by design, an unknown search
  * parameter is not an error.
@@ -29,6 +30,7 @@ const ROOT = join(import.meta.dirname, '../../../..')
 const META_KEYWORDS = new Set([
   'description',
   'title',
+  'examples',
   'x-perch',
   '$schema',
   'additionalProperties',

@@ -412,6 +412,19 @@
                               "boolean"
                             ]
                           },
+                          "examples": {
+                            "description": "Fake values of the parameter, each one it accepts; the first fills the example link.",
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "description": "A string, number or boolean value.",
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean"
+                              ]
+                            }
+                          },
                           "minimum": {
                             "description": "The smallest value of a number or an integer.",
                             "type": "number"
@@ -560,6 +573,19 @@
                               "boolean"
                             ]
                           },
+                          "examples": {
+                            "description": "Fake values of the parameter, each one it accepts; the first fills the example link.",
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "description": "A string, number or boolean value.",
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean"
+                              ]
+                            }
+                          },
                           "minimum": {
                             "description": "The smallest value of a number or an integer.",
                             "type": "number"
@@ -674,16 +700,21 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "example": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A deep link to the route with fake data, as the router writes it: each path parameter at its first example, every search key at its default (else its first enum value or example)."
                 }
               },
               "required": [
                 "path",
-                "roles"
+                "roles",
+                "example"
               ],
-              "additionalProperties": false,
-              "description": "One route of the screen."
+              "additionalProperties": false
             },
-            "description": "The routes of the screen: at least one unless the screen is the frame."
+            "description": "The routes of the screen, each with its example link."
           },
           "flag": {
             "description": "The feature flag that shows the screen, or null for always.",
@@ -2139,10 +2170,9 @@
           "entry",
           "anchors"
         ],
-        "additionalProperties": false,
-        "description": "One screen of the application."
+        "additionalProperties": false
       },
-      "description": "The screens of `contract/screens/`, verbatim: routes, anchors, flows."
+      "description": "The screens of `contract/screens/`, verbatim: routes with their example links, anchors, flows."
     },
     "routeParams": {
       "type": "object",
@@ -2196,6 +2226,19 @@
                     "number",
                     "boolean"
                   ]
+                },
+                "examples": {
+                  "description": "Fake values of the parameter, each one it accepts; the first fills the example link.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "description": "A string, number or boolean value.",
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean"
+                    ]
+                  }
                 },
                 "minimum": {
                   "description": "The smallest value of a number or an integer.",

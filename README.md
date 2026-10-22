@@ -150,6 +150,8 @@ Each workspace has a README with its role, key exports and commands.
   controls carrying an anchor per feature module, and the anchors and scenarios per screen;
   `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
   the ones declared off with `ui-contract-ignore: <reason>`.
+- `bun run contract:routes`: the routes of the screen files, one example deep link each,
+  where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.

@@ -1,8 +1,9 @@
 /**
  * The JSON Schema of a route's `params` or `search`: an object of flat primitives, each
  * with the bounds `z.toJSONSchema` writes (`minimum`, `maximum`, `minLength`, `maxLength`,
- * `pattern`), optionally tied to the control that sets it (`x-perch.control`) and, per enum
- * value, to the control and the `data-value` that choose it.
+ * `pattern`) and its `examples` (fake values for the route's example link; the contract
+ * check holds each one to the parameter), optionally tied to the control that sets it
+ * (`x-perch.control`) and, per enum value, to the control and the `data-value` that choose it.
  */
 
 import { z } from '@workspace/zod'
@@ -41,6 +42,13 @@ const parameterSchema = z
       .describe('The primitive type of the parameter.'),
     enum: z.array(primitiveSchema).min(1).optional().describe('The values the parameter takes.'),
     default: primitiveSchema.optional().describe('The value when the URL leaves it out.'),
+    examples: z
+      .array(primitiveSchema)
+      .min(1)
+      .optional()
+      .describe(
+        'Fake values of the parameter, each one it accepts; the first fills the example link.',
+      ),
     minimum: z.number().optional().describe('The smallest value of a number or an integer.'),
     maximum: z.number().optional().describe('The largest value of a number or an integer.'),
     minLength: z.int().min(0).optional().describe('The fewest characters of a string.'),
