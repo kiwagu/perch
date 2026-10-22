@@ -344,9 +344,9 @@ failure. The page sends the events and does what the machine emits: the sign-in 
 machine's config to the flow; a new app machine for a screen joins its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
-From `contract/screens/org.yaml` (lines 197-221, the descriptions left out), the organisation
-page: its own events leave `viewing` whatever each region is in, and each region moves on its
-own events only.
+From `contract/screens/org.yaml` (lines 198-237, the descriptions and the error's `show` left
+out), the organisation page: its own event leaves `viewing` whatever each region is in, and
+each region moves on its own events only, the create included.
 
 ```yaml
 viewing:
@@ -354,8 +354,6 @@ viewing:
   on:
     organisation.page.current-select:
       target: selecting
-    organisation.create.submit-button:
-      target: creating-organisation
   states:
     create-form:
       initial: closed
@@ -364,17 +362,33 @@ viewing:
           on:
             organisation.create.toggle-button:
               target: open
+            organisation.create.submit-button:
+              target: submitting
         open:
           on:
             organisation.create.toggle-button:
               target: closed
+            organisation.create.submit-button:
+              target: submitting
+        submitting:
+          invoke:
+            src: platform.organisations.create
+            input:
+              key: organisation.create.key-input
+              name: organisation.create.name-input
+            onDone:
+              target: "#organisation.viewing"
+            onError:
+              target: open
     note-add:
       # idle, adding (invokes note.createNote) ...
 ```
 
-A target of the root names a region's state as `<parallel>.<region>.<state>`: a failed
-create lands in `viewing.create-form.open`, the other regions at their `initial`. Within a
-parallel state an event is handled by one region or by the state's own `on`, never by two
-(`contract:check` says which two). A region has no `type`, no `meta.address` and no nested
-states; where the app keeps a state per item (each note's edit form), the region follows the
-item acted on last and its `description` says so.
+A target in a region names a state of that region or, by the flow's `id` (the screen's), a
+state of the root as `#<flow id>.<state>`: a done create re-enters `viewing`, every region
+at its `initial`, while a failed one stays in its area. A target of the root may name a
+region's state as `<parallel>.<region>.<state>`, the other regions at their `initial`.
+Within a parallel state an event is handled by one region or by the state's own `on`, never
+by two (`contract:check` says which two). A region has no `type`, no `meta.address` and no
+nested states; where the app keeps a state per item (each note's edit form), the region
+follows the item acted on last and its `description` says so.

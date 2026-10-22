@@ -1356,7 +1356,7 @@
                                   "target": {
                                     "description": "The state the machine moves to; absent: it stays where it is.",
                                     "type": "string",
-                                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                    "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                   },
                                   "guard": {
                                     "type": "string",
@@ -1478,7 +1478,7 @@
                                     "target": {
                                       "description": "The state the machine moves to; absent: it stays where it is.",
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                      "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                     },
                                     "guard": {
                                       "type": "string",
@@ -1648,7 +1648,7 @@
                                     "target": {
                                       "description": "The state the machine moves to; absent: it stays where it is.",
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                      "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                     },
                                     "guard": {
                                       "type": "string",
@@ -1770,7 +1770,7 @@
                                       "target": {
                                         "description": "The state the machine moves to; absent: it stays where it is.",
                                         "type": "string",
-                                        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                        "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                       },
                                       "guard": {
                                         "type": "string",
@@ -1897,7 +1897,7 @@
                                     "target": {
                                       "description": "The state the machine moves to; absent: it stays where it is.",
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                      "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                     },
                                     "guard": {
                                       "type": "string",
@@ -2019,7 +2019,7 @@
                                       "target": {
                                         "description": "The state the machine moves to; absent: it stays where it is.",
                                         "type": "string",
-                                        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                        "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                       },
                                       "guard": {
                                         "type": "string",
@@ -2415,7 +2415,7 @@
                                   "target": {
                                     "description": "The state the machine moves to; absent: it stays where it is.",
                                     "type": "string",
-                                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                    "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                   },
                                   "guard": {
                                     "type": "string",
@@ -2537,7 +2537,7 @@
                                     "target": {
                                       "description": "The state the machine moves to; absent: it stays where it is.",
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                      "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                     },
                                     "guard": {
                                       "type": "string",
@@ -2910,7 +2910,7 @@
                                               "target": {
                                                 "description": "The state the machine moves to; absent: it stays where it is.",
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                               },
                                               "guard": {
                                                 "type": "string",
@@ -3032,7 +3032,7 @@
                                                 "target": {
                                                   "description": "The state the machine moves to; absent: it stays where it is.",
                                                   "type": "string",
-                                                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                  "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                                 },
                                                 "guard": {
                                                   "type": "string",
@@ -3202,7 +3202,7 @@
                                                 "target": {
                                                   "description": "The state the machine moves to; absent: it stays where it is.",
                                                   "type": "string",
-                                                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                  "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                                 },
                                                 "guard": {
                                                   "type": "string",
@@ -3324,7 +3324,7 @@
                                                   "target": {
                                                     "description": "The state the machine moves to; absent: it stays where it is.",
                                                     "type": "string",
-                                                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                    "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                                   },
                                                   "guard": {
                                                     "type": "string",
@@ -3451,7 +3451,7 @@
                                                 "target": {
                                                   "description": "The state the machine moves to; absent: it stays where it is.",
                                                   "type": "string",
-                                                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                  "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                                 },
                                                 "guard": {
                                                   "type": "string",
@@ -3573,7 +3573,7 @@
                                                   "target": {
                                                     "description": "The state the machine moves to; absent: it stays where it is.",
                                                     "type": "string",
-                                                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?$"
+                                                    "pattern": "^(#[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)?)$"
                                                   },
                                                   "guard": {
                                                     "type": "string",

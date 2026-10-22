@@ -191,7 +191,8 @@ states:
   empty: "organisation.page.status in empty: no membership; the create form below it."
   error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
 flow:
-  description: The page's independent areas, the create form, the new note, the notes' items, the invitation and the members, are the regions of viewing, each in one of its states at a time; choosing another organisation or creating one leaves them all, and they start afresh.
+  id: organisation
+  description: The page's independent areas, the create form, the new note, the notes' items, the invitation and the members, are the regions of viewing, each in one of its states at a time; choosing another organisation, or creating one, starts them all afresh.
   initial: viewing
   states:
     viewing:
@@ -200,24 +201,51 @@ flow:
       on:
         organisation.page.current-select:
           target: selecting
-        organisation.create.submit-button:
-          target: creating-organisation
       states:
         create-form:
           description: The create form, closed until its toggle opens it; without a membership the form is shown regardless, the toggle not being rendered.
           initial: closed
           states:
             closed:
+              description: The create form is closed; without a membership it is shown regardless, so its submit is taken here too.
               on:
                 organisation.create.toggle-button:
                   target: open
                   description: The create form opens.
+                organisation.create.submit-button:
+                  target: submitting
             open:
               description: The create form, opened by the toggle button.
               on:
                 organisation.create.toggle-button:
                   target: closed
                   description: The create form closes.
+                organisation.create.submit-button:
+                  target: submitting
+            submitting:
+              description: The organisation is being created; the submit button is disabled meanwhile.
+              invoke:
+                src: platform.organisations.create
+                input:
+                  key: organisation.create.key-input
+                  name: organisation.create.name-input
+                onDone:
+                  target: "#organisation.viewing"
+                  description: The caller is the administrator of the new organisation, which becomes current; every area starts afresh and the form is closed.
+                onError:
+                  target: open
+                  description: The form stays open with what was typed.
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.create.error
+                        codes:
+                          - key-invalid
+                          - name-required
+                          - name-too-long
+                          - key-taken
+                          - rate-limited
+                          - failed
         note-add:
           description: The form of a new note.
           initial: idle
@@ -368,30 +396,6 @@ flow:
                         codes:
                           - not-admin
                           - failed
-    creating-organisation:
-      description: The organisation is being created; the submit button is disabled meanwhile.
-      invoke:
-        src: platform.organisations.create
-        input:
-          key: organisation.create.key-input
-          name: organisation.create.name-input
-        onDone:
-          target: viewing
-          description: The caller is the administrator of the new organisation, which becomes current; the form empties and closes.
-        onError:
-          target: viewing.create-form.open
-          description: The form stays open with what was typed.
-          actions:
-            - type: show
-              params:
-                anchor: organisation.create.error
-                codes:
-                  - key-invalid
-                  - name-required
-                  - name-too-long
-                  - key-taken
-                  - rate-limited
-                  - failed
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:

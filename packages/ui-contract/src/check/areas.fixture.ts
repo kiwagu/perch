@@ -15,7 +15,7 @@ const show = (anchor: string, codes: string[]) =>
  * The sample flow with `editing` a parallel state of two areas: the form, closed or open on
  * `sample.a-button`, and a side area that creates a thing on `sample.b-button`. The save
  * button is the parallel state's own event, whatever each area is in, and a failed save
- * lands with the form open.
+ * lands with the form open. The flow declares its id, the screen's, for id targets.
  */
 export function withAreas(): Contract {
   const contract = sampleContract()
@@ -26,6 +26,7 @@ export function withAreas(): Contract {
     throw new Error('the sample saves through an invoke')
   }
 
+  flow.id = 'sample'
   flow.states = {
     editing: {
       type: 'parallel',

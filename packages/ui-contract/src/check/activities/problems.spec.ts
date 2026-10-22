@@ -7,6 +7,7 @@ import type { Contract } from '../contract'
 import {
   activityIn,
   activityStateIn,
+  flowIn,
   flowStateIn,
   sampleContract,
   screenIn,
@@ -232,6 +233,27 @@ describe('activitiesProblems', () => {
     ])
 
     invoke.onError = { target: 'editing.form.open' }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it("backs a transition by a navigate after an id target out of a region: the root state's entry or its invoke", () => {
+    const contract = withOther(withAreas())
+    const flow = flowIn(contract)
+    const busy = regionStateIn(contract, 'side', 'busy').invoke ?? expect.unreachable('an invoke')
+    const toOther = [{ type: 'navigate', params: { to: '/other' } }] as const
+
+    activityStateIn(contract, 'editing').on = {
+      'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }],
+      'sample.b-button': { target: 'away' },
+    }
+    busy.onDone = { target: '#sample.leaving' }
+    flow.states['leaving'] = { type: 'final', entry: [...toOther] }
+
+    expect(printed(contract)).toEqual([])
+
+    flow.states['leaving'] = {
+      invoke: { src: 'platform.sign-out', onDone: { target: 'editing', actions: [...toOther] } },
+    }
 
     expect(printed(contract)).toEqual([])
   })

@@ -39,11 +39,8 @@ describe('flowProblems in a parallel state', () => {
 
     regionIn(gone, 'form').initial = 'gone'
 
-    expect(printed(gone)).toEqual([
-      `${IN}.form.initial: "gone" is not a state of region "form"`,
-      `${IN}.form.states.closed: is not reachable from "gone"`,
-      `${IN}.form.states.open: is not reachable from "gone"`,
-    ])
+    // The failed save's deep target still enters `open`, and `closed` follows from it.
+    expect(printed(gone)).toEqual([`${IN}.form.initial: "gone" is not a state of region "form"`])
   })
   it('reads a deep target of the root as a parallel state, a region of it and a state of that', () => {
     const contract = withAreas()
@@ -135,5 +132,56 @@ describe('flowProblems in a parallel state', () => {
       `${IN}.side.states.busy.invoke.src: entity "thing" has no action "renameThing"`,
       `${AT}.meta.guards.unused: is declared but no transition uses it`,
     ])
+  })
+  it('takes an id target from a state of a region only, to a state of the root of its own flow', () => {
+    const contract = withAreas()
+    const flow = flowIn(contract)
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    regionStateIn(contract, 'side', 'idle').on = {
+      'sample.b-button': { target: 'busy' },
+      'sample.mode-select': { target: '#other.saving' },
+      'sample.key-select': { target: '#sample.gone' },
+    }
+    Object.assign(parallelIn(contract).on ?? {}, {
+      'sample.home-link': { target: '#sample.saving' },
+    })
+    invoke.onError = { target: '#sample.editing' }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.home-link"].target: an id target is taken from a region state only`,
+      `${IN}.side.states.idle.on["sample.mode-select"].target: "#other.saving": "other" is not the id of the flow`,
+      `${IN}.side.states.idle.on["sample.key-select"].target: "gone" is not a state of the flow`,
+      `${AT}.states.saving.invoke.onError.target: an id target is taken from a region state only`,
+    ])
+
+    delete flow.id
+
+    expect(printed(contract)).toContain(
+      `${IN}.side.states.idle.on["sample.mode-select"].target: "#other.saving": "other" is not the id of the flow, which declares none`,
+    )
+
+    flow.id = 'other'
+
+    expect(printed(contract)).toContain(`${AT}.id: "other" is not the id of the screen "sample"`)
+  })
+  it('reaches a state of the root through an id target out of a region', () => {
+    const contract = withAreas()
+
+    flowIn(contract).states['left'] = { type: 'final' }
+    Object.assign(regionStateIn(contract, 'side', 'idle').on ?? {}, {
+      'sample.home-link': { target: '#sample.left' },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('reaches a state of a region that a deep target of the root names', () => {
+    const contract = withAreas()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    regionIn(contract, 'form').states['stray'] = { on: { 'sample.a-button': { target: 'closed' } } }
+    invoke.onDone = { target: 'editing.form.stray' }
+
+    expect(printed(contract)).toEqual([])
   })
 })

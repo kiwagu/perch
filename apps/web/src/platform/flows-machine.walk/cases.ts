@@ -6,9 +6,12 @@
  * first, runs the transition's actions, then enters in the order of the file: a parallel
  * state, then each region at its starting state (the one a deep target names, else the
  * initial). A transition without a target, or to its own state, neither exits nor enters; a
- * parallel state's own transition into itself exits and enters only its regions' states. A
- * case is sent from where the walk is: a state of the root; a parallel state with every region
- * at its initial; a region's state with the other regions at their initial.
+ * parallel state's own transition into itself exits and enters only its regions' states; an
+ * id target out of a region's state leaves the parallel state, every region's state and then
+ * the parallel state itself, for the state of the root it names, entered anew even when it is
+ * that parallel state. A case is sent from where the walk is: a state of the root; a parallel
+ * state with every region at its initial; a region's state with the other regions at their
+ * initial.
  */
 
 import type { StateValue } from 'xstate'
@@ -20,6 +23,7 @@ import {
   type FlowParallelState,
   type FlowTransition,
   flowNodes,
+  idTargetOf,
   type RegionNode,
   regionStartsOf,
   rootOf,
@@ -53,8 +57,8 @@ function parallelOf(flow: Flow, name: string): FlowParallelState | undefined {
   return state?.type === 'parallel' ? state : undefined
 }
 
-/** The configuration a transition of the root to `target` lands in. */
-function landingOf(flow: Flow, target: string): StateValue {
+/** The configuration a transition to `target` lands in, from the root or by an id target. */
+export function landingOf(flow: Flow, target: string): StateValue {
   const name = rootOf(target)
   const parallel = parallelOf(flow, name)
 
@@ -64,8 +68,7 @@ function landingOf(flow: Flow, target: string): StateValue {
 }
 
 /** The configuration of a parallel state with every region at its initial state. */
-export const initialValueOf = (flow: Flow, parallel: string): StateValue =>
-  landingOf(flow, parallel)
+const initialValueOf = (flow: Flow, parallel: string): StateValue => landingOf(flow, parallel)
 
 /** The entries of the regions' starting states on a move to `target`, in the order of the file. */
 const regionEntriesOf = (parallel: FlowParallelState, target: string): Effect[] =>
@@ -73,11 +76,20 @@ const regionEntriesOf = (parallel: FlowParallelState, target: string): Effect[] 
     ([region, state]) => parallel.states[region]?.states[state]?.entry ?? [],
   )
 
-/** The exits of the regions' states at their initial, the last region first. */
-const regionExitsOf = (parallel: FlowParallelState): Effect[] =>
-  Object.values(parallel.states)
+/**
+ * The exits of the regions' states, the last region first: each at its initial, but the
+ * region `moved` at the state the walk holds it in.
+ */
+const regionExitsOf = (
+  parallel: FlowParallelState,
+  moved?: { readonly region: string; readonly state: string },
+): Effect[] =>
+  Object.entries(parallel.states)
     .reverse()
-    .flatMap(({ initial, states }) => states[initial]?.exit ?? [])
+    .flatMap(
+      ([region, { initial, states }]) =>
+        states[region === moved?.region ? moved.state : initial]?.exit ?? [],
+    )
 
 /** The entries on a move of the root to `target`: a parallel state's, then its regions'. */
 function enteringOf(flow: Flow, target: string): Effect[] {
@@ -94,6 +106,21 @@ function expectedOf(
   node: Acting,
   { target, actions = [] }: FlowTransition,
 ): Omit<Outcome, 'handled'> {
+  const id = target === undefined ? undefined : idTargetOf(target)
+  const parallel = node.kind === 'region-state' ? parallelOf(flow, node.parallel) : undefined
+
+  if (node.kind === 'region-state' && id !== undefined && parallel !== undefined) {
+    return {
+      state: landingOf(flow, id.state),
+      effects: [
+        ...regionExitsOf(parallel, { region: node.region, state: node.name }),
+        ...(parallel.exit ?? []),
+        ...actions,
+        ...enteringOf(flow, id.state),
+      ],
+    }
+  }
+
   if (node.kind === 'region-state') {
     const at = (state: string) => landingOf(flow, `${node.parallel}.${node.region}.${state}`)
 

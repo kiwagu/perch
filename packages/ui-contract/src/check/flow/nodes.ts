@@ -6,7 +6,9 @@
  * where it is in the flow (`states.viewing.states.note-items.states.editing`) and its kind;
  * a region state, its parallel state, its region and the states of that region. Then the
  * targets: a transition of the root names a state of the root or, as XState splits a target
- * on `.`, a state of a region as `<parallel>.<region>.<state>` (a deep target).
+ * on `.`, a state of a region as `<parallel>.<region>.<state>` (a deep target); one of a
+ * region's state names a state of its region or, by the machine's id, a state of the root as
+ * `#<flow id>.<state>` (an id target), the id one segment for XState to split it there.
  */
 
 import type {
@@ -116,17 +118,51 @@ export interface DeepTarget {
   readonly state: string
 }
 
-/** The parts of a deep target, or undefined for the name of a state. */
+/** A target of a region's state out to the root, by the machine's id: `#<flow id>.<state>`. */
+export interface IdTarget {
+  readonly id: string
+  readonly state: string
+}
+
+/** The parts of an id target, or undefined for any other target. */
+export function idTargetOf(target: string): IdTarget | undefined {
+  const dot = target.indexOf('.')
+
+  return target.startsWith('#') && dot > 0
+    ? { id: target.slice(1, dot), state: target.slice(dot + 1) }
+    : undefined
+}
+
+/** The parts of a deep target, or undefined for the name of a state or an id target. */
 export function deepTargetOf(target: string): DeepTarget | undefined {
   const [parallel, region, state, ...more] = target.split('.')
 
-  return parallel === undefined || region === undefined || state === undefined || more.length > 0
+  return parallel === undefined ||
+    parallel.startsWith('#') ||
+    region === undefined ||
+    state === undefined ||
+    more.length > 0
     ? undefined
     : { parallel, region, state }
 }
 
-/** The state of the root a transition of the root to `target` lands in. */
-export const rootOf = (target: string): string => deepTargetOf(target)?.parallel ?? target
+/** The state of the root a transition to `target` lands in: of the root, or by an id target. */
+export const rootOf = (target: string): string =>
+  idTargetOf(target)?.state ?? deepTargetOf(target)?.parallel ?? target
+
+/** The states of regions that a deep target of the root names, by path: `viewing.form.open`. */
+export function deepEnteredOf(flow: Flow): Set<string> {
+  return new Set(
+    flowNodes(flow)
+      .flatMap((node) => (node.kind === 'root' || node.kind === 'parallel' ? [node.state] : []))
+      .flatMap(transitionsOf)
+      .flatMap(({ target }) => {
+        const deep = target === undefined ? undefined : deepTargetOf(target)
+
+        return deep === undefined ? [] : [`${deep.parallel}.${deep.region}.${deep.state}`]
+      }),
+  )
+}
 
 /**
  * Per region of a parallel state that a transition of the root enters to `target`, the state

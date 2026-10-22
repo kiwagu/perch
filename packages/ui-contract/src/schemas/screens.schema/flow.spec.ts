@@ -305,4 +305,22 @@ describe('flowSchema with a parallel state', () => {
       ).toBe(false)
     }
   })
+  it('accepts an id target `#<flow id>.<state>`, the id one segment, as XState splits on `.`', () => {
+    const at = (target: string) =>
+      viewingChanged((viewing) => {
+        const closed = stateOf(regionOf(viewing, 'form'), 'closed')
+
+        closed['on'] = { 'organisation.create.submit-button': { target } }
+      })
+
+    expect(at('#organisation.selecting')).toBe(true)
+
+    for (const target of [
+      '#organisation',
+      '#user.sign-in.selecting',
+      '#organisation.viewing.form',
+    ]) {
+      expect(at(target), target).toBe(false)
+    }
+  })
 })

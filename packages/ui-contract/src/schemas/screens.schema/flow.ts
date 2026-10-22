@@ -4,9 +4,10 @@
  * name, the effects `show` and `navigate`, and an invoke per action. A state of the root may
  * be a parallel state, whose regions are the independent areas of the screen, each in one of
  * its plain states at a time; a transition of the root may name a region's state as
- * `<parallel>.<region>.<state>`. Everything else XState knows (`context`, `after`, `always`,
- * deeper nesting, history, targets by `#id` or `.child`, actions named by a string) is
- * refused: every object is strict.
+ * `<parallel>.<region>.<state>`, and one of a region's state a state of the root as
+ * `#<flow id>.<state>`. Everything else XState knows (`context`, `after`, `always`, deeper
+ * nesting, history, other targets by `#id`, `.child`, actions named by a string) is refused:
+ * every object is strict.
  */
 
 import { z } from '@workspace/zod'
@@ -24,9 +25,11 @@ export const flowStateNameSchema = z
 
 export const flowTargetSchema = z
   .string()
-  .regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*)?$/)
+  .regex(
+    /^(#[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*)?)$/,
+  )
   .describe(
-    'A state of the flow, or of the region the transition is in (`signing-in`); from the root, a state of a region as `<parallel>.<region>.<state>` (`viewing.create-form.open`).',
+    'A state of the flow, or of the region the transition is in (`signing-in`); from the root, a state of a region as `<parallel>.<region>.<state>` (`viewing.create-form.open`); from a state of a region, a state of the root as `#<flow id>.<state>` (`#organisation.viewing`).',
   )
 
 export const platformEventNameSchema = z

@@ -1,27 +1,28 @@
 /**
  * Every state is reachable and every plain state has a way out. The states of the root are
  * reached from `initial` through the targets of the root (a deep target reaches its parallel
- * state), the states of a region from the region's `initial` through the region's targets, a
- * transition without a target staying. A plain state, of the root or of a region, that is not
- * final has an event or an invoke to leave it; a parallel state is never stuck, as its regions
- * move, and needs no event of its own.
+ * state) and the id targets out of the regions of a parallel state; the states of a region
+ * from the region's `initial` and the states of it a deep target of the root names, through
+ * the region's targets; a transition without a target stays. A plain state, of the root or of
+ * a region, that is not final has an event or an invoke to leave it; a parallel state is never
+ * stuck, as its regions move, and needs no event of its own.
  */
 
 import type { FlowTransition, Problem } from '../../files'
 import { has } from '../contract'
 
 import type { InFlow } from './in-flow'
-import { type FlowNode, flowNodes, rootOf, transitionsOf } from './nodes'
+import { deepEnteredOf, type FlowNode, flowNodes, idTargetOf, rootOf, transitionsOf } from './nodes'
 
-/** The names reached from `initial`, each state's transitions read once. */
+/** The names reached from `seeds`, each state's transitions read once. */
 function reachedFrom(
-  initial: string,
+  seeds: readonly string[],
   states: Readonly<Record<string, unknown>>,
   transitionsAt: (name: string) => readonly FlowTransition[],
   landing: (target: string) => string,
 ): Set<string> {
   const reached = new Set<string>()
-  const next = has(states, initial) ? [initial] : []
+  const next = seeds.filter((seed) => has(states, seed))
 
   for (let name = next.pop(); name !== undefined; name = next.pop()) {
     const first = !reached.has(name)
@@ -42,16 +43,31 @@ const unreachable = (
   reached: ReadonlySet<string>,
 ): string[] => Object.keys(states).filter((name) => !reached.has(name))
 
+/**
+ * The transitions that leave a state of the root: of a parallel one, its own and the id targets
+ * of its regions' states.
+ */
+function rootTransitionsOf(nodes: readonly FlowNode[], name: string): FlowTransition[] {
+  return nodes.flatMap((node) => {
+    if (node.kind === 'region-state' && node.parallel === name) {
+      return transitionsOf(node.state).filter(
+        ({ target }) => target !== undefined && idTargetOf(target) !== undefined,
+      )
+    }
+
+    return (node.kind === 'root' || node.kind === 'parallel') && node.name === name
+      ? transitionsOf(node.state)
+      : []
+  })
+}
+
 export function unreachableProblems({ flow, at, inScreens }: InFlow): Problem[] {
   const nodes = flowNodes(flow)
+  const deep = deepEnteredOf(flow)
   const root = reachedFrom(
-    flow.initial,
+    [flow.initial],
     flow.states,
-    (name) => {
-      const state = flow.states[name]
-
-      return state === undefined ? [] : transitionsOf(state)
-    },
+    (name) => rootTransitionsOf(nodes, name),
     rootOf,
   )
 
@@ -66,7 +82,7 @@ export function unreachableProblems({ flow, at, inScreens }: InFlow): Problem[] 
 
       const { initial, states } = node.state
       const reached = reachedFrom(
-        initial,
+        [initial, ...Object.keys(states).filter((name) => deep.has(`${node.path}.${name}`))],
         states,
         (name) => {
           const state = states[name]

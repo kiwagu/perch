@@ -5,7 +5,8 @@
  * is a link to that path (`binding.route`). A transition reaches the effects XState runs on
  * it: its actions; on a move, the exit of its state and the entry of its target, then what
  * follows the target's invoke (`onDone` and `onError`); a move into a parallel state enters
- * it and each region at its starting state (the one a deep target names, else the initial).
+ * it and each region at its starting state (the one a deep target names, else the initial);
+ * an id target out of a region leaves its parallel state for the state of the root it names.
  * Each state is followed once.
  */
 
@@ -14,6 +15,7 @@ import { bindingRefsOf, own } from '../contract'
 import {
   type FlowNode,
   flowNodes,
+  idTargetOf,
   type ParallelNode,
   type RegionStateNode,
   type RootNode,
@@ -87,8 +89,19 @@ function navigatesAfter(flow: Flow, anchor: string): Set<string> {
     }
 
     if (from.kind === 'region-state') {
+      const id = idTargetOf(target)
+      const parallel = nodes.get(from.parallel)
+
       collect(from.state.exit)
-      enter(`${from.parallel}.${from.region}.${target}`)
+
+      if (id === undefined) {
+        enter(`${from.parallel}.${from.region}.${target}`)
+      } else {
+        // Out of the parallel state by the machine's id: its own exit, then the state of the
+        // root entered anew, even its own; the other regions' active states are unknown.
+        collect(parallel?.kind === 'parallel' ? parallel.state.exit : undefined)
+        enterRoot(id.state)
+      }
     } else if (from.kind === 'parallel' && rootOf(target) === from.name) {
       // Into itself, XState leaves and enters its regions' states only; the active ones are
       // unknown, so no exit is taken, and each region enters its starting state.

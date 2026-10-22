@@ -3,10 +3,13 @@ export { bindingsProblems } from './bindings'
 export { bindingRefsOf, type Contract, own } from './contract'
 export {
   type DeepTarget,
+  deepEnteredOf,
   deepTargetOf,
   type FlowNode,
   flowNodes,
   flowProblems,
+  type IdTarget,
+  idTargetOf,
   type ParallelNode,
   type RegionNode,
   type RegionStateNode,

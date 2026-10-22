@@ -125,9 +125,12 @@ describe('the walk of a flow', () => {
  * A screen of two independent areas, as the organisation page has: `viewing` is a parallel
  * state whose own events leave it, the form opens and closes, the notes add through an
  * invoke, a failed create lands with the form open (a deep target from a sibling), and a
- * reset starts both areas again with the form open (a deep target into itself).
+ * reset starts both areas again with the form open (a deep target into itself). The form
+ * submits in its own area: done, it re-enters `viewing` by the machine's id, every area at
+ * its initial state; and the notes leave for `away` by an id target from their idle state.
  */
 const AREAS = flowOf({
+  id: 'sample',
   initial: 'viewing',
   states: {
     viewing: {
@@ -149,14 +152,29 @@ const AREAS = flowOf({
             },
             open: {
               entry: [show(['opened'])],
-              on: { 'sample.toggle-button': { target: 'closed' } },
+              on: {
+                'sample.toggle-button': { target: 'closed' },
+                'sample.submit-button': { target: 'submitting' },
+              },
+            },
+            submitting: {
+              invoke: {
+                src: 'platform.organisations.create',
+                onDone: { target: '#sample.viewing', actions: [show(['created'])] },
+                onError: { target: 'open', actions: [show(['refused'])] },
+              },
             },
           },
         },
         notes: {
           initial: 'idle',
           states: {
-            idle: { on: { 'sample.add-button': { target: 'adding' } } },
+            idle: {
+              on: {
+                'sample.add-button': { target: 'adding' },
+                'sample.leave-button': { target: '#sample.away', actions: [show(['leaving'])] },
+              },
+            },
             adding: {
               invoke: {
                 src: 'note.createNote',
@@ -176,6 +194,7 @@ const AREAS = flowOf({
         onError: { target: 'viewing.form.open', actions: [show(['refused'])] },
       },
     },
+    away: { type: 'final' },
   },
 })
 
@@ -186,7 +205,7 @@ describe('the walk of a flow with a parallel state', () => {
     const viewing = machineOf(AREAS, new Set()).states['viewing']
 
     expect(viewing?.states['notes']?.states['adding']?.invoke[0]?.id).toBe(
-      '0.(machine).viewing.notes.adding',
+      '0.sample.viewing.notes.adding',
     )
   })
   it('walks each region on its own, the others at their initial state', () => {
@@ -195,11 +214,13 @@ describe('the walk of a flow with a parallel state', () => {
       'viewing.form',
       'viewing.form.closed',
       'viewing.form.open',
+      'viewing.form.submitting',
       'viewing.notes',
       'viewing.notes.idle',
       'viewing.notes.adding',
       'selecting',
       'creating',
+      'away',
     ])
   })
   it('lands where XState does, with the effects in its order, as the flow expects', () => {
@@ -219,7 +240,23 @@ describe('the walk of a flow with a parallel state', () => {
         [show(['unfolded']), show(['opened'])],
       ],
       ['viewing.form.open sample.toggle-button[0]', at('closed', 'idle'), []],
+      ['viewing.form.open sample.submit-button[0]', at('submitting', 'idle'), []],
+      [
+        'viewing.form.submitting onDone[0]',
+        at('closed', 'idle'),
+        [show(['left']), show(['created']), show(['entered'])],
+      ],
+      [
+        'viewing.form.submitting onError[0]',
+        at('open', 'idle'),
+        [show(['refused']), show(['opened'])],
+      ],
       ['viewing.notes.idle sample.add-button[0]', at('closed', 'adding'), []],
+      [
+        'viewing.notes.idle sample.leave-button[0]',
+        'away',
+        [show(['unfolded']), show(['left']), show(['leaving'])],
+      ],
       ['viewing.notes.adding onDone[0]', at('closed', 'idle'), []],
       ['viewing.notes.adding onError[0]', at('closed', 'idle'), [show(['failed'])]],
       ['selecting onDone[0]', at('closed', 'idle'), [show(['entered'])]],
@@ -236,5 +273,46 @@ describe('the walk of a flow with a parallel state', () => {
     }
 
     expect(cases.map(({ label }) => label)).toEqual(casesOfFlow(AREAS).map(({ label }) => label))
+  })
+  it('walks a state of a region that only a deep target of the root enters', () => {
+    const flow = flowOf({
+      initial: 'loading',
+      states: {
+        loading: { on: { 'sample.go-button': { target: 'viewing.form.open' } } },
+        viewing: {
+          type: 'parallel',
+          states: {
+            form: {
+              initial: 'closed',
+              states: {
+                closed: { on: { 'sample.toggle-button': { actions: [show(['kept'])] } } },
+                open: { on: { 'sample.toggle-button': { target: 'closed' } } },
+              },
+            },
+            notes: {
+              initial: 'idle',
+              states: { idle: { on: { 'sample.add-button': { actions: [show(['kept'])] } } } },
+            },
+          },
+        },
+      },
+    })
+    const { visited, cases } = walk(flow)
+
+    expect(visited).toEqual([
+      'loading',
+      'viewing',
+      'viewing.form',
+      'viewing.form.closed',
+      'viewing.form.open',
+      'viewing.notes',
+      'viewing.notes.idle',
+    ])
+
+    for (const { label, expected, actual } of cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(cases.map(({ label }) => label)).toEqual(casesOfFlow(flow).map(({ label }) => label))
   })
 })

@@ -44,6 +44,7 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain(
       "an event is handled by one region or by the state's own `on`, never by two",
     )
+    expect(instructions.screenMap).toContain('`#<flow id>.<state>`')
   })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')

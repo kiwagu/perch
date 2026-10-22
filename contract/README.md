@@ -243,9 +243,12 @@ unchanged, as it carries a binding into the router.
   a `guard`, `actions` and a `description`. XState resolves a target from the parent of its
   state: at the root it is a state of the flow, or a state of a region as
   `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the
-  others at their `initial`); in a region it is a state of that region. Within a parallel
-  state an event belongs to one area, one region or the state's own `on`, never two; the
-  same event may appear in several states of one region.
+  others at their `initial`); in a region it is a state of that region, or a state of the
+  root by the machine's id, `#<flow id>.<state>` (`#organisation.viewing`, the flow declaring
+  its `id`, the screen's), which leaves the parallel state and enters that state afresh, the
+  parallel state itself with every region at its `initial`. Within a parallel state an event
+  belongs to one area, one region or the state's own `on`, never two; the same event may
+  appear in several states of one region.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
@@ -265,9 +268,10 @@ unchanged, as it carries a binding into the router.
   declares an address yet.
 
 Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested
-deeper than a parallel state's regions, history states, targets by `#id` or `.child`, or
-actions named by a string. A state of a region is the area's own: where the app keeps one
-per item (each note's edit form), the region follows the item acted on last and says so.
+deeper than a parallel state's regions, history states, targets by `.child` or by an id
+from anywhere but a region's state, or actions named by a string. A state of a region is
+the area's own: where the app keeps one per item (each note's edit form), the region follows
+the item acted on last and says so.
 The flow's states are the machine's; the screen's `states` stay the container states.
 `contract:check` holds the flow to the contract, and
 `apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState: a pure walk with
