@@ -139,8 +139,7 @@ function AlertDialogCancel({
       data-slot="alert-dialog-cancel"
       className={cn(className)}
       render={
-        // ui-contract-ignore-self: the button Close renders, given the caller's anchor through
-        // the props of AlertDialogCancel, which is counted where it is used
+        // ui-contract-ignore-self: rendered by Close with the anchor given to AlertDialogCancel
         <Button variant={variant} size={size} />
       }
       {...props}

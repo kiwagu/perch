@@ -14,10 +14,20 @@ export function Ignored(props: { readonly open: () => void; readonly close: () =
       <Link to="/card">
         <Button onClick={props.open}>Open</Button>
       </Link>
+      {/* ui-contract-ignore-self: the home link is drawn twice, this one for show */}
+      <Link to="/" data-testid="sample.home-link">
+        <Button size="icon">
+          <HomeIcon />
+        </Button>
+      </Link>
+      <label>
+        Name
+        {/* ui-contract-ignore: the name is typed in the form, not here */}
+        <input name="name" />
+      </label>
       <Close
         render={
-          // ui-contract-ignore-self: the button Close renders; the anchor of
-          // the caller reaches it through the props of Close
+          // ui-contract-ignore-self: the button Close renders for its caller
           <Button variant="ghost" />
         }
       >

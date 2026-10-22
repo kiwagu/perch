@@ -67,14 +67,15 @@ root export is build-time tooling for Bun.
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, and every suffix and code in the vocabulary. `ignoreMarkers(text, comments)`
-    reads the coverage-ignore markers of a file from the parser's comments: a comment
-    `ui-contract-ignore: <reason>` (the element and its subtree) or
-    `ui-contract-ignore-self: <reason>` (the element alone) right before a JSX element, as
-    a line comment whose reason may go on over the next ones or as a block comment in braces
-    among JSX children; each `IgnoreMarker` points at the element after it, and a marker
-    without a reason or in neither form is a fault (`IGNORE_WITHOUT_REASON`,
-    `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element starts where it points).
+    a suffix, and every suffix and code in the vocabulary.
+    `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
+    file: `ui-contract-ignore: <reason>` (the element and its subtree) or
+    `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
+    the only content of a JSX comment container among JSX children, with only white space
+    before the element; each `IgnoreMarker` points at the element after it, and a marker
+    whose own reason is shorter than three characters, or in another form, is a fault
+    (`IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element
+    starts where it points).
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
     returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
@@ -102,8 +103,8 @@ root export is build-time tooling for Bun.
     unbound (`ModelCoverage`, `BoundMember`): the first measure. `countControls(text, file)`
     counts the controls of one source file (`CONTROL_TAGS`, or any element with an
     `onClick`) and how many carry an anchor, lists the unmarked ones by line, tag and static
-    label (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason,
-    and the markers it cannot apply as problems; `measureCoverage(root)` returns the model's
+    label (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason
+    (whatever they carry), and the markers it cannot apply as problems; `measureCoverage(root)` returns the model's
     measure, the controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
     `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
     screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`

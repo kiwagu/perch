@@ -61,8 +61,8 @@ None.
 ### Ignored
 
 ```text
-packages/ui/src/components/ui/alert-dialog.tsx:144: Button — the button Close renders, given the caller's anchor through the props of AlertDialogCancel, which is counted where it is used
-packages/ui/src/components/ui/sheet.tsx:66: Button — no screen renders a sheet yet; the first one that does derives this button's anchor from the sheet's, with the close-button suffix
+packages/ui/src/components/ui/alert-dialog.tsx:143: Button — rendered by Close with the anchor given to AlertDialogCancel
+packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet yet; the first one anchors it
 ```
 
 ## Screens
@@ -107,13 +107,14 @@ the anchors of the code and of the screen files equal.
   `<label>`, which names it for a locator. Whether the value is an anchor the contract
   declares is the sources check's business, not this count's.
 - **Ignored.** A control that is not a test target is declared so in the source, with a
-  reason, by a comment right before its element: `// ui-contract-ignore: <reason>` on the
-  lines before it, or `{/* ui-contract-ignore: <reason> */}` among JSX children.
-  `ui-contract-ignore` covers the element and everything inside it,
-  `ui-contract-ignore-self` the element alone. An ignored control is neither marked nor unmarked, and is listed with its
-  reason. A control that carries an anchor stays marked under a marker. A marker without a
-  reason of three characters or more, or with no element right after it, is a problem: the
-  command prints it and writes nothing.
+  reason, by a comment right before its element, with only white space between: in code the
+  line comment `// ui-contract-ignore: <reason>`, among JSX children
+  `{/* ui-contract-ignore: <reason> */}`. `ui-contract-ignore` covers the element and
+  everything inside it, `ui-contract-ignore-self` the element alone. An ignored control is
+  neither marked nor unmarked, whatever it carries (an anchor, a `<label>` around it), and
+  is listed with its reason; the elements inside it are not taken as its parts. A marker
+  whose own reason is shorter than three characters, written in another form, or not right
+  before an element is a problem: the command prints it and writes nothing.
 - **Unmarked.** The controls that are neither marked nor ignored, listed as
   `file:line: <element>`, the element's tag with its `aria-label` or its text when that is a
   static string. `bun run contract:coverage --unmarked` prints the same two lists.

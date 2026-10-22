@@ -161,7 +161,6 @@ anchor follows the grammar and is declared once, every kind, state, code, role a
 value is in the vocabulary, every code of the vocabulary is used, every binding points at a
 field, an action or a route that exists. Its sources mode scans the application for anchor
 literals and fails when the code renders an anchor the contract does not declare, or the
-contract declares one the code does not render. The coverage note reports, per entity of the
-model, the fields and actions an anchor binds, per screen its anchors and the scenarios that
-open it, and per feature module and for the UI kit, the controls and how many of them carry an
-anchor or are declared off the coverage.
+contract declares one the code does not render. The coverage note reports, per screen, its
+anchors and the scenarios that open it, and per feature module and for the UI kit, the controls
+and how many of them carry an anchor.

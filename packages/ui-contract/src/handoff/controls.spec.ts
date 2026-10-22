@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
-import { IGNORE_WITHOUT_ELEMENT, IGNORE_WITHOUT_REASON } from '../sources'
+import { IGNORE_MALFORMED, IGNORE_WITHOUT_ELEMENT, IGNORE_WITHOUT_REASON } from '../sources'
 
 import { countControls } from './controls'
 
@@ -110,46 +110,76 @@ describe('countControls', () => {
 })
 
 describe('countControls with coverage-ignore markers', () => {
-  const ignored = countControls(readFileSync(join(FIXTURES, 'ignored.tsx'), 'utf8'), 'ignored.tsx')
+  const fixture = (name: string) =>
+    countControls(readFileSync(join(FIXTURES, name), 'utf8'), `sources/${name}`)
+  const ignored = fixture('ignored.tsx')
   const PAGER = 'a decorative pager, no scenario pages through it'
   const CARD = 'the card link is a mouse convenience'
-  const CLOSE =
-    'the button Close renders; the anchor of the caller reaches it through the props of Close'
+  const HOME = 'the home link is drawn twice, this one for show'
+  const NAME = 'the name is typed in the form, not here'
+  const CLOSE = 'the button Close renders for its caller'
+  const reasoned = (reason: string) => ignored.ignored.filter((entry) => entry.reason === reason)
 
-  it('declares off every unmarked control of a subtree, and keeps an anchored one marked', () => {
-    expect(ignored.ignored.filter(({ reason }) => reason === PAGER)).toEqual([
+  it('declares off every control of a subtree, an anchored one included', () => {
+    expect(reasoned(PAGER)).toEqual([
       { line: 7, tag: 'a', label: 'first', reason: PAGER },
       { line: 8, tag: 'button', label: 'next', reason: PAGER },
+      { line: 11, tag: 'Button', label: 'Save', reason: PAGER },
     ])
-    expect(ignored.marked).toBe(1)
   })
   it('declares off only the element of a -self marker, and counts what it holds on its own', () => {
-    expect(ignored.ignored.filter(({ reason }) => reason === CARD)).toEqual([
-      { line: 14, tag: 'Link', label: 'Open', reason: CARD },
-    ])
+    expect(reasoned(CARD)).toEqual([{ line: 14, tag: 'Link', label: 'Open', reason: CARD }])
     expect(ignored.unmarked).toContainEqual({ line: 15, tag: 'Button', label: 'Open' })
   })
-  it('reads a marker written before an element in an attribute', () => {
-    expect(ignored.ignored.filter(({ reason }) => reason === CLOSE)).toEqual([
-      { line: 21, tag: 'Button', reason: CLOSE },
-    ])
+  it('lets an anchored element under a -self marker leave its parts to be counted', () => {
+    expect(reasoned(HOME)).toEqual([{ line: 18, tag: 'Link', reason: HOME }])
+    expect(ignored.unmarked).toContainEqual({ line: 19, tag: 'Button' })
   })
-  it('counts an ignored control as neither marked nor unmarked', () => {
+  it('declares off a control inside a label', () => {
+    expect(reasoned(NAME)).toEqual([{ line: 26, tag: 'input', reason: NAME }])
+  })
+  it('reads a marker written before an element in an attribute', () => {
+    expect(reasoned(CLOSE)).toEqual([{ line: 31, tag: 'Button', reason: CLOSE }])
+  })
+  it('counts an ignored control as neither marked nor unmarked, whatever it carries', () => {
     expect(ignored).toEqual({
       controls: 4,
-      marked: 1,
+      marked: 0,
       unmarked: [
         { line: 15, tag: 'Button', label: 'Open' },
-        { line: 24, tag: 'a', label: 'Go inside' },
-        { line: 28, tag: 'button', label: 'Close' },
+        { line: 19, tag: 'Button' },
+        { line: 34, tag: 'a', label: 'Go inside' },
+        { line: 38, tag: 'button', label: 'Close' },
       ],
       ignored: [
         { line: 7, tag: 'a', label: 'first', reason: PAGER },
         { line: 8, tag: 'button', label: 'next', reason: PAGER },
+        { line: 11, tag: 'Button', label: 'Save', reason: PAGER },
         { line: 14, tag: 'Link', label: 'Open', reason: CARD },
-        { line: 21, tag: 'Button', reason: CLOSE },
+        { line: 18, tag: 'Link', reason: HOME },
+        { line: 26, tag: 'input', reason: NAME },
+        { line: 31, tag: 'Button', reason: CLOSE },
       ],
       problems: [],
+    })
+  })
+  it('refuses a reason on the next comment line, a comment between, and a block comment in code', () => {
+    const rejected = fixture('rejected-markers.tsx')
+
+    expect(rejected.problems.map(formatProblem)).toEqual([
+      `sources/rejected-markers.tsx:7: ${IGNORE_WITHOUT_REASON}`,
+      `sources/rejected-markers.tsx:14: ${IGNORE_WITHOUT_ELEMENT}`,
+      `sources/rejected-markers.tsx:19: ${IGNORE_MALFORMED}`,
+      `sources/rejected-markers.tsx:20: ${IGNORE_WITHOUT_ELEMENT}`,
+    ])
+    expect(rejected).toMatchObject({
+      controls: 3,
+      unmarked: [
+        { line: 9, tag: 'Button' },
+        { line: 16, tag: 'Button' },
+        { line: 19, tag: 'Button' },
+      ],
+      ignored: [],
     })
   })
   it('reports a marker without a reason and one that no element follows, and applies neither', () => {

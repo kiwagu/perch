@@ -61,8 +61,7 @@ function SheetContent({
           <SheetPrimitive.Close
             data-slot="sheet-close"
             render={
-              // ui-contract-ignore-self: no screen renders a sheet yet; the first one that does
-              // derives this button's anchor from the sheet's, with the close-button suffix
+              // ui-contract-ignore-self: no screen renders a sheet yet; the first one anchors it
               <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" />
             }
           >

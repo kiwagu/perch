@@ -5,8 +5,9 @@
  * `testId` or `*TestId` prop, or sits inside a `<label>`. An element inside a marked
  * control without an action of its own is a part of that control and is not counted; an
  * element that passes on the props it receives is not counted either, since whoever renders
- * it decides what it carries. An unmarked control that a coverage-ignore marker covers is
- * ignored: declared not a test target, it is neither marked nor unmarked.
+ * it decides what it carries. A control a coverage-ignore marker covers is ignored, whatever
+ * it carries: declared not a test target, it is neither marked nor unmarked, and the
+ * elements inside it are not taken as its parts.
  * An indicator read from the source text, not a rule of the contract.
  */
 
@@ -37,7 +38,7 @@ export interface Controls {
   controls: number
   marked: number
   unmarked: ControlPlace[]
-  /** The unmarked controls a coverage-ignore marker declares off, with its reason. */
+  /** The controls a coverage-ignore marker declares off, with its reason. */
   ignored: Array<ControlPlace & { reason: string }>
   /** The markers that cannot be applied: without a reason, or before no JSX element. */
   problems: Problem[]
@@ -159,7 +160,7 @@ export function countControls(text: string, file: string): Controls {
     throw new Error(`${file}:${line(error.labels[0]?.start ?? 0)}: ${error.message}`)
   }
 
-  const { markers, faults } = ignoreMarkers(text, comments)
+  const { markers, faults } = ignoreMarkers(text, { program, comments })
   const pending = new Map(markers.map((marker) => [marker.target, marker]))
   const counted: Controls = { controls: 0, marked: 0, unmarked: [], ignored: [], problems: [] }
   const top: Context = { inLabel: false, inMarked: false, ignoredFor: undefined }
@@ -182,20 +183,20 @@ export function countControls(text: string, file: string): Controls {
         const label = labelOf(element)
         const place = { line: line(element.start), tag, ...(label === undefined ? {} : { label }) }
 
-        if (anchored || context.inLabel) {
+        if (ignoredFor !== undefined) {
+          counted.ignored.push({ ...place, reason: ignoredFor })
+        } else if (anchored || context.inLabel) {
           counted.controls += 1
           counted.marked += 1
-        } else if (ignoredFor === undefined) {
+        } else {
           counted.controls += 1
           counted.unmarked.push(place)
-        } else {
-          counted.ignored.push({ ...place, reason: ignoredFor })
         }
       }
 
       stack.push({
         inLabel: context.inLabel || tag === 'label',
-        inMarked: context.inMarked || (control && anchored),
+        inMarked: context.inMarked || (control && anchored && ignoredFor === undefined),
         ignoredFor: marker === undefined || marker.self ? context.ignoredFor : marker.reason,
       })
     },
