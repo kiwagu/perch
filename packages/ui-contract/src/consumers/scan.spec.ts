@@ -68,6 +68,35 @@ describe('collectFromTest', () => {
       `an anchor built at runtime; write it as a literal, getByTestId('<anchor>') or [data-testid="<anchor>"]`,
     )
   })
+  it('reads the code, state, value or anchor toHaveAttribute asserts, with .not too, at the line of the value', () => {
+    const { literals, problems } = collected('attributes.ts')
+
+    expect(literals).toEqual([
+      { kind: 'anchor', value: 'sample.save-button', line: 6 },
+      { kind: 'anchor', value: 'sample.list', line: 7 },
+      { kind: 'code', value: 'saved', line: 9 },
+      { kind: 'code', value: 'lost', line: 10 },
+      { kind: 'state', value: 'loading', line: 11 },
+      { kind: 'code', value: 'failed', line: 12 },
+      { kind: 'anchor', value: 'sample.mode-select.option', line: 13 },
+      { kind: 'value', value: 'c', line: 15 },
+      { kind: 'anchor', value: 'sample.list', line: 17 },
+    ])
+    expect(problems).toEqual([])
+    expect(
+      collectFromTest('await expect(x).toHaveAttribute("data-state", "ready")\n', 'a.ts').literals,
+    ).toEqual([{ kind: 'state', value: 'ready', line: 1 }])
+  })
+  it('passes over a value toHaveAttribute takes from an expression, but not an anchor', () => {
+    const text =
+      "expect(x).toHaveAttribute('data-code', code)\nexpect(x).toHaveAttribute('data-testid', id)\n"
+
+    expect(collectFromTest(text, 'a.ts')).toEqual({
+      file: 'a.ts',
+      literals: [],
+      problems: [{ file: 'a.ts', line: 2, message: RUNTIME_TEST_ANCHOR }],
+    })
+  })
   it('reads the line of a selector inside a template that spans lines', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
     const text = 'const s = `\n  ${a}\n  [data-testid="sample.page"]\n  [data-code="${b}"]`\n'

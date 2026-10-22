@@ -31,6 +31,12 @@ describe('compareConsumers', () => {
       'consumers/unknown.ts:10: "c" is not a choice value of the vocabulary',
     ])
   })
+  it('reports a code, a state or a value toHaveAttribute asserts the same way', () => {
+    expect(printed(['attributes.ts'])).toEqual([
+      'consumers/attributes.ts:10: "lost" is not a code of the vocabulary',
+      'consumers/attributes.ts:15: "c" is not a choice value of the vocabulary',
+    ])
+  })
   it('keeps the anchors built at runtime, sorted with the rest by file and line', () => {
     expect(printed(['unknown.ts', 'runtime.ts', 'known.ts'])).toEqual([
       `consumers/runtime.ts:7: ${RUNTIME_TEST_ANCHOR}`,

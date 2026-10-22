@@ -78,11 +78,13 @@ root export is build-time tooling for Bun.
     starts where it points).
   - The consumers check: `collectFromTest(text, file)` reads one file of the e2e tests with
     oxc-parser and returns what it names of the contract (`Consumed`, its `ConsumedLiteral`s):
-    the anchor of a `getByTestId('<anchor>')` call, and in any string or template literal the
+    the anchor of a `getByTestId('<anchor>')` call; in any string or template literal the
     `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]`
-    selectors, in double or single quotes (a `data-id` is data and is not read); an anchor
-    built at runtime is a problem (`RUNTIME_TEST_ANCHOR`), a code, a state or a value from an
-    expression passes. `scanConsumers(root, tests?)` collects the `.ts` files under
+    selectors, in double or single quotes; and the value a
+    `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not`
+    included. A `data-id` is data and is not read, and neither is a helper call such as
+    `notice(page, '<code>')`; an anchor built at runtime is a problem (`RUNTIME_TEST_ANCHOR`),
+    a code, a state or a value from an expression passes. `scanConsumers(root, tests?)` collects the `.ts` files under
     `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given; `compareConsumers(consumed,
     contract)` wants every anchor known (declared, or derived from a declared base with a
     suffix it lists in `derived`), every code, state and choice value in the vocabulary, as

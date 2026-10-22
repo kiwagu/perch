@@ -1,17 +1,20 @@
 /**
  * Reads what the e2e tests name of the contract, as the consumers check reads it: the anchor
- * of a `getByTestId('<anchor>')` call, and in any string or template literal the attribute
+ * of a `getByTestId('<anchor>')` call; in any string or template literal the attribute
  * selectors `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and
- * `[data-value="..."]`, in double or single quotes. Nothing else is read: a `data-id` is data,
- * and no helper is followed. An anchor built at runtime (a `getByTestId` of anything but a
- * literal, a `data-testid` holding an expression) is a problem, since no check can follow it;
- * a code, a state or a value from an expression is a parameter of the test and passes.
+ * `[data-value="..."]`, in double or single quotes; and the value a
+ * `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not`
+ * included. Nothing else is read: a `data-id` is data, and no helper is followed (a
+ * `notice(page, '<code>')` is not read). An anchor built at runtime (a `getByTestId` of
+ * anything but a literal, a `data-testid` holding an expression) is a problem, since no check
+ * can follow it; a code, a state or a value from an expression is a parameter of the test and
+ * passes.
  */
 
 import { readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
-import { parseSync, Visitor } from 'oxc-parser'
+import { type Argument, parseSync, Visitor } from 'oxc-parser'
 
 import type { Problem } from '../files'
 import { filesUnder } from '../files/files-under'
@@ -42,6 +45,8 @@ const WORDS = /getByTestId|data-(testid|code|state|value)/
 const SELECTOR = /\[data-(testid|code|state|value)=(["'])(.*?)\2\]/g
 
 const EXPRESSION = '\0'
+
+const DATA = 'data-'
 
 const TEST_SOURCE = /\.ts$/
 
@@ -94,6 +99,15 @@ export function collectFromTest(text: string, file: string): Consumed {
     return line(parts[0]?.at ?? 0)
   }
 
+  /** A literal of `kind` at line `at`, or, built at runtime, a problem when it is an anchor. */
+  const found = (kind: ConsumedLiteral['kind'], value: string | undefined, at: number): void => {
+    if (value !== undefined) {
+      consumed.literals.push({ kind, value, line: at })
+    } else if (kind === 'anchor') {
+      consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
+    }
+  }
+
   /** The selectors of one string or template, each at the line its `[` is on. */
   const selectors = (parts: readonly Part[]): void => {
     const joined = parts.map((part) => part.text).join(EXPRESSION)
@@ -102,17 +116,19 @@ export function collectFromTest(text: string, file: string): Consumed {
       const [, attribute = '', , value = ''] = match
       const kind = kindOf(attribute)
 
-      if (kind === undefined) {
-        continue
+      if (kind !== undefined) {
+        found(kind, value.includes(EXPRESSION) ? undefined : value, lineIn(parts, match.index))
       }
+    }
+  }
 
-      const at = lineIn(parts, match.index)
+  /** `toHaveAttribute('data-<attribute>', <value>)`: the value, at its line. */
+  const asserted = ([name, value]: readonly Argument[]): void => {
+    const attribute = staticText(name)
+    const kind = attribute?.startsWith(DATA) ? kindOf(attribute.slice(DATA.length)) : undefined
 
-      if (!value.includes(EXPRESSION)) {
-        consumed.literals.push({ kind, value, line: at })
-      } else if (kind === 'anchor') {
-        consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
-      }
+    if (kind !== undefined && value !== undefined) {
+      found(kind, staticText(value), line(value.start))
     }
   }
 
@@ -126,18 +142,12 @@ export function collectFromTest(text: string, file: string): Consumed {
             ? callee.property.name
             : undefined
 
-      if (name !== 'getByTestId') {
-        return
-      }
+      if (name === 'getByTestId') {
+        const [argument] = node.arguments
 
-      const [argument] = node.arguments
-      const anchor = staticText(argument)
-      const at = line(argument?.start ?? node.start)
-
-      if (anchor === undefined) {
-        consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
-      } else {
-        consumed.literals.push({ kind: 'anchor', value: anchor, line: at })
+        found('anchor', staticText(argument), line(argument?.start ?? node.start))
+      } else if (name === 'toHaveAttribute') {
+        asserted(node.arguments)
       }
     },
     Literal(node) {
