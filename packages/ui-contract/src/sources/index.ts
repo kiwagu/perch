@@ -1,4 +1,10 @@
-export { type Collected, collectFromSource, RUNTIME_ANCHOR, RUNTIME_SUFFIX } from './collect'
+export {
+  type Collected,
+  collectFromSource,
+  isAnchorAttribute,
+  RUNTIME_ANCHOR,
+  RUNTIME_SUFFIX,
+} from './collect'
 export { compareWithContract } from './compare'
 export {
   IGNORE_MALFORMED,
@@ -8,5 +14,5 @@ export {
   type IgnoreMarker,
   ignoreMarkers,
 } from './ignore'
-export { SOURCE_ROOTS, scanSources } from './scan'
-export { unwrap } from './values'
+export { SOURCE_ROOTS, scanSources, sourcePaths } from './scan'
+export { attributeValue, staticText, unwrap } from './values'

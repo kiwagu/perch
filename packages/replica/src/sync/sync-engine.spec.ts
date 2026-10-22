@@ -9,8 +9,7 @@ import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
 import appendStatement from '../surql/replica-append.surql'
-import { interceptRegionResets } from '../testing/intercept-region-resets'
-import type { ManualClock } from '../testing/manual-clock'
+import { interceptRegionResets, type ManualClock } from '../testing'
 
 import {
   acmeRegion,

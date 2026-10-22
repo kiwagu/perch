@@ -8,7 +8,7 @@ import { identityId, profileId } from './__fixtures__/profile'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
 import { replaceRegionDoc } from './region-replacement'
-import { interceptRegionResets } from './testing/intercept-region-resets'
+import { interceptRegionResets } from './testing'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
 const key = `profile/${profileId}`

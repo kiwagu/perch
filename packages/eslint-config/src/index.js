@@ -7,7 +7,9 @@
  *   - immutability and no-throw discipline in domain and application code
  *     (eslint-plugin-functional),
  *   - one class per file everywhere, and one exported function or class per file in
- *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file).
+ *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file),
+ *   - a folder with an index.ts, or a module, entered only through its index
+ *     (workspace/import-through-index).
  * No rule here may format tokens.
  */
 
@@ -17,11 +19,16 @@ import functional from 'eslint-plugin-functional'
 import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 
+import { importThroughIndex } from './rules/import-through-index.js'
 import { mustUseResult } from './rules/must-use-result.js'
 import { oneUnitPerFile } from './rules/one-unit-per-file.js'
 
 const workspace = {
-  rules: { 'must-use-result': mustUseResult, 'one-unit-per-file': oneUnitPerFile },
+  rules: {
+    'import-through-index': importThroughIndex,
+    'must-use-result': mustUseResult,
+    'one-unit-per-file': oneUnitPerFile,
+  },
 }
 
 const paddingRules = [
@@ -54,6 +61,7 @@ const UI_MODULES = [
   '@workspace/ui/*',
 ]
 const TESTS = '**/*.spec.{ts,tsx}'
+const TYPED = { files: ['**/*.{ts,tsx}'], ignores: ['**/*.config.ts'] }
 
 const RAW_DRIVERS = ['surrealdb', '@surrealdb/*', 'loro-crdt']
 const DATA_PACKAGES = [
@@ -134,8 +142,7 @@ export const base = [
     },
   },
   {
-    files: ['**/*.{ts,tsx}'],
-    ignores: ['**/*.config.ts'],
+    ...TYPED,
     languageOptions: {
       parserOptions: { projectService: true },
     },
@@ -158,6 +165,7 @@ export const base = [
       '@typescript-eslint/no-unsafe-member-access': 'error',
       '@typescript-eslint/no-unsafe-return': 'error',
       'workspace/must-use-result': 'error',
+      'workspace/import-through-index': 'error',
     },
   },
   {
@@ -257,5 +265,19 @@ export const base = [
     },
   },
 ]
+
+/**
+ * The import-through-index rule with the repository's own layout, by absolute paths:
+ * `modules` lists folders of modules (`{ root, flat, outside }`: the modules that predate the
+ * rule and the folders that are not modules), `reachIn` the folders that may still import
+ * inside another one (`{ folder, from }`). See the rule for the details.
+ */
+export function importBoundaries({ modules = [], reachIn = [] }) {
+  return {
+    ...TYPED,
+    plugins: { workspace },
+    rules: { 'workspace/import-through-index': ['error', { modules, reachIn }] },
+  }
+}
 
 export default base

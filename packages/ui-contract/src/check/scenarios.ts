@@ -8,8 +8,7 @@
  * holds); the ids are paths, so each is used once.
  */
 
-import { ACTIVITIES_DIR, type Problem, scenarioFile } from '../files'
-import { jsonPath, lineAt } from '../files/problems'
+import { ACTIVITIES_DIR, jsonPath, lineAt, type Problem, scenarioFile } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 
 import {

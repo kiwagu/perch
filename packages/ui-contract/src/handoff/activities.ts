@@ -11,10 +11,9 @@
  */
 
 import type { Contract } from '../check'
-import { own } from '../check/contract'
-import { textsOf } from '../check/scenarios'
+import { own, textsOf } from '../check'
 import type { Activity } from '../files'
-import { type Lines, lineAt } from '../files/problems'
+import { type Lines, lineAt } from '../files'
 import { referencesIn, type Scenario } from '../scenarios'
 
 export interface ActivityCoverage {
