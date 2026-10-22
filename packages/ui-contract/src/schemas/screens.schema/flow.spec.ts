@@ -9,7 +9,7 @@ const SHOW_ERROR = {
 
 /** A machine config of the subset: every field it accepts, each once. */
 const SIGN_IN = {
-  id: 'user.sign-in',
+  id: 'sign-in',
   description: 'Signs in, or creates an account.',
   initial: 'sign-in',
   meta: { guards: { nameGiven: 'the name input holds a name' } },
@@ -100,6 +100,13 @@ describe('flowSchema', () => {
         Object.assign(stateOf(config, 'sign-in'), {
           exit: [{ type: 'navigate', params: { to: 'me' } }],
         })
+      }),
+    ).toBe(false)
+  })
+  it('refuses an id of two segments, as XState splits an id target on `.`', () => {
+    expect(
+      changed((config) => {
+        config['id'] = 'user.sign-in'
       }),
     ).toBe(false)
   })

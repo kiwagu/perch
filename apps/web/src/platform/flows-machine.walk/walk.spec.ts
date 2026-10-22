@@ -125,7 +125,9 @@ describe('the walk of a flow', () => {
  * A screen of two independent areas, as the organisation page has: `viewing` is a parallel
  * state whose own events leave it, the form opens and closes, the notes add through an
  * invoke, a failed create lands with the form open (a deep target from a sibling), and a
- * reset starts both areas again with the form open (a deep target into itself). The form
+ * reset starts both areas again with the form open (a deep target into itself), a restart
+ * with every area at its initial (a target into itself by name), and a peek at the notes
+ * neither moves nor runs anything, which XState does not count as handled. The form
  * submits in its own area: done, it re-enters `viewing` by the machine's id, every area at
  * its initial state; and the notes leave for `away` by an id target from their idle state.
  */
@@ -141,6 +143,7 @@ const AREAS = flowOf({
         'sample.select': { target: 'selecting' },
         'sample.create-button': { target: 'creating' },
         'sample.reset-button': { target: 'viewing.form.open', actions: [show(['reset'])] },
+        'sample.restart-button': { target: 'viewing', actions: [show(['restarted'])] },
       },
       states: {
         form: {
@@ -173,6 +176,7 @@ const AREAS = flowOf({
               on: {
                 'sample.add-button': { target: 'adding' },
                 'sample.leave-button': { target: '#sample.away', actions: [show(['leaving'])] },
+                'sample.peek-button': { description: 'Nothing moves and nothing runs.' },
               },
             },
             adding: {
@@ -235,6 +239,11 @@ describe('the walk of a flow with a parallel state', () => {
         [show(['unfolded']), show(['reset']), show(['opened'])],
       ],
       [
+        'viewing sample.restart-button[0]',
+        at('closed', 'idle'),
+        [show(['unfolded']), show(['restarted'])],
+      ],
+      [
         'viewing.form.closed sample.toggle-button[0]',
         at('open', 'idle'),
         [show(['unfolded']), show(['opened'])],
@@ -257,6 +266,7 @@ describe('the walk of a flow with a parallel state', () => {
         'away',
         [show(['unfolded']), show(['left']), show(['leaving'])],
       ],
+      ['viewing.notes.idle sample.peek-button[0]', at('closed', 'idle'), []],
       ['viewing.notes.adding onDone[0]', at('closed', 'idle'), []],
       ['viewing.notes.adding onError[0]', at('closed', 'idle'), [show(['failed'])]],
       ['selecting onDone[0]', at('closed', 'idle'), [show(['entered'])]],
@@ -266,6 +276,10 @@ describe('the walk of a flow with a parallel state', () => {
         at('open', 'idle'),
         [show(['refused']), show(['entered']), show(['opened'])],
       ],
+    ])
+
+    expect(cases.filter(({ actual }) => !actual.handled).map(({ label }) => label)).toEqual([
+      'viewing.notes.idle sample.peek-button[0]',
     ])
 
     for (const { label, expected, actual } of cases) {
@@ -285,13 +299,13 @@ describe('the walk of a flow with a parallel state', () => {
             form: {
               initial: 'closed',
               states: {
-                closed: { on: { 'sample.toggle-button': { actions: [show(['kept'])] } } },
+                closed: { on: { 'sample.toggle-button': {} } },
                 open: { on: { 'sample.toggle-button': { target: 'closed' } } },
               },
             },
             notes: {
               initial: 'idle',
-              states: { idle: { on: { 'sample.add-button': { actions: [show(['kept'])] } } } },
+              states: { idle: { on: { 'sample.add-button': {} } } },
             },
           },
         },

@@ -384,9 +384,10 @@ viewing:
       # idle, adding (invokes note.createNote) ...
 ```
 
-A target in a region names a state of that region or, by the flow's `id` (the screen's), a
-state of the root as `#<flow id>.<state>`: a done create re-enters `viewing`, every region
-at its `initial`, while a failed one stays in its area. A target of the root may name a
+A target in a region names a state of that region or, by the flow's `id` (a one-segment
+name the flow declares, which the app gives its machine), a state of the root as
+`#<flow id>.<state>`: a done create re-enters `viewing`, every region at its `initial`, while
+a failed one stays in its area. A target of the root may name a
 region's state as `<parallel>.<region>.<state>`, the other regions at their `initial`.
 Within a parallel state an event is handled by one region or by the state's own `on`, never
 by two (`contract:check` says which two). A region has no `type`, no `meta.address` and no

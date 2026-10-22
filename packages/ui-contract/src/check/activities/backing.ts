@@ -84,7 +84,8 @@ function navigatesAfter(flow: Flow, anchor: string): Set<string> {
   const follow = (from: Acting, { target, actions }: FlowTransition): void => {
     collect(actions)
 
-    if (target === undefined || target === from.name) {
+    // A plain state stays on a move to itself; a parallel state restarts its regions (below).
+    if (target === undefined || (from.kind !== 'parallel' && target === from.name)) {
       return
     }
 

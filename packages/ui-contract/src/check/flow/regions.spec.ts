@@ -160,10 +160,16 @@ describe('flowProblems in a parallel state', () => {
     expect(printed(contract)).toContain(
       `${IN}.side.states.idle.on["sample.mode-select"].target: "#other.saving": "other" is not the id of the flow, which declares none`,
     )
+  })
+  it("takes the id the flow declares for its id targets, whatever the screen's id", () => {
+    const contract = withAreas()
 
-    flow.id = 'other'
+    flowIn(contract).id = 'areas'
+    Object.assign(regionStateIn(contract, 'side', 'idle').on ?? {}, {
+      'sample.home-link': { target: '#areas.saving' },
+    })
 
-    expect(printed(contract)).toContain(`${AT}.id: "other" is not the id of the screen "sample"`)
+    expect(printed(contract)).toEqual([])
   })
   it('reaches a state of the root through an id target out of a region', () => {
     const contract = withAreas()

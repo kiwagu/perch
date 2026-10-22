@@ -81,7 +81,8 @@ for Bun.
     guards, actions with their `input`, anchors with their codes and bindings that exist,
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
-    `#<flow id>.<state>` of its own flow, whose `id` is the screen's, in a region),
+    `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
+    which the app gives its machine, in a region),
     handles each event of a parallel state in one area, reaches every state, leaves every
     plain state that is not final, and puts the one transition without a guard last) over
     the tree of its states, `flowNodes(flow)` (every state in the order of the file as a

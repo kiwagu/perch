@@ -12,7 +12,7 @@
 
 import { z } from '@workspace/zod'
 
-import { anchorSchema, codeSchema, screenNameSchema } from '../../names.schema'
+import { anchorSchema, codeSchema, kebabNameSchema } from '../../names.schema'
 
 import { actionNameSchema } from './anchor'
 import { routePathSchema } from './binding'
@@ -196,9 +196,11 @@ const parallelStateSchema = z
 
 export const flowSchema = z
   .strictObject({
-    id: screenNameSchema
+    id: kebabNameSchema
       .exactOptional()
-      .describe('The id of the machine; absent, the app names the machine by the screen id.'),
+      .describe(
+        'The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
+      ),
     description: z.string().exactOptional().describe('What the flow is, for a reader.'),
     initial: flowStateNameSchema.describe('The state the screen opens in.'),
     meta: z

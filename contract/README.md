@@ -244,9 +244,10 @@ unchanged, as it carries a binding into the router.
   state: at the root it is a state of the flow, or a state of a region as
   `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the
   others at their `initial`); in a region it is a state of that region, or a state of the
-  root by the machine's id, `#<flow id>.<state>` (`#organisation.viewing`, the flow declaring
-  its `id`, the screen's), which leaves the parallel state and enters that state afresh, the
-  parallel state itself with every region at its `initial`. Within a parallel state an event
+  root by the machine's id, `#<flow id>.<state>` (`#organisation.viewing`; the flow's `id` is
+  a one-segment name the flow declares, which the app gives its machine), which leaves the
+  parallel state and enters that state afresh, the parallel state itself with every region at
+  its `initial`. Within a parallel state an event
   belongs to one area, one region or the state's own `on`, never two; the same event may
   appear in several states of one region.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds

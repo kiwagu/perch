@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, type Screen } from '../../files'
 import { fixtureContract } from '../../manifest/manifest.fixture'
-import { regionStateIn, withAreas } from '../areas.fixture'
+import { parallelIn, regionStateIn, withAreas } from '../areas.fixture'
 import type { Contract } from '../contract'
 import {
   activityIn,
@@ -253,6 +253,22 @@ describe('activitiesProblems', () => {
 
     flow.states['leaving'] = {
       invoke: { src: 'platform.sign-out', onDone: { target: 'editing', actions: [...toOther] } },
+    }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it("backs a transition by a navigate on a region's initial entry, as a parallel state restarts its regions on a move to itself", () => {
+    const contract = withOther(withAreas())
+
+    Object.assign(parallelIn(contract).on ?? {}, {
+      'sample.sign-out-button': { target: 'editing' },
+    })
+    regionStateIn(contract, 'form', 'closed').entry = [
+      { type: 'navigate', params: { to: '/other' } },
+    ]
+    activityStateIn(contract, 'editing').on = {
+      'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }],
+      'sample.sign-out-button': { target: 'away' },
     }
 
     expect(printed(contract)).toEqual([])

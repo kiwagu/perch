@@ -1,8 +1,7 @@
 /**
  * Rule 8: a screen's flow is a machine XState runs as written, naming only what the
  * contract declares. A state of the root is a plain state or a parallel state whose regions
- * are the screen's independent areas (`nodes.ts`). A declared `id` is the screen's, as the app
- * names its machine; its `initial` is a state of the flow and
+ * are the screen's independent areas (`nodes.ts`). Its `initial` is a state of the flow and
  * a region's `initial` a state of that region; every `target` leads where XState resolves
  * it (`targets.ts`); every event, effect and address names what the contract declares
  * (`references.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
@@ -120,14 +119,6 @@ export function flowProblems(contract: Contract): Problem[] {
     }
 
     return [
-      ...(flow.id === undefined || flow.id === screen.id
-        ? []
-        : [
-            lookups.inScreens(
-              [...inFlow.at, 'id'],
-              `"${flow.id}" is not the id of the screen "${screen.id}"`,
-            ),
-          ]),
       ...(has(flow.states, flow.initial)
         ? []
         : [

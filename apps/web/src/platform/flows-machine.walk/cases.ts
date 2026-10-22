@@ -1,17 +1,18 @@
 /**
- * What the flow expects of each case of the walk: whether XState takes the transition, the
- * configuration it lands in (a `StateValue`: the name of a state of the root, or for a
- * parallel state the state each region is in) and the effects in XState's order. On a move,
- * XState exits what it leaves, a region's state before its parallel state and the last region
- * first, runs the transition's actions, then enters in the order of the file: a parallel
- * state, then each region at its starting state (the one a deep target names, else the
- * initial). A transition without a target, or to its own state, neither exits nor enters; a
- * parallel state's own transition into itself exits and enters only its regions' states; an
- * id target out of a region's state leaves the parallel state, every region's state and then
- * the parallel state itself, for the state of the root it names, entered anew even when it is
- * that parallel state. A case is sent from where the walk is: a state of the root; a parallel
- * state with every region at its initial; a region's state with the other regions at their
- * initial.
+ * What the flow expects of each case of the walk: whether XState counts the transition as
+ * handled (it moves or runs an action, as `snapshot.can` reads it), the configuration it lands
+ * in (a `StateValue`: the name of a state of the root, or for a parallel state the state each
+ * region is in) and the effects in XState's order. On a move, XState exits what it leaves, a
+ * region's state before its parallel state and the last region first, runs the transition's
+ * actions, then enters in the order of the file: a parallel state, then each region at its
+ * starting state (the one a deep target names, else the initial). A transition without a
+ * target, or of a plain state to itself, neither exits nor enters; a parallel state's own
+ * transition into itself, by name or by a deep target, exits and enters only its regions'
+ * states; an id target out of a region's state leaves the parallel state, every region's state
+ * and then the parallel state itself, for the state of the root it names, entered anew even
+ * when it is that parallel state. A case is sent from where the walk is: a state of the root; a
+ * parallel state with every region at its initial; a region's state with the other regions at
+ * their initial.
  */
 
 import type { StateValue } from 'xstate'
@@ -160,6 +161,13 @@ function expectedOf(
   }
 }
 
+/**
+ * Whether XState counts the transition as handled, as `snapshot.can` does: it moves or runs an
+ * action; one that does neither leaves the state as it is and reads as not handled.
+ */
+const isHandled = ({ target, actions = [] }: FlowTransition): boolean =>
+  target !== undefined || actions.length > 0
+
 /** Each branch of each event of a state, and none holding after a guarded last branch. */
 export function casesOfNode(flow: Flow, node: FlowNode): Case[] {
   if (node.kind === 'region') {
@@ -182,7 +190,7 @@ export function casesOfNode(flow: Flow, node: FlowNode): Case[] {
         label: `${node.path} ${event}[${index}]`,
         event,
         holding: branch.guard,
-        expected: { handled: true, ...expectedOf(flow, node, branch) },
+        expected: { handled: isHandled(branch), ...expectedOf(flow, node, branch) },
       })),
       ...(list.at(-1)?.guard === undefined
         ? []

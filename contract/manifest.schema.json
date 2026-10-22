@@ -1054,9 +1054,9 @@
             "type": "object",
             "properties": {
               "id": {
-                "description": "The id of the machine; absent, the app names the machine by the screen id.",
+                "description": "The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$"
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
               "description": {
                 "description": "What the flow is, for a reader.",
