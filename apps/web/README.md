@@ -150,7 +150,10 @@ modeling stage.
   Zod object) validates the URL's search, drops a parameter equal to its default and carries
   the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
   route equals its binding in `contract/screens.json` (path, guard, history, retained
-  parameters, and the input view of the search schema as JSON Schema, without its prose).
+  parameters, and the input view of the search schema as JSON Schema, without its prose);
+  `routes-router.spec.ts` builds every binding on the real router (sample path parameters,
+  the least search its schema accepts) and matches it back to the same route, parameters
+  and search with the defaults applied.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

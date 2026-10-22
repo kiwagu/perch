@@ -21,6 +21,12 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`window.__perch.ui.anchors()`')
     expect(instructions.session).toContain('`platform.sign-up`')
   })
+  it('says a binding is a route of the router and a route a state address', () => {
+    expect(instructions.screenMap).toContain('a TanStack Router path')
+    expect(instructions.screenMap).toContain(
+      'a route is a state address: the same path with the same search reaches the same state after a reload',
+    )
+  })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
       expect(text.length).toBeGreaterThan(80)
