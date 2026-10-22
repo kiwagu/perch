@@ -17,4 +17,4 @@ export {
   screenSchema,
   sourceSchema,
   transitionSchema,
-} from './screens.schema'
+} from './screens-schema'

@@ -1,6 +1,6 @@
 /**
  * Each activity of the contract is a machine XState runs as written, as each screen's flow is
- * (`flows-machine.spec.ts`): the same walk (`flows-machine.walk/`), flat as an activity has no
+ * (`flows-machine.spec.ts`): the same walk (`flows-walk/`), flat as an activity has no
  * parallel state, builds it with a stub per guard of `meta.guards`, reaches every state, and
  * takes every transition, every guarded branch with its guard holding, to its target. Its
  * states are visits to screens at addresses the contract check holds to bindings, which the
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, loadActivities } from '@workspace/ui-contract'
 
-import { casesOfFlow, walk } from './flows-machine.walk'
+import { casesOfFlow, walk } from './flows-walk'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 

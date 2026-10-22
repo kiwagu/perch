@@ -21,7 +21,7 @@ import { scenarioSchema } from '../scenarios'
 
 import { activitySchema } from './activity.schema'
 import { flatJsonSchema } from './flat-json-schema'
-import { anchorBindingSchema, bindingSchema, platformSchema, screenSchema } from './screens.schema'
+import { anchorBindingSchema, bindingSchema, platformSchema, screenSchema } from './screens-schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>

@@ -18,7 +18,7 @@ import {
   screenNameSchema,
 } from '../names.schema'
 
-import { guardNameSchema, modelFieldPathSchema, routePathSchema } from './screens.schema'
+import { guardNameSchema, modelFieldPathSchema, routePathSchema } from './screens-schema'
 
 const stateNameSchema = kebabNameSchema.describe(
   'A state of the activity, a key of its `states`: a visit to a screen, `sign-in`, `signed-out`.',

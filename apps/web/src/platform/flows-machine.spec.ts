@@ -1,6 +1,6 @@
 /**
  * Each screen's flow is a machine XState runs as written, as each binding is a route the
- * router matches (`routes-router.spec.ts`): the walk (`flows-machine.walk/`) reaches every
+ * router matches (`routes-router.spec.ts`): the walk (`flows-walk/`) reaches every
  * state of the flow, a parallel state's regions and their states included, and every
  * transition it takes lands where its `target` says (a transition without one stays) with the
  * contract's effects, every guarded branch with its guard holding. Where the app has a
@@ -25,7 +25,7 @@ import { createSignInMachine } from '../features/user/application/sign-in.machin
 import { SignInService } from '../features/user/application/sign-in.service'
 
 import { fakeSession } from './__fixtures__/session'
-import { casesOfFlow, walk } from './flows-machine.walk'
+import { casesOfFlow, walk } from './flows-walk'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 

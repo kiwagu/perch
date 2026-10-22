@@ -160,7 +160,7 @@ modeling stage.
   writes, the route, parameters and search it matches) and the router's route tree to the
   tree of the screen folder, both specs on the router of `__fixtures__/router.ts`. `flows-machine.spec.ts` runs every screen's `flow` in XState:
   `setup({ guards, actions, actors }).createMachine(flow)` with stubs, walked purely
-  (`flows-machine.walk/`) through every state, transition and guarded branch, a parallel
+  (`flows-walk/`) through every state, transition and guarded branch, a parallel
   state each region on its own with the others at their initial state, and holds the app's
   own machine for a screen (`user.sign-in`) to its flow;
   `activities-machine.spec.ts` walks every activity of `contract/activities/` the same way,
