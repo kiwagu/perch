@@ -1,6 +1,7 @@
 /**
- * The contract check: loads the three files (stopping at their own problems), then runs
- * every cross-check and the schema drift, and returns the problems sorted by file and line.
+ * The contract check: loads the three files and the scenarios (stopping at their own
+ * problems), then runs every cross-check and the schema drift, and returns the problems
+ * sorted by file and line.
  */
 
 import { readFileSync } from 'node:fs'
@@ -8,6 +9,7 @@ import { join } from 'node:path'
 
 import {
   loadModel,
+  loadScenarios,
   loadScreens,
   type Problem,
   parseVocabulary,
@@ -40,16 +42,17 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   return parseVocabulary(markdown)
 }
 
-/** The three files, or the problems that keep them from loading. */
+/** The three files and the scenarios, or the problems that keep them from loading. */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { screens, problems: screensLoad } = loadScreens(root)
   const { model, problems: modelLoad } = loadModel(root)
-  const problems = [...vocabularyLoad, ...screensLoad, ...modelLoad]
+  const { scenarios, problems: scenariosLoad } = loadScenarios(root)
+  const problems = [...vocabularyLoad, ...screensLoad, ...modelLoad, ...scenariosLoad]
 
   return problems.length > 0 || screens === undefined || model === undefined
     ? { problems: sortProblems(problems) }
-    : { contract: { vocabulary, screens, model }, problems: [] }
+    : { contract: { vocabulary, screens, model, scenarios }, problems: [] }
 }
 
 const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [

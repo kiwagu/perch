@@ -1,11 +1,12 @@
 /**
- * The manifest, built from the three contract files only: the vocabulary as tables with
- * instructions, the screens, the platform section and the scenarios verbatim, every declared
- * anchor by name with its screen, and the model document.
+ * The manifest, built from the contract folder only: the vocabulary as tables with
+ * instructions, the screens and the platform section verbatim, the scenarios parsed from
+ * their files, every declared anchor by name with its screen, and the model document.
  */
 
 import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'
 import type { Model, Screen, ScreensFile, Vocabulary } from '../files'
+import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
 import type { Manifest, Product } from './manifest.types'
@@ -17,6 +18,7 @@ export interface ManifestInput {
   readonly vocabulary: Vocabulary
   readonly screens: ScreensFile
   readonly model: Model
+  readonly scenarios: Scenario[]
   readonly product: Product
   /** When the manifest is built; now by default. */
   readonly now?: Date
@@ -91,6 +93,7 @@ export function buildManifest({
   vocabulary,
   screens,
   model,
+  scenarios,
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
@@ -104,7 +107,7 @@ export function buildManifest({
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens.screens),
     platform: screens.platform,
-    scenarios: screens.scenarios,
+    scenarios,
     model: model.document,
   }
 }

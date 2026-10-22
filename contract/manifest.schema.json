@@ -1718,8 +1718,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]*\\/\\d{2}-[a-z0-9]+(-[a-z0-9]+)*$",
-            "description": "`<feature>/<nn>-<slug>`, the test `tests/e2e/src/<id>.e2e.spec.ts`."
+            "pattern": "^[a-z][a-z0-9-]*(\\/[a-z][a-z0-9-]*){2,3}$",
+            "description": "`<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base` (the entity works on its own), `flows` (several roles or devices meet), `features` (how one function behaves): the path of the file `tests/e2e/scenarios/<id>.md`, and the test `tests/e2e/src/<id>.e2e.spec.ts`."
           },
           "title": {
             "type": "string",
@@ -1799,7 +1799,7 @@
         "additionalProperties": false,
         "description": "One end-to-end scenario."
       },
-      "description": "The end-to-end scenarios of `contract/screens.json`, verbatim."
+      "description": "The end-to-end scenarios, parsed from their files under `tests/e2e/scenarios/`: the id is the path of a file without `.md`."
     },
     "model": {
       "type": "object",

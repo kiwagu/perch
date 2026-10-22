@@ -1005,104 +1005,13 @@
       ],
       "additionalProperties": false,
       "description": "What the platform offers every screen."
-    },
-    "scenarios": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]*\\/\\d{2}-[a-z0-9]+(-[a-z0-9]+)*$",
-            "description": "`<feature>/<nn>-<slug>`, the test `tests/e2e/src/<id>.e2e.spec.ts`."
-          },
-          "title": {
-            "type": "string",
-            "minLength": 1,
-            "description": "What the scenario checks, in a few words."
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "smoke",
-                "full"
-              ]
-            },
-            "description": "The test tags: `smoke` or `full`."
-          },
-          "devices": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string",
-              "pattern": "^[A-Z]$"
-            },
-            "additionalProperties": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-              "description": "A role of the vocabulary."
-            },
-            "description": "A letter per browser, each with the role it acts as."
-          },
-          "where": {
-            "type": "string",
-            "description": "Where the scenario starts, with bracket references."
-          },
-          "data": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "The test data by name: `generate` or a fixed value."
-          },
-          "scenario": {
-            "type": "string",
-            "description": "The scenario in one sentence."
-          },
-          "steps": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The steps, with bracket references."
-          },
-          "expected": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The expected results, with bracket references."
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "tags",
-          "devices",
-          "where",
-          "data",
-          "scenario",
-          "steps",
-          "expected"
-        ],
-        "additionalProperties": false,
-        "description": "One end-to-end scenario."
-      },
-      "description": "The end-to-end scenarios of the application."
     }
   },
   "required": [
     "version",
     "screens",
-    "platform",
-    "scenarios"
+    "platform"
   ],
   "additionalProperties": false,
-  "description": "The screens of the application, the platform they share and their scenarios."
+  "description": "The screens of the application and the platform they share."
 }

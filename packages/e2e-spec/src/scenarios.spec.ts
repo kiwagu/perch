@@ -1,6 +1,9 @@
 import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
+
+import { SCENARIOS_DIR } from '@workspace/ui-contract'
 
 import { project, removeProjects, scenarioOf } from './project.fixture'
 import { readScenarios } from './scenarios'
@@ -8,32 +11,32 @@ import { readScenarios } from './scenarios'
 afterEach(removeProjects)
 
 describe('readScenarios', () => {
-  it('returns the scenarios of the screens file', () => {
-    const scenarios = [scenarioOf('sample/01-edit', 2), scenarioOf('sample/02-delete', 3)]
-    const { screens } = project(scenarios)
+  it('returns the scenarios of the folder, sorted by their paths', () => {
+    const edit = scenarioOf('sample/base/edit', 2)
+    const remove = scenarioOf('sample/base/delete', 3)
+    const { root } = project([edit, remove])
 
-    expect(readScenarios(screens)).toEqual({ scenarios, problems: [] })
+    expect(readScenarios(root)).toEqual({ scenarios: [remove, edit], problems: [] })
   })
 
-  it('reports a path that is not contract/screens.json and a file it cannot read', () => {
-    const { screens } = project([])
+  it('reports a missing folder', () => {
+    const { root } = project([])
 
-    expect(readScenarios(screens.replace('screens.json', 'other.json'))).toEqual({
+    rmSync(join(root, SCENARIOS_DIR), { recursive: true })
+    expect(readScenarios(root)).toEqual({
       scenarios: [],
-      problems: [expect.stringContaining('is not contract/screens.json')],
-    })
-    rmSync(screens)
-    expect(readScenarios(screens)).toEqual({
-      scenarios: [],
-      problems: ['contract/screens.json:1: cannot read the file'],
+      problems: ['tests/e2e/scenarios:1: cannot read the folder'],
     })
   })
 
-  it('reports a scenario that breaks the schema of the file', () => {
-    const { screens } = project([{ ...scenarioOf('sample/01-edit', 1), steps: [] }])
+  it('reports a scenario file by its path and line', () => {
+    const { root } = project([{ ...scenarioOf('sample/base/edit', 1), steps: [] }])
 
-    expect(readScenarios(screens).problems).toEqual([
-      expect.stringMatching(/^contract\/screens\.json:\d+: /),
-    ])
+    expect(readScenarios(root)).toEqual({
+      scenarios: [],
+      problems: [
+        expect.stringMatching(/^tests\/e2e\/scenarios\/sample\/base\/edit\.md:\d+: steps: /),
+      ],
+    })
   })
 })

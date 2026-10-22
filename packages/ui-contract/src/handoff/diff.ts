@@ -1,7 +1,7 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities and fields one contract adds or removes against another, and the anchors it
- * renames. `contractAt` reads the three files at a git ref.
+ * renames. `contractAt` reads the three files and the scenarios at a git ref.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -11,7 +11,14 @@ import { dirname, join } from 'node:path'
 
 import { type Contract, loadContract } from '../check'
 import { declaredAnchors } from '../check/contract'
-import { CONTRACT_DIR, formatProblem, MODEL_FILE, SCREENS_FILE, VOCABULARY_FILE } from '../files'
+import {
+  CONTRACT_DIR,
+  formatProblem,
+  MODEL_FILE,
+  SCENARIOS_DIR,
+  SCREENS_FILE,
+  VOCABULARY_FILE,
+} from '../files'
 
 interface Change {
   added: string[]
@@ -37,6 +44,20 @@ const git = (root: string, args: readonly string[]): string =>
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
+/** Writes `file` as it is at `ref` into the folder `temp`. */
+function copyAt(root: string, ref: string, file: string, temp: string): void {
+  let text: string
+
+  try {
+    text = git(root, ['show', `${ref}:${file}`])
+  } catch {
+    throw new Error(`${ref} has no ${file}`)
+  }
+
+  mkdirSync(dirname(join(temp, file)), { recursive: true })
+  writeFileSync(join(temp, file), text)
+}
+
 /**
  * The contract at `ref` of the repository at `root`, or `missing` when that commit has no
  * `contract/` folder. A ref that names no commit, and a contract there that does not load,
@@ -56,17 +77,12 @@ export function contractAt(ref: string, root: string): Contract | { missing: tru
   const temp = mkdtempSync(join(tmpdir(), 'ui-contract-diff-'))
 
   try {
-    for (const file of FILES) {
-      let text: string
+    const scenarios = git(root, ['ls-tree', '-r', '--name-only', ref, '--', `${SCENARIOS_DIR}/`])
+      .split('\n')
+      .filter((file) => file !== '')
 
-      try {
-        text = git(root, ['show', `${ref}:${file}`])
-      } catch {
-        throw new Error(`${ref} has no ${file}`)
-      }
-
-      mkdirSync(dirname(join(temp, file)), { recursive: true })
-      writeFileSync(join(temp, file), text)
+    for (const file of [...FILES, ...scenarios]) {
+      copyAt(root, ref, file, temp)
     }
 
     const { contract, problems } = loadContract(temp)

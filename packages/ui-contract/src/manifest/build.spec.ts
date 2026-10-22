@@ -58,7 +58,7 @@ describe('buildManifest', () => {
   it('carries the screens, the platform, the scenarios and the model verbatim', () => {
     expect(manifest.screens).toEqual(contract.screens.screens)
     expect(manifest.platform).toEqual(contract.screens.platform)
-    expect(manifest.scenarios).toEqual(contract.screens.scenarios)
+    expect(manifest.scenarios).toEqual(contract.scenarios)
     expect(manifest.model).toEqual(contract.model.document)
     expect(manifest.routeParams).toEqual({})
   })
@@ -69,6 +69,8 @@ describe('buildManifest', () => {
     const repository = contractAt(REPOSITORY_ROOT)
     const real = buildManifest({ ...repository, product: PRODUCT, now: NOW })
     const declared = repository.screens.screens.flatMap((screen) => Object.keys(screen.anchors))
+
+    expect(real.scenarios.map((scenario) => scenario.id)).toContain('user/base/sign-up')
 
     expect(real.contract.instructions.readiness).toContain(
       '[data-testid="app-shell.status"][data-state="ready"]',

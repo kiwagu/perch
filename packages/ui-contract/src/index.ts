@@ -40,6 +40,7 @@ export {
   formatProblem,
   jsonSchemaProblems,
   loadModel,
+  loadScenarios,
   loadScreens,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
@@ -50,12 +51,13 @@ export {
   type Platform,
   type Problem,
   parseVocabulary,
+  SCENARIOS_DIR,
   SCHEMA_OUTPUTS,
   SCREENS_FILE,
   SCREENS_SCHEMA_FILE,
-  type Scenario,
   type Screen,
   type ScreensFile,
+  scenarioFile,
   schemaDrift,
   sortProblems,
   VOCABULARY_FILE,
@@ -95,7 +97,18 @@ export {
   productInfo,
   writeManifest,
 } from './manifest'
-export { type Reference, referencesIn, scenarioSchema } from './scenarios'
+export {
+  formatScenario,
+  parseScenario,
+  type Reference,
+  referencesIn,
+  SCENARIO_LAYERS,
+  type Scenario,
+  type ScenarioHeader,
+  type ScenarioProblem,
+  scenarioHeaderSchema,
+  scenarioSchema,
+} from './scenarios'
 export {
   actionParamsSchema,
   anchorBindingSchema,

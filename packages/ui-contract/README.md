@@ -12,17 +12,25 @@ root export is build-time tooling for Bun.
 ## Key exports
 
 - `.`: the tooling, for Bun.
-  - Loaders of the three contract files, each returning problems (`file:line: message`
-    through `formatProblem`): `parseVocabulary(markdown)` (the closed lists of
-    `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
+  - Loaders of the three contract files and of the scenarios, each returning problems
+    (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
+    lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
     `loadScreens(root)` (`contract/screens.json` through `screensFileSchema`, problems named
-    by JSON path) and `loadModel(root)` (`contract/model.schema.json`, checked against the
+    by JSON path), `loadModel(root)` (`contract/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
-    `entityDefinitionSchema`). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_FILE`,
-    `MODEL_FILE` and the three schema files.
+    `entityDefinitionSchema`) and `loadScenarios(root)` (every `.md` file under
+    `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
+    `parseScenario`; a path outside the id grammar or a layer outside `SCENARIO_LAYERS` is a
+    problem of its file). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_FILE`,
+    `MODEL_FILE`, `SCENARIOS_DIR`, `scenarioFile(id)` and the three schema files.
+  - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
+    by `scenarioHeaderSchema`, then the fixed Markdown sections in any order) into a
+    `Scenario`, or returns its problems with their lines (`ScenarioProblem`);
+    `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screensFileSchema` and its parts, `flatJsonSchema` (route
     `params` and `search`, with the bounds `z.toJSONSchema` writes: `minimum`, `maximum`,
-    `minLength`, `maxLength`, `pattern`), `scenarioSchema`, `entityDefinitionSchema`, `manifestSchema`.
+    `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed scenario),
+    `entityDefinitionSchema`, `manifestSchema`.
     `SCHEMA_OUTPUTS`, `writeSchemas(root)` and `schemaDrift(root)` turn them into the
     committed `contract/screens.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
@@ -31,15 +39,17 @@ root export is build-time tooling for Bun.
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
-  - The contract check: `checkContract(root)` loads the three files (stopping at their own
-    problems), then runs the cross-checks and `schemaDrift`, sorted by file and line;
+  - The contract check: `checkContract(root)` loads the three files and the scenarios
+    (stopping at their own problems), then runs the cross-checks and `schemaDrift`, sorted by
+    file and line;
     `loadContract(root)` returns the loaded `Contract`. Each rule is a function of the
     `Contract`: `versionProblems`, `vocabularyProblems` (every word of `screens.json` is in
     the vocabulary, every code is used), `screensProblems` (anchors unique and never named
     like a derived one, entry and names), `bindingsProblems` (model fields, actions and
     their params, routes, sources, flow events), `routesProblems` with
     `parseRoutePath(path)` (the router's path syntax), `searchProblems` (enum controls,
-    `retain`) and `scenariosProblems` (bracket references, roles, ids).
+    `retain`) and `scenariosProblems` (bracket references and roles, as problems of each
+    scenario's file).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
@@ -53,11 +63,11 @@ root export is build-time tooling for Bun.
     the literals equal to the anchors of `screens.json`, no literal named like another plus
     a suffix, and every suffix and code in the vocabulary.
   - `sortProblems(problems)`: by file and line, stable.
-  - The manifest: `buildManifest({ vocabulary, screens, model, product, now? })` returns the
-    `Manifest` (typed from `manifestSchema`): the vocabulary as tables in `contract` with the
-    prose `instructions` for an agent (`instructionsOf`, the anchors and states taken from the
-    vocabulary and the platform section), the screens, the platform section and the scenarios
-    verbatim, `ids` (every declared anchor with its kind, its screen and its attributes),
+  - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
+    returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
+    `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
+    states taken from the vocabulary and the platform section), the screens and the platform
+    section verbatim, the scenarios parsed, `ids` (every declared anchor with its kind, its screen and its attributes),
     `routeParams` and the model document. `productInfo(root)` names the product (the root
     package's version, the commit checked out or null). `writeManifest(root, outDir, manifest)`
     validates it against `contract/manifest.schema.json` with Ajv and returns the problems
@@ -65,8 +75,8 @@ root export is build-time tooling for Bun.
     `MANIFEST_DIR`) and writes `manifest.json`, `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
-  - The hand-over: `contractAt(ref, root)` reads the three files at a git ref (`git show`) and
-    loads them, or returns `{ missing: true }` when that commit has no `contract/`;
+  - The hand-over: `contractAt(ref, root)` reads the three files and the scenarios at a git
+    ref (`git show`) and loads them, or returns `{ missing: true }` when that commit has no `contract/`;
     `diffContracts(before, after)` returns the `ContractChanges` (screens, anchors, codes,
     entities and fields as `entity.field`, added and removed, sorted; an anchor removed and
     one added are a rename when they are the only ones of their screen and kind);
@@ -93,13 +103,13 @@ root export is build-time tooling for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar, the loaders, the schema writer, the references, the
-  contract check, the sources check, the manifest, the hand-over diff and the coverage note.
+- `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
+  schema writer, the references, the contract check, the sources check, the manifest, the hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
-- From the root: `bun run contract:check` (the contract files against each other and the
-  schema drift; prints `file:line: message` per problem and exits 1, or a one-line
+- From the root: `bun run contract:check` (the contract files and the scenarios against each
+  other and the schema drift; prints `file:line: message` per problem and exits 1, or a one-line
   summary; part of `bun run check` and the pre-commit hook).
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
@@ -107,7 +117,7 @@ root export is build-time tooling for Bun.
   `contract: sources agree with the contract (<n> anchors)`; part of `bun run check` and
   the pre-commit hook).
 - From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
-  manifest from the three files and writes it into `ui-manifest/` at the root, gitignored, or
+  manifest from the three files and the scenarios and writes it into `ui-manifest/` at the root, gitignored, or
   into `<dir>` relative to the working directory, which may be any folder under the root;
   prints the problems and exits 1 when the contract check finds any or the manifest does not
   match its schema). The web app's build runs it into `apps/web/dist/ui-manifest/`.

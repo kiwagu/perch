@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
-import { MODEL_FILE, SCREENS_FILE, VOCABULARY_FILE } from '../files'
+import { MODEL_FILE, SCREENS_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
@@ -13,11 +13,13 @@ import { contractAt, diffContracts, formatChanges } from './diff'
 useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
+const SCENARIO = 'sample/base/thing'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
   [SCREENS_FILE]: readFileSync(join(FIXTURES, 'screens.json'), 'utf8'),
   [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
+  [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
 })
 
 /** A repository whose first commit has only a README and whose second adds `files`. */
@@ -128,7 +130,7 @@ describe('diffContracts', () => {
 })
 
 describe('contractAt', () => {
-  it('reads the three files at a ref', () => {
+  it('reads the three files and the scenarios at a ref', () => {
     const contract = contractAt('HEAD', history(fixtureFiles()))
 
     expect(contract).toEqual(fixtureContract())

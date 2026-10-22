@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem, type Scenario } from '../files'
+import { formatProblem } from '../files'
+import type { Scenario } from '../scenarios'
 
 import { sampleContract, screenIn } from './contract.fixture'
 import { scenariosProblems } from './scenarios'
@@ -9,7 +10,7 @@ const printed = (contract = sampleContract()): string[] =>
   scenariosProblems(contract).map(formatProblem)
 
 function firstScenario(contract: ReturnType<typeof sampleContract>): Scenario {
-  const [scenario] = contract.screens.scenarios
+  const [scenario] = contract.scenarios
 
   if (scenario === undefined) {
     throw new Error('no scenario')
@@ -32,14 +33,14 @@ describe('scenariosProblems', () => {
     scenario.expected = ['It shows [code:lost]']
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: scenarios[0].where: [/elsewhere] is the path of no binding',
-      'contract/screens.json:1: scenarios[0].scenario: [sample.gone-button] is not a declared anchor',
-      'contract/screens.json:1: scenarios[0].scenario: [sample.page.confirm-button] is not a declared anchor',
-      'contract/screens.json:1: scenarios[0].steps[0]: [state:busy] is not a state of the vocabulary',
-      'contract/screens.json:1: scenarios[0].steps[1]: [value:c] is not a choice value of the vocabulary',
-      'contract/screens.json:1: scenarios[0].steps[1]: [value:kx] is not a choice value of the vocabulary',
-      'contract/screens.json:1: scenarios[0].steps[2]: not an anchor, a route, a code, a state or a value: "Save"',
-      'contract/screens.json:1: scenarios[0].expected[0]: [code:lost] is not a code of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: [/elsewhere] is the path of no binding',
+      'tests/e2e/scenarios/sample/base/thing.md:1: scenario: [sample.gone-button] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: scenario: [sample.page.confirm-button] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [state:busy] is not a state of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:c] is not a choice value of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:kx] is not a choice value of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state or a value: "Save"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
   it('wants every device to act as a role of the vocabulary', () => {
@@ -48,16 +49,7 @@ describe('scenariosProblems', () => {
     firstScenario(contract).devices = { A: 'member', B: 'visitor' }
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: scenarios[0].devices.B: "visitor" is not a role of the vocabulary',
-    ])
-  })
-  it('wants every scenario id once', () => {
-    const contract = sampleContract()
-
-    contract.screens.scenarios.push(structuredClone(firstScenario(contract)))
-
-    expect(printed(contract)).toEqual([
-      'contract/screens.json:1: scenarios[1].id: "sample/01-edit" is the id of another scenario',
+      'tests/e2e/scenarios/sample/base/thing.md:1: devices.B: "visitor" is not a role of the vocabulary',
     ])
   })
   it('resolves a derived anchor only through a suffix its base lists in derived', () => {
@@ -74,8 +66,8 @@ describe('scenariosProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: scenarios[0].steps[0]: [sample.save-button.confirm-button] is not a declared anchor',
-      'contract/screens.json:1: scenarios[0].steps[2]: [sample.mode-select.item] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [sample.save-button.confirm-button] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: [sample.mode-select.item] is not a declared anchor',
     ])
   })
 })

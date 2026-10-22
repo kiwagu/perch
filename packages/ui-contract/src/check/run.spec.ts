@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   formatProblem,
   MODEL_FILE,
+  SCENARIOS_DIR,
   SCREENS_FILE,
   SCREENS_SCHEMA_FILE,
+  scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
 
@@ -29,6 +31,7 @@ const edit = (file: string, change: (text: string) => string): void => {
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'ui-contract-check-'))
   cpSync(join(ROOT, 'contract'), join(root, 'contract'), { recursive: true })
+  cpSync(join(ROOT, SCENARIOS_DIR), join(root, SCENARIOS_DIR), { recursive: true })
 })
 
 afterEach(() => {
@@ -45,6 +48,7 @@ describe('checkContract', () => {
       text.replace('## Roles', '## Roles\n\n## Roles').replace('## Kinds', '## Kind list'),
     )
     edit(SCREENS_FILE, (text) => text.replace('"version": 1', '"version": "one"'))
+    edit(scenarioFile('user/base/sign-up'), (text) => text.replace('  A: guest', '  a: guest'))
 
     expect(printed()).toEqual([
       'contract/model.schema.json:1: cannot read the file',
@@ -52,6 +56,7 @@ describe('checkContract', () => {
       'contract/vocabulary.md:1: missing section "Kinds"',
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: unknown section "Kind list"$/),
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: section "Roles" appears twice$/),
+      'tests/e2e/scenarios/user/base/sign-up.md:4: devices.a: Invalid key in record',
     ])
   })
   it('runs every rule and the schema drift once the files load', () => {
@@ -69,17 +74,15 @@ describe('checkContract', () => {
     ])
   })
   it('refuses a derived anchor of the repository whose base does not list the suffix', () => {
-    edit(SCREENS_FILE, (text) =>
+    edit(scenarioFile('user/base/edit-profile-name'), (text) =>
       text.replace(
-        '"Click [user.profile.save-button]"',
-        '"Click [user.profile.save-button.confirm-button]"',
+        'Click [user.profile.save-button]',
+        'Click [user.profile.save-button.confirm-button]',
       ),
     )
 
     expect(printed()).toEqual([
-      expect.stringMatching(
-        /^contract\/screens\.json:1: scenarios\[\d+\]\.steps\[\d+\]: \[user\.profile\.save-button\.confirm-button\] is not a declared anchor$/,
-      ),
+      'tests/e2e/scenarios/user/base/edit-profile-name.md:1: steps[3]: [user.profile.save-button.confirm-button] is not a declared anchor',
     ])
   })
   it('refuses a permission role of the model that the vocabulary does not list', () => {

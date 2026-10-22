@@ -1,2 +1,5 @@
+export { formatScenario } from './format'
+export { type ScenarioHeader, scenarioHeaderSchema } from './header'
+export { parseScenario, type ScenarioProblem } from './parse'
 export { type Reference, referencesIn } from './references'
-export { scenarioSchema } from './schema'
+export { SCENARIO_LAYERS, type Scenario, scenarioSchema } from './schema'

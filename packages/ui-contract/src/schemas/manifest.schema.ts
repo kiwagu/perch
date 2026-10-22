@@ -1,7 +1,7 @@
 /**
- * `ui-manifest/manifest.json`, the published contract built from the three files of
- * `contract/`: the vocabulary as tables with instructions for an agent, the screens
- * verbatim, every declared anchor with its screen, the platform, the scenarios and the model.
+ * `ui-manifest/manifest.json`, the published contract built from `contract/`: the vocabulary
+ * as tables with instructions for an agent, the screens verbatim, every declared anchor with
+ * its screen, the platform, the scenarios parsed from their files and the model.
  */
 
 import { z } from '@workspace/zod'
@@ -148,7 +148,9 @@ export const manifestSchema = z
     platform: platformSchema,
     scenarios: z
       .array(scenarioSchema)
-      .describe('The end-to-end scenarios of `contract/screens.json`, verbatim.'),
+      .describe(
+        'The end-to-end scenarios, parsed from their files under `tests/e2e/scenarios/`: the id is the path of a file without `.md`.',
+      ),
     model: z
       .record(z.string(), z.unknown().describe('A keyword of the model document.'))
       .describe('`contract/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.'),

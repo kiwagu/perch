@@ -11,8 +11,8 @@ import { baseOf } from '../anchors'
 import { type Contract, loadContract } from '../check'
 import { declaredAnchors } from '../check/contract'
 import { textsOf } from '../check/scenarios'
-import { formatProblem, type Scenario } from '../files'
-import { type Reference, referencesIn } from '../scenarios'
+import { formatProblem } from '../files'
+import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources/scan'
 
 import { countControls } from './controls'
@@ -104,7 +104,7 @@ export function measureCoverage(root: string): CoverageMeasure {
     }
   }
 
-  const reached = contract.screens.scenarios.map(screensReached(contract))
+  const reached = contract.scenarios.map(screensReached(contract))
 
   return {
     modules: [...modules].map(([module, counts]) => ({ module, ...counts })),

@@ -5,11 +5,14 @@ export {
   ENTITY_SCHEMA_FILE,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
+  SCENARIOS_DIR,
   SCREENS_FILE,
   SCREENS_SCHEMA_FILE,
+  scenarioFile,
   VOCABULARY_FILE,
 } from './paths'
 export { formatProblem, type Problem, sortProblems } from './problems'
+export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
   type AnchorBinding,
@@ -19,7 +22,6 @@ export {
   loadScreens,
   type ParamValue,
   type Platform,
-  type Scenario,
   type Screen,
   type ScreensFile,
 } from './screens'

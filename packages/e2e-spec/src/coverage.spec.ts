@@ -13,12 +13,12 @@ afterEach(removeProjects)
 
 describe('checkCoverage', () => {
   it('passes when every scenario has its test with a step per scenario step', () => {
-    const dirs = project([scenarioOf('user/01-a', 2)], {
-      'user/01-a.e2e.spec.ts': test('user/01-a', 2),
+    const dirs = project([scenarioOf('user/base/a', 2)], {
+      'user/base/a.e2e.spec.ts': test('user/base/a', 2),
       'support/fixtures.ts': 'export {}',
     })
 
-    expect(checkCoverage(dirs.screens, dirs.tests)).toEqual({
+    expect(checkCoverage(dirs.root, dirs.tests)).toEqual({
       missingTests: [],
       missingScenarios: [],
       stepMismatch: [],
@@ -28,45 +28,45 @@ describe('checkCoverage', () => {
   })
 
   it('reports a scenario without a test, a test without a scenario and a test with too few steps', () => {
-    const dirs = project([scenarioOf('user/01-a', 4), scenarioOf('user/02-b', 1)], {
-      'user/01-a.e2e.spec.ts': test('user/01-a', 3),
-      'user/03-c.e2e.spec.ts': test('user/03-c', 1),
+    const dirs = project([scenarioOf('user/base/a', 4), scenarioOf('user/base/b', 1)], {
+      'user/base/a.e2e.spec.ts': test('user/base/a', 3),
+      'user/base/c.e2e.spec.ts': test('user/base/c', 1),
     })
 
-    expect(checkCoverage(dirs.screens, dirs.tests)).toEqual({
-      missingTests: ['user/02-b'],
-      missingScenarios: ['user/03-c'],
-      stepMismatch: [{ scenario: 'user/01-a', steps: 4, testSteps: 3 }],
+    expect(checkCoverage(dirs.root, dirs.tests)).toEqual({
+      missingTests: ['user/base/b'],
+      missingScenarios: ['user/base/c'],
+      stepMismatch: [{ scenario: 'user/base/a', steps: 4, testSteps: 3 }],
       wrongHeader: [],
       problems: [],
     })
   })
 
   it('does not count steps that are commented out', () => {
-    const dirs = project([scenarioOf('user/01-a', 4)], {
-      'user/01-a.e2e.spec.ts': [
-        test('user/01-a', 2),
+    const dirs = project([scenarioOf('user/base/a', 4)], {
+      'user/base/a.e2e.spec.ts': [
+        test('user/base/a', 2),
         "// await test.step('3. x', fn)",
         "/* await test.step('4. x', fn) */",
       ].join('\n'),
     })
 
-    expect(checkCoverage(dirs.screens, dirs.tests).stepMismatch).toEqual([
-      { scenario: 'user/01-a', steps: 4, testSteps: 2 },
+    expect(checkCoverage(dirs.root, dirs.tests).stepMismatch).toEqual([
+      { scenario: 'user/base/a', steps: 4, testSteps: 2 },
     ])
   })
 
   it('reports a test whose first line names another scenario', () => {
-    const dirs = project([scenarioOf('user/01-a', 1)], {
-      'user/01-a.e2e.spec.ts': test('user/09-z', 1),
+    const dirs = project([scenarioOf('user/base/a', 1)], {
+      'user/base/a.e2e.spec.ts': test('user/base/z', 1),
     })
 
-    expect(checkCoverage(dirs.screens, dirs.tests).wrongHeader).toEqual(['user/01-a'])
+    expect(checkCoverage(dirs.root, dirs.tests).wrongHeader).toEqual(['user/base/a'])
   })
 
-  it('reports a screens file it cannot read', () => {
-    const dirs = project([{ ...scenarioOf('user/01-a', 1), steps: [] }])
+  it('reports a scenario file it cannot read', () => {
+    const dirs = project([{ ...scenarioOf('user/base/a', 1), steps: [] }])
 
-    expect(checkCoverage(dirs.screens, dirs.tests).problems).toHaveLength(1)
+    expect(checkCoverage(dirs.root, dirs.tests).problems).toHaveLength(1)
   })
 })

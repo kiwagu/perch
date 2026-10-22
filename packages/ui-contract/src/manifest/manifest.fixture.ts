@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { type Contract, loadContract } from '../check'
-import { formatProblem, MODEL_FILE, SCREENS_FILE, VOCABULARY_FILE } from '../files'
+import { formatProblem, MODEL_FILE, SCENARIOS_DIR, SCREENS_FILE, VOCABULARY_FILE } from '../files'
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 
@@ -32,6 +32,7 @@ export function fixtureContract(): Contract {
     cpSync(join(FIXTURES, 'vocabulary.md'), join(root, VOCABULARY_FILE))
     cpSync(join(FIXTURES, 'screens.json'), join(root, SCREENS_FILE))
     cpSync(join(FIXTURES, 'model.schema.json'), join(root, MODEL_FILE))
+    cpSync(join(FIXTURES, SCENARIOS_DIR), join(root, SCENARIOS_DIR), { recursive: true })
 
     return contractAt(root)
   } finally {

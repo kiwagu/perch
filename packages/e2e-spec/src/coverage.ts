@@ -12,9 +12,9 @@ export interface StepMismatch {
 }
 
 /**
- * Scenarios and tests pair by id: the scenario `user/01-sign-up` of `contract/screens.json`
- * with `<testsDir>/user/01-sign-up.e2e.spec.ts`, whose first line is
- * `// scenario: user/01-sign-up`.
+ * Scenarios and tests pair by id: the scenario `tests/e2e/scenarios/user/base/sign-up.md`
+ * with `<testsDir>/user/base/sign-up.e2e.spec.ts`, whose first line is
+ * `// scenario: user/base/sign-up`.
  */
 export interface CoverageReport {
   readonly missingTests: readonly string[]
@@ -22,7 +22,7 @@ export interface CoverageReport {
   readonly stepMismatch: readonly StepMismatch[]
   /** Paired tests whose first line is not `// scenario: <id>`. */
   readonly wrongHeader: readonly string[]
-  /** The screens file could not be read: `file:line: message`. */
+  /** The scenario files could not be read: `file:line: message`. */
   readonly problems: readonly string[]
 }
 
@@ -70,7 +70,7 @@ function countSteps(path: string, source: string): number {
   return steps
 }
 
-/** The tests under `dir` by the id they pair with (`user/01-sign-up`). */
+/** The tests under `dir` by the id they pair with (`user/base/sign-up`). */
 function testsById(dir: string): Map<string, string> {
   return new Map(
     filesUnder(dir)
@@ -82,8 +82,9 @@ function testsById(dir: string): Map<string, string> {
   )
 }
 
-export function checkCoverage(screensPath: string, testsDir: string): CoverageReport {
-  const { scenarios, problems } = readScenarios(screensPath)
+/** The scenarios of the repository at `root` against the tests under `testsDir`. */
+export function checkCoverage(root: string, testsDir: string): CoverageReport {
+  const { scenarios, problems } = readScenarios(root)
   const tests = testsById(testsDir)
   const ids = new Set(scenarios.map((scenario) => scenario.id))
   const stepMismatch: StepMismatch[] = []

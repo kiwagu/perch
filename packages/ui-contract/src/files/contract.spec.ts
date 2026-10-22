@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { loadModel } from './model'
 import { VOCABULARY_FILE } from './paths'
 import { formatProblem, type Problem } from './problems'
+import { loadScenarios } from './scenarios'
 import { loadScreens } from './screens'
 import { parseVocabulary } from './vocabulary'
 
@@ -79,6 +80,31 @@ describe('the contract folder of the repository', () => {
       'user.profile',
       'organisation',
       'device',
+    ])
+  })
+  it('has the scenarios without problems, sorted by their paths', () => {
+    const { scenarios, problems } = loadScenarios(ROOT)
+
+    expect(printed(problems)).toEqual([])
+    expect(scenarios.map((scenario) => scenario.id)).toEqual([
+      'contract/base/manifest',
+      'device/base/my-devices',
+      'organisation/flows/edit-own-admin-any',
+      'organisation/flows/membership-change',
+      'organisation/flows/outsider',
+      'organisation/flows/shared-notes',
+      'user/base/blocked-storage',
+      'user/base/edit-profile-name',
+      'user/base/sign-up',
+      'user/base/unopenable-database',
+      'user/flows/blocked-delete',
+      'user/flows/idle-traffic',
+      'user/flows/key-renewal',
+      'user/flows/offline-edit',
+      'user/flows/one-account-per-browser',
+      'user/flows/one-leader-per-browser',
+      'user/flows/sign-out',
+      'user/flows/two-devices',
     ])
   })
   it('has the data model without problems, with its two entities', () => {

@@ -3,16 +3,18 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources]
- *     checks the three contract files under `contract/` against each other; with
- *     `--sources`, then the anchors and codes of the web app and the UI kit against them.
+ *     checks the three contract files and the scenarios under `contract/` against each
+ *     other; with `--sources`, then the anchors and codes of the web app and the UI kit
+ *     against them.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
  *     fails when a committed schema is missing or differs from its source.
  *   ui-contract manifest [--out <dir>]
- *     builds the UI manifest from the three contract files and writes it, with its schema and
- *     the model's beside it, into `<dir>` (default `ui-manifest`, relative to the working
- *     directory; its last segment is `ui-manifest`). Runs from the root or any folder under it.
+ *     builds the UI manifest from the three contract files and the scenarios and writes it,
+ *     with its schema and the model's beside it, into `<dir>` (default `ui-manifest`,
+ *     relative to the working directory; its last segment is `ui-manifest`). Runs from the
+ *     root or any folder under it.
  *   ui-contract diff <ref> [--json]
  *     prints what the contract of the working tree adds, removes and renames against the
  *     contract at the git ref `<ref>` (all of it as added when the ref has no `contract/`):
@@ -54,7 +56,7 @@ const summaryOf = (contract: Contract): string => {
     `contract: ${screens} screens`,
     `${anchors} anchors`,
     `${codes} codes`,
-    `${contract.screens.scenarios.length} scenarios`,
+    `${contract.scenarios.length} scenarios`,
     `version ${contract.screens.version}`,
   ].join(', ')
 }

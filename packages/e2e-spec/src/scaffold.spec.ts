@@ -5,7 +5,7 @@ import type { Scenario } from '@workspace/ui-contract'
 import { scaffoldTest, testPathFor } from './scaffold'
 
 const signUp: Scenario = {
-  id: 'user/01-sign-up',
+  id: 'user/base/sign-up',
   title: 'Sign up and see the profile',
   tags: ['smoke'],
   devices: { A: 'guest' },
@@ -29,7 +29,7 @@ const output = scaffoldTest(signUp, { scenarioId: signUp.id })
 
 describe('scaffoldTest', () => {
   it('names its scenario and has one step per scenario step', () => {
-    expect(output.split('\n')[0]).toBe('// scenario: user/01-sign-up')
+    expect(output.split('\n')[0]).toBe('// scenario: user/base/sign-up')
     expect(output.match(/test\.step\(/g)).toHaveLength(4)
     expect(output).toContain("test.step('1. Open [/sign-in] and wait for [app-shell.status]")
     expect(output).toContain("test.step('3. Enter the user\\'s email")
@@ -56,9 +56,9 @@ describe('scaffoldTest', () => {
 
   it('writes the skeleton of the sample', () => {
     expect(output).toMatchInlineSnapshot(`
-      "// scenario: user/01-sign-up
-      import { generate } from '../support/data'
-      import { expect, test } from '../support/fixtures'
+      "// scenario: user/base/sign-up
+      import { generate } from '../../support/data'
+      import { expect, test } from '../../support/fixtures'
 
       test.describe('Sign up and see the profile', () => {
         test('A new user signs up and lands on the profile page', async ({ page }) => {
@@ -97,12 +97,18 @@ describe('scaffoldTest', () => {
       "
     `)
   })
+
+  it('imports the support files from the depth of its id', () => {
+    expect(scaffoldTest(signUp, { scenarioId: 'user/base/crud/sign-up' })).toContain(
+      "import { expect, test } from '../../../support/fixtures'",
+    )
+  })
 })
 
 describe('testPathFor', () => {
   it('pairs a scenario with its test by id', () => {
-    expect(testPathFor('tests/e2e/src', 'user/01-sign-up')).toBe(
-      'tests/e2e/src/user/01-sign-up.e2e.spec.ts',
+    expect(testPathFor('tests/e2e/src', 'user/base/sign-up')).toBe(
+      'tests/e2e/src/user/base/sign-up.e2e.spec.ts',
     )
   })
 })

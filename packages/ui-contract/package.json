@@ -25,7 +25,8 @@
     "@workspace/zod": "workspace:*",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
-    "oxc-parser": "catalog:"
+    "oxc-parser": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

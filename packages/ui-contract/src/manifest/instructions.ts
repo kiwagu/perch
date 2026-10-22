@@ -6,6 +6,7 @@
 
 import { ANCHOR_ATTRIBUTES, kindOf, PAGE_HELPER } from '../anchors'
 import type { Platform, Vocabulary } from '../files'
+import { SCENARIO_LAYERS } from '../scenarios'
 
 import type { Instructions } from './manifest.types'
 
@@ -67,8 +68,10 @@ function notices(platform: Platform): string {
 }
 
 const SCENARIOS = [
-  '`scenarios` are the end-to-end scenarios in the spec-instruction shape: `id` (`<feature>/<nn>-<slug>`, the test `tests/e2e/src/<id>.e2e.spec.ts`), `title`, `tags` (`smoke` or `full`), `devices` (a letter per browser with the role it reaches by the end; every device starts as `guest`), `where`, `data` (`generate` or a fixed value), `scenario`, `steps` and `expected`.',
+  '`scenarios` are the end-to-end scenarios in the spec-instruction shape, authored as Markdown files in the e2e tree (`tests/e2e/scenarios/<entity>/<layer>/<slug>.md`: a YAML front matter with `tags`, `devices` and `data`, then the sections `# <title>`, `Where:`, `## Scenario:`, `### Steps` and `### Expected result`) and carried here parsed.',
+  `Their fields: \`id\` (the file's path under \`tests/e2e/scenarios/\` without \`.md\`, \`<entity>/<layer>/[<area>/]<slug>\` with the layer one of ${quoted(SCENARIO_LAYERS)}; the test is \`tests/e2e/src/<id>.e2e.spec.ts\`), \`title\`, \`tags\` (\`smoke\` or \`full\`), \`devices\` (a letter per browser with the role it reaches by the end; every device starts as \`guest\`), \`where\`, \`data\` (\`generate\` or a fixed value), \`scenario\`, \`steps\` and \`expected\`.`,
   'Brackets in their text reference the contract: `[<anchor>]` (in `ids`, or derived from one with a suffix of its `derived`), `[/path]` (a route of `screens`), `[code:<code>]`, `[state:<state>]` and `[value:<value>]`.',
+  "They are the contract's feedback loop: a scenario that cannot be written from the contract alone (an anchor, a code, a state, a route or a role it would need) names a gap to fix in the contract files, never one to work around in a test.",
 ].join(' ')
 
 export function instructionsOf(

@@ -15,24 +15,24 @@ checks that scenarios and tests stay in step.
 
 ## Key exports
 
-- `readScenarios(screensPath)`: the scenarios of a `contract/screens.json`, read through
-  `loadScreens` of `@workspace/ui-contract`, with the problems of the file as
-  `file:line: message`.
+- `readScenarios(root)`: the scenarios of the repository at `root` (the files of
+  `tests/e2e/scenarios`), read through `loadScenarios` of `@workspace/ui-contract`, with the
+  problems of the files as `file:line: message`.
 - `scaffoldTest(scenario, { scenarioId })`: a test that starts with `// scenario: <id>`, with
   one `test.step` per step and one failing `expect.soft` per expected result; the fixtures
   `{ page }` for a single `guest` device, `{ page, signedIn }` otherwise; `generate.<name>()`
-  for a `generate` datum, the value itself for a fixed one. `testPathFor(testsDir, id)` names
-  its file.
-- `checkCoverage(screensPath, testsDir)`: scenarios without tests, tests without scenarios,
+  for a `generate` datum, the value itself for a fixed one; the support files imported from
+  the depth of the id. `testPathFor(testsDir, id)` names its file.
+- `checkCoverage(root, testsDir)`: scenarios without tests, tests without scenarios,
   tests whose first line does not name their scenario, tests with fewer `test.step(...)` calls
   in their code than their scenario has steps (a static count: comments do not count,
-  unreachable calls would), and the problems of the screens file.
+  unreachable calls would), and the problems of the scenario files.
 
 ## Commands
 
-- `bun run e2e:scaffold <feature>/<nn>-<slug>` (repository root): writes
-  `tests/e2e/src/<feature>/<nn>-<slug>.e2e.spec.ts` from the scenario with that id, never over
-  an existing file.
-- `bun run e2e:coverage`: the pairing check (`--screens=contract/screens.json
-  --tests=tests/e2e/src`), part of `bun run check`.
+- `bun run e2e:scaffold <entity>/<layer>/<slug>` (repository root): writes
+  `tests/e2e/src/<entity>/<layer>/<slug>.e2e.spec.ts` from the scenario with that id, never
+  over an existing file.
+- `bun run e2e:coverage`: the pairing check (`--root=. --tests=tests/e2e/src`), part of
+  `bun run check`.
 - `bun run test`, `bun run typecheck`, `bun run lint`.

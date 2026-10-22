@@ -1,8 +1,8 @@
 /**
- * The three contract files as the check reads them, and the lookups its rules share: the
- * declared anchors, a known anchor (declared, or a declared base with a suffix it lists in
- * `derived`), the states and choice values of the vocabulary, and a problem located in
- * `screens.json`.
+ * The contract as the check reads it, the three files and the scenarios, and the lookups
+ * its rules share: the declared anchors, a known anchor (declared, or a declared base with a
+ * suffix it lists in `derived`), the states and choice values of the vocabulary, and a
+ * problem located in `screens.json` or in a scenario's file.
  */
 
 import { baseOf } from '../anchors'
@@ -16,11 +16,14 @@ import {
   type Vocabulary,
 } from '../files'
 import { jsonPath } from '../files/problems'
+import type { Scenario } from '../scenarios'
 
 export interface Contract {
   readonly vocabulary: Vocabulary
   readonly screens: ScreensFile
   readonly model: Model
+  /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
+  readonly scenarios: Scenario[]
 }
 
 export interface DeclaredAnchor {
@@ -53,6 +56,10 @@ export const inScreens = (path: readonly PropertyKey[], message: string): Proble
   file: SCREENS_FILE,
   message: `${jsonPath(path)}: ${message}`,
 })
+
+/** A problem of a scenario's file, at `line` when it is known. */
+export const inScenario = (file: string, message: string, line?: number): Problem =>
+  line === undefined ? { file, message } : { file, line, message }
 
 /**
  * Whether an anchor is declared, or derived from a declared base with a suffix that base

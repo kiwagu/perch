@@ -16,8 +16,8 @@
     "i18n:check": "turbo run i18n:check",
     "test:db": "mcproc exec -- bun run scripts/gates/record-after.ts db -- turbo run test:db",
     "test:e2e": "mcproc exec --memory 4G --note e2e -- bun run scripts/gates/record-after.ts e2e -- bun tests/e2e/scripts/run-e2e.ts",
-    "e2e:scaffold": "bun packages/e2e-spec/src/cli.ts scaffold --screens=contract/screens.json --tests=tests/e2e/src",
-    "e2e:coverage": "bun packages/e2e-spec/src/cli.ts coverage --screens=contract/screens.json --tests=tests/e2e/src",
+    "e2e:scaffold": "bun packages/e2e-spec/src/cli.ts scaffold --root=. --tests=tests/e2e/src",
+    "e2e:coverage": "bun packages/e2e-spec/src/cli.ts coverage --root=. --tests=tests/e2e/src",
     "contract:schemas": "ui-contract schemas",
     "contract:check": "ui-contract check",
     "contract:check:sources": "ui-contract check --sources",
@@ -114,6 +114,7 @@
       "vite-tsconfig-paths": "6.1.1",
       "vitest": "5.0.5",
       "xstate": "5.33.2",
+      "yaml": "2.9.1",
       "zod": "4.6.7"
     },
     "catalogs": {

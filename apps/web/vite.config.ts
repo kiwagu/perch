@@ -9,13 +9,15 @@ import wasm from 'vite-plugin-wasm'
 
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
 
-const CONTRACT_FILES = ['vocabulary.md', 'screens.json', 'model.schema.json'].map((file) =>
-  fileURLToPath(new URL(`../../contract/${file}`, import.meta.url)),
-)
+const MANIFEST_INPUTS = [
+  ...['vocabulary.md', 'screens.json', 'model.schema.json'].map((file) => `contract/${file}`),
+  'tests/e2e/scenarios',
+].map((path) => fileURLToPath(new URL(`../../${path}`, import.meta.url)))
 
 // `bun run build` writes the UI manifest into dist/ui-manifest with `ui-contract manifest`
 // once Vite is done. The development watcher empties dist/ on its first build, so there the
-// same command runs after every build, and a change of a contract file rebuilds.
+// same command runs after every build, and a change of a contract file or of a scenario (the
+// folder of the scenario files is watched) rebuilds.
 function uiManifestOnWatch(): Plugin {
   let root = ''
   let outDir = ''
@@ -29,7 +31,7 @@ function uiManifestOnWatch(): Plugin {
     },
     buildStart() {
       if (this.meta.watchMode) {
-        for (const file of CONTRACT_FILES) {
+        for (const file of MANIFEST_INPUTS) {
           this.addWatchFile(file)
         }
       }

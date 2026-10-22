@@ -18,6 +18,9 @@ const camel = (name: string): string =>
     .trim()
     .replace(/[^a-z0-9]+(.)/g, (_match, next: string) => next.toUpperCase())
 
+/** The way from the test of `id` up to `tests/e2e/src`, where `support/` sits. */
+const upFrom = (id: string): string => '../'.repeat(id.split('/').length - 1)
+
 /** A single guest browser starts on a bare page; any other scenario starts signed in. */
 const fixturesOf = (devices: Scenario['devices']): string => {
   const roles = Object.values(devices)
@@ -48,10 +51,12 @@ export function scaffoldTest(scenario: Scenario, options: ScaffoldOptions): stri
     `    expect.soft(false, ${quote(`TODO: ${result}`)}).toBe(true)`,
   ])
 
+  const up = upFrom(options.scenarioId)
+
   return [
     `// scenario: ${options.scenarioId}`,
-    ...(generates ? ["import { generate } from '../support/data'"] : []),
-    "import { expect, test } from '../support/fixtures'",
+    ...(generates ? [`import { generate } from '${up}support/data'`] : []),
+    `import { expect, test } from '${up}support/fixtures'`,
     '',
     `test.describe(${quote(scenario.title)}, () => {`,
     `  test(${quote(scenario.scenario)}, async (${fixturesOf(scenario.devices)}) => {`,

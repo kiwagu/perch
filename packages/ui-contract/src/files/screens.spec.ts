@@ -55,7 +55,6 @@ describe('loadScreens', () => {
     expect(problems).toEqual([])
     expect(screens?.screens.map((screen) => screen.id)).toEqual(['sample'])
     expect(screens?.platform.actions['sign-out']?.codes).toEqual(['failed'])
-    expect(screens?.scenarios[0]?.id).toBe('sample/01-edit')
 
     const anchors = screens?.screens[0]?.anchors
 

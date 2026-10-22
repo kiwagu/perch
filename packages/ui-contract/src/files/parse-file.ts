@@ -4,19 +4,17 @@ import { z } from '@workspace/zod'
 
 import { jsonPath, type Problem } from './problems'
 
-const english = z.locales.en().localeError
+/** English messages for Zod issues: the workspace error map yields translation keys. */
+export const englishErrors = z.locales.en().localeError
 
-/**
- * Parses `data` with English messages (the workspace error map yields translation keys);
- * `at` is where `data` sits in the file.
- */
+/** Parses `data` with English messages; `at` is where `data` sits in the file. */
 export function parseFile<T extends z.ZodType>(
   file: string,
   schema: T,
   data: unknown,
   at: readonly PropertyKey[] = [],
 ): { value?: z.output<T>; problems: Problem[] } {
-  const parsed = schema.safeParse(data, { error: english })
+  const parsed = schema.safeParse(data, { error: englishErrors })
 
   if (parsed.success) {
     return { value: parsed.data, problems: [] }

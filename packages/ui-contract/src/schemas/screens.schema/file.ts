@@ -1,8 +1,6 @@
-/** `contract/screens.json`: the screens, the platform section and the scenarios. */
+/** `contract/screens.json`: the screens and the platform section they share. */
 
 import { z } from '@workspace/zod'
-
-import { scenarioSchema } from '../../scenarios'
 
 import { platformSchema } from './platform'
 import { screenSchema } from './screen'
@@ -16,6 +14,5 @@ export const screensFileSchema = z
     version: z.literal(1).describe('The version of the contract format.'),
     screens: z.array(screenSchema).min(1).describe('The screens of the application.'),
     platform: platformSchema,
-    scenarios: z.array(scenarioSchema).describe('The end-to-end scenarios of the application.'),
   })
-  .describe('The screens of the application, the platform they share and their scenarios.')
+  .describe('The screens of the application and the platform they share.')

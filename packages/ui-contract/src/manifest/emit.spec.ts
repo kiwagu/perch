@@ -12,12 +12,19 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { formatProblem, SCREENS_FILE, VOCABULARY_FILE } from '../files'
+import { formatProblem, SCENARIOS_DIR, SCREENS_FILE, VOCABULARY_FILE } from '../files'
 
 import { emitManifest } from './emit'
 import { REPOSITORY_ROOT } from './manifest.fixture'
 
 let temp: string
+
+/** The contract folder, the scenarios and the root package of the repository, under `root`. */
+function copyContract(root: string): void {
+  for (const path of ['contract', SCENARIOS_DIR, 'package.json']) {
+    cpSync(join(REPOSITORY_ROOT, path), join(root, path), { recursive: true })
+  }
+}
 
 beforeEach(() => {
   temp = mkdtempSync(join(tmpdir(), 'ui-contract-emit-'))
@@ -43,8 +50,7 @@ describe('emitManifest', () => {
     const out = join(temp, 'ui-manifest')
     const vocabulary = join(root, VOCABULARY_FILE)
 
-    cpSync(join(REPOSITORY_ROOT, 'contract'), join(root, 'contract'), { recursive: true })
-    cpSync(join(REPOSITORY_ROOT, 'package.json'), join(root, 'package.json'))
+    copyContract(root)
     writeFileSync(
       vocabulary,
       readFileSync(vocabulary, 'utf8').replace(
@@ -69,8 +75,7 @@ describe('emitManifest', () => {
       additionalProperties: false,
     }
 
-    cpSync(join(REPOSITORY_ROOT, 'contract'), join(root, 'contract'), { recursive: true })
-    cpSync(join(REPOSITORY_ROOT, 'package.json'), join(root, 'package.json'))
+    copyContract(root)
     writeFileSync(
       screens,
       readFileSync(screens, 'utf8').replace(

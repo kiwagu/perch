@@ -1,16 +1,24 @@
 /**
  * A throwaway repository root for the specs: `contract/screens.json` (the contract fixture
- * of `@workspace/ui-contract` with the scenarios a spec gives it) and test files under
- * `tests/`.
+ * of `@workspace/ui-contract`), the scenarios a spec gives it as files under
+ * `tests/e2e/scenarios/`, and test files under `tests/e2e/src/`.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
-import type { Scenario } from '@workspace/ui-contract'
+import {
+  formatScenario,
+  SCENARIOS_DIR,
+  SCREENS_FILE,
+  type Scenario,
+  scenarioFile,
+} from '@workspace/ui-contract'
 
 const FIXTURE = new URL('../../ui-contract/src/__fixtures__/screens.json', import.meta.url)
+
+const TESTS_DIR = 'tests/e2e/src'
 
 export const scenarioOf = (id: string, steps: number): Scenario => ({
   id,
@@ -26,24 +34,31 @@ export const scenarioOf = (id: string, steps: number): Scenario => ({
 
 const roots: string[] = []
 
+function write(root: string, path: string, text: string): void {
+  mkdirSync(dirname(join(root, path)), { recursive: true })
+  writeFileSync(join(root, path), text)
+}
+
 export function project(
   scenarios: readonly Scenario[],
   tests: Readonly<Record<string, string>> = {},
-): { screens: string; tests: string } {
+): { root: string; tests: string } {
   const root = mkdtempSync(join(tmpdir(), 'e2e-spec-'))
-  const screens = join(root, 'contract', 'screens.json')
-  const contract = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, unknown>
 
   roots.push(root)
+  mkdirSync(join(root, SCENARIOS_DIR), { recursive: true })
   mkdirSync(join(root, 'contract'))
-  writeFileSync(screens, JSON.stringify({ ...contract, scenarios }))
+  copyFileSync(FIXTURE, join(root, SCREENS_FILE))
 
-  for (const [path, content] of Object.entries(tests)) {
-    mkdirSync(join(root, 'tests', path, '..'), { recursive: true })
-    writeFileSync(join(root, 'tests', path), content)
+  for (const scenario of scenarios) {
+    write(root, scenarioFile(scenario.id), formatScenario(scenario))
   }
 
-  return { screens, tests: join(root, 'tests') }
+  for (const [path, content] of Object.entries(tests)) {
+    write(root, join(TESTS_DIR, path), content)
+  }
+
+  return { root, tests: join(root, TESTS_DIR) }
 }
 
 export function removeProjects(): void {

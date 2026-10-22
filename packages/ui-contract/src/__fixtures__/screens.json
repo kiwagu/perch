@@ -65,18 +65,5 @@
     },
     "reserved": ["sample.status"],
     "status": { "anchor": "sample.status", "states": ["ready"] }
-  },
-  "scenarios": [
-    {
-      "id": "sample/01-edit",
-      "title": "Edit the thing",
-      "tags": ["smoke"],
-      "devices": { "A": "member" },
-      "where": "[/sample]",
-      "data": { "Title": "generate" },
-      "scenario": "A member renames the thing",
-      "steps": ["Open [/sample]", "Enter the title into [sample.title-input]"],
-      "expected": ["[sample.save-button] saves with [code:saved]"]
-    }
-  ]
+  }
 }

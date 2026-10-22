@@ -2,7 +2,6 @@
 
 import type { z } from '@workspace/zod'
 
-import type { scenarioSchema } from '../scenarios'
 import {
   type anchorBindingSchema,
   type anchorDefSchema,
@@ -26,7 +25,6 @@ export type Binding = z.infer<typeof bindingSchema>
 export type BindingRef = z.infer<typeof bindingRefSchema>
 export type AnchorBinding = z.infer<typeof anchorBindingSchema>
 export type ParamValue = z.infer<typeof paramValueSchema>
-export type Scenario = z.infer<typeof scenarioSchema>
 export type Platform = z.infer<typeof platformSchema>
 
 export function loadScreens(root: string): { screens?: ScreensFile; problems: Problem[] } {

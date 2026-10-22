@@ -2,18 +2,19 @@
  * Rule 6: the scenarios speak of what the contract declares. Every bracket reference in
  * their text resolves (an anchor declared, or derived from a declared base with a suffix it
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
- * pattern row matches), every device
- * acts as a role of the vocabulary, and each id is used once.
+ * pattern row matches), and every device acts as a role of the vocabulary. Each problem is
+ * one of the scenario's file, named by its field; the ids are paths, so each is used once.
  */
 
-import type { Problem, Scenario } from '../files'
-import { type Reference, referencesIn } from '../scenarios'
+import { type Problem, scenarioFile } from '../files'
+import { jsonPath } from '../files/problems'
+import { type Reference, referencesIn, type Scenario } from '../scenarios'
 
 import {
   bindingPaths,
   type Contract,
   has,
-  inScreens,
+  inScenario,
   isChoiceValue,
   knownAnchors,
   statesOf,
@@ -53,33 +54,28 @@ function resolver(contract: Contract): (reference: Reference) => string | undefi
 
 export function scenariosProblems(contract: Contract): Problem[] {
   const resolve = resolver(contract)
-  const ids = new Set<string>()
 
-  return contract.screens.scenarios.flatMap((scenario, index) => {
-    const at = ['scenarios', index]
-    const repeated = ids.has(scenario.id)
-
-    ids.add(scenario.id)
+  return contract.scenarios.flatMap((scenario) => {
+    const file = scenarioFile(scenario.id)
+    const problem = (at: readonly PropertyKey[], message: string): Problem =>
+      inScenario(file, `${jsonPath(at)}: ${message}`)
 
     return [
-      ...(repeated
-        ? [inScreens([...at, 'id'], `"${scenario.id}" is the id of another scenario`)]
-        : []),
       ...Object.entries(scenario.devices).flatMap(([device, role]) =>
         has(contract.vocabulary.roles, role)
           ? []
-          : [inScreens([...at, 'devices', device], `"${role}" is not a role of the vocabulary`)],
+          : [problem(['devices', device], `"${role}" is not a role of the vocabulary`)],
       ),
-      ...textsOf(scenario).flatMap(({ text, at: field }) => {
+      ...textsOf(scenario).flatMap(({ text, at }) => {
         const { references, problems } = referencesIn(text)
 
         return [
           ...references.flatMap((reference) => {
-            const problem = resolve(reference)
+            const unresolved = resolve(reference)
 
-            return problem === undefined ? [] : [inScreens([...at, ...field], problem)]
+            return unresolved === undefined ? [] : [problem(at, unresolved)]
           }),
-          ...problems.map((problem) => inScreens([...at, ...field], problem)),
+          ...problems.map((message) => problem(at, message)),
         ]
       }),
     ]

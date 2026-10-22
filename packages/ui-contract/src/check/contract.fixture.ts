@@ -141,20 +141,20 @@ export function sampleContract(): Contract {
         reserved: ['app-shell.status'],
         status: { anchor: 'app-shell.status', states: ['opening', 'ready'] },
       },
-      scenarios: [
-        {
-          id: 'sample/01-edit',
-          title: 'Edit the thing',
-          tags: ['smoke'],
-          devices: { A: 'member' },
-          where: '[/sample/$key]',
-          data: { Title: 'generate' },
-          scenario: 'A member picks [value:a] in [sample.mode-select.option] and [value:k12]',
-          steps: ['Wait for [app-shell.status] to reach [state:ready]'],
-          expected: ['[sample.save-button] carries [code:saved]'],
-        },
-      ],
     },
+    scenarios: [
+      {
+        id: 'sample/base/thing',
+        title: 'Edit the thing',
+        tags: ['smoke'],
+        devices: { A: 'member' },
+        where: '[/sample/$key]',
+        data: { Title: 'generate' },
+        scenario: 'A member picks [value:a] in [sample.mode-select.option] and [value:k12]',
+        steps: ['Wait for [app-shell.status] to reach [state:ready]'],
+        expected: ['[sample.save-button] carries [code:saved]'],
+      },
+    ],
     model: {
       document: {},
       entities: {
