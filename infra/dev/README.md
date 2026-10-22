@@ -22,7 +22,8 @@ the gateway's `/sync`). No dev server runs behind it.
   `Cache-Control: public, max-age=31536000, immutable`; `index.html` (at `/`, by name or for
   a deep link) with `Cache-Control: no-cache`, so a reload after a rebuild loads the new build.
   `.wasm` files go out as `application/wasm`. `/ui-manifest/*` is the UI manifest the web
-  build writes into `dist/ui-manifest/` (`manifest.json`, `manifest.schema.json`,
+  build writes into its folder's `ui-manifest/` (`dist/` for the e2e stand, `dist-dev/` for
+  the dev stand; `manifest.json`, `manifest.schema.json`,
   `model.schema.json`), sent with `Cache-Control: no-store` and never answered with
   `index.html`; with `PERCH_UI_MANIFEST=0` (default `1`) it answers 404 instead. The mcproc
   manifest passes the switch to both fronts from its var `ui_manifest` (`'1'`); a checkout turns

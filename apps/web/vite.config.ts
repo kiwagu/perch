@@ -14,8 +14,8 @@ const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
 )
 
 // `bun run build` writes the UI manifest into dist/ui-manifest with `ui-contract manifest`
-// once Vite is done. The development watcher empties dist/ on its first build, so there the
-// same command runs after every build, and a change of a contract file or of a scenario (the
+// once Vite is done. The development watcher empties its outDir (dist-dev/) on its first
+// build, so there the same command runs after every build, into <outDir>/ui-manifest, and a change of a contract file or of a scenario (the
 // folders of the contract and of the scenario files are watched, at any depth) rebuilds.
 function uiManifestOnWatch(): Plugin {
   let root = ''

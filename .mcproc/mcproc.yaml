@@ -93,6 +93,7 @@ apps:
       - package.json
       - ../../bun.lock
       - ../../packages/data/src/vite-plugin-surql.ts
+      - ../../packages/data/src/surql-names.ts
     watch_delay: 1000
   gateway:
     description: >-
