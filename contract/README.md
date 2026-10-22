@@ -111,6 +111,7 @@ An excerpt of `screens/me.yaml`:
 # yaml-language-server: $schema=../screen.schema.json
 id: user.profile
 title: Profile
+description: "The signed-in account's own profile: its name and bio, saved together and kept in step across the account's devices; signing this device out, with a warning when changes are unsent."
 flag: null
 bindings: [ { path: /me, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ user.profile.heading, user.profile.form, user.profile.save-button ]
