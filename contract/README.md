@@ -94,11 +94,16 @@ The loader accepts any valid YAML. Files written by hand follow one layout, so t
 alike:
 
 - keys in the order `id`, `title`, `frame` or `flag`, `bindings`, `entry`, then the rest;
-- flow style, on one line, for `bindings` and each binding, for `entry`, and inside an
-  anchor for its `roles`, `codes`, `states` and `derived` lists and for a `binding` that is
-  one map with no map inside (`binding: { model: profile.name }`);
-- block style for everything else: `anchors`, a `binding` that is a list or has `params`,
-  the screen's `states`, `flow`, `source`, `wireframe` and `search`.
+- flow style, on one line, for `bindings` and each binding with everything it holds: its
+  `roles`, `params`, `search`, `history` and `retain`, nested maps included (the test
+  fixture `packages/ui-contract/src/__fixtures__/contract/screens/sample/$key.yaml` has a
+  binding whose `params` is a nested JSON Schema, still on one line);
+- flow style for `entry`, and inside an anchor for its `roles`, `codes`, `states` and
+  `derived` lists and for a `binding` that is one map with no map inside
+  (`binding: { model: profile.name }`, `binding: { action: platform.sign-out }`);
+- block style for the rest: the `anchors` map and each anchor in it, an anchor's `binding`
+  that is a list or holds a map (its action's `params` included), the screen's `states`, its
+  `flow` with everything inside it, a `source`, and the `wireframe` as a block scalar.
 
 An excerpt of `screens/me.yaml`:
 
@@ -199,13 +204,21 @@ One literal per rendered name:
 - an `item`, `row` or `option` is the one anchor that marks many elements: every entry of
   its container, told apart by `data-id` or `data-value`.
 
-So a search finds every place a name lives. The full name of a derived anchor finds the
-screen file, the scenario and the tests; its base finds the view that renders it:
+So a search finds every place a name lives. A grep for the full name of a derived anchor
+finds every explicit reference to it: the scenarios and tests that use it, a `flow` event or
+a choice value that names it, a view's unit test that writes it as a literal. Its
+declaration is found by the base, which lists the suffix in its `derived`, and so is the
+view that renders the part, which passes the base to the composite:
 
 ```sh
-git grep -n 'user.profile.sign-out-dialog.cancel-button'
-git grep -n 'user.profile.sign-out-dialog' -- apps
+git grep -nF 'user.profile.sign-out-dialog.cancel-button'   # the explicit references
+git grep -nF 'user.profile.sign-out-dialog'                 # the declaration and the view too
 ```
+
+A derived name may have no reference in the screens, the scenarios or the tests at all:
+`app-shell.locale-select.option` is named only by the vocabulary (its choice values and the
+reserved row of its base), and `app-shell.locale-select` with `derived: [ option ]` declares
+it.
 
 In code an anchor is a literal in one of four forms, the only ones the sources check reads:
 
@@ -343,7 +356,8 @@ The file opens with a YAML front matter that holds only the structured header:
 Then the body, with fixed sections in any order: `# <title>`, a line `Where: <text>`,
 `## Scenario: <sentence>`, `### Steps` with a numbered list and `### Expected result` with a
 bullet list. An unknown heading, a line outside a section, a missing section or a list item
-of the wrong shape is a problem with its line. The whole of
+of the wrong shape is a problem, with a line number where the parser knows it (a missing
+section has none). The whole of
 `tests/e2e/scenarios/user/base/edit-profile-name.md`:
 
 ```markdown
