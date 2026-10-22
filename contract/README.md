@@ -47,10 +47,11 @@ A screen's `bindings` are its routes in the router's format: `path` (static segm
 `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a
 visitor; `authenticated`: only a signed-in account), the `roles` it serves, `params` and
 `search` as flat JSON Schemas, `history` (`push` or `replace`) and `retain`. The frame
-(`app-shell`, `frame: true`) has no route: it is around every screen. A route is a state
-address: the same path with the same search reaches the same state after a reload, and the
-application's router builds and matches every binding
-(`apps/web/src/platform/routes-router.spec.ts`).
+(`app-shell`, `frame: true`) has no route: it is around every screen. Every binding `path`
+is a TanStack Router path in the router's own syntax, `params` are its path parameters and
+`search` its search parameters, and a route is a state address: the same path with the same
+search reaches the same state after a reload. The application's router builds and matches
+every binding (`apps/web/src/platform/routes-router.spec.ts`).
 
 A screen's `entry` lists the anchors a test starts from on the screen. Some of them are
 alternatives by state, so a test waits for the one its state shows, never for all of them:
