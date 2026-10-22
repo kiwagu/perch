@@ -60,6 +60,9 @@ flow:
                 anchor: sample.save-button
                 codes:
                   - saved
+            - type: navigate
+              params:
+                to: /sample/$key
         onError:
           target: editing
           actions:

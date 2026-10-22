@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem, type Screen } from '../files'
+import { fixtureContract } from '../manifest/manifest.fixture'
 
 import { activitiesProblems } from './activities'
 import type { Contract } from './contract'
-import { activityIn, activityStateIn, sampleContract, screenIn } from './contract.fixture'
+import {
+  activityIn,
+  activityStateIn,
+  flowStateIn,
+  sampleContract,
+  screenIn,
+} from './contract.fixture'
 
 const printed = (contract = sampleContract()): string[] =>
   activitiesProblems(contract).map(formatProblem)
@@ -44,6 +51,9 @@ function withOther(): Contract {
 describe('activitiesProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
+  })
+  it('finds nothing in the activity of the fixture files', () => {
+    expect(printed(fixtureContract())).toEqual([])
   })
   it('wants roles of the vocabulary and data that are fields of the model', () => {
     const contract = sampleContract()
@@ -117,6 +127,31 @@ describe('activitiesProblems', () => {
       `${AT} states.editing.on["sample.save-button"][1]: "sample.save-button" leads to "/other" through neither a navigate of the flow of "sample" nor a link`,
       `${AT} states.saved.on["sample.home-link"][0]: "sample.home-link" leads to "/other" through neither a navigate of the flow of "sample" nor a link`,
       `${AT} states.saved.on["sample.page"]: "sample.page" leads to "/sample/$key" through neither a navigate of the flow of "sample" nor a link`,
+    ])
+  })
+  it('backs a transition by a navigate on leaving a state, on the event or after an invoke', () => {
+    for (const leaving of ['editing', 'saving']) {
+      const contract = withOther()
+
+      flowStateIn(contract, leaving).exit = [{ type: 'navigate', params: { to: '/other' } }]
+      activityStateIn(contract, 'editing').on = {
+        'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }, { target: 'away' }],
+      }
+
+      expect(printed(contract), leaving).toEqual([])
+    }
+  })
+  it('backs no transition by a navigate on leaving a state the flow stays in', () => {
+    const contract = withOther()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.exit = [{ type: 'navigate', params: { to: '/other' } }]
+    editing.on = { ...editing.on, 'sample.a-button': { description: 'Nothing moves.' } }
+    activityStateIn(contract, 'saved').on = { 'sample.a-button': { target: 'away' } }
+
+    expect(printed(contract)).toEqual([
+      `${AT} states.saved.on["sample.a-button"]: "sample.a-button" leads to "/other" through neither a navigate of the flow of "sample" nor a link`,
+      `${AT} states.home: is not reachable from "editing"`,
     ])
   })
   it("backs a frame anchor by the frame's flow, through its invoke's onDone and onError", () => {

@@ -75,8 +75,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    named in the activity's `data`.
 2. **The screens' flows.** Every screen the activity visits has its screen file, and each
    step from one screen to the next is already there: a transition on an anchor whose flow
-   reaches a `navigate` to the next screen's path (in its actions, on entering a state, or
-   after an invoke's `onDone` or `onError`), or a link with `binding: { route: <path> }`. A
+   reaches a `navigate` to the next screen's path (in its actions, on leaving a state or
+   entering one, or after an invoke's `onDone` or `onError`), or a link with
+   `binding: { route: <path> }`. A
    step the screens cannot take yet goes into their flows first, never into the activity.
 3. **The activity file** `contract/activities/<id>.yaml`, named by its id, the editor hint on
    its first line, keys in the order `id`, `title`, `description`, `roles`, `data`,

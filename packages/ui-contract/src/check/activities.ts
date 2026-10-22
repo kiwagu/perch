@@ -6,8 +6,9 @@
  * through its base's `derived`) of that screen or of the frame. Every transition is backed by
  * the screens: the flow of the anchor's screen (the frame's for a frame anchor), from a
  * transition on that anchor, reaches a `navigate` to the target's path (in the transition's
- * actions, on entering a state, or after an invoke's `onDone` or `onError`, each state
- * followed once), or the anchor is a link to that path (`binding.route`). Every guard is
+ * actions, on leaving its state or entering its target, as XState runs `exit` and `entry` on
+ * a move, or after an invoke's `onDone` or `onError`, each state followed once), or the
+ * anchor is a link to that path (`binding.route`). Every guard is
  * declared in `meta.guards` and every declared one is used; every state is reachable from
  * `initial`, and every state that is not final has a transition to leave it.
  */
@@ -71,13 +72,21 @@ function navigatesAfter(flow: Flow, anchor: string): Set<string> {
       }
     }
   }
-  const follow = (transition: FlowTransition): void => {
+  /** Out of `from`: the actions, and on a move the exit of `from` and the target's entry. */
+  const follow = (from: string, transition: FlowTransition): void => {
     const { target } = transition
-    const state = target === undefined || seen.has(target) ? undefined : own(flow.states, target)
 
     collect(transition.actions)
 
-    if (target === undefined || state === undefined) {
+    if (target === undefined || target === from) {
+      return
+    }
+
+    collect(own(flow.states, from)?.exit)
+
+    const state = seen.has(target) ? undefined : own(flow.states, target)
+
+    if (state === undefined) {
       return
     }
 
@@ -85,16 +94,20 @@ function navigatesAfter(flow: Flow, anchor: string): Set<string> {
     collect(state.entry)
 
     if (state.invoke !== undefined) {
-      listOf(state.invoke.onDone).forEach(follow)
-      listOf(state.invoke.onError ?? []).forEach(follow)
+      for (const outcome of [
+        ...listOf(state.invoke.onDone),
+        ...listOf(state.invoke.onError ?? []),
+      ]) {
+        follow(target, outcome)
+      }
     }
   }
 
-  for (const state of Object.values(flow.states)) {
+  for (const [name, state] of Object.entries(flow.states)) {
     const transitions = own(state.on ?? {}, anchor)
 
-    if (transitions !== undefined) {
-      listOf(transitions).forEach(follow)
+    for (const transition of transitions === undefined ? [] : listOf(transitions)) {
+      follow(name, transition)
     }
   }
 

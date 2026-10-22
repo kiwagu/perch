@@ -306,8 +306,9 @@ and its address is a binding of that screen; every event is a declared anchor (a
 through its base's `derived`) of that screen or of the frame; and every transition from a
 state on an anchor to a target is backed by the screens: the flow of the anchor's screen
 (the frame's, for an anchor of the frame), from a transition on that anchor, reaches a
-`navigate` to the target's path, in the transition's actions, on entering a state or after
-an invoke's `onDone` or `onError`; or the anchor is a link to that path
+`navigate` to the target's path, in the transition's actions, on leaving its state or
+entering its target (the `exit` and `entry` effects XState runs on a move) or after an
+invoke's `onDone` or `onError`; or the anchor is a link to that path
 (`binding: { route: ... }`). The roles are of the vocabulary and every `data` model is a field
 of the model; `initial` and every target are states; every state is reachable from
 `initial` and every state that is not final leaves; every guard is declared in `meta.guards`
