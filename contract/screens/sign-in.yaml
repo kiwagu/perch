@@ -1,0 +1,133 @@
+# yaml-language-server: $schema=../screen.schema.json
+id: user.sign-in
+title: Sign in or create an account
+flag: null
+bindings: [ { path: /sign-in, guard: guest, roles: [ guest ], history: push } ]
+entry: [ user.sign-in.form, user.sign-in.email-input, user.sign-in.submit-button, user.sign-in.toggle-button ]
+anchors:
+  user.sign-in.form:
+    kind: form
+    description: The form of the page, in the mode sign-in or sign-up; its heading names the mode.
+  user.sign-in.notice-message:
+    kind: message
+    description: Why the last session on this device ended, when the person should know; shown once, while the page stays open.
+    codes: [ resend-after-sign-in, signed-out-elsewhere, delete-pending ]
+  user.sign-in.error:
+    kind: error
+    description: Why the last attempt failed; the next attempt or a switch of mode clears it.
+    codes: [ invalid-credentials, sign-up-rejected, rate-limited, other-account, name-required, name-too-long, failed ]
+  user.sign-in.email-input:
+    kind: input
+    description: The email of the account (type email).
+    binding:
+      - action: platform.sign-in
+        params:
+          email: user.sign-in.email-input
+      - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+  user.sign-in.password-input:
+    kind: input
+    description: The password of the account (type password).
+    binding:
+      - action: platform.sign-in
+        params:
+          password: user.sign-in.password-input
+      - action: platform.sign-up
+        params:
+          password: user.sign-in.password-input
+  user.sign-in.name-input:
+    kind: input
+    description: The name of the new account; shown only in the mode sign-up.
+    binding:
+      action: platform.sign-up
+      params:
+        name: user.sign-in.name-input
+  user.sign-in.submit-button:
+    kind: button
+    description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs.
+    binding:
+      - action: platform.sign-in
+        params:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+      - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+          name: user.sign-in.name-input
+  user.sign-in.toggle-button:
+    kind: button
+    description: Switches between signing in and creating an account; its value is the mode it switches to.
+    dataValue: true
+states:
+  ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
+flow:
+  states:
+    - sign-in
+    - sign-up
+    - submitting
+    - done
+  initial: sign-in
+  events:
+    - on: user.sign-in.toggle-button
+      from: sign-in
+      outcomes:
+        success:
+          state: sign-up
+          note: The name input appears; the error is cleared.
+    - on: user.sign-in.toggle-button
+      from: sign-up
+      outcomes:
+        success:
+          state: sign-in
+          note: The name input goes; the error is cleared.
+    - on: user.sign-in.submit-button
+      action: platform.sign-in
+      from: sign-in
+      params:
+        email: user.sign-in.email-input
+        password: user.sign-in.password-input
+      outcomes:
+        success:
+          route: /me
+          codes:
+            - welcome
+          state: done
+          note: The page is in submitting while the attempt runs.
+        failure:
+          codes:
+            - invalid-credentials
+            - rate-limited
+            - other-account
+            - failed
+          state: sign-in
+    - on: user.sign-in.submit-button
+      action: platform.sign-up
+      from: sign-up
+      params:
+        email: user.sign-in.email-input
+        password: user.sign-in.password-input
+        name: user.sign-in.name-input
+      outcomes:
+        success:
+          route: /me
+          codes:
+            - welcome
+          state: done
+          note: The account is created with its profile; the page is in submitting while the attempt runs.
+        failure:
+          codes:
+            - sign-up-rejected
+            - rate-limited
+            - other-account
+            - name-required
+            - name-too-long
+            - failed
+          state: sign-up
+wireframe: |-
+  - heading "Sign in" [level=1]
+  - textbox "Email"
+  - textbox "Password"
+  - button "Sign in"
+  - button "Create account"

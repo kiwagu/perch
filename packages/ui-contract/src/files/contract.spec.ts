@@ -70,16 +70,23 @@ describe('the contract folder of the repository', () => {
     expect(vocabulary.version).toBe(1)
     expect(Object.keys(vocabulary.kinds)).toEqual(KINDS)
   })
-  it('has the screens of the application without problems', () => {
+  it('has the screens of the application without problems, sorted by their files', () => {
     const { screens, problems } = loadScreens(ROOT)
 
     expect(printed(problems)).toEqual([])
+    expect(screens?.files).toEqual([
+      'contract/screens/__root.yaml',
+      'contract/screens/devices.yaml',
+      'contract/screens/me.yaml',
+      'contract/screens/org.yaml',
+      'contract/screens/sign-in.yaml',
+    ])
     expect(screens?.screens.map((screen) => screen.id)).toEqual([
       'app-shell',
-      'user.sign-in',
+      'device',
       'user.profile',
       'organisation',
-      'device',
+      'user.sign-in',
     ])
   })
   it('has the scenarios without problems, sorted by their paths', () => {

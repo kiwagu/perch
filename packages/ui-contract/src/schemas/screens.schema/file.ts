@@ -1,18 +1,20 @@
-/** `contract/screens.json`: the screens and the platform section they share. */
+/**
+ * The authored screen files: `contract/screens/<pathname>.yaml`, one screen each, and
+ * `contract/platform.yaml`, the contract version with the platform section. An editor
+ * finds their JSON Schemas through the hint comment on the first line, never a key.
+ */
 
 import { z } from '@workspace/zod'
 
 import { platformSchema } from './platform'
 import { screenSchema } from './screen'
 
-export const screensFileSchema = z
+/** One file of `contract/screens/`: one screen, as written. */
+export const screenFileSchema = screenSchema
+
+export const platformFileSchema = z
   .strictObject({
-    $schema: z
-      .string()
-      .optional()
-      .describe('The JSON Schema of this file, for editors: `./screens.schema.json`.'),
     version: z.literal(1).describe('The version of the contract format.'),
-    screens: z.array(screenSchema).min(1).describe('The screens of the application.'),
-    platform: platformSchema,
+    ...platformSchema.shape,
   })
-  .describe('The screens of the application and the platform they share.')
+  .describe('The version of the contract format and what the platform offers every screen.')

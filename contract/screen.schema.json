@@ -1,0 +1,869 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+      "description": "A screen name of the vocabulary: one or two kebab-case segments."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The title of the screen, for a reader."
+    },
+    "frame": {
+      "description": "The frame around every screen: it has no route of its own.",
+      "type": "boolean"
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+            "description": "The route path: static segments, `$param`, `{-$param}` (optional) and `$` (splat), from `/`."
+          },
+          "guard": {
+            "description": "Who may open the route: only a guest, or only a signed-in account; absent: anyone.",
+            "type": "string",
+            "enum": [
+              "guest",
+              "authenticated"
+            ]
+          },
+          "roles": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A role of the vocabulary."
+            },
+            "description": "The roles the route serves."
+          },
+          "params": {
+            "description": "The path parameters, as a flat JSON Schema.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "object",
+                "description": "Always \"object\"."
+              },
+              "properties": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "integer",
+                        "number",
+                        "boolean"
+                      ],
+                      "description": "The primitive type of the parameter."
+                    },
+                    "enum": {
+                      "description": "The values the parameter takes.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string, number or boolean value.",
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean"
+                        ]
+                      }
+                    },
+                    "default": {
+                      "description": "The value when the URL leaves it out.",
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    },
+                    "minimum": {
+                      "description": "The smallest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "maximum": {
+                      "description": "The largest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "minLength": {
+                      "description": "The fewest characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "maxLength": {
+                      "description": "The most characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "description": "A regular expression (ECMA-262) every value of a string matches.",
+                      "type": "string"
+                    },
+                    "description": {
+                      "description": "What the parameter means.",
+                      "type": "string"
+                    },
+                    "x-perch": {
+                      "type": "object",
+                      "properties": {
+                        "control": {
+                          "description": "The anchor of the control that sets the parameter.",
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$"
+                        },
+                        "values": {
+                          "description": "Per enum value, the control that chooses it.",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "control": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "The anchor of the control that chooses this value."
+                              },
+                              "controlValue": {
+                                "description": "The data-value of that control which chooses this value.",
+                                "type": "string"
+                              },
+                              "note": {
+                                "description": "Anything a reader needs to know about the value.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "control"
+                            ],
+                            "additionalProperties": false,
+                            "description": "How a page sets one enum value of the parameter."
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "The controls of the page that set the parameter."
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One flat parameter."
+                },
+                "description": "The parameters by name."
+              },
+              "required": {
+                "description": "The parameters the route needs.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "type": "boolean",
+                "const": false,
+                "description": "Always false: no other parameter."
+              }
+            },
+            "required": [
+              "type",
+              "properties",
+              "additionalProperties"
+            ],
+            "additionalProperties": false
+          },
+          "search": {
+            "description": "The search parameters, as a flat JSON Schema.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "object",
+                "description": "Always \"object\"."
+              },
+              "properties": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "integer",
+                        "number",
+                        "boolean"
+                      ],
+                      "description": "The primitive type of the parameter."
+                    },
+                    "enum": {
+                      "description": "The values the parameter takes.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string, number or boolean value.",
+                        "type": [
+                          "string",
+                          "number",
+                          "boolean"
+                        ]
+                      }
+                    },
+                    "default": {
+                      "description": "The value when the URL leaves it out.",
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    },
+                    "minimum": {
+                      "description": "The smallest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "maximum": {
+                      "description": "The largest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "minLength": {
+                      "description": "The fewest characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "maxLength": {
+                      "description": "The most characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "description": "A regular expression (ECMA-262) every value of a string matches.",
+                      "type": "string"
+                    },
+                    "description": {
+                      "description": "What the parameter means.",
+                      "type": "string"
+                    },
+                    "x-perch": {
+                      "type": "object",
+                      "properties": {
+                        "control": {
+                          "description": "The anchor of the control that sets the parameter.",
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$"
+                        },
+                        "values": {
+                          "description": "Per enum value, the control that chooses it.",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "control": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "The anchor of the control that chooses this value."
+                              },
+                              "controlValue": {
+                                "description": "The data-value of that control which chooses this value.",
+                                "type": "string"
+                              },
+                              "note": {
+                                "description": "Anything a reader needs to know about the value.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "control"
+                            ],
+                            "additionalProperties": false,
+                            "description": "How a page sets one enum value of the parameter."
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "The controls of the page that set the parameter."
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One flat parameter."
+                },
+                "description": "The parameters by name."
+              },
+              "required": {
+                "description": "The parameters the route needs.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {
+                "type": "boolean",
+                "const": false,
+                "description": "Always false: no other parameter."
+              }
+            },
+            "required": [
+              "type",
+              "properties",
+              "additionalProperties"
+            ],
+            "additionalProperties": false
+          },
+          "history": {
+            "default": "push",
+            "description": "Whether opening the route adds a history entry or replaces the current one.",
+            "type": "string",
+            "enum": [
+              "push",
+              "replace"
+            ]
+          },
+          "retain": {
+            "description": "The search parameters carried across navigations.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "roles"
+        ],
+        "additionalProperties": false,
+        "description": "One route of the screen."
+      },
+      "description": "The routes of the screen: at least one unless the screen is the frame."
+    },
+    "flag": {
+      "description": "The feature flag that shows the screen, or null for always.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "entry": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+        "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+      },
+      "description": "The anchors that are present once the screen is open."
+    },
+    "anchors": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "The kind of the anchor; matches the end of its last segment."
+          },
+          "description": {
+            "description": "What the element is, for a reader.",
+            "type": "string"
+          },
+          "binding": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "type": "string",
+                        "pattern": "^[a-z_]+\\.[a-z_]+$",
+                        "description": "`entity.field`: a field of an entity of model.schema.json."
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The anchor shows or edits a field of the model."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+                        "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
+                      },
+                      "params": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                              "description": "The anchor of the control whose value the parameter takes."
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "description": "The constant: a string, a number or a boolean.",
+                                  "type": [
+                                    "string",
+                                    "number",
+                                    "boolean"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "value"
+                              ],
+                              "additionalProperties": false,
+                              "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                            }
+                          ],
+                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                        },
+                        "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The anchor runs an action."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "route": {
+                        "type": "string",
+                        "pattern": "^\\/",
+                        "description": "The path of a binding the anchor navigates to."
+                      }
+                    },
+                    "required": [
+                      "route"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The anchor navigates to a route."
+                  }
+                ],
+                "description": "What the anchor is bound to: a model field, an action or a route."
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string",
+                          "pattern": "^[a-z_]+\\.[a-z_]+$",
+                          "description": "`entity.field`: a field of an entity of model.schema.json."
+                        }
+                      },
+                      "required": [
+                        "model"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The anchor shows or edits a field of the model."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "type": "string",
+                          "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+                          "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
+                        },
+                        "params": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "The anchor of the control whose value the parameter takes."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "description": "The constant: a string, a number or a boolean.",
+                                    "type": [
+                                      "string",
+                                      "number",
+                                      "boolean"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              }
+                            ],
+                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          },
+                          "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The anchor runs an action."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "route": {
+                          "type": "string",
+                          "pattern": "^\\/",
+                          "description": "The path of a binding the anchor navigates to."
+                        }
+                      },
+                      "required": [
+                        "route"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The anchor navigates to a route."
+                    }
+                  ],
+                  "description": "What the anchor is bound to: a model field, an action or a route."
+                },
+                "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
+              }
+            ],
+            "description": "What the anchor is bound to: one binding, or several in a non-empty list."
+          },
+          "roles": {
+            "description": "The roles that see the element; absent: every role of the screen.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A role of the vocabulary."
+            }
+          },
+          "own": {
+            "description": "Shown to a member only on the entries the member owns.",
+            "type": "boolean"
+          },
+          "codes": {
+            "description": "The data-code values the element carries.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A code of the vocabulary (data-code)."
+            }
+          },
+          "dataId": {
+            "description": "What the data-id of the element holds: the id of the entity it shows.",
+            "type": "string"
+          },
+          "dataValue": {
+            "description": "The element carries a data-value from the choice values.",
+            "type": "boolean"
+          },
+          "states": {
+            "description": "The data-state values the element takes.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A state of the vocabulary (data-state)."
+            }
+          },
+          "derived": {
+            "description": "The derived suffixes the element renders: `confirm-button`, `option`.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+            }
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "entity": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "The entity of model.schema.json the anchor lists."
+                  },
+                  "order": {
+                    "description": "The field the entries are ordered by.",
+                    "type": "string"
+                  },
+                  "direction": {
+                    "description": "The order direction.",
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                },
+                "required": [
+                  "entity"
+                ],
+                "additionalProperties": false,
+                "description": "The entries come from an entity of the model."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                    "description": "The platform action whose result the anchor lists."
+                  }
+                },
+                "required": [
+                  "platform"
+                ],
+                "additionalProperties": false,
+                "description": "The entries come from a platform action."
+              }
+            ],
+            "description": "Where the entries of a list, a section or a table come from."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false,
+        "description": "One declared anchor."
+      },
+      "description": "The declared anchors by name."
+    },
+    "states": {
+      "description": "The states of the screen with their meaning.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "flow": {
+      "type": "object",
+      "properties": {
+        "states": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The states of the screen."
+        },
+        "initial": {
+          "type": "string",
+          "description": "The state the screen opens in."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "on": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                "description": "The anchor the event happens on."
+              },
+              "action": {
+                "description": "The action the event runs.",
+                "type": "string"
+              },
+              "params": {
+                "description": "The parameters this path of the event passes to its action.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                      "description": "The anchor of the control whose value the parameter takes."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "description": "The constant: a string, a number or a boolean.",
+                          "type": [
+                            "string",
+                            "number",
+                            "boolean"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                    }
+                  ],
+                  "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                }
+              },
+              "guard": {
+                "description": "The condition under which the event applies.",
+                "type": "string"
+              },
+              "from": {
+                "description": "The flow state the event leaves.",
+                "type": "string"
+              },
+              "outcomes": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "object",
+                    "properties": {
+                      "route": {
+                        "description": "The route the app moves to.",
+                        "type": "string"
+                      },
+                      "codes": {
+                        "description": "The codes the page shows.",
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                          "description": "A code of the vocabulary (data-code)."
+                        }
+                      },
+                      "state": {
+                        "description": "The flow state the screen moves to.",
+                        "type": "string"
+                      },
+                      "note": {
+                        "description": "Anything else that happens.",
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "What follows when the action succeeds."
+                  },
+                  "failure": {
+                    "description": "What follows when the action fails.",
+                    "type": "object",
+                    "properties": {
+                      "route": {
+                        "description": "The route the app moves to.",
+                        "type": "string"
+                      },
+                      "codes": {
+                        "description": "The codes the page shows.",
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                          "description": "A code of the vocabulary (data-code)."
+                        }
+                      },
+                      "state": {
+                        "description": "The flow state the screen moves to.",
+                        "type": "string"
+                      },
+                      "note": {
+                        "description": "Anything else that happens.",
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "success"
+                ],
+                "additionalProperties": false,
+                "description": "What follows the event."
+              }
+            },
+            "required": [
+              "on",
+              "outcomes"
+            ],
+            "additionalProperties": false,
+            "description": "One event of the flow."
+          },
+          "description": "The events and their outcomes."
+        }
+      },
+      "required": [
+        "states",
+        "initial",
+        "events"
+      ],
+      "additionalProperties": false,
+      "description": "The flow of the screen."
+    },
+    "wireframe": {
+      "description": "A text sketch of the layout.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "bindings",
+    "flag",
+    "entry",
+    "anchors"
+  ],
+  "additionalProperties": false,
+  "description": "One screen of the application."
+}

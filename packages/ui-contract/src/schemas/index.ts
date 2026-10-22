@@ -9,8 +9,9 @@ export {
   bindingSchema,
   flowSchema,
   paramValueSchema,
+  platformFileSchema,
   platformSchema,
+  screenFileSchema,
   screenSchema,
-  screensFileSchema,
   sourceSchema,
 } from './screens.schema'

@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=../../screen.schema.json
+id: sample
+title: One thing, edited
+flag: null
+bindings:
+  - path: /sample/$key
+    guard: authenticated
+    roles: [ member ]
+    params:
+      type: object
+      properties:
+        key:
+          type: string
+      additionalProperties: false
+entry: [ sample.page, sample.title-input ]
+anchors:
+  sample.page:
+    kind: page
+    description: The root of the screen.
+  sample.title-input:
+    kind: input
+    binding: { model: thing.title }
+  sample.save-button:
+    kind: button
+    binding:
+      - action: thing.createThing
+        params:
+          title: sample.title-input
+      - action: thing.updateThing
+        params:
+          title: sample.title-input
+    roles: [ member ]
+    codes: [ saved, failed ]
+  sample.list:
+    kind: list
+    source:
+      entity: thing
+      order: created_at
+      direction: asc
+    states: [ loading ]
+  sample.list.row-item:
+    kind: item
+    dataId: the thing's id
+  sample.sign-out-button:
+    kind: button
+    binding:
+      action: platform.sign-out
+      params:
+        forgetUnsent:
+          value: true
+flow:
+  states:
+    - editing
+    - saving
+  initial: editing
+  events:
+    - on: sample.save-button
+      action: thing.updateThing
+      from: editing
+      params:
+        title: sample.title-input
+      outcomes:
+        success:
+          codes:
+            - saved
+        failure:
+          codes:
+            - failed

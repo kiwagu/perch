@@ -10,10 +10,9 @@
  * each with its line where the parser knows it.
  */
 
-import { parse, YAMLParseError } from 'yaml'
-
 import { englishErrors } from '../files/parse-file'
 import { jsonPath } from '../files/problems'
+import { parseYaml } from '../files/read-yaml'
 
 import { type ScenarioHeader, scenarioHeaderSchema } from './header'
 import { type Scenario, scenarioSchema } from './schema'
@@ -68,12 +67,6 @@ function partsOf(markdown: string): Parts | ScenarioProblem {
     : { header: lines.slice(1, close), body: lines.slice(close + 1), bodyLine: close + 2 }
 }
 
-/** Why YAML refused the text, without the position it appends: the problem carries that. */
-const reasonOf = (error: unknown): string =>
-  (error instanceof Error ? error.message : String(error))
-    .split('\n', 1)[0]
-    ?.replace(/ at line \d+, column \d+:?$/, '') ?? ''
-
 /** The line of the file where the top-level key `key` of the front matter starts, or line 1. */
 function keyLine(header: readonly string[], key: PropertyKey | undefined): number {
   const index =
@@ -86,21 +79,17 @@ function readHeader(
   header: readonly string[],
   problems: ScenarioProblem[],
 ): ScenarioHeader | undefined {
-  let data: unknown
+  const data = parseYaml(header.join('\n'))
 
-  try {
-    data = parse(header.join('\n'))
-  } catch (error) {
-    const line = error instanceof YAMLParseError ? error.linePos?.[0].line : undefined
+  if ('reason' in data) {
+    const line = data.line === undefined ? 1 : data.line + 1
 
-    problems.push(
-      at(line === undefined ? 1 : line + 1, `the front matter is not YAML: ${reasonOf(error)}`),
-    )
+    problems.push(at(line, `the front matter is not YAML: ${data.reason}`))
 
     return undefined
   }
 
-  const parsed = scenarioHeaderSchema.safeParse(data, { error: englishErrors })
+  const parsed = scenarioHeaderSchema.safeParse(data.value, { error: englishErrors })
 
   for (const issue of parsed.error?.issues ?? []) {
     const key = issue.path[0] ?? (issue.code === 'unrecognized_keys' ? issue.keys[0] : undefined)

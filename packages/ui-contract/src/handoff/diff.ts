@@ -1,7 +1,7 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities and fields one contract adds or removes against another, and the anchors it
- * renames. `contractAt` reads the three files and the scenarios at a git ref.
+ * renames. `contractAt` reads the contract files and the scenarios at a git ref.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -15,8 +15,9 @@ import {
   CONTRACT_DIR,
   formatProblem,
   MODEL_FILE,
+  PLATFORM_FILE,
   SCENARIOS_DIR,
-  SCREENS_FILE,
+  SCREENS_DIR,
   VOCABULARY_FILE,
 } from '../files'
 
@@ -34,7 +35,10 @@ export interface ContractChanges {
   fields: Change
 }
 
-const FILES = [VOCABULARY_FILE, SCREENS_FILE, MODEL_FILE] as const
+const FILES = [VOCABULARY_FILE, PLATFORM_FILE, MODEL_FILE] as const
+
+/** The folders whose every file belongs to the contract, at any depth. */
+const FOLDERS = [SCREENS_DIR, SCENARIOS_DIR] as const
 
 const git = (root: string, args: readonly string[]): string =>
   execFileSync('git', args, {
@@ -77,11 +81,12 @@ export function contractAt(ref: string, root: string): Contract | { missing: tru
   const temp = mkdtempSync(join(tmpdir(), 'ui-contract-diff-'))
 
   try {
-    const scenarios = git(root, ['ls-tree', '-r', '--name-only', ref, '--', `${SCENARIOS_DIR}/`])
+    const folders = FOLDERS.map((dir) => `${dir}/`)
+    const listed = git(root, ['ls-tree', '-r', '--name-only', ref, '--', ...folders])
       .split('\n')
       .filter((file) => file !== '')
 
-    for (const file of [...FILES, ...scenarios]) {
+    for (const file of [...FILES, ...listed]) {
       copyAt(root, ref, file, temp)
     }
 

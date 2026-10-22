@@ -13,7 +13,10 @@ Three authored files, edited by hand (or by a model in the modeling thread):
   anchors, the derived suffixes, the attributes, the app, container and row states, the
   codes, the choice values, the screen names, the roles and the anchors the shell reserves.
   Its `Grammar` section says how an anchor is spelled.
-- `screens.json`: the screens map and the anchor registry. Each screen has its routes
+- `screens/` and `platform.yaml`: the screens map and the anchor registry, one YAML file per
+  screen named by the path of its first binding (`screens/me.yaml` for `/me`,
+  `screens/__root.yaml` for the frame), and the contract version with the platform section,
+  each file opening with the comment that names its schema. Each screen has its routes
   (`bindings`), the anchors a test starts from (`entry`), every anchor it declares with
   its kind and binding, its states, its flow and a wireframe. The `platform` section lists
   the actions the platform offers every screen (signing in, organisations, devices), the
@@ -25,9 +28,9 @@ Three authored files, edited by hand (or by a model in the modeling thread):
   rules, actions, how each field merges).
 
 Beside them sit their schemas, generated from the Zod sources of `@workspace/ui-contract`
-(never edited by hand; `bun run contract:schemas` writes them): `screens.schema.json` for
-`screens.json`, `x-perch.schema.json` for the `x-perch` keyword of the model, and
-`manifest.schema.json` for the manifest.
+(never edited by hand; `bun run contract:schemas` writes them): `screen.schema.json` and
+`platform.schema.json` for those files, `x-perch.schema.json` for the `x-perch` keyword of
+the model, and `manifest.schema.json` for the manifest.
 
 `COVERAGE.md` is a note, not a contract file: how many controls of each feature module carry
 an anchor, and the anchors and scenarios of each screen, written by

@@ -3,7 +3,7 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources]
- *     checks the three contract files under `contract/` and the scenario files under
+ *     checks the contract files under `contract/` and the scenario files under
  *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
  *     of the web app and the UI kit against them.
  *   ui-contract schemas
@@ -11,7 +11,7 @@
  *   ui-contract schemas --check
  *     fails when a committed schema is missing or differs from its source.
  *   ui-contract manifest [--out <dir>]
- *     builds the UI manifest from the three contract files and the scenarios and writes it,
+ *     builds the UI manifest from the contract files and the scenarios and writes it,
  *     with its schema and the model's beside it, into `<dir>` (default `ui-manifest`,
  *     relative to the working directory; its last segment is `ui-manifest`). Runs from the
  *     root or any folder under it.
@@ -32,8 +32,8 @@ import { type Contract, checkContract, loadContract } from './check'
 import {
   COVERAGE_FILE,
   formatProblem,
+  PLATFORM_FILE,
   type Problem,
-  SCREENS_FILE,
   schemaDrift,
   writeSchemas,
 } from './files'
@@ -124,7 +124,7 @@ function schemas(argv: readonly string[]): number {
 /** The nearest folder at or above `from` that holds the contract. */
 function contractRoot(from: string): string | undefined {
   for (let folder = from; ; folder = dirname(folder)) {
-    if (existsSync(join(folder, SCREENS_FILE))) {
+    if (existsSync(join(folder, PLATFORM_FILE))) {
       return folder
     }
 
@@ -140,7 +140,7 @@ function manifest(argv: readonly string[]): number {
   const root = contractRoot(process.cwd())
 
   if (root === undefined) {
-    console.error(`ui-contract: no ${SCREENS_FILE} here or in a folder above`)
+    console.error(`ui-contract: no ${PLATFORM_FILE} here or in a folder above`)
 
     return 1
   }

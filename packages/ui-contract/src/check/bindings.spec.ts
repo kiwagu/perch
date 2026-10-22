@@ -8,7 +8,7 @@ import { anchorIn, sampleContract, screenIn } from './contract.fixture'
 const printed = (contract = sampleContract()): string[] =>
   bindingsProblems(contract).map(formatProblem)
 
-const AT = 'contract/screens.json:1: screens[1].anchors'
+const AT = 'contract/screens/sample/$key.yaml:1: anchors'
 
 describe('bindingsProblems', () => {
   it('finds nothing in a consistent contract', () => {
@@ -120,9 +120,9 @@ describe('bindingsProblems', () => {
     })
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].flow.events[1].on: "sample.gone-button" is not a declared anchor',
-      'contract/screens.json:1: screens[1].flow.events[1].params.size: "size" is not a parameter of "thing.updateThing"',
-      'contract/screens.json:1: screens[1].flow.events[1].outcomes.success.route: "/nowhere" is the path of no binding',
+      'contract/screens/sample/$key.yaml:1: flow.events[1].on: "sample.gone-button" is not a declared anchor',
+      'contract/screens/sample/$key.yaml:1: flow.events[1].params.size: "size" is not a parameter of "thing.updateThing"',
+      'contract/screens/sample/$key.yaml:1: flow.events[1].outcomes.success.route: "/nowhere" is the path of no binding',
     ])
   })
   it('resolves a derived anchor of a param or a flow event only through its base derived', () => {
@@ -140,7 +140,7 @@ describe('bindingsProblems', () => {
 
     expect(printed(contract)).toEqual([
       `${AT}["sample.save-button"].binding.params.title: "sample.title-input.item" is not a declared anchor`,
-      'contract/screens.json:1: screens[1].flow.events[0].on: "sample.save-button.confirm-button" is not a declared anchor',
+      'contract/screens/sample/$key.yaml:1: flow.events[0].on: "sample.save-button.confirm-button" is not a declared anchor',
     ])
   })
 })

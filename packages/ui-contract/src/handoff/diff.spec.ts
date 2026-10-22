@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
-import { MODEL_FILE, SCREENS_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
+import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
@@ -14,10 +14,12 @@ useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
+const SCREEN = 'contract/screens/sample/$key.yaml'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
-  [SCREENS_FILE]: readFileSync(join(FIXTURES, 'screens.json'), 'utf8'),
+  [SCREEN]: readFileSync(join(FIXTURES, SCREEN), 'utf8'),
+  [PLATFORM_FILE]: readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8'),
   [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
   [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
 })
@@ -130,7 +132,7 @@ describe('diffContracts', () => {
 })
 
 describe('contractAt', () => {
-  it('reads the three files and the scenarios at a ref', () => {
+  it('reads the contract files, the screen files and the scenarios at a ref', () => {
     const contract = contractAt('HEAD', history(fixtureFiles()))
 
     expect(contract).toEqual(fixtureContract())
@@ -148,11 +150,11 @@ describe('contractAt', () => {
     const files = fixtureFiles()
     const broken = history({
       ...files,
-      [SCREENS_FILE]: (files[SCREENS_FILE] ?? '').replace('"version": 1', '"version": 2'),
+      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 2'),
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/screens.json:1: version:',
+      'the contract at HEAD does not load: contract/platform.yaml:1: version:',
     )
   })
 })

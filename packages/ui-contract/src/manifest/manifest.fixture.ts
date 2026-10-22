@@ -1,11 +1,11 @@
 /** The package's fixture contract, loaded as the check loads it, for the manifest's tests. */
 
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { type Contract, loadContract } from '../check'
-import { formatProblem, MODEL_FILE, SCENARIOS_DIR, SCREENS_FILE, VOCABULARY_FILE } from '../files'
+import { CONTRACT_DIR, formatProblem, MODEL_FILE, SCENARIOS_DIR, VOCABULARY_FILE } from '../files'
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 
@@ -28,9 +28,8 @@ export function fixtureContract(): Contract {
   const root = mkdtempSync(join(tmpdir(), 'ui-contract-manifest-'))
 
   try {
-    mkdirSync(join(root, 'contract'))
+    cpSync(join(FIXTURES, CONTRACT_DIR), join(root, CONTRACT_DIR), { recursive: true })
     cpSync(join(FIXTURES, 'vocabulary.md'), join(root, VOCABULARY_FILE))
-    cpSync(join(FIXTURES, 'screens.json'), join(root, SCREENS_FILE))
     cpSync(join(FIXTURES, 'model.schema.json'), join(root, MODEL_FILE))
     cpSync(join(FIXTURES, SCENARIOS_DIR), join(root, SCENARIOS_DIR), { recursive: true })
 

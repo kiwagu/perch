@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1,
+      "description": "The version of the contract format."
+    },
+    "actions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+        "description": "A platform action: `sign-in`, `organisations.create`."
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the action does."
+          },
+          "params": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z0-9]*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "The type of the value: string, boolean, number."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "What the value is and its limits."
+                }
+              },
+              "required": [
+                "type",
+                "description"
+              ],
+              "additionalProperties": false,
+              "description": "One parameter of a platform action."
+            },
+            "description": "The parameters by name."
+          },
+          "result": {
+            "type": "string",
+            "description": "What holds once the action succeeds."
+          },
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A code of the vocabulary (data-code)."
+            },
+            "description": "The codes a failure of the action shows."
+          },
+          "roles": {
+            "description": "The roles that may run the action.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A role of the vocabulary."
+            }
+          }
+        },
+        "required": [
+          "description",
+          "params",
+          "result",
+          "codes"
+        ],
+        "additionalProperties": false,
+        "description": "One platform action."
+      },
+      "description": "The platform actions by name: `platform.<name>` in a binding."
+    },
+    "reserved": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+      },
+      "description": "The anchors the shell owns; a feature never declares them."
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+          "description": "The anchor of the readiness line of the app."
+        },
+        "states": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "A state of the vocabulary (data-state)."
+          },
+          "description": "The app states it takes, in order."
+        }
+      },
+      "required": [
+        "anchor",
+        "states"
+      ],
+      "additionalProperties": false,
+      "description": "The readiness line of the app."
+    }
+  },
+  "required": [
+    "version",
+    "actions",
+    "reserved",
+    "status"
+  ],
+  "additionalProperties": false,
+  "description": "The version of the contract format and what the platform offers every screen."
+}

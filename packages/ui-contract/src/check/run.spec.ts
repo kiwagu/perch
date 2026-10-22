@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   formatProblem,
   MODEL_FILE,
+  PLATFORM_FILE,
   SCENARIOS_DIR,
-  SCREENS_FILE,
-  SCREENS_SCHEMA_FILE,
+  SCREEN_SCHEMA_FILE,
   scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
@@ -47,12 +47,12 @@ describe('checkContract', () => {
     edit(VOCABULARY_FILE, (text) =>
       text.replace('## Roles', '## Roles\n\n## Roles').replace('## Kinds', '## Kind list'),
     )
-    edit(SCREENS_FILE, (text) => text.replace('"version": 1', '"version": "one"'))
+    edit(PLATFORM_FILE, (text) => text.replace('version: 1', 'version: one'))
     edit(scenarioFile('user/base/sign-up'), (text) => text.replace('  A: guest', '  a: guest'))
 
     expect(printed()).toEqual([
       'contract/model.schema.json:1: cannot read the file',
-      'contract/screens.json:1: version: Invalid input: expected 1',
+      'contract/platform.yaml:1: version: Invalid input: expected 1',
       'contract/vocabulary.md:1: missing section "Kinds"',
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: unknown section "Kind list"$/),
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: section "Roles" appears twice$/),
@@ -66,10 +66,10 @@ describe('checkContract', () => {
         '| `spare` | `organisation.notes.empty-message` | a spare code |\n| `no-notes` |',
       ),
     )
-    edit(SCREENS_SCHEMA_FILE, (text) => `${text}\n`)
+    edit(SCREEN_SCHEMA_FILE, (text) => `${text}\n`)
 
     expect(printed()).toEqual([
-      'contract/screens.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
+      'contract/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })

@@ -11,17 +11,32 @@ import {
   type Binding,
   jsonSchemaProblems,
   type Problem,
-  SCREENS_FILE,
+  SCREENS_DIR,
   type Vocabulary,
 } from '../files'
 
-import { type Contract, has, inScreens, isValueOf, knownAnchors, own } from './contract'
+import {
+  type Contract,
+  has,
+  type InScreens,
+  isValueOf,
+  knownAnchors,
+  locate,
+  own,
+} from './contract'
 
 type FlatSchema = NonNullable<Binding['search']>
 
+/** The contract with the lookups every route schema needs, built once. */
+interface Lookups {
+  readonly vocabulary: Vocabulary
+  readonly known: (anchor: string) => boolean
+  readonly inScreens: InScreens
+}
+
 /** What the anchor of a control lacks to choose `value`: its own choice values have no such row. */
 function controlValueProblems(
-  vocabulary: Vocabulary,
+  { vocabulary, inScreens }: Lookups,
   control: string,
   value: string | undefined,
   at: readonly PropertyKey[],
@@ -50,21 +65,24 @@ function controlValueProblems(
 
 /** The problems of `schema` as a JSON Schema 2020-12, at its binding, naming its screen. */
 const validityProblems = (
+  { inScreens }: Lookups,
   screen: string,
   schema: FlatSchema | undefined,
   at: readonly PropertyKey[],
 ): Problem[] =>
   schema === undefined
     ? []
-    : jsonSchemaProblems(SCREENS_FILE, schema).map(({ message }) =>
+    : jsonSchemaProblems(SCREENS_DIR, schema).map(({ message }) =>
         inScreens(at, `not a valid JSON Schema (screen "${screen}"): ${message}`),
       )
 
 function schemaProblems(
-  { vocabulary, known }: { vocabulary: Vocabulary; known: (anchor: string) => boolean },
+  lookups: Lookups,
   schema: FlatSchema | undefined,
   at: readonly PropertyKey[],
 ): Problem[] {
+  const { known, inScreens } = lookups
+
   return Object.entries(schema?.properties ?? {}).flatMap(([name, property]) => {
     const here = [...at, 'properties', name]
     const perch = property['x-perch']
@@ -87,7 +105,7 @@ function schemaProblems(
           ? []
           : [inScreens([...here, 'x-perch', 'values', value], `"${value}" is not an enum value`)]),
         ...control(choice.control, [...here, 'x-perch', 'values', value, 'control']),
-        ...controlValueProblems(vocabulary, choice.control, choice.controlValue, [
+        ...controlValueProblems(lookups, choice.control, choice.controlValue, [
           ...here,
           'x-perch',
           'values',
@@ -100,7 +118,12 @@ function schemaProblems(
 }
 
 export function searchProblems(contract: Contract): Problem[] {
-  const lookups = { vocabulary: contract.vocabulary, known: knownAnchors(contract) }
+  const lookups: Lookups = {
+    vocabulary: contract.vocabulary,
+    known: knownAnchors(contract),
+    inScreens: locate(contract.screens),
+  }
+  const { inScreens } = lookups
 
   return contract.screens.screens.flatMap((screen, index) =>
     screen.bindings.flatMap((binding, number) => {
@@ -108,9 +131,9 @@ export function searchProblems(contract: Contract): Problem[] {
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
-        ...validityProblems(screen.id, binding.params, [...at, 'params']),
+        ...validityProblems(lookups, screen.id, binding.params, [...at, 'params']),
         ...schemaProblems(lookups, binding.params, [...at, 'params']),
-        ...validityProblems(screen.id, binding.search, [...at, 'search']),
+        ...validityProblems(lookups, screen.id, binding.search, [...at, 'search']),
         ...schemaProblems(lookups, binding.search, [...at, 'search']),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)

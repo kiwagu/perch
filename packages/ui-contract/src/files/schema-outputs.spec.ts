@@ -46,9 +46,10 @@ afterEach(() => {
 })
 
 describe('writeSchemas', () => {
-  it('writes the three schemas', () => {
+  it('writes the schemas', () => {
     expect(writeSchemas(root)).toEqual([
-      'contract/screens.schema.json',
+      'contract/screen.schema.json',
+      'contract/platform.schema.json',
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])
@@ -91,7 +92,8 @@ describe('schemaDrift', () => {
   })
   it('names a missing file', () => {
     expect(schemaDrift(root).map((problem) => problem.file)).toEqual([
-      'contract/screens.schema.json',
+      'contract/screen.schema.json',
+      'contract/platform.schema.json',
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])

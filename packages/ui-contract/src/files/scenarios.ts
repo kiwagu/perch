@@ -5,29 +5,18 @@
  * not know, and the problems of a file's text are problems of that file.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { parseScenario, SCENARIO_LAYERS, type Scenario, scenarioSchema } from '../scenarios'
 
+import { filesUnder } from './files-under'
 import { SCENARIOS_DIR } from './paths'
 import type { Problem } from './problems'
 
 const SUFFIX = '.md'
 
 const NOT_AN_ID = `not a scenario path: <entity>/<layer>/[<area>/]<slug>${SUFFIX} in kebab-case, the layer one of ${SCENARIO_LAYERS.join(', ')}`
-
-/** The files under `dir` as paths relative to it with `/` separators, sorted. */
-function filesUnder(dir: string): string[] | undefined {
-  try {
-    return readdirSync(dir, { recursive: true, withFileTypes: true })
-      .filter((entry) => !entry.isDirectory())
-      .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
-      .sort()
-  } catch {
-    return undefined
-  }
-}
 
 const isScenarioId = (id: string): boolean =>
   scenarioSchema.shape.id.safeParse(id).success && SCENARIO_LAYERS.includes(id.split('/')[1] ?? '')

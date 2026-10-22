@@ -1,5 +1,5 @@
 /**
- * The contract check: loads the three files and the scenarios (stopping at their own
+ * The contract check: loads the contract files and the scenarios (stopping at their own
  * problems), then runs every cross-check and the schema drift, and returns the problems
  * sorted by file and line.
  */
@@ -42,7 +42,7 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   return parseVocabulary(markdown)
 }
 
-/** The three files and the scenarios, or the problems that keep them from loading. */
+/** The contract files and the scenarios, or the problems that keep them from loading. */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { screens, problems: screensLoad } = loadScreens(root)

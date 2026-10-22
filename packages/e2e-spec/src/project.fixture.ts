@@ -1,22 +1,22 @@
 /**
- * A throwaway repository root for the specs: `contract/screens.json` (the contract fixture
- * of `@workspace/ui-contract`), the scenarios a spec gives it as files under
- * `tests/e2e/scenarios/`, and test files under `tests/e2e/src/`.
+ * A throwaway repository root for the specs: the screen files and the platform file of the
+ * contract fixture of `@workspace/ui-contract` under `contract/`, the scenarios a spec gives
+ * it as files under `tests/e2e/scenarios/`, and test files under `tests/e2e/src/`.
  */
 
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import {
+  CONTRACT_DIR,
   formatScenario,
   SCENARIOS_DIR,
-  SCREENS_FILE,
   type Scenario,
   scenarioFile,
 } from '@workspace/ui-contract'
 
-const FIXTURE = new URL('../../ui-contract/src/__fixtures__/screens.json', import.meta.url)
+const FIXTURE = new URL('../../ui-contract/src/__fixtures__/contract', import.meta.url)
 
 const TESTS_DIR = 'tests/e2e/src'
 
@@ -47,8 +47,7 @@ export function project(
 
   roots.push(root)
   mkdirSync(join(root, SCENARIOS_DIR), { recursive: true })
-  mkdirSync(join(root, 'contract'))
-  copyFileSync(FIXTURE, join(root, SCREENS_FILE))
+  cpSync(FIXTURE, join(root, CONTRACT_DIR), { recursive: true })
 
   for (const scenario of scenarios) {
     write(root, scenarioFile(scenario.id), formatScenario(scenario))

@@ -1175,7 +1175,7 @@
         "additionalProperties": false,
         "description": "One screen of the application."
       },
-      "description": "The screens of `contract/screens.json`, verbatim: routes, anchors, flows."
+      "description": "The screens of `contract/screens/`, verbatim: routes, anchors, flows."
     },
     "routeParams": {
       "type": "object",

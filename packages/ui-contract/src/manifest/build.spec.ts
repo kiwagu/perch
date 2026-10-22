@@ -60,7 +60,9 @@ describe('buildManifest', () => {
     expect(manifest.platform).toEqual(contract.screens.platform)
     expect(manifest.scenarios).toEqual(contract.scenarios)
     expect(manifest.model).toEqual(contract.model.document)
-    expect(manifest.routeParams).toEqual({})
+    expect(manifest.routeParams).toEqual({
+      '/sample/$key': contract.screens.screens[0]?.bindings[0]?.params,
+    })
   })
   it('takes the readiness anchor of its instructions from the platform section', () => {
     expect(manifest.contract.instructions.readiness).toContain('sample.status')

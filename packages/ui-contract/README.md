@@ -15,24 +15,30 @@ root export is build-time tooling for Bun.
   - Loaders of the three contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
-    `loadScreens(root)` (`contract/screens.json` through `screensFileSchema`, problems named
-    by JSON path), `loadModel(root)` (`contract/model.schema.json`, checked against the
+    `loadScreens(root)` (every `.yaml` file under `contract/screens`, sorted by path, one screen
+    each through `screenFileSchema`, named by the path of its first binding: `/me` is
+    `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
+    and `contract/platform.yaml`, the version and the platform section, through
+    `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
+    screen, problems named by the file and the path inside it, a YAML error by its line),
+    `loadModel(root)` (`contract/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
     `entityDefinitionSchema`) and `loadScenarios(root)` (every `.md` file under
     `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
     `parseScenario`; a path outside the id grammar or a layer outside `SCENARIO_LAYERS` is a
-    problem of its file). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_FILE`,
-    `MODEL_FILE`, `SCENARIOS_DIR`, `scenarioFile(id)` and the three schema files.
+    problem of its file). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`,
+    `PLATFORM_FILE`, `MODEL_FILE`, `SCENARIOS_DIR`, `scenarioFile(id)` and the four schema
+    files.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`, then the fixed Markdown sections in any order) into a
     `Scenario`, or returns its problems with their lines (`ScenarioProblem`);
     `formatScenario(scenario)` writes one, its inverse.
-  - The Zod sources of the files: `screensFileSchema` and its parts, `flatJsonSchema` (route
-    `params` and `search`, with the bounds `z.toJSONSchema` writes: `minimum`, `maximum`,
-    `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed scenario),
-    `entityDefinitionSchema`, `manifestSchema`.
+  - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
+    `flatJsonSchema` (route `params` and `search`, with the bounds `z.toJSONSchema` writes:
+    `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed
+    scenario), `entityDefinitionSchema`, `manifestSchema`.
     `SCHEMA_OUTPUTS`, `writeSchemas(root)` and `schemaDrift(root)` turn them into the
-    committed `contract/screens.schema.json`, `x-perch.schema.json` and
+    committed `contract/screen.schema.json`, `platform.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
     authored).
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
@@ -43,7 +49,7 @@ root export is build-time tooling for Bun.
     (stopping at their own problems), then runs the cross-checks and `schemaDrift`, sorted by
     file and line;
     `loadContract(root)` returns the loaded `Contract`. Each rule is a function of the
-    `Contract`: `versionProblems`, `vocabularyProblems` (every word of `screens.json` is in
+    `Contract`: `versionProblems`, `vocabularyProblems` (every word of the screens is in
     the vocabulary, every code is used), `screensProblems` (anchors unique and never named
     like a derived one, entry and names), `bindingsProblems` (model fields, actions and
     their params, routes, sources, flow events), `routesProblems` with
@@ -60,7 +66,7 @@ root export is build-time tooling for Bun.
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
-    the literals equal to the anchors of `screens.json`, no literal named like another plus
+    the literals equal to the anchors of the screen files, no literal named like another plus
     a suffix, and every suffix and code in the vocabulary.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
@@ -76,9 +82,9 @@ root export is build-time tooling for Bun.
     `MANIFEST_DIR`) and writes `manifest.json`, `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
-  - The hand-over: `contractAt(ref, root)` reads the three files and the scenarios at a git
-    ref (`git show`) and loads them, or returns `{ missing: true }` when that commit has no
-    `contract/`;
+  - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files and the
+    scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or returns
+    `{ missing: true }` when that commit has no `contract/`;
     `diffContracts(before, after)` returns the `ContractChanges` (screens, anchors, codes,
     entities and fields as `entity.field`, added and removed, sorted; an anchor removed and
     one added are a rename when they are the only ones of their screen and kind);

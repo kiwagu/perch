@@ -8,9 +8,10 @@
 import { kindOf, screenOf } from '../anchors'
 import type { Problem } from '../files'
 
-import { type Contract, declaredAnchors, has, inScreens, knownAnchors } from './contract'
+import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
 
 function screenIdProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
   const seen = new Set<string>()
 
   return screens.screens.flatMap((screen, index) => {
@@ -25,6 +26,7 @@ function screenIdProblems({ screens }: Contract): Problem[] {
 }
 
 function duplicateProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
   const first = new Map<string, string>()
 
   return declaredAnchors(screens).flatMap(({ anchor, screen, at }) => {
@@ -46,6 +48,7 @@ function duplicateProblems({ screens }: Contract): Problem[] {
  * read as (or be) a derived anchor of the base.
  */
 function derivedNameProblems({ screens, vocabulary }: Contract): Problem[] {
+  const inScreens = locate(screens)
   const anchors = declaredAnchors(screens)
   const defs = new Map(anchors.map(({ anchor, def }) => [anchor, def]))
 
@@ -72,6 +75,8 @@ function derivedNameProblems({ screens, vocabulary }: Contract): Problem[] {
 }
 
 function entryProblems(contract: Contract): Problem[] {
+  const inScreens = locate(contract.screens)
+
   return contract.screens.screens.flatMap((screen, index) => {
     const own = knownAnchors({
       ...contract,
@@ -95,7 +100,7 @@ const bindingProblems = ({ screens }: Contract): Problem[] =>
   screens.screens.flatMap((screen, index) =>
     screen.frame !== true && screen.bindings.length === 0
       ? [
-          inScreens(
+          locate(screens)(
             ['screens', index, 'bindings'],
             'a screen that is not the frame needs at least one binding',
           ),
@@ -104,6 +109,7 @@ const bindingProblems = ({ screens }: Contract): Problem[] =>
   )
 
 function nameProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
   const ids = screens.screens.map(({ id }) => id)
 
   return declaredAnchors(screens).flatMap(({ anchor, def, screen, at }) => [

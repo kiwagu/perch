@@ -9,9 +9,19 @@ import { dirname, join } from 'node:path'
 
 import { z } from '@workspace/zod'
 
-import { entityDefinitionSchema, manifestSchema, screensFileSchema } from '../schemas'
+import {
+  entityDefinitionSchema,
+  manifestSchema,
+  platformFileSchema,
+  screenFileSchema,
+} from '../schemas'
 
-import { ENTITY_SCHEMA_FILE, MANIFEST_SCHEMA_FILE, SCREENS_SCHEMA_FILE } from './paths'
+import {
+  ENTITY_SCHEMA_FILE,
+  MANIFEST_SCHEMA_FILE,
+  PLATFORM_SCHEMA_FILE,
+  SCREEN_SCHEMA_FILE,
+} from './paths'
 import type { Problem } from './problems'
 
 /** The authored shape (`io: 'input'`): a field with a default is optional to write. */
@@ -19,14 +29,15 @@ const jsonSchemaOf = (schema: z.ZodType): object =>
   z.toJSONSchema(schema, { target: 'draft-2020-12', io: 'input' })
 
 export const SCHEMA_OUTPUTS: ReadonlyArray<{ file: string; schema: () => object }> = [
-  { file: SCREENS_SCHEMA_FILE, schema: () => jsonSchemaOf(screensFileSchema) },
+  { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(screenFileSchema) },
+  { file: PLATFORM_SCHEMA_FILE, schema: () => jsonSchemaOf(platformFileSchema) },
   { file: ENTITY_SCHEMA_FILE, schema: () => jsonSchemaOf(entityDefinitionSchema) },
   { file: MANIFEST_SCHEMA_FILE, schema: () => jsonSchemaOf(manifestSchema) },
 ]
 
 const textOf = (schema: object): string => `${JSON.stringify(schema, null, 2)}\n`
 
-/** Writes the three schemas under `root`; returns the files written. */
+/** Writes the schemas under `root`; returns the files written. */
 export function writeSchemas(root: string): string[] {
   return SCHEMA_OUTPUTS.map(({ file, schema }) => {
     const path = join(root, file)

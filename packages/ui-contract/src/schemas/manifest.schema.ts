@@ -139,7 +139,7 @@ export const manifestSchema = z
     contract: contractSchema,
     screens: z
       .array(screenSchema)
-      .describe('The screens of `contract/screens.json`, verbatim: routes, anchors, flows.'),
+      .describe('The screens of `contract/screens/`, verbatim: routes, anchors, flows.'),
     routeParams: z
       .record(z.string(), flatJsonSchema)
       .describe('The path parameters by route path, for the routes that have any.'),

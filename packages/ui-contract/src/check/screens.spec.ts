@@ -18,8 +18,8 @@ describe('screensProblems', () => {
     screenIn(contract, 'app-shell').anchors['sample.page'] = { kind: 'page' }
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].anchors["sample.page"]: also declared on screen "app-shell"',
-      'contract/screens.json:1: screens[0].anchors["sample.page"]: does not start with its screen\'s id "app-shell"',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.page"]: also declared on screen "app-shell"',
+      'contract/screens/__root.yaml:1: anchors["sample.page"]: does not start with its screen\'s id "app-shell"',
     ])
   })
   it('refuses a declared anchor that reads as another one with a suffix', () => {
@@ -32,9 +32,9 @@ describe('screensProblems', () => {
     sample.anchors['sample.page.pane-button'] = { kind: 'button' }
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].anchors["sample.list.item"]: reads as the anchor "sample.list" with the suffix "item"; a declared anchor is never named like a derived one',
-      'contract/screens.json:1: screens[1].anchors["sample.mode-select.option"]: reads as the anchor "sample.mode-select" with the suffix "option"; a declared anchor is never named like a derived one',
-      'contract/screens.json:1: screens[1].anchors["sample.page.pane-button"]: reads as the anchor "sample.page" with the suffix "pane-button"; a declared anchor is never named like a derived one',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.list.item"]: reads as the anchor "sample.list" with the suffix "item"; a declared anchor is never named like a derived one',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.mode-select.option"]: reads as the anchor "sample.mode-select" with the suffix "option"; a declared anchor is never named like a derived one',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.page.pane-button"]: reads as the anchor "sample.page" with the suffix "pane-button"; a declared anchor is never named like a derived one',
     ])
   })
   it('wants every entry anchor declared on its screen', () => {
@@ -43,8 +43,8 @@ describe('screensProblems', () => {
     screenIn(contract, 'sample').entry = ['sample.page', 'app-shell.status', 'sample.gone-page']
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].entry[1]: "app-shell.status" is not declared on this screen',
-      'contract/screens.json:1: screens[1].entry[2]: "sample.gone-page" is not declared on this screen',
+      'contract/screens/sample/$key.yaml:1: entry[1]: "app-shell.status" is not declared on this screen',
+      'contract/screens/sample/$key.yaml:1: entry[2]: "sample.gone-page" is not declared on this screen',
     ])
   })
   it('accepts a derived entry of a declared base', () => {
@@ -60,7 +60,7 @@ describe('screensProblems', () => {
     screenIn(contract, 'sample').bindings = []
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].bindings: a screen that is not the frame needs at least one binding',
+      'contract/screens/sample/$key.yaml:1: bindings: a screen that is not the frame needs at least one binding',
     ])
   })
   it('wants every anchor to start with its screen id and end with its kind', () => {
@@ -71,8 +71,8 @@ describe('screensProblems', () => {
     anchorIn(contract, 'sample.page').kind = 'list'
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].anchors["sample.page"].kind: "list" is not the kind its name ends with ("page")',
-      'contract/screens.json:1: screens[1].anchors["app-shell.extra-button"]: does not start with its screen\'s id "sample"',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].kind: "list" is not the kind its name ends with ("page")',
+      'contract/screens/sample/$key.yaml:1: anchors["app-shell.extra-button"]: does not start with its screen\'s id "sample"',
     ])
   })
   it('wants every screen id once', () => {
@@ -81,7 +81,7 @@ describe('screensProblems', () => {
     screenIn(contract, 'app-shell').id = 'sample'
 
     expect(printed(contract)).toContain(
-      'contract/screens.json:1: screens[1].id: "sample" is the id of another screen',
+      'contract/screens/sample/$key.yaml:1: id: "sample" is the id of another screen',
     )
   })
   it('takes an entry derived anchor only through a suffix its base lists in derived', () => {
@@ -94,7 +94,7 @@ describe('screensProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([
-      'contract/screens.json:1: screens[1].entry[2]: "sample.save-button.confirm-button" is not declared on this screen',
+      'contract/screens/sample/$key.yaml:1: entry[2]: "sample.save-button.confirm-button" is not declared on this screen',
     ])
   })
 })

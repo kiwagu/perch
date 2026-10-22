@@ -1,15 +1,15 @@
 /**
  * The anchors and codes of the sources against the contract: every literal is declared
- * once; the literals are exactly the anchors of `screens.json`; no literal is another
+ * once; the literals are exactly the anchors of the screen files; no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
  * `testIdFor()` and every code is in the vocabulary. The problems carry `file:line`.
  */
 
 import { baseOf } from '../anchors'
-import { declaredAnchors } from '../check/contract'
+import { declaredAnchors, locate } from '../check/contract'
 import {
   type Problem,
-  SCREENS_FILE,
+  SCREENS_DIR,
   type ScreensFile,
   sortProblems,
   VOCABULARY_FILE,
@@ -70,7 +70,7 @@ export function compareWithContract(
     return [
       ...(declared.has(anchor)
         ? []
-        : [at(place, `"${anchor}" is not in ${SCREENS_FILE}; add it there or rename it`)]),
+        : [at(place, `"${anchor}" is not in ${SCREENS_DIR}; add it there or rename it`)]),
       ...(base !== undefined && first.has(base)
         ? [
             at(
@@ -82,12 +82,10 @@ export function compareWithContract(
     ]
   })
 
+  const inScreens = locate(screens)
   const unrendered = contract
     .filter(({ anchor }) => !first.has(anchor))
-    .map(({ anchor, screen }) => ({
-      file: SCREENS_FILE,
-      message: `"${anchor}" (screen ${screen.id}) is declared in the contract but no source renders it`,
-    }))
+    .map(({ at: path }) => inScreens(path, 'declared in the contract, but no source renders it'))
 
   const vocabularyProblems = collected.flatMap(({ file, derived, codes: used }) => [
     ...derived

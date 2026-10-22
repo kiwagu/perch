@@ -21,10 +21,10 @@ The contract declares 5 screens, 67 anchors and 29 codes.
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | app-shell | 9 | 13 |
-| user.sign-in | 8 | 8 |
+| device | 10 | 2 |
 | user.profile | 10 | 14 |
 | organisation | 30 | 4 |
-| device | 10 | 2 |
+| user.sign-in | 8 | 8 |
 
 <!-- coverage:end -->
 

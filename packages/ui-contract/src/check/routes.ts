@@ -7,7 +7,7 @@
 
 import type { Problem } from '../files'
 
-import { type Contract, inScreens } from './contract'
+import { type Contract, locate } from './contract'
 
 export interface RouteSegment {
   kind: 'static' | 'param' | 'optional' | 'splat'
@@ -81,6 +81,7 @@ const parametersOf = (segments: readonly RouteSegment[]): string[] =>
   segments.filter(({ kind }) => kind === 'param' || kind === 'optional').map(({ name }) => name)
 
 export function routesProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
   const owners = new Map<string, string>()
 
   return screens.screens.flatMap((screen, index) =>

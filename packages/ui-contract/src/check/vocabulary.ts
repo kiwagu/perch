@@ -1,9 +1,9 @@
 /**
- * Rule 1: `screens.json` and the model speak only the vocabulary's words. Every kind,
- * derived suffix, code, state, role and screen name `screens.json` uses is listed in
- * `vocabulary.md`, and so is every role the model grants a permission to; every choice
- * value belongs to an anchor that exists; every code listed is used somewhere; the
- * platform's status states and reserved anchors are the vocabulary's own.
+ * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
+ * words. Every kind, derived suffix, code, state, role and screen name the screens and the
+ * platform use is listed in `vocabulary.md`, and so is every role the model grants a
+ * permission to; every choice value belongs to an anchor that exists; every code listed is
+ * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
  */
 
 import { screenOf } from '../anchors'
@@ -14,29 +14,34 @@ import {
   type Contract,
   declaredAnchors,
   has,
-  inScreens,
+  type InScreens,
   isPattern,
   knownAnchors,
+  locate,
   statesOf,
 } from './contract'
 
 const FRAME_SCREEN = 'app-shell'
 
-/** Each value of `values` that `listed` lacks, as a problem at `at[index]`. */
-const unlisted = (
-  values: readonly string[] | undefined,
-  at: readonly PropertyKey[],
-  listed: ReadonlySet<string> | Record<string, unknown>,
-  noun: string,
-): Problem[] =>
-  (values ?? []).flatMap((value, index) =>
-    (listed instanceof Set ? listed.has(value) : has(listed, value))
-      ? []
-      : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
-  )
+/** Each value of `values` that `listed` lacks, as a problem at `at[index]` (`inScreens`). */
+const unlistedIn =
+  (inScreens: InScreens) =>
+  (
+    values: readonly string[] | undefined,
+    at: readonly PropertyKey[],
+    listed: ReadonlySet<string> | Record<string, unknown>,
+    noun: string,
+  ): Problem[] =>
+    (values ?? []).flatMap((value, index) =>
+      (listed instanceof Set ? listed.has(value) : has(listed, value))
+        ? []
+        : [inScreens([...at, index], `"${value}" is not ${noun} of the vocabulary`)],
+    )
 
 function screenProblems(contract: Contract): Problem[] {
   const { vocabulary, screens } = contract
+  const inScreens = locate(screens)
+  const unlisted = unlistedIn(inScreens)
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
   const anchors = declaredAnchors(screens)
@@ -98,6 +103,8 @@ const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
 
 function platformProblems({ vocabulary, screens }: Contract): Problem[] {
   const { actions, status, reserved } = screens.platform
+  const inScreens = locate(screens)
+  const unlisted = unlistedIn(inScreens)
   const appStates = Object.keys(vocabulary.appStates)
   const frame = screens.screens.find((screen) => screen.id === FRAME_SCREEN)
 
@@ -173,7 +180,7 @@ function choiceValueProblems(contract: Contract): Problem[] {
         : []),
       ...(known(anchor)
         ? []
-        : [inVocabulary(`choice values of "${anchor}": no such anchor in screens.json`)]),
+        : [inVocabulary(`choice values of "${anchor}": no such anchor in the screens`)]),
     ]
   })
 }

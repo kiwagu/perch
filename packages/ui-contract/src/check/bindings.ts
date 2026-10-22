@@ -14,8 +14,9 @@ import {
   type Contract,
   declaredAnchors,
   has,
-  inScreens,
+  type InScreens,
   knownAnchors,
+  locate,
   own,
 } from './contract'
 
@@ -55,10 +56,11 @@ interface Lookups {
   readonly contract: Contract
   readonly known: (anchor: string) => boolean
   readonly paths: ReadonlySet<string>
+  readonly inScreens: InScreens
 }
 
 function actionProblems(
-  { contract, known }: Lookups,
+  { contract, known, inScreens }: Lookups,
   action: string,
   params: Params,
   at: readonly PropertyKey[],
@@ -80,7 +82,7 @@ function actionProblems(
 }
 
 const routeProblems = (
-  paths: ReadonlySet<string>,
+  { paths, inScreens }: Lookups,
   route: string | undefined,
   at: readonly PropertyKey[],
 ): Problem[] =>
@@ -90,13 +92,14 @@ const routeProblems = (
 
 function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly PropertyKey[]): Problem[] {
   if ('route' in ref) {
-    return routeProblems(lookups.paths, ref.route, [...at, 'route'])
+    return routeProblems(lookups, ref.route, [...at, 'route'])
   }
 
   if ('action' in ref) {
     return actionProblems(lookups, ref.action, ref.params, at)
   }
 
+  const { inScreens } = lookups
   const [entityName = '', field = ''] = ref.model.split('.')
   const entity = own(lookups.contract.model.entities, entityName)
 
@@ -109,7 +112,11 @@ function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly Propert
     : [inScreens([...at, 'model'], `entity "${entityName}" has no field "${field}"`)]
 }
 
-function sourceProblems(contract: Contract, def: AnchorDef, at: readonly PropertyKey[]): Problem[] {
+function sourceProblems(
+  { contract, inScreens }: Lookups,
+  def: AnchorDef,
+  at: readonly PropertyKey[],
+): Problem[] {
   const { source } = def
 
   if (source === undefined) {
@@ -145,13 +152,13 @@ function anchorProblems(lookups: Lookups): Problem[] {
 
     return [
       ...refs.flatMap((entry) => bindingProblems(lookups, entry.ref, entry.at)),
-      ...sourceProblems(lookups.contract, def, [...at, 'source']),
+      ...sourceProblems(lookups, def, [...at, 'source']),
     ]
   })
 }
 
 function flowProblems(lookups: Lookups): Problem[] {
-  const { known, paths } = lookups
+  const { known, inScreens } = lookups
 
   return lookups.contract.screens.screens.flatMap((screen, index) =>
     (screen.flow?.events ?? []).flatMap((event, number) => {
@@ -165,7 +172,7 @@ function flowProblems(lookups: Lookups): Problem[] {
           ? []
           : actionProblems(lookups, event.action, event.params, at)),
         ...(['success', 'failure'] as const).flatMap((outcome) =>
-          routeProblems(paths, event.outcomes[outcome]?.route, [
+          routeProblems(lookups, event.outcomes[outcome]?.route, [
             ...at,
             'outcomes',
             outcome,
@@ -182,6 +189,7 @@ export function bindingsProblems(contract: Contract): Problem[] {
     contract,
     known: knownAnchors(contract),
     paths: bindingPaths(contract.screens),
+    inScreens: locate(contract.screens),
   }
 
   return [...anchorProblems(lookups), ...flowProblems(lookups)]

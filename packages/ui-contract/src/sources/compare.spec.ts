@@ -22,6 +22,7 @@ const SCREENS: ScreensFile = {
       anchors: { 'sample.page': { kind: 'page' }, 'sample.mode-select': { kind: 'select' } },
     },
   ],
+  files: ['contract/screens/__root.yaml'],
 }
 
 const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected => ({
@@ -71,7 +72,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(printed(collected)).toEqual([
-      'b.tsx:2: "sample.other-button" is not in contract/screens.json; add it there or rename it',
+      'b.tsx:2: "sample.other-button" is not in contract/screens; add it there or rename it',
     ])
   })
   it('reports an anchor of the contract that no source renders', () => {
@@ -81,7 +82,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(printed(collected)).toEqual([
-      'contract/screens.json:1: "sample.mode-select" (screen sample) is declared in the contract but no source renders it',
+      'contract/screens/__root.yaml:1: anchors["sample.mode-select"]: declared in the contract, but no source renders it',
     ])
   })
   it('reports a literal named like another literal plus a suffix of the vocabulary', () => {
@@ -139,7 +140,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(compareWithContract(collected, screens, vocabulary).map(formatProblem)).toEqual([
-      'b.tsx:6: "sample.mode-select.option" is not in contract/screens.json; add it there or rename it',
+      'b.tsx:6: "sample.mode-select.option" is not in contract/screens; add it there or rename it',
       'b.tsx:6: "sample.mode-select.option" is "sample.mode-select" plus the suffix "option"; derive it with testIdFor()',
     ])
   })

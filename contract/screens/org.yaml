@@ -1,0 +1,329 @@
+# yaml-language-server: $schema=../screen.schema.json
+id: organisation
+title: Organisation
+flag: null
+bindings: [ { path: /org, guard: authenticated, roles: [ identity, member, admin ], history: push } ]
+entry: [ organisation.page.status, organisation.page.heading, organisation.notes.section, organisation.create.form ]
+anchors:
+  organisation.page.status:
+    kind: status
+    description: Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error); not rendered while an organisation is current.
+    roles: [ identity ]
+    states: [ empty, error ]
+  organisation.page.heading:
+    kind: heading
+    description: "The name of the current organisation (platform data: the current membership)."
+    roles: [ member, admin ]
+  organisation.page.role-badge:
+    kind: badge
+    description: The role of the signed-in account in the current organisation.
+    roles: [ member, admin ]
+    dataValue: true
+  organisation.page.current-select:
+    kind: select
+    description: Chooses the current organisation; shown with two memberships or more, its options are the organisations by key.
+    binding:
+      action: platform.organisations.select
+      params:
+        key: organisation.page.current-select
+    roles: [ member, admin ]
+    dataValue: true
+    derived: [ option ]
+  organisation.create.toggle-button:
+    kind: button
+    description: Opens or closes the create form; shown with a current organisation.
+    roles: [ member, admin ]
+  organisation.create.form:
+    kind: form
+    description: Creates an organisation; shown without memberships, or after the toggle button.
+  organisation.create.key-input:
+    kind: input
+    description: "The key of the new organisation: 2 to 32 lowercase letters, digits and underscores, starting with a letter."
+    binding:
+      action: platform.organisations.create
+      params:
+        key: organisation.create.key-input
+  organisation.create.name-input:
+    kind: input
+    description: The name of the new organisation, at most 80 characters.
+    binding:
+      action: platform.organisations.create
+      params:
+        name: organisation.create.name-input
+  organisation.create.error:
+    kind: error
+    description: Why the last creation failed.
+    codes: [ key-invalid, name-required, name-too-long, key-taken, rate-limited, failed ]
+  organisation.create.submit-button:
+    kind: button
+    description: Creates the organisation; disabled while it runs.
+    binding:
+      action: platform.organisations.create
+      params:
+        key: organisation.create.key-input
+        name: organisation.create.name-input
+  organisation.notes.section:
+    kind: section
+    description: The content of the notes card of the current organisation.
+    roles: [ member, admin ]
+    states: [ loading, ready, empty ]
+    source:
+      entity: note
+      order: created_at
+      direction: asc
+  organisation.notes.list:
+    kind: list
+    description: The notes, oldest first; rendered when there is at least one.
+    roles: [ member, admin ]
+  organisation.notes.empty-message:
+    kind: message
+    description: Says the organisation has no notes yet.
+    roles: [ member, admin ]
+    codes: [ no-notes ]
+  organisation.notes.item:
+    kind: item
+    description: "One note: its text and the controls the rules allow, or its edit form."
+    roles: [ member, admin ]
+    dataId: note
+  organisation.notes.text-cell:
+    kind: cell
+    description: The text of the note.
+    binding: { model: note.text }
+    roles: [ member, admin ]
+  organisation.notes.mine-badge:
+    kind: badge
+    description: Marks the notes the signed-in member wrote.
+    roles: [ member, admin ]
+  organisation.notes.edit-button:
+    kind: button
+    description: Opens the edit form of the note in its item; a member sees it on its own notes, an administrator on every note.
+    roles: [ member, admin ]
+    own: true
+  organisation.notes.delete-button:
+    kind: button
+    description: Deletes the note; shown where the rules allow, as the edit button.
+    binding:
+      action: note.deleteNote
+      params:
+        id: organisation.notes.item
+    roles: [ member, admin ]
+    own: true
+  organisation.notes.edit-textarea:
+    kind: textarea
+    description: The text of the note being edited, at most 500 characters.
+    binding: { model: note.text }
+    roles: [ member, admin ]
+  organisation.notes.save-button:
+    kind: button
+    description: Saves the edited text and closes the edit form.
+    binding:
+      action: note.updateNote
+      params:
+        id: organisation.notes.item
+        text: organisation.notes.edit-textarea
+    roles: [ member, admin ]
+  organisation.notes.new-textarea:
+    kind: textarea
+    description: The text of a new note, at most 500 characters.
+    binding: { model: note.text }
+    roles: [ member, admin ]
+  organisation.notes.error:
+    kind: error
+    description: Why the last change of a note failed, under the new note.
+    roles: [ member, admin ]
+    codes: [ forbidden, text-required, text-too-long, failed ]
+  organisation.notes.add-button:
+    kind: button
+    description: Adds the new note by the signed-in member and empties the textarea.
+    binding:
+      action: note.createNote
+      params:
+        text: organisation.notes.new-textarea
+    roles: [ member, admin ]
+  organisation.members.list:
+    kind: list
+    description: The members of the current organisation; rendered once they are read.
+    roles: [ admin ]
+    source:
+      platform: organisations.members
+  organisation.members.item:
+    kind: item
+    description: One member, shown by its email.
+    roles: [ admin ]
+    dataId: identity
+  organisation.members.remove-button:
+    kind: button
+    description: Removes the member; not on the administrator's own row.
+    binding:
+      action: platform.organisations.remove
+      params:
+        identity: organisation.members.item
+    roles: [ admin ]
+  organisation.invite.form:
+    kind: form
+    description: Invites an existing account by email, under the members.
+    roles: [ admin ]
+  organisation.invite.email-input:
+    kind: input
+    description: The email of the account to invite (type email).
+    binding:
+      action: platform.organisations.invite
+      params:
+        email: organisation.invite.email-input
+    roles: [ admin ]
+  organisation.invite.error:
+    kind: error
+    description: Why the last invitation, removal or read of the members failed.
+    roles: [ admin ]
+    codes: [ no-such-identity, already-member, not-admin, rate-limited, failed ]
+  organisation.invite.submit-button:
+    kind: button
+    description: Invites the account and empties the field; disabled while it runs.
+    binding:
+      action: platform.organisations.invite
+      params:
+        email: organisation.invite.email-input
+    roles: [ admin ]
+states:
+  loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
+  ready: The heading, the role badge, the select with two memberships or more, the notes with the new note form, the members with the invite form for an administrator, and the toggle of the create form.
+  empty: "organisation.page.status in empty: no membership; the create form below it."
+  error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
+flow:
+  states:
+    - viewing
+    - creating
+    - editing
+  initial: viewing
+  events:
+    - on: organisation.create.toggle-button
+      from: viewing
+      outcomes:
+        success:
+          state: creating
+          note: The create form opens.
+    - on: organisation.create.toggle-button
+      from: creating
+      outcomes:
+        success:
+          state: viewing
+          note: The create form closes.
+    - on: organisation.create.submit-button
+      action: platform.organisations.create
+      params:
+        key: organisation.create.key-input
+        name: organisation.create.name-input
+      outcomes:
+        success:
+          state: viewing
+          note: The caller is the administrator of the new organisation, which becomes current; the form empties and closes.
+        failure:
+          codes:
+            - key-invalid
+            - name-required
+            - name-too-long
+            - key-taken
+            - rate-limited
+            - failed
+    - on: organisation.page.current-select
+      action: platform.organisations.select
+      params:
+        key: organisation.page.current-select
+      outcomes:
+        success:
+          state: viewing
+          note: The page shows that organisation; the drafts and errors of the previous one are dropped.
+    - on: organisation.notes.add-button
+      action: note.createNote
+      params:
+        text: organisation.notes.new-textarea
+      outcomes:
+        success:
+          note: The note appears last in the list; the textarea empties.
+        failure:
+          codes:
+            - forbidden
+            - text-required
+            - text-too-long
+            - failed
+    - on: organisation.notes.edit-button
+      from: viewing
+      outcomes:
+        success:
+          state: editing
+          note: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button; each item edits on its own.
+    - on: organisation.notes.save-button
+      action: note.updateNote
+      from: editing
+      params:
+        id: organisation.notes.item
+        text: organisation.notes.edit-textarea
+      outcomes:
+        success:
+          state: viewing
+          note: The item shows the new text.
+        failure:
+          codes:
+            - forbidden
+            - text-required
+            - text-too-long
+            - failed
+          state: editing
+    - on: organisation.notes.delete-button
+      action: note.deleteNote
+      from: viewing
+      params:
+        id: organisation.notes.item
+      outcomes:
+        success:
+          note: The item leaves the list.
+        failure:
+          codes:
+            - forbidden
+            - failed
+    - on: organisation.invite.submit-button
+      action: platform.organisations.invite
+      params:
+        email: organisation.invite.email-input
+      outcomes:
+        success:
+          codes:
+            - invited
+          note: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
+        failure:
+          codes:
+            - no-such-identity
+            - already-member
+            - not-admin
+            - rate-limited
+            - failed
+    - on: organisation.members.remove-button
+      action: platform.organisations.remove
+      params:
+        identity: organisation.members.item
+      outcomes:
+        success:
+          note: The members are read again; the removed member's devices lose the organisation without a reload.
+        failure:
+          codes:
+            - not-admin
+            - failed
+          note: Shown by organisation.invite.error.
+wireframe: |-
+  - heading /.+/ [level=1]
+  - paragraph: Administrator
+  - heading "Notes" [level=2]
+  - list:
+    - listitem:
+      - paragraph: /.+/
+      - text: Yours
+      - button "Edit"
+      - button "Delete"
+  - textbox "Write a note for everyone in the organisation"
+  - button "Add note"
+  - heading "Members" [level=2]
+  - list:
+    - listitem: /.+@.+/
+  - textbox "Email of an existing account"
+  - button "Invite"
+  - button "New organisation"
