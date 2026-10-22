@@ -1,0 +1,284 @@
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parse, stringify } from 'yaml'
+
+import { PLATFORM_FILE, SCREENS_DIR } from './paths'
+import { formatProblem } from './problems'
+import { loadScreens } from './screens'
+import { jsonSchemaProblems } from './validator'
+
+const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract')
+const SAMPLE_FILE = 'contract/screens/sample/$key.yaml'
+
+let root: string
+
+/** Writes `text` at `file`, relative to the temporary root. */
+function write(file: string, text: string): void {
+  mkdirSync(dirname(join(root, file)), { recursive: true })
+  writeFileSync(join(root, file), text)
+}
+
+/** The fixture's screen with `change` applied, written back to its file. */
+function writeSample(change: (screen: Record<string, unknown>) => void): void {
+  const screen = parse(readFileSync(join(root, SAMPLE_FILE), 'utf8')) as Record<string, unknown>
+
+  change(screen)
+  write(SAMPLE_FILE, stringify(screen))
+}
+
+/** A screen with one page anchor, bound to `path`, or the frame without a binding. */
+const screenAt = (id: string, path?: string): string =>
+  stringify({
+    id,
+    title: `The ${id} screen`,
+    description: `What the ${id} screen is for.`,
+    ...(path === undefined ? { frame: true } : {}),
+    flag: null,
+    bindings: path === undefined ? [] : [{ path, roles: ['member'] }],
+    entry: [`${id}.page`],
+    anchors: { [`${id}.page`]: { kind: 'page' } },
+  })
+
+const problems = () => loadScreens(root).problems
+
+const messages = (): string[] => problems().map((problem) => problem.message)
+
+/** The one problem the files have. */
+function onlyMessage(): string {
+  const found = messages()
+
+  expect(found).toHaveLength(1)
+
+  return found[0] ?? ''
+}
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'ui-contract-screens-'))
+  cpSync(FIXTURE, join(root, 'contract'), { recursive: true })
+})
+
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('loadScreens', () => {
+  it('loads the fixture: its screens with their files, the version and the platform', () => {
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found).toEqual([])
+    expect(screens?.version).toBe(1)
+    expect(screens?.screens.map((screen) => screen.id)).toEqual(['sample'])
+    expect(screens?.files).toEqual([SAMPLE_FILE])
+    expect(screens?.platform.actions['sign-out']?.codes).toEqual(['failed'])
+
+    const anchors = screens?.screens[0]?.anchors
+
+    expect(anchors?.['sample.save-button']?.binding).toHaveLength(2)
+    expect(anchors?.['sample.sign-out-button']?.binding).toEqual({
+      action: 'platform.sign-out',
+      params: { forgetUnsent: { value: true } },
+    })
+    const saving = screens?.screens[0]?.flow?.states['saving']
+
+    expect(saving?.type !== 'parallel' && saving?.invoke?.input).toEqual({
+      title: 'sample.title-input',
+    })
+  })
+  it('refuses a screen without a description of what it is for', () => {
+    writeSample((screen) => {
+      delete screen['description']
+    })
+
+    expect(onlyMessage()).toContain('description')
+  })
+  it('defaults the history of a binding to push', () => {
+    expect(loadScreens(root).screens?.screens[0]?.bindings[0]?.history).toBe('push')
+  })
+  it('reads the folder at any depth, sorted by path, the frame first', () => {
+    write('contract/screens/sign-in.yaml', screenAt('user.sign-in', '/sign-in'))
+    write('contract/screens/org/$org.yaml', screenAt('organisation.one', '/org/$org'))
+    write('contract/screens/org.yaml', screenAt('organisation', '/org'))
+    write('contract/screens/me.yaml', screenAt('user.profile', '/me'))
+    write('contract/screens/__root.yaml', screenAt('app-shell'))
+    write('contract/screens/index.yaml', screenAt('home', '/'))
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found).toEqual([])
+    expect(screens?.files).toEqual([
+      'contract/screens/__root.yaml',
+      'contract/screens/index.yaml',
+      'contract/screens/me.yaml',
+      'contract/screens/org.yaml',
+      'contract/screens/org/$org.yaml',
+      SAMPLE_FILE,
+      'contract/screens/sign-in.yaml',
+    ])
+    expect(screens?.screens.map((screen) => screen.id)).toEqual([
+      'app-shell',
+      'home',
+      'user.profile',
+      'organisation',
+      'organisation.one',
+      'sample',
+      'user.sign-in',
+    ])
+  })
+  it('reports a file not named by the first binding of its screen', () => {
+    write('contract/screens/profile.yaml', screenAt('user.profile', '/me'))
+    write('contract/screens/org.yaml', screenAt('organisation.one', '/org/$org'))
+
+    expect(problems()).toEqual([
+      {
+        file: 'contract/screens/org.yaml',
+        message: 'its first binding is "/org/$org", so its file is contract/screens/org/$org.yaml',
+      },
+      {
+        file: 'contract/screens/profile.yaml',
+        message: 'its first binding is "/me", so its file is contract/screens/me.yaml',
+      },
+    ])
+  })
+  it('reports a second screen without bindings: the one frame is __root.yaml', () => {
+    write('contract/screens/__root.yaml', screenAt('app-shell'))
+    write('contract/screens/frame.yaml', screenAt('frame'))
+
+    expect(problems()).toEqual([
+      {
+        file: 'contract/screens/frame.yaml',
+        message:
+          'a screen without bindings is the frame, whose file is contract/screens/__root.yaml',
+      },
+    ])
+  })
+  it('reports a file that is not a screen file', () => {
+    write('contract/screens/me.yml', screenAt('user.profile', '/me'))
+    write('contract/screens/sample/notes.txt', 'Notes.\n')
+
+    expect(problems()).toEqual([
+      {
+        file: 'contract/screens/me.yml',
+        message: 'not a screen file: the folder holds `<pathname>.yaml` files only',
+      },
+      {
+        file: 'contract/screens/sample/notes.txt',
+        message: 'not a screen file: the folder holds `<pathname>.yaml` files only',
+      },
+    ])
+  })
+  it('reports a missing folder, an empty one and a missing platform file', () => {
+    rmSync(join(root, SCREENS_DIR), { recursive: true })
+    rmSync(join(root, PLATFORM_FILE))
+
+    expect(loadScreens(root)).toEqual({
+      problems: [
+        { file: 'contract/screens', message: 'cannot read the folder' },
+        { file: 'contract/platform.yaml', message: 'cannot read the file' },
+      ],
+    })
+
+    mkdirSync(join(root, SCREENS_DIR))
+
+    expect(problems()).toEqual([
+      { file: 'contract/screens', message: 'holds no screen file' },
+      { file: 'contract/platform.yaml', message: 'cannot read the file' },
+    ])
+  })
+  it('locates each problem in the file that holds it, by its path there', () => {
+    writeSample((screen) => {
+      delete screen['entry']
+    })
+    write(
+      PLATFORM_FILE,
+      readFileSync(join(root, PLATFORM_FILE), 'utf8').replace('version: 1', 'version: one'),
+    )
+
+    expect(problems()).toEqual([
+      { file: SAMPLE_FILE, message: 'entry: Invalid input: expected array, received undefined' },
+      { file: 'contract/platform.yaml', message: 'version: Invalid input: expected 1' },
+    ])
+  })
+  it('reports an anchor key that breaks the grammar', () => {
+    writeSample((screen) => {
+      screen['anchors'] = { 'Sample.Bad_Key': { kind: 'button' } }
+    })
+
+    expect(onlyMessage()).toMatch(/^anchors\["Sample\.Bad_Key"\]: /)
+  })
+  it('reports a binding path without a leading slash', () => {
+    writeSample((screen) => {
+      screen['bindings'] = [{ path: 'sample', roles: ['member'] }]
+    })
+
+    expect(onlyMessage()).toMatch(/^bindings\[0\]\.path: Invalid string/)
+  })
+  it('reports a search parameter of type object', () => {
+    writeSample((screen) => {
+      screen['bindings'] = [
+        {
+          path: '/sample/$key',
+          roles: ['member'],
+          search: {
+            type: 'object',
+            properties: { filter: { type: 'object' } },
+            additionalProperties: false,
+          },
+        },
+      ]
+    })
+
+    expect(onlyMessage()).toMatch(
+      /^bindings\[0\]\.search\.properties\.filter\.type: Invalid option/,
+    )
+  })
+  it('accepts route parameters that are, as written, a JSON Schema 2020-12', () => {
+    const search = {
+      type: 'object',
+      properties: {
+        tab: {
+          type: 'string',
+          enum: ['all', 'mine'],
+          default: 'all',
+          description: 'The tab of the list.',
+          'x-perch': {
+            control: 'sample.tab-select',
+            values: { mine: { control: 'sample.mine-tab', controlValue: 'mine' } },
+          },
+        },
+      },
+      required: ['tab'],
+      additionalProperties: false,
+    }
+
+    writeSample((screen) => {
+      screen['bindings'] = [{ path: '/sample/$key', roles: ['member'], search }]
+    })
+
+    expect(problems()).toEqual([])
+    expect(jsonSchemaProblems(SAMPLE_FILE, search)).toEqual([])
+  })
+  it('reports a routed screen without bindings', () => {
+    writeSample((screen) => {
+      screen['bindings'] = []
+    })
+
+    expect(messages()).toEqual([
+      'bindings: a screen that is not the frame needs at least one binding',
+    ])
+  })
+  it('reports a file that is not YAML at its line', () => {
+    write(SAMPLE_FILE, 'id: sample\ntitle: [One thing,\nflag: null\n')
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(screens).toBeUndefined()
+    expect(found.map(formatProblem)).toEqual([
+      expect.stringMatching(
+        /^contract\/screens\/sample\/\$key\.yaml:3: not YAML: Flow sequence in block collection/,
+      ),
+    ])
+  })
+})

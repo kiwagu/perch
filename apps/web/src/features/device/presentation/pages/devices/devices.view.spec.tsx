@@ -51,8 +51,8 @@ function renderView(props: Partial<DevicesViewProps> = {}, locale: 'en' | 'es' =
 function rows() {
   return new Map(
     screen
-      .getAllByTestId('device.list.item')
-      .map((row) => [within(row).getByTestId('device.list.label').textContent, row]),
+      .getAllByTestId('device.list.session-item')
+      .map((row) => [within(row).getByTestId('device.list.label-cell').textContent, row]),
   )
 }
 
@@ -65,27 +65,37 @@ describe('DevicesView', () => {
     renderView()
 
     expect([...rows().keys()]).toEqual([laptop.label, phone.label, tablet.label])
-    expect(within(row(laptop.label)).getByTestId('device.list.current').textContent).toBe(
+    expect(within(row(laptop.label)).getByTestId('device.list.current-badge').textContent).toBe(
       en['device.list.current'],
     )
-    expect(within(row(phone.label)).queryByTestId('device.list.current')).toBeNull()
-    expect(within(row(phone.label)).getByTestId('device.list.seen').textContent).toBe(
+    expect(within(row(phone.label)).queryByTestId('device.list.current-badge')).toBeNull()
+    expect(within(row(phone.label)).getByTestId('device.list.seen-cell').textContent).toBe(
       en['device.list.seen'].replace('{when}', when(phone.lastSeenAt)),
     )
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(en['device.page.title'])
   })
 
+  it('carries each device session id, and marks this device and a signed-out one by state', () => {
+    renderView()
+
+    expect(row(laptop.label).getAttribute('data-id')).toBe(laptop.id)
+    expect(row(laptop.label).getAttribute('data-state')).toBe('current')
+    expect(row(phone.label).getAttribute('data-id')).toBe(phone.id)
+    expect(row(phone.label).hasAttribute('data-state')).toBe(false)
+    expect(row(tablet.label).getAttribute('data-state')).toBe('revoked')
+  })
+
   it('offers no sign-out on the row of this device, which signs out through its session', () => {
     renderView()
 
-    expect(within(row(laptop.label)).queryByTestId('device.list.revoke')).toBeNull()
-    expect(screen.getAllByTestId('device.list.revoke')).toHaveLength(1)
+    expect(within(row(laptop.label)).queryByTestId('device.list.revoke-button')).toBeNull()
+    expect(screen.getAllByTestId('device.list.revoke-button')).toHaveLength(1)
   })
 
   it('signs another device out from its row', () => {
     const { onRevoke } = renderView()
 
-    fireEvent.click(within(row(phone.label)).getByTestId('device.list.revoke'))
+    fireEvent.click(within(row(phone.label)).getByTestId('device.list.revoke-button'))
 
     expect(onRevoke).toHaveBeenCalledWith(phone)
   })
@@ -93,10 +103,10 @@ describe('DevicesView', () => {
   it('says when a device was signed out and offers nothing more for it', () => {
     renderView()
 
-    expect(within(row(tablet.label)).getByTestId('device.list.revoked').textContent).toBe(
+    expect(within(row(tablet.label)).getByTestId('device.list.revoked-cell').textContent).toBe(
       en['device.list.revoked'].replace('{when}', when(tablet.revokedAt ?? new Date(0))),
     )
-    expect(within(row(tablet.label)).queryByTestId('device.list.revoke')).toBeNull()
+    expect(within(row(tablet.label)).queryByTestId('device.list.revoke-button')).toBeNull()
   })
 
   it('asks before signing out everywhere, and signs out only once confirmed', async () => {
@@ -104,20 +114,22 @@ describe('DevicesView', () => {
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
 
-    fireEvent.click(screen.getByTestId('device.everywhere.open'))
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
 
     const dialog = await screen.findByRole('alertdialog')
 
+    expect(dialog.getAttribute('data-testid')).toBe('device.everywhere.dialog')
+    expect(dialog.getAttribute('data-code')).toBe('sign-out-everywhere')
     expect(dialog.textContent).toContain(en['device.everywhere.title'])
     expect(dialog.textContent).toContain(en['device.everywhere.body'])
 
-    fireEvent.click(screen.getByTestId('device.everywhere.cancel'))
+    fireEvent.click(screen.getByTestId('device.everywhere.dialog.cancel-button'))
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(onSignOutEverywhere).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByTestId('device.everywhere.open'))
-    fireEvent.click(await screen.findByTestId('device.everywhere.confirm'))
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
 
     expect(onSignOutEverywhere).toHaveBeenCalledOnce()
   })
@@ -125,27 +137,32 @@ describe('DevicesView', () => {
   it('holds the sign-out buttons while a sign-out runs', () => {
     renderView({ pending: true })
 
-    expect((screen.getByTestId('device.list.revoke') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByTestId('device.everywhere.open') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('device.list.revoke-button') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect(
+      (screen.getByTestId('device.everywhere.open-button') as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 
   it('says the devices are being read until they are', () => {
     renderView({ devices: undefined })
 
+    expect(screen.getByTestId('device.page.status').getAttribute('data-state')).toBe('loading')
     expect(screen.getByTestId('device.page.status').textContent).toBe(en['device.page.loading'])
-    expect(screen.queryByTestId('device.list.item')).toBeNull()
+    expect(screen.queryByTestId('device.list.session-item')).toBeNull()
   })
 
   it('speaks Spanish, its times written the Spanish way', () => {
     renderView({}, 'es')
 
-    expect(within(row(laptop.label)).getByTestId('device.list.current').textContent).toBe(
+    expect(within(row(laptop.label)).getByTestId('device.list.current-badge').textContent).toBe(
       es['device.list.current'],
     )
-    expect(within(row(phone.label)).getByTestId('device.list.seen').textContent).toBe(
+    expect(within(row(phone.label)).getByTestId('device.list.seen-cell').textContent).toBe(
       es['device.list.seen'].replace('{when}', when(phone.lastSeenAt, 'es')),
     )
-    expect(screen.getByTestId('device.everywhere.open').textContent).toBe(
+    expect(screen.getByTestId('device.everywhere.open-button').textContent).toBe(
       es['device.everywhere.open'],
     )
   })

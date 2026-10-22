@@ -12,7 +12,8 @@
       "!**/dist",
       "!**/*.gen.ts",
       "!**/*.surql.d.ts",
-      "!**/pages.model.json"
+      "!**/pages.model.json",
+      "!contract/*.schema.json"
     ]
   },
   "formatter": {

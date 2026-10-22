@@ -1,0 +1,43 @@
+---
+description: 'Use when: adding, renaming or removing an anchor (data-testid), a code, a state or a choice value; adding a control, list, dialog or screen; changing contract/ or an e2e scenario; or when a test or an agent cannot find an element.'
+alwaysApply: false
+globs: '**/presentation/**/*.tsx, packages/ui/src/**/*.tsx, contract/**, tests/e2e/**'
+---
+
+# The UI contract comes first: the model, then the screen, then the code
+
+## Pyramid Layer
+
+- Layer: leaf (presentation, tests, the modeling thread), reached from `process-check-rules-skills.mdc`; its procedure is the skill `.agents/skills/adding-ui-anchors/SKILL.md`.
+
+## Use This When
+
+- A view gains, renames or loses an anchor, a code, a state, a choice value, a control, a list, a dialog or a screen.
+- A file under `contract/` or `tests/e2e/scenarios/` changes, an e2e test names the contract, or a test or an agent cannot find an element.
+
+## Stop Here If
+
+- `bun run contract:check`, `contract:check:sources`, `contract:check:consumers` and `e2e:coverage` are green, `bun run contract:coverage --unmarked` lists no unmarked control, and the scenario that reaches the element has its test.
+
+## Descend To
+
+- The steps, the patterns of our kit and views, the checklists and the templates: `.agents/skills/adding-ui-anchors/SKILL.md` and its `references/`. The closed lists: `contract/vocabulary.md`, never copied. The folder for people: `contract/README.md`.
+- Visible text and `aria-label` keys: `ui-i18n-direct-keys.mdc`. The controls: `ui-primitive-hygiene.mdc`.
+
+## Core rule
+
+- **Model first.** Completeness comes from `contract/model.schema.json`: a screen unfolds its entities, the anchors bind their fields and actions, and the DOM, the tests and the scenarios are checked back against the contract. A change starts in the model, then the screen file, then the scenario, then the code and the tests; an anchor, a code, a state or a route never appears first in JSX or in a test.
+- **The files.** Authored: `contract/vocabulary.md`, `contract/screens/<pathname>.yaml` (`__root.yaml` for the frame), `contract/platform.yaml`, `contract/model.schema.json`, `contract/activities/<id>.yaml`. Generated, never edited: `screen.schema.json`, `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json`, `manifest.schema.json` (`bun run contract:schemas`) and the block of `contract/COVERAGE.md`. A word the vocabulary lacks is added to it in the same change.
+- **Grammar.** An anchor (`data-testid`) is 2 to 4 dot-separated kebab-case segments, a screen name first and a kind last (`user.sign-in.email-input`); it says what the element is for, never its text, colour, position or an entity's id.
+- **One literal per rendered name**, declared once in one screen file and written once in the sources; no anchor equals another plus a derived suffix (`device.list.session-item`, never `device.list.item`). Four literal forms only: `data-testid="..."`, a `testId` or `<part>TestId` prop, a static `testId: '...'` key, a `<NAME>_TEST_ID` constant; never built at runtime.
+- **Derived names only through `testIdFor`.** A composite takes one `testId` and builds its parts with `testIdFor(testId, '<suffix>')`, the suffix from the vocabulary and in the base's `derived`; a part with a screen-level name of its own is a named prop (`navigationTestId`).
+- **Placement.** On the semantic element whose role the kind maps to, never on a wrapper, a fragment, a portal or a backdrop; a leaf kit component spreads its props, so the call site writes the literal.
+- **What needs one.** A container that scopes a test, every entry of a list, every control a test or an agent drives (every label is translated), a value a test reads, every state and message; not decorations, wrappers or an icon inside a marked control. A control that is not a test target carries a coverage-ignore marker, never a made-up anchor; an icon-only control also carries an `aria-label`.
+- **Codes, states and values, never wording.** `data-code` on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks), `data-state` on a container or an entry, `data-value` with the key of a choice that is not an entity. A behaviour that varies is a code or a state, never a second anchor; a domain code is mapped to a contract code in the presentation layer.
+- **Repeated items** share one static anchor with `data-id`; an entry that differs or changes in place carries a row state, a normal one none. **A composite mounted on its own is not a singleton**: the shell's instance owns the reserved anchor, every other mount passes its own `testId`, and a feature never renders a reserved anchor.
+- **Scenarios** are Markdown files, `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` beside `tests/e2e/src/<same path>.e2e.spec.ts`, and the contract's feedback loop: a scenario that cannot be written from the contract alone names a gap to fix in the contract files, never one to work around in a test; a gap the contract cannot close in the change is signalled, never emulated (`contract-gap-no-emulation.mdc`).
+- **Routes.** A binding is a TanStack Router route and a state address; `apps/web/src/platform/routes-contract.spec.ts` and `routes-router.spec.ts` hold the module routes and the real router to it, and `routes-examples.spec.ts` its example link (`bun run contract:routes`) and the route tree.
+- **Flows.** A screen's `flow` is an XState v5 machine config the app carries unchanged into `setup({ guards, actions, actors }).createMachine(flow)` (the route owns the addressable state, the machine the transient one; the screen's independent areas are the regions of a parallel state, each event handled by one area, a region's state leaving for a state of the root by `#<flow id>.<state>`, the flow's `id` a one-segment name the flow declares, which the app gives its machine), and `apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState and holds the app's own machine for a screen to its flow.
+- **Activities.** A task across screens is an activity, `contract/activities/<id>.yaml`: an XState machine config whose states are visits to screens (a dot-free name, `meta.screen`, `meta.address` a binding of that screen) and whose transitions on an anchor of that screen or the frame the screens' flows or links must back, which a scenario that walks it names in its `activity`.
+- **The checks**, in `bun run check` and the pre-commit hook: `contract:check` (the files, their cross-references, the schema drift, the scenarios' brackets), `contract:check:sources` (the JSX of `apps/web/src` and `packages/ui/src`), `contract:check:consumers` (the literals of `tests/e2e/src`). Coverage measures the model first, then the controls; a control off it carries `// ui-contract-ignore[-self]: <reason>` or `{/* ui-contract-ignore[-self]: <reason> */}` right before its element.
+- **The manifest** is built only after the check passes and served by every stand at `/ui-manifest/manifest.json` (`PERCH_UI_MANIFEST=0` turns it off); development and e2e builds add `window.__perch.ui.anchors()`. A contract change hands over `bun run contract:diff main` with the reason for each rename or removal.

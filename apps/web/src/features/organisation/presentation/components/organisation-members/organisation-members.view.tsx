@@ -51,6 +51,7 @@ export function OrganisationMembers(props: {
                 key={member.id}
                 className="flex items-center justify-between gap-2"
                 data-testid="organisation.members.item"
+                data-id={member.id}
               >
                 <span className="min-w-0 break-all">{member.email}</span>
                 {member.removable ? (
@@ -58,7 +59,7 @@ export function OrganisationMembers(props: {
                     type="button"
                     variant="outline"
                     onClick={() => props.onRemove(member.id)}
-                    data-testid="organisation.members.remove"
+                    data-testid="organisation.members.remove-button"
                   >
                     {t('organisation.members.remove')}
                   </Button>
@@ -67,7 +68,7 @@ export function OrganisationMembers(props: {
             ))}
           </ul>
         ) : null}
-        <form onSubmit={invite}>
+        <form onSubmit={invite} data-testid="organisation.invite.form">
           <Field data-invalid={props.error ? true : undefined}>
             <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
             <Input
@@ -77,10 +78,14 @@ export function OrganisationMembers(props: {
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="off"
               aria-invalid={props.error ? true : undefined}
-              data-testid="organisation.invite.email"
+              data-testid="organisation.invite.email-input"
             />
             <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
-            <Button type="submit" disabled={pending} data-testid="organisation.invite.submit">
+            <Button
+              type="submit"
+              disabled={pending}
+              data-testid="organisation.invite.submit-button"
+            >
               {t('organisation.invite.submit')}
             </Button>
           </Field>

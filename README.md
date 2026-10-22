@@ -43,6 +43,13 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   a dev server, so there is no hot module replacement: after a code change it rewrites
   `apps/web/dist` in 1-3 s, then reload the page. Until its first build finishes the front
   answers 404.
+- Both fronts serve the UI manifest, built from `contract/` and the scenario files by the web
+  build, at `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on
+  the dev stand, with `manifest.schema.json` and `model.schema.json` beside it;
+  `Cache-Control: no-store`). The mcproc var `ui_manifest` passes `PERCH_UI_MANIFEST` to
+  both: `'0'` (in `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404
+  there. Development and e2e builds also install `window.__perch.ui.anchors()`, which lists
+  the anchors a page renders now.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
@@ -87,9 +94,10 @@ A branch gets a checkout of its own, with stands of its own, next to the reposit
 `bun run seed --reset` (dev stand) seeds the organisation `acme` with `ann` as its administrator
 and `beto` as a member, besides the demo accounts. Sign in as either one and open `/org` in the
 app: the organisation's name, your role and its shared notes; a note written by one member
-reaches the other's open page. The e2e specs in `tests/e2e/specs/organisation/` cover the
-sharing, an outsider and a change of membership across two accounts, and the gateway smoke
-test (`bun run test:db`) drives the organisation routes and the tenant region on the e2e stand.
+reaches the other's open page. The e2e scenarios of `tests/e2e/scenarios/organisation/flows/`
+cover the sharing, an outsider, a change of membership and who may edit which note across two
+accounts, and the gateway smoke test (`bun run test:db`) drives the organisation routes and the
+tenant region on the e2e stand.
 
 ## Workspaces
 
@@ -106,6 +114,8 @@ Each workspace has a README with its role, key exports and commands.
 - `database`: the shared schema, its permission suites and the generated replica schema.
 - `seed`: demo accounts seeded through the gateway like any device, and their sweep.
 - `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
+- `packages/ui-contract`: the anchor grammar of every `data-testid` and the UI contract tooling:
+  the loaders, the three checks, the manifest, coverage and the hand-over diff.
 - `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
   container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
   logger, the UI kit and the single Zod instance.
@@ -113,8 +123,9 @@ Each workspace has a README with its role, key exports and commands.
 ## Gates
 
 - `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
-  coverage checks; the gate for a change. `bun run check --force` runs every task afresh
-  instead of replaying turbo's cache.
+  coverage checks, and the three UI contract checks (`contract:check`,
+  `contract:check:sources`, `contract:check:consumers`); the gate for a change.
+  `bun run check --force` runs every task afresh instead of replaying turbo's cache.
 - `bun run test:db` with the `e2e` stand up: the schema permission suites, the seed and the
   gateway smoke test.
 - `CI=1 bun run test:e2e`: the Playwright specs, one worker.
@@ -123,6 +134,24 @@ Each workspace has a README with its role, key exports and commands.
 
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
+- `bun run contract:check`, `bun run contract:check:sources` and
+  `bun run contract:check:consumers` (all three in `check` and in the pre-commit hook): the
+  contract files and the scenarios against each other, then the anchors and codes of the web
+  app and the UI kit against them, then the anchors, codes, states and values the e2e tests
+  name. The contract comes first: `contract/README.md` says how a change runs from the model
+  to the screen file, the scenario, the code and the tests.
+- `bun run contract:schemas`: writes the JSON Schemas of the contract files from their Zod
+  sources (`-- --check` fails on drift).
+- `bun run contract:manifest`: builds the UI manifest from `contract/` and the scenario files
+  into `ui-manifest/`.
+- `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
+  ref; a change to the contract hands over the output of `bun run contract:diff main`.
+- `bun run contract:coverage`: the fields and actions of the model bound by anchors, the
+  controls carrying an anchor per feature module, and the anchors and scenarios per screen;
+  `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
+  the ones declared off with `ui-contract-ignore: <reason>`.
+- `bun run contract:routes`: the routes of the screen files, one example deep link each,
+  where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.

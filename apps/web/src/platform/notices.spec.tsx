@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest'
 
 import { NoticeProvider, useNotice, useNotify } from './notices'
 
-function Trigger(props: { readonly text: string }) {
+function Trigger(props: { readonly code: string; readonly text: string }) {
   const notify = useNotify()
 
   return (
-    <button type="button" onClick={() => notify({ testId: 'test.notice', text: props.text })}>
+    <button type="button" onClick={() => notify({ code: props.code, text: props.text })}>
       {props.text}
     </button>
   )
@@ -17,27 +17,29 @@ function Trigger(props: { readonly text: string }) {
 function Current() {
   const notice = useNotice()
 
-  return notice ? <p data-testid={notice.testId}>{notice.text}</p> : null
+  return notice ? <p data-code={notice.code}>{notice.text}</p> : null
 }
 
 describe('notices', () => {
   it('shows the latest notice wherever the application renders it', () => {
     render(
       <NoticeProvider>
-        <Trigger text="Saved" />
-        <Trigger text="Welcome" />
+        <Trigger code="profile-saved" text="Saved" />
+        <Trigger code="welcome" text="Welcome" />
         <Current />
       </NoticeProvider>,
     )
 
-    expect(screen.queryByTestId('test.notice')).toBeNull()
+    expect(document.querySelector('[data-code]')).toBeNull()
 
     fireEvent.click(screen.getByText('Saved'))
 
-    expect(screen.getByTestId('test.notice').textContent).toBe('Saved')
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('profile-saved')
+    expect(document.querySelector('[data-code]')?.textContent).toBe('Saved')
 
     fireEvent.click(screen.getByRole('button', { name: 'Welcome' }))
 
-    expect(screen.getByTestId('test.notice').textContent).toBe('Welcome')
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('welcome')
+    expect(document.querySelector('[data-code]')?.textContent).toBe('Welcome')
   })
 })

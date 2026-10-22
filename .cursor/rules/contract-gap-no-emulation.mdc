@@ -1,0 +1,39 @@
+---
+description: 'Use when: the contract cannot say what a screen, a flow, an activity or a scenario needs (a facet, a state, a region, an event, a value, a route, a role, a code), or when you are about to hold in a component, a hook, a store or a test what the contract should hold.'
+alwaysApply: true
+---
+
+# A contract gap is signalled, never emulated
+
+## Pyramid Layer
+
+- Layer: L0 convention, binding on every agent that builds from the contract or from the manifest; the model-first order itself is `ui-contract.mdc`.
+
+## Use This When
+
+- The model, a screen file, the platform file, the flow subset, an activity or the scenario grammar has no way to say what the feature needs.
+- The contract says it, but no check holds it (a facet without a rule).
+- You are about to write state, a value, a label, a route, an event, a condition, an anchor or a code that the contract does not carry.
+
+## Stop Here If
+
+- The contract can say it: add it through the model-first order (the model, the screen file, the scenario, then the code and the tests), and no signal is needed.
+
+## Core rule
+
+- **The contract is the authority; the toolkit grows before the app does.** What the app shows or does is read from the contract and checked back against it. When the contract cannot express a thing, the thing is not built around the contract: the contract or its tooling is changed first, or the gap stays visible.
+- **At the gap, stop and assess.** Build the parts the contract covers; the part it cannot say is left unbuilt and named in the signal, never approximated. Assess it on the spot: what is needed, which part of the contract lacks it, what the workaround would have been, what the change would cost.
+- **Signal the developer.** The signal is the block below, in the task report, the card or the pull request, and with the result when the build was asked from the manifest alone. It is a finding, not a question: the developer decides whether the contract grows now or the feature waits.
+- **Never emulate.** Emulation is any of: state in a component, a hook or a store that stands in for a flow state, a region or an activity the contract lacks; a value, a label, a route, an event or a condition the contract does not carry; an anchor, a code, a state or a choice value born in JSX or in a test; a test that works around what it cannot find; a description in prose where a facet exists to say it; a second mechanism beside the contract's for the same thing.
+- **Why.** An emulation is a silent fork of the model: no check sees it, the manifest does not carry it, and the next build from the manifest loses it. Each one makes the next one cheaper to add, until the contract describes a different app from the one running; that decline is gradual and one way. A gap signalled on the day costs four lines.
+
+## The signal
+
+Four lines, so one search finds every gap ever signalled:
+
+```
+Contract gap: <what the screen, flow, activity or scenario needs, in one sentence>
+Facet: <model | screen file | platform | flow subset | activity | scenario grammar | check>
+Emulation refused: <the workaround not built, and where it would have lived>
+Proposal: <the change to the contract or its tooling, with its cost in one line>
+```

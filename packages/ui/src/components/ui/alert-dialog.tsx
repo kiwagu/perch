@@ -138,7 +138,10 @@ function AlertDialogCancel({
     <AlertDialogPrimitive.Close
       data-slot="alert-dialog-cancel"
       className={cn(className)}
-      render={<Button variant={variant} size={size} />}
+      render={
+        // ui-contract-ignore-self: rendered by Close with the anchor given to AlertDialogCancel
+        <Button variant={variant} size={size} />
+      }
       {...props}
     />
   )

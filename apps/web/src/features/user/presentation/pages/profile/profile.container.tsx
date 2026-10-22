@@ -80,7 +80,7 @@ export function ProfileContainer() {
       .match(
         () => {
           setError(undefined)
-          notify({ testId: 'user.profile.notice', text: t('user.profile.saved') })
+          notify({ code: 'profile-saved', text: t('user.profile.saved') })
         },
         (failure) => setError(failure.code),
       )

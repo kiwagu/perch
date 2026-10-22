@@ -9,7 +9,7 @@ import { useNotify } from '../../../../../platform/notices'
 import { HOME_PATH } from '../../../../../platform/router'
 import { SESSION } from '../../../../../platform/session.port'
 import { createSignInMachine } from '../../../application/sign-in.machine'
-import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
+import { SIGN_IN_SERVICE, type SignInMode } from '../../../application/sign-in.service'
 
 import { SignInView } from './sign-in.view'
 
@@ -19,12 +19,20 @@ export function SignInContainer() {
   // The word the last session left stays on the page while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
-  const [state, send] = useMachine(machine)
+  const [state, send, actor] = useMachine(machine)
   const navigate = useNavigate()
   const notify = useNotify()
   const t = useT()
+  const submitting = state.matches('signing-in') || state.matches('signing-up')
   const done = state.matches('done')
-  const busy = done || state.matches('submitting')
+  const busy = submitting || done
+  // The mode is the state; once done, the form keeps the mode of its attempt until it moves.
+  const [mode, setMode] = useState<SignInMode>('sign-in')
+  const shown = state.matches('sign-up') || state.matches('signing-up') ? 'sign-up' : 'sign-in'
+
+  if (!done && shown !== mode) {
+    setMode(shown)
+  }
 
   useEffect(() => {
     if (notice) {
@@ -44,21 +52,29 @@ export function SignInContainer() {
     [session, busy, navigate],
   )
 
+  // The effects of the flow outside the form: the welcome on the shell's notice, then the move.
   useEffect(() => {
-    if (done) {
-      notify({ testId: 'user.sign-in.notice', text: t('user.sign-in.welcome') })
-      void navigate({ to: HOME_PATH })
+    const shown = actor.on('show', ({ codes }) => {
+      if (codes.includes('welcome')) {
+        notify({ code: 'welcome', text: t('user.sign-in.welcome') })
+      }
+    })
+    const moved = actor.on('navigate', ({ to }) => void navigate({ to }))
+
+    return () => {
+      shown.unsubscribe()
+      moved.unsubscribe()
     }
-  }, [done, notify, navigate, t])
+  }, [actor, notify, navigate, t])
 
   return (
     <SignInView
-      mode={state.context.mode}
-      submitting={state.matches('submitting')}
+      mode={mode}
+      submitting={submitting}
       error={state.context.error}
       notice={notice}
-      onSubmit={(form) => send({ type: 'SUBMIT', form })}
-      onToggleMode={() => send({ type: 'TOGGLE_MODE' })}
+      onSubmit={(form) => send({ type: 'user.sign-in.submit-button', form })}
+      onToggleMode={() => send({ type: 'user.sign-in.toggle-button' })}
     />
   )
 }

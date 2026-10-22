@@ -7,7 +7,8 @@
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react'
 
 export interface Notice {
-  readonly testId: string
+  /** The contract code of what it says (`welcome`, `profile-saved`), shown as `data-code`. */
+  readonly code: string
   /** Already translated: the page that raises a notice knows its words. */
   readonly text: string
 }

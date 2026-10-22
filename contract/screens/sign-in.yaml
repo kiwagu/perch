@@ -1,0 +1,155 @@
+# yaml-language-server: $schema=../screen.schema.json
+id: user.sign-in
+title: Sign in or create an account
+description: "Where a visitor signs in with an existing account or creates one: the only screen a guest sees, and where a signed-out device returns."
+flag: null
+bindings: [ { path: /sign-in, guard: guest, roles: [ guest ], history: push } ]
+entry: [ user.sign-in.form, user.sign-in.email-input, user.sign-in.submit-button, user.sign-in.toggle-button ]
+anchors:
+  user.sign-in.form:
+    kind: form
+    description: The form of the page, in the mode sign-in or sign-up; its heading names the mode.
+  user.sign-in.notice-message:
+    kind: message
+    description: Why the last session on this device ended, when the person should know; shown once, while the page stays open.
+    codes: [ resend-after-sign-in, signed-out-elsewhere, delete-pending ]
+  user.sign-in.error:
+    kind: error
+    description: Why the last attempt failed; the next attempt or a switch of mode clears it.
+    codes: [ invalid-credentials, sign-up-rejected, rate-limited, other-account, name-required, name-too-long, failed ]
+  user.sign-in.email-input:
+    kind: input
+    description: The email of the account (type email).
+    binding:
+      - action: platform.sign-in
+        params:
+          email: user.sign-in.email-input
+      - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+  user.sign-in.password-input:
+    kind: input
+    description: The password of the account (type password).
+    binding:
+      - action: platform.sign-in
+        params:
+          password: user.sign-in.password-input
+      - action: platform.sign-up
+        params:
+          password: user.sign-in.password-input
+  user.sign-in.name-input:
+    kind: input
+    description: The name of the new account; shown only in the mode sign-up.
+    binding:
+      action: platform.sign-up
+      params:
+        name: user.sign-in.name-input
+  user.sign-in.submit-button:
+    kind: button
+    description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs.
+    binding:
+      - action: platform.sign-in
+        params:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+      - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+          name: user.sign-in.name-input
+  user.sign-in.toggle-button:
+    kind: button
+    description: Switches between signing in and creating an account; its value is the mode it switches to.
+    dataValue: true
+states:
+  ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
+flow:
+  initial: sign-in
+  states:
+    sign-in:
+      description: The form in the mode sign-in.
+      on:
+        user.sign-in.toggle-button:
+          target: sign-up
+          description: The name input appears; the error is cleared.
+        user.sign-in.submit-button:
+          target: signing-in
+    sign-up:
+      description: The form in the mode sign-up, with the name input.
+      on:
+        user.sign-in.toggle-button:
+          target: sign-in
+          description: The name input goes; the error is cleared.
+        user.sign-in.submit-button:
+          target: signing-up
+    signing-in:
+      description: The attempt to sign in runs; the submit button is disabled meanwhile.
+      invoke:
+        src: platform.sign-in
+        input:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+        onDone:
+          target: done
+          actions:
+            - type: show
+              params:
+                anchor: app-shell.notice-message
+                codes:
+                  - welcome
+            - type: navigate
+              params:
+                to: /me
+        onError:
+          target: sign-in
+          actions:
+            - type: show
+              params:
+                anchor: user.sign-in.error
+                codes:
+                  - invalid-credentials
+                  - rate-limited
+                  - other-account
+                  - failed
+    signing-up:
+      description: The attempt to create the account runs; the submit button is disabled meanwhile.
+      invoke:
+        src: platform.sign-up
+        input:
+          email: user.sign-in.email-input
+          password: user.sign-in.password-input
+          name: user.sign-in.name-input
+        onDone:
+          target: done
+          description: The account is created with its profile.
+          actions:
+            - type: show
+              params:
+                anchor: app-shell.notice-message
+                codes:
+                  - welcome
+            - type: navigate
+              params:
+                to: /me
+        onError:
+          target: sign-up
+          actions:
+            - type: show
+              params:
+                anchor: user.sign-in.error
+                codes:
+                  - sign-up-rejected
+                  - rate-limited
+                  - other-account
+                  - name-required
+                  - name-too-long
+                  - failed
+    done:
+      description: The app has moved to /me.
+      type: final
+wireframe: |-
+  - heading "Sign in" [level=1]
+  - textbox "Email"
+  - textbox "Password"
+  - button "Sign in"
+  - button "Create account"

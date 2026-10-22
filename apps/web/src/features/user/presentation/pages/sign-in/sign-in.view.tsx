@@ -28,22 +28,38 @@ export interface SignInViewProps {
   readonly onToggleMode: () => void
 }
 
-function errorText(t: ReturnType<typeof useT>, code: string): string {
+/** The contract code of a refusal, with its text. */
+function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
-      return t('user.sign-in.error.invalid-credentials')
+      return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
     case 'data:SIGN_UP_REJECTED':
-      return t('user.sign-in.error.sign-up-rejected')
+      return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
     case 'data:RATE_LIMITED':
-      return t('user.sign-in.error.rate-limited')
+      return { code: 'rate-limited', text: t('user.sign-in.error.rate-limited') }
     case 'data:OTHER_ACCOUNT':
-      return t('user.sign-in.error.other-account')
+      return { code: 'other-account', text: t('user.sign-in.error.other-account') }
     case 'profile:NAME_REQUIRED':
-      return t('user.sign-in.error.name-required')
+      return { code: 'name-required', text: t('user.sign-in.error.name-required') }
     case 'profile:NAME_TOO_LONG':
-      return t('user.sign-in.error.name-too-long')
+      return { code: 'name-too-long', text: t('user.sign-in.error.name-too-long') }
     default:
-      return t('user.sign-in.error.failed')
+      return { code: 'failed', text: t('user.sign-in.error.failed') }
+  }
+}
+
+/** The text of the notice the last session left. */
+function noticeText(
+  t: ReturnType<typeof useT>,
+  notice: NonNullable<SignInViewProps['notice']>,
+): string {
+  switch (notice) {
+    case 'resend-after-sign-in':
+      return t('user.sign-in.notice.resend-after-sign-in')
+    case 'signed-out-elsewhere':
+      return t('user.sign-in.notice.signed-out-elsewhere')
+    case 'delete-pending':
+      return t('user.sign-in.notice.delete-pending')
   }
 }
 
@@ -63,6 +79,7 @@ export function SignInView(props: SignInViewProps) {
     event.preventDefault()
     props.onSubmit(values)
   }
+  const error = props.error ? errorOf(t, props.error) : undefined
 
   return (
     <Card className="mx-auto w-full max-w-sm">
@@ -72,33 +89,22 @@ export function SignInView(props: SignInViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit}>
+        <form onSubmit={submit} data-testid="user.sign-in.form">
           <FieldGroup>
-            {props.notice === 'resend-after-sign-in' ? (
+            {props.notice ? (
               <Alert>
-                <AlertDescription data-testid="user.sign-in.notice.resend-after-sign-in">
-                  {t('user.sign-in.notice.resend-after-sign-in')}
+                <AlertDescription
+                  data-testid="user.sign-in.notice-message"
+                  data-code={props.notice}
+                >
+                  {noticeText(t, props.notice)}
                 </AlertDescription>
               </Alert>
             ) : null}
-            {props.notice === 'signed-out-elsewhere' ? (
-              <Alert>
-                <AlertDescription data-testid="user.sign-in.notice.signed-out-elsewhere">
-                  {t('user.sign-in.notice.signed-out-elsewhere')}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {props.notice === 'delete-pending' ? (
-              <Alert>
-                <AlertDescription data-testid="user.sign-in.notice.delete-pending">
-                  {t('user.sign-in.notice.delete-pending')}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {props.error ? (
+            {error ? (
               <Alert variant="destructive">
-                <AlertDescription data-testid="user.sign-in.error">
-                  {errorText(t, props.error)}
+                <AlertDescription data-testid="user.sign-in.error" data-code={error.code}>
+                  {error.text}
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -109,7 +115,7 @@ export function SignInView(props: SignInViewProps) {
                 type="email"
                 autoComplete="email"
                 required
-                data-testid="user.sign-in.email"
+                data-testid="user.sign-in.email-input"
               />
             </Field>
             <Field>
@@ -119,7 +125,7 @@ export function SignInView(props: SignInViewProps) {
                 type="password"
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
                 required
-                data-testid="user.sign-in.password"
+                data-testid="user.sign-in.password-input"
               />
             </Field>
             {signingUp ? (
@@ -129,18 +135,23 @@ export function SignInView(props: SignInViewProps) {
                   {...field('name')}
                   autoComplete="name"
                   required
-                  data-testid="user.sign-in.name"
+                  data-testid="user.sign-in.name-input"
                 />
               </Field>
             ) : null}
-            <Button type="submit" disabled={props.submitting} data-testid="user.sign-in.submit">
+            <Button
+              type="submit"
+              disabled={props.submitting}
+              data-testid="user.sign-in.submit-button"
+            >
               {signingUp ? t('user.sign-in.sign-up') : t('user.sign-in.sign-in')}
             </Button>
             <Button
               type="button"
               variant="link"
               onClick={props.onToggleMode}
-              data-testid="user.sign-in.toggle"
+              data-testid="user.sign-in.toggle-button"
+              data-value={signingUp ? 'sign-in' : 'sign-up'}
             >
               {signingUp ? t('user.sign-in.have-account') : t('user.sign-in.create-account')}
             </Button>

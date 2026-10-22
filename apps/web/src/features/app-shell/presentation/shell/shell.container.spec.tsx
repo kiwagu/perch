@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
@@ -46,7 +46,7 @@ describe('ShellContainer', () => {
     )
     await screen.findByText('home')
 
-    expect(screen.queryByTestId('app-shell.notice')).toBeNull()
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
 
     act(() =>
       reject({
@@ -58,9 +58,10 @@ describe('ShellContainer', () => {
       }),
     )
 
-    expect((await screen.findByTestId('app-shell.notice')).textContent).toBe(
-      'The server refused a change and undid it on this device.',
-    )
+    const rejected = await screen.findByTestId('app-shell.notice-message')
+
+    expect(rejected.getAttribute('data-code')).toBe('change-rejected')
+    expect(rejected.textContent).toBe('The server refused a change and undid it on this device.')
 
     // The undo was refused too: the region came back from the server without the later changes.
     act(() =>
@@ -73,7 +74,12 @@ describe('ShellContainer', () => {
       }),
     )
 
-    expect((await screen.findByTestId('app-shell.notice')).textContent).toBe(
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.notice-message').getAttribute('data-code')).toBe(
+        'changes-reloaded',
+      ),
+    )
+    expect(screen.getByTestId('app-shell.notice-message').textContent).toBe(
       'The server refused a change again, so it and the later changes not yet sent were undone on this device.',
     )
   })
