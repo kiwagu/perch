@@ -611,9 +611,12 @@ block into `COVERAGE.md`. It is a report, not a gate.
    internal (an id, a creation time), so an unbound one is a question, not an error. Then
    per activity, the scenarios that name it in their `activity` and the transitions they
    walk: a transition from a state on an anchor is walked when one of those scenarios names
-   the anchor in a step and the most recent route before that step, in `where` or an
-   earlier step, is the address of that state (the initial state while no route has come
-   yet), and the totals line adds `activities n, transitions walked x/y`.
+   the anchor in a step while that step's device is at the address of the state. Each
+   device is at the most recent route its texts named, read in the order of the file
+   (`where`, the steps and the expected results, each left to right), or at the initial
+   state before it names one; a text that opens with `On device X` or `Device X:` belongs to
+   device X, any other to the scenario's only device or to the device last named (`A` at
+   first). The totals line adds `activities n, transitions walked x/y`.
 2. **The controls**, the secondary measure: per feature module and for the UI kit, how many
    controls carry an anchor, which are left unmarked and which are declared off the
    coverage. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`.

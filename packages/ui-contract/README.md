@@ -152,9 +152,9 @@ for Bun.
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
     `activityCoverage(contract)`, per activity the scenarios that name it, its transitions
     (one per branch of each `on`) and how many of them those scenarios walk: a step names
-    the anchor while the most recent route before it, in `where` or an earlier step, is the
-    address of the state the transition leaves, the initial state before any route
-    (`ActivityCoverage`). `countControls(text, file)` counts
+    the anchor while its device is at the address of the state the transition leaves, each
+    device at the most recent route its texts named in the order of the file (by the lines
+    of `scenarioLines`), or at the initial state before any (`ActivityCoverage`). `countControls(text, file)` counts
     the controls of one source file (`CONTROL_TAGS`, or any element with an `onClick`) and
     how many carry an anchor, lists the unmarked ones by line, tag and static label
     (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason
@@ -186,8 +186,8 @@ for Bun.
   schema writer, the references, the contract check, the sources check, the consumers check,
   the coverage-ignore markers, the manifest, the hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
-- The commands below are the package's `ui-contract` bin, `src/cli/index.ts` (the usage and
-  the dispatch), one file per command beside it.
+- The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
+  of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each

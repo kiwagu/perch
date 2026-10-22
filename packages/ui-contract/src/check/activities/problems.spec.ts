@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem, type Screen } from '../files'
-import { fixtureContract } from '../manifest/manifest.fixture'
-
-import { activitiesProblems } from './activities'
-import type { Contract } from './contract'
+import { formatProblem, type Screen } from '../../files'
+import { fixtureContract } from '../../manifest/manifest.fixture'
+import type { Contract } from '../contract'
 import {
   activityIn,
   activityStateIn,
   flowStateIn,
   sampleContract,
   screenIn,
-} from './contract.fixture'
+} from '../contract.fixture'
+
+import { activitiesProblems } from './problems'
 
 const printed = (contract = sampleContract()): string[] =>
   activitiesProblems(contract).map(formatProblem)

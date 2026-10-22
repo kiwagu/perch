@@ -4,34 +4,27 @@
  * it; each state is a visit to a screen that exists (`meta.screen`) at the path of a binding
  * of that screen (`meta.address.path`); every event is a declared anchor (a derived one
  * through its base's `derived`) of that screen or of the frame. Every transition is backed by
- * the screens: the flow of the anchor's screen (the frame's for a frame anchor), from a
- * transition on that anchor, reaches a `navigate` to the target's path (in the transition's
- * actions, on leaving its state or entering its target, as XState runs `exit` and `entry` on
- * a move, or after an invoke's `onDone` or `onError`, each state followed once), or the
- * anchor is a link to that path (`binding.route`). Every guard is
+ * the screens (`backing.ts`): the flow of the anchor's screen (the frame's for a frame
+ * anchor) navigates to the target's path after a transition on that anchor, or the anchor is
+ * a link to that path. Every guard is
  * declared in `meta.guards` and every declared one is used; every state is reachable from
  * `initial`, and every state that is not final has a transition to leave it. Each problem is
  * named by its JSON path in the activity's file, at the line of the deepest part of that path
  * the file holds.
  */
 
-import { baseOf } from '../anchors'
+import { baseOf } from '../../anchors'
 import {
   type Activity,
   type ActivityState,
   type ActivityTransition,
   type AnchorDef,
   activityFile,
-  type Effect,
-  type Flow,
-  type FlowTransition,
   type Problem,
   type Screen,
-} from '../files'
-import { jsonPath, lineAt } from '../files/problems'
-
+} from '../../files'
+import { jsonPath, lineAt } from '../../files/problems'
 import {
-  bindingRefsOf,
   type Contract,
   declaredAnchors,
   fieldProblem,
@@ -39,7 +32,9 @@ import {
   inFile,
   knownAnchors,
   own,
-} from './contract'
+} from '../contract'
+
+import { type Backing, backed, listOf } from './backing'
 
 type At = readonly PropertyKey[]
 
@@ -54,82 +49,11 @@ interface InActivity {
   readonly problem: (at: At, message: string) => Problem
 }
 
-const listOf = <T>(transitions: T | T[]): readonly T[] =>
-  Array.isArray(transitions) ? transitions : [transitions]
-
 /** The screen that declares an anchor, or the base of a derived one. */
 function screenOf({ contract, declared }: InActivity, anchor: string): Screen | undefined {
   const base = baseOf(anchor, Object.keys(contract.vocabulary.suffixes))
 
   return (declared.get(anchor) ?? declared.get(base ?? ''))?.screen
-}
-
-/** The paths a flow navigates to after a transition on `anchor`, each state followed once. */
-function navigatesAfter(flow: Flow, anchor: string): Set<string> {
-  const paths = new Set<string>()
-  const seen = new Set<string>()
-  const collect = (effects: readonly Effect[] | undefined): void => {
-    for (const effect of effects ?? []) {
-      if (effect.type === 'navigate') {
-        paths.add(effect.params.to)
-      }
-    }
-  }
-  /** Out of `from`: the actions, and on a move the exit of `from` and the target's entry. */
-  const follow = (from: string, transition: FlowTransition): void => {
-    const { target } = transition
-
-    collect(transition.actions)
-
-    if (target === undefined || target === from) {
-      return
-    }
-
-    collect(own(flow.states, from)?.exit)
-
-    const state = seen.has(target) ? undefined : own(flow.states, target)
-
-    if (state === undefined) {
-      return
-    }
-
-    seen.add(target)
-    collect(state.entry)
-
-    if (state.invoke !== undefined) {
-      for (const outcome of [
-        ...listOf(state.invoke.onDone),
-        ...listOf(state.invoke.onError ?? []),
-      ]) {
-        follow(target, outcome)
-      }
-    }
-  }
-
-  for (const [name, state] of Object.entries(flow.states)) {
-    const transitions = own(state.on ?? {}, anchor)
-
-    for (const transition of transitions === undefined ? [] : listOf(transitions)) {
-      follow(name, transition)
-    }
-  }
-
-  return paths
-}
-
-/** An event of the state's screen or of the frame, with the screen that declares it. */
-interface Backing {
-  readonly anchor: string
-  readonly owner: Screen
-}
-
-/** Whether the screens take acting on the anchor to `path`: a flow's navigate, or a link. */
-function backed(inActivity: InActivity, { anchor, owner }: Backing, path: string): boolean {
-  const def = inActivity.declared.get(anchor)?.def
-  const linked =
-    def !== undefined && bindingRefsOf(def).some(({ ref }) => 'route' in ref && ref.route === path)
-
-  return linked || (owner.flow !== undefined && navigatesAfter(owner.flow, anchor).has(path))
 }
 
 function eventProblems(inActivity: InActivity, screen: Screen, anchor: string, at: At): Problem[] {
@@ -167,7 +91,7 @@ function transitionProblems(
     ...(guard === undefined || has(activity.meta?.guards ?? {}, guard)
       ? []
       : [problem([...at, 'guard'], `"${guard}" is not a guard of meta.guards`)]),
-    ...(backing === undefined || path === undefined || backed(inActivity, backing, path)
+    ...(backing === undefined || path === undefined || backed(backing, path)
       ? []
       : [
           problem(
@@ -202,7 +126,10 @@ function stateProblems(inActivity: InActivity, name: string, state: ActivityStat
       const event = screen === undefined ? [] : eventProblems(inActivity, screen, anchor, where)
       const owner =
         screen === undefined || event.length > 0 ? undefined : screenOf(inActivity, anchor)
-      const backing = owner === undefined ? undefined : { anchor, owner }
+      const backing =
+        owner === undefined
+          ? undefined
+          : { anchor, owner, def: inActivity.declared.get(anchor)?.def }
 
       return [
         ...event,

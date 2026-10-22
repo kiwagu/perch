@@ -99,6 +99,19 @@ describe('measureCoverage', () => {
       { id: 'thing', scenarios: 1, transitions: 1, walked: 1 },
     ])
   })
+  it('walks a scenario in the order of its file, whatever the order of its sections', () => {
+    const header = '---\ntags:\n  - smoke\nactivity: thing\ndevices:\n  A: member\ndata: {}\n---\n'
+    const intro = '# Edit the thing\n\nWhere: [/sample/$key]\n\n## Scenario: A member saves\n\n'
+    const steps = '### Steps\n1. Click [sample.save-button]\n\n'
+    const expected = '### Expected result\n- The page is on [/elsewhere]\n\n'
+    const walked = (body: string): number[] =>
+      measureCoverage(
+        sample({ [scenarioFile(SCENARIO)]: `${header}${intro}${body}` }),
+      ).activities.map(({ walked }) => walked)
+
+    expect(walked(`${steps}${expected}`)).toEqual([1])
+    expect(walked(`${expected}${steps}`)).toEqual([0])
+  })
   it('counts the anchors of each screen and the scenarios that reach it', () => {
     expect(measureCoverage(sample()).screens).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
   })

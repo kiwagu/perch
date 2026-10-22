@@ -14,7 +14,7 @@ block below from the code and the contract; the text around it is written by han
 
 The contract declares 5 screens, 67 anchors and 29 codes.
 
-Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 3/8; controls marked 33/33, ignored 2.
+Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
 
 ## Model
 
@@ -50,7 +50,7 @@ Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 3
 
 | Activity | Scenarios | Transitions | Walked |
 | --- | ---: | ---: | ---: |
-| session | 4 | 8 | 3 |
+| session | 4 | 8 | 4 |
 
 ## Controls
 
@@ -103,9 +103,12 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
 - **Activities.** Each activity of `contract/activities/`, the scenarios whose front matter
   names it in `activity`, its transitions (one per transition of each `on`, a guarded list
   counting each of its branches), and how many of them are walked: a transition from a
-  state on an anchor is walked when one of those scenarios names the anchor in a step and
-  the most recent route before that step, in `where` or an earlier step, is the address of
-  that state (the initial state while no route has come yet). The totals line adds the
+  state on an anchor is walked when one of those scenarios names the anchor in a step while
+  that step's device is at the address of the state: each device is at the most recent route
+  its texts named, read in the order of the file (`where`, the steps and the expected
+  results, each left to right), or at the initial state before it names one, and a text that
+  opens with `On device X` or `Device X:` belongs to device X, any other to the scenario's
+  only device or to the device last named (`A` at first). The totals line adds the
   activities and the transitions walked over all of them, and both it and the table are left
   out while the contract has no activity.
 - **Modules.** Each folder under `apps/web/src/features` is a module; `packages/ui/src` is
