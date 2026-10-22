@@ -4,9 +4,10 @@
  * schema accepts, matches the binding's route again with the same parameters, and its search
  * reads back with the schema's defaults applied. The parameters the binding declares are the
  * ones its path has. So a route is a state address: the same path with the same search
- * reaches the same state after a reload. A parameter's first example is its sample, before
- * any value the sampler builds; every sampled search satisfies the binding's schema; a
- * parameter the sampler builds no value of skips the binding's search case, named.
+ * reaches the same state after a reload. A parameter's value is the contract's sample of its
+ * schema (`parameterSample`: its example, default or first enum value, else one built within
+ * its bounds and pattern); every sampled search satisfies the binding's schema; a parameter
+ * no value of which can be built skips the binding's search case, named.
  */
 
 import { join } from 'node:path'
@@ -19,6 +20,7 @@ import {
   bindingSchema,
   formatProblem,
   loadScreens,
+  parameterSample,
   parseRoutePath,
   validateAgainst,
 } from '@workspace/ui-contract'
@@ -39,26 +41,42 @@ const SPLAT_SAMPLE = 'a/b'
 
 type Value = string | number | boolean
 type Search = Binding['search']
-type Parameter = NonNullable<Search>['properties'][string]
+
+/**
+ * The value a path parameter is built with: the contract's sample of its schema
+ * (`parameterSample`: its example, default or first enum value, or one built within its
+ * bounds and pattern); `sample-value` for one the binding does not declare. A declared one
+ * with no sample fails the spec, as the contract check refuses it.
+ */
+function paramValue(params: Binding['params'], name: string): string {
+  const parameter = params?.properties[name]
+
+  if (parameter === undefined) {
+    return PARAM_SAMPLE
+  }
+
+  const value = parameterSample(parameter)
+
+  if (value === undefined) {
+    throw new Error(`no value of the path parameter \`${name}\` can be built`)
+  }
+
+  return String(value)
+}
 
 /**
  * The path parameters a path is built with, named by the path itself, never by what a
- * binding declares: per `$param` and `{-$param}` the first example `params` gives it, else a
- * sample, and the splat's value under `_splat` when it ends in `$`; with an optional
- * parameter, also the form without it.
+ * binding declares: per `$param` and `{-$param}` a value of its schema (`paramValue`), and
+ * the splat's value under `_splat` when it ends in `$`; with an optional parameter, also the
+ * form without it.
  */
 function paramForms(path: string, params?: Binding['params']): Record<string, string>[] {
   const { segments } = parseRoutePath(path)
-  const firstExample = (name: string): string | undefined => {
-    const example = params?.properties[name]?.examples?.[0]
-
-    return example === undefined ? undefined : String(example)
-  }
   const present: Record<string, string> = Object.fromEntries(
     segments.flatMap(({ kind, name }) =>
       kind === 'static'
         ? []
-        : [[name, kind === 'splat' ? SPLAT_SAMPLE : (firstExample(name) ?? PARAM_SAMPLE)] as const],
+        : [[name, kind === 'splat' ? SPLAT_SAMPLE : paramValue(params, name)] as const],
     ),
   )
   const optional = new Set(
@@ -71,103 +89,9 @@ function paramForms(path: string, params?: Binding['params']): Record<string, st
 }
 
 /**
- * A number within a parameter's `minimum` and `maximum`, whole for an `integer`: 0 when the
- * bounds hold it, else the bound nearest to 0. (A binding's flat schema has no exclusive
- * bounds: it refuses them.)
- */
-function numberWithin(parameter: Parameter): number {
-  const whole = parameter.type === 'integer'
-  const lowest = parameter.minimum ?? Number.NEGATIVE_INFINITY
-  const highest = parameter.maximum ?? Number.POSITIVE_INFINITY
-
-  return Math.min(
-    Math.max(0, whole ? Math.ceil(lowest) : lowest),
-    whole ? Math.floor(highest) : highest,
-  )
-}
-
-/** Plain characters, `^draft$` (anchors optional): the value is the pattern itself. */
-const LITERAL = /^\^?([\w-]+)\$?$/
-
-/**
- * One character class repeated, `^[a-z]+$` or `^\d{3}$` (anchors optional): `\d` or `\w`, or
- * the first character of a class that is not negated, then the quantifier and its bounds.
- */
-const REPEATED = /^\^?(?:\\([dw])|\[([^\]^\\])[^\]]*\])(\+|\*|\{(\d+)(,(\d*))?\})\$?$/
-
-/** A character of each shorthand class. */
-const SHORTHAND: Readonly<Record<string, string>> = { d: '0', w: 'a' }
-
-/** The repetitions a quantifier allows: `+`, `*`, `{n}`, `{n,}` or `{n,m}`. */
-function repetitions(quantifier: string, fewest = '0', range?: string, most = ''): number[] {
-  if (quantifier === '+') {
-    return [1, Number.POSITIVE_INFINITY]
-  }
-
-  if (range === undefined) {
-    return quantifier === '*' ? [0, Number.POSITIVE_INFINITY] : [Number(fewest), Number(fewest)]
-  }
-
-  return [Number(fewest), most === '' ? Number.POSITIVE_INFINITY : Number(most)]
-}
-
-/**
- * The shortest length a string takes within `[fewest, most]` and the parameter's `minLength`
- * and `maxLength`: at least 1 unless `minLength` allows 0.
- */
-function lengthWithin(parameter: Parameter, fewest = 0, most = Number.POSITIVE_INFINITY): number {
-  return Math.min(
-    Math.max(fewest, parameter.minLength ?? 1),
-    most,
-    parameter.maxLength ?? Number.POSITIVE_INFINITY,
-  )
-}
-
-/**
- * A string of the parameter's lengths that its `pattern` accepts, when the pattern is plain
- * characters or one class repeated; none for any other pattern.
- */
-function stringOf(parameter: Parameter): string | undefined {
-  const { pattern } = parameter
-
-  if (pattern === undefined) {
-    return 'a'.repeat(lengthWithin(parameter))
-  }
-
-  const literal = LITERAL.exec(pattern)?.[1]
-
-  if (literal !== undefined) {
-    return literal
-  }
-
-  const [, shorthand, first, quantifier = '', fewest, range, most] = REPEATED.exec(pattern) ?? []
-  const character = shorthand === undefined ? first : SHORTHAND[shorthand]
-
-  if (character === undefined) {
-    return undefined
-  }
-
-  const [low, high] = repetitions(quantifier, fewest, range, most)
-
-  return character.repeat(lengthWithin(parameter, low, high))
-}
-
-/** A value of a parameter: its first example, else the first of its `enum`, else one of its type. */
-function sampleOf(parameter: Parameter): Value | undefined {
-  const byType: Readonly<Record<Parameter['type'], Value | undefined>> = {
-    string: stringOf(parameter),
-    integer: numberWithin(parameter),
-    number: numberWithin(parameter),
-    boolean: true,
-  }
-
-  return parameter.examples?.[0] ?? parameter.enum?.[0] ?? byType[parameter.type]
-}
-
-/**
- * The least search a schema accepts, a value per required parameter without a default, each
- * one checked against its own schema; or, when the sampler builds no value a parameter's
- * schema accepts, which parameter and why.
+ * The least search a schema accepts, a value per required parameter without a default
+ * (`parameterSample`, each one checked against its own schema); or, when no value a
+ * parameter's schema accepts can be built, which parameter and why.
  */
 function minimalSearch(
   search: Search,
@@ -179,9 +103,9 @@ function minimalSearch(
   const sent: Record<string, Value> = {}
 
   for (const [name, parameter] of needed) {
-    const value = sampleOf(parameter)
+    const value = parameterSample(parameter)
 
-    if (value === undefined || validateAgainst(name, parameter, value).length > 0) {
+    if (value === undefined) {
       const of = parameter.pattern === undefined ? 'its schema' : `the pattern ${parameter.pattern}`
 
       return { unsampled: `no value of \`${name}\` derived for ${of}` }
@@ -466,6 +390,25 @@ describe('the round trip', () => {
       search: { q: 'beta', name: 'aaa', slug: 'a', code: '123', kind: 'draft' },
     })
     searchCase(sampleRouter, find, skip)
+  })
+
+  it('builds a parameter without an example within its schema', () => {
+    const org = bindingSchema.parse({
+      path: '/org/$key',
+      roles: ['identity'],
+      params: {
+        type: 'object',
+        properties: { key: { type: 'string', pattern: '^org_[a-z0-9]+$' } },
+        additionalProperties: false,
+      },
+    })
+
+    expect(paramForms(org.path, org.params)).toEqual([{ key: 'org_a' }])
+    expect(visit(sampleRouter, org.path, { key: 'org_a' }, {})).toMatchObject({
+      pathname: '/org/org_a',
+      fullPath: '/org/$key',
+      params: { key: 'org_a' },
+    })
   })
 
   /** A pattern beyond plain characters and one repeated class. */

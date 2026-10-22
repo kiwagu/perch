@@ -158,6 +158,26 @@ describe('searchProblems', () => {
       `${AT}.search.properties.tab.examples[1]: "c" does not match its parameter: must be equal to one of the allowed values`,
     ])
   })
+  it('wants a value its schema accepts for a path parameter a link must fill', () => {
+    const contract = sampleContract()
+    const binding = sampleBinding(contract)
+    const key = { type: 'string' as const, pattern: '^[a-z]+-\\d+$' }
+
+    binding.params = { type: 'object', properties: { key }, additionalProperties: false }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.key: needs an example (no value of its schema can be built)`,
+    ])
+
+    binding.path = '/sample/{-$key}'
+
+    expect(printed(contract)).toEqual([])
+
+    binding.path = '/sample/$key'
+    binding.params.properties['key'] = { ...key, examples: ['ab-12'] }
+
+    expect(printed(contract)).toEqual([])
+  })
   it('leaves the examples of a schema that is not valid to its validity problem', () => {
     const contract = sampleContract()
 

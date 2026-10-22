@@ -167,9 +167,12 @@ it, the activity states at that address) and the tree as the router holds it, `_
 (app-shell)` with each route under it, a route under the binding whose path is the longest
 proper prefix of its own on whole segments. The example link is built from the binding:
 
-- the path: each `$param` at its parameter's first example, else its first `enum` value,
-  else a sample of its type (its name, 1, or true); a `{-$param}` at its first example, or
-  its segment left out without one; a splat `$` left out with its segment (no parameter can
+- the path: each `$param` at its parameter's first example, else its `default`, else its
+  first `enum` value, else a value built within its bounds and a `pattern` of a literal
+  prefix and at most one repeated class (`^thg_[a-z0-9]+$` gives `thg_a`), the first of them
+  the parameter's schema accepts; a parameter none of whose values can be built needs an
+  example, and `contract:check` says so; a `{-$param}` at its first example, or its segment
+  left out without one; a splat `$` left out with its segment (no parameter can
   be named `_splat`, so it takes no example); each value through `encodeURIComponent`;
 - the search: every key in its declared order at its `default`, else its first `enum`
   value, else its first example, a key with none left out; written as TanStack Router's
@@ -580,8 +583,8 @@ gap is fixed in the contract files first, never worked around in a test.
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists,
-  every path parses in the router's syntax, and every example of a route parameter matches
-  that parameter; every flow names states, events, guards,
+  every path parses in the router's syntax, every example of a route parameter matches
+  that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see

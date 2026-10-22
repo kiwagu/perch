@@ -21,6 +21,7 @@ export {
   checkContract,
   flowProblems,
   loadContract,
+  parameterSample,
   parseRoutePath,
   type RouteSegment,
   routesProblems,

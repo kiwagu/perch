@@ -3,13 +3,14 @@
  * TanStack Router writes a link.
  *
  * The path is the binding's path segment by segment: a static segment as written; a `$param`
- * by its parameter's first `examples` value, else its first `enum` value, else a sample of
- * its type (its name for a string, or for a parameter `params` does not declare, which the
- * contract check reports; 1 for a number, true for a boolean); a `{-$param}` by its
- * first example, its segment left out when it has none; a splat `$` left out with its
- * segment, as no parameter can be named `_splat` to carry an example. Each value is written
- * with `encodeURIComponent` (the router leaves `[`, `]`, `|` and `^` bare in a path, so the
- * web app's spec catches an example that holds one).
+ * by `parameterSample` (its parameter's first example, else its default, else its first
+ * `enum` value, else a value built within its bounds and pattern, the first of them the
+ * parameter's schema accepts), the link refused when there is none, as the contract check
+ * says the parameter needs an example; a `{-$param}` by its first example, its segment left
+ * out when it has none; a splat `$` left out with its segment, as no parameter can be named
+ * `_splat` to carry an example. Each value is written with `encodeURIComponent` (the router
+ * leaves `[`, `]`, `|` and `^` bare in a path, so the web app's spec catches an example that
+ * holds one).
  *
  * The search takes every key of the binding's `search` in its declared order, at its
  * `default`, else its first `enum` value, else its first example, and leaves out a key with
@@ -20,8 +21,7 @@
  * `URLSearchParams` (form encoding: a space as `+`, `!'()~` escaped).
  */
 
-import { parseRoutePath, type RouteSegment } from '../check'
-import { own } from '../check/contract'
+import { own, parameterSample, parseRoutePath, type RouteSegment } from '../check'
 import type { Binding } from '../files'
 
 type Value = string | number | boolean
@@ -38,18 +38,18 @@ export interface RouteExample {
   readonly link: string
 }
 
-const SAMPLE_BY_TYPE: Readonly<Record<Parameter['type'], (name: string) => Value>> = {
-  string: (name) => name,
-  integer: () => 1,
-  number: () => 1,
-  boolean: () => true,
-}
+/** The value of a `$param` (`parameterSample`), or the refusal of a link that has none. */
+function requiredValue(binding: Binding, parameter: Parameter | undefined, name: string): Value {
+  const value = parameter === undefined ? undefined : parameterSample(parameter)
 
-/** The value of a `$param`: its first example, its first enum value, or one of its type. */
-const requiredValue = (parameter: Parameter | undefined, name: string): Value =>
-  parameter?.examples?.[0] ??
-  parameter?.enum?.[0] ??
-  SAMPLE_BY_TYPE[parameter?.type ?? 'string'](name)
+  if (value === undefined) {
+    throw new Error(
+      `${binding.path}: the path parameter "${name}" needs an example (no value of its schema can be built)`,
+    )
+  }
+
+  return value
+}
 
 /** A segment of the path as the link writes it, and the parameter it fills, if any. */
 interface Filled {
@@ -67,7 +67,8 @@ function filled(binding: Binding, { kind, name }: RouteSegment): Filled {
   }
 
   const parameter = own(binding.params?.properties ?? {}, name)
-  const value = kind === 'optional' ? parameter?.examples?.[0] : requiredValue(parameter, name)
+  const value =
+    kind === 'optional' ? parameter?.examples?.[0] : requiredValue(binding, parameter, name)
 
   return value === undefined
     ? {}

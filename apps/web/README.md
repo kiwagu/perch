@@ -152,8 +152,8 @@ modeling stage.
   route equals its binding in the screen files of `contract/screens/` (path, guard, history,
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
-  `routes-router.spec.ts` builds every binding on the real router (a sample per parameter
-  of its path, its first example when it has one, the least search its schema accepts),
+  `routes-router.spec.ts` builds every binding on the real router (the contract's sample of
+  each parameter of its path, `parameterSample`, and the least search its schema accepts),
   matches it back to the same route, parameters and search with the defaults applied, and
   holds the binding's `params` to the parameters of its path; `routes-examples.spec.ts` holds
   each binding's example link to the router (the path it builds, the search string it

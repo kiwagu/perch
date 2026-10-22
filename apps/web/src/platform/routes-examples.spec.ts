@@ -84,6 +84,7 @@ const SampleModule = defineModule({
           .regex(/^\d{3}$/)
           .optional(),
         q: z.string().optional(),
+        filter: z.string().optional(),
         note: z.string().optional(),
       }),
     },
@@ -113,6 +114,14 @@ describe('the example link on the router', () => {
     )
   })
 
+  it('builds a path parameter without an example within its schema', () => {
+    const key = { type: 'string', pattern: '^thg_[a-z0-9]+$' }
+    const things = sample({ path: '/things/$key', params: flat({ key }) })
+
+    exampleCase(sampleRouter, things)
+    expect(exampleOf(things).link).toBe('/things/thg_a')
+  })
+
   it('builds an optional segment with its example, and without one leaves it out', () => {
     const path = '/notes/{-$tab}'
 
@@ -136,13 +145,14 @@ describe('the example link on the router', () => {
         open: { type: 'boolean', default: false },
         code: { type: 'string', pattern: '^\\d{3}$', examples: ['123'] },
         q: { type: 'string', examples: ["two words!'()~*"] },
+        filter: { type: 'string', examples: ['{"a":1}'] },
         note: { type: 'string' },
       }),
     })
 
     exampleCase(sampleRouter, list)
     expect(exampleOf(list).link).toBe(
-      '/list?view=read&pageSize=10&open=false&code=%22123%22&q=two+words%21%27%28%29%7E*',
+      '/list?view=read&pageSize=10&open=false&code=%22123%22&q=two+words%21%27%28%29%7E*&filter=%22%7B%5C%22a%5C%22%3A1%7D%22',
     )
   })
 })

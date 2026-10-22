@@ -91,4 +91,28 @@ describe('emitManifest', () => {
     ])
     expect(existsSync(out)).toBe(false)
   })
+  it('writes nothing for a path parameter no value of whose schema can be built', () => {
+    const root = join(temp, 'repository')
+    const out = join(temp, 'ui-manifest')
+    const screen = join(root, SCREENS_DIR, 'devices.yaml')
+    const params = {
+      type: 'object',
+      properties: { device: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
+      additionalProperties: false,
+    }
+
+    copyContract(root)
+    writeFileSync(
+      screen,
+      readFileSync(screen, 'utf8').replace(
+        'history: push }',
+        `history: push }, { path: /devices/$device, roles: [ identity ], params: ${JSON.stringify(params)} }`,
+      ),
+    )
+
+    expect(emitManifest(root, out).map(formatProblem)).toEqual([
+      'contract/screens/devices.yaml:1: bindings[1].params.properties.device: needs an example (no value of its schema can be built)',
+    ])
+    expect(existsSync(out)).toBe(false)
+  })
 })

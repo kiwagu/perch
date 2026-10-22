@@ -27,19 +27,37 @@ describe('exampleOf', () => {
       link: '/sample/thg_01hzx9k2',
     })
   })
-  it('fills a path parameter without an example with its first enum value, else by its type', () => {
+  it('fills a path parameter without an example with its default, its first enum value, else by its type', () => {
     const params = flat({
+      mode: { type: 'string', enum: ['read', 'edit'], default: 'edit' },
       tab: { type: 'string', enum: ['read', 'edit'] },
       name: { type: 'string' },
       page: { type: 'integer' },
       open: { type: 'boolean' },
     })
 
-    expect(exampleOf(binding({ path: '/a/$tab/$name/$page/$open', params }))).toEqual({
-      params: { tab: 'read', name: 'name', page: '1', open: 'true' },
+    expect(exampleOf(binding({ path: '/a/$mode/$tab/$name/$page/$open', params }))).toEqual({
+      params: { mode: 'edit', tab: 'read', name: 'a', page: '0', open: 'true' },
       search: {},
-      link: '/a/read/name/1/true',
+      link: '/a/edit/read/a/0/true',
     })
+  })
+  it('builds a path parameter without an example within its schema', () => {
+    const one = (path: string, schema: Readonly<Record<string, unknown>>) =>
+      linkOf({ path, params: flat({ key: schema }) })
+
+    expect(one('/things/$key', { type: 'string', pattern: '^thg_[a-z0-9]+$' })).toBe(
+      '/things/thg_a',
+    )
+    expect(one('/things/$key', { type: 'string', minLength: 3 })).toBe('/things/aaa')
+    expect(one('/pages/$key', { type: 'integer', minimum: 2, maximum: 9 })).toBe('/pages/2')
+  })
+  it('refuses a path parameter no value of whose schema can be built', () => {
+    const params = flat({ key: { type: 'string', pattern: '^[a-z]+-\\d+$' } })
+
+    expect(() => exampleOf(binding({ path: '/odd/$key', params }))).toThrow(
+      '/odd/$key: the path parameter "key" needs an example (no value of its schema can be built)',
+    )
   })
   it('takes an optional segment only when its parameter has an example', () => {
     const path = '/notes/{-$tab}'
@@ -87,10 +105,11 @@ describe('exampleOf', () => {
       flag: { type: 'string', examples: ['true'] },
       dash: { type: 'string', examples: ['-'] },
       q: { type: 'string', examples: ["two words!'()~*"] },
+      filter: { type: 'string', examples: ['{"a":1}'] },
     })
 
     expect(linkOf({ path: '/list', search })).toBe(
-      '/list?view=read&pageSize=10&ratio=1.5&open=true&code=%22123%22&flag=%22true%22&dash=-&q=two+words%21%27%28%29%7E*',
+      '/list?view=read&pageSize=10&ratio=1.5&open=true&code=%22123%22&flag=%22true%22&dash=-&q=two+words%21%27%28%29%7E*&filter=%22%7B%5C%22a%5C%22%3A1%7D%22',
     )
   })
 })

@@ -6,9 +6,7 @@
  * activities whose address it is); then the route tree (`routeTree`).
  */
 
-import type { Contract } from '../check'
-import { bindingRefsOf } from '../check/contract'
-import { transitionsOf } from '../check/flow'
+import { bindingRefsOf, type Contract, transitionsOf } from '../check'
 import type { Binding, Effect, Flow, Screen } from '../files'
 
 import { exampleOf } from './example'

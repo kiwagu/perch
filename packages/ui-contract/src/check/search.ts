@@ -5,7 +5,9 @@
  * control in the vocabulary, and `retain` names search parameters. That the schemas are
  * flat objects of primitives is the Zod schema's job (`flatJsonSchema`); that each is a
  * valid JSON Schema (a `pattern` that compiles, `required` without repeats) is Ajv's, and
- * so, once it is, is that every one of a property's `examples` matches that property.
+ * so, once it is, is that every one of a property's `examples` matches that property and
+ * that a path parameter a link must fill (a `$param`) has a value its schema accepts
+ * (`parameterSample`): one without needs an example.
  */
 
 import {
@@ -26,6 +28,8 @@ import {
   locate,
   own,
 } from './contract'
+import { parameterSample } from './parameter-sample'
+import { parseRoutePath } from './routes'
 
 type FlatSchema = NonNullable<Binding['search']>
 
@@ -108,20 +112,51 @@ function exampleProblems(
   })
 }
 
-/** A route schema: valid as a JSON Schema, then its examples; and its controls. */
+/** The parameters of `filled` that no value of their schema can be built for. */
+const unsampledProblems = (
+  { inScreens }: Lookups,
+  schema: FlatSchema | undefined,
+  filled: readonly string[],
+  at: readonly PropertyKey[],
+): Problem[] =>
+  Object.entries(schema?.properties ?? {})
+    .filter(([name, property]) => filled.includes(name) && parameterSample(property) === undefined)
+    .map(([name]) =>
+      inScreens(
+        [...at, 'properties', name],
+        'needs an example (no value of its schema can be built)',
+      ),
+    )
+
+/**
+ * A route schema: valid as a JSON Schema, then its examples and a value for each parameter
+ * of `filled` (the ones a link must carry); and its controls.
+ */
 function routeSchemaProblems(
   lookups: Lookups,
   screen: string,
   schema: FlatSchema | undefined,
+  filled: readonly string[],
   at: readonly PropertyKey[],
 ): Problem[] {
   const validity = validityProblems(lookups, screen, schema, at)
 
   return [
-    ...(validity.length > 0 ? validity : exampleProblems(lookups, schema, at)),
+    ...(validity.length > 0
+      ? validity
+      : [
+          ...exampleProblems(lookups, schema, at),
+          ...unsampledProblems(lookups, schema, filled, at),
+        ]),
     ...schemaProblems(lookups, schema, at),
   ]
 }
+
+/** The path parameters a link to `path` must fill: its `$param`s, not the optional ones. */
+const requiredParameters = (path: string): string[] =>
+  parseRoutePath(path)
+    .segments.filter(({ kind }) => kind === 'param')
+    .map(({ name }) => name)
 
 function schemaProblems(
   lookups: Lookups,
@@ -178,8 +213,14 @@ export function searchProblems(contract: Contract): Problem[] {
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
-        ...routeSchemaProblems(lookups, screen.id, binding.params, [...at, 'params']),
-        ...routeSchemaProblems(lookups, screen.id, binding.search, [...at, 'search']),
+        ...routeSchemaProblems(
+          lookups,
+          screen.id,
+          binding.params,
+          requiredParameters(binding.path),
+          [...at, 'params'],
+        ),
+        ...routeSchemaProblems(lookups, screen.id, binding.search, [], [...at, 'search']),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)
             ? []

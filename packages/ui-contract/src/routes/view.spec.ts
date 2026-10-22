@@ -16,7 +16,7 @@ describe('routesOf', () => {
         params: ['key'],
         search: ['tab'],
         file: 'contract/screens/sample/$key.yaml',
-        example: '/sample/key?tab=a',
+        example: '/sample/a?tab=a',
         reachedFrom: {
           links: ['sample.home-link'],
           navigate: ['sample'],
