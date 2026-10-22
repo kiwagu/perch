@@ -2,11 +2,12 @@
  * Reads one scenario file of `tests/e2e/scenarios`: a YAML front matter between two `---`
  * lines with the header (`tags`, `devices`, `data`), then Markdown with fixed sections in
  * any order: `# <title>`, a line `Where: <text>`, `## Scenario: <sentence>`, `### Steps`
- * with a numbered list and `### Expected result` with a bullet list. The id is the file's
- * path, never written in it. A front matter that is missing or not YAML, a header field
- * the header schema refuses, a section missing, unknown or repeated, a line outside any
- * section and a list item of the wrong shape are problems, each with its line where the
- * parser knows it.
+ * with a numbered list and `### Expected result` with a bullet list, each item at the
+ * start of its line (an indented one is no item: the lists do not nest). Any line ending
+ * reads as `\n`. The id is the file's path, never written in it. A front matter that is
+ * missing or not YAML, a header field the header schema refuses, a section missing, unknown
+ * or repeated, a line outside any section and a list item of the wrong shape are problems,
+ * each with its line where the parser knows it.
  */
 
 import { parse, YAMLParseError } from 'yaml'
@@ -153,10 +154,13 @@ function readBody(lines: readonly string[], first: number, problems: ScenarioPro
     } else if (current === undefined) {
       problems.push(at(line, `a line outside any section: "${text}"`))
     } else {
-      const item = current.item.exec(text)?.[1]
+      const indented = raw.trimStart() !== raw
+      const item = indented ? undefined : current.item.exec(text)?.[1]
 
       if (item === undefined) {
-        problems.push(at(line, `not a "${current.shape}" item of "${current.heading}": "${text}"`))
+        problems.push(
+          at(line, `not a "${current.shape}" item of "${current.heading}": "${raw.trimEnd()}"`),
+        )
       } else {
         values[current.list].push(item.trim())
       }
@@ -182,7 +186,7 @@ export function parseScenario(
   id: string,
   markdown: string,
 ): { scenario?: Scenario; problems: ScenarioProblem[] } {
-  const parts = partsOf(markdown)
+  const parts = partsOf(markdown.replace(/\r\n?/g, '\n'))
 
   if ('message' in parts) {
     return { problems: [parts] }

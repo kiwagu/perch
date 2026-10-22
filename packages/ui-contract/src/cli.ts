@@ -3,9 +3,9 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources]
- *     checks the three contract files and the scenarios under `contract/` against each
- *     other; with `--sources`, then the anchors and codes of the web app and the UI kit
- *     against them.
+ *     checks the three contract files under `contract/` and the scenario files under
+ *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
+ *     of the web app and the UI kit against them.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check

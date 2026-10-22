@@ -74,6 +74,19 @@ describe('parseScenario', () => {
       problems: [],
     })
   })
+  it('reads a file with CRLF or CR line endings as its LF twin', () => {
+    const noData = fixture.replace('data:\n  Title: generate', 'data: {}')
+
+    for (const markdown of [fixture, noData]) {
+      expect(parseScenario(ID, markdown).problems).toEqual([])
+
+      for (const ending of ['\r\n', '\r']) {
+        expect(parseScenario(ID, markdown.replaceAll('\n', ending))).toEqual(
+          parseScenario(ID, markdown),
+        )
+      }
+    }
+  })
   it('reports a missing section', () => {
     const markdown = fixture.replace(/### Steps\n[\s\S]*?(?=\n###)/, '')
 
@@ -109,6 +122,22 @@ describe('parseScenario', () => {
         line: lineOf(markdown, '1. [sample.save-button]'),
         message:
           'not a "- <result>" item of "### Expected result": "1. [sample.save-button] saves with [code:saved]"',
+      },
+    ])
+  })
+  it('reports an indented list line as no item of its section, by line', () => {
+    const markdown = fixture
+      .replace('2. Enter the title into [sample.title-input]', '$&\n   3. Press enter')
+      .replace('- [sample.save-button] saves with [code:saved]', '$&\n  - and shows it')
+
+    expect(parseScenario(ID, markdown).problems).toEqual([
+      {
+        line: lineOf(markdown, '   3. Press enter'),
+        message: 'not a "1. <step>" item of "### Steps": "   3. Press enter"',
+      },
+      {
+        line: lineOf(markdown, '  - and shows it'),
+        message: 'not a "- <result>" item of "### Expected result": "  - and shows it"',
       },
     ])
   })

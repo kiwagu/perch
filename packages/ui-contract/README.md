@@ -67,16 +67,18 @@ root export is build-time tooling for Bun.
     returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
     states taken from the vocabulary and the platform section), the screens and the platform
-    section verbatim, the scenarios parsed, `ids` (every declared anchor with its kind, its screen and its attributes),
-    `routeParams` and the model document. `productInfo(root)` names the product (the root
-    package's version, the commit checked out or null). `writeManifest(root, outDir, manifest)`
-    validates it against `contract/manifest.schema.json` with Ajv and returns the problems
+    section verbatim, the scenarios parsed, `ids` (every declared anchor with its kind, its
+    screen and its attributes), `routeParams` and the model document. `productInfo(root)`
+    names the product (the root package's version, the commit checked out or null).
+    `writeManifest(root, outDir, manifest)` validates it against
+    `contract/manifest.schema.json` with Ajv and returns the problems
     without writing anything, or empties `outDir` (its last segment must be `ui-manifest`,
     `MANIFEST_DIR`) and writes `manifest.json`, `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
   - The hand-over: `contractAt(ref, root)` reads the three files and the scenarios at a git
-    ref (`git show`) and loads them, or returns `{ missing: true }` when that commit has no `contract/`;
+    ref (`git show`) and loads them, or returns `{ missing: true }` when that commit has no
+    `contract/`;
     `diffContracts(before, after)` returns the `ContractChanges` (screens, anchors, codes,
     entities and fields as `entity.field`, added and removed, sorted; an anchor removed and
     one added are a rename when they are the only ones of their screen and kind);
@@ -104,23 +106,25 @@ root export is build-time tooling for Bun.
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
-  schema writer, the references, the contract check, the sources check, the manifest, the hand-over diff and the coverage note.
+  schema writer, the references, the contract check, the sources check, the manifest, the
+  hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
-  other and the schema drift; prints `file:line: message` per problem and exits 1, or a one-line
-  summary; part of `bun run check` and the pre-commit hook).
+  other and the schema drift; prints `file:line: message` per problem and exits 1, or a
+  one-line summary; part of `bun run check` and the pre-commit hook).
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or
   `contract: sources agree with the contract (<n> anchors)`; part of `bun run check` and
   the pre-commit hook).
 - From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
-  manifest from the three files and the scenarios and writes it into `ui-manifest/` at the root, gitignored, or
-  into `<dir>` relative to the working directory, which may be any folder under the root;
-  prints the problems and exits 1 when the contract check finds any or the manifest does not
-  match its schema). The web app's build runs it into `apps/web/dist/ui-manifest/`.
+  manifest from the three files and the scenarios and writes it into `ui-manifest/` at the
+  root, gitignored, or into `<dir>` relative to the working directory, which may be any
+  folder under the root; prints the problems and exits 1 when the contract check finds any
+  or the manifest does not match its schema). The web app's build runs it into
+  `apps/web/dist/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`; prints the hand-over block,
