@@ -1,7 +1,8 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities and fields one contract adds or removes against another, and the anchors it
- * renames. `contractAt` reads the contract files and the scenarios at a git ref.
+ * renames. `contractAt` reads the contract files, the activities and the scenarios at a git
+ * ref.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -12,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { type Contract, loadContract } from '../check'
 import { declaredAnchors } from '../check/contract'
 import {
+  ACTIVITIES_DIR,
   CONTRACT_DIR,
   formatProblem,
   MODEL_FILE,
@@ -38,7 +40,7 @@ export interface ContractChanges {
 const FILES = [VOCABULARY_FILE, PLATFORM_FILE, MODEL_FILE] as const
 
 /** The folders whose every file belongs to the contract, at any depth. */
-const FOLDERS = [SCREENS_DIR, SCENARIOS_DIR] as const
+const FOLDERS = [SCREENS_DIR, ACTIVITIES_DIR, SCENARIOS_DIR] as const
 
 const git = (root: string, args: readonly string[]): string =>
   execFileSync('git', args, {

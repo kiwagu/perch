@@ -55,8 +55,10 @@ describe('buildManifest', () => {
       dataId: "the thing's id",
     })
   })
-  it('carries the screens, the platform, the scenarios and the model verbatim', () => {
+  it('carries the screens, the platform, the activities, the scenarios and the model verbatim', () => {
     expect(manifest.screens).toEqual(contract.screens.screens)
+    expect(manifest.activities.map((activity) => activity.id)).toEqual(['thing'])
+    expect(manifest.activities).toEqual(contract.activities)
     expect(manifest.platform).toEqual(contract.screens.platform)
     expect(manifest.scenarios).toEqual(contract.scenarios)
     expect(manifest.model).toEqual(contract.model.document)

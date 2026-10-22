@@ -5,8 +5,9 @@
 The contract between the user interface and everything that drives it: tests, agents and
 the people and models who design screens. The contract is authored first, in the
 `contract/` folder at the root (the vocabulary, one YAML file per screen named by its
-pathname, the platform file and the model) and in the scenario files of
-`tests/e2e/scenarios/`; the model is the source of completeness and each screen unfolds it.
+pathname, the platform file, the model and the activities across screens) and in the
+scenario files of `tests/e2e/scenarios/`; the model is the source of completeness and each
+screen unfolds it.
 This package loads those files and checks them against each other, holds the web app's and
 the kit's JSX (`--sources`) and the e2e tests (`--consumers`) to them, builds the manifest,
 measures coverage (the model first, then the controls) and prints the hand-over diff. It
@@ -30,45 +31,53 @@ for Bun.
     screen, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
-    `entityDefinitionSchema`) and `loadScenarios(root)` (every `.md` file under
+    `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
+    `contract/activities`, sorted by path, one activity each through `activitySchema`, its
+    file named by its id; the folder is optional, so none is no problem) and
+    `loadScenarios(root)` (every `.md` file under
     `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
     `parseScenario`; a path outside the id grammar or a layer outside `SCENARIO_LAYERS` is a
     problem of its file). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`,
-    `PLATFORM_FILE`, `MODEL_FILE`, `SCENARIOS_DIR`, `scenarioFile(id)` and the four schema
-    files.
+    `PLATFORM_FILE`, `MODEL_FILE`, `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`,
+    `scenarioFile(id)` and the five schema files.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
-    by `scenarioHeaderSchema`, then the fixed Markdown sections in any order) into a
-    `Scenario`, or returns its problems with their lines (`ScenarioProblem`);
-    `formatScenario(scenario)` writes one, its inverse.
+    by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
+    fixed Markdown sections in any order) into a `Scenario`, or returns its problems with
+    their lines (`ScenarioProblem`); `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
-    `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine`
-    takes as written, its `effectSchema` and `transitionSchema`, with the types `Flow`,
-    `FlowState`, `FlowTransition` and `Effect`),
-    `flatJsonSchema` (route `params` and `search`, with the bounds `z.toJSONSchema` writes:
-    `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed
-    scenario), `entityDefinitionSchema`, `manifestSchema`.
-    `SCHEMA_OUTPUTS`, `writeSchemas(root)` and `schemaDrift(root)` turn them into the
-    committed `contract/screen.schema.json`, `platform.schema.json`, `x-perch.schema.json` and
+    `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
+    as written, its `effectSchema` and `transitionSchema`, with the types `Flow`, `FlowState`,
+    `FlowTransition` and `Effect`), `activitySchema` (an activity across screens: an XState v5
+    machine config in the subset of the flows without effects or `invoke`, whose states are
+    visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
+    types `Activity`, `ActivityState` and `ActivityTransition`), `flatJsonSchema` (route
+    `params` and `search`, with the bounds `z.toJSONSchema` writes: `minimum`, `maximum`,
+    `minLength`, `maxLength`, `pattern`), `scenarioSchema` (the parsed scenario),
+    `entityDefinitionSchema`, `manifestSchema`. `SCHEMA_OUTPUTS`, `writeSchemas(root)` and
+    `schemaDrift(root)` turn them into the committed `contract/screen.schema.json`,
+    `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
     authored).
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
-  - The contract check: `checkContract(root)` loads the contract files and the scenarios
-    (stopping at their own problems), then runs the cross-checks and `schemaDrift`, sorted by
-    file and line;
-    `loadContract(root)` returns the loaded `Contract`. Each rule is a function of the
-    `Contract`: `versionProblems`, `vocabularyProblems` (every word of the screens is in
-    the vocabulary, every code is used), `screensProblems` (anchors unique and never named
-    like a derived one, entry and names), `bindingsProblems` (model fields, actions and
-    their params, routes, sources), `flowProblems` (a flow names states, events, guards,
-    actions with their `input`, anchors with their codes and bindings that exist, reaches
-    every state, leaves every state that is not final, and puts the one transition without
-    a guard last), `routesProblems` with
-    `parseRoutePath(path)` (the router's path syntax), `searchProblems` (enum controls,
-    `retain`) and `scenariosProblems` (bracket references and roles, as problems of each
-    scenario's file).
+  - The contract check: `checkContract(root)` loads the contract files, the activities and the
+    scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
+    sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
+    a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
+    screens is in the vocabulary, every code is used), `screensProblems` (anchors unique and
+    never named like a derived one, entry and names), `bindingsProblems` (model fields,
+    actions and their params, routes, sources), `flowProblems` (a flow names states, events,
+    guards, actions with their `input`, anchors with their codes and bindings that exist,
+    reaches every state, leaves every state that is not final, and puts the one transition
+    without a guard last), `activitiesProblems` (an activity's states visit screens that exist
+    at bindings of theirs, its events are anchors of that screen or of the frame, and each
+    transition is backed by the flow of the anchor's screen navigating to the target's path,
+    or by a link to it; its roles, data, targets, guards, reachability and exits),
+    `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
+    (enum controls, `retain`) and `scenariosProblems` (bracket references, roles and the
+    activity a scenario names, as problems of each scenario's file).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
@@ -108,44 +117,46 @@ for Bun.
     from a declared base with a suffix it lists in `derived`), every code, state and choice
     value in the vocabulary, as the scenarios check resolves its bracket references.
   - `sortProblems(problems)`: by file and line, stable.
-  - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
-    returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
+  - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
+    now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section), the screens and the platform
-    section verbatim, the scenarios parsed, `ids` (every declared anchor with its kind, its
-    screen and its attributes), `routeParams` and the model document. `productInfo(root)`
-    names the product (the root package's version, the commit checked out or null).
-    `writeManifest(root, outDir, manifest)` validates it against
-    `contract/manifest.schema.json` with Ajv and returns the problems
-    without writing anything, or empties `outDir` (its last segment must be `ui-manifest`,
-    `MANIFEST_DIR`) and writes `manifest.json` (two spaces deep, each entry of `ids` on one
-    line, so a search for an anchor shows its facts), `manifest.schema.json` and
-    `model.schema.json`.
+    states taken from the vocabulary and the platform section), the screens, the platform
+    section and the activities verbatim, the scenarios parsed, `ids` (every declared anchor
+    with its kind, its screen and its attributes), `routeParams` and the model document.
+    `productInfo(root)` names the product (the root package's version, the commit checked out
+    or null). `writeManifest(root, outDir, manifest)` validates it against
+    `contract/manifest.schema.json` with Ajv and returns the problems without writing
+    anything, or empties `outDir` (its last segment must be `ui-manifest`, `MANIFEST_DIR`) and
+    writes `manifest.json` (two spaces deep, each entry of `ids` on one line, so a search for
+    an anchor shows its facts), `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
-  - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files and the
-    scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or returns
-    `{ missing: true }` when that commit has no `contract/`;
-    `diffContracts(before, after)` returns the `ContractChanges` (screens, anchors, codes,
-    entities and fields as `entity.field`, added and removed, sorted; an anchor removed and
-    one added are a rename when they are the only ones of their screen and kind);
-    `formatChanges(changes)` prints the block a change hands over: a summary line, then one
-    line per list that is not empty.
+  - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
+    activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
+    returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
+    after)` returns the `ContractChanges` (screens, anchors, codes, entities and fields as
+    `entity.field`, added and removed, sorted; an anchor removed and one added are a rename
+    when they are the only ones of their screen and kind); `formatChanges(changes)` prints the
+    block a change hands over: a summary line, then one line per list that is not empty.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
-    unbound (`ModelCoverage`, `BoundMember`): the first measure. `countControls(text, file)`
-    counts the controls of one source file (`CONTROL_TAGS`, or any element with an
-    `onClick`) and how many carry an anchor, lists the unmarked ones by line, tag and static
-    label (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason
-    (whatever they carry), and the markers it cannot apply as problems; `measureCoverage(root)` returns the model's
-    measure, the controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
+    unbound (`ModelCoverage`, `BoundMember`): the first measure, with
+    `activityCoverage(contract)`, per activity the scenarios that name it, its transitions and
+    how many of them those scenarios walk by naming the anchor in brackets
+    (`ActivityCoverage`). `countControls(text, file)` counts the controls of one source file
+    (`CONTROL_TAGS`, or any element with an `onClick`) and how many carry an anchor, lists the
+    unmarked ones by line, tag and static label (`ControlPlace`), the ones a coverage-ignore
+    marker declares off with its reason (whatever they carry), and the markers it cannot apply
+    as problems; `measureCoverage(root)` returns the model's measure, the activities', the
+    controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
     `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
     screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`
-    (`totalsOf`) prints the block, its totals line `fields bound x/y, actions bound x/y`
-    before the controls marked and ignored, `listControls(measure)` the two lists as
-    `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block between
-    `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is described
-    in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
+    (`totalsOf`) prints the block, its totals line `fields bound x/y, actions bound x/y` (then
+    `activities n, transitions walked x/y` when the contract has any, with a table of them
+    after the model) before the controls marked and ignored, `listControls(measure)` the two
+    lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
+    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
+    described in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
@@ -192,7 +203,8 @@ for Bun.
   `bun run contract:diff main` in its description.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
   [--unmarked]`: the coverage block, first the fields and actions of each entity of the
-  model with the anchors bound to them, then the controls marked and ignored per feature
+  model with the anchors bound to them and the transitions of each activity its scenarios
+  walk, then the controls marked and ignored per feature
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
   scenarios per screen; `--write` puts it between the markers of `contract/COVERAGE.md`,
   `--json` prints the measure, `--unmarked` prints the unmarked controls and the ignored ones

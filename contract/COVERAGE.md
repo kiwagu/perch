@@ -2,8 +2,9 @@
 
 How far the contract reaches, in two measures. The first is the model's, the measure of the
 contract's completeness: every field and action of each entity of `model.schema.json`, with
-the anchors that bind it. A screen unfolds the model, so a field or an action no anchor binds
-is a part of the model no screen shows yet. The second is the code's: how many of the
+the anchors that bind it, and for each activity across screens the transitions its scenarios
+walk. A screen unfolds the model, so a field or an action no anchor binds is a part of the
+model no screen shows yet. The second is the code's: how many of the
 controls a user can act on carry an anchor, per feature module of the web app and for the UI
 kit, which are left unmarked and which are declared off the coverage by a marker, and how
 many anchors and scenarios each screen has. `bun run contract:coverage --write` rewrites the
@@ -13,7 +14,7 @@ block below from the code and the contract; the text around it is written by han
 
 The contract declares 5 screens, 67 anchors and 29 codes.
 
-Totals: fields bound 4/11, actions bound 6/7; controls marked 33/33, ignored 2.
+Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 5/8; controls marked 33/33, ignored 2.
 
 ## Model
 
@@ -44,6 +45,12 @@ Totals: fields bound 4/11, actions bound 6/7; controls marked 33/33, ignored 2.
 | createNote | action | `organisation.notes.add-button` |
 | updateNote | action | `organisation.notes.save-button` |
 | deleteNote | action | `organisation.notes.delete-button` |
+
+## Activities
+
+| Activity | Scenarios | Transitions | Walked |
+| --- | ---: | ---: | ---: |
+| session | 4 | 8 | 5 |
 
 ## Controls
 
@@ -93,6 +100,12 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
   binds is `unbound`. That is a report, not a rule: a field may be internal, such as an id
   or a creation time, and an action may run outside the screens (`createProfile` runs at
   sign-up, through the platform). The totals line counts the fields and the actions bound.
+- **Activities.** Each activity of `contract/activities/`, the scenarios whose front matter
+  names it in `activity`, its transitions (one per transition of each `on`, a guarded list
+  counting each of its branches), and how many of them are walked: a transition is walked
+  when one of those scenarios names its anchor in brackets. The totals line adds the
+  activities and the transitions walked over all of them, and both it and the table are left
+  out while the contract has no activity.
 - **Modules.** Each folder under `apps/web/src/features` is a module; `packages/ui/src` is
   the `ui kit`. The `.tsx` sources of each are read, tracked or untracked, without tests,
   declarations, generated files, fixtures and snapshots: the same files the sources check

@@ -1,6 +1,15 @@
+export {
+  type Activity,
+  type ActivityState,
+  type ActivityTransition,
+  loadActivities,
+} from './activities'
 export { filesUnder } from './files-under'
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
 export {
+  ACTIVITIES_DIR,
+  ACTIVITY_SCHEMA_FILE,
+  activityFile,
   CONTRACT_DIR,
   COVERAGE_FILE,
   ENTITY_SCHEMA_FILE,

@@ -15,6 +15,7 @@ export {
   testIdFor,
 } from './anchors'
 export {
+  activitiesProblems,
   bindingsProblems,
   type Contract,
   checkContract,
@@ -39,8 +40,14 @@ export {
   scanConsumers,
 } from './consumers'
 export {
+  ACTIVITIES_DIR,
+  ACTIVITY_SCHEMA_FILE,
+  type Activity,
+  type ActivityState,
+  type ActivityTransition,
   type AnchorBinding,
   type AnchorDef,
+  activityFile,
   type Binding,
   type BindingRef,
   CONTRACT_DIR,
@@ -53,6 +60,7 @@ export {
   type FlowTransition,
   formatProblem,
   jsonSchemaProblems,
+  loadActivities,
   loadModel,
   loadScenarios,
   loadScreens,
@@ -83,6 +91,8 @@ export {
   writeSchemas,
 } from './files'
 export {
+  type ActivityCoverage,
+  activityCoverage,
   type BoundMember,
   CONTROL_TAGS,
   COVERAGE_END,
@@ -133,6 +143,7 @@ export {
 } from './scenarios'
 export {
   actionParamsSchema,
+  activitySchema,
   anchorBindingSchema,
   anchorDefSchema,
   bindingRefSchema,

@@ -3,8 +3,8 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources] [--consumers [--tests=<dir>]]
- *     checks the contract files under `contract/` and the scenario files under
- *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
+ *     checks the contract files under `contract/` (the activities included) and the scenario
+ *     files under `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
  *     of the web app and the UI kit against them; with `--consumers`, then the anchors, codes,
  *     states and values the e2e tests under `tests/e2e/src` (or `<dir>`) name as literals.
  *   ui-contract schemas
@@ -22,7 +22,8 @@
  *     the hand-over block of a change, or the changes as JSON.
  *   ui-contract coverage [--write] [--json] [--unmarked]
  *     prints the coverage block (the fields and actions of the model bound by anchors, the
- *     controls marked per module, anchors and scenarios per screen), writes it between the
+ *     transitions of each activity its scenarios walk, the controls marked per module,
+ *     anchors and scenarios per screen), writes it between the
  *     markers of `contract/COVERAGE.md`, prints the measure as JSON, or lists the unmarked
  *     and the ignored controls as `file:line: <element>`. A coverage-ignore marker it cannot
  *     apply is printed as a problem, and nothing is written.
@@ -62,6 +63,7 @@ const summaryOf = (contract: Contract): string => {
     `${anchors} anchors`,
     `${codes} codes`,
     `${contract.scenarios.length} scenarios`,
+    `${contract.activities.length} activities`,
     `version ${contract.screens.version}`,
   ].join(', ')
 }

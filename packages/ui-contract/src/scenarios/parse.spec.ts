@@ -26,6 +26,7 @@ describe('parseScenario', () => {
         id: ID,
         title: 'Edit the thing',
         tags: ['smoke'],
+        activity: 'thing',
         devices: { A: 'member' },
         where: '[/sample]',
         data: { Title: 'generate' },

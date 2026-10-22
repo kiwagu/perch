@@ -35,6 +35,7 @@ const MEASURE: CoverageMeasure = {
       reason: 'a mouse convenience',
     },
   ],
+  activities: [],
   screens: [
     { id: 'sample', anchors: 6, scenarios: 1 },
     { id: 'other', anchors: 2, scenarios: 0 },
@@ -88,6 +89,35 @@ describe('renderCoverage', () => {
       '| --- | ---: | ---: |',
       '| sample | 6 | 1 |',
       '| other | 2 | 0 |',
+    ])
+  })
+  it('adds the activities to the totals and a table of them after the model', () => {
+    const lines = renderCoverage(
+      {
+        ...MEASURE,
+        activities: [
+          { id: 'session', scenarios: 4, transitions: 8, walked: 5 },
+          { id: 'invite', scenarios: 0, transitions: 2, walked: 0 },
+        ],
+      },
+      { anchors: 8, codes: 2, screens: 2 },
+    ).split('\n')
+    const at = lines.indexOf('## Activities')
+
+    expect(lines[2]).toBe(
+      'Totals: fields bound 1/2, actions bound 1/2; activities 2, transitions walked 5/10; controls marked 2/4, ignored 1.',
+    )
+    expect(lines.slice(at - 2, at + 8)).toEqual([
+      '| updateThing | action | unbound |',
+      '',
+      '## Activities',
+      '',
+      '| Activity | Scenarios | Transitions | Walked |',
+      '| --- | ---: | ---: | ---: |',
+      '| session | 4 | 8 | 5 |',
+      '| invite | 0 | 2 | 0 |',
+      '',
+      '## Controls',
     ])
   })
   it('says so when no control is left unmarked or declared off', () => {

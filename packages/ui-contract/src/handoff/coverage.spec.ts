@@ -14,6 +14,7 @@ useRepositories()
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
 const SCREEN = 'contract/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/activities/thing.yaml'
 const ALPHA = 'apps/web/src/features/alpha/presentation/alpha.view.tsx'
 const KIT = 'packages/ui/src/components/ui/button.tsx'
 
@@ -21,6 +22,7 @@ const sample = (sources: Readonly<Record<string, string>> = {}): string =>
   repository({
     [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
     [SCREEN]: readFileSync(join(FIXTURES, SCREEN), 'utf8'),
+    [ACTIVITY]: readFileSync(join(FIXTURES, ACTIVITY), 'utf8'),
     [PLATFORM_FILE]: readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8'),
     [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
     [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
@@ -82,6 +84,11 @@ describe('measureCoverage', () => {
           { name: 'updateThing', anchors: ['sample.save-button'] },
         ],
       },
+    ])
+  })
+  it('counts per activity the scenarios that name it and the transitions they walk', () => {
+    expect(measureCoverage(sample()).activities).toEqual([
+      { id: 'thing', scenarios: 1, transitions: 1, walked: 1 },
     ])
   })
   it('counts the anchors of each screen and the scenarios that reach it', () => {

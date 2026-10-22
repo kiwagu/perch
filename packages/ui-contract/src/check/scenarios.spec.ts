@@ -52,6 +52,15 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: devices.B: "visitor" is not a role of the vocabulary',
     ])
   })
+  it('wants the activity a scenario names to be one of contract/activities', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).activity = 'gone'
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: activity: "gone" is not an activity of contract/activities',
+    ])
+  })
   it('resolves a derived anchor only through a suffix its base lists in derived', () => {
     const contract = sampleContract()
 

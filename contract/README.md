@@ -68,6 +68,8 @@ The authored files, edited by hand or by a model in the modeling thread:
 - `model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
+- `activities/<id>.yaml`: one activity across screens per file, named by its `id`
+  (`activities/session.yaml`); the folder is optional (see "Activities").
 
 Each YAML file opens with a comment that points an editor at its schema, so the editor
 validates and completes it; the loader does not read the comment:
@@ -76,12 +78,13 @@ validates and completes it; the loader does not read the comment:
 # yaml-language-server: $schema=../screen.schema.json
 ```
 
-`platform.yaml` points at `./platform.schema.json`, and a screen file one folder deeper
-points one folder further up.
+`platform.yaml` points at `./platform.schema.json`, an activity at `../activity.schema.json`,
+and a screen file one folder deeper points one folder further up.
 
 Generated beside them, never edited by hand: `screen.schema.json` (one screen file),
-`platform.schema.json` (the platform file), `x-perch.schema.json` (the `x-perch` keyword of
-the model) and `manifest.schema.json` (the manifest). `bun run contract:schemas` writes them
+`platform.schema.json` (the platform file), `activity.schema.json` (one activity file),
+`x-perch.schema.json` (the `x-perch` keyword of the model) and `manifest.schema.json` (the
+manifest). `bun run contract:schemas` writes them
 from the Zod sources of `@workspace/ui-contract`, and the contract check fails when they
 drift. `COVERAGE.md` is a note, not a contract file: `bun run contract:coverage --write`
 rewrites its block.
@@ -225,6 +228,96 @@ contract, and `apps/web/src/platform/flows-machine.spec.ts` runs every flow in X
 pure walk with `initialTransition` and `transition` reaches every state and takes every
 transition and every guarded branch to its target with its effects, and an app's own
 machine for a screen (`user.sign-in`) has the config of its flow.
+
+## Activities
+
+A screen file describes one screen, and a scenario one path through the app with its data
+ready; an activity is the composition between them: which screens form one task, in which
+order, and what the task carries from one screen to the next. Each one is a file,
+`activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
+`.yaml`, or one named otherwise than its id, is a problem of that file.
+
+An activity has an `id` (kebab-case), a `title`, a `description` (what it is for), the
+`roles` that take part and `data`: what it carries, by name, each with a `description` and,
+when it is a field of the model, its `model` as `<entity>.<field>`. The rest is an XState v5
+machine config in the subset of the flows, `initial`, `meta.guards` and `states`, where a
+state is a visit to a screen:
+
+- its name is dot-free kebab-case (`sign-in`, `profile`, `signed-out`): XState reads a dot in
+  a target as a path into nested states, so a screen id is never a state's name, and one
+  screen may be visited by several states;
+- `meta.screen` names the screen, a screen id, and `meta.address` its `path`, the path of a
+  binding of that screen: the activity is where its address is;
+- `type: final` where the activity ends;
+- `on` maps an anchor of that screen, or of the frame, to where acting on it leads: a
+  `target` (the next visit), a `guard` (a name of `meta.guards`) and a `description`, or a
+  list of guarded ones in XState's order.
+
+An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the task leads,
+and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
+written, as the flows do. The file follows the layout of a screen file, with keys in the
+order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
+state's `meta` on one line. An excerpt of `activities/session.yaml`, the session of an
+account from the sign-in page to the profile and the devices page and back to the sign-in
+page:
+
+```yaml
+# yaml-language-server: $schema=../activity.schema.json
+id: session
+title: The session of an account
+description: An account's session on this device, from the sign-in page to the profile and the devices page, and back to the sign-in page once the device signs out.
+roles: [ guest, identity ]
+data:
+  account:
+    description: The account signed in on this device, from the sign-in until the device signs out.
+  profile.name:
+    description: The name of the account, which the profile shows once it is signed in.
+    model: profile.name
+initial: sign-in
+meta:
+  guards:
+    noUnsentChanges: this device holds no changes the server has not received
+states:
+  sign-in:
+    description: The sign-in page, where a visitor signs in or creates an account.
+    meta: { screen: user.sign-in, address: { path: /sign-in } }
+    on:
+      user.sign-in.submit-button:
+        target: profile
+        description: The account signs in, or is created in the mode sign-up, and the profile opens.
+  profile:
+    description: The profile of the account signed in.
+    meta: { screen: user.profile, address: { path: /me } }
+    on:
+      app-shell.nav.devices-link:
+        target: devices
+      user.profile.sign-out-button:
+        - target: signed-out
+          guard: noUnsentChanges
+          description: The device signs out at once; with changes not sent, user.profile.sign-out-dialog asks first and the profile stays.
+  signed-out:
+    description: The sign-in page again, once the device has signed out.
+    type: final
+    meta: { screen: user.sign-in, address: { path: /sign-in } }
+```
+
+The contract check holds an activity to the screens it visits. Every state's screen exists
+and its address is a binding of that screen; every event is a declared anchor (a derived one
+through its base's `derived`) of that screen or of the frame; and every transition from a
+state on an anchor to a target is backed by the screens: the flow of the anchor's screen
+(the frame's, for an anchor of the frame), from a transition on that anchor, reaches a
+`navigate` to the target's path, in the transition's actions, on entering a state or after
+an invoke's `onDone` or `onError`; or the anchor is a link to that path
+(`binding: { route: ... }`). The roles are of the vocabulary and every `data` model is a field
+of the model; `initial` and every target are states; every state is reachable from
+`initial` and every state that is not final leaves; every guard is declared in `meta.guards`
+and every declared one is used. `apps/web/src/platform/activities-machine.spec.ts` builds
+each activity in XState as written, with the walk of the flows, reaches every state and
+takes every transition and every guarded branch to its target.
+
+A scenario that walks an activity names it in its front matter (`activity: session`, see
+"Scenarios"), and the coverage note counts, per activity, the scenarios that name it and the
+transitions they walk (see "Coverage").
 
 ## Anchors
 
@@ -394,6 +487,8 @@ problem of its file.
 The file opens with a YAML front matter that holds only the structured header:
 
 - `tags`: a list holding `smoke` or `full`;
+- `activity`, when the scenario walks one: the id of an activity of `contract/activities/`
+  (see "Activities");
 - `devices`: a letter per browser with the role it acts as by the end of the scenario; every
   device starts as `guest` until a step signs it in;
 - `data`: the test data by name, `generate` or a fixed string; `{}` when there is none.
@@ -458,8 +553,9 @@ gap is fixed in the contract files first, never worked around in a test.
   and every path parses in the router's syntax; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; the versions agree; the generated schemas
-  equal their Zod sources; every bracket reference of a scenario resolves, and every device
-  acts as a role of the vocabulary.
+  equal their Zod sources; every activity agrees with the screens it visits (see
+  "Activities"); every bracket reference of a scenario resolves, the activity it names
+  exists, and every device acts as a role of the vocabulary.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
@@ -490,10 +586,10 @@ the scenarios, only after the contract check passes, and validates it against
 `PERCH_UI_MANIFEST=0` on a stand answers 404 there.
 
 It is what a tool outside the repository reads: the vocabulary as tables with prose
-instructions for an agent, the screens and the platform section verbatim, the scenarios
-parsed, the route parameters, the model, and `ids`, every declared anchor with its kind, its
-screen and its attributes, one entry per line, so a search for an anchor in the manifest
-shows its facts.
+instructions for an agent, the screens, the platform section and the activities verbatim,
+the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
+its kind, its screen and its attributes, one entry per line, so a search for an anchor in
+the manifest shows its facts.
 
 On a development build, and on a production build made with `PERCH_UI_HOOKS=1` (the e2e
 stand's), `window.__perch.ui.anchors()` lists the anchors the page renders now, each with
@@ -511,7 +607,10 @@ block into `COVERAGE.md`. It is a report, not a gate.
 
 1. **The model**, the measure of completeness: per entity of `model.schema.json`, each field
    and each action with the anchors whose `binding` names it, or `unbound`. A field may be
-   internal (an id, a creation time), so an unbound one is a question, not an error.
+   internal (an id, a creation time), so an unbound one is a question, not an error. Then
+   per activity, the scenarios that name it in their `activity` and the transitions they
+   walk: a transition is walked when one of those scenarios names its anchor in brackets,
+   and the totals line adds `activities n, transitions walked x/y`.
 2. **The controls**, the secondary measure: per feature module and for the UI kit, how many
    controls carry an anchor, which are left unmarked and which are declared off the
    coverage. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`.

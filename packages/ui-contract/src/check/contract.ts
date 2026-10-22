@@ -1,13 +1,14 @@
 /**
- * The contract as the check reads it, the contract files and the scenarios, and the
- * lookups its rules share: the declared anchors, the refs of an anchor's binding and what
- * each names in the model, a known anchor (declared, or a declared base with a suffix it
- * lists in `derived`), the states and choice values of the vocabulary, and a problem
- * located in a screen's file, the platform file or a scenario's file.
+ * The contract as the check reads it, the contract files, the activities and the scenarios,
+ * and the lookups its rules share: the declared anchors, the refs of an anchor's binding and
+ * what each names in the model, a field of the model, a known anchor (declared, or a declared
+ * base with a suffix it lists in `derived`), the states and choice values of the vocabulary,
+ * and a problem located in a screen's file, the platform file or a scenario's file.
  */
 
 import { baseOf } from '../anchors'
 import {
+  type Activity,
   type AnchorDef,
   type BindingRef,
   type Model,
@@ -24,6 +25,8 @@ export interface Contract {
   readonly vocabulary: Vocabulary
   readonly screens: ScreensFile
   readonly model: Model
+  /** The activities of `contract/activities`, sorted by the path of their files. */
+  readonly activities: Activity[]
   /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
   readonly scenarios: Scenario[]
 }
@@ -93,6 +96,18 @@ export const has = (record: object, key: string): boolean => Object.hasOwn(recor
 /** The own entry `key` of `record`, if any. */
 export const own = <T>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
   Object.hasOwn(record, key) ? record[key] : undefined
+
+/** Why `entity.field` names no field of the model, or undefined when it names one. */
+export function fieldProblem(model: Model, path: string): string | undefined {
+  const { entity: entityName, member: field } = entityMemberOf(path)
+  const entity = own(model.entities, entityName)
+
+  if (entity === undefined) {
+    return `no entity "${entityName}" in the model`
+  }
+
+  return has(entity.fields, field) ? undefined : `entity "${entityName}" has no field "${field}"`
+}
 
 /** A problem at a JSON path of the screens as the rules read them (`ScreensFile`). */
 export type InScreens = (path: readonly PropertyKey[], message: string) => Problem

@@ -50,6 +50,7 @@ describe('writeSchemas', () => {
     expect(writeSchemas(root)).toEqual([
       'contract/screen.schema.json',
       'contract/platform.schema.json',
+      'contract/activity.schema.json',
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])
@@ -94,6 +95,7 @@ describe('schemaDrift', () => {
     expect(schemaDrift(root).map((problem) => problem.file)).toEqual([
       'contract/screen.schema.json',
       'contract/platform.schema.json',
+      'contract/activity.schema.json',
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])

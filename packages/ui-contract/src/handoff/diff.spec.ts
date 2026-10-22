@@ -15,10 +15,12 @@ useRepositories()
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
 const SCREEN = 'contract/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/activities/thing.yaml'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
   [SCREEN]: readFileSync(join(FIXTURES, SCREEN), 'utf8'),
+  [ACTIVITY]: readFileSync(join(FIXTURES, ACTIVITY), 'utf8'),
   [PLATFORM_FILE]: readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8'),
   [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
   [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
@@ -132,9 +134,10 @@ describe('diffContracts', () => {
 })
 
 describe('contractAt', () => {
-  it('reads the contract files, the screen files and the scenarios at a ref', () => {
+  it('reads the contract files, the screen files, the activities and the scenarios at a ref', () => {
     const contract = contractAt('HEAD', history(fixtureFiles()))
 
+    expect('missing' in contract ? [] : contract.activities.map(({ id }) => id)).toEqual(['thing'])
     expect(contract).toEqual(fixtureContract())
   })
   it('finds no contract at a commit without the folder', () => {

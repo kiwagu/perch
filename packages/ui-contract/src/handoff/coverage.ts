@@ -1,8 +1,9 @@
 /**
  * How far the contract reaches, for the coverage note. Its first measure is the model's: per
- * entity, every field and action with the anchors bound to it (`modelCoverage`). Then the
- * code's: per feature module of the web app and for the UI kit, the controls and how many
- * carry an anchor (`countControls`), with the unmarked controls and the ones a
+ * entity, every field and action with the anchors bound to it (`modelCoverage`), and per
+ * activity the scenarios that name it and the transitions they walk (`activityCoverage`).
+ * Then the code's: per feature module of the web app and for the UI kit, the controls and
+ * how many carry an anchor (`countControls`), with the unmarked controls and the ones a
  * coverage-ignore marker declares off listed by file and line; and per screen, its declared
  * anchors and the scenarios that reach it.
  */
@@ -18,6 +19,7 @@ import { formatProblem, type Problem, sortProblems } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources/scan'
 
+import { type ActivityCoverage, activityCoverage } from './activities'
 import { type ControlPlace, countControls } from './controls'
 import { type ModelCoverage, modelCoverage } from './model'
 
@@ -30,6 +32,7 @@ export type FileControl = ControlPlace & { file: string }
 
 export interface CoverageMeasure {
   model: ModelCoverage[]
+  activities: ActivityCoverage[]
   modules: Array<{ module: string; controls: number; marked: number; ignored: number }>
   unmarked: FileControl[]
   ignored: Array<FileControl & { reason: string }>
@@ -108,6 +111,7 @@ export function measureCoverage(root: string): CoverageMeasure {
   )
   const measure: CoverageMeasure = {
     model: modelCoverage(contract),
+    activities: activityCoverage(contract),
     modules: [],
     unmarked: [],
     ignored: [],

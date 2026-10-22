@@ -33,6 +33,16 @@ describe('instructionsOf', () => {
       'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged',
     )
   })
+  it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
+    expect(instructions.activities).toContain('a state is a visit to a screen')
+    expect(instructions.activities).toContain('`meta.screen`')
+    expect(instructions.activities).toContain('`meta.address`')
+    expect(instructions.activities).toContain('the screens do the work')
+    expect(instructions.activities).toContain('createMachine(activity)` unchanged')
+  })
+  it('names the activity a scenario may walk among the fields of a scenario', () => {
+    expect(instructions.scenarios).toContain('`activity`')
+  })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
       expect(text.length).toBeGreaterThan(80)

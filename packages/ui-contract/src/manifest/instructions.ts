@@ -70,9 +70,17 @@ function notices(platform: Platform): string {
   ].join(' ')
 }
 
+const ACTIVITIES = [
+  '`activities` are the activities across screens, one file each in `contract/activities/<id>.yaml`, carried here verbatim: which screens form one task, in which order, and what the task carries from one screen to the next.',
+  'An activity has an `id`, a `title`, a `description` (what it is for), the `roles` that take part and `data` (what it carries, by name, each with a `description` and, when it is a field of the model, its `model` as `<entity>.<field>`).',
+  'The rest is an XState v5 machine config in the subset of the flows, without effects or `invoke`: `initial`, `meta.guards` and `states`, where a state is a visit to a screen: `meta.screen` names the screen (one screen may be visited by several states), `meta.address` the `path` of a binding of that screen (the activity is where its address is), and `type: final` ends the activity.',
+  "A state's `on` maps an anchor of its screen or of the frame to where acting on it leads: `target` (the next visit), `guard` and `description`. The activity says where a task leads and the screens do the work: after that anchor, the flow of its screen navigates to the target's address, or the anchor is a link to it (`binding.route`).",
+  'Carry each into `setup({ guards }).createMachine(activity)` unchanged, as the flows, implementing the guards it names; a scenario that walks an activity names it in its `activity`.',
+].join(' ')
+
 const SCENARIOS = [
-  '`scenarios` are the end-to-end scenarios in the spec-instruction shape, authored as Markdown files in the e2e tree (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md`: a YAML front matter with `tags`, `devices` and `data`, then the sections `# <title>`, `Where:`, `## Scenario:`, `### Steps` and `### Expected result`) and carried here parsed.',
-  `Their fields: \`id\` (the file's path under \`tests/e2e/scenarios/\` without \`.md\`, \`<entity>/<layer>/[<area>/]<slug>\` with the layer one of ${quoted(SCENARIO_LAYERS)}; the test is \`tests/e2e/src/<id>.e2e.spec.ts\`), \`title\`, \`tags\` (\`smoke\` or \`full\`), \`devices\` (a letter per browser with the role it reaches by the end; every device starts as \`guest\`), \`where\`, \`data\` (\`generate\` or a fixed value), \`scenario\`, \`steps\` and \`expected\`.`,
+  '`scenarios` are the end-to-end scenarios in the spec-instruction shape, authored as Markdown files in the e2e tree (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md`: a YAML front matter with `tags`, an optional `activity`, `devices` and `data`, then the sections `# <title>`, `Where:`, `## Scenario:`, `### Steps` and `### Expected result`) and carried here parsed.',
+  `Their fields: \`id\` (the file's path under \`tests/e2e/scenarios/\` without \`.md\`, \`<entity>/<layer>/[<area>/]<slug>\` with the layer one of ${quoted(SCENARIO_LAYERS)}; the test is \`tests/e2e/src/<id>.e2e.spec.ts\`), \`title\`, \`tags\` (\`smoke\` or \`full\`), \`activity\` (the id of the activity of \`activities\` it walks, when it walks one), \`devices\` (a letter per browser with the role it reaches by the end; every device starts as \`guest\`), \`where\`, \`data\` (\`generate\` or a fixed value), \`scenario\`, \`steps\` and \`expected\`.`,
   'Brackets in their text reference the contract: `[<anchor>]` (in `ids`, or derived from one with a suffix of its `derived`), `[/path]` (a route of `screens`), `[code:<code>]`, `[state:<state>]` and `[value:<value>]`.',
   "They are the contract's feedback loop: a scenario that cannot be written from the contract alone (an anchor, a code, a state, a route or a role it would need) names a gap to fix in the contract files, never one to work around in a test.",
 ].join(' ')
@@ -90,6 +98,7 @@ export function instructionsOf(
     bindings: BINDINGS,
     model: MODEL,
     notices: notices(platform),
+    activities: ACTIVITIES,
     scenarios: SCENARIOS,
   }
 }

@@ -3,9 +3,10 @@ export {
   anchorBindingSchema,
   anchorDefSchema,
   bindingRefSchema,
+  modelFieldPathSchema,
   sourceSchema,
 } from './anchor'
-export { bindingSchema } from './binding'
+export { bindingSchema, routePathSchema } from './binding'
 export { platformFileSchema, screenFileSchema } from './file'
 export {
   effectSchema,

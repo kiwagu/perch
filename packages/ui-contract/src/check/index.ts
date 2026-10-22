@@ -1,3 +1,4 @@
+export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
 export type { Contract } from './contract'
 export { flowProblems } from './flow'

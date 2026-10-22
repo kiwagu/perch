@@ -3,7 +3,7 @@
  * on it, and a spec changes one thing and asserts the one problem that follows.
  */
 
-import type { AnchorDef, Flow, FlowState, Screen } from '../files'
+import type { Activity, ActivityState, AnchorDef, Flow, FlowState, Screen } from '../files'
 
 import type { Contract } from './contract'
 
@@ -127,6 +127,31 @@ const APP_SHELL: Screen = {
   anchors: { 'app-shell.status': { kind: 'status', states: ['opening', 'ready'] } },
 }
 
+/** The sample's one activity: its states are visits to the one screen, by a save and a link. */
+const THING: Activity = {
+  id: 'thing',
+  title: 'Edit the thing',
+  description: 'A member saves the title of the thing, then follows the link to it.',
+  roles: ['member'],
+  data: {
+    thing: { description: 'The thing being edited.' },
+    'thing.title': { description: 'Its title.', model: 'thing.title' },
+  },
+  initial: 'editing',
+  meta: { guards: { titleGiven: 'the title input holds a title' } },
+  states: {
+    editing: {
+      meta: { screen: 'sample', address: { path: '/sample/$key' } },
+      on: { 'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }] },
+    },
+    saved: {
+      meta: { screen: 'sample', address: { path: '/sample/$key' } },
+      on: { 'sample.home-link': { target: 'home' } },
+    },
+    home: { type: 'final', meta: { screen: 'sample', address: { path: '/sample/$key' } } },
+  },
+}
+
 export function sampleContract(): Contract {
   return structuredClone({
     vocabulary: {
@@ -170,11 +195,13 @@ export function sampleContract(): Contract {
         status: { anchor: 'app-shell.status', states: ['opening', 'ready'] },
       },
     },
+    activities: [THING],
     scenarios: [
       {
         id: 'sample/base/thing',
         title: 'Edit the thing',
         tags: ['smoke'],
+        activity: 'thing',
         devices: { A: 'member' },
         where: '[/sample/$key]',
         data: { Title: 'generate' },
@@ -247,6 +274,28 @@ export function flowStateIn(contract: Contract, name: string): FlowState {
 
   if (state === undefined) {
     throw new Error(`no flow state ${name}`)
+  }
+
+  return state
+}
+
+/** The activity `id` of a contract, for a spec to change. */
+export function activityIn(contract: Contract, id = 'thing'): Activity {
+  const activity = contract.activities.find((candidate) => candidate.id === id)
+
+  if (activity === undefined) {
+    throw new Error(`no activity ${id}`)
+  }
+
+  return activity
+}
+
+/** The state `name` of the sample's activity, for a spec to change. */
+export function activityStateIn(contract: Contract, name: string): ActivityState {
+  const state = activityIn(contract).states[name]
+
+  if (state === undefined) {
+    throw new Error(`no activity state ${name}`)
   }
 
   return state

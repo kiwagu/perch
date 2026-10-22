@@ -262,6 +262,11 @@
               "minLength": 1,
               "description": "How to find the notice an action raises."
             },
+            "activities": {
+              "type": "string",
+              "minLength": 1,
+              "description": "How to read `activities`, the machines of visits to screens."
+            },
             "scenarios": {
               "type": "string",
               "minLength": 1,
@@ -276,6 +281,7 @@
             "bindings",
             "model",
             "notices",
+            "activities",
             "scenarios"
           ],
           "additionalProperties": false,
@@ -2683,6 +2689,229 @@
       "additionalProperties": false,
       "description": "What the platform offers every screen."
     },
+    "activities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "The id of the activity, the name of its file: `session`."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The title of the activity, for a reader."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the activity is for: the task it serves across its screens."
+          },
+          "roles": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A role of the vocabulary."
+            },
+            "description": "The roles that take part in the activity."
+          },
+          "data": {
+            "description": "What the activity carries from screen to screen, by name.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+              "description": "A name of what the activity carries: one or two kebab-case segments."
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What it is, for a reader."
+                },
+                "model": {
+                  "type": "string",
+                  "pattern": "^[a-z_]+\\.[a-z_]+$",
+                  "description": "`entity.field`: a field of an entity of model.schema.json."
+                }
+              },
+              "required": [
+                "description"
+              ],
+              "additionalProperties": false,
+              "description": "One thing the activity carries, and the field of the model it is."
+            }
+          },
+          "initial": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "The state the activity starts in."
+          },
+          "meta": {
+            "description": "What the contract says of the machine beyond XState: its guards.",
+            "type": "object",
+            "properties": {
+              "guards": {
+                "description": "The guards by name, each with what it holds.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                  "description": "A guard: a camelCase name of the flow `meta.guards`."
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "states": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A state of the activity, a key of its `states`: a visit to a screen, `sign-in`, `signed-out`."
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "description": "What the visit is, for a reader.",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The activity ends in this state.",
+                  "type": "string",
+                  "const": "final"
+                },
+                "meta": {
+                  "type": "object",
+                  "properties": {
+                    "screen": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                      "description": "The screen the state is a visit to: a screen id."
+                    },
+                    "address": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "pattern": "^\\/(([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)(\\/([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$))*)?$",
+                          "description": "The path of a binding of that screen."
+                        }
+                      },
+                      "required": [
+                        "path"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The route of the visit: the activity is where its address is."
+                    }
+                  },
+                  "required": [
+                    "screen",
+                    "address"
+                  ],
+                  "additionalProperties": false,
+                  "description": "What the contract says of the state beyond XState: its screen and address."
+                },
+                "on": {
+                  "description": "Per anchor of the state's screen or of the frame, where acting on it leads.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                    "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "target": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "The state the activity moves to: the next visit."
+                          },
+                          "guard": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-zA-Z0-9]*$",
+                            "description": "A guard: a camelCase name of the flow `meta.guards`."
+                          },
+                          "description": {
+                            "description": "What happens, for a reader.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "target"
+                        ],
+                        "additionalProperties": false,
+                        "description": "One transition: the user acts on the anchor and reaches the target."
+                      },
+                      {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "target": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                              "description": "The state the activity moves to: the next visit."
+                            },
+                            "guard": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-zA-Z0-9]*$",
+                              "description": "A guard: a camelCase name of the flow `meta.guards`."
+                            },
+                            "description": {
+                              "description": "What happens, for a reader.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "target"
+                          ],
+                          "additionalProperties": false,
+                          "description": "One transition: the user acts on the anchor and reaches the target."
+                        },
+                        "description": "Guarded transitions in order: the first whose guard holds is taken."
+                      }
+                    ],
+                    "description": "One transition, or a list of guarded ones, the unguarded one last."
+                  }
+                }
+              },
+              "required": [
+                "meta"
+              ],
+              "additionalProperties": false,
+              "description": "One state of the activity: a visit to a screen."
+            },
+            "description": "The states by name: the visits."
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "roles",
+          "initial",
+          "states"
+        ],
+        "additionalProperties": false,
+        "description": "An activity across screens: an XState v5 machine config whose states are visits."
+      },
+      "description": "The activities of `contract/activities/`, verbatim: machines whose states are visits to screens."
+    },
     "scenarios": {
       "type": "array",
       "items": {
@@ -2708,6 +2937,11 @@
               ]
             },
             "description": "The test tags: `smoke` or `full`."
+          },
+          "activity": {
+            "description": "The activity of `contract/activities/` the scenario walks, by its id.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
           "devices": {
             "type": "object",
@@ -2793,6 +3027,7 @@
     "routeParams",
     "ids",
     "platform",
+    "activities",
     "scenarios",
     "model"
   ],

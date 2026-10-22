@@ -1,8 +1,9 @@
 /**
  * The coverage measure as text: the block of the coverage note, the model's measure first
- * (fields and actions bound, a table per entity), then the code's (controls marked per
- * module, the unmarked and the ignored controls, anchors and scenarios per screen); and the
- * lists `ui-contract coverage --unmarked` prints, one `file:line: <element>` per control.
+ * (fields and actions bound, a table per entity, then the transitions of each activity its
+ * scenarios walk), then the code's (controls marked per module, the unmarked and the ignored
+ * controls, anchors and scenarios per screen); and the lists `ui-contract coverage
+ * --unmarked` prints, one `file:line: <element>` per control.
  */
 
 import type { CoverageMeasure, FileControl } from './coverage'
@@ -44,7 +45,35 @@ function modelSection(model: CoverageMeasure['model']): string[] {
   ])
 }
 
-/** The block of the note: the totals, then the model, the controls and the screens. */
+/** The activities after the model, when the contract has any. */
+function activitiesSection(activities: CoverageMeasure['activities']): string[] {
+  if (activities.length === 0) {
+    return []
+  }
+
+  return [
+    '## Activities',
+    '',
+    row(['Activity', 'Scenarios', 'Transitions', 'Walked']),
+    row(['---', '---:', '---:', '---:']),
+    ...activities.map(({ id, scenarios, transitions, walked }) =>
+      row([id, scenarios, transitions, walked]),
+    ),
+    '',
+  ]
+}
+
+/** `; activities n, transitions walked x/y` for the totals, when the contract has any. */
+function activitiesTotal(activities: CoverageMeasure['activities']): string {
+  const walked = sum(activities.map((activity) => activity.walked))
+  const transitions = sum(activities.map((activity) => activity.transitions))
+
+  return activities.length === 0
+    ? ''
+    : `; activities ${activities.length}, transitions walked ${walked}/${transitions}`
+}
+
+/** The block of the note: the totals, the model, the activities, the controls, the screens. */
 export function renderCoverage(
   measure: CoverageMeasure,
   totals: { anchors: number; codes: number; screens: number },
@@ -58,11 +87,12 @@ export function renderCoverage(
   return [
     `The contract declares ${totals.screens} screens, ${totals.anchors} anchors and ${totals.codes} codes.`,
     '',
-    `Totals: fields bound ${boundShare(fields)}, actions bound ${boundShare(actions)}; controls marked ${marked}/${controls}, ignored ${ignored}.`,
+    `Totals: fields bound ${boundShare(fields)}, actions bound ${boundShare(actions)}${activitiesTotal(measure.activities)}; controls marked ${marked}/${controls}, ignored ${ignored}.`,
     '',
     '## Model',
     '',
     ...modelSection(measure.model),
+    ...activitiesSection(measure.activities),
     '## Controls',
     '',
     row(['Module', 'Controls', 'Marked', 'Ignored', 'Share']),

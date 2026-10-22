@@ -1,8 +1,8 @@
 /**
  * Writes a scenario as its file under `tests/e2e/scenarios`, the inverse of `parseScenario`:
- * the front matter (`tags`, `devices`, `data`, in that order), then the title, `Where:`,
- * the scenario, the numbered steps and the expected results. The id is the file's path, so
- * it is not written.
+ * the front matter (`tags`, the `activity` when it has one, `devices`, `data`, in that
+ * order), then the title, `Where:`, the scenario, the numbered steps and the expected
+ * results. The id is the file's path, so it is not written.
  */
 
 import { stringify } from 'yaml'
@@ -10,11 +10,12 @@ import { stringify } from 'yaml'
 import type { Scenario } from './schema'
 
 export function formatScenario(scenario: Scenario): string {
-  const { tags, devices, data } = scenario
+  const { tags, activity, devices, data } = scenario
+  const header = { tags, ...(activity === undefined ? {} : { activity }), devices, data }
 
   return [
     '---',
-    stringify({ tags, devices, data }, { lineWidth: 0 }).trimEnd(),
+    stringify(header, { lineWidth: 0 }).trimEnd(),
     '---',
     `# ${scenario.title}`,
     '',

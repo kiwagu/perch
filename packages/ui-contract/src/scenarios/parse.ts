@@ -1,10 +1,10 @@
 /**
  * Reads one scenario file of `tests/e2e/scenarios`: a YAML front matter between two `---`
- * lines with the header (`tags`, `devices`, `data`), then Markdown with fixed sections in
- * any order: `# <title>`, a line `Where: <text>`, `## Scenario: <sentence>`, `### Steps`
- * with a numbered list and `### Expected result` with a bullet list, each item at the
- * start of its line (an indented one is no item: the lists do not nest). Any line ending
- * reads as `\n`. The id is the file's path, never written in it. A front matter that is
+ * lines with the header (`tags`, an optional `activity`, `devices`, `data`), then Markdown
+ * with fixed sections in any order: `# <title>`, a line `Where: <text>`, `## Scenario:
+ * <sentence>`, `### Steps` with a numbered list and `### Expected result` with a bullet
+ * list, each item at the start of its line (an indented one is no item: the lists do not
+ * nest). Any line ending reads as `\n`. The id is the file's path, never written in it. A front matter that is
  * missing or not YAML, a header field the header schema refuses, a section missing, unknown
  * or repeated, a line outside any section and a list item of the wrong shape are problems,
  * each with its line where the parser knows it.

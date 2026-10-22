@@ -1,6 +1,7 @@
 ---
 tags:
   - full
+activity: session
 devices:
   A: identity
   B: identity

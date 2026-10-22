@@ -30,8 +30,8 @@ description: "Change what the web app shows or does contract first: the model in
 - The grammar and the closed lists (kinds, suffixes, attributes, states, codes, choice
   values, screen names, roles, reserved anchors): `contract/vocabulary.md`.
 - One example per situation, from our kit and views: `references/patterns.md`.
-- A new screen, a new field or action, rewriting a component, after a merge, changing the
-  coverage method: `references/checklists.md`.
+- A new screen, a new field or action, an activity across screens, rewriting a component,
+  after a merge, changing the coverage method: `references/checklists.md`.
 - The request (tester to developer) and the hand-off (the contract diff with its reasons):
   `references/templates.md`.
 - The folder, the screen files, the scenarios, the checks, the manifest and coverage for
@@ -103,6 +103,6 @@ code and the tests follow; the checks hold them to the contract.
 - Put a domain or bus code (`note:FORBIDDEN`) into `data-code`.
 - Declare or render a reserved anchor of the shell from a feature.
 - Edit a generated schema (`screen.schema.json`, `platform.schema.json`,
-  `x-perch.schema.json`, `manifest.schema.json`) by hand, or copy the vocabulary's tables
-  into another file.
+  `activity.schema.json`, `x-perch.schema.json`, `manifest.schema.json`) by hand, or copy
+  the vocabulary's tables into another file.
 - Strip anchors from any build.

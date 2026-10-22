@@ -1,6 +1,7 @@
 ---
 tags:
   - smoke
+activity: thing
 devices:
   A: member
 data:

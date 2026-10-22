@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { z } from '@workspace/zod'
 
 import {
+  activitySchema,
   entityDefinitionSchema,
   manifestSchema,
   platformFileSchema,
@@ -17,6 +18,7 @@ import {
 } from '../schemas'
 
 import {
+  ACTIVITY_SCHEMA_FILE,
   ENTITY_SCHEMA_FILE,
   MANIFEST_SCHEMA_FILE,
   PLATFORM_SCHEMA_FILE,
@@ -31,6 +33,7 @@ const jsonSchemaOf = (schema: z.ZodType): object =>
 export const SCHEMA_OUTPUTS: ReadonlyArray<{ file: string; schema: () => object }> = [
   { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(screenFileSchema) },
   { file: PLATFORM_SCHEMA_FILE, schema: () => jsonSchemaOf(platformFileSchema) },
+  { file: ACTIVITY_SCHEMA_FILE, schema: () => jsonSchemaOf(activitySchema) },
   { file: ENTITY_SCHEMA_FILE, schema: () => jsonSchemaOf(entityDefinitionSchema) },
   { file: MANIFEST_SCHEMA_FILE, schema: () => jsonSchemaOf(manifestSchema) },
 ]

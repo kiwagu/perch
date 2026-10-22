@@ -62,6 +62,12 @@ describe('formatScenario', () => {
       /^---\ntags:\n {2}- smoke\ndevices:\n {2}A: guest\ndata: \{\}\n---\n# Edit one's own note\n\nWhere: /,
     )
   })
+  it('writes the activity after the tags, and nothing for a scenario without one', () => {
+    expect(formatScenario({ ...ODD, tags: ['full'], activity: 'session' })).toMatch(
+      /^---\ntags:\n {2}- full\nactivity: session\ndevices:\n/,
+    )
+    expect(formatScenario(ODD)).not.toContain('activity')
+  })
   it('is undone by the parser for values YAML and Markdown would read otherwise', () => {
     expect(parseScenario(ODD.id, formatScenario(ODD))).toEqual({ scenario: ODD, problems: [] })
   })

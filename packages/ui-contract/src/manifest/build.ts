@@ -1,12 +1,13 @@
 /**
  * The manifest, built only from the contract folder (the vocabulary, the screen files, the
- * platform file and the model) and the scenario files of `tests/e2e/scenarios/`: the
- * vocabulary as tables with instructions, the screens and the platform section verbatim, the
- * scenarios parsed, every declared anchor by name with its screen, and the model document.
+ * platform file, the activities and the model) and the scenario files of
+ * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens, the
+ * platform section and the activities verbatim, the scenarios parsed, every declared anchor
+ * by name with its screen, and the model document.
  */
 
 import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'
-import type { Model, Screen, ScreensFile, Vocabulary } from '../files'
+import type { Activity, Model, Screen, ScreensFile, Vocabulary } from '../files'
 import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
@@ -19,6 +20,7 @@ export interface ManifestInput {
   readonly vocabulary: Vocabulary
   readonly screens: ScreensFile
   readonly model: Model
+  readonly activities: Activity[]
   readonly scenarios: Scenario[]
   readonly product: Product
   /** When the manifest is built; now by default. */
@@ -94,6 +96,7 @@ export function buildManifest({
   vocabulary,
   screens,
   model,
+  activities,
   scenarios,
   product,
   now = new Date(),
@@ -108,6 +111,7 @@ export function buildManifest({
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens.screens),
     platform: screens.platform,
+    activities,
     scenarios,
     model: model.document,
   }

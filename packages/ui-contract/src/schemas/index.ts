@@ -1,3 +1,4 @@
+export { activitySchema } from './activity.schema'
 export { entityDefinitionSchema, entityFieldSchema } from './entity.schema'
 export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'

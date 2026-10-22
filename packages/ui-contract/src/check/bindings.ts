@@ -9,7 +9,7 @@
 
 import type { AnchorDef, BindingRef, Problem } from '../files'
 
-import { bindingRefsOf, type Contract, declaredAnchors, entityMemberOf, has, own } from './contract'
+import { bindingRefsOf, type Contract, declaredAnchors, fieldProblem, has, own } from './contract'
 import { actionProblems, type Lookups, lookupsOf, routeProblems } from './lookups'
 
 function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly PropertyKey[]): Problem[] {
@@ -24,17 +24,9 @@ function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly Propert
     })
   }
 
-  const { inScreens } = lookups
-  const { entity: entityName, member: field } = entityMemberOf(ref.model)
-  const entity = own(lookups.contract.model.entities, entityName)
+  const problem = fieldProblem(lookups.contract.model, ref.model)
 
-  if (entity === undefined) {
-    return [inScreens([...at, 'model'], `no entity "${entityName}" in the model`)]
-  }
-
-  return has(entity.fields, field)
-    ? []
-    : [inScreens([...at, 'model'], `entity "${entityName}" has no field "${field}"`)]
+  return problem === undefined ? [] : [lookups.inScreens([...at, 'model'], problem)]
 }
 
 function sourceProblems(

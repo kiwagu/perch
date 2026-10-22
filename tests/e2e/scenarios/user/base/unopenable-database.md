@@ -1,6 +1,7 @@
 ---
 tags:
   - smoke
+activity: session
 devices:
   A: identity
 data: {}

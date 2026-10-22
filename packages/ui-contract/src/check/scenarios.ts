@@ -2,11 +2,12 @@
  * Rule 6: the scenarios speak of what the contract declares. Every bracket reference in
  * their text resolves (an anchor declared, or derived from a declared base with a suffix it
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
- * pattern row matches), and every device acts as a role of the vocabulary. Each problem is
- * one of the scenario's file, named by its field; the ids are paths, so each is used once.
+ * pattern row matches), the activity a scenario names is one of `contract/activities`, and
+ * every device acts as a role of the vocabulary. Each problem is one of the scenario's file,
+ * named by its field; the ids are paths, so each is used once.
  */
 
-import { type Problem, scenarioFile } from '../files'
+import { ACTIVITIES_DIR, type Problem, scenarioFile } from '../files'
 import { jsonPath } from '../files/problems'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 
@@ -61,13 +62,18 @@ export function referenceResolver(
 
 export function scenariosProblems(contract: Contract): Problem[] {
   const resolve = referenceResolver(contract)
+  const activities = new Set(contract.activities.map(({ id }) => id))
 
   return contract.scenarios.flatMap((scenario) => {
     const file = scenarioFile(scenario.id)
     const problem = (at: readonly PropertyKey[], message: string): Problem =>
       inScenario(file, `${jsonPath(at)}: ${message}`)
+    const { activity } = scenario
 
     return [
+      ...(activity === undefined || activities.has(activity)
+        ? []
+        : [problem(['activity'], `"${activity}" is not an activity of ${ACTIVITIES_DIR}`)]),
       ...Object.entries(scenario.devices).flatMap(([device, role]) =>
         has(contract.vocabulary.roles, role)
           ? []

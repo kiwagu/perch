@@ -24,6 +24,12 @@ export function screenFile(firstPath: string | undefined): string {
   return `${SCREENS_DIR}/${firstPath === '/' ? 'index' : firstPath.slice(1)}.yaml`
 }
 
+/** The activities across screens, one YAML file each, named by its id; the folder is optional. */
+export const ACTIVITIES_DIR = 'contract/activities'
+
+/** The file of the activity `id`. */
+export const activityFile = (id: string): string => `${ACTIVITIES_DIR}/${id}.yaml`
+
 /** The scenarios, one Markdown file each in the e2e tree, beside their tests: `<dir>/<id>.md`. */
 export const SCENARIOS_DIR = 'tests/e2e/scenarios'
 
@@ -32,6 +38,7 @@ export const scenarioFile = (id: string): string => `${SCENARIOS_DIR}/${id}.md`
 
 export const SCREEN_SCHEMA_FILE = 'contract/screen.schema.json'
 export const PLATFORM_SCHEMA_FILE = 'contract/platform.schema.json'
+export const ACTIVITY_SCHEMA_FILE = 'contract/activity.schema.json'
 export const ENTITY_SCHEMA_FILE = 'contract/x-perch.schema.json'
 export const MANIFEST_SCHEMA_FILE = 'contract/manifest.schema.json'
 

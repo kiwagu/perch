@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  activityFile,
   formatProblem,
   MODEL_FILE,
   PLATFORM_FILE,
@@ -49,14 +50,16 @@ describe('checkContract', () => {
     )
     edit(PLATFORM_FILE, (text) => text.replace('version: 1', 'version: one'))
     edit(scenarioFile('user/base/sign-up'), (text) => text.replace('  A: guest', '  a: guest'))
+    edit(activityFile('session'), (text) => text.replace('id: session', 'id: sessions'))
 
     expect(printed()).toEqual([
+      'contract/activities/session.yaml:1: its id is "sessions", so its file is contract/activities/sessions.yaml',
       'contract/model.schema.json:1: cannot read the file',
       'contract/platform.yaml:1: version: Invalid input: expected 1',
       'contract/vocabulary.md:1: missing section "Kinds"',
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: unknown section "Kind list"$/),
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: section "Roles" appears twice$/),
-      'tests/e2e/scenarios/user/base/sign-up.md:4: devices.a: Invalid key in record',
+      'tests/e2e/scenarios/user/base/sign-up.md:5: devices.a: Invalid key in record',
     ])
   })
   it('runs every rule and the schema drift once the files load', () => {
@@ -71,6 +74,16 @@ describe('checkContract', () => {
     expect(printed()).toEqual([
       'contract/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
       'contract/vocabulary.md:1: code "spare" is documented but unused',
+    ])
+  })
+  it('holds the activities of the repository to the screens they visit', () => {
+    edit(activityFile('session'), (text) =>
+      text.replace('address: { path: /devices }', 'address: { path: /device }'),
+    )
+
+    expect(printed()).toEqual([
+      'contract/activities/session.yaml:1: states.profile.on["app-shell.nav.devices-link"]: "app-shell.nav.devices-link" leads to "/device" through neither a navigate of the flow of "app-shell" nor a link',
+      'contract/activities/session.yaml:1: states.devices.meta.address.path: "/device" is the path of no binding of "device"',
     ])
   })
   it('refuses a derived anchor of the repository whose base does not list the suffix', () => {

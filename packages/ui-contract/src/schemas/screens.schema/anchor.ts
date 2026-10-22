@@ -21,14 +21,17 @@ export const actionNameSchema = z
     '`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions).',
   )
 
+/** A field of the model: `entity.field`. */
+export const modelFieldPathSchema = z
+  .string()
+  .regex(/^[a-z_]+\.[a-z_]+$/)
+  .describe('`entity.field`: a field of an entity of model.schema.json.')
+
 export const bindingRefSchema = z
   .union([
     z
       .strictObject({
-        model: z
-          .string()
-          .regex(/^[a-z_]+\.[a-z_]+$/)
-          .describe('`entity.field`: a field of an entity of model.schema.json.'),
+        model: modelFieldPathSchema,
       })
       .describe('The anchor shows or edits a field of the model.'),
     z

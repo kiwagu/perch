@@ -1,3 +1,4 @@
+export { type ActivityCoverage, activityCoverage } from './activities'
 export { CONTROL_TAGS, type ControlPlace, type Controls, countControls } from './controls'
 export {
   type CoverageMeasure,

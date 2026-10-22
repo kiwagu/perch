@@ -68,6 +68,32 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    bound. One left unbound on purpose (an internal id, a creation time) needs no anchor.
 7. **The checks and the hand-off** as for a new screen.
 
+## An activity across screens
+
+1. **The model.** What the activity carries from screen to screen and is a field of an
+   entity is in `contract/model.schema.json`; what is not (the account signed in) is only
+   named in the activity's `data`.
+2. **The screens' flows.** Every screen the activity visits has its screen file, and each
+   step from one screen to the next is already there: a transition on an anchor whose flow
+   reaches a `navigate` to the next screen's path (in its actions, on entering a state, or
+   after an invoke's `onDone` or `onError`), or a link with `binding: { route: <path> }`. A
+   step the screens cannot take yet goes into their flows first, never into the activity.
+3. **The activity file** `contract/activities/<id>.yaml`, named by its id, the editor hint on
+   its first line, keys in the order `id`, `title`, `description`, `roles`, `data`,
+   `initial`, `meta`, `states`. A state is a visit to a screen: a dot-free name (`sign-in`,
+   `signed-out`), `meta: { screen: <screen id>, address: { path: <a binding of it> } }` on
+   one line, `type: final` where the activity ends; one screen may be visited by several
+   states. Its `on` lists the anchors of that screen or of the frame that lead to another
+   visit, each with its `target`, a `guard` of `meta.guards` when only some cases lead there,
+   and a `description`; no effects and no `invoke`.
+4. **The scenarios.** Each scenario that walks the activity names it in its front matter,
+   `activity: <id>` after `tags`, and names in brackets the anchors of the transitions it
+   takes.
+5. **The checks.** `contract:check` holds the activity to the screens, the web app's
+   `activities-machine.spec.ts` runs it in XState, and `bun run contract:coverage --write`
+   shows how many of its transitions the scenarios walk.
+6. **The hand-off** as for a new screen.
+
 ## Rewriting a component
 
 1. **Before.** Note the anchors it renders (`git grep` its literals; on the dev stand,

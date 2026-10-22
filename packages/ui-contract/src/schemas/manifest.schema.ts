@@ -1,9 +1,9 @@
 /**
  * `ui-manifest/manifest.json`, the published contract built from the contract folder (the
- * vocabulary, the screen files, the platform file and the model) and the scenario files of
- * `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an agent, the screens
- * verbatim, every declared anchor with its screen, the platform, the scenarios parsed and the
- * model.
+ * vocabulary, the screen files, the platform file, the activities and the model) and the
+ * scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an
+ * agent, the screens verbatim, every declared anchor with its screen, the platform, the
+ * activities verbatim, the scenarios parsed and the model.
  */
 
 import { z } from '@workspace/zod'
@@ -19,6 +19,7 @@ import {
 } from '../names.schema'
 import { scenarioSchema } from '../scenarios'
 
+import { activitySchema } from './activity.schema'
 import { flatJsonSchema } from './flat-json-schema'
 import { anchorBindingSchema, platformSchema, screenSchema } from './screens.schema'
 
@@ -35,6 +36,10 @@ const instructionsSchema = z
     bindings: z.string().min(1).describe('Where each kind of binding points.'),
     model: z.string().min(1).describe('How to read `model` and its `x-perch` keyword.'),
     notices: z.string().min(1).describe('How to find the notice an action raises.'),
+    activities: z
+      .string()
+      .min(1)
+      .describe('How to read `activities`, the machines of visits to screens.'),
     scenarios: z.string().min(1).describe('How to read `scenarios` and their bracket references.'),
   })
   .describe('Prose instructions for an agent that drives the application.')
@@ -148,6 +153,11 @@ export const manifestSchema = z
       .record(baseAnchorSchema, idSchema)
       .describe('Every declared anchor by name; a derived one is its base plus a suffix.'),
     platform: platformSchema,
+    activities: z
+      .array(activitySchema)
+      .describe(
+        'The activities of `contract/activities/`, verbatim: machines whose states are visits to screens.',
+      ),
     scenarios: z
       .array(scenarioSchema)
       .describe(

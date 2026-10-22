@@ -1,7 +1,7 @@
 /**
- * The names the contract files share: anchors, screen names, roles, codes and states.
- * The vocabulary holds the closed lists; these schemas check only the spelling, and the
- * contract check matches the names against the vocabulary.
+ * The names the contract files share: anchors, screen names, roles, codes, states and the
+ * names of what an activity carries. The vocabulary holds the closed lists; these schemas
+ * check only the spelling, and the contract check matches the names against the vocabulary.
  */
 
 import { z } from '@workspace/zod'
@@ -29,6 +29,12 @@ export const screenNameSchema = z
   .string()
   .regex(new RegExp(`^${WORD}(\\.${WORD})?$`))
   .describe('A screen name of the vocabulary: one or two kebab-case segments.')
+
+/** What an activity carries across its screens: `account`, `profile.name`. */
+export const dataNameSchema = z
+  .string()
+  .regex(new RegExp(`^${WORD}(\\.${WORD})?$`))
+  .describe('A name of what the activity carries: one or two kebab-case segments.')
 
 export const roleSchema = kebabNameSchema.describe('A role of the vocabulary.')
 

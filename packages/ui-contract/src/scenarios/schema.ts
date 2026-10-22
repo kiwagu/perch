@@ -5,7 +5,7 @@
 
 import { z } from '@workspace/zod'
 
-import { roleSchema } from '../names.schema'
+import { kebabNameSchema, roleSchema } from '../names.schema'
 
 /** The second segment of a scenario's id, from the entity on its own to one function. */
 const LAYERS = {
@@ -30,6 +30,9 @@ export const scenarioSchema = z
       ),
     title: z.string().min(1).describe('What the scenario checks, in a few words.'),
     tags: z.array(z.enum(['smoke', 'full'])).describe('The test tags: `smoke` or `full`.'),
+    activity: kebabNameSchema
+      .exactOptional()
+      .describe('The activity of `contract/activities/` the scenario walks, by its id.'),
     devices: z
       .record(z.string().regex(/^[A-Z]$/), roleSchema)
       .describe('A letter per browser, each with the role it acts as.'),
