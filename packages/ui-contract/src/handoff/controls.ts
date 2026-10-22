@@ -5,25 +5,42 @@
  * `testId` or `*TestId` prop, or sits inside a `<label>`. An element inside a marked
  * control without an action of its own is a part of that control and is not counted; an
  * element that passes on the props it receives is not counted either, since whoever renders
- * it decides what it carries.
+ * it decides what it carries. An unmarked control that a coverage-ignore marker covers is
+ * ignored: declared not a test target, it is neither marked nor unmarked.
  * An indicator read from the source text, not a rule of the contract.
  */
 
 import {
   type Expression,
+  type JSXChild,
   type JSXElement,
   type JSXElementName,
   parseSync,
   Visitor,
 } from 'oxc-parser'
 
+import { type Problem, sortProblems } from '../files'
+import { IGNORE_WITHOUT_ELEMENT, ignoreMarkers } from '../sources'
 import { isAnchorAttribute } from '../sources/collect'
-import { unwrap } from '../sources/values'
+import { attributeValue, staticText, unwrap } from '../sources/values'
+
+/** A control by its line, its tag and, when a static one is at hand, its label. */
+export interface ControlPlace {
+  line: number
+  tag: string
+  /** The control's `aria-label`, or its text, when either is a static string. */
+  label?: string
+}
 
 export interface Controls {
+  /** The controls that are test targets: the marked and the unmarked ones. */
   controls: number
   marked: number
-  unmarked: Array<{ line: number; tag: string }>
+  unmarked: ControlPlace[]
+  /** The unmarked controls a coverage-ignore marker declares off, with its reason. */
+  ignored: Array<ControlPlace & { reason: string }>
+  /** The markers that cannot be applied: without a reason, or before no JSX element. */
+  problems: Problem[]
 }
 
 export const CONTROL_TAGS: ReadonlySet<string> = new Set([
@@ -46,6 +63,8 @@ export const CONTROL_TAGS: ReadonlySet<string> = new Set([
 interface Context {
   readonly inLabel: boolean
   readonly inMarked: boolean
+  /** The reason of the subtree marker the element sits under, if any. */
+  readonly ignoredFor: string | undefined
 }
 
 const tagOf = (name: JSXElementName): string => {
@@ -85,10 +104,52 @@ function attributesOf(element: JSXElement) {
   return { names, spreads }
 }
 
+/** The text of one JSX child, or undefined when it is computed. */
+function childText(child: JSXChild): string | undefined {
+  switch (child.type) {
+    case 'JSXText':
+      return child.value
+    case 'JSXElement':
+    case 'JSXFragment':
+      return textOf(child.children)
+    case 'JSXExpressionContainer':
+      return child.expression.type === 'JSXEmptyExpression' ? '' : staticText(child.expression)
+    default:
+      return undefined
+  }
+}
+
+/** The text of JSX children, or undefined when a part of it is computed. */
+function textOf(children: readonly JSXChild[]): string | undefined {
+  const parts = children.map(childText)
+
+  return parts.includes(undefined) ? undefined : parts.join('')
+}
+
+/** The `aria-label` of an element, or else its text, when that is a static string. */
+function labelOf(element: JSXElement): string | undefined {
+  const aria = element.openingElement.attributes.find(
+    (attribute) =>
+      attribute.type === 'JSXAttribute' &&
+      attribute.name.type === 'JSXIdentifier' &&
+      attribute.name.name === 'aria-label',
+  )
+  const named = aria?.type === 'JSXAttribute' ? attributeValue(aria.value) : undefined
+  const text =
+    named === undefined
+      ? textOf(element.children)
+      : named.kind === 'literal'
+        ? named.text
+        : undefined
+  const label = text?.replace(/\s+/g, ' ').trim()
+
+  return label === '' ? undefined : label
+}
+
 export function countControls(text: string, file: string): Controls {
   const starts = [0, ...[...text.matchAll(/\n/g)].map(({ index }) => index + 1)]
   const line = (offset: number): number => starts.findLastIndex((start) => start <= offset) + 1
-  const { program, errors } = parseSync(file, text, {
+  const { program, comments, errors } = parseSync(file, text, {
     lang: file.endsWith('x') ? 'tsx' : 'ts',
     sourceType: 'module',
   })
@@ -98,37 +159,56 @@ export function countControls(text: string, file: string): Controls {
     throw new Error(`${file}:${line(error.labels[0]?.start ?? 0)}: ${error.message}`)
   }
 
-  const counted: Controls = { controls: 0, marked: 0, unmarked: [] }
-  const stack: Context[] = [{ inLabel: false, inMarked: false }]
+  const { markers, faults } = ignoreMarkers(text, comments)
+  const pending = new Map(markers.map((marker) => [marker.target, marker]))
+  const counted: Controls = { controls: 0, marked: 0, unmarked: [], ignored: [], problems: [] }
+  const top: Context = { inLabel: false, inMarked: false, ignoredFor: undefined }
+  const stack: Context[] = [top]
 
   new Visitor({
     JSXElement(element) {
-      const context = stack.at(-1) ?? { inLabel: false, inMarked: false }
+      const context = stack.at(-1) ?? top
+      const marker = pending.get(element.start)
+      const ignoredFor = marker?.reason ?? context.ignoredFor
       const tag = tagOf(element.openingElement.name)
       const { names, spreads } = attributesOf(element)
       const action = names.includes('onClick')
       const control = CONTROL_TAGS.has(tag) || action
       const anchored = names.some(isAnchorAttribute)
 
+      pending.delete(element.start)
+
       if (control && !spreads && (action || !context.inMarked)) {
-        counted.controls += 1
+        const label = labelOf(element)
+        const place = { line: line(element.start), tag, ...(label === undefined ? {} : { label }) }
 
         if (anchored || context.inLabel) {
+          counted.controls += 1
           counted.marked += 1
+        } else if (ignoredFor === undefined) {
+          counted.controls += 1
+          counted.unmarked.push(place)
         } else {
-          counted.unmarked.push({ line: line(element.start), tag })
+          counted.ignored.push({ ...place, reason: ignoredFor })
         }
       }
 
       stack.push({
         inLabel: context.inLabel || tag === 'label',
         inMarked: context.inMarked || (control && anchored),
+        ignoredFor: marker === undefined || marker.self ? context.ignoredFor : marker.reason,
       })
     },
     'JSXElement:exit'() {
       stack.pop()
     },
   }).visit(program)
+
+  const unapplied = [...pending.values()].map(({ at }) => ({ at, message: IGNORE_WITHOUT_ELEMENT }))
+
+  counted.problems = sortProblems(
+    [...faults, ...unapplied].map(({ at, message }) => ({ file, line: line(at), message })),
+  )
 
   return counted
 }

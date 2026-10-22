@@ -32,9 +32,11 @@ Beside them sit their schemas, generated from the Zod sources of `@workspace/ui-
 `platform.schema.json` for those files, `x-perch.schema.json` for the `x-perch` keyword of
 the model, and `manifest.schema.json` for the manifest.
 
-`COVERAGE.md` is a note, not a contract file: how many controls of each feature module carry
-an anchor, and the anchors and scenarios of each screen, written by
-`bun run contract:coverage --write` between its markers, with how it is counted.
+`COVERAGE.md` is a note, not a contract file: first which fields and actions of the model an
+anchor binds, then how many controls of each feature module carry an anchor (a control that
+is not a test target is declared off in the source with `ui-contract-ignore: <reason>`), and
+the anchors and scenarios of each screen, written by `bun run contract:coverage --write`
+between its markers, with how it is counted.
 
 The manifest, `ui-manifest/manifest.json`, is built from these three files only and served
 at `/ui-manifest/manifest.json` on every stand. It is what a tool outside the repository
@@ -159,6 +161,7 @@ anchor follows the grammar and is declared once, every kind, state, code, role a
 value is in the vocabulary, every code of the vocabulary is used, every binding points at a
 field, an action or a route that exists. Its sources mode scans the application for anchor
 literals and fails when the code renders an anchor the contract does not declare, or the
-contract declares one the code does not render. The coverage note reports, per screen, its
-anchors and the scenarios that open it, and per feature module and for the UI kit, the controls
-and how many of them carry an anchor.
+contract declares one the code does not render. The coverage note reports, per entity of the
+model, the fields and actions an anchor binds, per screen its anchors and the scenarios that
+open it, and per feature module and for the UI kit, the controls and how many of them carry an
+anchor or are declared off the coverage.

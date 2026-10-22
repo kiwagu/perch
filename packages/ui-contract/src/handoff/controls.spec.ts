@@ -1,4 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
+
+import { formatProblem } from '../files'
+import { IGNORE_WITHOUT_ELEMENT, IGNORE_WITHOUT_REASON } from '../sources'
 
 import { countControls } from './controls'
 
@@ -8,20 +14,38 @@ const count = (body: string) =>
     'view.tsx',
   )
 
+const FIXTURES = join(import.meta.dirname, '../__fixtures__/sources')
+
+const NONE = { ignored: [], problems: [] }
+
 describe('countControls', () => {
   it('counts a control that carries an anchor as marked', () => {
     expect(count('<Button data-testid="sample.save-button" onClick={save}>Save</Button>')).toEqual({
       controls: 1,
       marked: 1,
       unmarked: [],
+      ...NONE,
     })
   })
-  it('lists an unmarked control with its line and tag', () => {
+  it('lists an unmarked control with its line, its tag and its text', () => {
     expect(count('<p>text</p>\n<a href="/elsewhere">elsewhere</a>')).toEqual({
       controls: 1,
       marked: 0,
-      unmarked: [{ line: 4, tag: 'a' }],
+      unmarked: [{ line: 4, tag: 'a', label: 'elsewhere' }],
+      ...NONE,
     })
+  })
+  it('names an unmarked control by its aria-label first, by its static text otherwise', () => {
+    expect(
+      count(
+        '<button aria-label="Close" onClick={close}><XIcon /></button>\n<a href="/">Go <b>home</b></a>\n<Button onClick={save}>{t(\'save\')}</Button>\n<Button onClick={save}>{\'Save\'} now</Button>',
+      ).unmarked,
+    ).toEqual([
+      { line: 3, tag: 'button', label: 'Close' },
+      { line: 4, tag: 'a', label: 'Go home' },
+      { line: 5, tag: 'Button' },
+      { line: 6, tag: 'Button', label: 'Save now' },
+    ])
   })
   it('takes a testId or a *TestId prop as a mark, whatever its value', () => {
     expect(
@@ -34,7 +58,8 @@ describe('countControls', () => {
     expect(count('<div onClick={open}>open</div>\n<span>label</span>\n<HomeIcon />')).toEqual({
       controls: 1,
       marked: 0,
-      unmarked: [{ line: 3, tag: 'div' }],
+      unmarked: [{ line: 3, tag: 'div', label: 'open' }],
+      ...NONE,
     })
   })
   it('leaves out an element inside a marked control that has no action of its own', () => {
@@ -42,31 +67,37 @@ describe('countControls', () => {
       count(
         '<Link to="/" data-testid="sample.home-link">\n<Button size="icon"><HomeIcon /></Button>\n</Link>',
       ),
-    ).toEqual({ controls: 1, marked: 1, unmarked: [] })
+    ).toEqual({ controls: 1, marked: 1, unmarked: [], ...NONE })
   })
   it('counts an element with its own action inside a marked control on its own', () => {
     expect(
       count('<Button data-testid="sample.open-button">\n<span onClick={close}>x</span>\n</Button>'),
-    ).toEqual({ controls: 2, marked: 1, unmarked: [{ line: 4, tag: 'span' }] })
+    ).toEqual({
+      controls: 2,
+      marked: 1,
+      unmarked: [{ line: 4, tag: 'span', label: 'x' }],
+      ...NONE,
+    })
   })
   it('takes a control inside a label as marked', () => {
     expect(count('<label>\nName <input name="name" />\n</label>')).toEqual({
       controls: 1,
       marked: 1,
       unmarked: [],
+      ...NONE,
     })
   })
   it('does not count an element that passes on the props it receives', () => {
     expect(
       count('<button type="button" {...props} />\n<Textarea {...rest} />\n<a {...props.link} />'),
-    ).toEqual({ controls: 0, marked: 0, unmarked: [] })
+    ).toEqual({ controls: 0, marked: 0, unmarked: [], ...NONE })
   })
   it('counts an element whose spread is built by a call, such as a form field', () => {
     expect(
       count(
         "<Input {...field('email')} data-testid=\"sample.email-input\" />\n<Input {...field('name')} />",
       ),
-    ).toEqual({ controls: 2, marked: 1, unmarked: [{ line: 4, tag: 'Input' }] })
+    ).toEqual({ controls: 2, marked: 1, unmarked: [{ line: 4, tag: 'Input' }], ...NONE })
   })
   it('names a member tag in full', () => {
     expect(count('<Dialog.Close onClick={close} />').unmarked).toEqual([
@@ -75,5 +106,62 @@ describe('countControls', () => {
   })
   it('refuses a file that does not parse', () => {
     expect(() => countControls('export const A = <div>', 'broken.tsx')).toThrow(/^broken\.tsx:1: /)
+  })
+})
+
+describe('countControls with coverage-ignore markers', () => {
+  const ignored = countControls(readFileSync(join(FIXTURES, 'ignored.tsx'), 'utf8'), 'ignored.tsx')
+  const PAGER = 'a decorative pager, no scenario pages through it'
+  const CARD = 'the card link is a mouse convenience'
+  const CLOSE =
+    'the button Close renders; the anchor of the caller reaches it through the props of Close'
+
+  it('declares off every unmarked control of a subtree, and keeps an anchored one marked', () => {
+    expect(ignored.ignored.filter(({ reason }) => reason === PAGER)).toEqual([
+      { line: 7, tag: 'a', label: 'first', reason: PAGER },
+      { line: 8, tag: 'button', label: 'next', reason: PAGER },
+    ])
+    expect(ignored.marked).toBe(1)
+  })
+  it('declares off only the element of a -self marker, and counts what it holds on its own', () => {
+    expect(ignored.ignored.filter(({ reason }) => reason === CARD)).toEqual([
+      { line: 14, tag: 'Link', label: 'Open', reason: CARD },
+    ])
+    expect(ignored.unmarked).toContainEqual({ line: 15, tag: 'Button', label: 'Open' })
+  })
+  it('reads a marker written before an element in an attribute', () => {
+    expect(ignored.ignored.filter(({ reason }) => reason === CLOSE)).toEqual([
+      { line: 21, tag: 'Button', reason: CLOSE },
+    ])
+  })
+  it('counts an ignored control as neither marked nor unmarked', () => {
+    expect(ignored).toEqual({
+      controls: 4,
+      marked: 1,
+      unmarked: [
+        { line: 15, tag: 'Button', label: 'Open' },
+        { line: 24, tag: 'a', label: 'Go inside' },
+        { line: 28, tag: 'button', label: 'Close' },
+      ],
+      ignored: [
+        { line: 7, tag: 'a', label: 'first', reason: PAGER },
+        { line: 8, tag: 'button', label: 'next', reason: PAGER },
+        { line: 14, tag: 'Link', label: 'Open', reason: CARD },
+        { line: 21, tag: 'Button', reason: CLOSE },
+      ],
+      problems: [],
+    })
+  })
+  it('reports a marker without a reason and one that no element follows, and applies neither', () => {
+    const counted = count(
+      '{/* ui-contract-ignore: */}\n<a href="/">home</a>\n<ul>\n{/* ui-contract-ignore: the end */}\n</ul>\n{/* ui-contract-ignore: a list */}\n{items}',
+    )
+
+    expect(counted.problems.map(formatProblem)).toEqual([
+      `view.tsx:3: ${IGNORE_WITHOUT_REASON}`,
+      `view.tsx:6: ${IGNORE_WITHOUT_ELEMENT}`,
+      `view.tsx:8: ${IGNORE_WITHOUT_ELEMENT}`,
+    ])
+    expect(counted).toMatchObject({ controls: 1, unmarked: [{ line: 4, tag: 'a' }], ignored: [] })
   })
 })

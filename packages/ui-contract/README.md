@@ -67,7 +67,14 @@ root export is build-time tooling for Bun.
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, and every suffix and code in the vocabulary.
+    a suffix, and every suffix and code in the vocabulary. `ignoreMarkers(text, comments)`
+    reads the coverage-ignore markers of a file from the parser's comments: a comment
+    `ui-contract-ignore: <reason>` (the element and its subtree) or
+    `ui-contract-ignore-self: <reason>` (the element alone) right before a JSX element, as
+    a line comment whose reason may go on over the next ones or as a block comment in braces
+    among JSX children; each `IgnoreMarker` points at the element after it, and a marker
+    without a reason or in neither form is a fault (`IGNORE_WITHOUT_REASON`,
+    `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element starts where it points).
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
     returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
@@ -90,14 +97,21 @@ root export is build-time tooling for Bun.
     one added are a rename when they are the only ones of their screen and kind);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty.
-  - The coverage note: `countControls(text, file)` counts the controls of one source file
-    (`CONTROL_TAGS`, or any element with an `onClick`) and how many carry an anchor, and lists
-    the others by line and tag; `measureCoverage(root)` counts them per feature module
-    (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`, `UI_KIT_MODULE`), and per screen its
-    anchors and the scenarios that reach it; `renderCoverage(measure, totals)` (`totalsOf`)
-    prints the block and `replaceCoverageBlock(note, block)` puts it between
+  - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
+    and action with the anchors whose binding (one or a list) names it, none when it is
+    unbound (`ModelCoverage`, `BoundMember`): the first measure. `countControls(text, file)`
+    counts the controls of one source file (`CONTROL_TAGS`, or any element with an
+    `onClick`) and how many carry an anchor, lists the unmarked ones by line, tag and static
+    label (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason,
+    and the markers it cannot apply as problems; `measureCoverage(root)` returns the model's
+    measure, the controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
+    `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
+    screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`
+    (`totalsOf`) prints the block, its totals line `fields bound x/y, actions bound x/y`
+    before the controls marked and ignored, `listControls(measure)` the two lists as
+    `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block between
     `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is described
-    in `contract/COVERAGE.md`; it is an indicator, not a rule of the contract.
+    in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
   - The anchor helpers of `./anchors`, re-exported.
 - `./anchors`: the browser-safe helpers. `ANCHOR_PATTERN`, `isAnchor(text)`,
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
@@ -112,8 +126,8 @@ root export is build-time tooling for Bun.
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
-  schema writer, the references, the contract check, the sources check, the manifest, the
-  hand-over diff and the coverage note.
+  schema writer, the references, the contract check, the sources check, the coverage-ignore
+  markers, the manifest, the hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
@@ -136,7 +150,12 @@ root export is build-time tooling for Bun.
   `<ref>`, all of it as added when that commit has no `contract/`; prints the hand-over block,
   or the changes as JSON with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.
-- From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]`: the
-  coverage block, the controls marked per feature module and for the kit, the anchors and
+- From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
+  [--unmarked]`: the coverage block, first the fields and actions of each entity of the
+  model with the anchors bound to them, then the controls marked and ignored per feature
+  module and for the kit with the unmarked and ignored ones listed, and the anchors and
   scenarios per screen; `--write` puts it between the markers of `contract/COVERAGE.md`,
-  `--json` prints the measure). Not part of `bun run check`: the note is an indicator.
+  `--json` prints the measure, `--unmarked` prints the unmarked controls and the ignored ones
+  with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason or
+  without an element after it is printed as a problem and exits 1, writing nothing). Not
+  part of `bun run check`: the note is a report.

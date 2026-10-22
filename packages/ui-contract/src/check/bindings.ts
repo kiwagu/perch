@@ -11,26 +11,27 @@ import type { AnchorDef, BindingRef, Problem } from '../files'
 
 import {
   bindingPaths,
+  bindingRefsOf,
   type Contract,
   declaredAnchors,
+  entityMemberOf,
   has,
   type InScreens,
   knownAnchors,
   locate,
   own,
+  PLATFORM_ACTION,
 } from './contract'
 
 type Params = Extract<BindingRef, { action: string }>['params']
-
-const PLATFORM = 'platform.'
 
 /** The parameters of an action, or the problem that it does not exist. */
 function parametersOf(
   { model, screens }: Contract,
   action: string,
 ): { parameters?: readonly string[]; problem?: string } {
-  if (action.startsWith(PLATFORM)) {
-    const name = action.slice(PLATFORM.length)
+  if (action.startsWith(PLATFORM_ACTION)) {
+    const name = action.slice(PLATFORM_ACTION.length)
     const platform = own(screens.platform.actions, name)
 
     return platform === undefined
@@ -38,7 +39,7 @@ function parametersOf(
       : { parameters: Object.keys(platform.params) }
   }
 
-  const [entityName = '', actionName = ''] = action.split('.')
+  const { entity: entityName, member: actionName } = entityMemberOf(action)
   const entity = own(model.entities, entityName)
   const found = entity === undefined ? undefined : own(entity.actions, actionName)
 
@@ -100,7 +101,7 @@ function bindingProblems(lookups: Lookups, ref: BindingRef, at: readonly Propert
   }
 
   const { inScreens } = lookups
-  const [entityName = '', field = ''] = ref.model.split('.')
+  const { entity: entityName, member: field } = entityMemberOf(ref.model)
   const entity = own(lookups.contract.model.entities, entityName)
 
   if (entity === undefined) {
@@ -141,20 +142,12 @@ function sourceProblems(
 }
 
 function anchorProblems(lookups: Lookups): Problem[] {
-  return declaredAnchors(lookups.contract.screens).flatMap(({ def, at }) => {
-    const binding = def.binding
-    const refs =
-      binding === undefined
-        ? []
-        : Array.isArray(binding)
-          ? binding.map((ref, index) => ({ ref, at: [...at, 'binding', index] }))
-          : [{ ref: binding, at: [...at, 'binding'] }]
-
-    return [
-      ...refs.flatMap((entry) => bindingProblems(lookups, entry.ref, entry.at)),
-      ...sourceProblems(lookups, def, [...at, 'source']),
-    ]
-  })
+  return declaredAnchors(lookups.contract.screens).flatMap(({ def, at }) => [
+    ...bindingRefsOf(def).flatMap((entry) =>
+      bindingProblems(lookups, entry.ref, [...at, ...entry.at]),
+    ),
+    ...sourceProblems(lookups, def, [...at, 'source']),
+  ])
 }
 
 function flowProblems(lookups: Lookups): Problem[] {

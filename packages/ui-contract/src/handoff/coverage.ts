@@ -1,7 +1,10 @@
 /**
- * How far the contract reaches into the code, for the coverage note: per feature module
- * of the web app and for the UI kit, the controls and how many carry an anchor
- * (`countControls`); per screen, its declared anchors and the scenarios that reach it.
+ * How far the contract reaches, for the coverage note. Its first measure is the model's: per
+ * entity, every field and action with the anchors bound to it (`modelCoverage`). Then the
+ * code's: per feature module of the web app and for the UI kit, the controls and how many
+ * carry an anchor (`countControls`), with the unmarked controls and the ones a
+ * coverage-ignore marker declares off listed by file and line; and per screen, its declared
+ * anchors and the scenarios that reach it.
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
@@ -11,19 +14,28 @@ import { baseOf } from '../anchors'
 import { type Contract, loadContract } from '../check'
 import { declaredAnchors } from '../check/contract'
 import { textsOf } from '../check/scenarios'
-import { formatProblem } from '../files'
+import { formatProblem, type Problem, sortProblems } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources/scan'
 
-import { countControls } from './controls'
+import { type ControlPlace, countControls } from './controls'
+import { type ModelCoverage, modelCoverage } from './model'
 
 export const FEATURES_DIR = 'apps/web/src/features'
 export const UI_KIT_DIR = 'packages/ui/src'
 export const UI_KIT_MODULE = 'ui kit'
 
+/** A control of a source file, by the file's repository path. */
+export type FileControl = ControlPlace & { file: string }
+
 export interface CoverageMeasure {
-  modules: Array<{ module: string; controls: number; marked: number }>
+  model: ModelCoverage[]
+  modules: Array<{ module: string; controls: number; marked: number; ignored: number }>
+  unmarked: FileControl[]
+  ignored: Array<FileControl & { reason: string }>
   screens: Array<{ id: string; anchors: number; scenarios: number }>
+  /** The coverage-ignore markers that cannot be applied. */
+  problems: Problem[]
 }
 
 /** The feature folders, sorted, then the kit. */
@@ -91,56 +103,43 @@ export function measureCoverage(root: string): CoverageMeasure {
     throw new Error(`the contract does not load: ${problems.map(formatProblem).join('; ')}`)
   }
 
-  const modules = new Map(modulesOf(root).map((module) => [module, { controls: 0, marked: 0 }]))
+  const modules = new Map(
+    modulesOf(root).map((module) => [module, { controls: 0, marked: 0, ignored: 0 }]),
+  )
+  const measure: CoverageMeasure = {
+    model: modelCoverage(contract),
+    modules: [],
+    unmarked: [],
+    ignored: [],
+    screens: [],
+    problems: [],
+  }
 
-  for (const path of sourcePaths(root).filter((file) => file.endsWith('.tsx'))) {
-    const counts = modules.get(moduleOf(path) ?? '')
+  for (const file of sourcePaths(root).filter((path) => path.endsWith('.tsx'))) {
+    const counts = modules.get(moduleOf(file) ?? '')
 
     if (counts !== undefined) {
-      const { controls, marked } = countControls(readFileSync(join(root, path), 'utf8'), path)
+      const counted = countControls(readFileSync(join(root, file), 'utf8'), file)
 
-      counts.controls += controls
-      counts.marked += marked
+      counts.controls += counted.controls
+      counts.marked += counted.marked
+      counts.ignored += counted.ignored.length
+      measure.unmarked.push(...counted.unmarked.map((place) => ({ file, ...place })))
+      measure.ignored.push(...counted.ignored.map((place) => ({ file, ...place })))
+      measure.problems.push(...counted.problems)
     }
   }
 
   const reached = contract.scenarios.map(screensReached(contract))
 
   return {
+    ...measure,
     modules: [...modules].map(([module, counts]) => ({ module, ...counts })),
     screens: contract.screens.screens.map(({ id, anchors }) => ({
       id,
       anchors: Object.keys(anchors).length,
       scenarios: reached.filter((screens) => screens.has(id)).length,
     })),
+    problems: sortProblems(measure.problems),
   }
-}
-
-const share = (marked: number, controls: number): string =>
-  controls === 0 ? '-' : `${Math.round((marked / controls) * 100)}%`
-
-const row = (cells: ReadonlyArray<string | number>): string => `| ${cells.join(' | ')} |`
-
-/** The block of the note: the contract's totals, the modules table and the screens table. */
-export function renderCoverage(
-  measure: CoverageMeasure,
-  totals: { anchors: number; codes: number; screens: number },
-): string {
-  const controls = measure.modules.reduce((sum, module) => sum + module.controls, 0)
-  const marked = measure.modules.reduce((sum, module) => sum + module.marked, 0)
-
-  return [
-    `The contract declares ${totals.screens} screens, ${totals.anchors} anchors and ${totals.codes} codes.`,
-    '',
-    row(['Module', 'Controls', 'Marked', 'Share']),
-    row(['---', '---:', '---:', '---:']),
-    ...measure.modules.map((module) =>
-      row([module.module, module.controls, module.marked, share(module.marked, module.controls)]),
-    ),
-    row(['all', controls, marked, share(marked, controls)]),
-    '',
-    row(['Screen', 'Anchors', 'Scenarios']),
-    row(['---', '---:', '---:']),
-    ...measure.screens.map((screen) => row([screen.id, screen.anchors, screen.scenarios])),
-  ].join('\n')
 }

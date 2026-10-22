@@ -19,10 +19,12 @@
  *     prints what the contract of the working tree adds, removes and renames against the
  *     contract at the git ref `<ref>` (all of it as added when the ref has no `contract/`):
  *     the hand-over block of a change, or the changes as JSON.
- *   ui-contract coverage [--write] [--json]
- *     prints the coverage block (controls marked per module, anchors and scenarios per
- *     screen), writes it between the markers of `contract/COVERAGE.md`, or prints the measure
- *     as JSON.
+ *   ui-contract coverage [--write] [--json] [--unmarked]
+ *     prints the coverage block (the fields and actions of the model bound by anchors, the
+ *     controls marked per module, anchors and scenarios per screen), writes it between the
+ *     markers of `contract/COVERAGE.md`, prints the measure as JSON, or lists the unmarked
+ *     and the ignored controls as `file:line: <element>`. A coverage-ignore marker it cannot
+ *     apply is printed as a problem, and nothing is written.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -41,6 +43,7 @@ import {
   contractAt,
   diffContracts,
   formatChanges,
+  listControls,
   measureCoverage,
   renderCoverage,
   replaceCoverageBlock,
@@ -198,8 +201,18 @@ function coverage(argv: readonly string[]): number {
   const measure = measureCoverage(root)
   const totals = totalsOf(contract)
 
+  if (reported(measure.problems)) {
+    return 1
+  }
+
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ totals, ...measure }, null, 2))
+
+    return 0
+  }
+
+  if (argv.includes('--unmarked')) {
+    console.log(listControls(measure))
 
     return 0
   }
@@ -236,7 +249,7 @@ function run(argv: readonly string[]): number {
       return coverage(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]" or "coverage [--write] [--json]"',
+        'ui-contract: use "check [--sources]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]" or "coverage [--write] [--json] [--unmarked]"',
       )
 
       return 1

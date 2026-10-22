@@ -139,8 +139,10 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run contract:manifest`: builds the UI manifest from `contract/` into `ui-manifest/`.
 - `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
   ref; a change to the contract hands over the output of `bun run contract:diff main`.
-- `bun run contract:coverage`: the controls carrying an anchor per feature module, and the
-  anchors and scenarios per screen; `--write` updates `contract/COVERAGE.md`.
+- `bun run contract:coverage`: the fields and actions of the model bound by anchors, the
+  controls carrying an anchor per feature module, and the anchors and scenarios per screen;
+  `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
+  the ones declared off with `ui-contract-ignore: <reason>`.
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.

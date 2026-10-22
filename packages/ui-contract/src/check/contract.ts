@@ -1,14 +1,15 @@
 /**
  * The contract as the check reads it, the contract files and the scenarios, and the
- * lookups its rules share: the declared anchors, a known anchor (declared, or a declared
- * base with a suffix it lists in `derived`), the states and choice values of the
- * vocabulary, and a problem located in a screen's file, the platform file or a scenario's
- * file.
+ * lookups its rules share: the declared anchors, the refs of an anchor's binding and what
+ * each names in the model, a known anchor (declared, or a declared base with a suffix it
+ * lists in `derived`), the states and choice values of the vocabulary, and a problem
+ * located in a screen's file, the platform file or a scenario's file.
  */
 
 import { baseOf } from '../anchors'
 import {
   type AnchorDef,
+  type BindingRef,
   type Model,
   PLATFORM_FILE,
   type Problem,
@@ -44,6 +45,47 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
       at: ['screens', index, 'anchors', anchor],
     })),
   )
+
+/** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
+export function bindingRefsOf(
+  def: AnchorDef,
+): Array<{ readonly ref: BindingRef; readonly at: readonly PropertyKey[] }> {
+  const { binding } = def
+
+  if (binding === undefined) {
+    return []
+  }
+
+  return Array.isArray(binding)
+    ? binding.map((ref, index) => ({ ref, at: ['binding', index] }))
+    : [{ ref: binding, at: ['binding'] }]
+}
+
+/** How an action of the platform is named in a binding: `platform.sign-out`. */
+export const PLATFORM_ACTION = 'platform.'
+
+/** The entity and its member that `entity.member` names: a field or an action. */
+export function entityMemberOf(path: string): { entity: string; member: string } {
+  const [entity = '', member = ''] = path.split('.')
+
+  return { entity, member }
+}
+
+/**
+ * What a binding ref names in the model: a field (`model`), or an action of an entity
+ * (`action` outside the platform); a route or a platform action names nothing there.
+ */
+export function modelTargetOf(
+  ref: BindingRef,
+): { kind: 'field' | 'action'; entity: string; member: string } | undefined {
+  if ('model' in ref) {
+    return { kind: 'field', ...entityMemberOf(ref.model) }
+  }
+
+  return 'action' in ref && !ref.action.startsWith(PLATFORM_ACTION)
+    ? { kind: 'action', ...entityMemberOf(ref.action) }
+    : undefined
+}
 
 /** Whether `record` has `key` as its own key (never a name of the object prototype). */
 export const has = (record: object, key: string): boolean => Object.hasOwn(record, key)
