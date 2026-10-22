@@ -28,6 +28,9 @@ let out: string
 
 const read = (file: string): unknown => JSON.parse(readFileSync(file, 'utf8'))
 
+/** One entry of `ids` on its line: `    "<anchor>": {"kind":"...","screen":"...",...},`. */
+const ID_LINE = /^ {4}"[a-z0-9.-]+": \{"kind":"[a-z-]+","screen":"[a-z.-]+".*\},?$/
+
 beforeEach(() => {
   temp = mkdtempSync(join(tmpdir(), 'ui-contract-write-'))
   out = join(temp, 'ui-manifest')
@@ -64,6 +67,25 @@ describe('writeManifest', () => {
       read(join(REPOSITORY_ROOT, MANIFEST_SCHEMA_FILE)),
     )
     expect(read(join(out, 'model.schema.json'))).toEqual(read(join(REPOSITORY_ROOT, MODEL_FILE)))
+  })
+  it('writes each entry of ids on one line, and the rest of the document two spaces deep', () => {
+    expect(writeManifest(REPOSITORY_ROOT, out, manifest)).toEqual([])
+
+    const text = readFileSync(join(out, 'manifest.json'), 'utf8')
+    const lines = text.split('\n')
+    const start = lines.indexOf('  "ids": {')
+    const entries = lines.slice(start + 1, lines.indexOf('  },', start))
+    const [first] = Object.entries(manifest.ids)
+
+    expect(JSON.parse(text)).toEqual(manifest)
+    expect(entries).toHaveLength(Object.keys(manifest.ids).length)
+    expect(entries.filter((line) => !ID_LINE.test(line))).toEqual([])
+    expect(entries[0]).toBe(`    ${JSON.stringify(first?.[0])}: ${JSON.stringify(first?.[1])},`)
+    expect(lines.slice(0, 3)).toEqual([
+      '{',
+      '  "$schema": "./manifest.schema.json",',
+      '  "manifestVersion": 1,',
+    ])
   })
   it('refuses a folder that is not named ui-manifest, and leaves it alone', () => {
     const elsewhere = join(temp, 'dist')

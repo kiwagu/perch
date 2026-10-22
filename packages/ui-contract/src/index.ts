@@ -29,6 +29,15 @@ export {
   vocabularyProblems,
 } from './check'
 export {
+  CONSUMER_ROOT,
+  type Consumed,
+  type ConsumedLiteral,
+  collectFromTest,
+  compareConsumers,
+  RUNTIME_TEST_ANCHOR,
+  scanConsumers,
+} from './consumers'
+export {
   type AnchorBinding,
   type AnchorDef,
   type Binding,

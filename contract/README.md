@@ -161,6 +161,10 @@ anchor follows the grammar and is declared once, every kind, state, code, role a
 value is in the vocabulary, every code of the vocabulary is used, every binding points at a
 field, an action or a route that exists. Its sources mode scans the application for anchor
 literals and fails when the code renders an anchor the contract does not declare, or the
-contract declares one the code does not render. The coverage note reports, per screen, its
+contract declares one the code does not render. `bun run check` and the pre-commit hook run
+three checks: `contract:check` (the files and the scenarios against each other),
+`contract:check:sources` (the application against the contract) and `contract:check:consumers`
+(every anchor, code, state and value an e2e test names as a literal is one the contract
+declares). The coverage note reports, per screen, its
 anchors and the scenarios that open it, and per feature module and for the UI kit, the controls
 and how many of them carry an anchor.

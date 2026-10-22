@@ -28,7 +28,14 @@ export const textsOf = (scenario: Scenario): Array<{ text: string; at: PropertyK
   ...scenario.expected.map((text, index) => ({ text, at: ['expected', index] })),
 ]
 
-function resolver(contract: Contract): (reference: Reference) => string | undefined {
+/**
+ * Resolves a reference against the contract: undefined when the contract declares what it
+ * names, or a message, opening with its `raw` text, that says what it is not. The consumers
+ * check resolves the literals of the e2e tests with it.
+ */
+export function referenceResolver(
+  contract: Contract,
+): (reference: Reference) => string | undefined {
   const known = knownAnchors(contract)
   const paths = bindingPaths(contract.screens)
   const states = statesOf(contract.vocabulary)
@@ -53,7 +60,7 @@ function resolver(contract: Contract): (reference: Reference) => string | undefi
 }
 
 export function scenariosProblems(contract: Contract): Problem[] {
-  const resolve = resolver(contract)
+  const resolve = referenceResolver(contract)
 
   return contract.scenarios.flatMap((scenario) => {
     const file = scenarioFile(scenario.id)

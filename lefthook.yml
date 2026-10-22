@@ -44,7 +44,7 @@ pre-commit:
       run: . scripts/ensure-path.sh && bun run readme:check
 
     - name: contract
-      run: . scripts/ensure-path.sh && bun run contract:check && bun run contract:check:sources
+      run: . scripts/ensure-path.sh && bun run contract:check && bun run contract:check:sources && bun run contract:check:consumers
 
     - name: source file sizes
       run: . scripts/ensure-path.sh && bun run refactor:ci

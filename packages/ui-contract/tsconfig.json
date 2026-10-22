@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "types": ["bun"], "jsx": "react-jsx", "lib": ["ES2023", "DOM"] },
   "include": ["src"],
-  "exclude": ["src/__fixtures__/sources"]
+  "exclude": ["src/__fixtures__/sources", "src/__fixtures__/consumers"]
 }

@@ -76,6 +76,17 @@ root export is build-time tooling for Bun.
     whose own reason is shorter than three characters, or in another form, is a fault
     (`IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element
     starts where it points).
+  - The consumers check: `collectFromTest(text, file)` reads one file of the e2e tests with
+    oxc-parser and returns what it names of the contract (`Consumed`, its `ConsumedLiteral`s):
+    the anchor of a `getByTestId('<anchor>')` call, and in any string or template literal the
+    `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]`
+    selectors, in double or single quotes (a `data-id` is data and is not read); an anchor
+    built at runtime is a problem (`RUNTIME_TEST_ANCHOR`), a code, a state or a value from an
+    expression passes. `scanConsumers(root, tests?)` collects the `.ts` files under
+    `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given; `compareConsumers(consumed,
+    contract)` wants every anchor known (declared, or derived from a declared base with a
+    suffix it lists in `derived`), every code, state and choice value in the vocabulary, as
+    the scenarios check resolves its bracket references.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, scenarios, product, now? })`
     returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
@@ -87,7 +98,9 @@ root export is build-time tooling for Bun.
     `writeManifest(root, outDir, manifest)` validates it against
     `contract/manifest.schema.json` with Ajv and returns the problems
     without writing anything, or empties `outDir` (its last segment must be `ui-manifest`,
-    `MANIFEST_DIR`) and writes `manifest.json`, `manifest.schema.json` and `model.schema.json`.
+    `MANIFEST_DIR`) and writes `manifest.json` (two spaces deep, each entry of `ids` on one
+    line, so a search for an anchor shows its facts), `manifest.schema.json` and
+    `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files and the
@@ -127,8 +140,8 @@ root export is build-time tooling for Bun.
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
-  schema writer, the references, the contract check, the sources check, the coverage-ignore
-  markers, the manifest, the hand-over diff and the coverage note.
+  schema writer, the references, the contract check, the sources check, the consumers check,
+  the coverage-ignore markers, the manifest, the hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
@@ -140,6 +153,12 @@ root export is build-time tooling for Bun.
   against the contract; prints `file:line: message` per problem and exits 1, or
   `contract: sources agree with the contract (<n> anchors)`; part of `bun run check` and
   the pre-commit hook).
+- From the root: `bun run contract:check:consumers` (`ui-contract check --consumers
+  [--tests=<dir>]`: the contract check, then the anchors, codes, states and values the e2e
+  tests under `tests/e2e/src`, or `<dir>` relative to the root, name as literals against the
+  contract; prints `file:line: message` per problem and exits 1, or
+  `contract: the e2e tests agree with the contract (<n> anchors)`; part of `bun run check`
+  and the pre-commit hook).
 - From the root: `bun run contract:manifest` (`ui-contract manifest [--out <dir>]`: builds the
   manifest from the three files and the scenarios and writes it into `ui-manifest/` at the
   root, gitignored, or into `<dir>` relative to the working directory, which may be any

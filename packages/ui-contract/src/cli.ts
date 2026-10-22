@@ -2,10 +2,11 @@
 /**
  * The contract tooling, run from the repository root.
  *
- *   ui-contract check [--sources]
+ *   ui-contract check [--sources] [--consumers [--tests=<dir>]]
  *     checks the contract files under `contract/` and the scenario files under
  *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
- *     of the web app and the UI kit against them.
+ *     of the web app and the UI kit against them; with `--consumers`, then the anchors, codes,
+ *     states and values the e2e tests under `tests/e2e/src` (or `<dir>`) name as literals.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
@@ -31,6 +32,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 import { type Contract, checkContract, loadContract } from './check'
+import { CONSUMER_ROOT, compareConsumers, scanConsumers } from './consumers'
 import {
   COVERAGE_FILE,
   formatProblem,
@@ -86,6 +88,28 @@ function checkSources(root: string, { screens, vocabulary }: Contract): number {
   return 0
 }
 
+function checkConsumers(root: string, contract: Contract, tests: string): number {
+  const consumed = scanConsumers(root, tests)
+
+  if (reported(compareConsumers(consumed, contract))) {
+    return 1
+  }
+
+  const anchors = new Set(
+    consumed.flatMap(({ literals }) =>
+      literals.filter(({ kind }) => kind === 'anchor').map(({ value }) => value),
+    ),
+  )
+
+  console.log(`contract: the e2e tests agree with the contract (${anchors.size} anchors)`)
+
+  return 0
+}
+
+/** The value of `--<name>=<value>`, if given. */
+const optionOf = (argv: readonly string[], name: string): string | undefined =>
+  argv.find((argument) => argument.startsWith(`--${name}=`))?.slice(name.length + 3)
+
 function check(argv: readonly string[]): number {
   const root = process.cwd()
 
@@ -101,7 +125,11 @@ function check(argv: readonly string[]): number {
 
   console.log(summaryOf(contract))
 
-  return argv.includes('--sources') ? checkSources(root, contract) : 0
+  const sources = argv.includes('--sources') ? checkSources(root, contract) : 0
+  const tests = optionOf(argv, 'tests') ?? CONSUMER_ROOT
+  const consumers = argv.includes('--consumers') ? checkConsumers(root, contract, tests) : 0
+
+  return Math.max(sources, consumers)
 }
 
 function schemas(argv: readonly string[]): number {
@@ -249,7 +277,7 @@ function run(argv: readonly string[]): number {
       return coverage(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]" or "coverage [--write] [--json] [--unmarked]"',
+        'ui-contract: use "check [--sources] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]" or "coverage [--write] [--json] [--unmarked]"',
       )
 
       return 1

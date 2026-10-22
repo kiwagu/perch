@@ -1,0 +1,185 @@
+/**
+ * Reads what the e2e tests name of the contract, as the consumers check reads it: the anchor
+ * of a `getByTestId('<anchor>')` call, and in any string or template literal the attribute
+ * selectors `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and
+ * `[data-value="..."]`, in double or single quotes. Nothing else is read: a `data-id` is data,
+ * and no helper is followed. An anchor built at runtime (a `getByTestId` of anything but a
+ * literal, a `data-testid` holding an expression) is a problem, since no check can follow it;
+ * a code, a state or a value from an expression is a parameter of the test and passes.
+ */
+
+import { readFileSync } from 'node:fs'
+import { join, relative, resolve, sep } from 'node:path'
+
+import { parseSync, Visitor } from 'oxc-parser'
+
+import type { Problem } from '../files'
+import { filesUnder } from '../files/files-under'
+import type { Reference } from '../scenarios'
+import { staticText } from '../sources/values'
+
+/** Where the e2e tests are, from the repository root. */
+export const CONSUMER_ROOT = 'tests/e2e/src'
+
+export const RUNTIME_TEST_ANCHOR = `an anchor built at runtime; write it as a literal, getByTestId('<anchor>') or [data-testid="<anchor>"]`
+
+export interface ConsumedLiteral {
+  readonly kind: Exclude<Reference['kind'], 'route'>
+  readonly value: string
+  readonly line: number
+}
+
+export interface Consumed {
+  readonly file: string
+  readonly literals: ConsumedLiteral[]
+  readonly problems: Problem[]
+}
+
+/** A file without any of these words names nothing of the contract, and is not parsed. */
+const WORDS = /getByTestId|data-(testid|code|state|value)/
+
+/** An attribute selector the check reads; `\0` in its value stands for an expression. */
+const SELECTOR = /\[data-(testid|code|state|value)=(["'])(.*?)\2\]/g
+
+const EXPRESSION = '\0'
+
+const TEST_SOURCE = /\.ts$/
+
+/** A piece of a string or a template between its expressions, with its source offset. */
+interface Part {
+  readonly text: string
+  readonly at: number
+}
+
+const kindOf = (attribute: string): ConsumedLiteral['kind'] | undefined =>
+  attribute === 'testid'
+    ? 'anchor'
+    : attribute === 'code' || attribute === 'state' || attribute === 'value'
+      ? attribute
+      : undefined
+
+const newlines = (text: string): number => text.split('\n').length - 1
+
+export function collectFromTest(text: string, file: string): Consumed {
+  const consumed: Consumed = { file, literals: [], problems: [] }
+
+  if (!WORDS.test(text)) {
+    return consumed
+  }
+
+  const line = (offset: number): number => newlines(text.slice(0, offset)) + 1
+  const { program, errors } = parseSync(file, text, { lang: 'ts', sourceType: 'module' })
+  const [error] = errors
+
+  if (error !== undefined) {
+    const at = line(error.labels[0]?.start ?? 0)
+
+    consumed.problems.push({ file, line: at, message: `cannot parse the file: ${error.message}` })
+
+    return consumed
+  }
+
+  /** The line of the character at `index` of the parts joined by EXPRESSION. */
+  const lineIn = (parts: readonly Part[], index: number): number => {
+    let from = 0
+
+    for (const part of parts) {
+      if (index <= from + part.text.length) {
+        return line(part.at) + newlines(part.text.slice(0, index - from))
+      }
+
+      from += part.text.length + EXPRESSION.length
+    }
+
+    return line(parts[0]?.at ?? 0)
+  }
+
+  /** The selectors of one string or template, each at the line its `[` is on. */
+  const selectors = (parts: readonly Part[]): void => {
+    const joined = parts.map((part) => part.text).join(EXPRESSION)
+
+    for (const match of joined.matchAll(SELECTOR)) {
+      const [, attribute = '', , value = ''] = match
+      const kind = kindOf(attribute)
+
+      if (kind === undefined) {
+        continue
+      }
+
+      const at = lineIn(parts, match.index)
+
+      if (!value.includes(EXPRESSION)) {
+        consumed.literals.push({ kind, value, line: at })
+      } else if (kind === 'anchor') {
+        consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
+      }
+    }
+  }
+
+  new Visitor({
+    CallExpression(node) {
+      const { callee } = node
+      const name =
+        callee.type === 'Identifier'
+          ? callee.name
+          : callee.type === 'MemberExpression' && !callee.computed
+            ? callee.property.name
+            : undefined
+
+      if (name !== 'getByTestId') {
+        return
+      }
+
+      const [argument] = node.arguments
+      const anchor = staticText(argument)
+      const at = line(argument?.start ?? node.start)
+
+      if (anchor === undefined) {
+        consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
+      } else {
+        consumed.literals.push({ kind: 'anchor', value: anchor, line: at })
+      }
+    },
+    Literal(node) {
+      if (typeof node.value === 'string') {
+        selectors([{ text: node.value, at: node.start }])
+      }
+    },
+    TemplateLiteral(node) {
+      selectors(
+        node.quasis.map((quasi) => ({
+          text: quasi.value.cooked ?? quasi.value.raw,
+          at: quasi.start,
+        })),
+      )
+    },
+  }).visit(program)
+
+  consumed.literals.sort((a, b) => a.line - b.line)
+  consumed.problems.sort((a, b) => (a.line ?? 1) - (b.line ?? 1))
+
+  return consumed
+}
+
+/**
+ * The `.ts` files under `tests` (relative to `root` unless absolute; `tests/e2e/src` by
+ * default), each collected and named by its path from the root; a folder it cannot read
+ * is an error.
+ */
+export function scanConsumers(root: string, tests: string = CONSUMER_ROOT): Consumed[] {
+  const folder = resolve(root, tests)
+  const paths = filesUnder(folder)
+
+  if (paths === undefined) {
+    throw new Error(`cannot read the tests in ${tests}`)
+  }
+
+  return paths
+    .filter((path) => TEST_SOURCE.test(path))
+    .map((path) =>
+      collectFromTest(
+        readFileSync(join(folder, path), 'utf8'),
+        relative(root, join(folder, path)).split(sep).join('/'),
+      ),
+    )
+}

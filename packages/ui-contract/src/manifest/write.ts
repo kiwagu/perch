@@ -1,7 +1,9 @@
 /**
  * Writes a manifest into its folder: checked first against `contract/manifest.schema.json`
  * (a manifest that breaks it writes nothing), then the folder is emptied and receives
- * `manifest.json` with the manifest's schema and the model's schema beside it.
+ * `manifest.json` with the manifest's schema and the model's schema beside it. The file is
+ * indented by two spaces, except that each entry of `ids` takes one line, so a search for an
+ * anchor in it shows everything the manifest says of that anchor.
  */
 
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -31,6 +33,18 @@ function manifestProblems(root: string, manifest: Manifest): Problem[] {
   return validateAgainst(MANIFEST_FILE, schema.json, manifest)
 }
 
+/** The text of `manifest.json`: two spaces deep, one line per entry of `ids`. */
+function manifestText(manifest: Manifest): string {
+  const marker = 'ids: one entry per line'
+  const entries = Object.entries(manifest.ids).map(
+    ([anchor, id]) => `    ${JSON.stringify(anchor)}: ${JSON.stringify(id)}`,
+  )
+  const ids = entries.length === 0 ? '{}' : `{\n${entries.join(',\n')}\n  }`
+  const text = JSON.stringify({ ...manifest, ids: marker }, null, 2)
+
+  return `${text.replace(`"ids": "${marker}"`, () => `"ids": ${ids}`)}\n`
+}
+
 /** `outDir` is relative to `root` unless absolute; its last segment is `ui-manifest`. */
 export function writeManifest(root: string, outDir: string, manifest: Manifest): Problem[] {
   const target = resolve(root, outDir)
@@ -47,7 +61,7 @@ export function writeManifest(root: string, outDir: string, manifest: Manifest):
 
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
-  writeFileSync(join(target, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  writeFileSync(join(target, 'manifest.json'), manifestText(manifest))
   copyFileSync(join(root, MANIFEST_SCHEMA_FILE), join(target, 'manifest.schema.json'))
   copyFileSync(join(root, MODEL_FILE), join(target, 'model.schema.json'))
 

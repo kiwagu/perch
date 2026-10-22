@@ -77,6 +77,10 @@
     },
     "//#contract:check:sources": {
       "cache": false
+    },
+    "//#contract:check:consumers": {
+      "inputs": ["tests/e2e/src/**", "contract/**", "tests/e2e/scenarios/**"],
+      "cache": false
     }
   }
 }
