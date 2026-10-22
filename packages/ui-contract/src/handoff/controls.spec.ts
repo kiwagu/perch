@@ -4,7 +4,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
-import { IGNORE_MALFORMED, IGNORE_WITHOUT_ELEMENT, IGNORE_WITHOUT_REASON } from '../sources'
+import {
+  IGNORE_MALFORMED,
+  IGNORE_NO_CONTROL,
+  IGNORE_WITHOUT_ELEMENT,
+  IGNORE_WITHOUT_REASON,
+} from '../sources'
 
 import { countControls } from './controls'
 
@@ -193,5 +198,32 @@ describe('countControls with coverage-ignore markers', () => {
       `view.tsx:8: ${IGNORE_WITHOUT_ELEMENT}`,
     ])
     expect(counted).toMatchObject({ controls: 1, unmarked: [{ line: 4, tag: 'a' }], ignored: [] })
+  })
+  it('reports a marker whose element, and subtree for the plain form, holds no control', () => {
+    const counted = count(
+      [
+        '{/* ui-contract-ignore: a decorative list */}',
+        '<ul><li>one</li></ul>',
+        '{/* ui-contract-ignore-self: the wrapper alone */}',
+        '<div>',
+        '<button onClick={go}>go</button>',
+        '</div>',
+        '{/* ui-contract-ignore: whoever renders it decides */}',
+        '<button {...props} />',
+        '{/* ui-contract-ignore: a decorative pager */}',
+        '<nav><a href="/first">first</a></nav>',
+      ].join('\n'),
+    )
+
+    expect(counted.problems.map(formatProblem)).toEqual([
+      `view.tsx:3: ${IGNORE_NO_CONTROL}`,
+      `view.tsx:5: ${IGNORE_NO_CONTROL}`,
+      `view.tsx:9: ${IGNORE_NO_CONTROL}`,
+    ])
+    expect(counted).toMatchObject({
+      controls: 1,
+      unmarked: [{ line: 7, tag: 'button', label: 'go' }],
+      ignored: [{ line: 12, tag: 'a', label: 'first', reason: 'a decorative pager' }],
+    })
   })
 })

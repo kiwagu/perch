@@ -196,6 +196,7 @@ export function sampleContract(): Contract {
       },
     },
     activities: [THING],
+    activityLines: new Map(),
     scenarios: [
       {
         id: 'sample/base/thing',
@@ -210,6 +211,7 @@ export function sampleContract(): Contract {
         expected: ['[sample.save-button] carries [code:saved]'],
       },
     ],
+    scenarioLines: new Map(),
     model: {
       document: {},
       entities: {

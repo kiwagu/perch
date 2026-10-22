@@ -315,7 +315,7 @@
       "name": "@workspace/ui-contract",
       "version": "0.1.0",
       "bin": {
-        "ui-contract": "./src/cli.ts",
+        "ui-contract": "./src/cli/index.ts",
       },
       "dependencies": {
         "@workspace/zod": "workspace:*",

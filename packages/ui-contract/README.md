@@ -37,13 +37,18 @@ for Bun.
     `loadScenarios(root)` (every `.md` file under
     `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
     `parseScenario`; a path outside the id grammar or a layer outside `SCENARIO_LAYERS` is a
-    problem of its file). The paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`,
-    `PLATFORM_FILE`, `MODEL_FILE`, `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`,
-    `scenarioFile(id)` and the five schema files.
+    problem of its file); both return beside their files `lines`, by id the line of each
+    place of the file by its JSON path (`states.profile.on["user.profile.sign-out-button"]`,
+    `steps[2]`), which the `Contract` carries as `activityLines` and `scenarioLines`. The
+    paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`, `MODEL_FILE`,
+    `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and the five
+    schema files.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
-    fixed Markdown sections in any order) into a `Scenario`, or returns its problems with
-    their lines (`ScenarioProblem`); `formatScenario(scenario)` writes one, its inverse.
+    fixed Markdown sections in any order) into a `Scenario` with `lines`, the line of each
+    key of the front matter (`devices.A`), each section (`where`) and each list item
+    (`steps[0]`), or returns its problems with their lines (`ScenarioProblem`);
+    `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, its `effectSchema` and `transitionSchema`, with the types `Flow`, `FlowState`,
@@ -77,7 +82,8 @@ for Bun.
     or by a link to it; its roles, data, targets, guards, reachability and exits),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
     (enum controls, `retain`) and `scenariosProblems` (bracket references, roles and the
-    activity a scenario names, as problems of each scenario's file).
+    activity a scenario names, as problems of each scenario's file). A problem of an activity
+    or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
@@ -97,7 +103,8 @@ for Bun.
     before the element; each `IgnoreMarker` points at the element after it, and a marker
     whose own reason is shorter than three characters, or in another form, is a fault
     (`IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element
-    starts where it points).
+    starts where it points, `IGNORE_NO_CONTROL` when its element, and its subtree for the
+    plain form, holds no control).
   - The consumers check: `collectFromTest(text, file)` reads one file of the e2e tests with
     oxc-parser and returns what it names of the contract (`Consumed`, its
     `ConsumedLiteral`s): the anchor of a `getByTestId('<anchor>')` call; in any string or
@@ -134,20 +141,25 @@ for Bun.
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
-    after)` returns the `ContractChanges` (screens, anchors, codes, entities and fields as
-    `entity.field`, added and removed, sorted; an anchor removed and one added are a rename
-    when they are the only ones of their screen and kind); `formatChanges(changes)` prints the
-    block a change hands over: a summary line, then one line per list that is not empty.
+    after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
+    `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
+    added are a rename when they are the only ones of their screen and kind; per activity
+    both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`);
+    `formatChanges(changes)` prints the block a change hands over: a summary line, then one
+    line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
-    `activityCoverage(contract)`, per activity the scenarios that name it, its transitions and
-    how many of them those scenarios walk by naming the anchor in brackets
-    (`ActivityCoverage`). `countControls(text, file)` counts the controls of one source file
-    (`CONTROL_TAGS`, or any element with an `onClick`) and how many carry an anchor, lists the
-    unmarked ones by line, tag and static label (`ControlPlace`), the ones a coverage-ignore
-    marker declares off with its reason (whatever they carry), and the markers it cannot apply
-    as problems; `measureCoverage(root)` returns the model's measure, the activities', the
+    `activityCoverage(contract)`, per activity the scenarios that name it, its transitions
+    (one per branch of each `on`) and how many of them those scenarios walk: a step names
+    the anchor while the most recent route before it, in `where` or an earlier step, is the
+    address of the state the transition leaves, the initial state before any route
+    (`ActivityCoverage`). `countControls(text, file)` counts
+    the controls of one source file (`CONTROL_TAGS`, or any element with an `onClick`) and
+    how many carry an anchor, lists the unmarked ones by line, tag and static label
+    (`ControlPlace`), the ones a coverage-ignore marker declares off with its reason
+    (whatever they carry), and as problems the markers it cannot apply and the ones that
+    ignore no control; `measureCoverage(root)` returns the model's measure, the activities', the
     controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
     `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
     screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`
@@ -174,6 +186,8 @@ for Bun.
   schema writer, the references, the contract check, the sources check, the consumers check,
   the coverage-ignore markers, the manifest, the hand-over diff and the coverage note.
 - `bun run typecheck`, `bun run lint`.
+- The commands below are the package's `ui-contract` bin, `src/cli/index.ts` (the usage and
+  the dispatch), one file per command beside it.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
@@ -198,8 +212,9 @@ for Bun.
   `apps/web/dist/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`; prints the hand-over block,
-  or the changes as JSON with `--json`). A change to the contract carries the output of
+  `<ref>`, all of it as added when that commit has no `contract/`, the activities and the
+  transitions changed in each included; prints the hand-over block, or the changes as JSON
+  with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
   [--unmarked]`: the coverage block, first the fields and actions of each entity of the
@@ -208,6 +223,6 @@ for Bun.
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
   scenarios per screen; `--write` puts it between the markers of `contract/COVERAGE.md`,
   `--json` prints the measure, `--unmarked` prints the unmarked controls and the ignored ones
-  with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason or
-  without an element after it is printed as a problem and exits 1, writing nothing). Not
-  part of `bun run check`: the note is a report.
+  with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
+  without an element after it or ignoring no control is printed as a problem and exits 1,
+  writing nothing). Not part of `bun run check`: the note is a report.

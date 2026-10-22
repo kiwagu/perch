@@ -82,8 +82,8 @@ describe('checkContract', () => {
     )
 
     expect(printed()).toEqual([
-      'contract/activities/session.yaml:1: states.profile.on["app-shell.nav.devices-link"]: "app-shell.nav.devices-link" leads to "/device" through neither a navigate of the flow of "app-shell" nor a link',
-      'contract/activities/session.yaml:1: states.devices.meta.address.path: "/device" is the path of no binding of "device"',
+      'contract/activities/session.yaml:28: states.profile.on["app-shell.nav.devices-link"]: "app-shell.nav.devices-link" leads to "/device" through neither a navigate of the flow of "app-shell" nor a link',
+      'contract/activities/session.yaml:42: states.devices.meta.address.path: "/device" is the path of no binding of "device"',
     ])
   })
   it('refuses a derived anchor of the repository whose base does not list the suffix', () => {
@@ -95,7 +95,7 @@ describe('checkContract', () => {
     )
 
     expect(printed()).toEqual([
-      'tests/e2e/scenarios/user/base/edit-profile-name.md:1: steps[3]: [user.profile.save-button.confirm-button] is not a declared anchor',
+      'tests/e2e/scenarios/user/base/edit-profile-name.md:19: steps[3]: [user.profile.save-button.confirm-button] is not a declared anchor',
     ])
   })
   it('refuses a permission role of the model that the vocabulary does not list', () => {

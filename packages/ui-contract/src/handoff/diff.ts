@@ -1,8 +1,8 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
- * entities and fields one contract adds or removes against another, and the anchors it
- * renames. `contractAt` reads the contract files, the activities and the scenarios at a git
- * ref.
+ * entities, fields and activities one contract adds or removes against another, the anchors
+ * it renames, and the transitions it adds or removes in each activity both contracts hold.
+ * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -14,6 +14,7 @@ import { type Contract, loadContract } from '../check'
 import { declaredAnchors } from '../check/contract'
 import {
   ACTIVITIES_DIR,
+  type Activity,
   CONTRACT_DIR,
   formatProblem,
   MODEL_FILE,
@@ -22,6 +23,8 @@ import {
   SCREENS_DIR,
   VOCABULARY_FILE,
 } from '../files'
+
+import { branchesOf } from './activities'
 
 interface Change {
   added: string[]
@@ -35,6 +38,8 @@ export interface ContractChanges {
   entities: Change
   /** As `entity.field`. */
   fields: Change
+  /** By id; per activity both hold, its transitions as `<state> on <anchor> -> <target>`. */
+  activities: Change & { transitions: Record<string, Change> }
 }
 
 const FILES = [VOCABULARY_FILE, PLATFORM_FILE, MODEL_FILE] as const
@@ -177,6 +182,30 @@ const fieldsOf = (contract: Contract | undefined): string[] =>
     Object.keys(fields).map((field) => `${name}.${field}`),
   )
 
+/** The activities added and removed, and the transitions changed in each one both hold. */
+function activityChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['activities'] {
+  const was = new Map((before?.activities ?? []).map((activity) => [activity.id, activity]))
+  const is = new Map((after?.activities ?? []).map((activity) => [activity.id, activity]))
+  const transitionsOf = (activity: Activity): string[] =>
+    branchesOf(activity).map(({ state, anchor, target }) => `${state} on ${anchor} -> ${target}`)
+
+  return {
+    ...changeOf([...was.keys()], [...is.keys()]),
+    transitions: Object.fromEntries(
+      [...is].flatMap(([id, activity]) => {
+        const old = was.get(id)
+
+        return old === undefined
+          ? []
+          : [[id, changeOf(transitionsOf(old), transitionsOf(activity))]]
+      }),
+    ),
+  }
+}
+
 /** The changes from `before` to `after`; a contract left undefined is an empty one. */
 export const diffContracts = (
   before: Contract | undefined,
@@ -196,6 +225,7 @@ export const diffContracts = (
     Object.keys(after?.model.entities ?? {}),
   ),
   fields: changeOf(fieldsOf(before), fieldsOf(after)),
+  activities: activityChanges(before, after),
 })
 
 /** The lists in the order of the block, each with its singular and plural noun. */
@@ -205,28 +235,39 @@ const LISTS = [
   ['codes', 'code', 'codes'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
+  ['activities', 'activity', 'activities'],
 ] as const
 
-/** Each non-empty list: `anchors renamed`, its count and its entries. */
-function listsOf(changes: ContractChanges) {
-  return LISTS.flatMap(([key, one, many]) => {
-    const change = changes[key]
-    const lists: Array<{ verb: string; entries: string[] }> = [
-      { verb: 'added', entries: change.added },
-      { verb: 'removed', entries: change.removed },
-      ...('renamed' in change
-        ? [{ verb: 'renamed', entries: change.renamed.map(({ from, to }) => `${from} -> ${to}`) }]
-        : []),
-    ]
+/** The non-empty lists of one change: its count and its entries, after `where` when given. */
+function linesOf(
+  change: Change | ContractChanges['anchors'],
+  one: string,
+  many: string,
+  where = '',
+) {
+  const lists: Array<{ verb: string; entries: string[] }> = [
+    { verb: 'added', entries: change.added },
+    { verb: 'removed', entries: change.removed },
+    ...('renamed' in change
+      ? [{ verb: 'renamed', entries: change.renamed.map(({ from, to }) => `${from} -> ${to}`) }]
+      : []),
+  ]
 
-    return lists
-      .filter(({ entries }) => entries.length > 0)
-      .map(({ verb, entries }) => ({
-        summary: `${entries.length} ${entries.length === 1 ? one : many} ${verb}`,
-        line: `${many} ${verb}: ${entries.join(', ')}`,
-      }))
-  })
+  return lists
+    .filter(({ entries }) => entries.length > 0)
+    .map(({ verb, entries }) => ({
+      summary: `${entries.length} ${entries.length === 1 ? one : many} ${verb}${where}`,
+      line: `${many} ${verb}${where}: ${entries.join(', ')}`,
+    }))
 }
+
+/** Each non-empty list (`anchors renamed`), then the transitions changed in each activity. */
+const listsOf = (changes: ContractChanges) => [
+  ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
+  ...Object.entries(changes.activities.transitions).flatMap(([id, change]) =>
+    linesOf(change, 'transition', 'transitions', ` in ${id}`),
+  ),
+]
 
 /** The hand-over block: a summary line, then one line per list that is not empty. */
 export function formatChanges(changes: ContractChanges): string {

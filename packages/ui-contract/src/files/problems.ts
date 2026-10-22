@@ -30,3 +30,19 @@ export const jsonPath = (path: readonly PropertyKey[]): string =>
       return `[${JSON.stringify(name)}]`
     })
     .join('') || '(root)'
+
+/** The line of each place of a file, by its JSON path: `steps[2]`, `states.profile.on["x"]`. */
+export type Lines = Readonly<Record<string, number>>
+
+/** The line of the deepest part of `path` that `lines` knows, if it knows one. */
+export function lineAt(lines: Lines | undefined, path: readonly PropertyKey[]): number | undefined {
+  for (let end = path.length; end > 0; end -= 1) {
+    const at = jsonPath(path.slice(0, end))
+
+    if (lines !== undefined && Object.hasOwn(lines, at)) {
+      return lines[at]
+    }
+  }
+
+  return undefined
+}

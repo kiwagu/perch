@@ -7,7 +7,8 @@
  * only content of a JSX comment container (a block comment in braces), with only white
  * space between the closing brace and the element. The reason is the marker's own text,
  * three characters at least. The reader finds where each marker points; whether a JSX
- * element starts there is for the counter to say.
+ * element starts there, and whether it or its subtree holds a control to ignore, is for the
+ * counter to say.
  */
 
 import { type Comment, type Program, Visitor } from 'oxc-parser'
@@ -17,6 +18,8 @@ export const IGNORE_WITHOUT_REASON =
 
 export const IGNORE_WITHOUT_ELEMENT =
   'a ui-contract-ignore marker must stand right before a JSX element, with only white space between'
+
+export const IGNORE_NO_CONTROL = 'the marker ignores no control'
 
 export const IGNORE_MALFORMED =
   'write the marker as "// ui-contract-ignore[-self]: <reason>" before a JSX element, or as "{/* ui-contract-ignore[-self]: <reason> */}" before one among JSX children'

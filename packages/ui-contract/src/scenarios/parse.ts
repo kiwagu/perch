@@ -7,11 +7,13 @@
  * nest). Any line ending reads as `\n`. The id is the file's path, never written in it. A front matter that is
  * missing or not YAML, a header field the header schema refuses, a section missing, unknown
  * or repeated, a line outside any section and a list item of the wrong shape are problems,
- * each with its line where the parser knows it.
+ * each with its line where the parser knows it. A scenario comes with the line of each of its
+ * fields, by the path a problem names it with: each key of the front matter (`devices.A`),
+ * each section (`where`, `steps`) and each item of a list (`steps[2]`).
  */
 
 import { englishErrors } from '../files/parse-file'
-import { jsonPath } from '../files/problems'
+import { jsonPath, type Lines } from '../files/problems'
 import { parseYaml } from '../files/read-yaml'
 
 import { type ScenarioHeader, scenarioHeaderSchema } from './header'
@@ -67,18 +69,13 @@ function partsOf(markdown: string): Parts | ScenarioProblem {
     : { header: lines.slice(1, close), body: lines.slice(close + 1), bodyLine: close + 2 }
 }
 
-/** The line of the file where the top-level key `key` of the front matter starts, or line 1. */
-function keyLine(header: readonly string[], key: PropertyKey | undefined): number {
-  const index =
-    typeof key === 'string' ? header.findIndex((line) => line.startsWith(`${key}:`)) : -1
-
-  return index === -1 ? 1 : index + 2
+interface Header {
+  readonly value?: ScenarioHeader
+  /** The line of each key of the front matter in the file, by its path. */
+  readonly lines: ReadonlyMap<string, number>
 }
 
-function readHeader(
-  header: readonly string[],
-  problems: ScenarioProblem[],
-): ScenarioHeader | undefined {
+function readHeader(header: readonly string[], problems: ScenarioProblem[]): Header {
   const data = parseYaml(header.join('\n'))
 
   if ('reason' in data) {
@@ -86,29 +83,33 @@ function readHeader(
 
     problems.push(at(line, `the front matter is not YAML: ${data.reason}`))
 
-    return undefined
+    return { lines: new Map() }
   }
 
+  /** The front matter starts on line 2 of the file. */
+  const lines = new Map(Object.entries(data.lines).map(([path, line]) => [path, line + 1]))
   const parsed = scenarioHeaderSchema.safeParse(data.value, { error: englishErrors })
 
   for (const issue of parsed.error?.issues ?? []) {
     const key = issue.path[0] ?? (issue.code === 'unrecognized_keys' ? issue.keys[0] : undefined)
+    const line = typeof key === 'string' ? lines.get(jsonPath([key])) : undefined
 
-    problems.push(at(keyLine(header, key), `${jsonPath(issue.path)}: ${issue.message}`))
+    problems.push(at(line ?? 1, `${jsonPath(issue.path)}: ${issue.message}`))
   }
 
-  return parsed.data
+  return parsed.data === undefined ? { lines } : { value: parsed.data, lines }
 }
 
 interface Body {
   readonly values: Partial<Record<Field, string>> & Record<List, string[]>
-  /** The line each section starts on. */
+  /** The line each section starts on, and the line of each item of a list (`steps[2]`). */
   readonly lines: ReadonlyMap<string, number>
 }
 
 function readBody(lines: readonly string[], first: number, problems: ScenarioProblem[]): Body {
   const values: Body['values'] = { steps: [], expected: [] }
   const starts = new Map<string, number>()
+  const items: Array<[string, number]> = []
   let current: (typeof LISTS)[number] | undefined
 
   const open = (name: Field | List, form: string, line: number): void => {
@@ -151,6 +152,7 @@ function readBody(lines: readonly string[], first: number, problems: ScenarioPro
           at(line, `not a "${current.shape}" item of "${current.heading}": "${raw.trimEnd()}"`),
         )
       } else {
+        items.push([jsonPath([current.list, values[current.list].length]), line])
         values[current.list].push(item.trim())
       }
     }
@@ -168,13 +170,15 @@ function readBody(lines: readonly string[], first: number, problems: ScenarioPro
     }
   }
 
-  return { values, lines: starts }
+  return { values, lines: new Map([...starts, ...items]) }
 }
 
-export function parseScenario(
-  id: string,
-  markdown: string,
-): { scenario?: Scenario; problems: ScenarioProblem[] } {
+/** A scenario with the line of each of its fields, or the problems that keep it from being one. */
+export type ParsedScenario =
+  | { readonly scenario: Scenario; readonly lines: Lines; readonly problems: ScenarioProblem[] }
+  | { readonly scenario?: never; readonly lines?: never; readonly problems: ScenarioProblem[] }
+
+export function parseScenario(id: string, markdown: string): ParsedScenario {
   const parts = partsOf(markdown.replace(/\r\n?/g, '\n'))
 
   if ('message' in parts) {
@@ -185,17 +189,21 @@ export function parseScenario(
   const header = readHeader(parts.header, problems)
   const body = readBody(parts.body, parts.bodyLine, problems)
 
-  if (problems.length > 0 || header === undefined) {
+  if (problems.length > 0 || header.value === undefined) {
     return { problems }
   }
 
   const parsed = scenarioSchema.safeParse(
-    { id, ...header, ...body.values },
+    { id, ...header.value, ...body.values },
     { error: englishErrors },
   )
 
   return parsed.success
-    ? { scenario: parsed.data, problems: [] }
+    ? {
+        scenario: parsed.data,
+        lines: Object.fromEntries([...header.lines, ...body.lines]),
+        problems: [],
+      }
     : {
         problems: parsed.error.issues.map((issue) =>
           at(

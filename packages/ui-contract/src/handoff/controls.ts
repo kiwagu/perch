@@ -7,8 +7,9 @@
  * element that passes on the props it receives is not counted either, since whoever renders
  * it decides what it carries. A control a coverage-ignore marker covers is ignored, whatever
  * it carries: declared not a test target, it is neither marked nor unmarked, and the
- * elements inside it are not taken as its parts.
- * An indicator read from the source text, not a rule of the contract.
+ * elements inside it are not taken as its parts. A marker that ignores no control (its
+ * element, and its subtree for the plain form, holds none) is a problem, as is one that
+ * cannot be applied. An indicator read from the source text, not a rule of the contract.
  */
 
 import {
@@ -21,7 +22,12 @@ import {
 } from 'oxc-parser'
 
 import { type Problem, sortProblems } from '../files'
-import { IGNORE_WITHOUT_ELEMENT, ignoreMarkers } from '../sources'
+import {
+  IGNORE_NO_CONTROL,
+  IGNORE_WITHOUT_ELEMENT,
+  type IgnoreMarker,
+  ignoreMarkers,
+} from '../sources'
 import { isAnchorAttribute } from '../sources/collect'
 import { attributeValue, staticText, unwrap } from '../sources/values'
 
@@ -40,7 +46,10 @@ export interface Controls {
   unmarked: ControlPlace[]
   /** The controls a coverage-ignore marker declares off, with its reason. */
   ignored: Array<ControlPlace & { reason: string }>
-  /** The markers that cannot be applied: without a reason, or before no JSX element. */
+  /**
+   * The markers that cannot be applied (without a reason, or before no JSX element), and the
+   * ones that ignore no control.
+   */
   problems: Problem[]
 }
 
@@ -64,8 +73,8 @@ export const CONTROL_TAGS: ReadonlySet<string> = new Set([
 interface Context {
   readonly inLabel: boolean
   readonly inMarked: boolean
-  /** The reason of the subtree marker the element sits under, if any. */
-  readonly ignoredFor: string | undefined
+  /** The subtree marker the element sits under, if any. */
+  readonly ignoredBy: IgnoreMarker | undefined
 }
 
 const tagOf = (name: JSXElementName): string => {
@@ -162,15 +171,17 @@ export function countControls(text: string, file: string): Controls {
 
   const { markers, faults } = ignoreMarkers(text, { program, comments })
   const pending = new Map(markers.map((marker) => [marker.target, marker]))
+  /** The markers that ignore at least one control. */
+  const ignoring = new Set<IgnoreMarker>()
   const counted: Controls = { controls: 0, marked: 0, unmarked: [], ignored: [], problems: [] }
-  const top: Context = { inLabel: false, inMarked: false, ignoredFor: undefined }
+  const top: Context = { inLabel: false, inMarked: false, ignoredBy: undefined }
   const stack: Context[] = [top]
 
   new Visitor({
     JSXElement(element) {
       const context = stack.at(-1) ?? top
       const marker = pending.get(element.start)
-      const ignoredFor = marker?.reason ?? context.ignoredFor
+      const ignoredBy = marker ?? context.ignoredBy
       const tag = tagOf(element.openingElement.name)
       const { names, spreads } = attributesOf(element)
       const action = names.includes('onClick')
@@ -183,8 +194,9 @@ export function countControls(text: string, file: string): Controls {
         const label = labelOf(element)
         const place = { line: line(element.start), tag, ...(label === undefined ? {} : { label }) }
 
-        if (ignoredFor !== undefined) {
-          counted.ignored.push({ ...place, reason: ignoredFor })
+        if (ignoredBy !== undefined) {
+          ignoring.add(ignoredBy)
+          counted.ignored.push({ ...place, reason: ignoredBy.reason })
         } else if (anchored || context.inLabel) {
           counted.controls += 1
           counted.marked += 1
@@ -196,8 +208,8 @@ export function countControls(text: string, file: string): Controls {
 
       stack.push({
         inLabel: context.inLabel || tag === 'label',
-        inMarked: context.inMarked || (control && anchored && ignoredFor === undefined),
-        ignoredFor: marker === undefined || marker.self ? context.ignoredFor : marker.reason,
+        inMarked: context.inMarked || (control && anchored && ignoredBy === undefined),
+        ignoredBy: marker === undefined || marker.self ? context.ignoredBy : marker,
       })
     },
     'JSXElement:exit'() {
@@ -205,10 +217,18 @@ export function countControls(text: string, file: string): Controls {
     },
   }).visit(program)
 
-  const unapplied = [...pending.values()].map(({ at }) => ({ at, message: IGNORE_WITHOUT_ELEMENT }))
+  const unapplied = new Set(pending.values())
+  const withoutElement = [...unapplied].map(({ at }) => ({ at, message: IGNORE_WITHOUT_ELEMENT }))
+  const stale = markers
+    .filter((marker) => !unapplied.has(marker) && !ignoring.has(marker))
+    .map(({ at }) => ({ at, message: IGNORE_NO_CONTROL }))
 
   counted.problems = sortProblems(
-    [...faults, ...unapplied].map(({ at, message }) => ({ file, line: line(at), message })),
+    [...faults, ...withoutElement, ...stale].map(({ at, message }) => ({
+      file,
+      line: line(at),
+      message,
+    })),
   )
 
   return counted

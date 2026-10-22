@@ -50,8 +50,8 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { screens, problems: screensLoad } = loadScreens(root)
   const { model, problems: modelLoad } = loadModel(root)
-  const { activities, problems: activitiesLoad } = loadActivities(root)
-  const { scenarios, problems: scenariosLoad } = loadScenarios(root)
+  const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
+  const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
   const problems = [
     ...vocabularyLoad,
     ...screensLoad,
@@ -62,7 +62,18 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
 
   return problems.length > 0 || screens === undefined || model === undefined
     ? { problems: sortProblems(problems) }
-    : { contract: { vocabulary, screens, model, activities, scenarios }, problems: [] }
+    : {
+        contract: {
+          vocabulary,
+          screens,
+          model,
+          activities,
+          activityLines,
+          scenarios,
+          scenarioLines,
+        },
+        problems: [],
+      }
 }
 
 const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [

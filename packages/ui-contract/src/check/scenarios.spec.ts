@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
+import { fixtureContract } from '../manifest/manifest.fixture'
 import type { Scenario } from '../scenarios'
 
 import { sampleContract, screenIn } from './contract.fixture'
@@ -59,6 +60,22 @@ describe('scenariosProblems', () => {
 
     expect(printed(contract)).toEqual([
       'tests/e2e/scenarios/sample/base/thing.md:1: activity: "gone" is not an activity of contract/activities',
+    ])
+  })
+  it('reports each problem at the line of its field in the file, the deepest the file holds', () => {
+    const contract = fixtureContract()
+    const scenario = firstScenario(contract)
+
+    scenario.activity = 'gone'
+    scenario.devices = { A: 'member', B: 'visitor' }
+    scenario.expected = ['[sample.save-button] saves with [code:saved]', 'It shows [code:lost]']
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:4: activity: "gone" is not an activity of contract/activities',
+      'tests/e2e/scenarios/sample/base/thing.md:5: devices.B: "visitor" is not a role of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:12: where: [/sample] is the path of no binding',
+      'tests/e2e/scenarios/sample/base/thing.md:17: steps[0]: [/sample] is the path of no binding',
+      'tests/e2e/scenarios/sample/base/thing.md:20: expected[1]: [code:lost] is not a code of the vocabulary',
     ])
   })
   it('resolves a derived anchor only through a suffix its base lists in derived', () => {

@@ -10,7 +10,9 @@
  * a move, or after an invoke's `onDone` or `onError`, each state followed once), or the
  * anchor is a link to that path (`binding.route`). Every guard is
  * declared in `meta.guards` and every declared one is used; every state is reachable from
- * `initial`, and every state that is not final has a transition to leave it.
+ * `initial`, and every state that is not final has a transition to leave it. Each problem is
+ * named by its JSON path in the activity's file, at the line of the deepest part of that path
+ * the file holds.
  */
 
 import { baseOf } from '../anchors'
@@ -26,7 +28,7 @@ import {
   type Problem,
   type Screen,
 } from '../files'
-import { jsonPath } from '../files/problems'
+import { jsonPath, lineAt } from '../files/problems'
 
 import {
   bindingRefsOf,
@@ -34,6 +36,7 @@ import {
   declaredAnchors,
   fieldProblem,
   has,
+  inFile,
   knownAnchors,
   own,
 } from './contract'
@@ -289,17 +292,17 @@ export function activitiesProblems(contract: Contract): Problem[] {
     declaredAnchors(contract.screens).map(({ anchor, def, screen }) => [anchor, { def, screen }]),
   )
 
-  return contract.activities.flatMap((activity) =>
-    activityProblems({
+  return contract.activities.flatMap((activity) => {
+    const file = activityFile(activity.id)
+    const lines = contract.activityLines.get(activity.id)
+
+    return activityProblems({
       activity,
       contract,
       screens,
       known,
       declared,
-      problem: (at, message) => ({
-        file: activityFile(activity.id),
-        message: `${jsonPath(at)}: ${message}`,
-      }),
-    }),
-  )
+      problem: (at, message) => inFile(file, `${jsonPath(at)}: ${message}`, lineAt(lines, at)),
+    })
+  })
 }

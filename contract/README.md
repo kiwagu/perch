@@ -610,8 +610,10 @@ block into `COVERAGE.md`. It is a report, not a gate.
    and each action with the anchors whose `binding` names it, or `unbound`. A field may be
    internal (an id, a creation time), so an unbound one is a question, not an error. Then
    per activity, the scenarios that name it in their `activity` and the transitions they
-   walk: a transition is walked when one of those scenarios names its anchor in brackets,
-   and the totals line adds `activities n, transitions walked x/y`.
+   walk: a transition from a state on an anchor is walked when one of those scenarios names
+   the anchor in a step and the most recent route before that step, in `where` or an
+   earlier step, is the address of that state (the initial state while no route has come
+   yet), and the totals line adds `activities n, transitions walked x/y`.
 2. **The controls**, the secondary measure: per feature module and for the UI kit, how many
    controls carry an anchor, which are left unmarked and which are declared off the
    coverage. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`.
@@ -630,21 +632,23 @@ render={
 In code it is a line comment, `// ui-contract-ignore: <reason>`; among JSX children it is
 the only content of a comment container, `{/* ui-contract-ignore: <reason> */}`.
 `ui-contract-ignore` covers the element and everything inside it, `ui-contract-ignore-self`
-the element alone. A marker without a reason, in another form, or not right before an
-element makes the command fail and write nothing. A marker that no longer ignores any
-control raises nothing yet.
+the element alone. A marker without a reason, in another form, not right before an
+element, or that ignores no control (its element, and for `ui-contract-ignore` everything
+inside it, holds none) makes the command fail and write nothing.
 
 ## Handing over a change
 
 A change to the contract goes with the output of `bun run contract:diff main` in its
-description, and below it, by hand, the reason for each rename or removal, since those break
-whoever reads the old name:
+description (the screens, anchors, codes, entities, fields and activities added, removed or
+renamed, and the transitions added or removed in each activity both sides hold), and below
+it, by hand, the reason for each rename or removal, since those break whoever reads the old
+name:
 
 ```text
 <the output of bun run contract:diff main>
 
 Why:
-- <each anchor, code, screen, entity or field renamed or removed>: <the reason>
+- <each anchor, code, screen, entity, field, activity or transition renamed or removed>: <the reason>
 Scenarios and tests changed with it: <scenario ids>
 ```
 

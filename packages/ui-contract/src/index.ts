@@ -167,6 +167,7 @@ export {
   collectFromSource,
   compareWithContract,
   IGNORE_MALFORMED,
+  IGNORE_NO_CONTROL,
   IGNORE_WITHOUT_ELEMENT,
   IGNORE_WITHOUT_REASON,
   type IgnoreMarker,

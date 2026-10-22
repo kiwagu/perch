@@ -49,8 +49,24 @@ describe('loadActivities', () => {
     })
     expect(activities[0]?.data?.['thing.title']?.model).toBe('thing.title')
   })
+  it('keeps the line of each key and item of an activity file by its JSON path', () => {
+    cpSync(FIXTURE, join(root, ACTIVITIES_DIR), { recursive: true })
+
+    expect(loadActivities(root).lines.get('thing')).toMatchObject({
+      id: 2,
+      roles: 5,
+      'roles[0]': 5,
+      'data["thing.title"].model': 11,
+      initial: 12,
+      'states.editing': 14,
+      'states.editing.meta.address.path': 16,
+      'states.editing.on["sample.save-button"]': 18,
+      'states.editing.on["sample.save-button"].target': 19,
+      'states.saved.type': 23,
+    })
+  })
   it('finds no activity, and no problem, without the folder', () => {
-    expect(loadActivities(root)).toEqual({ activities: [], problems: [] })
+    expect(loadActivities(root)).toEqual({ activities: [], lines: new Map(), problems: [] })
   })
   it('reads the folder sorted by path', () => {
     writeAs('contract/activities/session.yaml', 'session')
@@ -68,6 +84,7 @@ describe('loadActivities', () => {
 
     expect(loadActivities(root)).toEqual({
       activities: [],
+      lines: new Map(),
       problems: [
         {
           file: 'contract/activities/notes.txt',

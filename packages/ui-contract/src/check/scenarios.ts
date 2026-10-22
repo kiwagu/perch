@@ -4,18 +4,19 @@
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
  * pattern row matches), the activity a scenario names is one of `contract/activities`, and
  * every device acts as a role of the vocabulary. Each problem is one of the scenario's file,
- * named by its field; the ids are paths, so each is used once.
+ * named by its field and at the line of that field (of the deepest part of its path the file
+ * holds); the ids are paths, so each is used once.
  */
 
 import { ACTIVITIES_DIR, type Problem, scenarioFile } from '../files'
-import { jsonPath } from '../files/problems'
+import { jsonPath, lineAt } from '../files/problems'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 
 import {
   bindingPaths,
   type Contract,
   has,
-  inScenario,
+  inFile,
   isChoiceValue,
   knownAnchors,
   statesOf,
@@ -66,8 +67,9 @@ export function scenariosProblems(contract: Contract): Problem[] {
 
   return contract.scenarios.flatMap((scenario) => {
     const file = scenarioFile(scenario.id)
+    const lines = contract.scenarioLines.get(scenario.id)
     const problem = (at: readonly PropertyKey[], message: string): Problem =>
-      inScenario(file, `${jsonPath(at)}: ${message}`)
+      inFile(file, `${jsonPath(at)}: ${message}`, lineAt(lines, at))
     const { activity } = scenario
 
     return [

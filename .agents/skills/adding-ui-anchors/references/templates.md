@@ -28,7 +28,7 @@ and tests changed with it. The diff leaves out the lists that are empty:
 <the output of bun run contract:diff main>
 
 Why:
-- <each anchor, code, screen, entity or field renamed or removed>: <the reason>
+- <each anchor, code, screen, entity, field, activity or transition renamed or removed>: <the reason>
 Scenarios and tests changed with it: <scenario ids>
 ```
 

@@ -86,8 +86,16 @@ describe('measureCoverage', () => {
       },
     ])
   })
-  it('counts per activity the scenarios that name it and the transitions they walk', () => {
+  it('counts per activity the scenarios that name it and the transitions they walk in a step', () => {
+    const fixture = readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8')
+    const walking = fixture
+      .replaceAll('[/sample]', '[/sample/$key]')
+      .replace('[sample.title-input]', '$& and click [sample.save-button]')
+
     expect(measureCoverage(sample()).activities).toEqual([
+      { id: 'thing', scenarios: 1, transitions: 1, walked: 0 },
+    ])
+    expect(measureCoverage(sample({ [scenarioFile(SCENARIO)]: walking })).activities).toEqual([
       { id: 'thing', scenarios: 1, transitions: 1, walked: 1 },
     ])
   })

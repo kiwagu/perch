@@ -55,6 +55,21 @@ describe('activitiesProblems', () => {
   it('finds nothing in the activity of the fixture files', () => {
     expect(printed(fixtureContract())).toEqual([])
   })
+  it('reports each problem at the line of the deepest part of its path the file holds', () => {
+    const contract = fixtureContract()
+    const activity = activityIn(contract)
+    const editing = activityStateIn(contract, 'editing')
+
+    activity.roles = ['member', 'visitor']
+    editing.on = { 'sample.save-button': { target: 'gone', guard: 'titleGiven' } }
+
+    expect(printed(contract)).toEqual([
+      'contract/activities/thing.yaml:5: roles[1]: "visitor" is not a role of the vocabulary',
+      'contract/activities/thing.yaml:19: states.editing.on["sample.save-button"].target: "gone" is not a state of the activity',
+      'contract/activities/thing.yaml:18: states.editing.on["sample.save-button"].guard: "titleGiven" is not a guard of meta.guards',
+      'contract/activities/thing.yaml:21: states.saved: is not reachable from "editing"',
+    ])
+  })
   it('wants roles of the vocabulary and data that are fields of the model', () => {
     const contract = sampleContract()
     const activity = activityIn(contract)

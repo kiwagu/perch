@@ -69,11 +69,11 @@ describe('formatScenario', () => {
     expect(formatScenario(ODD)).not.toContain('activity')
   })
   it('is undone by the parser for values YAML and Markdown would read otherwise', () => {
-    expect(parseScenario(ODD.id, formatScenario(ODD))).toEqual({ scenario: ODD, problems: [] })
+    expect(parsed(ODD.id, formatScenario(ODD))).toEqual(ODD)
   })
   it.each(filesUnder(REPOSITORY))('is undone by the parser for %s', (id, text) => {
     const scenario = parsed(id, text)
 
-    expect(parseScenario(id, formatScenario(scenario))).toEqual({ scenario, problems: [] })
+    expect(parsed(id, formatScenario(scenario))).toEqual(scenario)
   })
 })

@@ -3,7 +3,7 @@
  * and the lookups its rules share: the declared anchors, the refs of an anchor's binding and
  * what each names in the model, a field of the model, a known anchor (declared, or a declared
  * base with a suffix it lists in `derived`), the states and choice values of the vocabulary,
- * and a problem located in a screen's file, the platform file or a scenario's file.
+ * and a problem located in a screen's file, the platform file or another file at a line.
  */
 
 import { baseOf } from '../anchors'
@@ -18,7 +18,7 @@ import {
   type ScreensFile,
   type Vocabulary,
 } from '../files'
-import { jsonPath } from '../files/problems'
+import { jsonPath, type Lines } from '../files/problems'
 import type { Scenario } from '../scenarios'
 
 export interface Contract {
@@ -27,8 +27,12 @@ export interface Contract {
   readonly model: Model
   /** The activities of `contract/activities`, sorted by the path of their files. */
   readonly activities: Activity[]
+  /** The line of each key and item of each activity's file, by the activity's id. */
+  readonly activityLines: ReadonlyMap<string, Lines>
   /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
   readonly scenarios: Scenario[]
+  /** The line of each field of each scenario's file, by the scenario's id. */
+  readonly scenarioLines: ReadonlyMap<string, Lines>
 }
 
 export interface DeclaredAnchor {
@@ -137,8 +141,8 @@ export const locate =
     return { file, message: `${jsonPath(inside)}: ${message}` }
   }
 
-/** A problem of a scenario's file, at `line` when it is known. */
-export const inScenario = (file: string, message: string, line?: number): Problem =>
+/** A problem of a file, at `line` when it is known. */
+export const inFile = (file: string, message: string, line?: number): Problem =>
   line === undefined ? { file, message } : { file, line, message }
 
 /**

@@ -48,10 +48,17 @@ describe('loadScenarios', () => {
   it('loads the fixture', () => {
     cpSync(FIXTURES, join(root, SCENARIOS_DIR), { recursive: true })
 
-    const { scenarios, problems } = loadScenarios(root)
+    const { scenarios, lines, problems } = loadScenarios(root)
 
     expect(problems).toEqual([])
     expect(scenarios.map((scenario) => scenario.id)).toEqual(['sample/base/thing'])
+    expect(lines.get('sample/base/thing')).toMatchObject({
+      activity: 4,
+      'devices.A': 6,
+      where: 12,
+      'steps[1]': 18,
+      'expected[0]': 21,
+    })
   })
   it('takes each id from its path and sorts the scenarios by it', () => {
     for (const id of [
@@ -63,15 +70,19 @@ describe('loadScenarios', () => {
       writeScenario(id)
     }
 
-    expect(loadScenarios(root)).toEqual({
-      scenarios: [
-        'device/base/my-devices',
-        'user/base/crud/edit-name',
-        'user/base/sign-up',
-        'user/flows/sign-out',
-      ].map((id) => ({ ...SAMPLE, id })),
+    const { scenarios, lines, problems } = loadScenarios(root)
+    const ids = [
+      'device/base/my-devices',
+      'user/base/crud/edit-name',
+      'user/base/sign-up',
+      'user/flows/sign-out',
+    ]
+
+    expect({ scenarios, problems }).toEqual({
+      scenarios: ids.map((id) => ({ ...SAMPLE, id })),
       problems: [],
     })
+    expect([...lines.keys()]).toEqual(ids)
   })
   it('reports a path outside the id grammar, an unknown layer and a file that is no scenario', () => {
     writeScenario('user/base/sign-up')
@@ -82,7 +93,10 @@ describe('loadScenarios', () => {
     const path =
       'not a scenario path: <entity>/<layer>/[<area>/]<slug>.md in kebab-case, the layer one of base, flows, features'
 
-    expect(loadScenarios(root)).toEqual({
+    const { scenarios, lines, problems } = loadScenarios(root)
+
+    expect([...lines.keys()]).toEqual(['user/base/sign-up'])
+    expect({ scenarios, problems }).toEqual({
       scenarios: [{ ...SAMPLE, id: 'user/base/sign-up' }],
       problems: [
         { file: 'tests/e2e/scenarios/user/01-sign-up.md', message: path },
@@ -99,6 +113,7 @@ describe('loadScenarios', () => {
 
     expect(loadScenarios(root)).toEqual({
       scenarios: [],
+      lines: new Map(),
       problems: [
         {
           file: 'tests/e2e/scenarios/user/base/sign-up.md',
@@ -111,6 +126,7 @@ describe('loadScenarios', () => {
   it('reports a missing folder as one problem', () => {
     expect(loadScenarios(root)).toEqual({
       scenarios: [],
+      lines: new Map(),
       problems: [{ file: 'tests/e2e/scenarios', message: 'cannot read the folder' }],
     })
   })

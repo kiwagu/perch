@@ -88,8 +88,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    visit, each with its `target`, a `guard` of `meta.guards` when only some cases lead there,
    and a `description`; no effects and no `invoke`.
 4. **The scenarios.** Each scenario that walks the activity names it in its front matter,
-   `activity: <id>` after `tags`, and names in brackets the anchors of the transitions it
-   takes.
+   `activity: <id>` after `tags`, and names in brackets, in a step, the anchor of each
+   transition it takes, after the route of the state it leaves (in `where` or an earlier
+   step).
 5. **The checks.** `contract:check` holds the activity to the screens, the web app's
    `activities-machine.spec.ts` runs it in XState, and `bun run contract:coverage --write`
    shows how many of its transitions the scenarios walk.

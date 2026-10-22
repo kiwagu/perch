@@ -71,6 +71,49 @@ function changed(before: Contract): Contract {
   return after
 }
 
+/** A visit to the sample screen, as each state of the fixture's activity is. */
+const atSample = () => ({ screen: 'sample', address: { path: '/sample/$key' } })
+
+/**
+ * The fixture contract with a second activity, `gone` before the change and `invite` after
+ * it; after it, `thing` also saves on the title input and leads back from `saved`.
+ */
+function withActivities(base: Contract, side: 'before' | 'after'): Contract {
+  const contract = structuredClone(base)
+  const [thing] = contract.activities
+
+  if (thing === undefined) {
+    throw new Error('the fixture has no activity')
+  }
+
+  contract.activities.push({ ...structuredClone(thing), id: side === 'before' ? 'gone' : 'invite' })
+
+  if (side === 'after') {
+    thing.states = {
+      editing: {
+        meta: atSample(),
+        on: {
+          'sample.title-input': [{ guard: 'titleGiven', target: 'saved' }, { target: 'saved' }],
+        },
+      },
+      saved: { meta: atSample(), on: { 'sample.page': { target: 'editing' } } },
+    }
+  }
+
+  return contract
+}
+
+const ACTIVITY_CHANGES = {
+  added: ['invite'],
+  removed: ['gone'],
+  transitions: {
+    thing: {
+      added: ['editing on sample.title-input -> saved', 'saved on sample.page -> editing'],
+      removed: ['editing on sample.save-button -> saved'],
+    },
+  },
+}
+
 describe('diffContracts', () => {
   const before = fixtureContract()
   const after = changed(before)
@@ -86,7 +129,17 @@ describe('diffContracts', () => {
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
+      activities: {
+        added: [],
+        removed: [],
+        transitions: { thing: { added: [], removed: [] } },
+      },
     })
+  })
+  it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
+    expect(
+      diffContracts(withActivities(before, 'before'), withActivities(before, 'after')).activities,
+    ).toEqual(ACTIVITY_CHANGES)
   })
   it('leaves the anchors added and removed when the pairing is ambiguous', () => {
     const twice = structuredClone(after)
@@ -127,6 +180,7 @@ describe('diffContracts', () => {
       'thing.title',
     ])
     expect(changes.anchors.removed).toEqual([])
+    expect(changes.activities).toEqual({ added: ['thing'], removed: [], transitions: {} })
   })
   it('finds nothing between a contract and itself', () => {
     expect(formatChanges(diffContracts(before, before))).toBe('contract changes: none')
@@ -173,16 +227,29 @@ describe('formatChanges', () => {
       'fields removed: thing.title',
     ])
   })
-  it('counts in the plural and keeps the order screens, anchors, codes, entities, fields', () => {
+  it('counts in the plural and keeps the order screens, anchors, codes, entities, fields, activities', () => {
     const changes = diffContracts(undefined, fixtureContract())
 
     expect(formatChanges(changes).split('\n')).toEqual([
-      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 entity added, 5 fields added',
+      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 entity added, 5 fields added, 1 activity added',
       'screens added: sample',
       'anchors added: sample.list, sample.list.row-item, sample.page, sample.save-button, sample.sign-out-button, sample.title-input',
       'codes added: failed, saved',
       'entities added: thing',
       'fields added: thing.author, thing.created_at, thing.id, thing.size, thing.title',
+      'activities added: thing',
+    ])
+  })
+  it('prints the activities added and removed, then the transitions changed in each', () => {
+    const before = fixtureContract()
+    const changes = diffContracts(withActivities(before, 'before'), withActivities(before, 'after'))
+
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 activity added, 1 activity removed, 2 transitions added in thing, 1 transition removed in thing',
+      'activities added: invite',
+      'activities removed: gone',
+      'transitions added in thing: editing on sample.title-input -> saved, saved on sample.page -> editing',
+      'transitions removed in thing: editing on sample.save-button -> saved',
     ])
   })
 })

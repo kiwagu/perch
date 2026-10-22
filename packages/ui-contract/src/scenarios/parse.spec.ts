@@ -21,7 +21,9 @@ const file = (header: readonly string[], body: readonly string[]): string =>
 
 describe('parseScenario', () => {
   it('reads every section of a file', () => {
-    expect(parseScenario(ID, fixture)).toEqual({
+    const { scenario, problems } = parseScenario(ID, fixture)
+
+    expect({ scenario, problems }).toEqual({
       scenario: {
         id: ID,
         title: 'Edit the thing',
@@ -35,6 +37,25 @@ describe('parseScenario', () => {
         expected: ['[sample.save-button] saves with [code:saved]'],
       },
       problems: [],
+    })
+  })
+  it('gives the line of every key of the front matter and of every section and item, by its path', () => {
+    expect(parseScenario(ID, fixture).lines).toEqual({
+      tags: lineOf(fixture, 'tags:'),
+      'tags[0]': lineOf(fixture, '  - smoke'),
+      activity: lineOf(fixture, 'activity:'),
+      devices: lineOf(fixture, 'devices:'),
+      'devices.A': lineOf(fixture, '  A: member'),
+      data: lineOf(fixture, 'data:'),
+      'data.Title': lineOf(fixture, '  Title:'),
+      title: lineOf(fixture, '# Edit the thing'),
+      where: lineOf(fixture, 'Where:'),
+      scenario: lineOf(fixture, '## Scenario:'),
+      steps: lineOf(fixture, '### Steps'),
+      'steps[0]': lineOf(fixture, '1. Open'),
+      'steps[1]': lineOf(fixture, '2. Enter'),
+      expected: lineOf(fixture, '### Expected result'),
+      'expected[0]': lineOf(fixture, '- [sample.save-button]'),
     })
   })
   it('takes the sections in any order and keeps a fixed data value', () => {
@@ -60,7 +81,9 @@ describe('parseScenario', () => {
       ],
     )
 
-    expect(parseScenario('user/flows/idle-traffic', markdown)).toEqual({
+    const { scenario, lines, problems } = parseScenario('user/flows/idle-traffic', markdown)
+
+    expect({ scenario, problems }).toEqual({
       scenario: {
         id: 'user/flows/idle-traffic',
         title: 'Idle traffic',
@@ -74,6 +97,7 @@ describe('parseScenario', () => {
       },
       problems: [],
     })
+    expect(lines).toMatchObject({ data: 2, 'data.Locale': 4, where: 12, 'steps[1]': 15 })
   })
   it('reads a file with CRLF or CR line endings as its LF twin', () => {
     const noData = fixture.replace('data:\n  Title: generate', 'data: {}')

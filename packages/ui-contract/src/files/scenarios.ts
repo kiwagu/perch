@@ -2,7 +2,8 @@
  * Reads `tests/e2e/scenarios`: each `.md` file under it, at any depth and sorted by path, is
  * one scenario, its id the path without `.md` (`user/base/sign-up`). A missing folder, a
  * file that is not `.md`, a path outside the id grammar or with a layer the grammar does
- * not know, and the problems of a file's text are problems of that file.
+ * not know, and the problems of a file's text are problems of that file. Beside the scenarios,
+ * the line of each field of each one's file, by its id.
  */
 
 import { readFileSync } from 'node:fs'
@@ -12,7 +13,7 @@ import { parseScenario, SCENARIO_LAYERS, type Scenario, scenarioSchema } from '.
 
 import { filesUnder } from './files-under'
 import { SCENARIOS_DIR } from './paths'
-import type { Problem } from './problems'
+import type { Lines, Problem } from './problems'
 
 const SUFFIX = '.md'
 
@@ -21,11 +22,20 @@ const NOT_AN_ID = `not a scenario path: <entity>/<layer>/[<area>/]<slug>${SUFFIX
 const isScenarioId = (id: string): boolean =>
   scenarioSchema.shape.id.safeParse(id).success && SCENARIO_LAYERS.includes(id.split('/')[1] ?? '')
 
-export function loadScenarios(root: string): { scenarios: Scenario[]; problems: Problem[] } {
+export function loadScenarios(root: string): {
+  scenarios: Scenario[]
+  lines: Map<string, Lines>
+  problems: Problem[]
+} {
   const paths = filesUnder(join(root, SCENARIOS_DIR))
+  const lines = new Map<string, Lines>()
 
   if (paths === undefined) {
-    return { scenarios: [], problems: [{ file: SCENARIOS_DIR, message: 'cannot read the folder' }] }
+    return {
+      scenarios: [],
+      lines,
+      problems: [{ file: SCENARIOS_DIR, message: 'cannot read the folder' }],
+    }
   }
 
   const scenarios: Scenario[] = []
@@ -49,9 +59,10 @@ export function loadScenarios(root: string): { scenarios: Scenario[]; problems: 
 
       if (parsed.scenario !== undefined) {
         scenarios.push(parsed.scenario)
+        lines.set(id, parsed.lines)
       }
     }
   }
 
-  return { scenarios, problems }
+  return { scenarios, lines, problems }
 }

@@ -14,7 +14,7 @@ block below from the code and the contract; the text around it is written by han
 
 The contract declares 5 screens, 67 anchors and 29 codes.
 
-Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 5/8; controls marked 33/33, ignored 2.
+Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 3/8; controls marked 33/33, ignored 2.
 
 ## Model
 
@@ -50,7 +50,7 @@ Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 5
 
 | Activity | Scenarios | Transitions | Walked |
 | --- | ---: | ---: | ---: |
-| session | 4 | 8 | 5 |
+| session | 4 | 8 | 3 |
 
 ## Controls
 
@@ -102,8 +102,10 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
   sign-up, through the platform). The totals line counts the fields and the actions bound.
 - **Activities.** Each activity of `contract/activities/`, the scenarios whose front matter
   names it in `activity`, its transitions (one per transition of each `on`, a guarded list
-  counting each of its branches), and how many of them are walked: a transition is walked
-  when one of those scenarios names its anchor in brackets. The totals line adds the
+  counting each of its branches), and how many of them are walked: a transition from a
+  state on an anchor is walked when one of those scenarios names the anchor in a step and
+  the most recent route before that step, in `where` or an earlier step, is the address of
+  that state (the initial state while no route has come yet). The totals line adds the
   activities and the transitions walked over all of them, and both it and the table are left
   out while the contract has no activity.
 - **Modules.** Each folder under `apps/web/src/features` is a module; `packages/ui/src` is
@@ -132,8 +134,9 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
   `ui-contract-ignore-self` the element alone. An ignored control is neither marked nor
   unmarked, whatever it carries (an anchor, a `<label>` around it), and is listed with its
   reason; the elements inside it are not taken as its parts. A marker without a reason, in
-  another form, or not right before an element is a problem: the command prints it, exits 1
-  and writes nothing. A marker that no longer ignores any control raises nothing yet.
+  another form, not right before an element, or that ignores no control (its element, and
+  for `ui-contract-ignore` everything inside it, holds none) is a problem: the command
+  prints it, exits 1 and writes nothing.
 - **Unmarked.** The controls that are neither marked nor ignored, listed as
   `file:line: <element>`, the element's tag with its `aria-label` or its text when that is a
   static string. `bun run contract:coverage --unmarked` prints the same two lists.

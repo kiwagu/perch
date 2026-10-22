@@ -2,6 +2,7 @@ export { type Collected, collectFromSource, RUNTIME_ANCHOR, RUNTIME_SUFFIX } fro
 export { compareWithContract } from './compare'
 export {
   IGNORE_MALFORMED,
+  IGNORE_NO_CONTROL,
   IGNORE_WITHOUT_ELEMENT,
   IGNORE_WITHOUT_REASON,
   type IgnoreMarker,
