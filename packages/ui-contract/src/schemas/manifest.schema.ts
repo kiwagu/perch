@@ -41,6 +41,7 @@ const instructionsSchema = z
       .min(1)
       .describe('How to read `activities`, the machines of visits to screens.'),
     scenarios: z.string().min(1).describe('How to read `scenarios` and their bracket references.'),
+    gaps: z.string().min(1).describe('What to do when the contract cannot say what a build needs.'),
   })
   .describe('Prose instructions for an agent that drives the application.')
 

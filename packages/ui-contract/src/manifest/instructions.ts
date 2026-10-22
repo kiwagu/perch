@@ -86,6 +86,11 @@ const SCENARIOS = [
   "They are the contract's feedback loop: a scenario that cannot be written from the contract alone (an anchor, a code, a state, a route or a role it would need) names a gap to fix in the contract files, never one to work around in a test.",
 ].join(' ')
 
+const GAPS = [
+  'When the contract cannot say what you need (a state, a region, an event, a value, a route, a role, a code, a shape), stop at that part: build what the contract covers and report a contract gap with your result, as four lines: `Contract gap:` what is needed; `Facet:` which part of the contract cannot say it (the model, a screen file, the platform, the flow subset, an activity, the scenario grammar, a check); `Emulation refused:` the workaround you did not build; `Proposal:` the change to the contract and its cost.',
+  'Never hold it in the app or in a test instead: state in a component for a flow state or a region the contract lacks, a value or a route it does not carry, an anchor or a code born in the code or in a test. An emulation is a fork of the model that no check sees and the next build from this manifest loses; the contract is changed first.',
+].join(' ')
+
 export function instructionsOf(
   vocabulary: Vocabulary,
   platform: Platform,
@@ -101,5 +106,6 @@ export function instructionsOf(
     notices: notices(platform),
     activities: ACTIVITIES,
     scenarios: SCENARIOS,
+    gaps: GAPS,
   }
 }

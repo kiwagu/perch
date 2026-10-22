@@ -271,6 +271,11 @@
               "type": "string",
               "minLength": 1,
               "description": "How to read `scenarios` and their bracket references."
+            },
+            "gaps": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What to do when the contract cannot say what a build needs."
             }
           },
           "required": [
@@ -282,7 +287,8 @@
             "model",
             "notices",
             "activities",
-            "scenarios"
+            "scenarios",
+            "gaps"
           ],
           "additionalProperties": false,
           "description": "Prose instructions for an agent that drives the application."

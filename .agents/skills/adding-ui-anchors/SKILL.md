@@ -68,7 +68,8 @@ code and the tests follow; the checks hold them to the contract.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
    bracket references. When it cannot be written from the contract, the scenario has found a
-   gap: go back to steps 2 to 4, never work around it in the test.
+   gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
+   close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    `bun run e2e:scaffold <id>` writes the failing test of a new scenario.
 6. **The code.** Put the literal on the semantic element, in one of the four forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
@@ -94,6 +95,8 @@ code and the tests follow; the checks hold them to the contract.
 ## Do not
 
 - Start in JSX or in a test: an anchor, a code, a state or a route is in the contract first.
+- Emulate a facet the contract lacks in a component, a hook, a store or a test; signal the gap
+  as `contract-gap-no-emulation.mdc` says.
 - Invent a kind, a suffix, a state, a code or a value outside the vocabulary; add it to its
   table in the same change.
 - Build an anchor at runtime, join a derived name by hand instead of `testIdFor`, or write

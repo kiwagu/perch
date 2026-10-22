@@ -56,6 +56,13 @@ describe('instructionsOf', () => {
   it('names the activity a scenario may walk among the fields of a scenario', () => {
     expect(instructions.scenarios).toContain('`activity`')
   })
+  it('says a gap of the contract is signalled with four lines, never emulated', () => {
+    expect(instructions.gaps).toContain('`Contract gap:`')
+    expect(instructions.gaps).toContain('`Facet:`')
+    expect(instructions.gaps).toContain('`Emulation refused:`')
+    expect(instructions.gaps).toContain('`Proposal:`')
+    expect(instructions.gaps).toContain('Never hold it in the app or in a test instead')
+  })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
       expect(text.length).toBeGreaterThan(80)
