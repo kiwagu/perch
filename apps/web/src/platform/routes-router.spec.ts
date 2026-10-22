@@ -43,49 +43,66 @@ type Value = string | number | boolean
 type Search = Binding['search']
 
 /**
- * The value a path parameter is built with: the contract's sample of its schema
- * (`parameterSample`: its example, default or first enum value, or one built within its
- * bounds and pattern); `sample-value` for one the binding does not declare. A declared one
- * with no sample fails the spec, as the contract check refuses it.
+ * The value a path parameter is built with: the contract's sample of its schema for a path
+ * segment (`parameterSample`: its example, default or first enum value, or one built within
+ * its bounds and pattern, never empty), none when no such value can be built;
+ * `sample-value` for one the binding does not declare.
  */
-function paramValue(params: Binding['params'], name: string): string {
+function paramValue(params: Binding['params'], name: string): string | undefined {
   const parameter = params?.properties[name]
 
   if (parameter === undefined) {
     return PARAM_SAMPLE
   }
 
-  const value = parameterSample(parameter)
+  const value = parameterSample(parameter, 'path')
 
-  if (value === undefined) {
-    throw new Error(`no value of the path parameter \`${name}\` can be built`)
-  }
+  return value === undefined ? undefined : String(value)
+}
 
-  return String(value)
+/** The forms a path is built in, and why the form with its optional parameters is left out. */
+interface ParamForms {
+  readonly forms: Record<string, string>[]
+  readonly unsampled?: string
 }
 
 /**
  * The path parameters a path is built with, named by the path itself, never by what a
  * binding declares: per `$param` and `{-$param}` a value of its schema (`paramValue`), and
  * the splat's value under `_splat` when it ends in `$`; with an optional parameter, also the
- * form without it.
+ * form without it. An optional parameter no value of which can be built leaves only the
+ * form without the optional ones, and says why; a `$param` of that kind fails the spec, as
+ * the contract check refuses it.
  */
-function paramForms(path: string, params?: Binding['params']): Record<string, string>[] {
-  const { segments } = parseRoutePath(path)
-  const present: Record<string, string> = Object.fromEntries(
-    segments.flatMap(({ kind, name }) =>
-      kind === 'static'
-        ? []
-        : [[name, kind === 'splat' ? SPLAT_SAMPLE : paramValue(params, name)] as const],
-    ),
+function paramForms(path: string, params?: Binding['params']): ParamForms {
+  const values = parseRoutePath(path).segments.flatMap(({ kind, name }) =>
+    kind === 'static'
+      ? []
+      : [{ kind, name, value: kind === 'splat' ? SPLAT_SAMPLE : paramValue(params, name) }],
   )
-  const optional = new Set(
-    segments.filter(({ kind }) => kind === 'optional').map(({ name }) => name),
-  )
+  const missing = values.filter(({ value }) => value === undefined).map(({ name }) => name)
+  const required = values.find(({ kind, value }) => kind !== 'optional' && value === undefined)
 
-  return optional.size === 0
-    ? [present]
-    : [present, Object.fromEntries(Object.entries(present).filter(([name]) => !optional.has(name)))]
+  if (required !== undefined) {
+    throw new Error(`no value of the path parameter \`${required.name}\` can be built`)
+  }
+
+  const present: Record<string, string> = Object.fromEntries(
+    values.flatMap(({ name, value }) => (value === undefined ? [] : [[name, value] as const])),
+  )
+  const optional = new Set(values.filter(({ kind }) => kind === 'optional').map(({ name }) => name))
+  const absent = Object.fromEntries(Object.entries(present).filter(([name]) => !optional.has(name)))
+
+  if (missing.length > 0) {
+    const names = missing.map((name) => `\`${name}\``).join(', ')
+
+    return {
+      forms: [absent],
+      unsampled: `${path}: no value of the optional parameter ${names} can be built; the form with it is skipped`,
+    }
+  }
+
+  return { forms: optional.size === 0 ? [present] : [present, absent] }
 }
 
 /**
@@ -103,7 +120,7 @@ function minimalSearch(
   const sent: Record<string, Value> = {}
 
   for (const [name, parameter] of needed) {
-    const value = parameterSample(parameter)
+    const value = parameterSample(parameter, 'search')
 
     if (value === undefined) {
       const of = parameter.pattern === undefined ? 'its schema' : `the pattern ${parameter.pattern}`
@@ -156,19 +173,49 @@ function visit(
 /**
  * A binding's path parameters three ways, each on its own: as its path names them (`_splat`
  * for a splat), as its `params` declares them, and as the router reports them for the path
- * built from the path's own.
+ * built from the path's own (and why that one is not the form with every parameter, if it
+ * is not).
  */
 function parameterNames(
   router: AppRouter,
   binding: Binding,
-): { path: string[]; declared: string[]; reported: string[] } {
-  const [built = {}] = paramForms(binding.path, binding.params)
+): { path: string[]; declared: string[]; reported: string[]; unsampled?: string } {
+  const {
+    forms: [built = {}],
+    unsampled,
+  } = paramForms(binding.path, binding.params)
   const reached = visit(router, binding.path, built, {})
-
-  return {
-    path: Object.keys(built).sort(),
+  const names = {
+    path: parseRoutePath(binding.path)
+      .segments.filter(({ kind }) => kind !== 'static')
+      .map(({ name }) => name)
+      .sort(),
     declared: Object.keys(binding.params?.properties ?? {}).sort(),
     reported: Object.keys(reached.params).sort(),
+  }
+
+  return unsampled === undefined ? names : { ...names, unsampled }
+}
+
+/**
+ * The round trip of a binding's path: each form it is built in matches the binding's route
+ * again with the same parameters; the form a parameter no value of which can be built
+ * would need is skipped, the note naming it.
+ */
+function roundTrip(router: AppRouter, binding: Binding, skip: (note: string) => never): void {
+  const { forms, unsampled } = paramForms(binding.path, binding.params)
+
+  for (const params of forms) {
+    const reached = visit(router, binding.path, params, {})
+
+    expect(trimPathRight(reached.fullPath ?? ''), `the route ${reached.pathname} matches`).toBe(
+      trimPathRight(binding.path),
+    )
+    expect(reached.params, `the parameters ${reached.pathname} matches`).toEqual(params)
+  }
+
+  if (unsampled !== undefined) {
+    skip(unsampled)
   }
 }
 
@@ -184,7 +231,9 @@ function searchCase(router: AppRouter, binding: Binding, skip: (note: string) =>
     skip(`${binding.path}: ${sample.unsampled}`)
   }
 
-  const [present = {}] = paramForms(binding.path, binding.params)
+  const {
+    forms: [present = {}],
+  } = paramForms(binding.path, binding.params)
   const reached = visit(router, binding.path, present, sample.search)
   const problems = binding.search
     ? validateAgainst(binding.path, binding.search, sample.search)
@@ -260,7 +309,9 @@ describe('the round trip', () => {
     const splat = bindingSchema.parse({ path: '/files/$', roles: ['identity'] })
 
     expect(
-      paramForms(optional.path).map((params) => visit(sampleRouter, optional.path, params, {})),
+      paramForms(optional.path).forms.map((params) =>
+        visit(sampleRouter, optional.path, params, {}),
+      ),
     ).toEqual([
       {
         pathname: '/notes/sample-value',
@@ -272,7 +323,7 @@ describe('the round trip', () => {
       { pathname: '/notes', searchStr: '', fullPath: '/notes/{-$tab}', params: {}, search: {} },
     ])
     expect(
-      paramForms(splat.path).map((params) => visit(sampleRouter, splat.path, params, {})),
+      paramForms(splat.path).forms.map((params) => visit(sampleRouter, splat.path, params, {})),
     ).toEqual([
       {
         pathname: '/files/a/b',
@@ -381,7 +432,7 @@ describe('the round trip', () => {
       },
     })
 
-    expect(paramForms(org.path, org.params)).toEqual([{ key: 'org_01hzx9k2' }])
+    expect(paramForms(org.path, org.params)).toEqual({ forms: [{ key: 'org_01hzx9k2' }] })
     expect(visit(sampleRouter, org.path, { key: 'org_01hzx9k2' }, {})).toMatchObject({
       pathname: '/org/org_01hzx9k2',
       params: { key: 'org_01hzx9k2' },
@@ -403,12 +454,47 @@ describe('the round trip', () => {
       },
     })
 
-    expect(paramForms(org.path, org.params)).toEqual([{ key: 'org_a' }])
+    expect(paramForms(org.path, org.params)).toEqual({ forms: [{ key: 'org_a' }] })
+    expect(
+      paramForms('/org/$key', {
+        type: 'object',
+        properties: { key: { type: 'string', minLength: 0 } },
+        additionalProperties: false,
+      }),
+    ).toEqual({ forms: [{ key: 'a' }] })
     expect(visit(sampleRouter, org.path, { key: 'org_a' }, {})).toMatchObject({
       pathname: '/org/org_a',
       fullPath: '/org/$key',
       params: { key: 'org_a' },
     })
+  })
+
+  /** An optional segment whose pattern is beyond plain characters and one repeated class. */
+  const notes = bindingSchema.parse({
+    path: '/notes/{-$tab}',
+    roles: ['identity'],
+    params: {
+      type: 'object',
+      properties: { tab: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
+      additionalProperties: false,
+    },
+  })
+
+  it('builds the form without an optional parameter it builds no value of, and names it', () => {
+    expect(paramForms(notes.path, notes.params)).toEqual({
+      forms: [{}],
+      unsampled:
+        '/notes/{-$tab}: no value of the optional parameter `tab` can be built; the form with it is skipped',
+    })
+    expect(visit(sampleRouter, notes.path, {}, {})).toMatchObject({
+      pathname: '/notes',
+      fullPath: '/notes/{-$tab}',
+      params: {},
+    })
+  })
+
+  it('skips the form with an optional parameter it builds no value of', ({ skip }) => {
+    roundTrip(sampleRouter, notes, skip)
   })
 
   /** A pattern beyond plain characters and one repeated class. */
@@ -487,26 +573,27 @@ describe('the bindings of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.each(bindings)('%s matches its route again with its parameters', (path, binding) => {
-    for (const params of paramForms(path, binding.params)) {
-      const reached = visit(router, path, params, {})
+  it.for(bindings)('%s matches its route again with its parameters', ([, binding], { skip }) => {
+    roundTrip(router, binding, skip)
+  })
 
-      expect(trimPathRight(reached.fullPath ?? ''), `the route ${reached.pathname} matches`).toBe(
-        trimPathRight(path),
+  it.for(bindings)(
+    '%s declares the path parameters the router reports',
+    ([path, binding], { skip }) => {
+      const names = parameterNames(router, binding)
+
+      // A splat is declared by its `$` alone: a `params` property cannot be named `_splat`.
+      expect(names.declared, `the params ${path} declares`).toEqual(
+        names.path.filter((name) => name !== SPLAT),
       )
-      expect(reached.params, `the parameters ${reached.pathname} matches`).toEqual(params)
-    }
-  })
 
-  it.each(bindings)('%s declares the path parameters the router reports', (path, binding) => {
-    const names = parameterNames(router, binding)
+      if (names.unsampled !== undefined) {
+        skip(names.unsampled)
+      }
 
-    expect(names.reported, `the parameters the router reports for ${path}`).toEqual(names.path)
-    // A splat is declared by its `$` alone: a `params` property cannot be named `_splat`.
-    expect(names.declared, `the params ${path} declares`).toEqual(
-      names.path.filter((name) => name !== SPLAT),
-    )
-  })
+      expect(names.reported, `the parameters the router reports for ${path}`).toEqual(names.path)
+    },
+  )
 
   it.for(bindings)(
     '%s builds its search and reads it back with the defaults',

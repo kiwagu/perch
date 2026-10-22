@@ -52,6 +52,14 @@ describe('exampleOf', () => {
     expect(one('/things/$key', { type: 'string', minLength: 3 })).toBe('/things/aaa')
     expect(one('/pages/$key', { type: 'integer', minimum: 2, maximum: 9 })).toBe('/pages/2')
   })
+  it('never fills a path segment with an empty value', () => {
+    const tab = { type: 'string', minLength: 0, examples: [''] }
+
+    expect(linkOf({ path: '/things/$tab', params: flat({ tab }) })).toBe('/things/a')
+    expect(() => exampleOf(binding({ path: '/notes/{-$tab}', params: flat({ tab }) }))).toThrow(
+      '/notes/{-$tab}: the path parameter "tab" cannot be empty',
+    )
+  })
   it('refuses a path parameter no value of whose schema can be built', () => {
     const params = flat({ key: { type: 'string', pattern: '^[a-z]+-\\d+$' } })
 

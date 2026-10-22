@@ -25,6 +25,7 @@ export {
   parseRoutePath,
   type RouteSegment,
   routesProblems,
+  type SampleSlot,
   scenariosProblems,
   screensProblems,
   searchProblems,

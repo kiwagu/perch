@@ -3,11 +3,12 @@
  * TanStack Router writes a link.
  *
  * The path is the binding's path segment by segment: a static segment as written; a `$param`
- * by `parameterSample` (its parameter's first example, else its default, else its first
- * `enum` value, else a value built within its bounds and pattern, the first of them the
- * parameter's schema accepts), the link refused when there is none, as the contract check
- * says the parameter needs an example; a `{-$param}` by its first example, its segment left
- * out when it has none; a splat `$` left out with its segment, as no parameter can be named
+ * by `parameterSample` for a path segment (its parameter's first example, else its default,
+ * else its first `enum` value, else a value built within its bounds and pattern, the first
+ * of them not empty that the parameter's schema accepts), the link refused when there is
+ * none, as the contract check says the parameter needs an example; a `{-$param}` by its
+ * first example, its segment left out when it has none and the link refused when that
+ * example is empty; a splat `$` left out with its segment, as no parameter can be named
  * `_splat` to carry an example. Each value is written with `encodeURIComponent` (the router
  * leaves `[`, `]`, `|` and `^` bare in a path, so the web app's spec catches an example that
  * holds one).
@@ -40,7 +41,7 @@ export interface RouteExample {
 
 /** The value of a `$param` (`parameterSample`), or the refusal of a link that has none. */
 function requiredValue(binding: Binding, parameter: Parameter | undefined, name: string): Value {
-  const value = parameter === undefined ? undefined : parameterSample(parameter)
+  const value = parameter === undefined ? undefined : parameterSample(parameter, 'path')
 
   if (value === undefined) {
     throw new Error(
@@ -70,9 +71,15 @@ function filled(binding: Binding, { kind, name }: RouteSegment): Filled {
   const value =
     kind === 'optional' ? parameter?.examples?.[0] : requiredValue(binding, parameter, name)
 
-  return value === undefined
-    ? {}
-    : { text: encodeURIComponent(String(value)), param: [name, String(value)] }
+  if (value === undefined) {
+    return {}
+  }
+
+  if (value === '') {
+    throw new Error(`${binding.path}: the path parameter "${name}" cannot be empty`)
+  }
+
+  return { text: encodeURIComponent(String(value)), param: [name, String(value)] }
 }
 
 /** The value of a search key: its default, its first enum value or its first example. */

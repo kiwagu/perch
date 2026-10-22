@@ -20,7 +20,8 @@ const parameter = (schema: Readonly<Record<string, unknown>>) => {
   return read
 }
 
-const sampleOf = (schema: Readonly<Record<string, unknown>>) => parameterSample(parameter(schema))
+const sampleOf = (schema: Readonly<Record<string, unknown>>, slot: 'path' | 'search' = 'search') =>
+  parameterSample(parameter(schema), slot)
 
 describe('parameterSample', () => {
   it('takes the first example, then the default, then the first enum value', () => {
@@ -51,6 +52,15 @@ describe('parameterSample', () => {
     expect(sampleOf({ type: 'integer', minimum: 1.5 })).toBe(2)
     expect(sampleOf({ type: 'number', maximum: -2.5 })).toBe(-2.5)
     expect(sampleOf({ type: 'boolean' })).toBe(true)
+  })
+  it('never samples an empty value for a path segment', () => {
+    expect(sampleOf({ type: 'string', minLength: 0 }, 'path')).toBe('a')
+    expect(sampleOf({ type: 'string', minLength: 0, pattern: '^[a-z]*$' }, 'path')).toBe('a')
+    expect(sampleOf({ type: 'string', minLength: 0, pattern: '^[a-z]*$' })).toBe('')
+    expect(sampleOf({ type: 'string', minLength: 0, examples: [''] }, 'path')).toBe('a')
+    expect(sampleOf({ type: 'string', maxLength: 0 }, 'path')).toBeUndefined()
+    expect(sampleOf({ type: 'string', enum: [''] }, 'path')).toBeUndefined()
+    expect(sampleOf({ type: 'string', enum: [''] })).toBe('')
   })
   it('has none for a pattern it cannot derive, bounds nothing meets or a schema that does not compile', () => {
     expect(sampleOf({ type: 'string', pattern: '^[a-z]+-\\d+$' })).toBeUndefined()

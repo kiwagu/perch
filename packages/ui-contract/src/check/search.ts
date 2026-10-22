@@ -7,7 +7,8 @@
  * valid JSON Schema (a `pattern` that compiles, `required` without repeats) is Ajv's, and
  * so, once it is, is that every one of a property's `examples` matches that property and
  * that a path parameter a link must fill (a `$param`) has a value its schema accepts
- * (`parameterSample`): one without needs an example.
+ * (`parameterSample` for a path segment): one without needs an example. A path segment is
+ * never empty, so neither is an example of a path parameter.
  */
 
 import {
@@ -82,10 +83,17 @@ const validityProblems = (
         inScreens(at, `not a valid JSON Schema (screen "${screen}"): ${message}`),
       )
 
-/** The examples of each property that the property's own schema refuses, with Ajv's reasons. */
+/** Why an empty example cannot fill a path segment. */
+const EMPTY_SEGMENT = 'a path segment cannot be empty'
+
+/**
+ * The examples of each property that the property's own schema refuses, with Ajv's reasons,
+ * and in `params` an empty one, which no path segment can carry.
+ */
 function exampleProblems(
   { inScreens }: Lookups,
   schema: FlatSchema | undefined,
+  inPath: boolean,
   at: readonly PropertyKey[],
 ): Problem[] {
   return Object.entries(schema?.properties ?? {}).flatMap(([name, property]) => {
@@ -96,11 +104,16 @@ function exampleProblems(
     const validate = createValidator().compile(property)
 
     return property.examples.flatMap((example, index) => {
-      if (validate(example)) {
+      const reasons = [
+        ...(validate(example)
+          ? []
+          : (validate.errors ?? []).map(({ message, keyword }) => message ?? keyword)),
+        ...(inPath && example === '' ? [EMPTY_SEGMENT] : []),
+      ]
+
+      if (reasons.length === 0) {
         return []
       }
-
-      const reasons = (validate.errors ?? []).map(({ message, keyword }) => message ?? keyword)
 
       return [
         inScreens(
@@ -112,7 +125,10 @@ function exampleProblems(
   })
 }
 
-/** The parameters of `filled` that no value of their schema can be built for. */
+/**
+ * The parameters of `filled` that no value of their schema can be built for as a path
+ * segment: their schema permits only the empty string, or nothing that can be built.
+ */
 const unsampledProblems = (
   { inScreens }: Lookups,
   schema: FlatSchema | undefined,
@@ -120,43 +136,47 @@ const unsampledProblems = (
   at: readonly PropertyKey[],
 ): Problem[] =>
   Object.entries(schema?.properties ?? {})
-    .filter(([name, property]) => filled.includes(name) && parameterSample(property) === undefined)
-    .map(([name]) =>
+    .filter(
+      ([name, property]) =>
+        filled.includes(name) && parameterSample(property, 'path') === undefined,
+    )
+    .map(([name, property]) =>
       inScreens(
         [...at, 'properties', name],
-        'needs an example (no value of its schema can be built)',
+        `needs an example (${parameterSample(property, 'search') === '' ? EMPTY_SEGMENT : 'no value of its schema can be built'})`,
       ),
     )
-
-/**
- * A route schema: valid as a JSON Schema, then its examples and a value for each parameter
- * of `filled` (the ones a link must carry); and its controls.
- */
-function routeSchemaProblems(
-  lookups: Lookups,
-  screen: string,
-  schema: FlatSchema | undefined,
-  filled: readonly string[],
-  at: readonly PropertyKey[],
-): Problem[] {
-  const validity = validityProblems(lookups, screen, schema, at)
-
-  return [
-    ...(validity.length > 0
-      ? validity
-      : [
-          ...exampleProblems(lookups, schema, at),
-          ...unsampledProblems(lookups, schema, filled, at),
-        ]),
-    ...schemaProblems(lookups, schema, at),
-  ]
-}
 
 /** The path parameters a link to `path` must fill: its `$param`s, not the optional ones. */
 const requiredParameters = (path: string): string[] =>
   parseRoutePath(path)
     .segments.filter(({ kind }) => kind === 'param')
     .map(({ name }) => name)
+
+/**
+ * A route schema: valid as a JSON Schema, then its examples and, for the `params` of the
+ * route path `path`, a value for each parameter a link must carry; and its controls.
+ */
+function routeSchemaProblems(
+  lookups: Lookups,
+  screen: string,
+  schema: FlatSchema | undefined,
+  path: string | undefined,
+  at: readonly PropertyKey[],
+): Problem[] {
+  const validity = validityProblems(lookups, screen, schema, at)
+  const filled = path === undefined ? [] : requiredParameters(path)
+
+  return [
+    ...(validity.length > 0
+      ? validity
+      : [
+          ...exampleProblems(lookups, schema, path !== undefined, at),
+          ...unsampledProblems(lookups, schema, filled, at),
+        ]),
+    ...schemaProblems(lookups, schema, at),
+  ]
+}
 
 function schemaProblems(
   lookups: Lookups,
@@ -213,14 +233,8 @@ export function searchProblems(contract: Contract): Problem[] {
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
-        ...routeSchemaProblems(
-          lookups,
-          screen.id,
-          binding.params,
-          requiredParameters(binding.path),
-          [...at, 'params'],
-        ),
-        ...routeSchemaProblems(lookups, screen.id, binding.search, [], [...at, 'search']),
+        ...routeSchemaProblems(lookups, screen.id, binding.params, binding.path, [...at, 'params']),
+        ...routeSchemaProblems(lookups, screen.id, binding.search, undefined, [...at, 'search']),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)
             ? []

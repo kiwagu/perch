@@ -5,7 +5,9 @@
  * `minLength` and `maxLength` and a `pattern` of an optional literal prefix and at most one
  * character class repeated (`^draft$`, `^[a-z]+$`, `^\d{3}$`, `^thg_[a-z0-9]+$`, anchors
  * optional); a number within `minimum` and `maximum`, whole for an integer; a boolean is
- * true. A parameter none of whose values can be built has no sample: it needs an example.
+ * true. A value for a path segment is never empty: its strings are one character long at
+ * least, and an empty example, default or enum value is passed over. A parameter none of
+ * whose values can be built has no sample: it needs an example.
  */
 
 import { type Binding, createValidator } from '../files'
@@ -13,6 +15,9 @@ import { type Binding, createValidator } from '../files'
 type Parameter = NonNullable<Binding['params']>['properties'][string]
 
 type Value = string | number | boolean
+
+/** Where a sample goes: a path segment, which cannot be empty, or a search value, which can. */
+export type SampleSlot = 'path' | 'search'
 
 /**
  * A number within a parameter's `minimum` and `maximum`, whole for an `integer`: 0 when the
@@ -54,12 +59,19 @@ function repetitions(quantifier: string, fewest = '0', range?: string, most = ''
 }
 
 /**
+ * The fewest characters a string takes in `slot`: the parameter's `minLength`, 1 when it has
+ * none, and never fewer than 1 in a path segment.
+ */
+const shortestIn = (parameter: Parameter, slot: SampleSlot): number =>
+  slot === 'path' ? Math.max(1, parameter.minLength ?? 1) : (parameter.minLength ?? 1)
+
+/**
  * The fewest repetitions within `[fewest, most]` after a prefix of `prefix` characters that
- * keep the whole within the parameter's `minLength` and `maxLength`: at least 1 character in
- * all unless `minLength` allows 0.
+ * keep the whole within `shortest` and the parameter's `maxLength`.
  */
 function countWithin(
   parameter: Parameter,
+  shortest: number,
   prefix: number,
   fewest = 0,
   most = Number.POSITIVE_INFINITY,
@@ -67,7 +79,7 @@ function countWithin(
   return Math.max(
     0,
     Math.min(
-      Math.max(fewest, (parameter.minLength ?? 1) - prefix),
+      Math.max(fewest, shortest - prefix),
       most,
       (parameter.maxLength ?? Number.POSITIVE_INFINITY) - prefix,
     ),
@@ -75,11 +87,12 @@ function countWithin(
 }
 
 /** A string of the parameter's lengths that its `pattern` accepts, when it is derivable. */
-function stringOf(parameter: Parameter): string | undefined {
+function stringOf(parameter: Parameter, slot: SampleSlot): string | undefined {
   const { pattern } = parameter
+  const shortest = shortestIn(parameter, slot)
 
   if (pattern === undefined) {
-    return 'a'.repeat(countWithin(parameter, 0))
+    return 'a'.repeat(countWithin(parameter, shortest, 0))
   }
 
   const parts = DERIVABLE.exec(pattern)
@@ -101,13 +114,13 @@ function stringOf(parameter: Parameter): string | undefined {
 
   const [low, high] = repetitions(quantifier, fewest, range, most)
 
-  return prefix + character.repeat(countWithin(parameter, prefix.length, low, high))
+  return prefix + character.repeat(countWithin(parameter, shortest, prefix.length, low, high))
 }
 
 /** A value built from the parameter's type within its bounds, if one can be. */
-function builtOf(parameter: Parameter): Value | undefined {
+function builtOf(parameter: Parameter, slot: SampleSlot): Value | undefined {
   const byType: Readonly<Record<Parameter['type'], () => Value | undefined>> = {
-    string: () => stringOf(parameter),
+    string: () => stringOf(parameter, slot),
     integer: () => numberWithin(parameter),
     number: () => numberWithin(parameter),
     boolean: () => true,
@@ -127,8 +140,11 @@ function acceptorOf(parameter: Parameter): ((value: Value) => boolean) | undefin
   }
 }
 
-/** The value of the parameter a link carries when it must carry one, or none to be built. */
-export function parameterSample(parameter: Parameter): Value | undefined {
+/**
+ * The value of the parameter a link carries in `slot` when it must carry one, or none to be
+ * built.
+ */
+export function parameterSample(parameter: Parameter, slot: SampleSlot): Value | undefined {
   const accepts = acceptorOf(parameter)
 
   if (accepts === undefined) {
@@ -139,8 +155,11 @@ export function parameterSample(parameter: Parameter): Value | undefined {
     parameter.examples?.[0],
     parameter.default,
     parameter.enum?.[0],
-    builtOf(parameter),
+    builtOf(parameter, slot),
   ]
 
-  return candidates.find((value): value is Value => value !== undefined && accepts(value))
+  return candidates.find(
+    (value): value is Value =>
+      value !== undefined && (slot === 'search' || value !== '') && accepts(value),
+  )
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
+import { flatJsonSchema } from '../schemas'
 
 import { sampleContract, screenIn } from './contract.fixture'
 import { searchProblems } from './search'
@@ -177,6 +178,30 @@ describe('searchProblems', () => {
     binding.params.properties['key'] = { ...key, examples: ['ab-12'] }
 
     expect(printed(contract)).toEqual([])
+  })
+  it('wants a path parameter that can fill its segment, and no empty example of one', () => {
+    const contract = sampleContract()
+    const binding = sampleBinding(contract)
+    const params = (key: Readonly<Record<string, unknown>>) =>
+      flatJsonSchema.parse({ type: 'object', properties: { key }, additionalProperties: false })
+
+    binding.params = params({ type: 'string', maxLength: 0 })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.key: needs an example (a path segment cannot be empty)`,
+    ])
+
+    binding.params = params({ type: 'string', minLength: 0, examples: ['', 'thg_1'] })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.key.examples[0]: "" does not match its parameter: a path segment cannot be empty`,
+    ])
+
+    binding.path = '/sample/{-$key}'
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.key.examples[0]: "" does not match its parameter: a path segment cannot be empty`,
+    ])
   })
   it('leaves the examples of a schema that is not valid to its validity problem', () => {
     const contract = sampleContract()

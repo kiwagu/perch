@@ -122,6 +122,16 @@ describe('the example link on the router', () => {
     expect(exampleOf(things).link).toBe('/things/thg_a')
   })
 
+  it('never builds an empty path segment, even where its schema allows one', () => {
+    const things = sample({
+      path: '/things/$key',
+      params: flat({ key: { type: 'string', minLength: 0 } }),
+    })
+
+    exampleCase(sampleRouter, things)
+    expect(exampleOf(things).link).toBe('/things/a')
+  })
+
   it('builds an optional segment with its example, and without one leaves it out', () => {
     const path = '/notes/{-$tab}'
 

@@ -170,9 +170,10 @@ proper prefix of its own on whole segments. The example link is built from the b
 - the path: each `$param` at its parameter's first example, else its `default`, else its
   first `enum` value, else a value built within its bounds and a `pattern` of a literal
   prefix and at most one repeated class (`^thg_[a-z0-9]+$` gives `thg_a`), the first of them
-  the parameter's schema accepts; a parameter none of whose values can be built needs an
-  example, and `contract:check` says so; a `{-$param}` at its first example, or its segment
-  left out without one; a splat `$` left out with its segment (no parameter can
+  not empty that the parameter's schema accepts; a parameter none of whose values can be
+  built needs an example, and `contract:check` says so (`a path segment cannot be empty` for
+  a schema that allows only the empty string); a `{-$param}` at its first example, or its
+  segment left out without one; an empty example of a path parameter is a problem; a splat `$` left out with its segment (no parameter can
   be named `_splat`, so it takes no example); each value through `encodeURIComponent`;
 - the search: every key in its declared order at its `default`, else its first `enum`
   value, else its first example, a key with none left out; written as TanStack Router's

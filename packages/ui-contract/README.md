@@ -83,8 +83,9 @@ for Bun.
     or by a link to it; its roles, data, targets, guards, reachability and exits),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
     (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
-    reasons at `bindings[i].params.properties.<name>.examples[j]`, and a value for each
-    `$param`, else `needs an example` at its property) and `scenariosProblems` (bracket references, roles and the
+    reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
+    path parameter, and a value for each `$param`, else `needs an example` at its property)
+    and `scenariosProblems` (bracket references, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
@@ -173,15 +174,17 @@ for Bun.
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
     between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
-  - `parameterSample(parameter)`: the value of a route parameter a link carries, its first
-    example, else its default, else its first enum value, else one built within its
-    `minLength`, `maxLength`, `minimum`, `maximum` and a `pattern` of a literal prefix and at
-    most one repeated class, the first of them Ajv accepts against the parameter; none when
-    no such value can be built.
+  - `parameterSample(parameter, slot)`: the value of a route parameter a link carries in a
+    `SampleSlot`, `path` or `search`: its first example, else its default, else its first
+    enum value, else one built within its `minLength`, `maxLength`, `minimum`, `maximum` and
+    a `pattern` of a literal prefix and at most one repeated class, the first of them Ajv
+    accepts against the parameter, never empty in a path segment; none when no such value
+    can be built.
   - The routes view: `exampleOf(binding)` returns its `RouteExample`, the `params` and
     `search` it is built with and the `link`, a deep link with fake data written the way
-    TanStack Router writes a link: each `$param` at `parameterSample(parameter)` (refused
-    when it has none), a `{-$param}` at its first example or left out, a splat `$` left out, each through `encodeURIComponent`; every search key in order
+    TanStack Router writes a link: each `$param` at `parameterSample(parameter, 'path')`
+    (refused when it has none), a `{-$param}` at its first example (refused when empty) or
+    left out, a splat `$` left out, each through `encodeURIComponent`; every search key in order
     at its `default`, else its first `enum` value or example, a string bare unless it parses
     as JSON (then quoted), a number or a boolean as JSON, form-encoded as `URLSearchParams`
     does. `routesOf(contract)` returns the `RoutesView`: per binding sorted by path a
