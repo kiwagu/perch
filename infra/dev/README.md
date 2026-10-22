@@ -9,9 +9,10 @@ the gateway's `/sync`). No dev server runs behind it.
   ports in `FRONT_PORT` and `GATEWAY_PORT` (the main checkout: https://localhost:5443 with the
   gateway on 5181, https://localhost:5493 with gateway-e2e on 5191; a worktree's slot shifts
   each by 100), and the manifest switch in `PERCH_UI_MANIFEST`. The compose project and the container name carry the checkout's project slug,
-  so two stands, or two checkouts, never share a container. The service mounts `apps/web/dist`
-  read-only at `/srv/web`: on the dev stand the `web` watcher keeps it current, before an e2e
-  run the launcher writes the production build there. Host networking lets Caddy reach the
+  so two stands, or two checkouts, never share a container. The service mounts a web build
+  read-only at `/srv/web`, the folder `WEB_DIST` names under `apps/web` (default `dist`): the
+  dev stand passes `dist-dev`, which the `web` watcher keeps current; the e2e stand keeps
+  `dist`, where the launcher writes the production build before each run. Host networking lets Caddy reach the
   gateways; the site binds 127.0.0.1 only.
 - `Caddyfile`: one site, `https://localhost:{$FRONT_PORT}`, with `/backend/*` proxied to
   `127.0.0.1:{$GATEWAY_PORT}`, both read from the container's environment; a file server for a
@@ -21,7 +22,8 @@ the gateway's `/sync`). No dev server runs behind it.
   `Cache-Control: public, max-age=31536000, immutable`; `index.html` (at `/`, by name or for
   a deep link) with `Cache-Control: no-cache`, so a reload after a rebuild loads the new build.
   `.wasm` files go out as `application/wasm`. `/ui-manifest/*` is the UI manifest the web
-  build writes into `dist/ui-manifest/` (`manifest.json`, `manifest.schema.json`,
+  build writes into its folder's `ui-manifest/` (`dist/` for the e2e stand, `dist-dev/` for
+  the dev stand; `manifest.json`, `manifest.schema.json`,
   `model.schema.json`), sent with `Cache-Control: no-store` and never answered with
   `index.html`; with `PERCH_UI_MANIFEST=0` (default `1`) it answers 404 instead. The mcproc
   manifest passes the switch to both fronts from its var `ui_manifest` (`'1'`); a checkout turns

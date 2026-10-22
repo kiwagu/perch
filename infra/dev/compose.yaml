@@ -1,4 +1,5 @@
-# Same-origin front of a local stand: the web app's build (apps/web/dist, read-only) and, under
+# Same-origin front of a local stand: the web app's build (read-only: apps/web/dist for the e2e
+# stand, apps/web/dist-dev, the dev watcher's, for the dev stand, by WEB_DIST) and, under
 # /backend/, the gateway, WebSocket upgrades included. Host networking lets Caddy reach the
 # gateway on 127.0.0.1; the site binds 127.0.0.1 only. The mcproc apps caddy-dev and caddy-e2e
 # each run this one service with `compose run --name <project>-caddy-<stand>` under the
@@ -15,4 +16,4 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
-      - ../../apps/web/dist:/srv/web:ro
+      - ../../apps/web/${WEB_DIST:-dist}:/srv/web:ro
