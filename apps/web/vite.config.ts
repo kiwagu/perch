@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
@@ -15,6 +15,9 @@ const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
 )
 
 const MANIFEST_PATH = '/ui-manifest/'
+
+/** What `ui-contract manifest --out` writes. */
+const MANIFEST_FILES = new Set(['manifest.json', 'manifest.schema.json', 'model.schema.json'])
 
 // `bun run build` writes the UI manifest into dist/ui-manifest with `ui-contract manifest`
 // once Vite is done. The dev server writes it into its cache folder when it starts and after
@@ -68,18 +71,22 @@ function uiManifestInDev(): Plugin {
           write()
         }
       })
-      server.middlewares.use(MANIFEST_PATH, (request, response, next) => {
-        const name = basename(request.url?.split('?')[0] ?? '')
+      // Only the files the manifest command writes; anything else under the path, or a file
+      // not written yet, is a 404, never the app's index.html.
+      server.middlewares.use(MANIFEST_PATH, (request, response) => {
+        const name = (request.url ?? '').split('?')[0]?.replace(/^\//, '') ?? ''
         const file = join(out, name)
 
-        if (name === '' || !existsSync(file)) {
-          next()
+        response.setHeader('Cache-Control', 'no-store')
+
+        if (!MANIFEST_FILES.has(name) || !existsSync(file) || !statSync(file).isFile()) {
+          response.statusCode = 404
+          response.end()
 
           return
         }
 
         response.setHeader('Content-Type', 'application/json')
-        response.setHeader('Cache-Control', 'no-store')
         response.end(readFileSync(file))
       })
     },

@@ -23,8 +23,9 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 ## Local stands
 
 A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves the
-web app's build (`apps/web/dist`) and, under `/backend/`, the gateway on one https origin; the
-browser talks to nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
+web app (the Vite dev server on the dev stand, the production build in `apps/web/dist` on the
+e2e stand) and, under `/backend/`, the gateway on one https origin; the browser talks to
+nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
 by mcproc (pm2 underneath).
 
 | Stand | Profile | Open | SurrealDB | Gateway | Web app |
