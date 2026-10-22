@@ -60,7 +60,9 @@ code and the tests follow; the checks hold them to the contract.
    `description`, its `binding` (the model field, the action with its params, a route, or a
    list of them), and its `codes`, `states`, `dataId` or `dataValue`, `derived`, `roles` and
    `own` as they apply. Add its events to the `flow` (XState's language: see the pattern
-   "A machine from the flow") and the element to the `wireframe`. A
+   "A machine from the flow"; an area of the screen independent of the others is a region
+   of its parallel state, and an event belongs to one area) and the element to the
+   `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file

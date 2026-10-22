@@ -37,6 +37,14 @@ describe('instructionsOf', () => {
       'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged',
     )
   })
+  it("says a flow's state may be a parallel state of regions, each event in one area", () => {
+    expect(instructions.screenMap).toContain('`type: parallel`')
+    expect(instructions.screenMap).toContain('its `states` are regions')
+    expect(instructions.screenMap).toContain('`<parallel>.<region>.<state>`')
+    expect(instructions.screenMap).toContain(
+      "an event is handled by one region or by the state's own `on`, never by two",
+    )
+  })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')
     expect(instructions.activities).toContain('`meta.screen`')

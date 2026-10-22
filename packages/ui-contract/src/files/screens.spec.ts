@@ -81,7 +81,9 @@ describe('loadScreens', () => {
       action: 'platform.sign-out',
       params: { forgetUnsent: { value: true } },
     })
-    expect(screens?.screens[0]?.flow?.states['saving']?.invoke?.input).toEqual({
+    const saving = screens?.screens[0]?.flow?.states['saving']
+
+    expect(saving?.type !== 'parallel' && saving?.invoke?.input).toEqual({
       title: 'sample.title-input',
     })
   })

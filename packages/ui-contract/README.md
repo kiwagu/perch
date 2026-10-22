@@ -51,8 +51,10 @@ for Bun.
     `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
-    as written, its `effectSchema` and `transitionSchema`, with the types `Flow`, `FlowState`,
-    `FlowTransition` and `Effect`), `activitySchema` (an activity across screens: an XState v5
+    as written, each state of the root plain or parallel with its regions, its `effectSchema`
+    and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
+    `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
+    `activitySchema` (an activity across screens: an XState v5
     machine config in the subset of the flows without effects or `invoke`, whose states are
     visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
     types `Activity`, `ActivityState` and `ActivityTransition`), `flatJsonSchema` (route
@@ -76,8 +78,15 @@ for Bun.
     never named like a derived one, entry and names), `bindingsProblems` (model fields,
     actions and their params, routes, sources), `flowProblems` (a flow names states, events,
     guards, actions with their `input`, anchors with their codes and bindings that exist,
-    reaches every state, leaves every state that is not final, and puts the one transition
-    without a guard last), `activitiesProblems` (an activity's states visit screens that exist
+    resolves every target as XState does (a state of the root or a deep target
+    `<parallel>.<region>.<state>` from the root, a state of its own region in a region),
+    handles each event of a parallel state in one area, reaches every state, leaves every
+    plain state that is not final, and puts the one transition without a guard last) over
+    the tree of its states, `flowNodes(flow)` (every state in the order of the file as a
+    `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode` with its path
+    of names and its place in the flow), with `deepTargetOf`, `rootOf` and `regionStartsOf`
+    (the state of the root a target lands in, each region at its starting state: a
+    `DeepTarget`'s, else the initial), `activitiesProblems` (an activity's states visit screens that exist
     at bindings of theirs, its events are anchors of that screen or of the frame, and each
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),

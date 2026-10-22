@@ -99,8 +99,15 @@ function OrganisationHeader(props: {
 export function OrganisationView(props: OrganisationViewProps) {
   const t = useT()
   const [creating, setCreating] = useState(false)
+  const [shownKey, setShownKey] = useState(props.current?.key)
   const { current } = props
   const unavailable = props.organisations.length > 0
+
+  // Another organisation starts every area afresh: the create form closes with the rest.
+  if (shownKey !== current?.key) {
+    setShownKey(current?.key)
+    setCreating(false)
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">

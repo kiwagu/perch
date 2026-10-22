@@ -191,47 +191,183 @@ states:
   empty: "organisation.page.status in empty: no membership; the create form below it."
   error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
 flow:
-  description: The create form, the notes and the members are independent areas of the page in the app; the flow describes one area at a time, as the subset has no parallel regions, so a note or a member is changed from viewing.
+  description: The page's independent areas, the create form, the new note, the notes' items, the invitation and the members, are the regions of viewing, each in one of its states at a time; choosing another organisation or creating one leaves them all, and they start afresh.
   initial: viewing
   states:
     viewing:
+      type: parallel
       description: The current organisation with its notes and, for an administrator, its members; without a membership, the create form.
       on:
-        organisation.create.toggle-button:
-          target: creating
-          description: The create form opens.
+        organisation.page.current-select:
+          target: selecting
         organisation.create.submit-button:
           target: creating-organisation
-        organisation.page.current-select:
-          target: selecting
-        organisation.notes.add-button:
-          target: adding
-        organisation.notes.edit-button:
-          target: editing
-          description: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button; each item edits on its own.
-        organisation.notes.delete-button:
-          target: deleting
-        organisation.invite.submit-button:
-          target: inviting
-        organisation.members.remove-button:
-          target: removing
-    creating:
-      description: The create form, opened by the toggle button.
-      on:
-        organisation.create.toggle-button:
-          target: viewing
-          description: The create form closes.
-        organisation.create.submit-button:
-          target: creating-organisation
-        organisation.page.current-select:
-          target: selecting
-    editing:
-      description: A note shows its edit form.
-      on:
-        organisation.notes.save-button:
-          target: saving
-        organisation.page.current-select:
-          target: selecting
+      states:
+        create-form:
+          description: The create form, closed until its toggle opens it; without a membership the form is shown regardless, the toggle not being rendered.
+          initial: closed
+          states:
+            closed:
+              on:
+                organisation.create.toggle-button:
+                  target: open
+                  description: The create form opens.
+            open:
+              description: The create form, opened by the toggle button.
+              on:
+                organisation.create.toggle-button:
+                  target: closed
+                  description: The create form closes.
+        note-add:
+          description: The form of a new note.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.notes.add-button:
+                  target: adding
+            adding:
+              description: The new note is being added.
+              invoke:
+                src: note.createNote
+                input:
+                  text: organisation.notes.new-textarea
+                onDone:
+                  target: idle
+                  description: The note appears last in the list; the textarea empties.
+                onError:
+                  target: idle
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.notes.error
+                        codes:
+                          - forbidden
+                          - text-required
+                          - text-too-long
+                          - failed
+        note-items:
+          description: The notes' items; in the app each item edits on its own, and the region follows the item acted on last.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.notes.edit-button:
+                  target: editing
+                  description: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button; each item edits on its own.
+                organisation.notes.delete-button:
+                  target: deleting
+            editing:
+              description: A note shows its edit form.
+              on:
+                organisation.notes.save-button:
+                  target: saving
+                organisation.notes.edit-button:
+                  target: editing
+                  description: Another item opens its edit form.
+                organisation.notes.delete-button:
+                  target: deleting
+            saving:
+              description: The edited text is being saved.
+              invoke:
+                src: note.updateNote
+                input:
+                  id: organisation.notes.item
+                  text: organisation.notes.edit-textarea
+                onDone:
+                  target: idle
+                  description: The item shows the new text.
+                onError:
+                  target: editing
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.notes.error
+                        codes:
+                          - forbidden
+                          - text-required
+                          - text-too-long
+                          - failed
+            deleting:
+              description: The note is being deleted.
+              invoke:
+                src: note.deleteNote
+                input:
+                  id: organisation.notes.item
+                onDone:
+                  target: idle
+                  description: The item leaves the list.
+                onError:
+                  target: idle
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.notes.error
+                        codes:
+                          - forbidden
+                          - failed
+        invite:
+          description: The invite form, for an administrator.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.invite.submit-button:
+                  target: inviting
+            inviting:
+              description: The account is being invited; the submit button is disabled meanwhile.
+              invoke:
+                src: platform.organisations.invite
+                input:
+                  email: organisation.invite.email-input
+                onDone:
+                  target: idle
+                  description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
+                  actions:
+                    - type: show
+                      params:
+                        anchor: app-shell.notice-message
+                        codes:
+                          - invited
+                onError:
+                  target: idle
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.invite.error
+                        codes:
+                          - no-such-identity
+                          - already-member
+                          - not-admin
+                          - rate-limited
+                          - failed
+        members:
+          description: The members, for an administrator.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.members.remove-button:
+                  target: removing
+            removing:
+              description: The member is being removed.
+              invoke:
+                src: platform.organisations.remove
+                input:
+                  identity: organisation.members.item
+                onDone:
+                  target: idle
+                  description: The members are read again; the removed member's devices lose the organisation without a reload.
+                onError:
+                  target: idle
+                  description: Shown by organisation.invite.error.
+                  actions:
+                    - type: show
+                      params:
+                        anchor: organisation.invite.error
+                        codes:
+                          - not-admin
+                          - failed
     creating-organisation:
       description: The organisation is being created; the submit button is disabled meanwhile.
       invoke:
@@ -243,7 +379,8 @@ flow:
           target: viewing
           description: The caller is the administrator of the new organisation, which becomes current; the form empties and closes.
         onError:
-          target: creating
+          target: viewing.create-form.open
+          description: The form stays open with what was typed.
           actions:
             - type: show
               params:
@@ -263,112 +400,7 @@ flow:
           key: organisation.page.current-select
         onDone:
           target: viewing
-          description: The page shows that organisation; the drafts and errors of the previous one are dropped.
-    adding:
-      description: The new note is being added.
-      invoke:
-        src: note.createNote
-        input:
-          text: organisation.notes.new-textarea
-        onDone:
-          target: viewing
-          description: The note appears last in the list; the textarea empties.
-        onError:
-          target: viewing
-          actions:
-            - type: show
-              params:
-                anchor: organisation.notes.error
-                codes:
-                  - forbidden
-                  - text-required
-                  - text-too-long
-                  - failed
-    saving:
-      description: The edited text is being saved.
-      invoke:
-        src: note.updateNote
-        input:
-          id: organisation.notes.item
-          text: organisation.notes.edit-textarea
-        onDone:
-          target: viewing
-          description: The item shows the new text.
-        onError:
-          target: editing
-          actions:
-            - type: show
-              params:
-                anchor: organisation.notes.error
-                codes:
-                  - forbidden
-                  - text-required
-                  - text-too-long
-                  - failed
-    deleting:
-      description: The note is being deleted.
-      invoke:
-        src: note.deleteNote
-        input:
-          id: organisation.notes.item
-        onDone:
-          target: viewing
-          description: The item leaves the list.
-        onError:
-          target: viewing
-          actions:
-            - type: show
-              params:
-                anchor: organisation.notes.error
-                codes:
-                  - forbidden
-                  - failed
-    inviting:
-      description: The account is being invited; the submit button is disabled meanwhile.
-      invoke:
-        src: platform.organisations.invite
-        input:
-          email: organisation.invite.email-input
-        onDone:
-          target: viewing
-          description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
-          actions:
-            - type: show
-              params:
-                anchor: app-shell.notice-message
-                codes:
-                  - invited
-        onError:
-          target: viewing
-          actions:
-            - type: show
-              params:
-                anchor: organisation.invite.error
-                codes:
-                  - no-such-identity
-                  - already-member
-                  - not-admin
-                  - rate-limited
-                  - failed
-    removing:
-      description: The member is being removed.
-      invoke:
-        src: platform.organisations.remove
-        input:
-          identity: organisation.members.item
-        onDone:
-          target: viewing
-          description: The members are read again; the removed member's devices lose the organisation without a reload.
-        onError:
-          target: viewing
-          description: Shown by organisation.invite.error.
-          actions:
-            - type: show
-              params:
-                anchor: organisation.invite.error
-                codes:
-                  - not-admin
-                  - failed
+          description: "Every area starts afresh: the drafts and errors of the previous organisation are dropped and the create form closes."
 wireframe: |-
   - heading /.+/ [level=1]
   - paragraph: Administrator

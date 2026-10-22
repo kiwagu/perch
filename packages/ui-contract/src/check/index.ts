@@ -1,7 +1,20 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
 export { bindingRefsOf, type Contract, own } from './contract'
-export { flowProblems, transitionsOf } from './flow'
+export {
+  type DeepTarget,
+  deepTargetOf,
+  type FlowNode,
+  flowNodes,
+  flowProblems,
+  type ParallelNode,
+  type RegionNode,
+  type RegionStateNode,
+  type RootNode,
+  regionStartsOf,
+  rootOf,
+  transitionsOf,
+} from './flow'
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'

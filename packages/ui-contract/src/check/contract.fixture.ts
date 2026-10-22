@@ -270,12 +270,12 @@ export function flowIn(contract: Contract): Flow {
   return flow
 }
 
-/** The state `name` of the sample screen's flow, for a spec to change. */
+/** The plain state `name` of the sample screen's flow, for a spec to change. */
 export function flowStateIn(contract: Contract, name: string): FlowState {
   const state = flowIn(contract).states[name]
 
-  if (state === undefined) {
-    throw new Error(`no flow state ${name}`)
+  if (state === undefined || state.type === 'parallel') {
+    throw new Error(`no plain flow state ${name}`)
   }
 
   return state

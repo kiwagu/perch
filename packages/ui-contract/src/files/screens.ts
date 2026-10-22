@@ -41,7 +41,14 @@ export type AnchorBinding = z.infer<typeof anchorBindingSchema>
 export type ParamValue = z.infer<typeof paramValueSchema>
 export type Platform = z.infer<typeof platformSchema>
 export type Flow = z.infer<typeof flowSchema>
-export type FlowState = Flow['states'][string]
+/** A plain state of the root: it may end, carry an address and run an invoke. */
+export type FlowState = Exclude<Flow['states'][string], { type: 'parallel' }>
+/** A state of the root whose regions are all active at once. */
+export type FlowParallelState = Extract<Flow['states'][string], { type: 'parallel' }>
+/** A region of a parallel state: one independent area, in one of its states at a time. */
+export type FlowRegion = FlowParallelState['states'][string]
+/** A state of a region: a plain state that does not end and has no address. */
+export type FlowRegionState = FlowRegion['states'][string]
 export type FlowTransition = z.infer<typeof transitionSchema>
 export type Effect = z.infer<typeof effectSchema>
 export type PlatformFile = z.infer<typeof platformFileSchema>

@@ -1,9 +1,10 @@
 /**
  * Each activity of the contract is a machine XState runs as written, as each screen's flow is
- * (`flows-machine.spec.ts`): the same walk (`flows-machine.walk.ts`) builds it with a stub per
- * guard of `meta.guards`, reaches every state, and takes every transition, every guarded
- * branch with its guard holding, to its target. Its states are visits to screens at
- * addresses the contract check holds to bindings, which the router proves
+ * (`flows-machine.spec.ts`): the same walk (`flows-machine.walk/`), flat as an activity has no
+ * parallel state, builds it with a stub per guard of `meta.guards`, reaches every state, and
+ * takes every transition, every guarded branch with its guard holding, to its target. Its
+ * states are visits to screens at addresses the contract check holds to bindings, which the
+ * router proves
  * (`routes-router.spec.ts`); the app has no machine of its own for an activity, so nothing
  * is compared with the app.
  */

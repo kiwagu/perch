@@ -6,7 +6,7 @@
  * activities whose address it is); then the route tree (`routeTree`).
  */
 
-import { bindingRefsOf, type Contract, transitionsOf } from '../check'
+import { bindingRefsOf, type Contract, flowNodes, transitionsOf } from '../check'
 import type { Binding, Effect, Flow, Screen } from '../files'
 
 import { exampleOf } from './example'
@@ -43,13 +43,20 @@ export interface RoutesView {
   readonly tree: readonly RouteNode[]
 }
 
-/** Every path a flow navigates to: in its states' `entry` and `exit` and its transitions. */
+/**
+ * Every path a flow navigates to: in the `entry` and `exit` and the transitions of its
+ * states, a parallel state's own and its regions' states included.
+ */
 function navigatesTo(flow: Flow): Set<string> {
-  const effects: Effect[] = Object.values(flow.states).flatMap((state) => [
-    ...(state.entry ?? []),
-    ...(state.exit ?? []),
-    ...transitionsOf(state).flatMap(({ actions }) => actions ?? []),
-  ])
+  const effects: Effect[] = flowNodes(flow).flatMap((node) =>
+    node.kind === 'region'
+      ? []
+      : [
+          ...(node.state.entry ?? []),
+          ...(node.state.exit ?? []),
+          ...transitionsOf(node.state).flatMap(({ actions }) => actions ?? []),
+        ],
+  )
 
   return new Set(
     effects.flatMap((effect) => (effect.type === 'navigate' ? [effect.params.to] : [])),

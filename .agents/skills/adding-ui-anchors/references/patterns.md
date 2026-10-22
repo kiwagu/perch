@@ -342,3 +342,39 @@ failure. The page sends the events and does what the machine emits: the sign-in 
 (`presentation/pages/sign-in/sign-in.container.tsx`, lines 50-62) notifies the welcome on
 `show` and moves on `navigate`. `apps/web/src/platform/flows-machine.spec.ts` holds the
 machine's config to the flow; a new app machine for a screen joins its `APP_MACHINES`.
+
+A screen whose areas are independent runs them at once as the regions of a parallel state.
+From `contract/screens/org.yaml` (lines 197-221, the descriptions left out), the organisation
+page: its own events leave `viewing` whatever each region is in, and each region moves on its
+own events only.
+
+```yaml
+viewing:
+  type: parallel
+  on:
+    organisation.page.current-select:
+      target: selecting
+    organisation.create.submit-button:
+      target: creating-organisation
+  states:
+    create-form:
+      initial: closed
+      states:
+        closed:
+          on:
+            organisation.create.toggle-button:
+              target: open
+        open:
+          on:
+            organisation.create.toggle-button:
+              target: closed
+    note-add:
+      # idle, adding (invokes note.createNote) ...
+```
+
+A target of the root names a region's state as `<parallel>.<region>.<state>`: a failed
+create lands in `viewing.create-form.open`, the other regions at their `initial`. Within a
+parallel state an event is handled by one region or by the state's own `on`, never by two
+(`contract:check` says which two). A region has no `type`, no `meta.address` and no nested
+states; where the app keeps a state per item (each note's edit form), the region follows the
+item acted on last and its `description` says so.

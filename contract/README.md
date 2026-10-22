@@ -226,14 +226,26 @@ A screen's `flow` is an XState v5 machine config, in the subset `createMachine` 
 written: the app carries it into `setup({ guards, actions, actors }).createMachine(flow)`
 unchanged, as it carries a binding into the router.
 
-- `initial` and `states`, a flat map. A state has a `description`, `type: final` where the
-  flow ends (the app has left the screen, or stops), `entry` and `exit` effects, `on` and
-  `invoke`.
+- `initial` and `states`. A state has a `description`, `type: final` where the flow ends
+  (the app has left the screen, or stops), `entry` and `exit` effects, `on` and `invoke`.
+- A state of the root may be a parallel state, `type: parallel`, for the independent areas
+  of a screen (the organisation page's create form, new note, notes' items, invitation and
+  members): its `states` are its regions, two or more, all active at once. A region has a
+  `description`, an `initial` and its `states`, plain states that never end, carry no
+  `meta.address` (the address is the screen's state) and hold no states of their own. The
+  parallel state has a `description`, `on`, `entry`, `exit` and `meta.address`, never an
+  `initial` or an `invoke`; its own `on` applies whichever state each region is in. Entering
+  it starts every region at its `initial`; leaving it leaves every region.
 - `on` maps an event to one transition, or to a list of guarded ones in XState's order, the
   one without a guard last. An event is the user acting on a declared anchor (a derived one
   through its base's `derived`), or a platform event of `platform.yaml` `events`
   (`platform.opened`). A transition has a `target` (absent: the machine stays where it is),
-  a `guard`, `actions` and a `description`.
+  a `guard`, `actions` and a `description`. XState resolves a target from the parent of its
+  state: at the root it is a state of the flow, or a state of a region as
+  `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the
+  others at their `initial`); in a region it is a state of that region. Within a parallel
+  state an event belongs to one area, one region or the state's own `on`, never two; the
+  same event may appear in several states of one region.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
@@ -252,15 +264,17 @@ unchanged, as it carries a binding into the router.
   restores; the machine owns the transient one (signing in, confirming, failed). No state
   declares an address yet.
 
-Nothing else of XState is in the subset: no `context`, `after`, `always`, nested or parallel
-states, targets by `#id` or `.child`, or actions named by a string. A page whose areas are
-independent (the organisation page's create form, notes and members) describes one area at
-a time until the subset has parallel regions. The flow's states are the machine's; the
-screen's `states` stay the container states. `contract:check` holds the flow to the
-contract, and `apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState: a
-pure walk with `initialTransition` and `transition` reaches every state and takes every
-transition and every guarded branch to its target with its effects, and an app's own
-machine for a screen (`user.sign-in`) has the config of its flow.
+Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested
+deeper than a parallel state's regions, history states, targets by `#id` or `.child`, or
+actions named by a string. A state of a region is the area's own: where the app keeps one
+per item (each note's edit form), the region follows the item acted on last and says so.
+The flow's states are the machine's; the screen's `states` stay the container states.
+`contract:check` holds the flow to the contract, and
+`apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState: a pure walk with
+`initialTransition` and `transition` reaches every state, a parallel state's regions each
+on its own with the others at their `initial`, and takes every transition and every guarded
+branch to its target with its effects, and an app's own machine for a screen
+(`user.sign-in`) has the config of its flow.
 
 ## Activities
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { parallelIn, regionStateIn, withAreas } from '../check/areas.fixture'
 import { sampleContract, screenIn } from '../check/contract.fixture'
 
 import { routesOf } from './view'
@@ -44,5 +45,24 @@ describe('routesOf', () => {
 
     expect(routes.map(({ path }) => path)).toEqual(['/about', '/sample/$key'])
     expect(routes[0]?.reachedFrom).toEqual({ links: [], navigate: ['app-shell'], activities: [] })
+  })
+  it('names a screen whose parallel state or a state of its regions navigates to the route', () => {
+    const contract = withAreas()
+    const to = (path: string) => [{ type: 'navigate', params: { to: path } }] as const
+
+    screenIn(contract, 'sample').bindings.push(
+      { path: '/about', roles: ['guest'], history: 'replace' },
+      { path: '/help', roles: ['guest'], history: 'replace' },
+    )
+    parallelIn(contract).entry = [...to('/help')]
+    regionStateIn(contract, 'form', 'open').exit = [...to('/about')]
+
+    expect(
+      routesOf(contract).routes.map(({ path, reachedFrom }) => [path, reachedFrom.navigate]),
+    ).toEqual([
+      ['/about', ['sample']],
+      ['/help', ['sample']],
+      ['/sample/$key', ['sample']],
+    ])
   })
 })

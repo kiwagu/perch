@@ -310,6 +310,37 @@ describe('OrganisationView of a member', () => {
     expect(field('organisation.notes.new-textarea').value).toBe('')
   })
 
+  it('closes the create form when the current organisation changes', () => {
+    const { rerender } = renderView({ organisations: [acme, globex] })
+    const toggle = () => screen.getByTestId('organisation.create.toggle-button')
+
+    fireEvent.click(toggle())
+
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByTestId('organisation.create.form')).toBeTruthy()
+
+    rerender({ organisations: [acme, globex], current: globex, notes: [] })
+
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByTestId('organisation.create.form')).toBeNull()
+  })
+
+  it('keeps the create form open when the creation fails', async () => {
+    renderView({ onCreate: vi.fn(() => Promise.resolve(false)) })
+
+    fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+    type('organisation.create.key-input', 'globex')
+    type('organisation.create.name-input', 'Globex')
+    fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+
+    await waitFor(() => {
+      expect(field('organisation.create.key-input').value).toBe('globex')
+    })
+    expect(
+      screen.getByTestId('organisation.create.toggle-button').getAttribute('aria-expanded'),
+    ).toBe('true')
+  })
+
   it('shows neither the members nor the invite form', () => {
     renderView({ members: [ann, bea] })
 

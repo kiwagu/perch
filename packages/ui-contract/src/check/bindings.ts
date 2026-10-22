@@ -4,7 +4,7 @@
  * `params` keys are that action's parameters, each taking a declared anchor or a constant
  * (a parameter left out is the view's to compute, and `$id` is minted); `route` is the path
  * of a binding; a `source` names an entity and its order field, or a platform action. What
- * a flow names is rule 8's (`flow.ts`).
+ * a flow names is rule 8's (`flow/`).
  */
 
 import type { AnchorDef, BindingRef, Problem } from '../files'

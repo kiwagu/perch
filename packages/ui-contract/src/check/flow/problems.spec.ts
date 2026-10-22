@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem } from '../files'
+import { formatProblem } from '../../files'
+import { flowIn, flowStateIn, sampleContract } from '../contract.fixture'
 
-import { flowIn, flowStateIn, sampleContract } from './contract.fixture'
-import { flowProblems } from './flow'
+import { flowProblems } from './problems'
 
 const printed = (contract = sampleContract()): string[] => flowProblems(contract).map(formatProblem)
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, type Screen } from '../../files'
 import { fixtureContract } from '../../manifest/manifest.fixture'
+import { regionStateIn, withAreas } from '../areas.fixture'
 import type { Contract } from '../contract'
 import {
   activityIn,
@@ -35,9 +36,7 @@ const OTHER: Screen = {
 }
 
 /** The sample contract with the other screen, and a final state of the activity on it. */
-function withOther(): Contract {
-  const contract = sampleContract()
-
+function withOther(contract = sampleContract()): Contract {
   contract.screens.screens.push(structuredClone(OTHER))
   contract.screens.files = [...contract.screens.files, 'contract/screens/other.yaml']
   activityIn(contract).states['away'] = {
@@ -200,6 +199,41 @@ describe('activitiesProblems', () => {
     expect(printed(contract)).toEqual([
       `${AT} states.saved.on["app-shell.home-button"]: "app-shell.home-button" leads to "/sample/$key" through neither a navigate of the flow of "app-shell" nor a link`,
     ])
+  })
+  it('backs a transition by a navigate reached inside a region of a parallel state', () => {
+    const contract = withOther(withAreas())
+    const busy = regionStateIn(contract, 'side', 'busy').invoke ?? expect.unreachable('an invoke')
+
+    activityStateIn(contract, 'editing').on = {
+      'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }],
+      'sample.b-button': { target: 'away' },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT} states.editing.on["sample.b-button"]: "sample.b-button" leads to "/other" through neither a navigate of the flow of "sample" nor a link`,
+    ])
+
+    busy.onDone = { target: 'idle', actions: [{ type: 'navigate', params: { to: '/other' } }] }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it("backs a transition by a navigate on entering a region's state that a deep target names", () => {
+    const contract = withOther(withAreas())
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    regionStateIn(contract, 'form', 'open').entry = [{ type: 'navigate', params: { to: '/other' } }]
+    activityStateIn(contract, 'editing').on = {
+      'sample.save-button': [{ guard: 'titleGiven', target: 'saved' }, { target: 'away' }],
+    }
+    invoke.onError = { target: 'editing' }
+
+    expect(printed(contract)).toEqual([
+      `${AT} states.editing.on["sample.save-button"][1]: "sample.save-button" leads to "/other" through neither a navigate of the flow of "sample" nor a link`,
+    ])
+
+    invoke.onError = { target: 'editing.form.open' }
+
+    expect(printed(contract)).toEqual([])
   })
   it('wants every guard declared in meta.guards, and every declared one used', () => {
     const contract = sampleContract()
