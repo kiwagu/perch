@@ -168,6 +168,32 @@ describe('profile machine', () => {
     expect(actor.getSnapshot().can({ type: 'user.profile.save-button' })).toBe(true)
   })
 
+  it('keeps what is typed while a save runs: the value it stores takes neither field back', async () => {
+    const names = Promise.withResolvers<void>()
+    const bios = Promise.withResolvers<void>()
+    const { actor, is, type, store, save, idle, updateName, updateBio } = page({
+      updateName: () => ResultAsync.fromSafePromise(names.promise),
+      updateBio: () => ResultAsync.fromSafePromise(bios.promise),
+    })
+
+    type('name', 'Bea')
+    type('bio', 'About me')
+    save()
+    type('name', 'Bea, typing on')
+    store('name', 'Bea')
+    names.resolve()
+    await waitFor(actor, (state) => state.matches({ editing: { save: 'saving-bio' } }))
+    type('bio', 'About me, typing on')
+    store('bio', 'About me')
+    bios.resolve()
+    await idle()
+
+    expect(updateName).toHaveBeenCalledWith({ id, name: 'Bea' })
+    expect(updateBio).toHaveBeenCalledWith({ id, bio: 'About me' })
+    expect(is('name')).toBe('edited')
+    expect(is('bio')).toBe('edited')
+  })
+
   it('asks before signing out with unsent changes, and signs out anyway once told', async () => {
     const outcomes: Array<'signed-out' | 'needs-confirmation'> = [
       'needs-confirmation',

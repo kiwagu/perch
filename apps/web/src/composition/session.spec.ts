@@ -363,10 +363,7 @@ describe('SessionService', () => {
     await writeOffline()
 
     // The clock stands still: a sign-out waiting for the channel would never answer.
-    const waiting = new Promise<'waiting'>((resolve) => setTimeout(resolve, 2_000, 'waiting'))
-    const answered = session.signOut().then((outcome) => outcome._unsafeUnwrap())
-
-    expect(await Promise.race([answered, waiting])).toBe('needs-confirmation')
+    expect((await session.signOut())._unsafeUnwrap()).toBe('needs-confirmation')
   })
 
   it("asks before signing out offline while an organisation's region holds an unsent change", async () => {
