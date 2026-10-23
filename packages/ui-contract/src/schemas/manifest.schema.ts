@@ -109,6 +109,10 @@ const idSchema = z
     screen: screenNameSchema.describe('The id of the screen that declares the anchor.'),
     binding: anchorBindingSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    fields: z
+      .record(codeSchema, baseAnchorSchema)
+      .optional()
+      .describe("An error's codes, each with the field it concerns."),
     dataId: z.string().optional().describe('What the data-id of the element holds.'),
     dataValue: z
       .boolean()

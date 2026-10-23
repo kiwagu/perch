@@ -634,6 +634,20 @@
               "description": "A code of the vocabulary (data-code)."
             }
           },
+          "fields": {
+            "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "A code of the vocabulary (data-code)."
+            },
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+              "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+            }
+          },
           "dataId": {
             "description": "What the data-id of the element holds: the id of the entity it shows.",
             "type": "string"
@@ -1013,7 +1027,7 @@
                     }
                   },
                   "on": {
-                    "description": "Per event, what follows: an anchor (the user acts on it) or a platform event of platform.events.",
+                    "description": "Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.",
                     "type": "object",
                     "propertyNames": {
                       "anyOf": [
@@ -1021,6 +1035,11 @@
                           "type": "string",
                           "pattern": "^platform\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                           "description": "A platform event: `platform.<name>`, an event of platform.events."
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^model\\.[a-z_]+\\.[a-z_]+$",
+                          "description": "A data event: `model.<entity>.<field>`, the stored value of a field the screen shows changed, here or on another device."
                         },
                         {
                           "type": "string",
@@ -2072,7 +2091,7 @@
                     }
                   },
                   "on": {
-                    "description": "Per event, what follows: an anchor (the user acts on it) or a platform event of platform.events.",
+                    "description": "Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.",
                     "type": "object",
                     "propertyNames": {
                       "anyOf": [
@@ -2080,6 +2099,11 @@
                           "type": "string",
                           "pattern": "^platform\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                           "description": "A platform event: `platform.<name>`, an event of platform.events."
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^model\\.[a-z_]+\\.[a-z_]+$",
+                          "description": "A data event: `model.<entity>.<field>`, the stored value of a field the screen shows changed, here or on another device."
                         },
                         {
                           "type": "string",
@@ -2567,7 +2591,7 @@
                                 }
                               },
                               "on": {
-                                "description": "Per event, what follows: an anchor (the user acts on it) or a platform event of platform.events.",
+                                "description": "Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.",
                                 "type": "object",
                                 "propertyNames": {
                                   "anyOf": [
@@ -2575,6 +2599,11 @@
                                       "type": "string",
                                       "pattern": "^platform\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                                       "description": "A platform event: `platform.<name>`, an event of platform.events."
+                                    },
+                                    {
+                                      "type": "string",
+                                      "pattern": "^model\\.[a-z_]+\\.[a-z_]+$",
+                                      "description": "A data event: `model.<entity>.<field>`, the stored value of a field the screen shows changed, here or on another device."
                                     },
                                     {
                                       "type": "string",

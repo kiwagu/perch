@@ -39,7 +39,7 @@ export interface Outcome {
 
 /** One case of the walk: a branch of an event of a state, the guard that holds for it. */
 export interface Case {
-  /** `<path> <event>[<branch>]`: an anchor or a platform event, `onDone` or `onError`. */
+  /** `<path> <event>[<branch>]`: an anchor, a platform or data event, `onDone` or `onError`. */
   readonly label: string
   readonly event: string
   readonly holding: string | undefined

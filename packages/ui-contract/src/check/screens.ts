@@ -2,7 +2,8 @@
  * Rule 2: the screens and their anchors hold together. Every anchor is declared once in
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
- * screen that is not the frame has a route.
+ * screen that is not the frame has a route; an error's `fields` map codes it carries to
+ * fields of its own screen.
  */
 
 import { kindOf, screenOf } from '../anchors'
@@ -127,6 +128,46 @@ function nameProblems({ screens }: Contract): Problem[] {
   ])
 }
 
+/** The kinds a person types into or picks with: what an error's code can concern. */
+const FIELD_KINDS: ReadonlySet<string> = new Set([
+  'input',
+  'textarea',
+  'select',
+  'checkbox',
+  'radio',
+  'switch',
+])
+
+function fieldsProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
+
+  return declaredAnchors(screens).flatMap(({ def, screen, at }) => {
+    if (def.fields === undefined) {
+      return []
+    }
+
+    if (def.kind !== 'error') {
+      return [inScreens([...at, 'fields'], 'only an error names the fields its codes concern')]
+    }
+
+    return Object.entries(def.fields).flatMap(([code, field]) => {
+      const here = [...at, 'fields', code]
+      const target = screen.anchors[field]
+
+      return [
+        ...((def.codes ?? []).includes(code)
+          ? []
+          : [inScreens(here, `"${code}" is not a code of the anchor`)]),
+        ...(target === undefined
+          ? [inScreens(here, `"${field}" is not an anchor of the screen`)]
+          : FIELD_KINDS.has(target.kind)
+            ? []
+            : [inScreens(here, `"${field}" is a ${target.kind}, not a field`)]),
+      ]
+    })
+  })
+}
+
 export const screensProblems = (contract: Contract): Problem[] => [
   ...screenIdProblems(contract),
   ...duplicateProblems(contract),
@@ -134,4 +175,5 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...entryProblems(contract),
   ...bindingProblems(contract),
   ...nameProblems(contract),
+  ...fieldsProblems(contract),
 ]

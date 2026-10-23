@@ -63,8 +63,8 @@ code and the tests follow; the checks hold them to the contract.
    `x.list.<object>-item`, never `x.list.item`.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
    `description`, its `binding` (the model field, the action with its params, a route, or a
-   list of them), and its `codes`, `states`, `dataId` or `dataValue`, `derived`, `roles` and
-   `own` as they apply. Add its events to the `flow` (XState's language: see the pattern
+   list of them), and its `codes` (an error's `fields` with them: the field each code
+   concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply. Add its events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area) and the element to the
    `wireframe`. A

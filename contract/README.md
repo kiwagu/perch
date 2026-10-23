@@ -147,7 +147,7 @@ anchors:
     binding: { model: profile.name }
   user.profile.save-button:
     kind: button
-    description: Saves the name, then the bio, each only when it changed; disabled while the save runs.
+    description: Saves the name, then the bio, each only when it changed.
     binding:
       - action: profile.updateName
         params:
@@ -230,7 +230,9 @@ An anchor's `binding` says what the element does or shows:
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
-values the element carries), `dataId` (what its `data-id` holds), `dataValue` (it, or its
+values the element carries), `fields` (an error's codes, each with the field of its screen it
+concerns: the error shows under that field and marks it invalid; a code left out concerns the
+form), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
@@ -255,8 +257,10 @@ unchanged, as it carries a binding into the router.
   it starts every region at its `initial`; leaving it leaves every region.
 - `on` maps an event to one transition, or to a list of guarded ones in XState's order, the
   one without a guard last. An event is the user acting on a declared anchor (a derived one
-  through its base's `derived`), or a platform event of `platform.yaml` `events`
-  (`platform.opened`). A transition has a `target` (absent: the machine stays where it is),
+  through its base's `derived`; typing, for a field), a platform event of `platform.yaml`
+  `events` (`platform.opened`), or a data event `model.<entity>.<field>`: the stored value of
+  a field that an anchor of the screen shows changed, here or on another device
+  (`model.profile.name`). A transition has a `target` (absent: the machine stays where it is),
   a `guard`, `actions` and a `description`. XState resolves a target from the parent of its
   state: at the root it is a state of the flow, or a state of a region as
   `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the
@@ -270,6 +274,10 @@ unchanged, as it carries a binding into the router.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
+- A button whose anchor is an event of the flow is enabled exactly while a state the machine
+  is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's
+  Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it.
+  The app reads it from its machine and keeps no flag of its own.
 - The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
   { to, search } }`, the app moves to that binding. The app implements both.

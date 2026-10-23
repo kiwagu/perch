@@ -37,6 +37,17 @@ describe('instructionsOf', () => {
       'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged',
     )
   })
+  it('says what a data event is, that a button follows the states that handle it, and what fields are', () => {
+    expect(instructions.screenMap).toContain(
+      'a data event `model.<entity>.<field>`: the stored value of a field the screen shows changed, here or on another device',
+    )
+    expect(instructions.screenMap).toContain(
+      'A button whose anchor is an event of the flow is enabled exactly while a state the machine is in handles that event',
+    )
+    expect(instructions.screenMap).toContain(
+      "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",
+    )
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')
