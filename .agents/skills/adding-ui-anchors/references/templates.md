@@ -26,7 +26,7 @@ has not. The developer gets, and answers with an OK or with changes to the contr
 ```text
 <the output of bun run contract:diff main>
 
-The contract files: <the diff of contract/ and tests/e2e/scenarios/, or where to read it>
+The contract commits: <the meta commit (when a facet is new) and the business commit, their diffs or where to read them>
 Why:
 - <every change, an added state, guard, facet or code included>: <the reason>
 Gaps signalled: <the Contract gap: blocks, or none>

@@ -133,8 +133,11 @@ incoming change.
    gets an anchor declared in its screen file, or a marker with its reason.
 5. **What came in.** New routes, search parameters, dialogs and messages of the incoming
    side are in the screen files, and its new messages have codes.
-6. **The commit.** This audit is a commit of its own after the merge commit, handed over as
-   any contract change.
+6. **The commits.** This audit follows the merge commit as any contract change, a kind per
+   commit: the meta change when the merge brought one (the vocabulary, the tooling), the
+   business change (the screen files, the model, the scenarios), which stops for the
+   developer's review, then the implementation's (the attributes, the markers and the
+   tests), after the OK.
 
 ## Changing the coverage method
 

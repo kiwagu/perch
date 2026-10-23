@@ -75,12 +75,19 @@ code and the tests follow; the checks hold them to the contract.
    bracket references. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
-   **Then stop for review** (the gate of `.cursor/rules/ui-contract.mdc`): hand the developer
+   **Commit the contract**, each layer on its own and no implementation in either (the
+   layers of `.cursor/rules/ui-contract.mdc`; the app's runtime of the contract and the specs
+   that hold the app to it are meta): the meta change first when a facet is new
+   (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about them),
+   then the business change (the screen files, the activities, the platform, the model, the
+   scenarios). **Then stop for review** (the gate of the same rule): hand the developer
    the output of `bun run contract:diff main`, the diff of the contract files, the reason for
    every change and the gaps signalled (`references/templates.md`, "Review"), and wait for the
    OK. Nothing below starts before it, not even a test's scaffold.
-6. **The code**, after the developer's OK. A contract change found from here on goes back to
-   steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
+6. **The code**, after the developer's OK, in commits of its own (the code, its tests, an
+   app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
+   changes), never with any other business or meta change. A contract change
+   found from here on is a commit of its own and goes back to steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the

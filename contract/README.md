@@ -38,11 +38,16 @@ page may still inspire a change, but the contract decides it.
    added to its table in the same change.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
-   **Then the review.** The change stops here: the developer reads the contract diff
+   **Then the review.** The contract is committed first, a layer per commit and no
+   implementation in either (the app's runtime of the contract and its specs are meta): the meta change when a facet is new (the engine: `@workspace/ui-contract`,
+   the generated schemas, the vocabulary, this README), then the business change (the screen
+   files, the activities, the platform, the model, the scenarios), the entry point of a
+   feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the diff of the files, the reason for every change, the
    gaps signalled) and gives an OK or asks for changes to the contract. The code and the tests,
-   a test's scaffold included, start only after the OK; a contract change found while writing
-   them goes back to step 1 and stops again. A fix that brings the code back to what the
+   a test's scaffold included, start only after the OK, in commits of their own; a contract
+   change found while writing them is a commit of its own and goes back to step 1 and stops
+   again. A fix that brings the code back to what the
    contract already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
