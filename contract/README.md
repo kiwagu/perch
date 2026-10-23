@@ -38,6 +38,23 @@ page may still inspire a change, but the contract decides it.
    added to its table in the same change.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
+   **Then the review.** The contract is committed first, a layer per commit and no
+   implementation in either (the app's runtime of the contract and its specs are meta): the meta change when a facet is new (the engine: `@workspace/ui-contract`,
+   the generated schemas, the vocabulary, this README), then the business change (the screen
+   files, the activities, the platform, the model, the scenarios), the entry point of a
+   feature. The change stops here: the developer reads the contract diff
+   (`bun run contract:diff main`, the contract commits by hash with their diff, the reason
+   for every change, the gaps signalled) and gives an OK on those commits or asks for changes
+   to the contract. The OK covers those commits, and the last business commit of a rename
+   or a removal that drops the old names the review listed. Any other contract commit made,
+   re-cut, amended or rebased after it, even with its files unchanged, and a return to the
+   implementation after other work, stop here again. The code and the tests,
+   a test's scaffold included, start only after the OK, in commits of their own. A rename or a
+   removal keeps the old name declared until the code no longer renders it, then a last
+   business commit drops it, approved with the first, with no new stop; any other contract
+   change found while writing the code is a commit of its own and goes back to step 1 and
+   stops again. A fix that brings the code back to what the
+   contract already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the
@@ -130,7 +147,7 @@ anchors:
     binding: { model: profile.name }
   user.profile.save-button:
     kind: button
-    description: Saves the name, then the bio, each only when it changed; disabled while the save runs.
+    description: Saves the name, then the bio, each only when it changed.
     binding:
       - action: profile.updateName
         params:
@@ -213,7 +230,9 @@ An anchor's `binding` says what the element does or shows:
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
-values the element carries), `dataId` (what its `data-id` holds), `dataValue` (it, or its
+values the element carries), `fields` (an error's codes, each with the field of its screen it
+concerns: the error shows under that field and marks it invalid; a code left out concerns the
+form), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
@@ -238,8 +257,10 @@ unchanged, as it carries a binding into the router.
   it starts every region at its `initial`; leaving it leaves every region.
 - `on` maps an event to one transition, or to a list of guarded ones in XState's order, the
   one without a guard last. An event is the user acting on a declared anchor (a derived one
-  through its base's `derived`), or a platform event of `platform.yaml` `events`
-  (`platform.opened`). A transition has a `target` (absent: the machine stays where it is),
+  through its base's `derived`; typing, for a field), a platform event of `platform.yaml`
+  `events` (`platform.opened`), or a data event `model.<entity>.<field>`: the stored value of
+  a field that an anchor of the screen shows changed, here or on another device
+  (`model.profile.name`). A transition has a `target` (absent: the machine stays where it is),
   a `guard`, `actions` and a `description`. XState resolves a target from the parent of its
   state: at the root it is a state of the flow, or a state of a region as
   `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the
@@ -253,6 +274,10 @@ unchanged, as it carries a binding into the router.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
+- A button whose anchor is an event of the flow is enabled exactly while a state the machine
+  is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's
+  Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it.
+  The app reads it from its machine and keeps no flag of its own.
 - The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
   { to, search } }`, the app moves to that binding. The app implements both.
@@ -614,7 +639,12 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem.
+  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
+  contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
+  `main` and `bun run check` take the full check. A rename or a removal keeps the old name
+  declared until the implementation has switched to the new name or stopped rendering the
+  removed element, then a last business commit drops it.
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the
   contract. It reads `getByTestId('...')`, the selectors `[data-testid="..."]`,
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or
@@ -696,7 +726,8 @@ inside it, holds none) makes the command fail and write nothing.
 
 ## Handing over a change
 
-A change to the contract goes with the output of `bun run contract:diff main` in its
+This is the delivery of a finished change; the review before the code is described in "The
+order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, and the transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old

@@ -1,6 +1,8 @@
 /**
  * The anchors and codes of the sources against the contract: every literal is declared
- * once; the literals are exactly the anchors of the screen files; no literal is another
+ * once; the literals are exactly the anchors of the screen files, or with `ahead` a part of
+ * them (the contract runs ahead of the app on a branch: a declared anchor not rendered yet is
+ * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
  * `testIdFor()` and every code is in the vocabulary. The problems carry `file:line`.
  */
@@ -57,6 +59,7 @@ export function compareWithContract(
   collected: readonly Collected[],
   screens: ScreensFile,
   vocabulary: Vocabulary,
+  options: { readonly ahead?: boolean } = {},
 ): Problem[] {
   const { first, problems: duplicates } = firstPlaces(collected)
   const contract = declaredAnchors(screens)
@@ -83,9 +86,13 @@ export function compareWithContract(
   })
 
   const inScreens = locate(screens)
-  const unrendered = contract
-    .filter(({ anchor }) => !first.has(anchor))
-    .map(({ at: path }) => inScreens(path, 'declared in the contract, but no source renders it'))
+  const unrendered = options.ahead
+    ? []
+    : contract
+        .filter(({ anchor }) => !first.has(anchor))
+        .map(({ at: path }) =>
+          inScreens(path, 'declared in the contract, but no source renders it'),
+        )
 
   const vocabularyProblems = collected.flatMap(({ file, derived, codes: used }) => [
     ...derived

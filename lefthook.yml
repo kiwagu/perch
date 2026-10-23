@@ -43,8 +43,15 @@ pre-commit:
     - name: readmes of packages and modules
       run: . scripts/ensure-path.sh && bun run readme:check
 
+    # On a branch the contract may run ahead of the app (a business commit before its
+    # implementation): the sources must use only what it declares. A commit on main, the
+    # landing, takes the full check: every declared anchor rendered.
     - name: contract
-      run: . scripts/ensure-path.sh && bun run contract:check && bun run contract:check:sources && bun run contract:check:consumers
+      run: >-
+        . scripts/ensure-path.sh && bun run contract:check &&
+        if [ "$(git branch --show-current)" = main ]; then bun run contract:check:sources;
+        else bun run contract:check:sources:ahead; fi &&
+        bun run contract:check:consumers
 
     - name: source file sizes
       run: . scripts/ensure-path.sh && bun run refactor:ci

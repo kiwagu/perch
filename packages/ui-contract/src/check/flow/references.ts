@@ -1,19 +1,29 @@
 /**
  * What a state of a flow names of the contract: each event is a declared anchor (a derived
- * one through its base's `derived`) or a platform event of `platform.events`; a `show` names
+ * one through its base's `derived`), a platform event of `platform.events`, or a data event
+ * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
  * a declared anchor and codes it carries, a `navigate` the path of a binding and search
  * parameters of that binding; an address is a binding of the flow's own screen (its first
  * one when the path is left out) with search parameters of that binding.
  */
 
 import type { Binding, Effect, FlowState, Problem } from '../../files'
-import { has, PLATFORM_ACTION } from '../contract'
+import { bindingRefsOf, fieldProblem, has, PLATFORM_ACTION } from '../contract'
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
 
 /** A platform event is named as a platform action is: `platform.<name>`. */
 const PLATFORM_EVENT = PLATFORM_ACTION
+
+/** A data event names a field of the model: `model.<entity>.<field>`. */
+export const MODEL_EVENT = 'model.'
+
+/** Whether an anchor of the flow's own screen shows the field: a data event needs one. */
+const showsField = ({ screen }: InFlow, path: string): boolean =>
+  Object.values(screen.anchors).some((def) =>
+    bindingRefsOf(def).some(({ ref }) => 'model' in ref && ref.model === path),
+  )
 
 const searchProblems = (
   { inScreens }: InFlow,
@@ -63,6 +73,19 @@ export function effectProblems(
 
 export function eventProblems(inFlow: InFlow, event: string, at: At): Problem[] {
   const { contract, known, inScreens } = inFlow
+
+  if (event.startsWith(MODEL_EVENT)) {
+    const path = event.slice(MODEL_EVENT.length)
+    const problem = fieldProblem(contract.model, path)
+
+    if (problem !== undefined) {
+      return [inScreens(at, problem)]
+    }
+
+    return showsField(inFlow, path)
+      ? []
+      : [inScreens(at, `"${event}": no anchor of the screen shows ${path}`)]
+  }
 
   if (event.startsWith(PLATFORM_EVENT)) {
     return has(contract.screens.platform.events ?? {}, event.slice(PLATFORM_EVENT.length))

@@ -41,11 +41,13 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     `flows-machine.spec.ts` runs it in XState) and the `wireframe` (the default state as an
     aria snapshot).
 12. **The scenario.** At least one file under `tests/e2e/scenarios/<entity>/base/` that opens
-    the screen, written from the contract alone; `bun run e2e:scaffold <id>` writes its test.
-13. **The code.** The module route equals the binding (`routes-contract.spec.ts`) and the
-    router round-trips it (`routes-router.spec.ts`); the view renders exactly the anchors of
-    the file. An element two render paths draw is one `<NAME>_TEST_ID` constant; an icon-only
-    control has an `aria-label` from a translation key.
+    the screen, written from the contract alone. Then the review stop of
+    `.cursor/rules/ui-contract.mdc`: the contract diff to the developer, and wait for the OK.
+13. **The code**, after the OK; `bun run e2e:scaffold <id>` writes the scenario's test. The
+    module route equals the binding (`routes-contract.spec.ts`) and the router round-trips it
+    (`routes-router.spec.ts`); the view renders exactly the anchors of the file. An element
+    two render paths draw is one `<NAME>_TEST_ID` constant; an icon-only control has an
+    `aria-label` from a translation key.
 14. **The checks.** `contract:check`, `contract:check:sources`, `contract:check:consumers`,
     `e2e:coverage`, then `contract:coverage --unmarked` (nothing unmarked) and
     `contract:coverage --write`.
@@ -131,8 +133,11 @@ incoming change.
    gets an anchor declared in its screen file, or a marker with its reason.
 5. **What came in.** New routes, search parameters, dialogs and messages of the incoming
    side are in the screen files, and its new messages have codes.
-6. **The commit.** This audit is a commit of its own after the merge commit, handed over as
-   any contract change.
+6. **The commits.** This audit follows the merge commit as any contract change, a kind per
+   commit: the meta change when the merge brought one (the vocabulary, the tooling), the
+   business change (the screen files, the model, the scenarios), which stops for the
+   developer's review, then the implementation's (the attributes, the markers and the
+   tests), after the OK.
 
 ## Changing the coverage method
 

@@ -51,6 +51,22 @@ describe('flowProblems', () => {
       `${AT}.states.editing.on["platform.closed"]: "platform.closed" is not an event of platform.events`,
     ])
   })
+  it('takes a data event for a field of the model the screen shows, and no other', () => {
+    const contract = sampleContract()
+
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'model.thing.title': { target: 'saving' },
+      'model.thing.created_at': { target: 'saving' },
+      'model.thing.colour': { target: 'saving' },
+      'model.gadget.title': { target: 'saving' },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["model.thing.created_at"]: "model.thing.created_at": no anchor of the screen shows thing.created_at`,
+      `${AT}.states.editing.on["model.thing.colour"]: entity "thing" has no field "colour"`,
+      `${AT}.states.editing.on["model.gadget.title"]: no entity "gadget" in the model`,
+    ])
+  })
   it('wants an invoke to run an action whose parameters its input names, from declared anchors', () => {
     const contract = sampleContract()
     const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')

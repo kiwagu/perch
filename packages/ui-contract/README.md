@@ -237,7 +237,10 @@ for Bun.
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or
   `contract: sources agree with the contract (<n> anchors)`; part of `bun run check` and
-  the pre-commit hook).
+  of the pre-commit hook on `main`). `bun run contract:check:sources:ahead` (`--sources
+  --ahead`) lets the contract run ahead of the app: an anchor declared but not rendered yet
+  passes and is counted, a literal the contract lacks still fails; the pre-commit hook runs
+  it on every branch but `main`.
 - From the root: `bun run contract:check:consumers` (`ui-contract check --consumers
   [--tests=<dir>]`: the contract check, then the anchors, codes, states and values the e2e
   tests under `tests/e2e/src`, or `<dir>` relative to the root, name as literals against the

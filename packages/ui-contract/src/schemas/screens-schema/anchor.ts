@@ -2,7 +2,13 @@
 
 import { z } from '@workspace/zod'
 
-import { codeSchema, kebabNameSchema, roleSchema, stateSchema } from '../../names.schema'
+import {
+  baseAnchorSchema,
+  codeSchema,
+  kebabNameSchema,
+  roleSchema,
+  stateSchema,
+} from '../../names.schema'
 
 import { actionParamsSchema } from './params'
 
@@ -93,6 +99,12 @@ export const anchorDefSchema = z
       .describe('The roles that see the element; absent: every role of the screen.'),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    fields: z
+      .record(codeSchema, baseAnchorSchema)
+      .optional()
+      .describe(
+        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+      ),
     dataId: z
       .string()
       .optional()

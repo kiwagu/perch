@@ -54,6 +54,40 @@ describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
     expect(printed(agreeing())).toEqual([])
   })
+  it('lets the contract run ahead: an anchor not rendered yet passes, one the contract lacks does not', () => {
+    const [first] = agreeing()
+    const collected = [
+      { ...(first ?? expect.unreachable('a source')), literals: [] },
+      source('b.tsx', {
+        literals: [{ anchor: 'sample.other-button', form: 'attribute', line: 2 }],
+      }),
+    ]
+
+    expect(
+      compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
+    ).toEqual([
+      'b.tsx:2: "sample.other-button" is not in contract/screens; add it there or rename it',
+    ])
+  })
+  it('keeps every other problem when the contract runs ahead', () => {
+    const collected = [
+      source('c.tsx', { problems: [{ file: 'c.tsx', line: 9, message: 'built at runtime' }] }),
+      ...agreeing(),
+      source('b.tsx', {
+        literals: [
+          { anchor: 'sample.page', form: 'key', line: 7 },
+          { anchor: 'sample.mode-select.option', form: 'attribute', line: 6 },
+        ],
+        derived: [{ suffix: 'thing', line: 8 }],
+        codes: [{ code: 'unheard-of', form: 'attribute', line: 5 }],
+      }),
+    ]
+
+    expect(
+      compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
+    ).toEqual(printed(collected))
+    expect(printed(collected).length).toBeGreaterThanOrEqual(5)
+  })
   it('reports a literal declared twice at the second place, naming the first', () => {
     const collected = [
       ...agreeing(),

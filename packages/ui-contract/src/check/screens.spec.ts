@@ -63,6 +63,30 @@ describe('screensProblems', () => {
       'contract/screens/sample/$key.yaml:1: bindings: a screen that is not the frame needs at least one binding',
     ])
   })
+  it("holds an error's fields to its codes and to the fields of its screen", () => {
+    const contract = sampleContract()
+    const sample = screenIn(contract, 'sample')
+
+    sample.anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['title-required', 'failed'],
+      fields: {
+        'title-required': 'sample.title-input',
+        failed: 'sample.save-button',
+        missing: 'sample.title-input',
+        'title-too-long': 'sample.gone-input',
+      },
+    }
+    anchorIn(contract, 'sample.save-button').fields = { saved: 'sample.title-input' }
+
+    expect(printed(contract)).toEqual([
+      'contract/screens/sample/$key.yaml:1: anchors["sample.save-button"].fields: only an error names the fields its codes concern',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields.failed: "sample.save-button" is a button, not a field',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields.missing: "missing" is not a code of the anchor',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "title-too-long" is not a code of the anchor',
+      'contract/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "sample.gone-input" is not an anchor of the screen',
+    ])
+  })
   it('wants every anchor to start with its screen id and end with its kind', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')

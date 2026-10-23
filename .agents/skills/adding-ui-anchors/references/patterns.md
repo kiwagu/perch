@@ -393,3 +393,35 @@ Within a parallel state an event is handled by one region or by the state's own 
 by two (`contract:check` says which two). A region has no `type`, no `meta.address` and no
 nested states; where the app keeps a state per item (each note's edit form), the region
 follows the item acted on last and its `description` says so.
+
+A field whose value the person types and the store changes on its own is a region of its own,
+following the stored value or holding what was typed. A data event, `model.<entity>.<field>`,
+is the stored value of a field the screen shows changing, here or on another device. From
+`contract/screens/me.yaml`, the profile's name (descriptions left out):
+
+```yaml
+name:
+  initial: following
+  states:
+    following:
+      on:
+        user.profile.name-input:
+          target: edited
+    edited:
+      on:
+        user.profile.name-input:
+          target: following
+          guard: nameIsStored
+        model.profile.name:
+          target: following
+          guard: nameIsStored
+```
+
+In `following` the input shows the stored name; in `edited` it shows what was typed, and a
+name stored on another device changes nothing until the guard holds (its own Save landed, the
+profile storing it trimmed). The page sends the data event when the shape's value changes.
+
+A button whose anchor is an event of the flow is enabled exactly while a state the machine is
+in handles that event: the view asks the machine (`snapshot.can({ type: anchor })`, passed to
+the view as `can`) and keeps no flag of its own, so Save is disabled while `saving-name` or
+`saving-bio` runs and the sign-out button while the sign-out does.

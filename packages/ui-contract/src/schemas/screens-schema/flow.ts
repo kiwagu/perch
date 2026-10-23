@@ -37,6 +37,13 @@ export const platformEventNameSchema = z
   .regex(/^platform\.[a-z][a-z0-9]*(-[a-z0-9]+)*$/)
   .describe('A platform event: `platform.<name>`, an event of platform.events.')
 
+export const modelEventNameSchema = z
+  .string()
+  .regex(/^model\.[a-z_]+\.[a-z_]+$/)
+  .describe(
+    'A data event: `model.<entity>.<field>`, the stored value of a field the screen shows changed, here or on another device.',
+  )
+
 export const guardNameSchema = z
   .string()
   .regex(/^[a-z][a-zA-Z0-9]*$/)
@@ -122,10 +129,10 @@ const entrySchema = effectsSchema.exactOptional().describe('The effects on enter
 const exitSchema = effectsSchema.exactOptional().describe('The effects on leaving the state.')
 
 const onSchema = z
-  .record(z.union([platformEventNameSchema, anchorSchema]), transitionsSchema)
+  .record(z.union([platformEventNameSchema, modelEventNameSchema, anchorSchema]), transitionsSchema)
   .exactOptional()
   .describe(
-    'Per event, what follows: an anchor (the user acts on it) or a platform event of platform.events.',
+    'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
   )
 
 const metaSchema = z

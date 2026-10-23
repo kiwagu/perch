@@ -55,6 +55,30 @@ describe('buildManifest', () => {
       dataId: "the thing's id",
     })
   })
+  it("carries an error's fields, the field each of its codes concerns", () => {
+    const withFields = fixtureContract()
+    const screen = withFields.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    screen.anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['failed'],
+      fields: { failed: 'sample.title-input' },
+    }
+
+    const built = buildManifest({ ...withFields, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.save-error']).toEqual({
+      kind: 'error',
+      screen: 'sample',
+      codes: ['failed'],
+      fields: { failed: 'sample.title-input' },
+    })
+    expect(manifestSchema.safeParse(built).success).toBe(true)
+  })
   it('carries the screens, the platform, the activities, the scenarios and the model verbatim', () => {
     const withoutBindings = (screens: readonly { bindings: unknown }[]) =>
       screens.map(({ bindings: _bindings, ...screen }) => screen)
