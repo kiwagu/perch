@@ -1,4 +1,4 @@
-import { type SubmitEvent, useId, useState } from 'react'
+import { type SubmitEvent, useId } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
@@ -8,6 +8,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
+import type { ProfileFields } from '../../../application/profile.machine'
 import { PROFILE_BIO_MAX } from '../../../domain/profile.entity'
 
 export interface ProfileViewData {
@@ -16,24 +17,26 @@ export interface ProfileViewData {
   readonly bio?: string | undefined
 }
 
-/** What the person typed into the profile form, saved together by one Save. */
-export interface ProfileDraft {
-  readonly name: string
-  readonly bio: string
-}
+/** The buttons the profile's flow handles: each is enabled while the machine's state does. */
+export type ProfileControl = 'user.profile.save-button' | 'user.profile.sign-out-button'
 
 export interface ProfileViewProps {
   readonly status: 'idle' | 'loading' | 'ready'
+  /** The profile as stored: its heading and its email. */
   readonly profile: ProfileViewData | undefined
-  readonly saving?: boolean
-  /** The code of the last refused change. */
+  /** What the fields show: the stored value, or what was typed while the field is edited. */
+  readonly form: ProfileFields
+  /** The code of the last refused save. */
   readonly error?: string | undefined
-  readonly onSave: (draft: ProfileDraft) => void
-  /** Signs out; `forgetUnsent` once the person confirmed losing changes this device could not send. */
-  readonly onSignOut: (options?: { readonly forgetUnsent: true }) => void
-  /** Signing out would lose changes this device could not send: the person confirms or cancels. */
+  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
+  readonly can: (control: ProfileControl) => boolean
+  readonly onType: (field: keyof ProfileFields, value: string) => void
+  readonly onSave: () => void
+  readonly onSignOut: () => void
+  /** The flow asks before signing out: this device holds changes it could not send. */
   readonly confirmSignOut?: boolean
-  readonly onCancelSignOut?: () => void
+  readonly onConfirmSignOut: () => void
+  readonly onCancelSignOut: () => void
 }
 
 /** The contract code of a refused change, with its text. */
@@ -50,78 +53,64 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   }
 }
 
-/**
- * A draft of a stored value. It starts from the stored value and restarts from it whenever
- * the stored value changes, saved here or on another device.
- */
-function useDraft(stored: string): readonly [string, (value: string) => void] {
-  const [draft, setDraft] = useState({ from: stored, value: stored })
-
-  // Adjusting state while rendering: React renders again at once, before anything is shown.
-  if (draft.from !== stored) {
-    setDraft({ from: stored, value: stored })
-  }
-
-  return [
-    draft.from === stored ? draft.value : stored,
-    (value) => setDraft({ from: stored, value }),
-  ]
+/** The field each code of `user.profile.error` concerns, as the screen's `fields` say; others concern the form. */
+const ERROR_FIELDS: Readonly<Record<string, keyof ProfileFields>> = {
+  'name-required': 'name',
+  'name-too-long': 'name',
+  'bio-too-long': 'bio',
 }
 
-const NAME_CODES: ReadonlySet<string> = new Set(['profile:NAME_REQUIRED', 'profile:NAME_TOO_LONG'])
-
-function ProfileForm(props: {
-  readonly name: string
-  readonly bio: string
-  readonly saving: boolean
-  readonly error: string | undefined
-  readonly onSave: (draft: ProfileDraft) => void
-}) {
+function ProfileForm(props: ProfileViewProps) {
   const t = useT()
   const nameId = useId()
   const bioId = useId()
-  const [name, setName] = useDraft(props.name)
-  const [bio, setBio] = useDraft(props.bio)
-  const nameRefused = props.error !== undefined && NAME_CODES.has(props.error)
-  const bioRefused = props.error === 'profile:BIO_TOO_LONG'
   const error = props.error ? errorOf(t, props.error) : undefined
+  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  // One message: under the field its code concerns, or above Save when it concerns the form.
+  const message = error ? (
+    <FieldError data-testid="user.profile.error" data-code={error.code}>
+      {error.text}
+    </FieldError>
+  ) : null
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
-    props.onSave({ name, bio })
+    props.onSave()
   }
 
   return (
     <form onSubmit={submit} data-testid="user.profile.form">
       <FieldGroup>
-        <Field data-invalid={nameRefused ? true : undefined}>
+        <Field data-invalid={concerns === 'name' ? true : undefined}>
           <FieldLabel htmlFor={nameId}>{t('user.profile.name')}</FieldLabel>
           <Input
             id={nameId}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            value={props.form.name}
+            onChange={(event) => props.onType('name', event.target.value)}
             autoComplete="name"
-            aria-invalid={nameRefused ? true : undefined}
+            aria-invalid={concerns === 'name' ? true : undefined}
             data-testid="user.profile.name-input"
           />
+          {concerns === 'name' ? message : null}
         </Field>
-        <Field data-invalid={bioRefused ? true : undefined}>
+        <Field data-invalid={concerns === 'bio' ? true : undefined}>
           <FieldLabel htmlFor={bioId}>{t('user.profile.bio')}</FieldLabel>
           <Textarea
             id={bioId}
-            value={bio}
-            onChange={(event) => setBio(event.target.value)}
+            value={props.form.bio}
+            onChange={(event) => props.onType('bio', event.target.value)}
             maxLength={PROFILE_BIO_MAX}
-            aria-invalid={bioRefused ? true : undefined}
+            aria-invalid={concerns === 'bio' ? true : undefined}
             data-testid="user.profile.bio-textarea"
           />
+          {concerns === 'bio' ? message : null}
         </Field>
-        <Field data-invalid={error ? true : undefined}>
-          {error ? (
-            <FieldError data-testid="user.profile.error" data-code={error.code}>
-              {error.text}
-            </FieldError>
-          ) : null}
-          <Button type="submit" disabled={props.saving} data-testid="user.profile.save-button">
+        <Field data-invalid={error && !concerns ? true : undefined}>
+          {concerns ? null : message}
+          <Button
+            type="submit"
+            disabled={!props.can('user.profile.save-button')}
+            data-testid="user.profile.save-button"
+          >
             {t('user.profile.save')}
           </Button>
         </Field>
@@ -166,16 +155,11 @@ export function ProfileView(props: ProfileViewProps) {
               data-testid="user.profile.email-input"
             />
           </Field>
-          <ProfileForm
-            name={profile.name}
-            bio={profile.bio ?? ''}
-            saving={props.saving ?? false}
-            error={props.error}
-            onSave={props.onSave}
-          />
+          <ProfileForm {...props} />
           <Button
             type="button"
             variant="outline"
+            disabled={!props.can('user.profile.sign-out-button')}
             onClick={() => props.onSignOut()}
             data-testid="user.profile.sign-out-button"
           >
@@ -189,8 +173,8 @@ export function ProfileView(props: ProfileViewProps) {
           confirmLabel={t('user.profile.sign-out-offline.confirm')}
           cancelLabel={t('user.profile.sign-out-offline.cancel')}
           destructive
-          onConfirm={() => props.onSignOut({ forgetUnsent: true })}
-          onCancel={() => props.onCancelSignOut?.()}
+          onConfirm={() => props.onConfirmSignOut()}
+          onCancel={() => props.onCancelSignOut()}
           testId="user.profile.sign-out-dialog"
           code="unsent-changes"
         />

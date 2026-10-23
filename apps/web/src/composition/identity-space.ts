@@ -90,7 +90,7 @@ export interface IdentitySpace {
    * tab runs no engine. A change of memberships meanwhile replaces that engine, which ends the
    * sign-out `offline`.
    */
-  signOut(): Promise<'signed-out' | 'offline'>
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
    * engine's channel: as on a change of leader, a new engine over a new channel replaces it
@@ -266,8 +266,8 @@ class Space implements IdentitySpace {
    * holds for a membership did not open, the gateway is not asked (`offline`), as for a region
    * that stopped syncing: what it holds may be unsent.
    */
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#unopened().length > 0 ? Promise.resolve('offline') : this.#leading.signOut()
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#unopened().length > 0 ? Promise.resolve('offline') : this.#leading.signOut(network)
   }
 
   resumeSync(): void {

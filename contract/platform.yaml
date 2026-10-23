@@ -42,7 +42,7 @@ actions:
       forgetUnsent:
         type: boolean
         description: "Optional: sign out even though this device holds changes the server has not received; they are lost."
-    result: this device signs out, its local data goes, the app moves to /sign-in; with unsent changes and no forgetUnsent the sign-out asks first (dialog unsent-changes) and changes nothing
+    result: this device signs out, its local data goes, the app moves to /sign-in; with unsent changes and no forgetUnsent the sign-out asks first (dialog unsent-changes) and changes nothing; it waits a few seconds for the sync channel first, except when the browser says it has no network, where it answers at once
     codes:
       - failed
   sign-out-everywhere:

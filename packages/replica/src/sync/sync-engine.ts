@@ -66,11 +66,11 @@ export interface SyncEngine {
    * sign-out close, which means the grant is revoked. Any other close after the sign-out was
    * asked for (a gateway that could not revoke the grant closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
-   * Resolves `offline`, without asking the gateway, when the channel stayed down, fell, the
-   * outbox did not drain in time, or a region that stopped syncing still holds what it has not
-   * sent. Never rejects.
+   * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
+   * the platform says there is no network, `network.online`), fell, the outbox did not drain in
+   * time, or a region that stopped syncing still holds what it has not sent. Never rejects.
    */
-  signOut(): Promise<'signed-out' | 'offline'>
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Whether a sign-out stopped this engine's channel: it asked the gateway, which then did not
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
@@ -184,8 +184,8 @@ class Engine implements SyncEngine {
     return this.#options.transport.send({ type: 'renew' })
   }
 
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#signOutFlow.run()
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#signOutFlow.run(network.online)
   }
 
   #receive(message: ServerMessage): void {

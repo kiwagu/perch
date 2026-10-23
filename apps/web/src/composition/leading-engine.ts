@@ -123,8 +123,8 @@ export class LeadingEngine {
   }
 
   /** Has the engine sign the device out (`SyncEngine.signOut`); `offline` while this tab does not lead. */
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#engine?.signOut() ?? Promise.resolve('offline')
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#engine?.signOut(network) ?? Promise.resolve('offline')
   }
 
   /** After a sign-out that asked the gateway in vain, which stopped its channel: a new engine replaces it. */

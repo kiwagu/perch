@@ -21,6 +21,7 @@ import { createMachine } from 'xstate'
 
 import { flowNodes, flowSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
 
+import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
 
@@ -309,6 +310,16 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
     createSignInMachine(
       new SignInService(fakeSession().session, { createProfile: () => okAsync(undefined) }),
     ),
+  'user.profile': () =>
+    createProfileMachine({
+      profiles: { updateName: () => okAsync(undefined), updateBio: () => okAsync(undefined) },
+      signOut: () => okAsync('signed-out' as const),
+      values: () => ({
+        id: undefined,
+        stored: { name: '', bio: '' },
+        drafts: { name: '', bio: '' },
+      }),
+    }),
 }
 
 describe('the machines of the app', () => {

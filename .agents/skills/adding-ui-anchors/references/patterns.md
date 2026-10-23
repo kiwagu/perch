@@ -20,7 +20,11 @@ so the call site writes the literal and the component changes nothing. From
 <FieldError data-testid="user.profile.error" data-code={error.code}>
   {error.text}
 </FieldError>
-<Button type="submit" disabled={props.saving} data-testid="user.profile.save-button">
+<Button
+  type="submit"
+  disabled={!props.can('user.profile.save-button')}
+  data-testid="user.profile.save-button"
+>
   {t('user.profile.save')}
 </Button>
 ```

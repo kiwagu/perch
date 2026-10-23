@@ -26,9 +26,15 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in` and `user.profile` in `contract/screens/sign-in.yaml` and
   `contract/screens/me.yaml`.
-- Behaviour: the name and the bio (at most 2000 characters) are saved together by one Save;
-  the chosen language follows the identity across devices; signing out asks before losing
-  changes this device could not send; the sign-in page says so when the gateway refused the
+- Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
+  held to `contract/screens/me.yaml` by `platform/flows-machine.spec.ts`): the name and the bio
+  (at most 2000 characters) each follow the stored value until typed into, then keep what was
+  typed when another device stores another value, until it is saved (the name stored trimmed)
+  or typed back; one Save writes what changed; a refused save is explained under the field its
+  code concerns (the error's `fields`); Save and the sign-out button are enabled while the
+  machine's state handles them; the chosen language follows the identity across devices;
+  signing out asks before losing changes this device could not send, at once when the browser
+  says it has no network; the sign-in page says so when the gateway refused the
   device's keys while changes remain to send after the next sign-in, and says "You were signed
   out from another device." when this device was signed out from another one
   (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
