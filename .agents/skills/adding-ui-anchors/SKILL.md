@@ -21,8 +21,11 @@ description: "Change what the web app shows or does contract first: the model in
 
 ## Stop Here If
 
-- The change reached the contract before the code, the anchor is rendered by its literal and
-  reached by a scenario with its test, and step 8 is green.
+- The change reached the contract before the code, the developer approved the contract diff
+  before the code started, the anchor is rendered by its literal and reached by a scenario with
+  its test, and step 8 is green.
+- The change is a fix that brings the code back to what the contract already says, correctly:
+  no contract diff and no review stop; steps 6 to 8 only.
 
 ## Descend To
 
@@ -46,7 +49,9 @@ code and the tests follow; the checks hold them to the contract.
    (`__root.yaml` for the frame): its `entry`, `anchors`, `states` and `flow`. On the dev
    stand (`mcproc start dev`), `window.__perch.ui.anchors()` in the page's console lists the
    anchors the page renders now, with their kind, `data-state`, `data-code`, `data-id`,
-   `data-value` and visibility. When the element already has an anchor, use it and stop.
+   `data-value` and visibility. When the element already has an anchor and what the contract
+   says of it stays as it is, use it and stop. A change of its behaviour (a transition, a
+   state, a guard, a code, a facet) goes on through steps 2 to 5 like a new element.
 2. **The model.** A field or an action the screen needs goes into its entity of
    `contract/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
    `contract/platform.yaml` when the platform runs it.
@@ -70,15 +75,21 @@ code and the tests follow; the checks hold them to the contract.
    bracket references. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
-   `bun run e2e:scaffold <id>` writes the failing test of a new scenario.
-6. **The code.** Put the literal on the semantic element, in one of the four forms. A
+   **Then stop for review** (the gate of `.cursor/rules/ui-contract.mdc`): hand the developer
+   the output of `bun run contract:diff main`, the diff of the contract files, the reason for
+   every change and the gaps signalled (`references/templates.md`, "Review"), and wait for the
+   OK. Nothing below starts before it, not even a test's scaffold.
+6. **The code**, after the developer's OK. A contract change found from here on goes back to
+   steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
+   forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the
    contract code in the presentation layer. An icon-only control also gets an `aria-label`.
    A control that is not a test target gets a coverage-ignore marker with its reason.
    `references/patterns.md` has one example per case.
-7. **The tests.** The test of the scenario locates by anchors and asserts codes, states and
-   values, never wording.
+7. **The tests.** `bun run e2e:scaffold <id>` writes the failing test of a new scenario. The
+   test of the scenario locates by anchors and asserts codes, states and values, never
+   wording.
 8. **Check:**
 
    ```sh
@@ -89,8 +100,9 @@ code and the tests follow; the checks hold them to the contract.
    ```
 
    Then `bun run check` before the commit.
-9. **Hand over** the output of `bun run contract:diff main` with the reason for each rename
-   or removal (`references/templates.md`).
+9. **Hand over** the finished change: the output of `bun run contract:diff main` with the
+   reason for each rename or removal (`references/templates.md`, "Hand-off"). This is the
+   delivery; the review of step 5 came before the code.
 
 ## Do not
 

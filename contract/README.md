@@ -38,6 +38,12 @@ page may still inspire a change, but the contract decides it.
    added to its table in the same change.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
+   **Then the review.** The change stops here: the developer reads the contract diff
+   (`bun run contract:diff main`, the diff of the files, the reason for every change, the
+   gaps signalled) and gives an OK or asks for changes to the contract. The code and the tests,
+   a test's scaffold included, start only after the OK; a contract change found while writing
+   them goes back to step 1 and stops again. A fix that brings the code back to what the
+   contract already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the
@@ -696,7 +702,8 @@ inside it, holds none) makes the command fail and write nothing.
 
 ## Handing over a change
 
-A change to the contract goes with the output of `bun run contract:diff main` in its
+This is the delivery of a finished change; the review before the code is described in "The
+order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, and the transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old

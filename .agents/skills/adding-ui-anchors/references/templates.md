@@ -18,6 +18,20 @@ In the tests: tests/e2e/src/<id>.e2e.spec.ts, scenario <id>
 Why: without it the test depends on the wording or the layout and breaks when they change
 ```
 
+## Review (before the code)
+
+The stop of the review gate (`.cursor/rules/ui-contract.mdc`): the contract changed, the code
+has not. The developer gets, and answers with an OK or with changes to the contract:
+
+```text
+<the output of bun run contract:diff main>
+
+The contract files: <the diff of contract/ and tests/e2e/scenarios/, or where to read it>
+Why:
+- <every change, an added state, guard, facet or code included>: <the reason>
+Gaps signalled: <the Contract gap: blocks, or none>
+```
+
 ## Hand-off (developer)
 
 A change to the contract carries the output of `bun run contract:diff main` in its
