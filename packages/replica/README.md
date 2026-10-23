@@ -137,13 +137,15 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   push carries, 256 by default; `localCompactionRows`, how many rows past its snapshot a region's
   local log holds before a full pass compacts it, 200 by default as on the server;
   `replaceRegion(region, how)`, the app's document that takes a
-  region's place, below) returns a `SyncEngine` (`start`,
+  region's place, below; `online()`, whether the platform says the device has a network) returns
+  a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
   other close after it asked, or none within 10 seconds, stops the transport and answers
-  `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
+  `offline`; it answers `offline` at once while the channel is down and `online()` says there is
+  no network), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
   tells that such a sign-out stopped the channel, after which only a new engine syncs; `renew()`
   asks the gateway for new keys over the welcomed channel, and answers false,

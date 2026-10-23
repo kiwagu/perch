@@ -455,7 +455,7 @@ export class SessionService implements SessionPort {
     // engine answers `offline` without asking the gateway while anything stays unsent, a region
     // that stopped syncing included; what is unsent is then weighed here.
     const ended = ResultAsync.fromSafePromise(leadership?.takeOver() ?? Promise.resolve())
-      .andThen(() => ResultAsync.fromSafePromise(space.signOut()))
+      .andThen(() => ResultAsync.fromSafePromise(space.signOut({ online: this.#options.online() })))
       // What is unsent is read, and the database deleted, only once no tab writes any more.
       // Keys the gateway did not revoke are left to revoke, whichever way they are forgotten.
       .andThen((outcome) =>

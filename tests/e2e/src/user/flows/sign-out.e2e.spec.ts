@@ -10,9 +10,6 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
     signedIn,
     secondDevice,
   }) => {
-    // A sign-out waits for the sync channel first: several seconds when the device is offline.
-    test.slow()
-
     const data = {
       bio: generate.bio(),
       newName: generate.newName(),
@@ -78,7 +75,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       })
     })
 
-    await test.step('6. Take device A offline, enter the unsent name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
+    await test.step("6. Take device A's browser offline, enter the unsent name into [user.profile.name-input] and click [user.profile.save-button]", async () => {
       await network.goOffline()
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'down')
       await page.getByTestId('user.profile.name-input').fill(data.unsentName)
@@ -88,13 +85,14 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('7. On device A, click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      // Expected: After step 7 device A asks before deleting the change it could not send:
-      //   [user.profile.sign-out-dialog] carries [code:unsent-changes]
-      // The app first waits a few seconds for the sync channel before it asks.
+      // Expected: After step 7 device A asks at once, without waiting for the sync channel, before
+      //   deleting the change it could not send: [user.profile.sign-out-dialog] carries
+      //   [code:unsent-changes]
+      // A sign-out that waited for the channel would ask only after 5 seconds.
       await expect(page.getByTestId('user.profile.sign-out-dialog')).toHaveAttribute(
         'data-code',
         'unsent-changes',
-        { timeout: 15_000 },
+        { timeout: 3_000 },
       )
       await expect(page.getByTestId('user.profile.sign-out-dialog.confirm-button')).toBeVisible()
     })

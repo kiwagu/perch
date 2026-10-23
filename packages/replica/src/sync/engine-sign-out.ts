@@ -29,7 +29,9 @@ export interface EngineSignOutOptions {
 /**
  * Signs the device out through the gateway: waits up to 5 seconds for the channel, drains for up
  * to 10 seconds, then asks the gateway and resolves `signed-out` only on the sign-out close; any
- * other outcome resolves `offline`, the transport stopped when the gateway was asked in vain.
+ * other outcome resolves `offline`, the transport stopped when the gateway was asked in vain. A
+ * device the platform says has no network resolves `offline` at once while its channel is down:
+ * the channel cannot come up meanwhile.
  */
 export class EngineSignOut {
   readonly #transport: SyncTransport
@@ -53,7 +55,12 @@ export class EngineSignOut {
     return this.#channelStopped
   }
 
-  async run(): Promise<'signed-out' | 'offline'> {
+  /** `online`: the platform says the device has a network as the sign-out is asked for. */
+  async run(online: boolean): Promise<'signed-out' | 'offline'> {
+    if (!this.#up() && !online) {
+      return 'offline'
+    }
+
     if (!(await this.#untilUp(SIGN_OUT_CHANNEL_MS))) {
       return 'offline'
     }

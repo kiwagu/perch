@@ -820,7 +820,7 @@ describe('organisations in the identity space', () => {
     expect((await space.writePath.run(createProfile, profile('Ann'))).isOk()).toBe(true)
 
     let outcome: string | undefined
-    const signingOut = space.signOut().then((answered) => {
+    const signingOut = space.signOut({ online: true }).then((answered) => {
       outcome = answered
     })
 

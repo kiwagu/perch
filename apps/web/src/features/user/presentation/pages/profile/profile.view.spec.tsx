@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
-import { fireEvent, screen } from '@testing-library/react'
+import { join } from 'node:path'
+
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProfileId } from '@workspace/ids'
+import { loadScreens } from '@workspace/ui-contract'
 
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
 import type { ProfileResult } from './profile.model.gen'
-import { ProfileView, type ProfileViewProps } from './profile.view'
+import { type ProfileControl, ProfileView, type ProfileViewProps } from './profile.view'
+
+const ROOT = join(import.meta.dirname, '../../../../../../../..')
 
 // The tree the profile shape returns, as its snapshot in the service test records it.
 const tree: ProfileResult = [
@@ -24,9 +29,23 @@ const tree: ProfileResult = [
 ]
 
 function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSave: vi.fn(), onSignOut: vi.fn(), onCancelSignOut: vi.fn() }
+  const handlers = {
+    onType: vi.fn(),
+    onSave: vi.fn(),
+    onSignOut: vi.fn(),
+    onConfirmSignOut: vi.fn(),
+    onCancelSignOut: vi.fn(),
+  }
   const view = (more: Partial<ProfileViewProps>) => (
-    <ProfileView status="ready" profile={tree[0]} {...handlers} {...props} {...more} />
+    <ProfileView
+      status="ready"
+      profile={tree[0]}
+      form={{ name: 'Ann', bio: '' }}
+      can={() => true}
+      {...handlers}
+      {...props}
+      {...more}
+    />
   )
   const { rerender } = renderWithProviders(view({}), { locale, es })
 
@@ -35,100 +54,101 @@ function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' =
 
 const field = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
+/** The form field an element sits in: its label, its control and the error that concerns it. */
+const fieldOf = (testId: string) => screen.getByTestId(testId).closest('[data-slot="field"]')
+
+/** A domain code the view maps to each contract code of the error. */
+const DOMAIN: Readonly<Record<string, string>> = {
+  'name-required': 'profile:NAME_REQUIRED',
+  'name-too-long': 'profile:NAME_TOO_LONG',
+  'bio-too-long': 'profile:BIO_TOO_LONG',
+}
+
 describe('ProfileView', () => {
-  it('shows the name and the email', () => {
-    renderView()
+  it('shows the stored name and email, and what the fields show', () => {
+    renderView({ form: { name: 'Ann draft', bio: 'About me' } })
 
     expect(screen.getByTestId('user.profile.form').tagName).toBe('FORM')
     expect(screen.getByTestId('user.profile.heading').textContent).toBe('Ann')
     expect(field('user.profile.email-input').value).toBe('ann@example.test')
-    expect(field('user.profile.name-input').value).toBe('Ann')
-  })
-
-  it('shows the bio under its label, empty while the profile has none', () => {
-    renderView()
-
-    expect(field('user.profile.bio-textarea').value).toBe('')
+    expect(field('user.profile.name-input').value).toBe('Ann draft')
+    expect(field('user.profile.bio-textarea').value).toBe('About me')
     expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 
-  it('shows the stored bio', () => {
-    renderView({ profile: { name: 'Ann', email: 'ann@example.test', bio: 'Hello' } })
-
-    expect(field('user.profile.bio-textarea').value).toBe('Hello')
-  })
-
-  it('saves the new name', () => {
-    const { onSave } = renderView()
-
-    fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
-    fireEvent.click(screen.getByTestId('user.profile.save-button'))
-
-    expect(screen.getByTestId('user.profile.save-button').textContent).toBe(en['user.profile.save'])
-    expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: '' })
-  })
-
-  it('saves the name and the bio with one Save', () => {
-    const { onSave } = renderView()
+  it('tells what is typed into each field, and Save', () => {
+    const { onType, onSave } = renderView()
 
     fireEvent.change(field('user.profile.name-input'), { target: { value: 'Renamed' } })
     fireEvent.change(field('user.profile.bio-textarea'), { target: { value: 'About me' } })
     fireEvent.click(screen.getByTestId('user.profile.save-button'))
 
+    expect(onType).toHaveBeenCalledWith('name', 'Renamed')
+    expect(onType).toHaveBeenCalledWith('bio', 'About me')
     expect(onSave).toHaveBeenCalledOnce()
-    expect(onSave).toHaveBeenCalledWith({ name: 'Renamed', bio: 'About me' })
+    expect(screen.getByTestId('user.profile.save-button').textContent).toBe(en['user.profile.save'])
   })
 
-  it('restarts a draft when its stored value changes, here or on another device', () => {
-    const profile = { name: 'Ann', email: 'ann@example.test', bio: 'Hello' }
-    const { rerender } = renderView({ profile })
+  it('enables each button while the flow handles it', () => {
+    const { onSave, rerender } = renderView({
+      can: (control: ProfileControl) => control === 'user.profile.sign-out-button',
+    })
+    const save = screen.getByTestId('user.profile.save-button') as HTMLButtonElement
+    const signOut = screen.getByTestId('user.profile.sign-out-button') as HTMLButtonElement
 
-    fireEvent.change(field('user.profile.name-input'), { target: { value: 'Ann draft' } })
-    fireEvent.change(field('user.profile.bio-textarea'), { target: { value: 'Bio draft' } })
-    rerender({ profile: { ...profile, bio: 'Written elsewhere' } })
+    expect(save.disabled).toBe(true)
+    expect(signOut.disabled).toBe(false)
 
-    expect(field('user.profile.bio-textarea').value).toBe('Written elsewhere')
-    expect(field('user.profile.name-input').value).toBe('Ann draft')
+    fireEvent.click(save)
 
-    rerender({ profile: { ...profile, name: 'Bea', bio: 'Written elsewhere' } })
+    expect(onSave).not.toHaveBeenCalled()
 
-    expect(field('user.profile.name-input').value).toBe('Bea')
+    rerender({ can: (control: ProfileControl) => control === 'user.profile.save-button' })
 
-    // A stored value that comes back to an earlier one does not bring back the old draft.
-    rerender({ profile: { ...profile, name: 'Bea' } })
-
-    expect(field('user.profile.bio-textarea').value).toBe('Hello')
+    expect(save.disabled).toBe(false)
+    expect(signOut.disabled).toBe(true)
   })
 
-  it('explains a name the profile refuses', () => {
-    renderView({ error: 'profile:NAME_REQUIRED' })
+  it("shows an error under the field its code concerns, as the screen's fields say", () => {
+    const { screens } = loadScreens(ROOT)
+    const fields = screens?.screens.find(({ id }) => id === 'user.profile')?.anchors[
+      'user.profile.error'
+    ]?.fields
 
-    expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('name-required')
+    expect(Object.keys(fields ?? {}).length).toBeGreaterThan(0)
+
+    for (const [code, anchor] of Object.entries(fields ?? {})) {
+      renderView({ error: DOMAIN[code] })
+
+      expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe(code)
+      expect(fieldOf('user.profile.error')).toBe(fieldOf(anchor))
+      expect(field(anchor).getAttribute('aria-invalid')).toBe('true')
+
+      cleanup()
+    }
+  })
+
+  it('explains each refused save, and shows a failure that concerns no field above Save', () => {
+    const { rerender } = renderView({ error: 'profile:NAME_REQUIRED' })
+
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.name-required'],
     )
-    expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBe('true')
-  })
 
-  it('takes at most 2000 characters of bio, and explains a bio the profile refuses', () => {
-    renderView({ error: 'profile:BIO_TOO_LONG' })
+    rerender({ error: 'profile:BIO_TOO_LONG' })
 
     expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
-    expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('bio-too-long')
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.bio-too-long'],
     )
-    expect(field('user.profile.bio-textarea').getAttribute('aria-invalid')).toBe('true')
-    expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
-  })
 
-  it('explains a change that was not saved without blaming the name', () => {
-    renderView({ error: 'data:WRITE_FAILED' })
+    rerender({ error: 'data:WRITE_FAILED' })
 
     expect(screen.getByTestId('user.profile.error').getAttribute('data-code')).toBe('failed')
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.failed'],
     )
+    expect(fieldOf('user.profile.error')).toBe(fieldOf('user.profile.save-button'))
     expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
   })
 
@@ -150,34 +170,31 @@ describe('ProfileView', () => {
     fireEvent.click(screen.getByTestId('user.profile.sign-out-button'))
 
     expect(onSignOut).toHaveBeenCalledOnce()
-    expect(onSignOut).toHaveBeenCalledWith()
   })
 
   it('asks before signing out with changes this device has not sent', async () => {
-    const { onSignOut, onCancelSignOut } = renderView({ confirmSignOut: true })
+    const { onConfirmSignOut, onCancelSignOut } = renderView({ confirmSignOut: true })
 
     const dialog = await screen.findByTestId('user.profile.sign-out-dialog')
 
     expect(dialog.getAttribute('data-code')).toBe('unsent-changes')
     expect(screen.getByRole('alertdialog')).toBe(dialog)
     expect(dialog.textContent).toContain(en['user.profile.sign-out-offline.title'])
-    expect(screen.getByRole('alertdialog').textContent).toContain(
-      en['user.profile.sign-out-offline.body'],
-    )
+    expect(dialog.textContent).toContain(en['user.profile.sign-out-offline.body'])
     expect(screen.getByTestId('user.profile.sign-out-dialog.confirm-button').textContent).toBe(
       en['user.profile.sign-out-offline.confirm'],
     )
 
     fireEvent.click(screen.getByTestId('user.profile.sign-out-dialog.confirm-button'))
 
-    expect(onSignOut).toHaveBeenCalledWith({ forgetUnsent: true })
+    expect(onConfirmSignOut).toHaveBeenCalledOnce()
 
     fireEvent.click(screen.getByTestId('user.profile.sign-out-dialog.cancel-button'))
 
-    expect(onCancelSignOut).toHaveBeenCalledOnce()
+    expect(onCancelSignOut).toHaveBeenCalled()
   })
 
-  it('shows no confirmation until signing out needs one', () => {
+  it('shows no confirmation until the flow asks', () => {
     renderView()
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
