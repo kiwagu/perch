@@ -3,13 +3,15 @@ import { generate } from '../../support/data'
 import { appReady, expect, notice, test } from '../../support/fixtures'
 
 test.describe('Keep one account in step on two devices', { tag: '@full' }, () => {
-  test('A bio written on one device and a name changed on another reach both devices', async ({
+  test('A bio written on one device and a name changed on another reach both devices, and a name being typed is not overwritten', async ({
     page,
     secondDevice,
   }, testInfo) => {
     const data = {
       bio: generate.bio(),
       newName: generate.newName(),
+      draftName: generate.newName(),
+      secondName: generate.newName(),
     }
 
     await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
@@ -77,5 +79,30 @@ test.describe('Keep one account in step on two devices', { tag: '@full' }, () =>
     expect(latency, 'the delay from the click to the new name').toBeGreaterThanOrEqual(0)
     expect(latency, 'the delay from the click to the new name').toBeLessThanOrEqual(5_000)
     testInfo.annotations.push({ type: 'sync-latency-ms', description: String(latency) })
+
+    await test.step('5. On device A, enter the draft name into [user.profile.name-input] without saving', async () => {
+      await page.getByTestId('user.profile.name-input').fill(data.draftName)
+    })
+
+    await test.step('6. On device B, enter the second name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
+      await deviceB.getByTestId('user.profile.name-input').fill(data.secondName)
+      await deviceB.getByTestId('user.profile.save-button').click()
+      // Expected: After step 6 device A shows the second name in [user.profile.heading] and still
+      //   holds the draft name in [user.profile.name-input]
+      await expect(page.getByTestId('user.profile.heading')).toHaveText(data.secondName, {
+        timeout: 5_000,
+      })
+      await expect(page.getByTestId('user.profile.name-input')).toHaveValue(data.draftName)
+    })
+
+    await test.step('7. On device A, click [user.profile.save-button]', async () => {
+      await page.getByTestId('user.profile.save-button').click()
+      // Expected: After step 7 device B shows the draft name in [user.profile.heading] and in
+      //   [user.profile.name-input]
+      await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.draftName, {
+        timeout: 5_000,
+      })
+      await expect(deviceB.getByTestId('user.profile.name-input')).toHaveValue(data.draftName)
+    })
   })
 })
