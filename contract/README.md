@@ -43,8 +43,12 @@ page may still inspire a change, but the contract decides it.
    the generated schemas, the vocabulary, this README), then the business change (the screen
    files, the activities, the platform, the model, the scenarios), the entry point of a
    feature. The change stops here: the developer reads the contract diff
-   (`bun run contract:diff main`, the diff of the files, the reason for every change, the
-   gaps signalled) and gives an OK or asks for changes to the contract. The code and the tests,
+   (`bun run contract:diff main`, the contract commits by hash with their diff, the reason
+   for every change, the gaps signalled) and gives an OK on those commits or asks for changes
+   to the contract. The OK covers those commits, and the last business commit of a rename
+   or a removal that drops the old names the review listed. Any other contract commit made,
+   re-cut, amended or rebased after it, even with its files unchanged, and a return to the
+   implementation after other work, stop here again. The code and the tests,
    a test's scaffold included, start only after the OK, in commits of their own. A rename or a
    removal keeps the old name declared until the code no longer renders it, then a last
    business commit drops it, approved with the first, with no new stop; any other contract

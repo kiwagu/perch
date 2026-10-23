@@ -30,7 +30,14 @@ The contract commits: <the meta commit (when a facet is new) and the business co
 Why:
 - <every change, an added state, guard, facet or code included>: <the reason>
 Gaps signalled: <the Contract gap: blocks, or none>
+Dropped after the implementation: <the old names a last business commit will drop, or none>
+OK to implement on <the meta commit's hash, when there is one> + <the business commit's hash>?
 ```
+
+The OK covers those commits, and the last business commit that drops exactly the old names
+listed above. Any other contract commit made, re-cut, amended or rebased after it, even with
+its files unchanged, and a return to the implementation after other work, go through this
+review again.
 
 ## Hand-off (developer)
 

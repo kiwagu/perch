@@ -84,10 +84,15 @@ code and the tests follow; the checks hold them to the contract.
    declared, not rendered yet, passes). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer
-   the output of `bun run contract:diff main`, the diff of the contract files, the reason for
-   every change and the gaps signalled (`references/templates.md`, "Review"), and wait for the
-   OK. Nothing below starts before it, not even a test's scaffold.
-6. **The code**, after the developer's OK, in commits of its own (the code, its tests, an
+   the output of `bun run contract:diff main`, the contract commits by hash with their diff,
+   the reason for every change and the gaps signalled (`references/templates.md`, "Review"),
+   ask for the OK on those commits, and wait. Nothing below starts before it, not even a
+   test's scaffold. The OK covers those commits, and the one it approves in advance: the last
+   business commit of a rename or a removal, which drops the old names the review listed and
+   nothing else. Any other contract commit made, re-cut, amended or rebased after the OK, even
+   with its files unchanged, stops here again, and so does a return to the code after other
+   work.
+6. **The code**, after the developer's OK on the contract commits beneath it, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
    changes), never with any other business or meta change. Once the code no longer renders a
    renamed or removed name, a last business commit drops it from the contract: the review of
