@@ -10,6 +10,7 @@ that applies to the task, starting with the router.
 @.cursor/rules/reuse-first-discovery.mdc
 @.cursor/rules/security-review-before-commit.mdc
 @.cursor/rules/verify-before-commit-and-landing.mdc
+@.cursor/rules/branch-reuse-first.mdc
 
 ## Always-on conventions
 
