@@ -1,20 +1,26 @@
 import { useNavigate } from '@tanstack/react-router'
-import { okAsync } from 'neverthrow'
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useMachine } from '@xstate/react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
-import type { BusError } from '@workspace/cqrs'
 import { useLocale, useT } from '@workspace/i18n'
 
 import { useSetLocale } from '../../../../../platform/i18n'
 import { useService, useShape } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
-import { SIGN_IN_PATH } from '../../../../../platform/router'
 import { SESSION } from '../../../../../platform/session.port'
 import { localeChange } from '../../../application/locale-change.policy'
+import {
+  createProfileMachine,
+  type ProfileFields,
+  type ProfileValues,
+} from '../../../application/profile.machine'
 import { PROFILE_SERVICE } from '../../../application/profile.service'
 
 import { profileShape } from './profile.model.gen'
-import { type ProfileDraft, ProfileView } from './profile.view'
+import { type ProfileControl, ProfileView } from './profile.view'
+
+/** The anchor whose event a field's typing is. */
+const INPUTS = { name: 'user.profile.name-input', bio: 'user.profile.bio-textarea' } as const
 
 export function ProfileContainer() {
   const session = useService(SESSION)
@@ -25,9 +31,23 @@ export function ProfileContainer() {
   )
   const { tree, status } = useShape(profileShape, user ? { identity: user.id } : null)
   const row = tree?.[0]
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
-  const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const stored: ProfileFields = { name: row?.name ?? '', bio: row?.bio ?? '' }
+  const [drafts, setDrafts] = useState<ProfileFields>(stored)
+  // What the machine reads at each guard and each write: the profile as stored, what was typed.
+  const values = useRef<ProfileValues>({ id: row?.id, stored, drafts })
+
+  values.current = { id: row?.id, stored, drafts: values.current.drafts }
+
+  const machine = useMemo(
+    () =>
+      createProfileMachine({
+        profiles,
+        signOut: (options) => session.signOut(options),
+        values: () => values.current,
+      }),
+    [profiles, session],
+  )
+  const [state, send, actor] = useMachine(machine)
   const notify = useNotify()
   const navigate = useNavigate()
   const t = useT()
@@ -35,7 +55,20 @@ export function ProfileContainer() {
   const setLocale = useSetLocale()
   const seen = useRef<string | undefined>(undefined)
 
-  // The language follows the profile across devices; see `localeChange`.
+  // The stored fields changed, here or on another device: the data events of the flow.
+  useEffect(() => {
+    if (row) {
+      send({ type: 'model.profile.name' })
+    }
+  }, [row?.name, send])
+  useEffect(() => {
+    if (row) {
+      send({ type: 'model.profile.bio' })
+    }
+  }, [row?.bio, send])
+
+  // The language follows the profile across devices; see `localeChange`. A store that fails
+  // shows nowhere: the frame's flow gives its `storing-locale` no outcome on a failure.
   useEffect(() => {
     if (!row) {
       return
@@ -54,61 +87,50 @@ export function ProfileContainer() {
     } else if (change) {
       void profiles.updateLocale({ id: row.id, locale: change.save }).match(
         () => undefined,
-        (failure) => setError(failure.code),
+        () => undefined,
       )
     }
   }, [row, locale, setLocale, profiles])
 
-  // One Save writes each field the person changed: the name first, then the bio.
-  const save = (draft: ProfileDraft) => {
-    if (!row) {
-      return
+  // The effects of the flow outside the form: the shell's notice, then the move.
+  useEffect(() => {
+    const shown = actor.on('show', ({ codes }) => {
+      if (codes.includes('profile-saved')) {
+        notify({ code: 'profile-saved', text: t('user.profile.saved') })
+      }
+    })
+    const moved = actor.on('navigate', ({ to }) => void navigate({ to }))
+
+    return () => {
+      shown.unsubscribe()
+      moved.unsubscribe()
     }
+  }, [actor, notify, navigate, t])
 
-    const name = () =>
-      draft.name === row.name
-        ? okAsync<void, BusError>(undefined)
-        : profiles.updateName({ id: row.id, name: draft.name })
-    const bio = () =>
-      draft.bio === (row.bio ?? '')
-        ? okAsync<void, BusError>(undefined)
-        : profiles.updateBio({ id: row.id, bio: draft.bio })
+  const type = (field: keyof ProfileFields, value: string) => {
+    const next = { ...values.current.drafts, [field]: value }
 
-    setSaving(true)
-    void name()
-      .andThen(bio)
-      .match(
-        () => {
-          setError(undefined)
-          notify({ code: 'profile-saved', text: t('user.profile.saved') })
-        },
-        (failure) => setError(failure.code),
-      )
-      .then(() => setSaving(false))
-  }
-
-  // Changes this device could not send are lost by signing out: that waits for a confirmation.
-  const signOut = (options?: { readonly forgetUnsent: true }) => {
-    setConfirmSignOut(false)
-    void session.signOut(options).match(
-      (outcome) =>
-        outcome === 'needs-confirmation'
-          ? setConfirmSignOut(true)
-          : void navigate({ to: SIGN_IN_PATH }),
-      () => navigate({ to: SIGN_IN_PATH }),
-    )
+    values.current = { ...values.current, drafts: next }
+    setDrafts(next)
+    send({ type: INPUTS[field] })
   }
 
   return (
     <ProfileView
       status={status}
       profile={row}
-      saving={saving}
-      error={error}
-      onSave={save}
-      onSignOut={signOut}
-      confirmSignOut={confirmSignOut}
-      onCancelSignOut={() => setConfirmSignOut(false)}
+      form={{
+        name: state.context.edited.name ? drafts.name : stored.name,
+        bio: state.context.edited.bio ? drafts.bio : stored.bio,
+      }}
+      error={state.context.error}
+      can={(control: ProfileControl) => state.can({ type: control })}
+      onType={type}
+      onSave={() => send({ type: 'user.profile.save-button' })}
+      onSignOut={() => send({ type: 'user.profile.sign-out-button' })}
+      confirmSignOut={state.matches({ editing: { session: 'confirming' } })}
+      onConfirmSignOut={() => send({ type: 'user.profile.sign-out-dialog.confirm-button' })}
+      onCancelSignOut={() => send({ type: 'user.profile.sign-out-dialog.cancel-button' })}
     />
   )
 }
