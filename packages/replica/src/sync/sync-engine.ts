@@ -20,6 +20,7 @@ export interface SyncEngineOptions {
   readonly regions: readonly RegionDoc[]
   readonly transport: SyncTransport
   readonly clock: Clock
+  readonly online: () => boolean
   /** Who inverse commits of rejected batches are written as. */
   readonly actor: string
   readonly onState: (state: { readonly channel: ChannelState }) => void
@@ -66,9 +67,9 @@ export interface SyncEngine {
    * sign-out close, which means the grant is revoked. Any other close after the sign-out was
    * asked for (a gateway that could not revoke the grant closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
-   * Resolves `offline`, without asking the gateway, when the channel stayed down, fell, the
-   * outbox did not drain in time, or a region that stopped syncing still holds what it has not
-   * sent. Never rejects.
+   * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
+   * the option `online` says there is no network), fell, the outbox did not drain in time, or a
+   * region that stopped syncing still holds what it has not sent. Never rejects.
    */
   signOut(): Promise<'signed-out' | 'offline'>
   /**
@@ -126,6 +127,7 @@ class Engine implements SyncEngine {
       drain: this.#drain,
       settling: this.#settling,
       up: () => this.#channel === 'up',
+      online: options.online,
     })
   }
 

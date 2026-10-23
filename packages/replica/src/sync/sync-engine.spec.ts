@@ -291,6 +291,25 @@ describe('sync engine', () => {
     expect(await outcome).toBe('signed-out')
   })
 
+  it('answers offline at once while the platform says the device has no network and the channel is down', async () => {
+    const network = { online: true }
+    const { a } = await twoDevices({}, { online: () => network.online })
+
+    a.transport.goOffline()
+    network.online = false
+
+    const waiting = new Promise((resolve) => setTimeout(resolve, 0, 'waiting'))
+
+    expect(await Promise.race([a.engine.signOut(), waiting])).toBe('offline')
+  })
+
+  it('signs out through the gateway while its channel is up, whatever the platform says of the network', async () => {
+    const { a } = await twoDevices({}, { online: () => false })
+
+    expect(a.channel()).toBe('up')
+    expect(await a.engine.signOut()).toBe('signed-out')
+  })
+
   it('resolves offline, connecting no more, when the gateway closes as failed after the sign-out', async () => {
     const { a, stub } = await twoDevices()
     const received = stub.failNextSignOut()

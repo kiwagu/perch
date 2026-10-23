@@ -24,12 +24,16 @@ export interface EngineSignOutOptions {
   readonly settling: EngineSettling
   /** The channel is up. */
   readonly up: () => boolean
+  /** The platform says the device has a network. */
+  readonly online: () => boolean
 }
 
 /**
  * Signs the device out through the gateway: waits up to 5 seconds for the channel, drains for up
  * to 10 seconds, then asks the gateway and resolves `signed-out` only on the sign-out close; any
- * other outcome resolves `offline`, the transport stopped when the gateway was asked in vain.
+ * other outcome resolves `offline`, the transport stopped when the gateway was asked in vain. A
+ * device the platform says has no network resolves `offline` at once while its channel is down:
+ * the channel cannot come up meanwhile.
  */
 export class EngineSignOut {
   readonly #transport: SyncTransport
@@ -37,6 +41,7 @@ export class EngineSignOut {
   readonly #drain: OutboxDrainPort
   readonly #settling: EngineSettling
   readonly #up: () => boolean
+  readonly #online: () => boolean
   /** A sign-out the gateway did not carry out stopped the channel. */
   #channelStopped = false
 
@@ -46,6 +51,7 @@ export class EngineSignOut {
     this.#drain = options.drain
     this.#settling = options.settling
     this.#up = options.up
+    this.#online = options.online
   }
 
   /** Whether a sign-out stopped the channel: it asked the gateway, which then did not sign the device out. */
@@ -54,6 +60,10 @@ export class EngineSignOut {
   }
 
   async run(): Promise<'signed-out' | 'offline'> {
+    if (!this.#up() && !this.#online()) {
+      return 'offline'
+    }
+
     if (!(await this.#untilUp(SIGN_OUT_CHANNEL_MS))) {
       return 'offline'
     }

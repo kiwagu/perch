@@ -26,6 +26,8 @@ export interface LeadingEngineOptions {
   /** Builds the channel to the gateway for each new engine. */
   readonly transport: () => SyncTransport
   readonly clock: Clock
+  /** Whether the browser says it has a network: an engine's sign-out without one does not wait. */
+  readonly online: () => boolean
   /** Who inverse commits of rejected batches are written as: the identity. */
   readonly actor: string
   readonly hints: SyncHints
@@ -68,6 +70,7 @@ export class LeadingEngine {
       regions: options.regions(),
       transport: options.transport(),
       clock: options.clock,
+      online: options.online,
       actor: options.actor,
       onState: ({ channel }) => {
         if (this.#engine === engine) {

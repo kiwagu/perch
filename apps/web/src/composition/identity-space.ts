@@ -129,6 +129,7 @@ export interface IdentitySpaceOptions {
   readonly leadership: Leadership | undefined
   readonly hints: SyncHints
   readonly clock: Clock
+  readonly online: () => boolean
   readonly onState: (state: SyncState) => void
   readonly onError: (error: DataError) => void
 }
@@ -183,6 +184,7 @@ class Space implements IdentitySpace {
       regions: () => this.#spaces().map((space) => space.region),
       transport: options.transport,
       clock: options.clock,
+      online: options.online,
       actor: options.identity.id,
       hints: options.hints,
       replaceRegion: (region, how) => this.#reloads.replace(region, how),

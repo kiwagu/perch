@@ -271,6 +271,7 @@ async function openTab(
       leadership: browser.locks ? leadership(browser.locks, lockName(ann.id)) : undefined,
       hints: syncHints(new FakeHintChannel(browser.bus)),
       clock: gateway.clock,
+      online: () => true,
       onState: (state) => states.push(state),
       onError: (error) => errors.push(error),
     })
@@ -333,6 +334,7 @@ async function openSpace(
       leadership: leadership(new FakeLocks(), lockName(ann.id)),
       hints: syncHints(undefined),
       clock: gateway.clock,
+      online: () => true,
       onState: () => {},
       onError: (error) => errors.push(error),
     })
@@ -457,6 +459,7 @@ describe('openIdentitySpace', () => {
         leadership: leadership(new FakeLocks(), lockName(ann.id)),
         hints: syncHints(undefined),
         clock: gateway.clock,
+        online: () => true,
         onState: () => {},
         onError: (error) => expect.unreachable(error.message),
       })
@@ -709,6 +712,7 @@ describe('openIdentitySpace', () => {
         leadership: leadership(new FakeLocks(), lockName(ann.id)),
         hints: syncHints(undefined),
         clock: gateway.clock,
+        online: () => true,
         onState: () => {},
         onError: (error) => expect.unreachable(error.message),
       })

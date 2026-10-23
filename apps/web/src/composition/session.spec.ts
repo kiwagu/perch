@@ -167,6 +167,8 @@ function aProfile(identity: string = ann.identity.id) {
  */
 async function twoTabs(options: {
   readonly online: boolean
+  /** Whether the browser says it has a network; as `online` by default. */
+  readonly network?: boolean
   readonly hints?: boolean
   readonly ownStorageOfB?: boolean
   /** Wraps the database connection of tab `b`, e.g. to hold its writes. */
@@ -178,6 +180,7 @@ async function twoTabs(options: {
     locks,
     databases: browserDatabases(),
     online: options.online,
+    ...(options.network === undefined ? {} : { network: options.network }),
     ...(options.hints ? { hints: new Set<FakeHintChannel>() } : {}),
   }
 
@@ -352,6 +355,18 @@ describe('SessionService', () => {
     expect(session.current()).toBeUndefined()
     expect(storage.get('perch.session.refresh')).toBeUndefined()
     expect(destroyed()).toEqual([ann.identity.id])
+  })
+
+  it('asks at once, waiting for no channel, when the browser has no network', async () => {
+    const { session, writeOffline } = await bootSession({ saved: ann, online: false })
+
+    await writeOffline()
+
+    // The clock stands still: a sign-out waiting for the channel would never answer.
+    const waiting = new Promise<'waiting'>((resolve) => setTimeout(resolve, 2_000, 'waiting'))
+    const answered = session.signOut().then((outcome) => outcome._unsafeUnwrap())
+
+    expect(await Promise.race([answered, waiting])).toBe('needs-confirmation')
   })
 
   it("asks before signing out offline while an organisation's region holds an unsent change", async () => {
@@ -775,7 +790,8 @@ describe('SessionService', () => {
   })
 
   it('lifts the barrier when the sign-out ends offline, so the other tab writes again', async () => {
-    const { a, b, storage } = await twoTabs({ online: false })
+    // The gateway is out of reach on a network: the sign-out waits for the channel meanwhile.
+    const { a, b, storage } = await twoTabs({ online: false, network: true })
 
     // A change the device cannot send: the sign-out asks first.
     expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
@@ -800,7 +816,13 @@ describe('SessionService', () => {
   })
 
   it('holds back the writes of a tab that hears of the sign-out before its storage shows it', async () => {
-    const { a, b } = await twoTabs({ online: false, hints: true, ownStorageOfB: true })
+    // The gateway is out of reach on a network: the sign-out waits for the channel meanwhile.
+    const { a, b } = await twoTabs({
+      online: false,
+      network: true,
+      hints: true,
+      ownStorageOfB: true,
+    })
 
     expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
 

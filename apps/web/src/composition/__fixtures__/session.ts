@@ -35,6 +35,11 @@ export interface TestWorldOptions {
    * up and the browser says it is offline.
    */
   readonly online?: boolean
+  /**
+   * Whether the browser says it has a network, as `online` by default: a device offline with a
+   * network is one whose gateway is out of reach, so its sign-out waits for the channel.
+   */
+  readonly network?: boolean
   /** Wraps each identity database as it opens, e.g. to hold its queries. */
   readonly wrap?: (local: LocalDb) => LocalDb
   readonly logger?: CommandLogger
@@ -246,7 +251,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     },
     schema: replicaSchema,
     deviceLabel: TEST_DEVICE_LABEL,
-    online: () => options.online !== false,
+    online: () => options.network ?? options.online !== false,
     transport: (context) => {
       // The channel names the device its context names, as the browser's hello does.
       const transport = stub.transport(context.identity, context.device)

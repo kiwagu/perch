@@ -403,6 +403,7 @@ export class SessionService implements SessionPort {
       leadership: lead,
       hints,
       clock: this.#options.clock,
+      online: this.#options.online,
       onState: (state) => {
         if (status.live) {
           this.#options.onSyncState(state)
