@@ -75,17 +75,21 @@ code and the tests follow; the checks hold them to the contract.
    bracket references. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
-   **Commit the contract**, each layer on its own and no implementation in either (the
-   layers of `.cursor/rules/ui-contract.mdc`; the app's runtime of the contract and the specs
-   that hold the app to it are meta): the meta change first when a facet is new
-   (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about them),
-   then the business change (the screen files, the activities, the platform, the model, the
-   scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
+   **Commit the contract**, each layer on its own branch and no implementation in either
+   (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
+   contract and the specs that hold the app to it are meta). A new facet first: the meta
+   change (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about
+   them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
+   lands on `main` as its own squash after the developer's go on those meta commits by hash
+   (one round at a time; a commit added after the hand-over needs a new one). Then the
+   feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
+   after that landing, takes the business change (the screen files, the activities, the
+   platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer
-   the output of `bun run contract:diff main`, the contract commits by hash with their diff,
-   the reason for every change and the gaps signalled (`references/templates.md`, "Review"),
+   the output of `bun run contract:diff main`, the contract commits by hash with their diff
+   and the meta landing they build on, the reason for every change and the gaps signalled (`references/templates.md`, "Review"),
    ask for the OK on those commits, and wait. Nothing below starts before it, not even a
    test's scaffold. The OK covers those commits, and the one it approves in advance: the last
    business commit of a rename or a removal, which drops the old names the review listed and
@@ -97,7 +101,9 @@ code and the tests follow; the checks hold them to the contract.
    changes), never with any other business or meta change. Once the code no longer renders a
    renamed or removed name, a last business commit drops it from the contract: the review of
    step 5 approved it, so it needs no new stop. Any other contract change found from here on
-   is a commit of its own and goes back to steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
+   is a commit of its own and goes back to steps 2 to 5 and their stop; a meta one goes
+   through `feat/contract-first-pass` and its landing, then `main` is merged into this
+   branch. Put the literal on the semantic element, in one of the four
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the
