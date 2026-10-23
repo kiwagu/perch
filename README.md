@@ -53,6 +53,10 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   both: `'0'` (in `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404
   there. Development and e2e builds also install `window.__perch.ui.anchors()`, which lists
   the anchors a page renders now.
+- `bun run test`: every package's unit and functional tests, four packages at a time (each
+  vitest takes the cores it finds; all of them at once starved one another past vitest's 5 s
+  timeout in the pre-commit hook, at no gain in time). Part of the pre-commit hook.
+  `bun run check` runs its tasks four at a time for the same reason.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
