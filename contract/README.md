@@ -39,10 +39,12 @@ page may still inspire a change, but the contract decides it.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
    **Then the review.** The contract is committed first, a layer per commit and no
-   implementation in either (the app's runtime of the contract and its specs are meta): the meta change when a facet is new (the engine: `@workspace/ui-contract`,
-   the generated schemas, the vocabulary, this README), then the business change (the screen
-   files, the activities, the platform, the model, the scenarios), the entry point of a
-   feature. The change stops here: the developer reads the contract diff
+   implementation in either (the app's runtime of the contract and its specs are meta). A
+   new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
+   vocabulary, this README) goes on `feat/contract-first-pass`, after a merge of the latest
+   `origin/main` into it, and lands on `main` as its own squash after the developer's go.
+   The feature then branches off `main` and commits the business change (the screen files,
+   the activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the contract commits by hash with their diff, the reason
    for every change, the gaps signalled) and gives an OK on those commits or asks for changes
    to the contract. The OK covers those commits, and the last business commit of a rename
@@ -53,7 +55,8 @@ page may still inspire a change, but the contract decides it.
    removal keeps the old name declared until the code no longer renders it, then a last
    business commit drops it, approved with the first, with no new stop; any other contract
    change found while writing the code is a commit of its own and goes back to step 1 and
-   stops again. A fix that brings the code back to what the
+   stops again, a meta one through `feat/contract-first-pass` and its landing, after which
+   `main` is merged into the feature branch. A fix that brings the code back to what the
    contract already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.

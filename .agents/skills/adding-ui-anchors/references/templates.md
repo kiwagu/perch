@@ -26,12 +26,13 @@ has not. The developer gets, and answers with an OK or with changes to the contr
 ```text
 <the output of bun run contract:diff main>
 
-The contract commits: <the meta commit (when a facet is new) and the business commit, their diffs or where to read them>
+The meta it builds on: <the squash of feat/contract-first-pass on main, when a facet is new, or none>
+The contract commits: <the business commits on the feature branch, their diffs or where to read them>
 Why:
 - <every change, an added state, guard, facet or code included>: <the reason>
 Gaps signalled: <the Contract gap: blocks, or none>
 Dropped after the implementation: <the old names a last business commit will drop, or none>
-OK to implement on <the meta commit's hash, when there is one> + <the business commit's hash>?
+OK to implement on <the business commits' hashes>?
 ```
 
 The OK covers those commits, and the last business commit that drops exactly the old names
