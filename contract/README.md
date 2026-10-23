@@ -45,9 +45,11 @@ page may still inspire a change, but the contract decides it.
    feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the diff of the files, the reason for every change, the
    gaps signalled) and gives an OK or asks for changes to the contract. The code and the tests,
-   a test's scaffold included, start only after the OK, in commits of their own; a contract
-   change found while writing them is a commit of its own and goes back to step 1 and stops
-   again. A fix that brings the code back to what the
+   a test's scaffold included, start only after the OK, in commits of their own. A rename or a
+   removal keeps the old name declared until the code no longer renders it, then a last
+   business commit drops it, approved with the first, with no new stop; any other contract
+   change found while writing the code is a commit of its own and goes back to step 1 and
+   stops again. A fix that brings the code back to what the
    contract already says, correctly, has no contract diff and no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
@@ -625,7 +627,12 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem.
+  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
+  contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
+  `main` and `bun run check` take the full check. A rename or a removal keeps the old name
+  declared until the implementation has switched to the new name or stopped rendering the
+  removed element, then a last business commit drops it.
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the
   contract. It reads `getByTestId('...')`, the selectors `[data-testid="..."]`,
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or

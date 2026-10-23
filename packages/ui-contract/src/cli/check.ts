@@ -1,6 +1,6 @@
-/** `ui-contract check [--sources] [--consumers [--tests=<dir>]]`. */
+/** `ui-contract check [--sources [--ahead]] [--consumers [--tests=<dir>]]`. */
 
-import { type Contract, checkContract, loadContract } from '../check'
+import { type Contract, checkContract, declaredAnchors, loadContract } from '../check'
 import { CONSUMER_ROOT, compareConsumers, scanConsumers } from '../consumers'
 import { totalsOf } from '../handoff'
 import { compareWithContract, scanSources } from '../sources'
@@ -20,16 +20,21 @@ const summaryOf = (contract: Contract): string => {
   ].join(', ')
 }
 
-function checkSources(root: string, { screens, vocabulary }: Contract): number {
+function checkSources(root: string, { screens, vocabulary }: Contract, ahead: boolean): number {
   const collected = scanSources(root)
 
-  if (reported(compareWithContract(collected, screens, vocabulary))) {
+  if (reported(compareWithContract(collected, screens, vocabulary, { ahead }))) {
     return 1
   }
 
   const anchors = new Set(collected.flatMap(({ literals }) => literals.map(({ anchor }) => anchor)))
+  const unrendered = declaredAnchors(screens).filter(({ anchor }) => !anchors.has(anchor)).length
 
-  console.log(`contract: sources agree with the contract (${anchors.size} anchors)`)
+  console.log(
+    unrendered === 0
+      ? `contract: sources agree with the contract (${anchors.size} anchors)`
+      : `contract: sources use only what the contract declares (${anchors.size} anchors; ${unrendered} declared, not rendered yet)`,
+  )
 
   return 0
 }
@@ -71,7 +76,9 @@ export function check(argv: readonly string[]): number {
 
   console.log(summaryOf(contract))
 
-  const sources = argv.includes('--sources') ? checkSources(root, contract) : 0
+  const sources = argv.includes('--sources')
+    ? checkSources(root, contract, argv.includes('--ahead'))
+    : 0
   const tests = optionOf(argv, 'tests') ?? CONSUMER_ROOT
   const consumers = argv.includes('--consumers') ? checkConsumers(root, contract, tests) : 0
 

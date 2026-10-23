@@ -80,14 +80,19 @@ code and the tests follow; the checks hold them to the contract.
    that hold the app to it are meta): the meta change first when a facet is new
    (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about them),
    then the business change (the screen files, the activities, the platform, the model, the
-   scenarios). **Then stop for review** (the gate of the same rule): hand the developer
+   scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
+   declared, not rendered yet, passes). A rename or a removal keeps the old name declared in
+   this commit; its drop, after the implementation, is part of what the review approves.
+   **Then stop for review** (the gate of the same rule): hand the developer
    the output of `bun run contract:diff main`, the diff of the contract files, the reason for
    every change and the gaps signalled (`references/templates.md`, "Review"), and wait for the
    OK. Nothing below starts before it, not even a test's scaffold.
 6. **The code**, after the developer's OK, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
-   changes), never with any other business or meta change. A contract change
-   found from here on is a commit of its own and goes back to steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
+   changes), never with any other business or meta change. Once the code no longer renders a
+   renamed or removed name, a last business commit drops it from the contract: the review of
+   step 5 approved it, so it needs no new stop. Any other contract change found from here on
+   is a commit of its own and goes back to steps 2 to 5 and their stop. Put the literal on the semantic element, in one of the four
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the

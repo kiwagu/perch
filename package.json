@@ -21,6 +21,7 @@
     "contract:schemas": "ui-contract schemas",
     "contract:check": "ui-contract check",
     "contract:check:sources": "ui-contract check --sources",
+    "contract:check:sources:ahead": "ui-contract check --sources --ahead",
     "contract:check:consumers": "ui-contract check --consumers",
     "contract:manifest": "ui-contract manifest",
     "contract:diff": "ui-contract diff",
