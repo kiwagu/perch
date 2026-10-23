@@ -1,0 +1,29 @@
+---
+description: 'Use when: about to start a branch, to pick up work on an area again, or to land a branch on main.'
+alwaysApply: true
+---
+
+# Branches: the area's branch first, main merged in, a squash back
+
+## Pyramid Layer
+
+- Layer: L0 convention.
+
+## Use This When
+
+- A fix or a feature is about to start and needs a branch.
+- A branch is about to land on `main`.
+
+## Stop Here If
+
+- The work already sits on its area's branch, with the latest `main` merged into it.
+
+## Core rule
+
+- **Look for the area's branch before starting one.** Work on an area a branch has already carried, landed or still open, goes on that branch. The branches (`git branch -a`), the `Squashed-from:` trailers of `main` on the files the work touches (`git log main --format='%h %s%n%b' -- <path>`) and the branch recorded on the work's card say which one. Merge the latest `main` into it first, by a merge commit, never a rebase of what was pushed; then commit the fix or the feature on it. Only an area no branch has carried gets a new branch, off `main`, named for the area (`feat/<area>`, `fix/<area>`, `chore/<area>`); it is that area's branch from then on.
+- **Land with one squash, keep the branch.** A branch lands on `main` as one squash commit, `type(scope): goal` and then the trailer `Squashed-from: <branch> (<tip>) <card>`, after the gates of `verify-before-commit-and-landing.mdc` and the developer's go. The branch stays: the next fix or feature of its area merges `main` into it again and lands as the next squash.
+- **One area per branch.** Work that spans two areas goes on two branches. The one the other builds on lands first, and the other merges `main` in before it goes on.
+- **Example: a feature over the UI contract**, whose layers are areas of their own (`ui-contract.mdc`). The profile's fixes needed a new facet of the contract's engine, so they took three kinds of commit on two branches:
+  1. The engine's area already had its branch, `feat/contract-first-pass`, landed before. The latest `main` was merged into it, the meta commits went on it (the engine learns data events and error fields, with the rules and the skill about the contract), and it landed as one squash.
+  2. `fix/profile-ux`, the profile's branch, came off `main` after that landing. The business commit of the contract went first (the screen's flow regions and error fields, the scenarios: the review stop), then the implementation commits (the code and its tests), and it landed as one squash.
+  The next change to the engine merges `main` into `feat/contract-first-pass` again, and the next fix of the profile merges `main` into `fix/profile-ux`.
