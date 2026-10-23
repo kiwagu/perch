@@ -35,6 +35,7 @@ Run through this table after editing a rule in `.cursor/rules/` or a skill in
 | Add a handler to a 450-line service | process -> file-size-tiers |
 | Split a 520-line sync file into its push, pull and rollback parts | process -> file-size-tiers -> entity-first-module-naming |
 | Add a rate-limits module to the gateway | process -> entity-first-module-naming, then package-readme |
+| ESLint reports workspace/import-through-index on an import of `./region-sync/push` | process -> entity-first-module-naming |
 | Add a second validation function to a domain entity file | process -> one-unit-per-file |
 | Add a field to the profile table and expose it in a shape | process -> surrealql skill, then domain-context-first-analysis |
 | Write a permission test for the new table | process -> surrealkit skill |

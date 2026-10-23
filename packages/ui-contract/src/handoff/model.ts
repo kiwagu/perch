@@ -7,7 +7,7 @@
  */
 
 import type { Contract } from '../check'
-import { bindingRefsOf, declaredAnchors, modelTargetOf } from '../check/contract'
+import { bindingRefsOf, declaredAnchors, modelTargetOf } from '../check'
 
 /** A field or an action and the anchors bound to it, none when it is unbound. */
 export interface BoundMember {

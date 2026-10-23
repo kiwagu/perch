@@ -196,11 +196,12 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
 
 ## Commands
 
-- `bun run dev`: the build watcher, `vite build --watch --mode development`: rewrites `dist/`
-  (source maps, no minifying) on every change, then the UI manifest into `dist/ui-manifest/`
+- `bun run dev`: the build watcher, `vite build --watch --mode development --outDir dist-dev`:
+  rewrites `dist-dev/` (source maps, no minifying) on every change, then the UI manifest into
+  `dist-dev/ui-manifest/`
   (`ui-contract manifest`; a change of a file under `contract/` or `tests/e2e/scenarios/`
-  rebuilds too). There is no dev server: the local stands' Caddy front serves `dist/`, so
-  reload the page after a rebuild.
+  rebuilds too). There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
   contract check passes, with its schema and the model's beside it, which the stands serve at

@@ -13,9 +13,7 @@ import { replaceRegionDoc } from '../region-replacement'
 import localTailStatement from '../surql/local-tail.surql'
 import outboxReadStatement from '../surql/outbox-read.surql'
 import importStatement from '../surql/replica-import.surql'
-import type { GatewayStub } from '../testing/gateway-stub'
-import { interceptRegionResets } from '../testing/intercept-region-resets'
-import { manualClock } from '../testing/manual-clock'
+import { type GatewayStub, interceptRegionResets, manualClock } from '../testing'
 
 import {
   ann,

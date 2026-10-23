@@ -7,8 +7,7 @@
  */
 
 import { screenOf } from '../anchors'
-import { MODEL_FILE, type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
-import { jsonPath } from '../files/problems'
+import { jsonPath, MODEL_FILE, type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
 
 import {
   type Contract,

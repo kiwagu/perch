@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { FakeLocks } from '../testing/fake-locks'
+import { FakeLocks } from '../testing'
 
 import { leadership, lockName, writeLockName } from './leader'
 

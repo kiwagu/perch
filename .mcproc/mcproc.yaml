@@ -76,19 +76,30 @@ apps:
   web:
     description: >-
       The web application's build watcher: `vite build --watch` in development mode
-      (source maps, no minifying) rewrites apps/web/dist on every source change, in 1-3 s,
+      (source maps, no minifying) rewrites apps/web/dist-dev on every source change, in 1-3 s,
       and caddy-dev serves it at https://localhost:{{ front }}; reload the page to see a change.
-      Each signed-in identity's database runs in the browser (WASM on IndexedDB); signing
-      up or in and syncing go through the gateway under /backend/ of the same front.
+      Restarted on a change of its config, its scripts or the lockfile. Each signed-in
+      identity's database runs in the browser (WASM on IndexedDB); signing up or in and syncing
+      go through the gateway under /backend/ of the same front.
     kind: build
     run: bun run dev
     cwd: apps/web
     memory: 1.5G
+    # what the watcher reads only when it starts: its config (and the surql plugin the config
+    # imports from a workspace package), the dev script, the installed dependencies; pm2
+    # restarts it on a change of any of them
+    watch:
+      - vite.config.ts
+      - package.json
+      - ../../bun.lock
+      - ../../packages/data/src/vite-plugin-surql.ts
+      - ../../packages/data/src/surql-names.ts
+    watch_delay: 1000
   gateway:
     description: >-
       The gateway on 127.0.0.1:{{ gateway }} for local development: sign-in over HTTP and
       sync over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
-      account on the stand first, then reloads on every source change.
+      account on the stand first; restarted on a change of its sources.
     kind: server
     run: >-
       SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc SURREAL_USER=root SURREAL_PASS=root
@@ -96,17 +107,34 @@ apps:
       SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc GATEWAY_PORT={{ gateway }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
       GATEWAY_JWT_KEY={{ stand_jwt_key }}
-      exec bun --watch apps/gateway/src/index.ts
+      exec bun apps/gateway/src/index.ts
     port: '{{ gateway }}'
     url: http://127.0.0.1:{{ gateway }}/health
     memory: 256M
+    # pm2 restarts the gateway on a change of its sources or of a workspace package it
+    # imports: a fresh process each time, so a tree caught mid-edit fails one start, is
+    # retried with a growing delay, and the next change brings it back
+    watch: &gateway-sources
+      - apps/gateway/src
+      - database/schema
+      - database/src
+      - packages/data/src
+      - packages/di/src
+      - packages/ids/src
+      - packages/kernel/src
+      - packages/logger/src
+      - packages/replica/src
+      - packages/zod/src
+    ignore_watch: &gateway-ignored ['**/*.spec.ts', '**/__fixtures__/**']
+    watch_delay: 1000
+    pm2: &gateway-pm2 { exp_backoff_restart_delay: 200 }
     depends_on:
       - { app: surrealdb-dev, condition: ready, timeout: 120 }
   gateway-e2e:
     description: >-
       The gateway on 127.0.0.1:{{ gateway_e2e }} for the e2e runs, the only client of the
-      e2e SurrealDB. Sets up its namespace account on the stand first, then reloads on
-      every source change.
+      e2e SurrealDB. Sets up its namespace account on the stand first; restarted on a change
+      of its sources.
     kind: server
     run: >-
       SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc SURREAL_USER=root SURREAL_PASS=root
@@ -114,25 +142,32 @@ apps:
       SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc GATEWAY_PORT={{ gateway_e2e }}
       GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
       GATEWAY_JWT_KEY={{ stand_jwt_key }}
-      exec bun --watch apps/gateway/src/index.ts
+      exec bun apps/gateway/src/index.ts
     port: '{{ gateway_e2e }}'
     url: http://127.0.0.1:{{ gateway_e2e }}/health
     memory: 256M
+    # restarted as the dev gateway is, on the same sources
+    watch: *gateway-sources
+    ignore_watch: *gateway-ignored
+    watch_delay: 1000
+    pm2: *gateway-pm2
     depends_on:
       - { app: surrealdb-e2e, condition: ready, timeout: 120 }
   caddy-dev:
     description: >-
-      Caddy on https://localhost:{{ front }}: the web app's build from apps/web/dist, kept
-      fresh by the web watcher (a 404 until its first build finishes), and, under /backend/,
-      the gateway; certificates from infra/dev/make-certs.sh.
+      Caddy on https://localhost:{{ front }}: the web app's development build from
+      apps/web/dist-dev, kept fresh by the web watcher (a 404 until its first build finishes),
+      and, under /backend/, the gateway; certificates from infra/dev/make-certs.sh. Restarted
+      on a change of the Caddyfile or the compose file.
     kind: server
-    # docker would create a missing apps/web/dist as root, which the watcher could not write.
+    # docker would create a missing apps/web/dist-dev as root, which the watcher could not write.
     # The compose project is this checkout's slug and the container is named, so two stands
     # or two checkouts never share one; the ports reach the Caddyfile through the environment.
     run: >-
       docker rm -f {{ project }}-caddy-dev >/dev/null 2>&1;
-      sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
+      sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist-dev &&
       FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }} PERCH_UI_MANIFEST={{ ui_manifest }}
+      WEB_DIST=dist-dev
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-dev caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
@@ -140,7 +175,9 @@ apps:
     url: https://localhost:{{ front }}/
     memory: 128M
     containers: ['{{ project }}-caddy-dev']
-    # start order only: Caddy serves whatever apps/web/dist holds
+    watch: [infra/dev/Caddyfile, infra/dev/compose.yaml]
+    watch_delay: 1000
+    # start order only: Caddy serves whatever apps/web/dist-dev holds
     depends_on: [web, gateway]
   caddy-e2e:
     description: >-

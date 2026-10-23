@@ -32,8 +32,8 @@ alwaysApply: true
   - `## Role in the architecture`: what the module is for and which layers it has.
   - `## Surface`: routes and pages, shapes, commands, providers, the i18n namespace and test ids.
   - `## Commands`: how to test and regenerate it.
-- A gateway module (a folder under `apps/gateway/src/` with an `index.ts`, `entity-first-module-naming.mdc`) keeps a README of the same shape: `# <Title> (module \`<folder>\`)`, its role, its surface (routes, messages, services exported from the index) and its commands. The check covers web feature modules today; a gateway module's README is reviewed by hand until it does.
+- A gateway module (a folder under `apps/gateway/src/` other than the composition root `composition/`, `entity-first-module-naming.mdc`) keeps a README of the same shape: `# <Title> (module \`<folder>\`)`, its role, its surface (routes, messages, services it offers the rest of the server) and its commands.
 - A module's details belong to the module's README. The application's README keeps one line per module pointing there, so nothing piles up in the parent.
 - Update the README in the same change that alters the role, exports, commands, routes, shapes or providers. A missing README is created, not deferred.
 - Describe what exists, not plans.
-- `bun run readme:check` (part of `bun run check`) fails on a missing README, a title that does not name the package or module, or a missing section.
+- `bun run readme:check` (part of `bun run check` and of the pre-commit hook) fails on a missing README, a title that does not name the package or module, or a missing section, for every workspace, every feature module and every gateway module.

@@ -6,6 +6,7 @@ export {
 } from './activities'
 export { filesUnder } from './files-under'
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
+export { englishErrors } from './parse-file'
 export {
   ACTIVITIES_DIR,
   ACTIVITY_SCHEMA_FILE,
@@ -23,7 +24,16 @@ export {
   scenarioFile,
   VOCABULARY_FILE,
 } from './paths'
-export { formatProblem, type Problem, sortProblems } from './problems'
+export {
+  formatProblem,
+  jsonPath,
+  type Lines,
+  lineAt,
+  type Problem,
+  sortProblems,
+} from './problems'
+export { readJson } from './read-json'
+export { parseYaml } from './read-yaml'
 export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {

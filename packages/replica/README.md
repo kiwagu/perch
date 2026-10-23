@@ -191,7 +191,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
   `settled`, `sign-out`, `renew` (a tab asks the leader to renew the keys) and `reset` (a tab reset a region; the others open it again
   from the database) hints between tabs over a `BroadcastChannel` and ignores anything
-  else on it.
+  else on it. `invert(doc, rows)` applies to a region's document the undo of outbox rows the
+  server refused, as a rollback does.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the

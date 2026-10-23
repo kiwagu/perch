@@ -635,7 +635,8 @@ XState and the app's machines to the flows.
 `bun run contract:manifest` builds `ui-manifest/manifest.json` from the contract files and
 the scenarios, only after the contract check passes, and validates it against
 `manifest.schema.json` before it writes anything. The web build writes it into
-`apps/web/dist/ui-manifest/`, and both stands serve it at `/ui-manifest/manifest.json`, with
+`apps/web/dist/ui-manifest/` (the dev watcher into `apps/web/dist-dev/ui-manifest/`), and both
+stands serve it at `/ui-manifest/manifest.json`, with
 `manifest.schema.json` and `model.schema.json` beside it and `Cache-Control: no-store`.
 `PERCH_UI_MANIFEST=0` on a stand answers 404 there.
 

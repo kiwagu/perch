@@ -33,3 +33,8 @@ declare module 'react/jsx-runtime' {
   export function jsxs(type: unknown, props: unknown, key?: string): JSX.Element
   export const Fragment: unique symbol
 }
+
+declare module '*.surql' {
+  const text: string
+  export default text
+}
