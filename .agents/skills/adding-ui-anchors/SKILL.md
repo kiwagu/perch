@@ -79,11 +79,12 @@ code and the tests follow; the checks hold them to the contract.
    (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
    contract and the specs that hold the app to it are meta). A new facet first: the meta
    change (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about
-   them) goes on `feat/contract-first-pass`, after a merge of the latest `origin/main` into
-   it, and lands on `main` as its own squash after the developer's go on those meta commits
-   by hash (one round at a time; a commit added after the hand-over needs a new one). Then
-   the feature branch, off `main`, takes the business change (the screen files, the
-   activities, the platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
+   them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
+   lands on `main` as its own squash after the developer's go on those meta commits by hash
+   (one round at a time; a commit added after the hand-over needs a new one). Then the
+   feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
+   after that landing, takes the business change (the screen files, the activities, the
+   platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer

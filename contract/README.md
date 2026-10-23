@@ -42,11 +42,11 @@ page may still inspire a change, but the contract decides it.
    implementation in either (the app's runtime of the contract and its specs are meta). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
    vocabulary, this README) goes on `feat/contract-first-pass`, after a merge of the latest
-   `origin/main` into it, and lands on `main` as its own squash after the developer's go on
-   those meta commits by hash (one round at a time; a commit added after the hand-over needs
-   a new one).
-   The feature then branches off `main` and commits the business change (the screen files,
-   the activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
+   `main` into it, and lands on `main` as its own squash after the developer's go on those
+   meta commits by hash (one round at a time; a commit added after the hand-over needs a new
+   one). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
+   merged in after that landing, then takes the business change (the screen files, the
+   activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
    landing they build on, the reason for every change, the gaps signalled) and gives an OK on those commits or asks for changes
    to the contract. The OK covers those commits, and the last business commit of a rename
