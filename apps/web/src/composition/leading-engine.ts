@@ -26,8 +26,6 @@ export interface LeadingEngineOptions {
   /** Builds the channel to the gateway for each new engine. */
   readonly transport: () => SyncTransport
   readonly clock: Clock
-  /** Whether the browser says it has a network: an engine's sign-out without one does not wait. */
-  readonly online: () => boolean
   /** Who inverse commits of rejected batches are written as: the identity. */
   readonly actor: string
   readonly hints: SyncHints
@@ -70,7 +68,6 @@ export class LeadingEngine {
       regions: options.regions(),
       transport: options.transport(),
       clock: options.clock,
-      online: options.online,
       actor: options.actor,
       onState: ({ channel }) => {
         if (this.#engine === engine) {
@@ -126,8 +123,8 @@ export class LeadingEngine {
   }
 
   /** Has the engine sign the device out (`SyncEngine.signOut`); `offline` while this tab does not lead. */
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#engine?.signOut() ?? Promise.resolve('offline')
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#engine?.signOut(network) ?? Promise.resolve('offline')
   }
 
   /** After a sign-out that asked the gateway in vain, which stopped its channel: a new engine replaces it. */

@@ -20,7 +20,6 @@ export interface SyncEngineOptions {
   readonly regions: readonly RegionDoc[]
   readonly transport: SyncTransport
   readonly clock: Clock
-  readonly online: () => boolean
   /** Who inverse commits of rejected batches are written as. */
   readonly actor: string
   readonly onState: (state: { readonly channel: ChannelState }) => void
@@ -68,10 +67,10 @@ export interface SyncEngine {
    * asked for (a gateway that could not revoke the grant closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
    * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
-   * the option `online` says there is no network), fell, the outbox did not drain in time, or a
-   * region that stopped syncing still holds what it has not sent. Never rejects.
+   * the platform says there is no network, `network.online`), fell, the outbox did not drain in
+   * time, or a region that stopped syncing still holds what it has not sent. Never rejects.
    */
-  signOut(): Promise<'signed-out' | 'offline'>
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Whether a sign-out stopped this engine's channel: it asked the gateway, which then did not
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
@@ -127,7 +126,6 @@ class Engine implements SyncEngine {
       drain: this.#drain,
       settling: this.#settling,
       up: () => this.#channel === 'up',
-      online: options.online,
     })
   }
 
@@ -186,8 +184,8 @@ class Engine implements SyncEngine {
     return this.#options.transport.send({ type: 'renew' })
   }
 
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#signOutFlow.run()
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#signOutFlow.run(network.online)
   }
 
   #receive(message: ServerMessage): void {

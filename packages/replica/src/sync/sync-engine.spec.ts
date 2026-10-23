@@ -126,7 +126,7 @@ describe('sync engine', () => {
 
     writeName(a.region, 'Ana')
 
-    expect(await a.engine.signOut()).toBe('signed-out')
+    expect(await a.engine.signOut({ online: true })).toBe('signed-out')
     expect(stub.signOuts()).toBe(1)
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(a.channel()).toBe('down')
@@ -227,7 +227,7 @@ describe('sync engine', () => {
     a.transport.goOffline()
     writeName(a.region, 'Ana')
 
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     // The channel comes back during the sign-out; the drain's batch is rejected, rolled back
     // and rejected again, and the region, which cannot reload, stops with the rows and their
@@ -248,7 +248,7 @@ describe('sync engine', () => {
     a.transport.goOffline()
     writeName(a.region, 'Ana')
 
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     // The batch is rejected, rolled back and rejected again: the region reloads from the server
     // without what the gateway refused, and nothing is left to send.
@@ -266,7 +266,7 @@ describe('sync engine', () => {
     const { a, clock } = await twoDevices()
 
     a.transport.goOffline()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await clock.advance(4_999)
 
@@ -283,7 +283,7 @@ describe('sync engine', () => {
     const { a, clock } = await twoDevices()
 
     a.transport.goOffline()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await clock.advance(1_000)
     a.transport.goOnline()
@@ -292,28 +292,26 @@ describe('sync engine', () => {
   })
 
   it('answers offline at once while the platform says the device has no network and the channel is down', async () => {
-    const network = { online: true }
-    const { a } = await twoDevices({}, { online: () => network.online })
+    const { a } = await twoDevices()
 
     a.transport.goOffline()
-    network.online = false
 
     const waiting = new Promise((resolve) => setTimeout(resolve, 0, 'waiting'))
 
-    expect(await Promise.race([a.engine.signOut(), waiting])).toBe('offline')
+    expect(await Promise.race([a.engine.signOut({ online: false }), waiting])).toBe('offline')
   })
 
   it('signs out through the gateway while its channel is up, whatever the platform says of the network', async () => {
-    const { a } = await twoDevices({}, { online: () => false })
+    const { a } = await twoDevices()
 
     expect(a.channel()).toBe('up')
-    expect(await a.engine.signOut()).toBe('signed-out')
+    expect(await a.engine.signOut({ online: false })).toBe('signed-out')
   })
 
   it('resolves offline, connecting no more, when the gateway closes as failed after the sign-out', async () => {
     const { a, stub } = await twoDevices()
     const received = stub.failNextSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
 
@@ -328,7 +326,7 @@ describe('sync engine', () => {
   it('resolves offline when the channel ends for any reason but a sign-out after it was asked for', async () => {
     const { a, stub } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
     stub.endWith('unauthorized')
@@ -339,7 +337,7 @@ describe('sync engine', () => {
   it('resolves offline 10 seconds after the sign-out when the gateway never closes the channel', async () => {
     const { a, stub, clock } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
     await clock.advance(9_999)
@@ -385,7 +383,7 @@ describe('sync engine', () => {
     await gateway.clock.advance(1_000)
 
     await expect(settling).rejects.toThrow('1000 ms')
-    expect(await driven(gateway.clock, a.engine.signOut())).toBe('offline')
+    expect(await driven(gateway.clock, a.engine.signOut({ online: true }))).toBe('offline')
     expect(gateway.stub.signOuts()).toBe(0)
     expect(a.errors).toEqual([
       expect.objectContaining({
@@ -498,7 +496,7 @@ describe('sync engine', () => {
     await device.engine.settled(60_000)
 
     // The gateway could never take those rows: the sign-out leaves them for the app to weigh.
-    expect(await driven(gateway.clock, device.engine.signOut())).toBe('offline')
+    expect(await driven(gateway.clock, device.engine.signOut({ online: true }))).toBe('offline')
     expect(device.errors).toEqual([])
   })
 
@@ -507,7 +505,7 @@ describe('sync engine', () => {
     const swallowed = stub.swallowNextPush()
 
     writeName(a.region, 'Ana')
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await swallowed
     await clock.advance(10_000)

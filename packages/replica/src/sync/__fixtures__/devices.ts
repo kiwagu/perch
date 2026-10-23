@@ -80,8 +80,6 @@ export interface DeviceOptions {
   readonly batchRows?: number
   /** How many local log rows past its snapshot a region holds before a full pass compacts it. */
   readonly localCompactionRows?: number
-  /** Whether the platform says the device has a network; it has one by default. */
-  readonly online?: () => boolean
 }
 
 const opened: Array<{ readonly gateway: Gateway; readonly devices: Device[] }> = []
@@ -142,7 +140,6 @@ export async function openDevice(gateway: Gateway, options: DeviceOptions = {}):
     regions: [region],
     transport,
     clock: gateway.clock,
-    online: options.online ?? (() => true),
     actor: privateRegionId(owner),
     onState: (state) => {
       channel = state.channel
@@ -193,7 +190,7 @@ export async function settleAll(devices: readonly Device[]): Promise<void> {
 /** Two started devices of one identity whose region holds the identity's profile, named Ann. */
 export async function twoDevices(
   options: GatewayOptions = {},
-  devices: Pick<DeviceOptions, 'wrap' | 'online'> = {},
+  devices: Pick<DeviceOptions, 'wrap'> = {},
 ) {
   const gateway = await openGateway(options)
   const a = await openDevice(gateway, devices)

@@ -24,8 +24,6 @@ export interface EngineSignOutOptions {
   readonly settling: EngineSettling
   /** The channel is up. */
   readonly up: () => boolean
-  /** The platform says the device has a network. */
-  readonly online: () => boolean
 }
 
 /**
@@ -41,7 +39,6 @@ export class EngineSignOut {
   readonly #drain: OutboxDrainPort
   readonly #settling: EngineSettling
   readonly #up: () => boolean
-  readonly #online: () => boolean
   /** A sign-out the gateway did not carry out stopped the channel. */
   #channelStopped = false
 
@@ -51,7 +48,6 @@ export class EngineSignOut {
     this.#drain = options.drain
     this.#settling = options.settling
     this.#up = options.up
-    this.#online = options.online
   }
 
   /** Whether a sign-out stopped the channel: it asked the gateway, which then did not sign the device out. */
@@ -59,8 +55,9 @@ export class EngineSignOut {
     return this.#channelStopped
   }
 
-  async run(): Promise<'signed-out' | 'offline'> {
-    if (!this.#up() && !this.#online()) {
+  /** `online`: the platform says the device has a network as the sign-out is asked for. */
+  async run(online: boolean): Promise<'signed-out' | 'offline'> {
+    if (!this.#up() && !online) {
       return 'offline'
     }
 
