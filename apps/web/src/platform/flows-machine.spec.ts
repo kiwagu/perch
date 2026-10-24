@@ -308,7 +308,11 @@ function beyondTheSubset(config: unknown): string[] {
 const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>> = {
   'user.sign-in': () =>
     createSignInMachine(
-      new SignInService(fakeSession().session, { createProfile: () => okAsync(undefined) }),
+      new SignInService(
+        fakeSession().session,
+        { createProfile: () => okAsync(undefined) },
+        { createSettings: () => okAsync(undefined) },
+      ),
     ),
   'user.profile': () =>
     createProfileMachine({

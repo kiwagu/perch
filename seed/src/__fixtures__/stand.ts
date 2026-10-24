@@ -14,6 +14,7 @@ export interface LeftOnStand {
   /** How many of the manifest's organisation databases `t_<key>` exist. */
   readonly databases: number
   readonly profiles: number
+  readonly settings: number
   readonly regionRows: number
   /** The sum of the regions' heads: how many batches the server accepted into them. */
   readonly accepted: number
@@ -43,6 +44,7 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     'tenant',
     'membership',
     'profile',
+    'settings',
     '_replica_head',
     '_replica_snapshot',
     '_replica_update',

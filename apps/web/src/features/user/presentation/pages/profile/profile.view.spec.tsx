@@ -23,7 +23,6 @@ const tree: ProfileResult = [
     name: 'Ann',
     email: 'ann@example.test',
     bio: undefined,
-    locale: undefined,
     created_at: new Date('2026-10-16T12:00:00Z'),
   },
 ]

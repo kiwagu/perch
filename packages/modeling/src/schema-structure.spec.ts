@@ -150,6 +150,7 @@ describe('loadSchemaModel', () => {
       'identity',
       'membership',
       'profile',
+      'settings',
       'tenant',
     ])
     expect(model.tables['profile']?.region).toBe('private')

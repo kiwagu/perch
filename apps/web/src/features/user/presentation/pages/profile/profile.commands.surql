@@ -15,7 +15,3 @@ UPDATE $id SET name = $name;
 -- @command updateBio($id: record<profile>, $bio: string)
 -- @allow record
 UPDATE $id SET bio = $bio;
-
--- @command updateLocale($id: record<profile>, $locale: 'en' | 'es')
--- @allow record
-UPDATE $id SET locale = $locale;

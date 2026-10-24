@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
 import { useEffect, useMemo, useState } from 'react'
 
-import { useT } from '@workspace/i18n'
+import { useLocale, useT } from '@workspace/i18n'
 
 import { useService } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
@@ -23,6 +23,7 @@ export function SignInContainer() {
   const navigate = useNavigate()
   const notify = useNotify()
   const t = useT()
+  const locale = useLocale()
   const submitting = state.matches('signing-in') || state.matches('signing-up')
   const done = state.matches('done')
   const busy = submitting || done
@@ -73,7 +74,7 @@ export function SignInContainer() {
       submitting={submitting}
       error={state.context.error}
       notice={notice}
-      onSubmit={(form) => send({ type: 'user.sign-in.submit-button', form })}
+      onSubmit={(form) => send({ type: 'user.sign-in.submit-button', form: { ...form, locale } })}
       onToggleMode={() => send({ type: 'user.sign-in.toggle-button' })}
     />
   )

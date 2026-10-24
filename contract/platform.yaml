@@ -2,7 +2,7 @@
 version: 1
 actions:
   sign-up:
-    description: Creates an account with its profile and signs this device in.
+    description: Creates an account with its profile and its settings, and signs this device in.
     params:
       email:
         type: string
@@ -13,7 +13,7 @@ actions:
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
-    result: the account is created with its profile, the device is signed in, the app moves to /me with code welcome
+    result: the account is created with its profile and its settings, the device is signed in, the app moves to /me with code welcome
     codes:
       - sign-up-rejected
       - rate-limited
