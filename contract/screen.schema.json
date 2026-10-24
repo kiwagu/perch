@@ -883,6 +883,37 @@
                           "properties": {
                             "type": {
                               "type": "string",
+                              "const": "clear",
+                              "description": "The effect: an anchor stops showing its code."
+                            },
+                            "params": {
+                              "type": "object",
+                              "properties": {
+                                "anchor": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                  "description": "The anchor that shows no code any more."
+                                }
+                              },
+                              "required": [
+                                "anchor"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Which anchor."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "params"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor shows no code until one is shown again."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
                               "const": "navigate",
                               "description": "The effect: the app moves to a binding."
                             },
@@ -925,7 +956,7 @@
                           "description": "The app moves to that binding."
                         }
                       ],
-                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                     }
                   },
                   "exit": {
@@ -981,6 +1012,37 @@
                           "properties": {
                             "type": {
                               "type": "string",
+                              "const": "clear",
+                              "description": "The effect: an anchor stops showing its code."
+                            },
+                            "params": {
+                              "type": "object",
+                              "properties": {
+                                "anchor": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                  "description": "The anchor that shows no code any more."
+                                }
+                              },
+                              "required": [
+                                "anchor"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Which anchor."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "params"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor shows no code until one is shown again."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
                               "const": "navigate",
                               "description": "The effect: the app moves to a binding."
                             },
@@ -1023,7 +1085,7 @@
                           "description": "The app moves to that binding."
                         }
                       ],
-                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                     }
                   },
                   "on": {
@@ -1115,6 +1177,37 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
+                                        "const": "clear",
+                                        "description": "The effect: an anchor stops showing its code."
+                                      },
+                                      "params": {
+                                        "type": "object",
+                                        "properties": {
+                                          "anchor": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                            "description": "The anchor that shows no code any more."
+                                          }
+                                        },
+                                        "required": [
+                                          "anchor"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "Which anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "params"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The anchor shows no code until one is shown again."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
                                         "const": "navigate",
                                         "description": "The effect: the app moves to a binding."
                                       },
@@ -1157,7 +1250,7 @@
                                     "description": "The app moves to that binding."
                                   }
                                 ],
-                                "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                               },
                               "description": "The effects, in order."
                             },
@@ -1237,6 +1330,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -1279,7 +1403,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 },
                                 "description": "The effects, in order."
                               },
@@ -1407,6 +1531,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -1449,7 +1604,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 },
                                 "description": "The effects, in order."
                               },
@@ -1529,6 +1684,37 @@
                                         "properties": {
                                           "type": {
                                             "type": "string",
+                                            "const": "clear",
+                                            "description": "The effect: an anchor stops showing its code."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anchor": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                "description": "The anchor that shows no code any more."
+                                              }
+                                            },
+                                            "required": [
+                                              "anchor"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which anchor."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The anchor shows no code until one is shown again."
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
                                             "const": "navigate",
                                             "description": "The effect: the app moves to a binding."
                                           },
@@ -1571,7 +1757,7 @@
                                         "description": "The app moves to that binding."
                                       }
                                     ],
-                                    "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                    "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                   },
                                   "description": "The effects, in order."
                                 },
@@ -1656,6 +1842,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -1698,7 +1915,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 },
                                 "description": "The effects, in order."
                               },
@@ -1778,6 +1995,37 @@
                                         "properties": {
                                           "type": {
                                             "type": "string",
+                                            "const": "clear",
+                                            "description": "The effect: an anchor stops showing its code."
+                                          },
+                                          "params": {
+                                            "type": "object",
+                                            "properties": {
+                                              "anchor": {
+                                                "type": "string",
+                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                "description": "The anchor that shows no code any more."
+                                              }
+                                            },
+                                            "required": [
+                                              "anchor"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Which anchor."
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "params"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "The anchor shows no code until one is shown again."
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
                                             "const": "navigate",
                                             "description": "The effect: the app moves to a binding."
                                           },
@@ -1820,7 +2068,7 @@
                                         "description": "The app moves to that binding."
                                       }
                                     ],
-                                    "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                    "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                   },
                                   "description": "The effects, in order."
                                 },
@@ -1947,6 +2195,37 @@
                           "properties": {
                             "type": {
                               "type": "string",
+                              "const": "clear",
+                              "description": "The effect: an anchor stops showing its code."
+                            },
+                            "params": {
+                              "type": "object",
+                              "properties": {
+                                "anchor": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                  "description": "The anchor that shows no code any more."
+                                }
+                              },
+                              "required": [
+                                "anchor"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Which anchor."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "params"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor shows no code until one is shown again."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
                               "const": "navigate",
                               "description": "The effect: the app moves to a binding."
                             },
@@ -1989,7 +2268,7 @@
                           "description": "The app moves to that binding."
                         }
                       ],
-                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                     }
                   },
                   "exit": {
@@ -2045,6 +2324,37 @@
                           "properties": {
                             "type": {
                               "type": "string",
+                              "const": "clear",
+                              "description": "The effect: an anchor stops showing its code."
+                            },
+                            "params": {
+                              "type": "object",
+                              "properties": {
+                                "anchor": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                  "description": "The anchor that shows no code any more."
+                                }
+                              },
+                              "required": [
+                                "anchor"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Which anchor."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "params"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The anchor shows no code until one is shown again."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
                               "const": "navigate",
                               "description": "The effect: the app moves to a binding."
                             },
@@ -2087,7 +2397,7 @@
                           "description": "The app moves to that binding."
                         }
                       ],
-                      "description": "An effect, which the implementation provides: `show` or `navigate`."
+                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                     }
                   },
                   "on": {
@@ -2179,6 +2489,37 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
+                                        "const": "clear",
+                                        "description": "The effect: an anchor stops showing its code."
+                                      },
+                                      "params": {
+                                        "type": "object",
+                                        "properties": {
+                                          "anchor": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                            "description": "The anchor that shows no code any more."
+                                          }
+                                        },
+                                        "required": [
+                                          "anchor"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "Which anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "params"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The anchor shows no code until one is shown again."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
                                         "const": "navigate",
                                         "description": "The effect: the app moves to a binding."
                                       },
@@ -2221,7 +2562,7 @@
                                     "description": "The app moves to that binding."
                                   }
                                 ],
-                                "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                               },
                               "description": "The effects, in order."
                             },
@@ -2301,6 +2642,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -2343,7 +2715,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 },
                                 "description": "The effects, in order."
                               },
@@ -2447,6 +2819,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -2489,7 +2892,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 }
                               },
                               "exit": {
@@ -2545,6 +2948,37 @@
                                       "properties": {
                                         "type": {
                                           "type": "string",
+                                          "const": "clear",
+                                          "description": "The effect: an anchor stops showing its code."
+                                        },
+                                        "params": {
+                                          "type": "object",
+                                          "properties": {
+                                            "anchor": {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "The anchor that shows no code any more."
+                                            }
+                                          },
+                                          "required": [
+                                            "anchor"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "Which anchor."
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "params"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The anchor shows no code until one is shown again."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
                                           "const": "navigate",
                                           "description": "The effect: the app moves to a binding."
                                         },
@@ -2587,7 +3021,7 @@
                                       "description": "The app moves to that binding."
                                     }
                                   ],
-                                  "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                 }
                               },
                               "on": {
@@ -2679,6 +3113,37 @@
                                                 "properties": {
                                                   "type": {
                                                     "type": "string",
+                                                    "const": "clear",
+                                                    "description": "The effect: an anchor stops showing its code."
+                                                  },
+                                                  "params": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "anchor": {
+                                                        "type": "string",
+                                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                        "description": "The anchor that shows no code any more."
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "anchor"
+                                                    ],
+                                                    "additionalProperties": false,
+                                                    "description": "Which anchor."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "type",
+                                                  "params"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "The anchor shows no code until one is shown again."
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "type": {
+                                                    "type": "string",
                                                     "const": "navigate",
                                                     "description": "The effect: the app moves to a binding."
                                                   },
@@ -2721,7 +3186,7 @@
                                                 "description": "The app moves to that binding."
                                               }
                                             ],
-                                            "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                            "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                           },
                                           "description": "The effects, in order."
                                         },
@@ -2801,6 +3266,37 @@
                                                   "properties": {
                                                     "type": {
                                                       "type": "string",
+                                                      "const": "clear",
+                                                      "description": "The effect: an anchor stops showing its code."
+                                                    },
+                                                    "params": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "anchor": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                          "description": "The anchor that shows no code any more."
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "anchor"
+                                                      ],
+                                                      "additionalProperties": false,
+                                                      "description": "Which anchor."
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "type",
+                                                    "params"
+                                                  ],
+                                                  "additionalProperties": false,
+                                                  "description": "The anchor shows no code until one is shown again."
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": "string",
                                                       "const": "navigate",
                                                       "description": "The effect: the app moves to a binding."
                                                     },
@@ -2843,7 +3339,7 @@
                                                   "description": "The app moves to that binding."
                                                 }
                                               ],
-                                              "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                              "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                             },
                                             "description": "The effects, in order."
                                           },
@@ -2971,6 +3467,37 @@
                                                   "properties": {
                                                     "type": {
                                                       "type": "string",
+                                                      "const": "clear",
+                                                      "description": "The effect: an anchor stops showing its code."
+                                                    },
+                                                    "params": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "anchor": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                          "description": "The anchor that shows no code any more."
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "anchor"
+                                                      ],
+                                                      "additionalProperties": false,
+                                                      "description": "Which anchor."
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "type",
+                                                    "params"
+                                                  ],
+                                                  "additionalProperties": false,
+                                                  "description": "The anchor shows no code until one is shown again."
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": "string",
                                                       "const": "navigate",
                                                       "description": "The effect: the app moves to a binding."
                                                     },
@@ -3013,7 +3540,7 @@
                                                   "description": "The app moves to that binding."
                                                 }
                                               ],
-                                              "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                              "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                             },
                                             "description": "The effects, in order."
                                           },
@@ -3093,6 +3620,37 @@
                                                     "properties": {
                                                       "type": {
                                                         "type": "string",
+                                                        "const": "clear",
+                                                        "description": "The effect: an anchor stops showing its code."
+                                                      },
+                                                      "params": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "anchor": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "The anchor that shows no code any more."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "anchor"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "Which anchor."
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "type",
+                                                      "params"
+                                                    ],
+                                                    "additionalProperties": false,
+                                                    "description": "The anchor shows no code until one is shown again."
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "type": {
+                                                        "type": "string",
                                                         "const": "navigate",
                                                         "description": "The effect: the app moves to a binding."
                                                       },
@@ -3135,7 +3693,7 @@
                                                     "description": "The app moves to that binding."
                                                   }
                                                 ],
-                                                "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                                "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                               },
                                               "description": "The effects, in order."
                                             },
@@ -3220,6 +3778,37 @@
                                                   "properties": {
                                                     "type": {
                                                       "type": "string",
+                                                      "const": "clear",
+                                                      "description": "The effect: an anchor stops showing its code."
+                                                    },
+                                                    "params": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "anchor": {
+                                                          "type": "string",
+                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                          "description": "The anchor that shows no code any more."
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "anchor"
+                                                      ],
+                                                      "additionalProperties": false,
+                                                      "description": "Which anchor."
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "type",
+                                                    "params"
+                                                  ],
+                                                  "additionalProperties": false,
+                                                  "description": "The anchor shows no code until one is shown again."
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "type": {
+                                                      "type": "string",
                                                       "const": "navigate",
                                                       "description": "The effect: the app moves to a binding."
                                                     },
@@ -3262,7 +3851,7 @@
                                                   "description": "The app moves to that binding."
                                                 }
                                               ],
-                                              "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                              "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                             },
                                             "description": "The effects, in order."
                                           },
@@ -3342,6 +3931,37 @@
                                                     "properties": {
                                                       "type": {
                                                         "type": "string",
+                                                        "const": "clear",
+                                                        "description": "The effect: an anchor stops showing its code."
+                                                      },
+                                                      "params": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "anchor": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "The anchor that shows no code any more."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "anchor"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "Which anchor."
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "type",
+                                                      "params"
+                                                    ],
+                                                    "additionalProperties": false,
+                                                    "description": "The anchor shows no code until one is shown again."
+                                                  },
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "type": {
+                                                        "type": "string",
                                                         "const": "navigate",
                                                         "description": "The effect: the app moves to a binding."
                                                       },
@@ -3384,7 +4004,7 @@
                                                     "description": "The app moves to that binding."
                                                   }
                                                 ],
-                                                "description": "An effect, which the implementation provides: `show` or `navigate`."
+                                                "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
                                               },
                                               "description": "The effects, in order."
                                             },

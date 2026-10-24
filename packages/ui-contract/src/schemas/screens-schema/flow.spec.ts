@@ -18,7 +18,10 @@ const SIGN_IN = {
       description: 'The form in the mode sign-in.',
       meta: { address: { path: '/sign-in', search: { mode: 'sign-in', page: 1, open: true } } },
       entry: [{ type: 'show', params: { anchor: 'user.sign-in.notice-message', codes: ['x'] } }],
-      exit: [{ type: 'navigate', params: { to: '/sign-in', search: { mode: '$id' } } }],
+      exit: [
+        { type: 'clear', params: { anchor: 'user.sign-in.notice-message' } },
+        { type: 'navigate', params: { to: '/sign-in', search: { mode: '$id' } } },
+      ],
       on: {
         'user.sign-in.toggle-button': { target: 'sign-up', description: 'The name input appears.' },
         'user.sign-in.submit-button': { target: 'signing-in' },
@@ -80,10 +83,19 @@ describe('flowSchema', () => {
       }),
     ).toBe(false)
   })
-  it('refuses an effect other than show and navigate', () => {
+  it('refuses an effect other than show, clear and navigate', () => {
     expect(
       changed((config) => {
         Object.assign(stateOf(config, 'sign-in'), { entry: [{ type: 'assign', params: {} }] })
+      }),
+    ).toBe(false)
+  })
+  it('refuses a clear naming codes', () => {
+    expect(
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'clear', params: { anchor: 'user.sign-in.error', codes: ['failed'] } }],
+        })
       }),
     ).toBe(false)
   })
