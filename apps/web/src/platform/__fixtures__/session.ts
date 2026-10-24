@@ -52,8 +52,10 @@ export function fakeSession(): {
   }
 }
 
-/** The services a component test provides: the container resolves `session`, reads find no shapes. */
-export function fakeServices(session: SessionPort): ServicesView {
+/** The services a component test provides: the container resolves `session`, reads find no shapes until the test sets one on `runner`. */
+export function fakeServices(
+  session: SessionPort,
+): ServicesView & { readonly runner: FakeShapeRunner } {
   const runner = new FakeShapeRunner()
   // The settings the frame reads; their commands are not in these tests.
   const commands = {

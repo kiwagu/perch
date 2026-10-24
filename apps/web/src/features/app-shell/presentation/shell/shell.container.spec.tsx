@@ -4,6 +4,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
+import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
 import en from '../../../../platform/i18n/app.en.json'
@@ -12,6 +13,8 @@ import { defineModule } from '../../../../platform/module'
 import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
+import type { SessionPort } from '../../../../platform/session.port'
+import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 
 import { openedFrame } from './__fixtures__/frame'
 import { ShellContainer } from './shell.container'
@@ -85,6 +88,49 @@ describe('ShellContainer', () => {
     )
     expect(screen.getByTestId('app-shell.notice-message').textContent).toBe(
       'The server refused a change again, so it and the later changes not yet sent were undone on this device.',
+    )
+  })
+
+  it("takes a language choice once the signed-in account's settings are on the device", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const signedIn: SessionPort = { ...session, current: () => ann }
+    const services = fakeServices(signedIn)
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: signedIn,
+      layout: () => (
+        <NoticeProvider>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellFrameContext.Provider value={openedFrame()}>
+          <ServicesProvider services={services}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    // Signed in, the settings not here yet: the frame takes no choice.
+    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(true)
+
+    act(() => {
+      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'en' }])
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(
+        false,
+      ),
     )
   })
 })

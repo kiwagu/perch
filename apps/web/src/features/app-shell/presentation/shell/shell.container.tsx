@@ -1,6 +1,6 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useSelector } from '@xstate/react'
-import { type ReactNode, useEffect, useSyncExternalStore } from 'react'
+import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { useT } from '@workspace/i18n'
 
@@ -24,24 +24,28 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     () => session.current(),
   )
   const { actor, live } = useShellFrame()
-  const canChoose = useSelector(actor, (state) =>
-    state.can({ type: 'app-shell.locale-select', locale: 'en' }),
-  )
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
+  const account = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const notice = useNotice()
   const notify = useNotify()
   const t = useT()
 
-  // What the frame's machine reads: whether an account is signed in, and how to store its language.
+  // What the frame's machine reads, current before it is asked anything below: whether an account
+  // is signed in, the language its settings hold here, how to store one; another account, or none,
+  // starts knowing nothing of its stored language.
+  if (account.current !== user?.id) {
+    account.current = user?.id
+    live.writes = LocaleWrites.none
+  }
+
   live.signedIn = user !== undefined
+  live.stored = row?.locale
   live.store = row ? (locale) => settings.updateLocale({ id: row.id, locale }) : undefined
 
-  // Another account, or none: nothing is known of its stored language until its settings arrive.
-  useEffect(() => {
-    live.stored = undefined
-    live.writes = LocaleWrites.none
-  }, [user?.id, live])
+  // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
+  useSelector(actor, (state) => state)
+  const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
 
   // The stored language arriving or changing, here or from another device: the frame's data event.
   const stored = row?.locale
@@ -51,10 +55,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       return
     }
 
-    live.stored = stored
     actor.send({ type: 'model.settings.locale' })
     live.writes = live.writes.arrived(stored)
-  }, [stored, actor, live])
+  }, [user?.id, stored, actor, live])
 
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
