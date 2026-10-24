@@ -13,7 +13,8 @@ type Stored = ResultAsync<void, unknown>
 function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = {}) {
   let values: ShellValues = {
     account: undefined,
-    storingFor: undefined,
+    session: 0,
+    storingIn: undefined,
     stored: undefined,
     writes: LocaleWrites.none,
   }
@@ -23,7 +24,7 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
     createShellMachine({
       values: () => values,
       storeLocale: (locale) => {
-        values = { ...values, storingFor: values.account, writes: values.writes.writing(locale) }
+        values = { ...values, storingIn: values.session, writes: values.writes.writing(locale) }
 
         return storeLocale(locale)
       },
@@ -43,11 +44,17 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
     spoken,
     emitted,
     signIn: (account = 'idn_ann') => {
-      values = { ...values, account }
+      values = { ...values, account, session: values.session + 1 }
     },
     /** The account goes away, by its own sign-out or from another device. */
     signOut: () => {
-      values = { ...values, account: undefined, stored: undefined, writes: LocaleWrites.none }
+      values = {
+        ...values,
+        account: undefined,
+        session: values.session + 1,
+        stored: undefined,
+        writes: LocaleWrites.none,
+      }
       actor.send({ type: 'platform.signed-out' })
     },
     /** The settings arrive or change on this device, here or from another one. */
@@ -186,26 +193,32 @@ describe('shell machine', () => {
     await waitFor(shell.actor, (state) => state.matches('ready'))
   })
 
-  it('shows nothing for a failed store of an account that left, even with another one in', async () => {
-    const failed = Promise.withResolvers<void>()
-    const shell = frame({
-      storeLocale: () =>
-        ResultAsync.fromPromise(failed.promise, () => ({ code: 'data:WRITE_FAILED' })),
-    })
+  it.each([
+    ['another account', 'idn_bob'],
+    ['the same account again', 'idn_ann'],
+  ])(
+    'shows nothing for a failed store of an account that left, %s signed in since',
+    async (_, next) => {
+      const failed = Promise.withResolvers<void>()
+      const shell = frame({
+        storeLocale: () =>
+          ResultAsync.fromPromise(failed.promise, () => ({ code: 'data:WRITE_FAILED' })),
+      })
 
-    shell.actor.send({ type: 'platform.opened' })
-    shell.signIn()
-    shell.store('en')
-    shell.choose('es')
-    shell.signOut()
-    shell.signIn('idn_bob')
+      shell.actor.send({ type: 'platform.opened' })
+      shell.signIn('idn_ann')
+      shell.store('en')
+      shell.choose('es')
+      shell.signOut()
+      shell.signIn(next)
 
-    failed.reject(new Error('the database went with the account'))
-    await waitFor(shell.actor, (state) => state.matches('ready'))
+      failed.reject(new Error('the database went with the account'))
+      await waitFor(shell.actor, (state) => state.matches('ready'))
 
-    expect(shell.emitted).toContainEqual(CLEARED)
-    expect(shell.emitted).not.toContainEqual(NOT_STORED)
-  })
+      expect(shell.emitted).toContainEqual(CLEARED)
+      expect(shell.emitted).not.toContainEqual(NOT_STORED)
+    },
+  )
 
   it("speaks a language another device stored, and not this device's own coming back", async () => {
     const stored = Promise.withResolvers<void>()

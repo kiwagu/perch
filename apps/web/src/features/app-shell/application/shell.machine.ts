@@ -9,8 +9,10 @@ import type { LocaleWrites } from './locale-writes'
 export interface ShellValues {
   /** The account signed in on this device; none for a guest. */
   readonly account: string | undefined
-  /** The account the store under way began for. */
-  readonly storingFor: string | undefined
+  /** Moves on each time the account changes, a sign-out included: the same account back is not. */
+  readonly session: number
+  /** The session the store under way began in. */
+  readonly storingIn: number | undefined
   /** The language the account's settings hold on this device; none before they arrive. */
   readonly stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
@@ -97,9 +99,9 @@ export function createShellMachine(deps: ShellMachineDeps) {
       settingsHeld: () => deps.values().stored !== undefined,
       signedOut: () => deps.values().account === undefined,
       accountLeft: () => {
-        const { account, storingFor } = deps.values()
+        const { session, storingIn } = deps.values()
 
-        return storingFor !== account
+        return storingIn !== session
       },
       storedElsewhere: () => storedElsewhere() !== undefined,
     },

@@ -38,6 +38,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // knowing nothing of its stored language.
   if (account.current !== user?.id) {
     account.current = user?.id
+    live.session += 1
     live.writes = LocaleWrites.none
   }
 

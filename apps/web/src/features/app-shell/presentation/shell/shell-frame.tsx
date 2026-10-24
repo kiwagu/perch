@@ -11,8 +11,10 @@ import { createShellMachine } from '../../application/shell.machine'
 export interface ShellLive {
   /** The account signed in on this device; none for a guest. */
   account: string | undefined
-  /** The account the store under way began for. */
-  storingFor: string | undefined
+  /** Moves on each time the account changes, a sign-out included: the same account back is not. */
+  session: number
+  /** The session the store under way began in. */
+  storingIn: number | undefined
   /** The language the account's settings hold on this device; none before they arrive. */
   stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
@@ -29,7 +31,7 @@ export function shellFrameMachine(live: ShellLive) {
     values: () => live,
     storeLocale: (locale) => {
       live.writes = live.writes.writing(locale)
-      live.storingFor = live.account
+      live.storingIn = live.session
 
       return (
         live.store?.(locale) ?? errAsync(new Error('the settings are not on this device'))
