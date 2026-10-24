@@ -35,7 +35,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     screen's `states` say what each state shows.
 11. **The rest of the screen.** `entry` (the anchors a test starts from, alternatives by
     state included), the `flow` (an XState machine config: its states, per event on an
-    anchor the transition with its `target`, `guard` and effects `show` and `navigate`, an
+    anchor the transition with its `target`, `guard` and effects `show`, `clear` and `navigate`, an
     `invoke` state per action with its `onDone` and `onError`, the screen's independent
     areas as the regions of a parallel state, each event in one area;
     `flows-machine.spec.ts` runs it in XState) and the `wireframe` (the default state as an

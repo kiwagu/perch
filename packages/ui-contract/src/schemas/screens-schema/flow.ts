@@ -1,7 +1,7 @@
 /**
  * The behaviour of a screen as an XState v5 machine config, in the subset `createMachine`
  * takes verbatim: states, transitions on the anchors' events and the platform's, guards by
- * name, the effects `show` and `navigate`, and an invoke per action. A state of the root may
+ * name, the effects `show`, `clear` and `navigate`, and an invoke per action. A state of the root may
  * be a parallel state, whose regions are the independent areas of the screen, each in one of
  * its plain states at a time; a transition of the root may name a region's state as
  * `<parallel>.<region>.<state>`, and one of a region's state a state of the root as
@@ -72,6 +72,17 @@ const showSchema = z
   })
   .describe('The anchor shows one of the codes.')
 
+const clearSchema = z
+  .strictObject({
+    type: z.literal('clear').describe('The effect: an anchor stops showing its code.'),
+    params: z
+      .strictObject({
+        anchor: anchorSchema.describe('The anchor that shows no code any more.'),
+      })
+      .describe('Which anchor.'),
+  })
+  .describe('The anchor shows no code until one is shown again.')
+
 const navigateSchema = z
   .strictObject({
     type: z.literal('navigate').describe('The effect: the app moves to a binding.'),
@@ -85,8 +96,8 @@ const navigateSchema = z
   .describe('The app moves to that binding.')
 
 export const effectSchema = z
-  .discriminatedUnion('type', [showSchema, navigateSchema])
-  .describe('An effect, which the implementation provides: `show` or `navigate`.')
+  .discriminatedUnion('type', [showSchema, clearSchema, navigateSchema])
+  .describe('An effect, which the implementation provides: `show`, `clear` or `navigate`.')
 
 const effectsSchema = z.array(effectSchema).min(1).describe('The effects, in order.')
 

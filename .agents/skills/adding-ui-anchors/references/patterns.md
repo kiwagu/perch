@@ -297,7 +297,7 @@ signing-in:
 ```
 
 And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 72-121): an actor
-per `invoke.src`, the two effects, the same states, events, targets and effects; what the
+per `invoke.src`, the effects, the same states, events, targets and effects; what the
 app adds is its own (the `error` in context, `clearError`, the `input` built from the
 submit event):
 

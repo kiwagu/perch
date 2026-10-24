@@ -83,7 +83,7 @@ function listOf(value: unknown): readonly unknown[] {
 const effectsIn = (actions: unknown) =>
   listOf(actions)
     .filter(isRecord)
-    .filter(({ type }) => type === 'show' || type === 'navigate')
+    .filter(({ type }) => type === 'show' || type === 'clear' || type === 'navigate')
     .map(({ type, params }) => ({ type, params }))
 
 const transitionsIn = (value: unknown) =>
