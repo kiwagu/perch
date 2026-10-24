@@ -29,6 +29,12 @@ lay down its skeleton: that was the one DOM-first fill, by design, and it ended 
 sides in sync. From now on a change starts in the contract, never in JSX or in a test. A
 page may still inspire a change, but the contract decides it.
 
+The contract is also where the architecture is decided. The developer programs it there,
+apart from the implementation: the model, the screens with their flows, the platform, the
+activities and the scenarios. The agent brings the patterns that make it good, proposed for
+the developer's review with their trade-offs, and builds the code from the contract the
+developer approved; the code takes no architectural decision of its own.
+
 ### The order of work
 
 1. **The model.** A new field or action goes into its entity in `model.schema.json`
@@ -41,15 +47,17 @@ page may still inspire a change, but the contract decides it.
    **Then the review.** The contract is committed first, a layer per commit and no
    implementation in either (the app's runtime of the contract and its specs are meta). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
-   vocabulary, this README) goes on `feat/contract-first-pass`, after a merge of the latest
+   vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
-   one). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
+   one, and a change its review brings is a commit of its own on top, never an amend). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
    merged in after that landing, then takes the business change (the screen files, the
    activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
    landing they build on, the reason for every change, the gaps signalled) and gives an OK on those commits or asks for changes
-   to the contract. The OK covers those commits, and the last business commit of a rename
+   to the contract. A change the review brings is a commit of its own on top of the ones
+   under review, never an amend, and the OK is then asked on all of them. The OK covers those
+   commits, and the last business commit of a rename
    or a removal that drops the old names the review listed. Any other contract commit made,
    re-cut, amended or rebased after it, even with its files unchanged, and a return to the
    implementation after other work, stop here again. The code and the tests,
@@ -73,7 +81,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   the derived suffixes, the attributes, the app, container and row states, the codes, the
   choice values, the screen names, the roles and the anchors the shell reserves). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
-  heading.
+  heading. The grammar, the kinds, the suffixes, the attributes and the contract version are
+  the engine's (meta); every other table is content a feature adds with the screen file that
+  first uses it (business).
 - `screens/<pathname>.yaml`: one screen per file, named by the path of the screen's first
   binding without the leading `/`. `/sign-in` is `screens/sign-in.yaml` and `/me` is
   `screens/me.yaml`; a nested path is a folder (`/org/$org` would be `screens/org/$org.yaml`)
@@ -279,13 +289,16 @@ unchanged, as it carries a binding into the router.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
-- A button whose anchor is an event of the flow is enabled exactly while a state the machine
-  is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's
-  Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it.
-  The app reads it from its machine and keeps no flag of its own.
-- The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
-  codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
-  { to, search } }`, the app moves to that binding. The app implements both.
+- A control whose anchor is an event of the flow (a button, a select, a switch) is enabled
+  exactly while a state the machine is in handles that event (`snapshot.can` in XState), and
+  disabled otherwise: the profile's Save is disabled while it saves because neither
+  `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no
+  flag of its own.
+- The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
+  codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
+  } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
+  navigate, params: { to, search } }`, the app moves to that binding. The app implements
+  all three.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter to the anchor whose value it
   takes or to a constant `{ value: ... }`, and `onDone` and `onError` say what follows its

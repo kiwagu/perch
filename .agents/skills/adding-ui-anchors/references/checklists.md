@@ -35,7 +35,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     screen's `states` say what each state shows.
 11. **The rest of the screen.** `entry` (the anchors a test starts from, alternatives by
     state included), the `flow` (an XState machine config: its states, per event on an
-    anchor the transition with its `target`, `guard` and effects `show` and `navigate`, an
+    anchor the transition with its `target`, `guard` and effects `show`, `clear` and `navigate`, an
     `invoke` state per action with its `onDone` and `onError`, the screen's independent
     areas as the regions of a parallel state, each event in one area;
     `flows-machine.spec.ts` runs it in XState) and the `wireframe` (the default state as an
@@ -134,7 +134,7 @@ incoming change.
 5. **What came in.** New routes, search parameters, dialogs and messages of the incoming
    side are in the screen files, and its new messages have codes.
 6. **The commits.** This audit follows the merge commit as any contract change, a kind per
-   commit: the meta change when the merge brought one (the vocabulary, the tooling), on
+   commit: the meta change when the merge brought one (the vocabulary's grammar, the tooling), on
    `feat/contract-first-pass` and landed first (the branches of the rule), the
    business change (the screen files, the model, the scenarios), which stops for the
    developer's review, then the implementation's (the attributes, the markers and the

@@ -28,6 +28,7 @@ has not. The developer gets, and answers with an OK or with changes to the contr
 
 The meta it builds on: <the squash of feat/contract-first-pass on main, when a facet is new, or none>
 The contract commits: <the business commits on the feature branch, their diffs or where to read them>
+Changed during this review: <the commits added since the last hand-over of this review, each a decision of its own, or none>
 Why:
 - <every change, an added state, guard, facet or code included>: <the reason>
 Gaps signalled: <the Contract gap: blocks, or none>

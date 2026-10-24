@@ -42,7 +42,7 @@ describe('instructionsOf', () => {
       'a data event `model.<entity>.<field>`: the stored value of a field the screen shows changed, here or on another device',
     )
     expect(instructions.screenMap).toContain(
-      'A button whose anchor is an event of the flow is enabled exactly while a state the machine is in handles that event',
+      'A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event',
     )
     expect(instructions.screenMap).toContain(
       "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",

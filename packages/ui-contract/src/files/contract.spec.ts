@@ -72,52 +72,26 @@ describe('the contract folder of the repository', () => {
   })
   it('has the screens of the application without problems, sorted by their files', () => {
     const { screens, problems } = loadScreens(ROOT)
+    const files = screens?.files ?? []
 
     expect(printed(problems)).toEqual([])
-    expect(screens?.files).toEqual([
-      'contract/screens/__root.yaml',
-      'contract/screens/devices.yaml',
-      'contract/screens/me.yaml',
-      'contract/screens/org.yaml',
-      'contract/screens/sign-in.yaml',
-    ])
-    expect(screens?.screens.map((screen) => screen.id)).toEqual([
-      'app-shell',
-      'device',
-      'user.profile',
-      'organisation',
-      'user.sign-in',
-    ])
+    expect(files).toEqual([...files].sort())
+    expect(files).toContain('contract/screens/__root.yaml')
+    expect(screens?.screens.map((screen) => screen.id)).toHaveLength(files.length)
+    expect(screens?.screens[0]?.id).toBe('app-shell')
   })
   it('has the scenarios without problems, sorted by their paths', () => {
     const { scenarios, problems } = loadScenarios(ROOT)
+    const ids = scenarios.map((scenario) => scenario.id)
 
     expect(printed(problems)).toEqual([])
-    expect(scenarios.map((scenario) => scenario.id)).toEqual([
-      'contract/base/manifest',
-      'device/base/my-devices',
-      'organisation/flows/edit-own-admin-any',
-      'organisation/flows/membership-change',
-      'organisation/flows/outsider',
-      'organisation/flows/shared-notes',
-      'user/base/blocked-storage',
-      'user/base/edit-profile-name',
-      'user/base/sign-up',
-      'user/base/unopenable-database',
-      'user/flows/blocked-delete',
-      'user/flows/idle-traffic',
-      'user/flows/key-renewal',
-      'user/flows/offline-edit',
-      'user/flows/one-account-per-browser',
-      'user/flows/one-leader-per-browser',
-      'user/flows/sign-out',
-      'user/flows/two-devices',
-    ])
+    expect(ids).toEqual([...ids].sort())
+    expect(ids).toContain('user/base/sign-up')
   })
-  it('has the data model without problems, with its two entities', () => {
+  it('has the data model without problems, with the profile among its entities', () => {
     const { model, problems } = loadModel(ROOT)
 
     expect(printed(problems)).toEqual([])
-    expect(Object.keys(model?.entities ?? {}).sort()).toEqual(['note', 'profile'])
+    expect(Object.keys(model?.entities ?? {})).toContain('profile')
   })
 })

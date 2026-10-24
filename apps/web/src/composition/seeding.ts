@@ -1,7 +1,7 @@
 /**
  * Seeding from Bun or Node with the application itself. A seed client is a device of the
  * application in this process: the composition root over an in-memory database, signing up
- * or in through the gateway's HTTP routes, writing the profile with the user module's
+ * or in through the gateway's HTTP routes, writing the profile and the settings with the user module's
  * services, the command bus and the Loro write path of the identity's region, and syncing
  * the region over the gateway's WebSocket like any device. A stand is reached directly only
  * by its operator, as a system user on the gateway's database, to sweep seeded accounts.
@@ -21,7 +21,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { readSchema } from '@workspace/data/schema-files'
 import type { Locale } from '@workspace/i18n'
-import { type ProfileId, profileIdFactory } from '@workspace/ids'
+import { type ProfileId, profileIdFactory, settingsIdFactory } from '@workspace/ids'
 import { systemClock } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
 import { type LockManagerLike, syncHints, WebSocketTransport } from '@workspace/replica/sync'
@@ -37,6 +37,11 @@ import {
   type ProfileRow,
   type ProfileService,
 } from '../features/user/application/profile.service'
+import {
+  SETTINGS_SERVICE,
+  type SettingsRow,
+  type SettingsService,
+} from '../features/user/application/settings/settings.service'
 import { UserModule } from '../features/user/user.module'
 
 import type { CommandLogger } from './commands'
@@ -81,6 +86,7 @@ export interface SeededAccount {
 export interface AccountView {
   readonly user: AuthUser
   readonly profile: ProfileRow | undefined
+  readonly settings: SettingsRow | undefined
 }
 
 /** An organisation as a member's device sees it once it has caught up with the gateway. */
@@ -97,7 +103,7 @@ export type SeedError = DataError | BusError
  * its in-memory database, but never signs the account out, which would revoke its grant.
  */
 export interface SeedClient {
-  /** Signs up (or in, when the account exists), writes the profile through commands and waits until the gateway acknowledged everything. */
+  /** Signs up (or in, when the account exists), writes the profile and the settings through commands and waits until the gateway acknowledged everything. */
   ensureAccount(input: AccountInput): ResultAsync<SeededAccount, SeedError>
   /** Signs in as an existing account and waits for the first catch-up; the organisation calls act as it. */
   signIn(input: SignInInput): ResultAsync<AuthUser, SeedError>
@@ -114,7 +120,7 @@ export interface SeedClient {
   ensureMember(key: string, email: string): ResultAsync<void, SeedError>
   /** Signs in, makes the organisation current and reads its notes once the gateway's copy has arrived; writes nothing. */
   readOrganisation(key: string, input: SignInInput): ResultAsync<OrganisationView, SeedError>
-  /** Signs in and reads the profile once the gateway's copy of the account's region has arrived; writes nothing. */
+  /** Signs in and reads the profile and the settings once the gateway's copy of the account's region has arrived; writes nothing. */
   readAccount(input: SignInInput): ResultAsync<AccountView, SeedError>
   close(): Promise<void>
 }
@@ -142,6 +148,7 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
   }
 
   const profiles: ProfileService = scope.get(PROFILE_SERVICE)
+  const settings: SettingsService = scope.get(SETTINGS_SERVICE)
 
   for (const provider of OrganisationModule.providers) {
     scope.singleton(provider.provide, provider.useFactory)
@@ -207,10 +214,10 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
   const profileOf = (user: AuthUser): ResultAsync<ProfileRow | undefined, SeedError> =>
     profiles.read({ identity: user.id }).map(([row]) => row)
 
-  /** The account's profile as the catalog describes it: created when missing, its language and bio set. */
+  /** The account's profile as the catalog describes it: created when missing, its bio set. */
   const ensureProfile = (user: AuthUser, input: AccountInput): ResultAsync<ProfileId, SeedError> =>
     profileOf(user)
-      .andThen((row): ResultAsync<Pick<ProfileRow, 'id' | 'bio' | 'locale'>, SeedError> => {
+      .andThen((row): ResultAsync<Pick<ProfileRow, 'id' | 'bio'>, SeedError> => {
         if (row) {
           return okAsync(row)
         }
@@ -219,20 +226,30 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
 
         return profiles
           .createProfile({ id, identity: user.id, name: input.name, email: user.email })
-          .map(() => ({ id, bio: undefined, locale: undefined }))
+          .map(() => ({ id, bio: undefined }))
       })
       .andThen((profile) =>
-        (profile.locale === input.locale
+        (profile.bio === input.bio
           ? okAsync(undefined)
-          : profiles.updateLocale({ id: profile.id, locale: input.locale })
-        )
-          .andThen(() =>
-            profile.bio === input.bio
-              ? okAsync(undefined)
-              : profiles.updateBio({ id: profile.id, bio: input.bio }),
-          )
-          .map(() => profile.id),
+          : profiles.updateBio({ id: profile.id, bio: input.bio })
+        ).map(() => profile.id),
       )
+
+  /** The account's settings as the catalog describes them: created when missing, its language set. */
+  const ensureSettings = (user: AuthUser, input: AccountInput): ResultAsync<void, SeedError> =>
+    settings.read({ identity: user.id }).andThen(([row]): ResultAsync<void, SeedError> => {
+      if (!row) {
+        return settings.createSettings({
+          id: settingsIdFactory.create(),
+          identity: user.id,
+          locale: input.locale,
+        })
+      }
+
+      return row.locale === input.locale
+        ? okAsync(undefined)
+        : settings.updateLocale({ id: row.id, locale: input.locale })
+    })
 
   const membershipOf = (key: string): Membership | undefined =>
     services.session.memberships().find((membership) => membership.tenant.key === key)
@@ -293,11 +310,18 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
               : errAsync(error),
           ),
       )
-        .andThen((user) => ensureProfile(user, input).map((profileId) => ({ user, profileId })))
+        // The settings before the profile, as a sign-up writes them.
+        .andThen((user) =>
+          ensureSettings(user, input).andThen(() =>
+            ensureProfile(user, input).map((profileId) => ({ user, profileId })),
+          ),
+        )
         .andThen((seeded) => settle().map(() => seeded)),
     readAccount: (input) =>
       enter(() => services.session.signIn(input)).andThen((user) =>
-        profileOf(user).map((profile) => ({ user, profile })),
+        profileOf(user).andThen((profile) =>
+          settings.read({ identity: user.id }).map(([row]) => ({ user, profile, settings: row })),
+        ),
       ),
     close: () => services.close(),
   }

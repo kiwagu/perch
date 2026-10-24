@@ -117,6 +117,21 @@ describe('flowProblems', () => {
       `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
+  it('holds a clear to a declared anchor that carries codes', () => {
+    const contract = sampleContract()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.entry = [
+      { type: 'clear', params: { anchor: 'sample.gone-message' } },
+      { type: 'clear', params: { anchor: 'sample.page' } },
+      { type: 'clear', params: { anchor: 'sample.save-button' } },
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.entry[0].params.anchor: "sample.gone-message" is not a declared anchor`,
+      `${AT}.states.editing.entry[1].params.anchor: "sample.page" carries no code to clear`,
+    ])
+  })
   it('holds the effects of every transition, an invoke outcome included', () => {
     const contract = sampleContract()
     const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')

@@ -68,7 +68,8 @@ code and the tests follow; the checks hold them to the contract.
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area) and the element to the
    `wireframe`. A
-   new code, state or choice value goes into its table of the vocabulary in the same change.
+   new code, state or choice value goes into its table of the vocabulary in the same change:
+   those tables are business, like the screen file.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
@@ -78,10 +79,11 @@ code and the tests follow; the checks hold them to the contract.
    **Commit the contract**, each layer on its own branch and no implementation in either
    (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
    contract and the specs that hold the app to it are meta). A new facet first: the meta
-   change (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about
-   them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
+   change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
+   docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash
-   (one round at a time; a commit added after the hand-over needs a new one). Then the
+   (one round at a time; a commit added after the hand-over needs a new one, and a change its
+   review brings is a commit of its own on top, never an amend). Then the
    feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
@@ -93,9 +95,11 @@ code and the tests follow; the checks hold them to the contract.
    ask for the OK on those commits, and wait. Nothing below starts before it, not even a
    test's scaffold. The OK covers those commits, and the one it approves in advance: the last
    business commit of a rename or a removal, which drops the old names the review listed and
-   nothing else. Any other contract commit made, re-cut, amended or rebased after the OK, even
-   with its files unchanged, stops here again, and so does a return to the code after other
-   work.
+   nothing else. A change the review brings (one the developer asks for, or one an answer to
+   their question leads to) is a new commit on top of the ones under review, never an amend
+   or a re-cut, and the OK is then asked on all of them. Any other contract commit made,
+   re-cut, amended or rebased after the OK, even with its files unchanged, stops here again,
+   and so does a return to the code after other work.
 6. **The code**, after the developer's OK on the contract commits beneath it, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
    changes), never with any other business or meta change. Once the code no longer renders a

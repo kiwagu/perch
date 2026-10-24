@@ -40,9 +40,9 @@ anchors:
     roles: [ guest ]
   app-shell.locale-select:
     kind: select
-    description: The language of the app; a choice applies at once, and while the profile is open it is stored in the profile, whose stored language wins each time the profile page opens.
+    description: The language of the app; a choice applies at once and is stored in the account's settings, whose stored language wins when they first arrive on a device.
     binding:
-      action: profile.updateLocale
+      action: settings.updateLocale
       params:
         locale: app-shell.locale-select
     dataValue: true
@@ -74,14 +74,14 @@ flow:
         app-shell.locale-select:
           target: storing-locale
     storing-locale:
-      description: The profile stores the chosen language.
+      description: The settings store the chosen language.
       invoke:
-        src: profile.updateLocale
+        src: settings.updateLocale
         input:
           locale: app-shell.locale-select
         onDone:
           target: ready
-          description: The page renders in the chosen language at once; the profile stores it while /me is open.
+          description: The page renders in the chosen language at once; the settings store it while /me is open.
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       on:

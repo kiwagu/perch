@@ -83,7 +83,7 @@ function listOf(value: unknown): readonly unknown[] {
 const effectsIn = (actions: unknown) =>
   listOf(actions)
     .filter(isRecord)
-    .filter(({ type }) => type === 'show' || type === 'navigate')
+    .filter(({ type }) => type === 'show' || type === 'clear' || type === 'navigate')
     .map(({ type, params }) => ({ type, params }))
 
 const transitionsIn = (value: unknown) =>
@@ -308,7 +308,11 @@ function beyondTheSubset(config: unknown): string[] {
 const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>> = {
   'user.sign-in': () =>
     createSignInMachine(
-      new SignInService(fakeSession().session, { createProfile: () => okAsync(undefined) }),
+      new SignInService(
+        fakeSession().session,
+        { createProfile: () => okAsync(undefined) },
+        { createSettings: () => okAsync(undefined) },
+      ),
     ),
   'user.profile': () =>
     createProfileMachine({

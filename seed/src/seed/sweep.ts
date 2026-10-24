@@ -87,6 +87,7 @@ const sweepCommand: Command<SweepParams> = {
   tables: [
     'identity',
     'profile',
+    'settings',
     'tenant',
     'membership',
     '_replica_head',
@@ -146,10 +147,11 @@ function sweepStand(
 }
 
 /**
- * Removes seeded accounts from the stand with their profiles and the server's copy of their
- * regions, the organisations they created with their databases, and their member rows in the
- * databases of organisations of others. An operator's task, run as a system user on the stand
- * rather than through the gateway; no seed client may still be connected as one of these accounts.
+ * Removes seeded accounts from the stand with their profiles, their settings and the server's
+ * copy of their regions, the organisations they created with their databases, and their member
+ * rows in the databases of organisations of others. An operator's task, run as a system user on
+ * the stand rather than through the gateway; no seed client may still be connected as one of
+ * these accounts.
  */
 export function sweep(
   target: StandOptions,

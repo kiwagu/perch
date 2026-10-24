@@ -31,6 +31,32 @@ describe('OptionSelect', () => {
     expect(items.map((item) => item.getAttribute('data-value'))).toEqual(['en', 'es'])
   })
 
+  it('carries the chosen value on its anchor', () => {
+    const { rerender } = render(
+      <OptionSelect
+        label="Language"
+        value="en"
+        options={options}
+        onChange={() => {}}
+        testId="x.y.locale-select"
+      />,
+    )
+
+    expect(screen.getByTestId('x.y.locale-select').getAttribute('data-value')).toBe('en')
+
+    rerender(
+      <OptionSelect
+        label="Language"
+        value="es"
+        options={options}
+        onChange={() => {}}
+        testId="x.y.locale-select"
+      />,
+    )
+
+    expect(screen.getByTestId('x.y.locale-select').getAttribute('data-value')).toBe('es')
+  })
+
   it('reports the chosen option', async () => {
     const onChange = vi.fn()
 
@@ -45,11 +71,14 @@ describe('OptionSelect', () => {
     )
 
     await userEvent.click(screen.getByTestId('x.y.locale-select'))
-    await userEvent.click(
-      (await screen.findAllByTestId('x.y.locale-select.option')).find(
-        (item) => item.getAttribute('data-value') === 'es',
-      ) as HTMLElement,
-    )
+
+    const spanish = (await screen.findAllByTestId('x.y.locale-select.option')).find(
+      (item) => item.getAttribute('data-value') === 'es',
+    ) as HTMLElement
+
+    // The list takes no pointer until it has finished opening.
+    await vi.waitFor(() => expect(getComputedStyle(spanish).pointerEvents).not.toBe('none'))
+    await userEvent.click(spanish)
 
     expect(onChange).toHaveBeenCalledWith('es')
   })

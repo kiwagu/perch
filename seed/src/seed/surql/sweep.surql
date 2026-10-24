@@ -1,8 +1,8 @@
 -- Teardown for seeded accounts: an operator task on a stand, not a product command.
 -- Removes the accounts addressed to the seed domain (only those of them at `$emails` when
--- it is given) with their profiles and the server's copy of their private regions
--- (`identity:<account key>`): heads, snapshots, the update log, the projected keys and the
--- identities their Loro peers are bound to.
+-- it is given) with their profiles, their settings and the server's copy of their private
+-- regions (`identity:<account key>`): heads, snapshots, the update log, the projected keys and
+-- the identities their Loro peers are bound to.
 -- Only seed data uses that domain, so real accounts never match. The organisations the
 -- accounts created go too: their memberships, their databases `t_<key>` and their rows in
 -- the directory; the accounts' memberships in organisations of others are deleted too (the
@@ -39,6 +39,7 @@ FOR $database IN (
 };
 DELETE tenant WHERE created_by IN $accounts;
 DELETE profile WHERE identity IN $accounts;
+DELETE settings WHERE identity IN $accounts;
 DELETE _replica_head WHERE region IN $regions;
 DELETE _replica_snapshot WHERE region IN $regions;
 -- Region by region: SurrealDB 3.3.4 deletes nothing for `region IN $regions` on a table whose

@@ -17,7 +17,7 @@ export interface OptionSelectProps<Value extends string> {
   readonly value: Value
   readonly options: readonly Option<Value>[]
   readonly onChange: (value: Value) => void
-  /** The trigger's anchor; each option carries `<testId>.option` with its value as `data-value`. */
+  /** The trigger's anchor, carrying the chosen value as `data-value`; each option carries `<testId>.option` with its value as `data-value`. */
   readonly testId?: string
 }
 
@@ -38,6 +38,7 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
       <SelectTrigger
         aria-label={props.label}
         data-testid={props.testId}
+        data-value={props.value}
         className="min-h-11 text-base"
       >
         <SelectValue />
