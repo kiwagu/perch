@@ -13,5 +13,6 @@ export {
   regionStartsOf,
   rootOf,
   transitionsOf,
-} from './nodes'
+} from '../../files'
+
 export { flowProblems } from './problems'

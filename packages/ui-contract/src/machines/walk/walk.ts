@@ -30,7 +30,7 @@ import {
   flowNodes,
   type ParallelNode,
   type RegionNode,
-} from '@workspace/ui-contract'
+} from '../../files'
 
 import { type Case, casesOfNode, landingOf, type Outcome } from './cases'
 import { type Machine, machineOf } from './machine'
