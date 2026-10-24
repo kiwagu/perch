@@ -64,6 +64,7 @@ flow:
       settingsHeld: the account's settings are on this device
       signedOut: no account is signed in on this device
       storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      accountLeft: the account the store was for has signed out since it began
   states:
     opening:
       description: The local data is being opened; no screen is rendered.
@@ -116,13 +117,16 @@ flow:
           target: ready
           description: The settings hold the chosen language.
         onError:
-          target: ready
-          description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
-          actions:
-            - type: show
-              params:
-                anchor: app-shell.notice-message
-                codes: [ locale-not-stored ]
+          - target: ready
+            guard: accountLeft
+            description: The account signed out meanwhile; its notice went with it, and nothing is shown.
+          - target: ready
+            description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
+            actions:
+              - type: show
+                params:
+                  anchor: app-shell.notice-message
+                  codes: [ locale-not-stored ]
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       on:
