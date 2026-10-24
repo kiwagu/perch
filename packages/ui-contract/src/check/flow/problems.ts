@@ -1,7 +1,7 @@
 /**
  * Rule 8: a screen's flow is a machine XState runs as written, naming only what the
  * contract declares. A state of the root is a plain state or a parallel state whose regions
- * are the screen's independent areas (`nodes.ts`). Its `initial` is a state of the flow and
+ * are the screen's independent areas (`files/flow-nodes.ts`). Its `initial` is a state of the flow and
  * a region's `initial` a state of that region; every `target` leads where XState resolves
  * it (`targets.ts`); every event, effect and address names what the contract declares
  * (`references.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
@@ -12,12 +12,12 @@
  */
 
 import type { FlowState, Problem } from '../../files'
+import { type FlowNode, flowNodes, type RegionStateNode, transitionsOf } from '../../files'
 import { type Contract, declaredAnchors, has } from '../contract'
 import { actionProblems, lookupsOf } from '../lookups'
 
 import { areaProblems } from './areas'
 import type { At, InFlow } from './in-flow'
-import { type FlowNode, flowNodes, type RegionStateNode, transitionsOf } from './nodes'
 import { stuckProblems, unreachableProblems } from './reach'
 import { addressProblems, effectProblems, eventProblems } from './references'
 import { transitionsProblems } from './targets'

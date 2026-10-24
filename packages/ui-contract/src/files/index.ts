@@ -5,6 +5,22 @@ export {
   loadActivities,
 } from './activities'
 export { filesUnder } from './files-under'
+export {
+  type DeepTarget,
+  deepEnteredOf,
+  deepTargetOf,
+  type FlowNode,
+  flowNodes,
+  type IdTarget,
+  idTargetOf,
+  type ParallelNode,
+  type RegionNode,
+  type RegionStateNode,
+  type RootNode,
+  regionStartsOf,
+  rootOf,
+  transitionsOf,
+} from './flow-nodes'
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
 export { englishErrors } from './parse-file'
 export {

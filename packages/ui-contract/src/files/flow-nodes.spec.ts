@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Flow } from '../../files'
-
-import { deepTargetOf, flowNodes, regionStartsOf, transitionsOf } from './nodes'
+import { deepTargetOf, flowNodes, regionStartsOf, transitionsOf } from './flow-nodes'
+import type { Flow } from './screens'
 
 /** A flow with a plain state, then a parallel state of two regions. */
 const AREAS: Flow = {
