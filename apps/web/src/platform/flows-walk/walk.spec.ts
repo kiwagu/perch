@@ -9,6 +9,8 @@ import { walk } from './walk'
 const show = (codes: string[]) =>
   ({ type: 'show', params: { anchor: 'sample.notice-message', codes } }) as const
 
+const clear = { type: 'clear', params: { anchor: 'sample.notice-message' } } as const
+
 /** A flow of the subset, parsed as the contract parses one. */
 const flowOf = (flow: unknown): Flow => flowSchema.parse(flow)
 
@@ -95,15 +97,15 @@ describe('the walk of a flow', () => {
 
     expect(shadowed).toMatchObject({ expected: { state: 'c' }, actual: { state: 'b' } })
   })
-  it("expects the effects in XState's order: exit, the transition's, entry; none on staying", () => {
+  it("expects the effects in XState's order: exit, the transition's, entry; none on staying, a clear among them", () => {
     const flow = flowOf({
       initial: 'a',
       states: {
         a: {
           exit: [show(['left'])],
           on: {
-            'sample.go-button': { target: 'b', actions: [show(['moved'])] },
-            'sample.stay-button': { actions: [show(['stayed'])] },
+            'sample.go-button': { target: 'b', actions: [clear, show(['moved'])] },
+            'sample.stay-button': { actions: [show(['stayed']), clear] },
           },
         },
         b: { type: 'final', entry: [show(['entered'])] },
@@ -115,8 +117,8 @@ describe('the walk of a flow', () => {
     }
 
     expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([
-      [show(['left']), show(['moved']), show(['entered'])],
-      [show(['stayed'])],
+      [show(['left']), clear, show(['moved']), show(['entered'])],
+      [show(['stayed']), clear],
     ])
   })
 })
