@@ -425,7 +425,7 @@ In `following` the input shows the stored name; in `edited` it shows what was ty
 name stored on another device changes nothing until the guard holds (its own Save landed, the
 profile storing it trimmed). The page sends the data event when the shape's value changes.
 
-A button whose anchor is an event of the flow is enabled exactly while a state the machine is
-in handles that event: the view asks the machine (`snapshot.can({ type: anchor })`, passed to
+A control whose anchor is an event of the flow (a button, a select, a switch) is enabled
+exactly while a state the machine is in handles that event: the view asks the machine (`snapshot.can({ type: anchor })`, passed to
 the view as `can`) and keeps no flag of its own, so Save is disabled while `saving-name` or
 `saving-bio` runs and the sign-out button while the sign-out does.

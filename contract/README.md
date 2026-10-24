@@ -281,10 +281,11 @@ unchanged, as it carries a binding into the router.
 - A guard is a camelCase name that the root `meta.guards` declares with what it holds
   (`holdsUnsentChanges: this device holds changes the server has not received`); the app
   implements it.
-- A button whose anchor is an event of the flow is enabled exactly while a state the machine
-  is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's
-  Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it.
-  The app reads it from its machine and keeps no flag of its own.
+- A control whose anchor is an event of the flow (a button, a select, a switch) is enabled
+  exactly while a state the machine is in handles that event (`snapshot.can` in XState), and
+  disabled otherwise: the profile's Save is disabled while it saves because neither
+  `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no
+  flag of its own.
 - The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
   { to, search } }`, the app moves to that binding. The app implements both.
