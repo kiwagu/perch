@@ -75,7 +75,7 @@
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account, at sign-up, with the language the app spoke then.",
+            "description": "Creates the settings of a new account, at sign-up, each with its starting value.",
             "params": { "id": "$id", "identity": "identity", "locale": "locale" }
           },
           "updateLocale": {
