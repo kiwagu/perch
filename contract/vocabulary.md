@@ -154,6 +154,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
+| `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
