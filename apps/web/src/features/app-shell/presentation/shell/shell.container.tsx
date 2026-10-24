@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useT } from '@workspace/i18n'
 
 import { useService, useShape } from '../../../../platform/module'
-import { useNotice, useNotify } from '../../../../platform/notices'
+import { useClearNotice, useNotice, useNotify } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
@@ -26,9 +26,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const { actor, live } = useShellFrame()
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
+  const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const notice = useNotice()
   const notify = useNotify()
+  const clearNotice = useClearNotice()
   const t = useT()
 
   // What the frame's machine reads, current before it is asked anything below: whether an account
@@ -59,15 +61,34 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     live.writes = live.writes.arrived(stored)
   }, [user?.id, stored, actor, live])
 
+  // The account going away, by its own sign-out or from another device: the frame's platform event.
+  useEffect(() => {
+    const before = signedInAs.current
+
+    signedInAs.current = user?.id
+
+    if (before !== undefined && user?.id === undefined) {
+      actor.send({ type: 'platform.signed-out' })
+    }
+  }, [user?.id, actor])
+
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('locale-not-stored')) {
         notify({ code: 'locale-not-stored', text: (t) => t('app.shell.locale-not-stored') })
       }
     })
+    const cleared = actor.on('clear', ({ anchor }) => {
+      if (anchor === 'app-shell.notice-message') {
+        clearNotice()
+      }
+    })
 
-    return () => shown.unsubscribe()
-  }, [actor, notify])
+    return () => {
+      shown.unsubscribe()
+      cleared.unsubscribe()
+    }
+  }, [actor, notify, clearNotice])
 
   useEffect(
     () =>

@@ -58,6 +58,11 @@ const NOT_STORED = {
   codes: ['locale-not-stored'],
 }
 
+const CLEARED = { type: 'clear', anchor: 'app-shell.notice-message' }
+
+const sameAs = (event: unknown, expected: object): boolean =>
+  JSON.stringify(event) === JSON.stringify(expected)
+
 describe('shell machine', () => {
   it('opens the frame, or says the data failed or the browser keeps none', () => {
     const opened = frame()
@@ -147,6 +152,28 @@ describe('shell machine', () => {
 
     expect(shell.spoken.at(-1)).toBe('es')
     expect(shell.emitted).toContainEqual(NOT_STORED)
+  })
+
+  it('clears the notice when the account signs out, and a store under way runs on', async () => {
+    const stored = Promise.withResolvers<void>()
+    const shell = frame({ storeLocale: () => ResultAsync.fromSafePromise(stored.promise) })
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.signIn()
+    shell.actor.send({ type: 'platform.signed-out' })
+
+    expect(shell.emitted).toEqual([CLEARED])
+    expect(shell.is('ready')).toBe(true)
+
+    shell.store('en')
+    shell.choose('es')
+    shell.actor.send({ type: 'platform.signed-out' })
+
+    expect(shell.emitted.filter((each) => sameAs(each, CLEARED))).toHaveLength(2)
+    expect(shell.is('storing-locale')).toBe(true)
+
+    stored.resolve()
+    await waitFor(shell.actor, (state) => state.matches('ready'))
   })
 
   it("speaks a language another device stored, and not this device's own coming back", async () => {

@@ -185,8 +185,8 @@ describe('ShellContainer', () => {
     )
   })
 
-  it("speaks no signed-out account's stored language", async () => {
-    const { session } = fakeSession()
+  it("speaks no signed-out account's stored language, and its notice goes with it", async () => {
+    const { session, reject } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const changes = new Set<Parameters<SessionPort['subscribe']>[0]>()
     let who: typeof ann | undefined = ann
@@ -233,7 +233,19 @@ describe('ShellContainer', () => {
 
     await waitFor(() => expect(spoken).toEqual(['es']))
 
-    // Signed out, the settings read for Ann are not this device's any more: nothing to speak.
+    act(() =>
+      reject({
+        region: 'tenant:acme',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: 'note/nte_1:update',
+        reloaded: false,
+      }),
+    )
+    await screen.findByTestId('app-shell.notice-message')
+
+    // Signed out, the settings read for Ann are not this device's any more: nothing to speak,
+    // and the notice raised for her goes too.
     act(() => {
       who = undefined
 
@@ -248,5 +260,6 @@ describe('ShellContainer', () => {
       ),
     )
     expect(spoken).toEqual(['es'])
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
   })
 })

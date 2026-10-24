@@ -8,14 +8,15 @@ carries the navigation (sign-in, or the profile, the organisation page and My de
 language switch, which stores the chosen language in the account's settings from any page and
 follows a language another device stores, and the notices the session raises, such as a change the
 gateway refused and this device undid, so the change does not just vanish, and, when the gateway
-refused the undo too, that the later changes not sent yet went with it. The folder has no
+refused the undo too, that the later changes not sent yet went with it; a notice goes when the
+account it was raised for signs out, here or from another device. The folder has no
 module manifest: the composition root mounts the shell around the router built from the
 modules' routes.
 
 ## Surface
 
 - `application/shell.machine.ts`: the frame's flow as its machine (held to the contract by
-  `platform/flows-machine.spec.ts`), made by the start (`src/main.tsx`) through
+  `platform/machines.spec.ts`), made by the start (`src/main.tsx`) through
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `locale-writes.ts`
   tells a language another device stored from this device's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation

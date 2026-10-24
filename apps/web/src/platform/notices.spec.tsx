@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Translate } from '@workspace/i18n'
 
-import { NoticeProvider, useNotice, useNotify } from './notices'
+import { NoticeProvider, useClearNotice, useNotice, useNotify } from './notices'
 
 function Trigger(props: { readonly code: string; readonly text: string }) {
   const notify = useNotify()
@@ -45,5 +45,34 @@ describe('notices', () => {
 
     expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('welcome')
     expect(document.querySelector('[data-code]')?.textContent).toBe('Welcome')
+  })
+
+  it('shows no notice once it is cleared, until a newer one is raised', () => {
+    function Clear() {
+      const clear = useClearNotice()
+
+      return (
+        <button type="button" onClick={clear}>
+          clear
+        </button>
+      )
+    }
+
+    render(
+      <NoticeProvider>
+        <Trigger code="profile-saved" text="Saved" />
+        <Clear />
+        <Current />
+      </NoticeProvider>,
+    )
+
+    fireEvent.click(screen.getByText('Saved'))
+    fireEvent.click(screen.getByText('clear'))
+
+    expect(document.querySelector('[data-code]')).toBeNull()
+
+    fireEvent.click(screen.getByText('Saved'))
+
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('profile-saved')
   })
 })

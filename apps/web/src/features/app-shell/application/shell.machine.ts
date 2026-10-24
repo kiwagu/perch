@@ -22,11 +22,19 @@ export type ShellEvent =
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'app-shell.sign-out-here-button' }
+  | { readonly type: 'platform.signed-out' }
 
-/** The params of the flow's effects: an anchor shows one of the codes; the app moves to a path. */
+/**
+ * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
+ * moves to a path.
+ */
 interface ShowParams {
   readonly anchor: string
   readonly codes: readonly string[]
+}
+
+interface ClearParams {
+  readonly anchor: string
 }
 
 interface NavigateParams {
@@ -36,6 +44,7 @@ interface NavigateParams {
 /** The flow's effects, and the language the app is to speak. */
 export type ShellEmitted =
   | ({ readonly type: 'show' } & ShowParams)
+  | ({ readonly type: 'clear' } & ClearParams)
   | ({ readonly type: 'navigate' } & NavigateParams)
   | { readonly type: 'speak'; readonly locale: Locale }
 
@@ -59,6 +68,8 @@ const NOT_STORED = {
   params: { anchor: 'app-shell.notice-message', codes: ['locale-not-stored'] },
 } as const
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
+/** The notice goes with the account that was signed in when it was raised. */
+const CLEAR_NOTICE = { type: 'clear', params: { anchor: 'app-shell.notice-message' } } as const
 
 /** The frame's flow (`contract/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
@@ -87,6 +98,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
     },
     actions: {
       show: emit((_, params: ShowParams) => ({ type: 'show' as const, ...params })),
+      clear: emit((_, params: ClearParams) => ({ type: 'clear' as const, ...params })),
       navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
       speakChoice: emit(({ event }) => {
         assertEvent(event, 'app-shell.locale-select')
@@ -120,11 +132,13 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
+          'platform.signed-out': { actions: CLEAR_NOTICE },
         },
       },
       'storing-locale': {
         on: {
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
+          'platform.signed-out': { actions: CLEAR_NOTICE },
         },
         invoke: {
           src: 'settings.updateLocale',
