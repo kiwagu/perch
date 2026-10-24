@@ -322,6 +322,7 @@
         "ajv": "catalog:",
         "ajv-formats": "catalog:",
         "oxc-parser": "catalog:",
+        "xstate": "catalog:",
         "yaml": "catalog:",
       },
       "devDependencies": {

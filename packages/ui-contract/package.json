@@ -14,6 +14,10 @@
     "./anchors": {
       "types": "./src/anchors/index.ts",
       "import": "./src/anchors/index.ts"
+    },
+    "./machines": {
+      "types": "./src/machines/index.ts",
+      "import": "./src/machines/index.ts"
     }
   },
   "scripts": {
@@ -26,6 +30,7 @@
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
     "oxc-parser": "catalog:",
+    "xstate": "catalog:",
     "yaml": "catalog:"
   },
   "devDependencies": {

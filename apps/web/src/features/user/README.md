@@ -35,7 +35,7 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 - Anchors: screens `user.sign-in` and `user.profile` in `contract/screens/sign-in.yaml` and
   `contract/screens/me.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
-  held to `contract/screens/me.yaml` by `platform/flows-machine.spec.ts`): the name and the bio
+  held to `contract/screens/me.yaml` by `platform/machines.spec.ts`): the name and the bio
   (at most 2000 characters) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its

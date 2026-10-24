@@ -10,10 +10,10 @@
  */
 
 import type { Flow, FlowTransition, Problem } from '../../files'
+import { deepTargetOf, type IdTarget, idTargetOf, type RegionStateNode } from '../../files'
 import { has, own } from '../contract'
 
 import type { At, InFlow } from './in-flow'
-import { deepTargetOf, type IdTarget, idTargetOf, type RegionStateNode } from './nodes'
 import { effectProblems } from './references'
 
 type Transitions = FlowTransition | FlowTransition[]

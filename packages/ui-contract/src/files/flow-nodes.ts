@@ -18,7 +18,7 @@ import type {
   FlowRegionState,
   FlowState,
   FlowTransition,
-} from '../../files'
+} from './screens'
 
 interface Placed {
   /** The key of the `states` that hold it. */

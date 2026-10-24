@@ -38,7 +38,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     anchor the transition with its `target`, `guard` and effects `show`, `clear` and `navigate`, an
     `invoke` state per action with its `onDone` and `onError`, the screen's independent
     areas as the regions of a parallel state, each event in one area;
-    `flows-machine.spec.ts` runs it in XState) and the `wireframe` (the default state as an
+    `contract:check` runs it in XState) and the `wireframe` (the default state as an
     aria snapshot).
 12. **The scenario.** At least one file under `tests/e2e/scenarios/<entity>/base/` that opens
     the screen, written from the contract alone. Then the review stop of
@@ -97,8 +97,8 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    `activity: <id>` after `tags`, and names in brackets, in a step, the anchor of each
    transition it takes, after the route of the state it leaves; with several devices, each
    step opens with `On device X,`.
-5. **The checks.** `contract:check` holds the activity to the screens, the web app's
-   `activities-machine.spec.ts` runs it in XState, and `bun run contract:coverage --write`
+5. **The checks.** `contract:check` holds the activity to the screens and runs it in
+   XState, and `bun run contract:coverage --write`
    shows how many of its transitions the scenarios walk.
 6. **The hand-off** as for a new screen.
 
