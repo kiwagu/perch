@@ -134,7 +134,7 @@ incoming change.
 5. **What came in.** New routes, search parameters, dialogs and messages of the incoming
    side are in the screen files, and its new messages have codes.
 6. **The commits.** This audit follows the merge commit as any contract change, a kind per
-   commit: the meta change when the merge brought one (the vocabulary, the tooling), on
+   commit: the meta change when the merge brought one (the vocabulary's grammar, the tooling), on
    `feat/contract-first-pass` and landed first (the branches of the rule), the
    business change (the screen files, the model, the scenarios), which stops for the
    developer's review, then the implementation's (the attributes, the markers and the

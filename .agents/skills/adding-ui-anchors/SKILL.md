@@ -68,7 +68,8 @@ code and the tests follow; the checks hold them to the contract.
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area) and the element to the
    `wireframe`. A
-   new code, state or choice value goes into its table of the vocabulary in the same change.
+   new code, state or choice value goes into its table of the vocabulary in the same change:
+   those tables are business, like the screen file.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
@@ -78,8 +79,8 @@ code and the tests follow; the checks hold them to the contract.
    **Commit the contract**, each layer on its own branch and no implementation in either
    (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
    contract and the specs that hold the app to it are meta). A new facet first: the meta
-   change (`@workspace/ui-contract`, the generated schemas, the vocabulary, the docs about
-   them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
+   change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
+   docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash
    (one round at a time; a commit added after the hand-over needs a new one). Then the
    feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
