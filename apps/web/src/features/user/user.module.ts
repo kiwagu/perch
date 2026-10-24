@@ -5,8 +5,7 @@ import { defineModule } from '../../platform/module'
 import { SESSION } from '../../platform/session.port'
 
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
-import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
-import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
+import { SETTINGS_SERVICE } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
@@ -22,14 +21,6 @@ export const UserModule = defineModule({
         new ProfileService(container.get(SHAPE_RUNNER), container.get(COMMANDS), {
           shape: profileShape,
           commands: profileCommands,
-        }),
-    },
-    {
-      provide: SETTINGS_SERVICE,
-      useFactory: (container) =>
-        new SettingsService(container.get(SHAPE_RUNNER), container.get(COMMANDS), {
-          shape: settingsShape,
-          commands: settingsCommands,
         }),
     },
     {

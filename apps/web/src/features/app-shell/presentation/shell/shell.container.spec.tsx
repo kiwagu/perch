@@ -13,7 +13,9 @@ import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
 
+import { openedFrame } from './__fixtures__/frame'
 import { ShellContainer } from './shell.container'
+import { ShellFrameContext } from './shell-frame'
 
 const HomeModule = defineModule({
   id: 'home',
@@ -39,9 +41,11 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ServicesProvider services={fakeServices(session)}>
-          <RouterProvider router={router} />
-        </ServicesProvider>
+        <ShellFrameContext.Provider value={openedFrame()}>
+          <ServicesProvider services={fakeServices(session)}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')

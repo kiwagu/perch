@@ -18,6 +18,7 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
         status="ready"
         signedIn={false}
         activePath="/sign-in"
+        canChooseLocale={true}
         onLocaleChange={() => {}}
         {...rest}
       >
@@ -152,6 +153,29 @@ describe('ShellView', () => {
     expect(navigation.tagName).toBe('NAV')
     expect(within(navigation).getByTestId('app-shell.nav.profile-link')).toBeTruthy()
     expect(screen.getByTestId('app-shell.locale-select').getAttribute('role')).toBe('combobox')
+  })
+
+  it('takes a language choice only while the frame takes one', () => {
+    const { rerender } = renderShell({ canChooseLocale: false })
+    const select = screen.getByTestId('app-shell.locale-select')
+
+    expect(select.hasAttribute('data-disabled')).toBe(true)
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale
+          onLocaleChange={() => {}}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
   })
 
   it('speaks Spanish when the Spanish catalog is chosen', () => {

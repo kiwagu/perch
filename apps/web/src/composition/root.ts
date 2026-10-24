@@ -20,6 +20,14 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
+import {
+  settingsCommands,
+  settingsShape,
+} from '../features/user/application/settings/settings.model.gen'
+import {
+  SETTINGS_SERVICE,
+  SettingsService,
+} from '../features/user/application/settings/settings.service'
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
@@ -148,6 +156,15 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     .singleton(WRITE_PATH, () => session.writePath)
     .singleton(SESSION, () => session)
     .singleton(COMMANDS, () => commands)
+    // The account's settings, which the frame reads and stores as well as the account's pages.
+    .singleton(
+      SETTINGS_SERVICE,
+      () =>
+        new SettingsService(session.runner, commands, {
+          shape: settingsShape,
+          commands: settingsCommands,
+        }),
+    )
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
 

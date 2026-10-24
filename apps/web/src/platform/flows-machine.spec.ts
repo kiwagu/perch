@@ -21,6 +21,8 @@ import { createMachine } from 'xstate'
 
 import { flowNodes, flowSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
 
+import { LocaleWrites } from '../features/app-shell/application/locale-writes'
+import { createShellMachine } from '../features/app-shell/application/shell.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
@@ -306,6 +308,12 @@ function beyondTheSubset(config: unknown): string[] {
 
 /** The machines the app builds for a screen of the contract, by screen id. */
 const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>> = {
+  'app-shell': () =>
+    createShellMachine({
+      values: () => ({ signedIn: false, stored: undefined, writes: LocaleWrites.none }),
+      storeLocale: () => okAsync(undefined),
+      signOutHere: () => okAsync(undefined),
+    }),
   'user.sign-in': () =>
     createSignInMachine(
       new SignInService(
