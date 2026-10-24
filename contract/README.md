@@ -41,7 +41,7 @@ page may still inspire a change, but the contract decides it.
    **Then the review.** The contract is committed first, a layer per commit and no
    implementation in either (the app's runtime of the contract and its specs are meta). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
-   vocabulary, this README) goes on `feat/contract-first-pass`, after a merge of the latest
+   vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
    one). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
@@ -73,7 +73,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   the derived suffixes, the attributes, the app, container and row states, the codes, the
   choice values, the screen names, the roles and the anchors the shell reserves). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
-  heading.
+  heading. The grammar, the kinds, the suffixes, the attributes and the contract version are
+  the engine's (meta); every other table is content a feature adds with the screen file that
+  first uses it (business).
 - `screens/<pathname>.yaml`: one screen per file, named by the path of the screen's first
   binding without the leading `/`. `/sign-in` is `screens/sign-in.yaml` and `/me` is
   `screens/me.yaml`; a nested path is a folder (`/org/$org` would be `screens/org/$org.yaml`)
