@@ -28,7 +28,7 @@ import {
   type RegionNode,
   regionStartsOf,
   rootOf,
-} from '@workspace/ui-contract'
+} from '../../files'
 
 /** What a transition comes to: whether XState takes one, the state after it, its effects. */
 export interface Outcome {

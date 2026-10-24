@@ -95,6 +95,9 @@ for Bun.
     at bindings of theirs, its events are anchors of that screen or of the frame, and each
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),
+    `runsProblems` (every flow and every activity runs in XState as written: the walk of
+    `./machines` reaches every state and takes every transition and guarded branch to its
+    target with its effects; a machine XState will not build is a problem, never a crash),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
     (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
@@ -218,13 +221,23 @@ for Bun.
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
   `Window` for any code that imports them.
+- `./machines`: a flow in XState, for the check and for an app's own machines.
+  `walk(flow)` builds the flow with `setup({ guards, actions, actors }).createMachine` (a stub
+  per guard, per effect and per `invoke.src`), reaches every state, a parallel state's regions
+  each on its own with the others at their initial, and gives the `visited` states and each
+  case with its `expected` and `actual` outcome (handled, state, effects); `casesOfFlow(flow)`
+  the cases the flow says. An app holds a machine of its own to its flow with
+  `projected(config)` (initial state, states, final states, regions, events with their
+  targets and guards, invoke sources, the contract's effects; the app's own actions left
+  out) and `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  counterpart for).
 
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
   schema writer, the references, the contract check, the sources check, the consumers check,
-  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note and the
-  routes view.
+  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note, the
+  routes view, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.

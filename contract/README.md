@@ -317,12 +317,13 @@ from anywhere but a region's state, or actions named by a string. A state of a r
 the area's own: where the app keeps one per item (each note's edit form), the region follows
 the item acted on last and says so.
 The flow's states are the machine's; the screen's `states` stay the container states.
-`contract:check` holds the flow to the contract, and
-`apps/web/src/platform/flows-machine.spec.ts` runs every flow in XState: a pure walk with
-`initialTransition` and `transition` reaches every state, a parallel state's regions each
-on its own with the others at their `initial`, and takes every transition and every guarded
-branch to its target with its effects, and an app's own machine for a screen
-(`user.sign-in`) has the config of its flow.
+`contract:check` holds the flow to the contract and runs it in XState (the engine's
+`machines/walk`): a pure walk with `initialTransition` and `transition` reaches every state,
+a parallel state's regions each on its own with the others at their `initial`, and takes
+every transition and every guarded branch to its target with its effects. An app that
+builds its own machine for a screen holds it to the flow with the engine's comparison
+(`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
+the machine has the config of its flow.
 
 ## Activities
 
@@ -407,9 +408,9 @@ invoke's `onDone` or `onError`; or the anchor is a link to that path
 (`binding: { route: ... }`). The roles are of the vocabulary and every `data` model is a field
 of the model; `initial` and every target are states; every state is reachable from
 `initial` and every state that is not final leaves; every guard is declared in `meta.guards`
-and every declared one is used. `apps/web/src/platform/activities-machine.spec.ts` builds
-each activity in XState as written, with the walk of the flows, reaches every state and
-takes every transition and every guarded branch to its target.
+and every declared one is used. `contract:check` builds each activity in XState as
+written, with the walk of the flows, reaches every state and takes every transition and
+every guarded branch to its target.
 
 A scenario that walks an activity names it in its front matter (`activity: session`, see
 "Scenarios"), and the coverage note counts, per activity, the scenarios that name it and the

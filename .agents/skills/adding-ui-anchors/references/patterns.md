@@ -344,8 +344,9 @@ and the mode is the state (`sign-in`, `sign-up`), not context. An actor resolves
 result and rejects with the failure, so `onDone` and `onError` are the action's success and
 failure. The page sends the events and does what the machine emits: the sign-in container
 (`presentation/pages/sign-in/sign-in.container.tsx`, lines 50-62) notifies the welcome on
-`show` and moves on `navigate`. `apps/web/src/platform/flows-machine.spec.ts` holds the
-machine's config to the flow; a new app machine for a screen joins its `APP_MACHINES`.
+`show` and moves on `navigate`. `apps/web/src/platform/machines.spec.ts` holds the
+machine's config to the flow through the engine's comparison
+(`@workspace/ui-contract/machines`); a new app machine for a screen joins its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
 From `contract/screens/org.yaml` (lines 198-237, the descriptions and the error's `show` left

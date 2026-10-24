@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { type Flow, flowSchema } from '@workspace/ui-contract'
+import type { Flow } from '../../files'
+import { flowSchema } from '../../schemas'
 
 import { casesOfFlow } from './cases'
 import { machineOf } from './machine'

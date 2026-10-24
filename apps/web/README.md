@@ -158,13 +158,10 @@ modeling stage.
   holds the binding's `params` to the parameters of its path; `routes-examples.spec.ts` holds
   each binding's example link to the router (the path it builds, the search string it
   writes, the route, parameters and search it matches) and the router's route tree to the
-  tree of the screen folder, both specs on the router of `__fixtures__/router.ts`. `flows-machine.spec.ts` runs every screen's `flow` in XState:
-  `setup({ guards, actions, actors }).createMachine(flow)` with stubs, walked purely
-  (`flows-walk/`) through every state, transition and guarded branch, a parallel
-  state each region on its own with the others at their initial state, and holds the app's
-  own machine for a screen (`user.sign-in`) to its flow;
-  `activities-machine.spec.ts` walks every activity of `contract/activities/` the same way,
-  each state a visit to a screen.
+  tree of the screen folder, both specs on the router of `__fixtures__/router.ts`.
+  `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
+  flows with the engine's comparison (`@workspace/ui-contract/machines`); running every flow
+  and activity in XState is the contract check's, not the app's.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

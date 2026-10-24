@@ -7,7 +7,7 @@
 
 import { type AnyEventObject, fromPromise, setup } from 'xstate'
 
-import { type Effect, type Flow, flowNodes } from '@workspace/ui-contract'
+import { type Effect, type Flow, flowNodes } from '../../files'
 
 type ShowParams = Extract<Effect, { type: 'show' }>['params']
 type ClearParams = Extract<Effect, { type: 'clear' }>['params']
