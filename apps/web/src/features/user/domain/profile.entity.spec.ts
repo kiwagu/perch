@@ -13,9 +13,9 @@ const valid = {
 }
 
 describe('ProfileSchema', () => {
-  it('accepts a complete profile with optional bio and language', () => {
+  it('accepts a complete profile with an optional bio', () => {
     expect(ProfileSchema.safeParse(valid).success).toBe(true)
-    expect(ProfileSchema.safeParse({ ...valid, bio: 'Hi', locale: 'es' }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, bio: 'Hi' }).success).toBe(true)
   })
 
   it('rejects a bio longer than 2000 characters', () => {
