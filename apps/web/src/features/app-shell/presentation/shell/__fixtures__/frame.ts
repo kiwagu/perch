@@ -6,7 +6,8 @@ import { type ShellFrame, type ShellLive, shellFrameMachine } from '../shell-fra
 /** The frame the start makes, already opened: what a page test renders the shell container in. */
 export function openedFrame(): ShellFrame {
   const live: ShellLive = {
-    signedIn: false,
+    account: undefined,
+    storingFor: undefined,
     stored: undefined,
     writes: LocaleWrites.none,
     store: undefined,

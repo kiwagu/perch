@@ -33,15 +33,15 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const clearNotice = useClearNotice()
   const t = useT()
 
-  // What the frame's machine reads, current before it is asked anything below: whether an account
-  // is signed in, the language its settings hold here, how to store one; another account, or none,
-  // starts knowing nothing of its stored language.
+  // What the frame's machine reads, current before it is asked anything below: the account signed
+  // in, the language its settings hold here, how to store one; another account, or none, starts
+  // knowing nothing of its stored language.
   if (account.current !== user?.id) {
     account.current = user?.id
     live.writes = LocaleWrites.none
   }
 
-  live.signedIn = user !== undefined
+  live.account = user?.id
   live.stored = row?.locale
   live.store = row ? (locale) => settings.updateLocale({ id: row.id, locale }) : undefined
 

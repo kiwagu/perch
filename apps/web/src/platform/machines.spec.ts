@@ -37,7 +37,12 @@ const { screens, problems } = loadScreens(ROOT)
 const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>> = {
   'app-shell': () =>
     createShellMachine({
-      values: () => ({ signedIn: false, stored: undefined, writes: LocaleWrites.none }),
+      values: () => ({
+        account: undefined,
+        storingFor: undefined,
+        stored: undefined,
+        writes: LocaleWrites.none,
+      }),
       storeLocale: () => okAsync(undefined),
       signOutHere: () => okAsync(undefined),
     }),

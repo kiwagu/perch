@@ -91,7 +91,8 @@ function App() {
   // The frame's flow runs from the start: what it reads is filled in as the start and the shell learn it.
   const [made] = useState(() => {
     const live: ShellLive = {
-      signedIn: false,
+      account: undefined,
+      storingFor: undefined,
       stored: undefined,
       writes: LocaleWrites.none,
       store: undefined,

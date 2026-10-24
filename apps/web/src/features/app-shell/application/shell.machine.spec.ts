@@ -11,14 +11,19 @@ type Stored = ResultAsync<void, unknown>
 
 /** A frame over its machine: what the guards read, the writes, and what the machine emitted. */
 function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = {}) {
-  let values: ShellValues = { signedIn: false, stored: undefined, writes: LocaleWrites.none }
+  let values: ShellValues = {
+    account: undefined,
+    storingFor: undefined,
+    stored: undefined,
+    writes: LocaleWrites.none,
+  }
   const storeLocale = vi.fn(options.storeLocale ?? (() => okAsync(undefined)))
   const signOutHere = vi.fn(() => okAsync(undefined))
   const actor = createActor(
     createShellMachine({
       values: () => values,
       storeLocale: (locale) => {
-        values = { ...values, writes: values.writes.writing(locale) }
+        values = { ...values, storingFor: values.account, writes: values.writes.writing(locale) }
 
         return storeLocale(locale)
       },
@@ -37,8 +42,13 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
     signOutHere,
     spoken,
     emitted,
-    signIn: () => {
-      values = { ...values, signedIn: true }
+    signIn: (account = 'idn_ann') => {
+      values = { ...values, account }
+    },
+    /** The account goes away, by its own sign-out or from another device. */
+    signOut: () => {
+      values = { ...values, account: undefined, stored: undefined, writes: LocaleWrites.none }
+      actor.send({ type: 'platform.signed-out' })
     },
     /** The settings arrive or change on this device, here or from another one. */
     store: (stored: string) => {
@@ -174,6 +184,27 @@ describe('shell machine', () => {
 
     stored.resolve()
     await waitFor(shell.actor, (state) => state.matches('ready'))
+  })
+
+  it('shows nothing for a failed store of an account that left, even with another one in', async () => {
+    const failed = Promise.withResolvers<void>()
+    const shell = frame({
+      storeLocale: () =>
+        ResultAsync.fromPromise(failed.promise, () => ({ code: 'data:WRITE_FAILED' })),
+    })
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.signIn()
+    shell.store('en')
+    shell.choose('es')
+    shell.signOut()
+    shell.signIn('idn_bob')
+
+    failed.reject(new Error('the database went with the account'))
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.emitted).toContainEqual(CLEARED)
+    expect(shell.emitted).not.toContainEqual(NOT_STORED)
   })
 
   it("speaks a language another device stored, and not this device's own coming back", async () => {

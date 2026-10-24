@@ -7,8 +7,10 @@ import type { LocaleWrites } from './locale-writes'
 
 /** What the frame's guards read at the moment they are asked. */
 export interface ShellValues {
-  /** An account is signed in on this device. */
-  readonly signedIn: boolean
+  /** The account signed in on this device; none for a guest. */
+  readonly account: string | undefined
+  /** The account the store under way began for. */
+  readonly storingFor: string | undefined
   /** The language the account's settings hold on this device; none before they arrive. */
   readonly stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
@@ -93,7 +95,12 @@ export function createShellMachine(deps: ShellMachineDeps) {
     },
     guards: {
       settingsHeld: () => deps.values().stored !== undefined,
-      signedOut: () => !deps.values().signedIn,
+      signedOut: () => deps.values().account === undefined,
+      accountLeft: () => {
+        const { account, storingFor } = deps.values()
+
+        return storingFor !== account
+      },
       storedElsewhere: () => storedElsewhere() !== undefined,
     },
     actions: {
@@ -148,7 +155,10 @@ export function createShellMachine(deps: ShellMachineDeps) {
             return { locale: event.locale }
           },
           onDone: { target: 'ready' },
-          onError: { target: 'ready', actions: NOT_STORED },
+          onError: [
+            { target: 'ready', guard: 'accountLeft' },
+            { target: 'ready', actions: NOT_STORED },
+          ],
         },
       },
       failed: {
