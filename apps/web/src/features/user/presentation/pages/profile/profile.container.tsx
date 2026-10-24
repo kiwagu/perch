@@ -57,8 +57,11 @@ export function ProfileContainer() {
   const t = useT()
   const locale = useLocale()
   const setLocale = useSetLocale()
-  // The settings row as this device last saw it: which row, and its stored language.
-  const seen = useRef<{ readonly id: string; readonly locale: string } | undefined>(undefined)
+  // The settings row as this device last saw it: which row, its stored language, and the
+  // languages this device stored that have not arrived back yet, oldest first.
+  const seen = useRef<
+    { readonly id: string; readonly locale: string; written: string[] } | undefined
+  >(undefined)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -79,20 +82,39 @@ export function ProfileContainer() {
       return
     }
 
+    const known = seen.current?.id === owned.id ? seen.current : undefined
+    const written = known?.written ?? []
     const change = localeChange({
       stored: owned.locale,
-      seen: seen.current?.id === owned.id ? seen.current.locale : undefined,
+      seen: known?.locale,
+      written,
       current: locale,
     })
+    const arrived = owned.locale !== known?.locale
+    const own = written.indexOf(owned.locale)
+    // A write of this device that arrived back is no longer on its way, nor are the ones before
+    // it; another device's language that arrived overtakes them all.
+    const pending = !arrived ? written : own < 0 ? [] : written.slice(own + 1)
+    const next = { id: owned.id, locale: owned.locale, written: pending }
 
-    seen.current = { id: owned.id, locale: owned.locale }
+    seen.current = next
 
     if (change && 'apply' in change) {
       setLocale(change.apply)
     } else if (change) {
-      void settings.updateLocale({ id: owned.id, locale: change.save }).match(
+      const chosen = change.save
+
+      next.written = [...pending, chosen]
+      void settings.updateLocale({ id: owned.id, locale: chosen }).match(
         () => undefined,
-        () => undefined,
+        // A write that failed is not on its way: the same choice may be stored again.
+        () => {
+          const now = seen.current
+
+          if (now?.id === next.id) {
+            now.written = now.written.filter((written) => written !== chosen)
+          }
+        },
       )
     }
   }, [owned, locale, setLocale, settings])
