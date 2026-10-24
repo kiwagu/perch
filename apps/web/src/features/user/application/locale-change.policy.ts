@@ -6,7 +6,10 @@ import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n'
  * device stored meanwhile, is applied here. Otherwise the current language is stored when it
  * differs from the stored one and is not already on its way: a choice made here, a return to
  * a language included while an earlier write of this device is still arriving. A device never
- * stores back a language only because another device changed the stored one.
+ * stores back a language only because another device changed the stored one. A write is known
+ * by its language alone: another device's language equal to one this device wrote and has not
+ * seen arrive yet is taken for this device's own. The window is the time this device's write
+ * takes through its local database; closing it would need the write's origin in the settings.
  */
 export function localeChange(input: {
   readonly stored: string | undefined
