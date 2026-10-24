@@ -13,6 +13,9 @@ actions:
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
+      locale:
+        type: string
+        description: The language the new account's settings start with.
     result: the account is created with its profile and its settings, the device is signed in, the app moves to /me with code welcome
     codes:
       - sign-up-rejected

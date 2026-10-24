@@ -86,11 +86,11 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 14 |
+| app-shell | 9 | 15 |
 | device | 10 | 2 |
-| user.profile | 10 | 15 |
+| user.profile | 10 | 16 |
 | organisation | 30 | 4 |
-| user.sign-in | 8 | 9 |
+| user.sign-in | 8 | 10 |
 
 <!-- coverage:end -->
 
