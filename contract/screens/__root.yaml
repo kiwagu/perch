@@ -81,7 +81,7 @@ flow:
           locale: app-shell.locale-select
         onDone:
           target: ready
-          description: The page renders in the chosen language at once; the profile stores it while /me is open.
+          description: The page renders in the chosen language at once; the settings store it while /me is open.
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       on:
