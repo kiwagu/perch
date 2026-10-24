@@ -5,7 +5,7 @@
   "$defs": {
     "profile": {
       "type": "object",
-      "description": "The public face of an account: its name, contact email, bio and language. It lives in the account's private region, so the account reads and edits it offline on each of its devices.",
+      "description": "The public face of an account: its name, contact email and bio. It lives in the account's private region, so the account reads and edits it offline on each of its devices.",
       "x-perch": {
         "table": "profile",
         "region": "private",
@@ -22,10 +22,6 @@
           "updateBio": {
             "description": "Replaces the bio.",
             "params": { "id": "$id", "bio": "bio" }
-          },
-          "updateLocale": {
-            "description": "Stores the language the account chose.",
-            "params": { "id": "$id", "locale": "locale" }
           }
         },
         "unique": [["identity"]]
@@ -60,11 +56,6 @@
           "maxLength": 2000,
           "x-perch": { "crdt": "text" }
         },
-        "locale": {
-          "description": "The language the account chose; it follows the account across devices.",
-          "enum": ["en", "es"],
-          "x-perch": { "crdt": "none" }
-        },
         "created_at": {
           "type": "string",
           "description": "When the profile was created.",
@@ -73,6 +64,45 @@
         }
       },
       "required": ["id", "identity", "name", "email", "created_at"],
+      "additionalProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "description": "The settings of an account: what the app is like for it, today its language. One row per account, created at sign-up, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
+      "x-perch": {
+        "table": "settings",
+        "region": "private",
+        "id": "stg",
+        "actions": {
+          "createSettings": {
+            "description": "Creates the settings of a new account, at sign-up, with the language the app spoke then.",
+            "params": { "id": "$id", "identity": "identity", "locale": "locale" }
+          },
+          "updateLocale": {
+            "description": "Stores the language the account chose.",
+            "params": { "id": "$id", "locale": "locale" }
+          }
+        },
+        "unique": [["identity"]]
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The settings' id, prefix stg.",
+          "x-perch": { "readonly": true }
+        },
+        "identity": {
+          "type": "string",
+          "description": "The account the settings belong to; one row per account.",
+          "x-perch": { "record": "identity", "readonly": true }
+        },
+        "locale": {
+          "description": "The language the account chose; it follows the account across devices.",
+          "enum": ["en", "es"],
+          "x-perch": { "crdt": "none" }
+        }
+      },
+      "required": ["id", "identity", "locale"],
       "additionalProperties": false
     },
     "note": {
