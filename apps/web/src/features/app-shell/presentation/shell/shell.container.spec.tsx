@@ -133,4 +133,69 @@ describe('ShellContainer', () => {
       ),
     )
   })
+
+  it("speaks no signed-out account's stored language", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const changes = new Set<Parameters<SessionPort['subscribe']>[0]>()
+    let who: typeof ann | undefined = ann
+    const switching: SessionPort = {
+      ...session,
+      current: () => who,
+      subscribe: (onChange) => {
+        changes.add(onChange)
+
+        return () => changes.delete(onChange)
+      },
+    }
+    const services = fakeServices(switching)
+    const frame = openedFrame()
+    const spoken: string[] = []
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: switching,
+      layout: () => (
+        <NoticeProvider>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    frame.actor.on('speak', ({ locale }) => spoken.push(locale))
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellFrameContext.Provider value={frame}>
+          <ServicesProvider services={services}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    act(() => {
+      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'es' }])
+    })
+
+    await waitFor(() => expect(spoken).toEqual(['es']))
+
+    // Signed out, the settings read for Ann are not this device's any more: nothing to speak.
+    act(() => {
+      who = undefined
+
+      for (const onChange of changes) {
+        onChange(undefined)
+      }
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(
+        false,
+      ),
+    )
+    expect(spoken).toEqual(['es'])
+  })
 })
