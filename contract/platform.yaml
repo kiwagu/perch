@@ -134,6 +134,7 @@ events:
   opened: The local data is open, and the frame renders the screen.
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
+  signed-out: The account was signed out on this device, by its own sign-out or from another device.
 reserved:
   - app-shell.status
   - app-shell.notice-message
