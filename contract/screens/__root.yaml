@@ -13,7 +13,7 @@ anchors:
     states: [ opening, ready, failed, storage-blocked ]
   app-shell.notice-message:
     kind: message
-    description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
+    description: "The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it but not the account: a sign-out clears it."
     codes: [ welcome, profile-saved, invited, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
   app-shell.nav:
     kind: nav

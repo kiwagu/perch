@@ -27,7 +27,7 @@ Where: [/me] then [user.profile.sign-out-button] on device A, and [/me] on devic
 8. Click [user.profile.sign-out-dialog.cancel-button]
 
 ### Expected result
-- After step 3 device A is on [/sign-in] and its browser keeps no local database of the account
+- After step 3 device A is on [/sign-in], shows no [app-shell.notice-message] (the notice of step 1 went with the account), and its browser keeps no local database of the account
 - After step 4 device B, still signed in, shows [app-shell.notice-message] carrying [code:profile-saved]
 - After step 5 device A shows the profile the server holds: the new name from device B and the bio from step 1
 - After step 7 device A asks at once, without waiting for the sync channel, before deleting the change it could not send: [user.profile.sign-out-dialog] carries [code:unsent-changes]
