@@ -79,6 +79,26 @@ describe('a machine that lags its flow', () => {
     expect(app).toEqual(aheadOf(app, projected(FLOW)))
   })
 
+  it('may lack a state or a region named like a property every object has', () => {
+    const flow = projected({
+      ...FLOW,
+      states: {
+        ...FLOW.states,
+        constructor: {},
+        viewing: {
+          type: 'parallel',
+          states: {
+            ...FLOW.states.viewing.states,
+            toString: { initial: 'idle', states: { idle: {} } },
+          },
+        },
+      },
+    })
+    const app = projected(BEHIND)
+
+    expect(app).toEqual(aheadOf(app, flow))
+  })
+
   it('is the whole flow when the machine lacks nothing', () => {
     const flow = projected(FLOW)
 
@@ -108,6 +128,36 @@ describe('a machine that lags its flow', () => {
       }),
       behindWith((states) => {
         states['done'] = {}
+      }),
+      behindWith((states) => {
+        states['editing'] = {
+          on: { 'sample.save-button': { guard: 'other', target: 'saving' } },
+        }
+      }),
+      behindWith((states) => {
+        states['editing'] = {
+          on: {
+            'sample.save-button': [
+              { target: 'saving', actions: [show(['saving'])] },
+              { guard: 'added', target: 'done' },
+            ],
+          },
+        }
+      }),
+      behindWith((states) => {
+        states['viewing'] = {
+          type: 'parallel',
+          states: {
+            form: { initial: 'closed', states: { closed: {}, open: {} } },
+            extra: { initial: 'idle', states: { idle: {} } },
+          },
+        }
+      }),
+      behindWith((states) => {
+        states['saving'] = {
+          type: 'parallel',
+          states: { form: { initial: 'closed', states: { closed: {} } } },
+        }
       }),
       { ...BEHIND, initial: 'saving' },
     ]

@@ -41,7 +41,10 @@ const transitionsOf = (
   flow: readonly ProjectedTransition[],
 ) => (within(app, flow, sameTransition) ? app : flow)
 
-/** The flow's entries the app has too, each through `of`; one the app alone has is left out. */
+/**
+ * The flow's entries the app has too, each through `of`; one the app alone has is left out.
+ * Only the app's own keys count: a state named `constructor` is not one every object has.
+ */
 function shared<T>(
   app: Readonly<Record<string, T>>,
   flow: Readonly<Record<string, T>>,
@@ -49,7 +52,7 @@ function shared<T>(
 ): Record<string, T> {
   return Object.fromEntries(
     Object.entries(flow).flatMap(([key, value]) => {
-      const mine = app[key]
+      const mine = Object.hasOwn(app, key) ? app[key] : undefined
 
       return mine === undefined ? [] : [[key, of(mine, value)]]
     }),

@@ -14,14 +14,23 @@ import { casesOfFlow, sameValue, walk } from '../machines'
 
 import { type Contract, inFile, locate } from './contract'
 
+/** What the walk finds, at the state it concerns (its path), or at the whole machine. */
+interface Found {
+  readonly state?: string
+  readonly message: string
+}
+
+/** The state a case of the walk leaves: its label starts with that state's path. */
+const stateOfCase = (label: string): string => label.split(' ')[0] ?? label
+
 /** What the walk of one machine finds against what it says, each message on its own. */
-function walkMessages(flow: Flow): string[] {
+function walkFindings(flow: Flow): Found[] {
   let walked: ReturnType<typeof walk>
 
   try {
     walked = walk(flow)
   } catch (error) {
-    return [`XState does not build or run the machine: ${String(error)}`]
+    return [{ message: `XState does not build or run the machine: ${String(error)}` }]
   }
 
   const visited = new Set(walked.visited)
@@ -31,16 +40,19 @@ function walkMessages(flow: Flow): string[] {
     ...flowNodes(flow)
       .map(({ path }) => path)
       .filter((path) => !visited.has(path))
-      .map((path) => `${path}: XState does not reach this state`),
+      .map((path) => ({ state: path, message: `${path}: XState does not reach this state` })),
     ...casesOfFlow(flow)
       .filter(({ label }) => !taken.has(label))
-      .map(({ label }) => `${label}: XState never takes this transition`),
+      .map(({ label }) => ({
+        state: stateOfCase(label),
+        message: `${label}: XState never takes this transition`,
+      })),
     ...walked.cases
       .filter(({ expected, actual }) => !sameValue(expected, actual))
-      .map(
-        ({ label, expected, actual }) =>
-          `${label}: XState comes to ${JSON.stringify(actual)}, the flow says ${JSON.stringify(expected)}`,
-      ),
+      .map(({ label, expected, actual }) => ({
+        state: stateOfCase(label),
+        message: `${label}: XState comes to ${JSON.stringify(actual)}, the flow says ${JSON.stringify(expected)}`,
+      })),
   ]
 }
 
@@ -51,14 +63,17 @@ export function runsProblems(contract: Contract): Problem[] {
     ...contract.screens.screens.flatMap(({ flow }, index) =>
       flow === undefined
         ? []
-        : walkMessages(flow).map((message) => inScreens(['screens', index, 'flow'], message)),
+        : walkFindings(flow).map(({ message }) => inScreens(['screens', index, 'flow'], message)),
     ),
     ...contract.activities.flatMap((activity) =>
-      walkMessages(activity).map((message) =>
+      walkFindings(activity).map(({ state, message }) =>
         inFile(
           activityFile(activity.id),
           message,
-          lineAt(contract.activityLines.get(activity.id), []),
+          lineAt(
+            contract.activityLines.get(activity.id),
+            state === undefined ? [] : ['states', state],
+          ),
         ),
       ),
     ),
