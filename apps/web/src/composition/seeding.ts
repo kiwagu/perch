@@ -39,6 +39,7 @@ import {
 } from '../features/user/application/profile.service'
 import {
   SETTINGS_SERVICE,
+  type SettingsRow,
   type SettingsService,
 } from '../features/user/application/settings/settings.service'
 import { UserModule } from '../features/user/user.module'
@@ -85,6 +86,7 @@ export interface SeededAccount {
 export interface AccountView {
   readonly user: AuthUser
   readonly profile: ProfileRow | undefined
+  readonly settings: SettingsRow | undefined
 }
 
 /** An organisation as a member's device sees it once it has caught up with the gateway. */
@@ -118,7 +120,7 @@ export interface SeedClient {
   ensureMember(key: string, email: string): ResultAsync<void, SeedError>
   /** Signs in, makes the organisation current and reads its notes once the gateway's copy has arrived; writes nothing. */
   readOrganisation(key: string, input: SignInInput): ResultAsync<OrganisationView, SeedError>
-  /** Signs in and reads the profile once the gateway's copy of the account's region has arrived; writes nothing. */
+  /** Signs in and reads the profile and the settings once the gateway's copy of the account's region has arrived; writes nothing. */
   readAccount(input: SignInInput): ResultAsync<AccountView, SeedError>
   close(): Promise<void>
 }
@@ -316,7 +318,9 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
         .andThen((seeded) => settle().map(() => seeded)),
     readAccount: (input) =>
       enter(() => services.session.signIn(input)).andThen((user) =>
-        profileOf(user).map((profile) => ({ user, profile })),
+        profileOf(user).andThen((profile) =>
+          settings.read({ identity: user.id }).map(([row]) => ({ user, profile, settings: row })),
+        ),
       ),
     close: () => services.close(),
   }

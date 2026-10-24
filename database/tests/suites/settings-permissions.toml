@@ -79,7 +79,7 @@ kind = "sql_expect"
 actor = "root"
 sql = "UPDATE settings:bob SET locale = 'fr';"
 allow = false
-error_contains = "$value IN ['en', 'es']"
+error_contains = "must conform to: $value INSIDE ['en', 'es']"
 
 [[cases]]
 name = "a second row for the same account is refused"
