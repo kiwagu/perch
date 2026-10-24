@@ -4,7 +4,15 @@
  * renders the latest one, until a newer one replaces it or the shell clears it.
  */
 
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react'
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import type { Translate } from '@workspace/i18n'
 
@@ -31,9 +39,26 @@ const NoticeContext = createContext<NoticeChannel>({
 })
 
 export function NoticeProvider(props: { readonly children: ReactNode }) {
-  const [notice, notify] = useState<Notice | undefined>(undefined)
-  const clear = useCallback(() => notify(undefined), [])
-  const channel = useMemo(() => ({ notice, notify, clear }), [notice, clear])
+  const [notice, setNotice] = useState<Notice | undefined>(undefined)
+  // Each clear starts a generation: a `notify` taken before it (a page's request whose reply
+  // comes after the account that sent it signed out) raises nothing.
+  const [generation, setGeneration] = useState(0)
+  const current = useRef(0)
+  const notify = useMemo(() => {
+    const raisedIn = generation
+
+    return (next: Notice) => {
+      if (current.current === raisedIn) {
+        setNotice(next)
+      }
+    }
+  }, [generation])
+  const clear = useCallback(() => {
+    current.current += 1
+    setGeneration(current.current)
+    setNotice(undefined)
+  }, [])
+  const channel = useMemo(() => ({ notice, notify, clear }), [notice, notify, clear])
 
   return <NoticeContext.Provider value={channel}>{props.children}</NoticeContext.Provider>
 }
@@ -42,5 +67,8 @@ export const useNotify = (): ((notice: Notice) => void) => useContext(NoticeCont
 
 export const useNotice = (): Notice | undefined => useContext(NoticeContext).notice
 
-/** Takes the notice away: the shell does when the account it was raised for signs out. */
+/**
+ * Takes the notice away, and any raised later through a `notify` taken before: the shell does
+ * when the account it was raised for signs out.
+ */
 export const useClearNotice = (): (() => void) => useContext(NoticeContext).clear

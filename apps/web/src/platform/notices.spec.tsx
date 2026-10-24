@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
+import { useRef } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import type { Translate } from '@workspace/i18n'
@@ -74,5 +75,50 @@ describe('notices', () => {
     fireEvent.click(screen.getByText('Saved'))
 
     expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('profile-saved')
+  })
+
+  it('drops a notice raised for what came before the clear, such as a reply that came late', () => {
+    function Late() {
+      const notify = useNotify()
+      // The page's request went out before the clear; its reply arrives after it.
+      const first = useRef(notify)
+
+      return (
+        <button
+          type="button"
+          onClick={() => first.current({ code: 'invited', text: () => 'Invited' })}
+        >
+          late
+        </button>
+      )
+    }
+
+    function Clear() {
+      const clear = useClearNotice()
+
+      return (
+        <button type="button" onClick={clear}>
+          clear
+        </button>
+      )
+    }
+
+    render(
+      <NoticeProvider>
+        <Late />
+        <Trigger code="welcome" text="Welcome" />
+        <Clear />
+        <Current />
+      </NoticeProvider>,
+    )
+
+    fireEvent.click(screen.getByText('clear'))
+    fireEvent.click(screen.getByText('late'))
+
+    expect(document.querySelector('[data-code]')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Welcome' }))
+
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('welcome')
   })
 })
