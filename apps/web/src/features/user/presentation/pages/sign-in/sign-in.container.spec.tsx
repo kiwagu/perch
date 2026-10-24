@@ -71,7 +71,12 @@ function renderSignIn(session: SessionPort) {
     providers: [
       {
         provide: SIGN_IN_SERVICE,
-        useFactory: () => new SignInService(session, { createProfile: () => okAsync(undefined) }),
+        useFactory: () =>
+          new SignInService(
+            session,
+            { createProfile: () => okAsync(undefined) },
+            { createSettings: () => okAsync(undefined) },
+          ),
       },
     ],
     declarations: { SignIn: SignInContainer, Me: () => <p>profile</p> },

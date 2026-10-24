@@ -14,7 +14,7 @@ block below from the code and the contract; the text around it is written by han
 
 The contract declares 5 screens, 67 anchors and 29 codes.
 
-Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
+Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
 
 ## Model
 
@@ -27,11 +27,19 @@ Totals: fields bound 4/11, actions bound 6/7; activities 1, transitions walked 4
 | name | field | `user.profile.heading`, `user.profile.name-input` |
 | email | field | `user.profile.email-input` |
 | bio | field | `user.profile.bio-textarea` |
-| locale | field | unbound |
 | created_at | field | unbound |
 | createProfile | action | unbound |
 | updateName | action | `user.profile.save-button` |
 | updateBio | action | `user.profile.save-button` |
+
+### settings
+
+| Field or action | Kind | Anchors |
+| --- | --- | --- |
+| id | field | unbound |
+| identity | field | unbound |
+| locale | field | unbound |
+| createSettings | action | unbound |
 | updateLocale | action | `app-shell.locale-select` |
 
 ### note
@@ -78,11 +86,11 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 13 |
+| app-shell | 9 | 14 |
 | device | 10 | 2 |
-| user.profile | 10 | 14 |
+| user.profile | 10 | 15 |
 | organisation | 30 | 4 |
-| user.sign-in | 8 | 8 |
+| user.sign-in | 8 | 9 |
 
 <!-- coverage:end -->
 

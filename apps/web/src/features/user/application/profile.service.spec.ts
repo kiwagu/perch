@@ -82,15 +82,13 @@ describe('ProfileService', () => {
     expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]?.bio).toBe('Hello')
   })
 
-  it('keeps the biography and the chosen language', async () => {
+  it('keeps the biography', async () => {
     expect((await service.updateBio({ id: profileId, bio: 'Hello' })).isOk()).toBe(true)
-    expect((await service.updateLocale({ id: profileId, locale: 'es' })).isOk()).toBe(true)
 
     expect((await session.flush()).isOk()).toBe(true)
 
     expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]).toMatchObject({
       bio: 'Hello',
-      locale: 'es',
     })
   })
 })

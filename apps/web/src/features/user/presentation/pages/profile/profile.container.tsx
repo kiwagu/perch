@@ -15,6 +15,8 @@ import {
   type ProfileValues,
 } from '../../../application/profile.machine'
 import { PROFILE_SERVICE } from '../../../application/profile.service'
+import { settingsShape } from '../../../application/settings/settings.model.gen'
+import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
 
 import { profileShape } from './profile.model.gen'
 import { type ProfileControl, ProfileView } from './profile.view'
@@ -25,12 +27,14 @@ const INPUTS = { name: 'user.profile.name-input', bio: 'user.profile.bio-textare
 export function ProfileContainer() {
   const session = useService(SESSION)
   const profiles = useService(PROFILE_SERVICE)
+  const settings = useService(SETTINGS_SERVICE)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
   )
   const { tree, status } = useShape(profileShape, user ? { identity: user.id } : null)
   const row = tree?.[0]
+  const owned = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const stored: ProfileFields = { name: row?.name ?? '', bio: row?.bio ?? '' }
   const [drafts, setDrafts] = useState<ProfileFields>(stored)
   // What the machine reads at each guard and each write: the profile as stored, what was typed.
@@ -53,7 +57,11 @@ export function ProfileContainer() {
   const t = useT()
   const locale = useLocale()
   const setLocale = useSetLocale()
-  const seen = useRef<string | undefined>(undefined)
+  // The settings row as this device last saw it: which row, its stored language, and the
+  // languages this device stored that have not arrived back yet, oldest first.
+  const seen = useRef<
+    { readonly id: string; readonly locale: string; written: string[] } | undefined
+  >(undefined)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -67,30 +75,49 @@ export function ProfileContainer() {
     }
   }, [row?.bio, send])
 
-  // The language follows the profile across devices; see `localeChange`. A store that fails
-  // shows nowhere: the frame's flow gives its `storing-locale` no outcome on a failure.
+  // The language follows the account's settings across devices; see `localeChange`. A store
+  // that fails shows nowhere: the frame's flow gives its `storing-locale` no outcome on a failure.
   useEffect(() => {
-    if (!row) {
+    if (!owned) {
       return
     }
 
+    const known = seen.current?.id === owned.id ? seen.current : undefined
+    const written = known?.written ?? []
     const change = localeChange({
-      stored: row.locale,
+      stored: owned.locale,
+      seen: known?.locale,
+      written,
       current: locale,
-      first: seen.current !== row.id,
     })
+    const arrived = owned.locale !== known?.locale
+    const own = written.indexOf(owned.locale)
+    // A write of this device that arrived back is no longer on its way, nor are the ones before
+    // it; another device's language that arrived overtakes them all.
+    const pending = !arrived ? written : own < 0 ? [] : written.slice(own + 1)
+    const next = { id: owned.id, locale: owned.locale, written: pending }
 
-    seen.current = row.id
+    seen.current = next
 
     if (change && 'apply' in change) {
       setLocale(change.apply)
     } else if (change) {
-      void profiles.updateLocale({ id: row.id, locale: change.save }).match(
+      const chosen = change.save
+
+      next.written = [...pending, chosen]
+      void settings.updateLocale({ id: owned.id, locale: chosen }).match(
         () => undefined,
-        () => undefined,
+        // A write that failed is not on its way: the same choice may be stored again.
+        () => {
+          const now = seen.current
+
+          if (now?.id === next.id) {
+            now.written = now.written.filter((written) => written !== chosen)
+          }
+        },
       )
     }
-  }, [row, locale, setLocale, profiles])
+  }, [owned, locale, setLocale, settings])
 
   // The effects of the flow outside the form: the shell's notice, then the move.
   useEffect(() => {

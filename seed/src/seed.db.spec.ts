@@ -126,12 +126,8 @@ describe('seeding through the gateway', () => {
         email: account.email,
         profileId: profile.id,
       })
-      expect(profile).toMatchObject({
-        name: preset.name,
-        email: account.email,
-        bio: preset.bio,
-        locale: preset.locale,
-      })
+      expect(profile).toMatchObject({ name: preset.name, email: account.email, bio: preset.bio })
+      expect(seen.settings).toMatchObject({ locale: preset.locale })
     }
   })
 
@@ -177,6 +173,7 @@ describe('seeding through the gateway', () => {
     expect(before).toMatchObject({
       identities: 2,
       profiles: 2,
+      settings: 2,
       tenants: 1,
       memberships: 2,
       databases: 1,
@@ -200,7 +197,7 @@ describe('seeding through the gateway', () => {
     ).toMatchObject({ code: 'data:WRITE_REJECTED', message: 'key-taken' })
   })
 
-  it('sweeps seeded identities with their profiles, region rows, memberships and organisation databases', async () => {
+  it('sweeps seeded identities with their profiles, settings, region rows, memberships and organisation databases', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const manifest = (
       await runSeed({ ...target, mode: demo, fetcher: client.fetcher })
@@ -227,6 +224,7 @@ describe('seeding through the gateway', () => {
     expect(before).toMatchObject({
       identities: 2,
       profiles: 2,
+      settings: 2,
       tenants: 1,
       // Ann and beto in acme, and ann in the outsider's organisation.
       memberships: 3,
@@ -243,6 +241,7 @@ describe('seeding through the gateway', () => {
       memberships: 0,
       databases: 0,
       profiles: 0,
+      settings: 0,
       regionRows: 0,
       accepted: 0,
     })

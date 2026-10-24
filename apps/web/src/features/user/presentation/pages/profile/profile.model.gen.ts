@@ -6,14 +6,14 @@ import { z } from '@workspace/zod'
 
 export type ProfileParams = { identity: IdentityId }
 
-export type ProfileResult = Array<{ id: ProfileId; name: string; email: string; bio?: string | undefined; locale?: string | undefined; created_at: Date }>
+export type ProfileResult = Array<{ id: ProfileId; name: string; email: string; bio?: string | undefined; created_at: Date }>
 
 export const ProfileParamsSchema = z.object({ identity: idSchemas.identity.schema })
 
 export const profileShape: Shape<ProfileParams, ProfileResult> = {
   id: 'user.profile',
   kind: 'shape',
-  text: 'SELECT\n  id,\n  name,\n  email,\n  bio,\n  locale,\n  created_at\nFROM profile\nWHERE identity = $identity\nLIMIT 1;',
+  text: 'SELECT\n  id,\n  name,\n  email,\n  bio,\n  created_at\nFROM profile\nWHERE identity = $identity\nLIMIT 1;',
   params: [{ name: 'identity', type: 'record<identity>' }],
   tables: ['profile'],
 }
@@ -32,15 +32,10 @@ export type UpdateBioParams = { id: ProfileId; bio: string }
 
 export const UpdateBioParamsSchema = z.object({ id: idSchemas.profile.schema, bio: z.string() })
 
-export type UpdateLocaleParams = { id: ProfileId; locale: 'en' | 'es' }
-
-export const UpdateLocaleParamsSchema = z.object({ id: idSchemas.profile.schema, locale: z.enum(['en', 'es']) })
-
 export const profileCommands: {
   readonly createProfile: Command<CreateProfileParams>
   readonly updateName: Command<UpdateNameParams>
   readonly updateBio: Command<UpdateBioParams>
-  readonly updateLocale: Command<UpdateLocaleParams>
 } = {
   createProfile: {
     id: 'user.profile.createProfile',
@@ -71,16 +66,6 @@ export const profileCommands: {
     region: 'private',
     ops: [{ op: 'text.update', record: 'id', field: 'bio', value: { param: 'bio' } }],
     schema: UpdateBioParamsSchema,
-  },
-  updateLocale: {
-    id: 'user.profile.updateLocale',
-    kind: 'command',
-    text: 'UPDATE $id SET locale = $locale;',
-    params: [{ name: 'id', type: 'record<profile>' }, { name: 'locale', type: '\'en\' | \'es\'' }],
-    tables: ['profile'],
-    region: 'private',
-    ops: [{ op: 'set', record: 'id', field: 'locale', value: { param: 'locale' } }],
-    schema: UpdateLocaleParamsSchema,
   },
 }
 
