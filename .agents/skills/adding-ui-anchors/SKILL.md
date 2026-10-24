@@ -82,7 +82,8 @@ code and the tests follow; the checks hold them to the contract.
    change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
    docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash
-   (one round at a time; a commit added after the hand-over needs a new one). Then the
+   (one round at a time; a commit added after the hand-over needs a new one, and a change its
+   review brings is a commit of its own on top, never an amend). Then the
    feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor

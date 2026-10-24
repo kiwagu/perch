@@ -50,7 +50,7 @@ developer approved; the code takes no architectural decision of its own.
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
-   one). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
+   one, and a change its review brings is a commit of its own on top, never an amend). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
    merged in after that landing, then takes the business change (the screen files, the
    activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
