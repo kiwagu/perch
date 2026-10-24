@@ -82,7 +82,8 @@ code and the tests follow; the checks hold them to the contract.
    change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
    docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash
-   (one round at a time; a commit added after the hand-over needs a new one). Then the
+   (one round at a time; a commit added after the hand-over needs a new one, and a change its
+   review brings is a commit of its own on top, never an amend). Then the
    feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
@@ -94,9 +95,11 @@ code and the tests follow; the checks hold them to the contract.
    ask for the OK on those commits, and wait. Nothing below starts before it, not even a
    test's scaffold. The OK covers those commits, and the one it approves in advance: the last
    business commit of a rename or a removal, which drops the old names the review listed and
-   nothing else. Any other contract commit made, re-cut, amended or rebased after the OK, even
-   with its files unchanged, stops here again, and so does a return to the code after other
-   work.
+   nothing else. A change the review brings (one the developer asks for, or one an answer to
+   their question leads to) is a new commit on top of the ones under review, never an amend
+   or a re-cut, and the OK is then asked on all of them. Any other contract commit made,
+   re-cut, amended or rebased after the OK, even with its files unchanged, stops here again,
+   and so does a return to the code after other work.
 6. **The code**, after the developer's OK on the contract commits beneath it, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
    changes), never with any other business or meta change. Once the code no longer renders a
