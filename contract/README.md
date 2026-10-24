@@ -323,7 +323,8 @@ a parallel state's regions each on its own with the others at their `initial`, a
 every transition and every guarded branch to its target with its effects. An app that
 builds its own machine for a screen holds it to the flow with the engine's comparison
 (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
-the machine has the config of its flow.
+the machine has the config of its flow (on a branch, the flow less what it added and the
+machine has not built yet).
 
 ## Activities
 
@@ -661,9 +662,12 @@ gap is fixed in the contract files first, never worked around in a test.
   suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
-  `main` and `bun run check` take the full check. A rename or a removal keeps the old name
-  declared until the implementation has switched to the new name or stopped rendering the
-  removed element, then a last business commit drops it.
+  `main` and `bun run check` take the full check. The same holds for the app's machines: on a
+  branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
+  flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
+  not say; on `main` and in `bun run check` every machine is its whole flow. A rename or a
+  removal keeps the old name declared until the implementation has switched to the new name
+  or stopped rendering the removed element, then a last business commit drops it.
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the
   contract. It reads `getByTestId('...')`, the selectors `[data-testid="..."]`,
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or

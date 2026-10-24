@@ -229,8 +229,10 @@ for Bun.
   the cases the flow says. An app holds a machine of its own to its flow with
   `projected(config)` (initial state, states, final states, regions, events with their
   targets and guards, invoke sources, the contract's effects; the app's own actions left
-  out) and `beyondTheSubset(config)` (what a machine does that the flow subset has no
-  counterpart for).
+  out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  counterpart for) and `aheadOf(app, flow)` (the flow as far as a machine that lags it has
+  come: equal to the machine's projection exactly when it does nothing the flow does not
+  say), which a branch uses while a business commit runs ahead of the implementation.
 
 ## Commands
 

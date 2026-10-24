@@ -160,8 +160,9 @@ modeling stage.
   writes, the route, parameters and search it matches) and the router's route tree to the
   tree of the screen folder, both specs on the router of `__fixtures__/router.ts`.
   `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
-  flows with the engine's comparison (`@workspace/ui-contract/machines`); running every flow
-  and activity in XState is the contract check's, not the app's.
+  flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
+  (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added); running every flow and
+  activity in XState is the contract check's, not the app's.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

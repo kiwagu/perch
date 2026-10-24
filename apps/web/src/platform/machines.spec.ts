@@ -6,7 +6,10 @@
  * final states, parallel states with the same regions and initial states, events with their
  * targets and guard names, invoke sources, and the contract's effects on the same transitions.
  * The app adds actions of its own (an `assign`), and its `input` is the app's, but no
- * mechanism the flow has no counterpart for.
+ * mechanism the flow has no counterpart for. On a branch the pre-commit hook sets
+ * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a
+ * machine may lack what its flow added but does nothing the flow does not say; `bun run check`
+ * and a commit on `main` hold every machine to its whole flow.
  */
 
 import { join } from 'node:path'
@@ -15,7 +18,7 @@ import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
-import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
+import { aheadOf, beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
@@ -24,6 +27,7 @@ import { SignInService } from '../features/user/application/sign-in.service'
 import { fakeSession } from './__fixtures__/session'
 
 const ROOT = join(import.meta.dirname, '../../../..')
+const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
 const { screens, problems } = loadScreens(ROOT)
 
@@ -59,8 +63,9 @@ describe('the machines of the app', () => {
       screens?.screens.find((screen) => screen.id === id)?.flow ??
       expect.unreachable(`a flow of ${id}`)
     const { config } = machine()
+    const app = projected(config)
 
     expect(beyondTheSubset(config), `what ${id} does beyond its flow`).toEqual([])
-    expect(projected(config)).toEqual(projected(flow))
+    expect(app).toEqual(AHEAD ? aheadOf(app, projected(flow)) : projected(flow))
   })
 })
