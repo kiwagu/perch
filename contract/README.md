@@ -29,6 +29,12 @@ lay down its skeleton: that was the one DOM-first fill, by design, and it ended 
 sides in sync. From now on a change starts in the contract, never in JSX or in a test. A
 page may still inspire a change, but the contract decides it.
 
+The contract is also where the architecture is decided. The developer programs it there,
+apart from the implementation: the model, the screens with their flows, the platform, the
+activities and the scenarios. The agent brings the patterns that make it good, proposed for
+the developer's review with their trade-offs, and builds the code from the contract the
+developer approved; the code takes no architectural decision of its own.
+
 ### The order of work
 
 1. **The model.** A new field or action goes into its entity in `model.schema.json`
@@ -44,12 +50,14 @@ page may still inspire a change, but the contract decides it.
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
-   one). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
+   one, and a change its review brings is a commit of its own on top, never an amend). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
    merged in after that landing, then takes the business change (the screen files, the
    activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
    (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
    landing they build on, the reason for every change, the gaps signalled) and gives an OK on those commits or asks for changes
-   to the contract. The OK covers those commits, and the last business commit of a rename
+   to the contract. A change the review brings is a commit of its own on top of the ones
+   under review, never an amend, and the OK is then asked on all of them. The OK covers those
+   commits, and the last business commit of a rename
    or a removal that drops the old names the review listed. Any other contract commit made,
    re-cut, amended or rebased after it, even with its files unchanged, and a return to the
    implementation after other work, stop here again. The code and the tests,
