@@ -6,14 +6,22 @@ import type { SessionService } from '../../../composition/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
 import { ProfileService } from './profile.service'
+import { settingsCommands, settingsShape } from './settings/settings.model.gen'
+import { SettingsService } from './settings/settings.service'
 import { createSignInMachine } from './sign-in.machine'
 import { SignInService } from './sign-in.service'
 
-const ann = { email: 'ann@example.test', password: 'secret-ann', name: 'Ann' }
+const ann = {
+  email: 'ann@example.test',
+  password: 'secret-ann',
+  name: 'Ann',
+  locale: 'es' as const,
+}
 
 let opened: TestSession
 let session: SessionService
 let profiles: ProfileService
+let settings: SettingsService
 let signIn: SignInService
 
 beforeEach(async () => {
@@ -23,7 +31,11 @@ beforeEach(async () => {
     shape: profileShape,
     commands: profileCommands,
   })
-  signIn = new SignInService(session, profiles)
+  settings = new SettingsService(opened.runner, opened.commands, {
+    shape: settingsShape,
+    commands: settingsCommands,
+  })
+  signIn = new SignInService(session, profiles, settings)
 })
 
 afterEach(async () => {
@@ -37,7 +49,7 @@ const settled = (actor: ReturnType<typeof start>) =>
   waitFor(actor, (state) => state.matches('done') || state.context.error !== undefined)
 
 describe('sign-in', () => {
-  it('creates an account with its profile and signs the user in', async () => {
+  it('creates an account with its profile and its settings, in the language of the form, and signs the user in', async () => {
     const actor = start()
 
     actor.send({ type: 'user.sign-in.toggle-button' })
@@ -56,6 +68,7 @@ describe('sign-in', () => {
     expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann', email: ann.email },
     ])
+    expect((await settings.read({ identity }))._unsafeUnwrap()).toMatchObject([{ locale: 'es' }])
   })
 
   it('keeps the email in lower case in the account and its profile, however it was written', async () => {

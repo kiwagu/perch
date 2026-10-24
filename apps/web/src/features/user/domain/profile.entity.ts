@@ -17,7 +17,6 @@ export const ProfileSchema = z.object({
   name: z.string().trim().min(1).max(PROFILE_NAME_MAX),
   email: z.email(),
   bio: z.string().max(PROFILE_BIO_MAX).optional(),
-  locale: z.enum(['en', 'es']).optional(),
   createdAt: z.date(),
 })
 

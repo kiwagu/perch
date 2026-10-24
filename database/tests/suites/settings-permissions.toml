@@ -1,0 +1,109 @@
+name = "settings-permissions"
+tags = ["permissions", "settings"]
+
+# The server contract of the replicated settings table: clients write settings through
+# their private region, which the gateway checks and stores, so on the server an identity
+# may only read its own row and can neither create, change nor delete one. Refused writes
+# return no rows; root then confirms that nothing changed. The language is one the app
+# speaks, and an account has one row.
+
+[[cases]]
+name = "root seeds the settings of alice and of bob"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE settings:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], locale = 'en'; CREATE settings:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'es';"
+allow = true
+
+[[cases]]
+name = "alice sees only her own settings"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE locale FROM settings;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "en"
+
+[[cases.assertions]]
+path = "1"
+exists = false
+
+[[cases]]
+name = "alice cannot change her own settings"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE settings:alice SET locale = 'es' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot change bob's settings"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE settings:bob SET locale = 'en' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create settings"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE settings:extra SET identity = $auth.id, locale = 'en';"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete her settings"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE settings:alice RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a language the app does not speak is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE settings:bob SET locale = 'fr';"
+allow = false
+error_contains = "$value IN ['en', 'es']"
+
+[[cases]]
+name = "a second row for the same account is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE settings:second SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'en';"
+allow = false
+error_contains = "settings_identity"
+
+[[cases]]
+name = "only the seeded settings exist and keep their languages"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE locale FROM settings ORDER BY locale;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "en"
+
+[[cases.assertions]]
+path = "1"
+equals = "es"
+
+[[cases.assertions]]
+path = "2"
+exists = false

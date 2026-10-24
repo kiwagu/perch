@@ -6,8 +6,15 @@ name = "generated-user"
 tags = ["generated", "user"]
 
 [[cases]]
+name = "a signed-in user can run the shape user.settings"
+kind = "sql_expect"
+actor = "record"
+sql = "LET $identity = $auth.id; SELECT id, locale FROM settings WHERE identity = $identity LIMIT 1;"
+allow = true
+
+[[cases]]
 name = "a signed-in user can run the shape user.profile"
 kind = "sql_expect"
 actor = "record"
-sql = "LET $identity = $auth.id; SELECT\n  id,\n  name,\n  email,\n  bio,\n  locale,\n  created_at\nFROM profile\nWHERE identity = $identity\nLIMIT 1;"
+sql = "LET $identity = $auth.id; SELECT\n  id,\n  name,\n  email,\n  bio,\n  created_at\nFROM profile\nWHERE identity = $identity\nLIMIT 1;"
 allow = true

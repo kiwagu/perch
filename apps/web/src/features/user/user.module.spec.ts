@@ -9,6 +9,7 @@ import { COMMANDS } from '../../platform/commands.port'
 import { SESSION } from '../../platform/session.port'
 
 import { PROFILE_SERVICE } from './application/profile.service'
+import { SETTINGS_SERVICE } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
 import { UserModule } from './user.module'
 
@@ -37,11 +38,11 @@ afterEach(async () => {
 })
 
 describe('UserModule', () => {
-  it('provides sign-in and profile services over the application ports', async () => {
+  it('provides sign-in, profile and settings services over the application ports', async () => {
     const user = (
       await container
         .get(SIGN_IN_SERVICE)
-        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
+        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann', locale: 'en' })
     )._unsafeUnwrap()
 
     expect((await session.flush()).isOk()).toBe(true)
@@ -49,6 +50,9 @@ describe('UserModule', () => {
     expect(
       (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
     ).toMatchObject([{ name: 'Ann' }])
+    expect(
+      (await container.get(SETTINGS_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
+    ).toMatchObject([{ locale: 'en' }])
   })
 
   it('routes guests to sign-in and signed-in users to their profile', () => {

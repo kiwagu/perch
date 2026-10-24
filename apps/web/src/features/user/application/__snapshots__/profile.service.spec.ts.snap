@@ -4,7 +4,6 @@ exports[`ProfileService > reads the profile tree of the signed-in user 1`] = `
 {
   "bio": undefined,
   "email": "ann@example.test",
-  "locale": undefined,
   "name": "Ann",
 }
 `;

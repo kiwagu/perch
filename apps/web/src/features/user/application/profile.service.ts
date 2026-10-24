@@ -3,7 +3,6 @@ import type { ResultAsync } from 'neverthrow'
 import type { BusError } from '@workspace/cqrs'
 import type { Command, DataError, Shape, ShapeRunnerPort } from '@workspace/data'
 import { token } from '@workspace/di'
-import type { Locale } from '@workspace/i18n'
 import type { IdentityId, ProfileId } from '@workspace/ids'
 
 import type { CommandsPort } from '../../../platform/commands.port'
@@ -17,7 +16,6 @@ export interface ProfileRow {
   readonly name: string
   readonly email: string
   readonly bio?: string | undefined
-  readonly locale?: string | undefined
   readonly created_at: Date
 }
 
@@ -39,7 +37,6 @@ export interface ProfileModel {
     readonly createProfile: Command<NewProfile>
     readonly updateName: Command<{ readonly id: ProfileId; readonly name: string }>
     readonly updateBio: Command<{ readonly id: ProfileId; readonly bio: string }>
-    readonly updateLocale: Command<{ readonly id: ProfileId; readonly locale: Locale }>
   }
 }
 
@@ -78,13 +75,6 @@ export class ProfileService {
     return profileBio(input.bio).asyncAndThen((bio) =>
       this.commands.execute(this.model.commands.updateBio, { id: input.id, bio }),
     )
-  }
-
-  updateLocale(input: {
-    readonly id: ProfileId
-    readonly locale: Locale
-  }): ResultAsync<void, BusError> {
-    return this.commands.execute(this.model.commands.updateLocale, input)
   }
 }
 
