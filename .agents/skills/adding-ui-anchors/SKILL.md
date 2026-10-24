@@ -94,9 +94,11 @@ code and the tests follow; the checks hold them to the contract.
    ask for the OK on those commits, and wait. Nothing below starts before it, not even a
    test's scaffold. The OK covers those commits, and the one it approves in advance: the last
    business commit of a rename or a removal, which drops the old names the review listed and
-   nothing else. Any other contract commit made, re-cut, amended or rebased after the OK, even
-   with its files unchanged, stops here again, and so does a return to the code after other
-   work.
+   nothing else. A change the review brings (one the developer asks for, or one an answer to
+   their question leads to) is a new commit on top of the ones under review, never an amend
+   or a re-cut, and the OK is then asked on all of them. Any other contract commit made,
+   re-cut, amended or rebased after the OK, even with its files unchanged, stops here again,
+   and so does a return to the code after other work.
 6. **The code**, after the developer's OK on the contract commits beneath it, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
    changes), never with any other business or meta change. Once the code no longer renders a
