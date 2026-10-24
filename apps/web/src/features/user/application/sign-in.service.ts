@@ -48,21 +48,24 @@ export class SignInService {
     }
 
     // The account holds only what signing in needs; the name lives in the profile, and the
-    // settings start from what the app is like as the form is sent.
+    // settings start from what the app is like as the form is sent. The settings come first: a
+    // later commit of the region never arrives without the earlier ones, so a device that holds
+    // the profile holds the settings too, and a sign-up stopped between the two leaves an
+    // account without a profile, which the profile page says.
     return this.session.signUp({ email: form.email, password: form.password }).andThen((user) =>
-      this.profiles
-        .createProfile({
-          id: profileIdFactory.create(),
+      this.settings
+        .createSettings({
+          id: settingsIdFactory.create(),
           identity: user.id,
-          name: name.value,
-          // As the account keeps it: in lower case, however it was typed.
-          email: user.email,
+          locale: form.locale,
         })
         .andThen(() =>
-          this.settings.createSettings({
-            id: settingsIdFactory.create(),
+          this.profiles.createProfile({
+            id: profileIdFactory.create(),
             identity: user.id,
-            locale: form.locale,
+            name: name.value,
+            // As the account keeps it: in lower case, however it was typed.
+            email: user.email,
           }),
         )
         .map(() => user),

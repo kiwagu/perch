@@ -1,5 +1,8 @@
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
+
+import { dataError } from '@workspace/data'
 
 import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
@@ -69,6 +72,30 @@ describe('sign-in', () => {
       { name: 'Ann', email: ann.email },
     ])
     expect((await settings.read({ identity }))._unsafeUnwrap()).toMatchObject([{ locale: 'es' }])
+  })
+
+  it('creates the settings before the profile, so a device holding the profile holds them too', async () => {
+    const written: string[] = []
+    const ordered = new SignInService(
+      session,
+      { createProfile: () => okAsync(written.push('profile')).map(() => undefined) },
+      { createSettings: () => okAsync(written.push('settings')).map(() => undefined) },
+    )
+
+    expect((await ordered.signUp(ann)).isOk()).toBe(true)
+    expect(written).toEqual(['settings', 'profile'])
+  })
+
+  it('writes no profile when the settings could not be created', async () => {
+    const written: string[] = []
+    const refused = new SignInService(
+      session,
+      { createProfile: () => okAsync(written.push('profile')).map(() => undefined) },
+      { createSettings: () => errAsync(dataError('data:WRITE_FAILED', 'not stored')) },
+    )
+
+    expect((await refused.signUp(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(written).toEqual([])
   })
 
   it('keeps the email in lower case in the account and its profile, however it was written', async () => {

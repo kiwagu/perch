@@ -310,9 +310,10 @@ function seedClient(services: AppServices, failures: DataError[]): SeedClient {
               : errAsync(error),
           ),
       )
+        // The settings before the profile, as a sign-up writes them.
         .andThen((user) =>
-          ensureProfile(user, input).andThen((profileId) =>
-            ensureSettings(user, input).map(() => ({ user, profileId })),
+          ensureSettings(user, input).andThen(() =>
+            ensureProfile(user, input).map((profileId) => ({ user, profileId })),
           ),
         )
         .andThen((seeded) => settle().map(() => seeded)),
