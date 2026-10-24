@@ -294,9 +294,11 @@ unchanged, as it carries a binding into the router.
   disabled otherwise: the profile's Save is disabled while it saves because neither
   `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no
   flag of its own.
-- The effects, in `actions`, `entry` and `exit`, are two: `{ type: show, params: { anchor,
-  codes } }`, the anchor shows one of the codes it carries, and `{ type: navigate, params:
-  { to, search } }`, the app moves to that binding. The app implements both.
+- The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
+  codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
+  } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
+  navigate, params: { to, search } }`, the app moves to that binding. The app implements
+  all three.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter to the anchor whose value it
   takes or to a constant `{ value: ... }`, and `onDone` and `onError` say what follows its
