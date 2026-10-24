@@ -20,6 +20,8 @@ import { describe, expect, it } from 'vitest'
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
 import { aheadOf, beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
+import { LocaleWrites } from '../features/app-shell/application/locale-writes'
+import { createShellMachine } from '../features/app-shell/application/shell.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
@@ -33,6 +35,18 @@ const { screens, problems } = loadScreens(ROOT)
 
 /** The machines the app builds for a screen of the contract, by screen id. */
 const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>> = {
+  'app-shell': () =>
+    createShellMachine({
+      values: () => ({
+        account: undefined,
+        session: 0,
+        storingIn: undefined,
+        stored: undefined,
+        writes: LocaleWrites.none,
+      }),
+      storeLocale: () => okAsync(undefined),
+      signOutHere: () => okAsync(undefined),
+    }),
   'user.sign-in': () =>
     createSignInMachine(
       new SignInService(

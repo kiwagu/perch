@@ -29,7 +29,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 - Commands `settings.commands.surql`: `createSettings` (at sign-up, with the language the app
   speaks then), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
-- Providers: `PROFILE_SERVICE`, `SETTINGS_SERVICE`, `SIGN_IN_SERVICE`.
+- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`; `SETTINGS_SERVICE` is provided app-wide by
+  the composition root, since the frame reads and stores the settings too.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in` and `user.profile` in `contract/screens/sign-in.yaml` and
   `contract/screens/me.yaml`.
@@ -40,7 +41,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
   or typed back; one Save writes what changed; a refused save is explained under the field its
   code concerns (the error's `fields`); Save and the sign-out button are enabled while the
   machine's state handles them; the chosen language, kept in the settings, follows the
-  identity across devices;
+  identity across devices (the frame stores and follows it, see the app-shell module), and a
+  new account's settings start in the language chosen before signing up;
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
   device's keys while changes remain to send after the next sign-in, and says "You were signed

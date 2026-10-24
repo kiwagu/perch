@@ -16,7 +16,9 @@ Where: [/me] on device A, and [/sign-in] then [/me] on device B, another browser
 1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]
 2. On device A, choose [value:es] in [app-shell.locale-select]
 3. On device B, sign in with the same account and wait for [/me]
+4. On device A, choose [value:en] in [app-shell.locale-select]
 
 ### Expected result
 - After step 2 device A shows [app-shell.locale-select] with [value:es] at once
 - After step 3 device B shows [app-shell.locale-select] with [value:es], with no choice made on device B
+- After step 4 device B shows [app-shell.locale-select] with [value:en], without a reload

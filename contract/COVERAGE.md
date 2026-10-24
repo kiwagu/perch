@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 5 screens, 67 anchors and 29 codes.
+The contract declares 5 screens, 67 anchors and 30 codes.
 
-Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
 
 ## Model
 
@@ -38,7 +38,7 @@ Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4
 | --- | --- | --- |
 | id | field | unbound |
 | identity | field | unbound |
-| locale | field | unbound |
+| locale | field | `app-shell.locale-select` |
 | createSettings | action | unbound |
 | updateLocale | action | `app-shell.locale-select` |
 
@@ -86,11 +86,11 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 14 |
+| app-shell | 9 | 15 |
 | device | 10 | 2 |
-| user.profile | 10 | 15 |
+| user.profile | 10 | 16 |
 | organisation | 30 | 4 |
-| user.sign-in | 8 | 9 |
+| user.sign-in | 8 | 10 |
 
 <!-- coverage:end -->
 
