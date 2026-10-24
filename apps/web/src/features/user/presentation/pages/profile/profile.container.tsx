@@ -2,8 +2,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
-import { useT } from '@workspace/i18n'
-
 import { useService, useShape } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
 import { SESSION } from '../../../../../platform/session.port'
@@ -48,7 +46,6 @@ export function ProfileContainer() {
   const [state, send, actor] = useMachine(machine)
   const notify = useNotify()
   const navigate = useNavigate()
-  const t = useT()
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -66,7 +63,7 @@ export function ProfileContainer() {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('profile-saved')) {
-        notify({ code: 'profile-saved', text: t('user.profile.saved') })
+        notify({ code: 'profile-saved', text: (t) => t('user.profile.saved') })
       }
     })
     const moved = actor.on('navigate', ({ to }) => void navigate({ to }))
@@ -75,7 +72,7 @@ export function ProfileContainer() {
       shown.unsubscribe()
       moved.unsubscribe()
     }
-  }, [actor, notify, navigate, t])
+  }, [actor, notify, navigate])
 
   const type = (field: keyof ProfileFields, value: string) => {
     const next = { ...values.current.drafts, [field]: value }

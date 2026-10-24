@@ -2,22 +2,26 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import type { Translate } from '@workspace/i18n'
+
 import { NoticeProvider, useNotice, useNotify } from './notices'
 
 function Trigger(props: { readonly code: string; readonly text: string }) {
   const notify = useNotify()
 
   return (
-    <button type="button" onClick={() => notify({ code: props.code, text: props.text })}>
+    <button type="button" onClick={() => notify({ code: props.code, text: () => props.text })}>
       {props.text}
     </button>
   )
 }
 
+const asWritten: Translate = (key) => key
+
 function Current() {
   const notice = useNotice()
 
-  return notice ? <p data-code={notice.code}>{notice.text}</p> : null
+  return notice ? <p data-code={notice.code}>{notice.text(asWritten)}</p> : null
 }
 
 describe('notices', () => {

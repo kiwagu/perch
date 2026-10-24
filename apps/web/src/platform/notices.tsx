@@ -6,11 +6,16 @@
 
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react'
 
+import type { Translate } from '@workspace/i18n'
+
 export interface Notice {
   /** The contract code of what it says (`welcome`, `profile-saved`), shown as `data-code`. */
   readonly code: string
-  /** Already translated: the page that raises a notice knows its words. */
-  readonly text: string
+  /**
+   * Its words, which the page that raises it knows, said in the language the app speaks while it
+   * is shown: a notice raised in one language reads in the next one chosen.
+   */
+  readonly text: (t: Translate) => string
 }
 
 interface NoticeChannel {

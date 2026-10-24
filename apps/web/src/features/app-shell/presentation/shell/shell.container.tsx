@@ -62,23 +62,23 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('locale-not-stored')) {
-        notify({ code: 'locale-not-stored', text: t('app.shell.locale-not-stored') })
+        notify({ code: 'locale-not-stored', text: (t) => t('app.shell.locale-not-stored') })
       }
     })
 
     return () => shown.unsubscribe()
-  }, [actor, notify, t])
+  }, [actor, notify])
 
   useEffect(
     () =>
       session.subscribeRejections((rejection) =>
         notify(
           rejection.reloaded
-            ? { code: 'changes-reloaded', text: t('app.shell.reloaded') }
-            : { code: 'change-rejected', text: t('app.shell.rejected') },
+            ? { code: 'changes-reloaded', text: (t) => t('app.shell.reloaded') }
+            : { code: 'change-rejected', text: (t) => t('app.shell.rejected') },
         ),
       ),
-    [session, notify, t],
+    [session, notify],
   )
 
   return (
@@ -89,7 +89,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       canChooseLocale={canChoose}
       onLocaleChange={(locale) => actor.send({ type: 'app-shell.locale-select', locale })}
       link={RouterLink}
-      notice={notice}
+      notice={notice && { code: notice.code, text: notice.text(t) }}
     >
       {props.children}
     </ShellView>

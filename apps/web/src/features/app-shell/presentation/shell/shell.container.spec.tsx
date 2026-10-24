@@ -3,7 +3,7 @@ import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-rou
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { I18nProvider } from '@workspace/i18n'
+import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
@@ -88,6 +88,57 @@ describe('ShellContainer', () => {
     )
     expect(screen.getByTestId('app-shell.notice-message').textContent).toBe(
       'The server refused a change again, so it and the later changes not yet sent were undone on this device.',
+    )
+  })
+
+  it('says a notice in the language the app speaks now, not the one it spoke when raised', async () => {
+    const { session, reject } = fakeSession()
+    const services = fakeServices(session)
+    const frame = openedFrame()
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+    const app = (locale: Locale) => (
+      <I18nProvider locale={locale} catalogs={{ en, es }}>
+        <ShellFrameContext.Provider value={frame}>
+          <ServicesProvider services={services}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
+      </I18nProvider>
+    )
+    const view = render(app('es'))
+
+    await screen.findByText('home')
+    act(() =>
+      reject({
+        region: 'tenant:acme',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: 'note/nte_1:update',
+        reloaded: false,
+      }),
+    )
+
+    expect((await screen.findByTestId('app-shell.notice-message')).textContent).toBe(
+      es['app.shell.rejected'],
+    )
+
+    view.rerender(app('en'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.notice-message').textContent).toBe(
+        en['app.shell.rejected'],
+      ),
     )
   })
 
