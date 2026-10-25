@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
 import { useEffect, useMemo, useState } from 'react'
 
-import { useLocale, useT } from '@workspace/i18n'
+import { useLocale } from '@workspace/i18n'
 
 import { useService } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
@@ -22,7 +22,6 @@ export function SignInContainer() {
   const [state, send, actor] = useMachine(machine)
   const navigate = useNavigate()
   const notify = useNotify()
-  const t = useT()
   const locale = useLocale()
   const submitting = state.matches('signing-in') || state.matches('signing-up')
   const done = state.matches('done')
@@ -57,7 +56,7 @@ export function SignInContainer() {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('welcome')) {
-        notify({ code: 'welcome', text: t('user.sign-in.welcome') })
+        notify({ code: 'welcome', text: (t) => t('user.sign-in.welcome') })
       }
     })
     const moved = actor.on('navigate', ({ to }) => void navigate({ to }))
@@ -66,7 +65,7 @@ export function SignInContainer() {
       shown.unsubscribe()
       moved.unsubscribe()
     }
-  }, [actor, notify, navigate, t])
+  }, [actor, notify, navigate])
 
   return (
     <SignInView

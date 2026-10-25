@@ -10,6 +10,7 @@
   "app.shell.nav.devices": "My devices",
   "app.shell.navigation": "Main navigation",
   "app.shell.locale": "Language",
+  "app.shell.locale-not-stored": "Your language applies on this device, but it could not be saved to your account.",
   "app.shell.locale.en": "English",
   "app.shell.locale.es": "Español",
   "app.shell.rejected": "The server refused a change and undid it on this device.",

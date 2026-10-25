@@ -9,7 +9,8 @@ import { COMMANDS } from '../../platform/commands.port'
 import { SESSION } from '../../platform/session.port'
 
 import { PROFILE_SERVICE } from './application/profile.service'
-import { SETTINGS_SERVICE } from './application/settings/settings.service'
+import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
+import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
 import { UserModule } from './user.module'
 
@@ -25,6 +26,15 @@ beforeEach(async () => {
     .singleton(SHAPE_RUNNER, () => opened.runner)
     .singleton(COMMANDS, () => opened.commands)
     .singleton(SESSION, () => session)
+    // The composition root provides the settings to the frame and to every module.
+    .singleton(
+      SETTINGS_SERVICE,
+      () =>
+        new SettingsService(opened.runner, opened.commands, {
+          shape: settingsShape,
+          commands: settingsCommands,
+        }),
+    )
 
   container = root.child()
 
