@@ -390,6 +390,57 @@ describe('loadScreens', () => {
     })
   })
 
+  it('counts the derived regions among the two a parallel state has, after the expansion', () => {
+    cpSync(MODEL_FIXTURE, join(root, MODEL_FILE))
+
+    const withRegions = (states: Record<string, unknown>, buttons: Record<string, unknown>) =>
+      writeSample((screen) => {
+        const anchors = Object.fromEntries(
+          Object.entries(screen['anchors'] as Record<string, unknown>).filter(
+            ([name]) => name !== 'sample.sign-out-button' && !name.startsWith('sample.form.'),
+          ),
+        )
+
+        screen['anchors'] = {
+          ...anchors,
+          'sample.form.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+          'sample.form.error': { kind: 'error' },
+          ...buttons,
+        }
+        screen['flow'] = { initial: 'viewing', states: { viewing: { type: 'parallel', states } } }
+      })
+    const button = (action: string) => ({
+      kind: 'button',
+      binding: { action, params: { title: 'sample.form.title-input' } },
+    })
+
+    withRegions(
+      {},
+      {
+        'sample.form.add-button': button('thing.createThing'),
+        'sample.form.rename-button': button('thing.updateThing'),
+      },
+    )
+
+    const viewing = loadScreens(root).screens?.screens[0]?.flow?.states['viewing']
+
+    expect(problems()).toEqual([])
+    expect(Object.keys(viewing !== undefined && 'states' in viewing ? viewing.states : {})).toEqual(
+      ['form-add', 'form-rename'],
+    )
+
+    withRegions(
+      { form: { by: 'sample.form.add-button' } },
+      {
+        'sample.form.add-button': button('thing.createThing'),
+      },
+    )
+
+    expect(messages()).toEqual([
+      'flow.states.viewing.states: a parallel state has two regions or more',
+    ])
+  })
+
   it('reports what keeps a flow from expanding, at its place in the file', () => {
     writeSample((screen) => {
       screen['flow'] = {

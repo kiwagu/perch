@@ -119,6 +119,11 @@ export const authoredFlowSchema = flowSchemaOf({
       .describe(
         'A region written in full, by its pattern (`draft`), or as the region of a button (`by`).',
       ),
+  regions: {
+    min: 0,
+    description:
+      'The regions written, by name: two or more once the loader adds the region of each button bound to one action that the flow handles nowhere.',
+  },
   description:
     'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',
 })

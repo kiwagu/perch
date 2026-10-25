@@ -135,6 +135,16 @@ describe('the screen schema an editor reads', () => {
     expect(validateAgainst('x.yaml', schema, screenWith(removal({})))).toEqual([])
   })
 
+  it('takes a parallel state that writes fewer than two regions, the loader deriving the rest', () => {
+    const parallel = (states: Record<string, unknown>) => ({
+      ...screenWith(removal({})),
+      flow: { initial: 'viewing', states: { viewing: { type: 'parallel', states } } },
+    })
+
+    expect(validateAgainst('x.yaml', schema, parallel({ list: removal({}) }))).toEqual([])
+    expect(validateAgainst('x.yaml', schema, parallel({}))).toEqual([])
+  })
+
   it('refuses a region by its button that names what the binding gives, as the loader does', () => {
     expect(
       validateAgainst('x.yaml', schema, screenWith(removal({ src: 'thing.remove' }))),

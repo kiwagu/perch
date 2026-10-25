@@ -99,7 +99,9 @@ export type FlowParts<T extends z.ZodType, E extends z.ZodType> = ReturnType<
 /**
  * The flow over one `transition` and one `effect`, its parallel states holding the regions
  * `region` makes of the parts (the plain region alone, or with the patterns that expand into
- * one).
+ * one), at least `regions.min` of them: two in the canonical flow; fewer in the authored one,
+ * where the loader adds the regions of the buttons the flow leaves out before the canonical
+ * flow holds the parallel state to two.
  */
 export function flowSchemaOf<
   T extends z.ZodType,
@@ -109,8 +111,10 @@ export function flowSchemaOf<
   transition: T
   effect: E
   region: (parts: FlowParts<T, E>) => R
+  regions: { min: number; description: string }
   description: string
 }) {
+  const { min, description: regionsDescription } = options.regions
   const parts = flowPartsOf({ transition: options.transition, effect: options.effect })
   const parallel = z
     .strictObject({
@@ -122,10 +126,10 @@ export function flowSchemaOf<
       on: parts.on,
       states: z
         .record(flowStateNameSchema, options.region(parts))
-        .refine((regions) => Object.keys(regions).length >= 2, {
+        .refine((regions) => Object.keys(regions).length >= min, {
           message: 'a parallel state has two regions or more',
         })
-        .meta({ description: 'The regions by name, two or more.', minProperties: 2 }),
+        .meta({ description: regionsDescription, ...(min > 0 ? { minProperties: min } : {}) }),
     })
     .describe(
       'A parallel state: its regions are the independent areas of the screen; an event of its own `on` is handled whichever state each region is in.',

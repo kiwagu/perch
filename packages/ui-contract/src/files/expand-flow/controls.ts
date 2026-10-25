@@ -142,7 +142,10 @@ export function controlRegionOf(
   return { region: regionOf(control, written, expansion, at), expanded: true }
 }
 
-/** The events the flow handles, and the buttons its regions written by `by` stand for. */
+/**
+ * The events the states handle, and the buttons of the regions written by `by` that did not
+ * expand (their mistakes are reported).
+ */
 function handledOf(states: unknown, handled = new Set<string>()): Set<string> {
   for (const state of Object.values(recordOf(states))) {
     for (const event of Object.keys(recordOf(recordOf(state)['on']))) {
@@ -169,16 +172,16 @@ const nameOf = (anchor: string, screen: string): string =>
 
 /**
  * `states`, the states of the root as expanded, with a region derived for each button bound to
- * one action that the flow as written (`written`) handles nowhere, after the regions written in
- * the one parallel state of the root. A flow whose root has no parallel state, or several, gets
- * none: there a button the flow does not handle stays as written.
+ * one action that they handle nowhere (a pattern's or a button's region included, once
+ * expanded), after the regions written in the one parallel state of the root. A flow whose
+ * root has no parallel state, or several, gets none: there a button the flow does not handle
+ * stays as written.
  */
 export function withDerivedRegions(
-  written: unknown,
   states: Readonly<Record<string, unknown>>,
   expansion: Expansion,
 ): Readonly<Record<string, unknown>> {
-  const handled = handledOf(written)
+  const handled = handledOf(states)
   const left = expansion.controls.filter(({ anchor }) => !handled.has(anchor))
   const parallel = Object.keys(states).filter(
     (name) => recordOf(states[name])['type'] === 'parallel',

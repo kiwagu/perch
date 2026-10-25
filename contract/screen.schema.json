@@ -1351,8 +1351,7 @@
                       ],
                       "description": "A region written in full, by its pattern (`draft`), or as the region of a button (`by`)."
                     },
-                    "description": "The regions by name, two or more.",
-                    "minProperties": 2
+                    "description": "The regions written, by name: two or more once the loader adds the region of each button bound to one action that the flow handles nowhere."
                   }
                 },
                 "required": [

@@ -194,6 +194,20 @@ describe('the region of a button bound to one action', () => {
     ])
   })
 
+  it('is not derived for a button a pattern handles once expanded', () => {
+    const draft = {
+      pattern: 'draft',
+      input: 'sample.form.add-button',
+      stored: 'model.thing.title',
+      guard: 'titleIsStored',
+    }
+
+    expect(Object.keys(regionsOf(viewing({ other: OTHER, form: draft }), [ADD]).regions)).toEqual([
+      'other',
+      'form',
+    ])
+  })
+
   it('makes a flow the canonical schema takes', () => {
     const { flow } = expandFlow(
       viewing({ other: OTHER, list: { by: 'sample.list.remove-button', onError: 'idle' } }),

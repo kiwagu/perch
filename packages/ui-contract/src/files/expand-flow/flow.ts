@@ -110,7 +110,7 @@ export function expandFlow(
   )
 
   return {
-    flow: { ...flow, states: withDerivedRegions(flow['states'], states, expansion) },
+    flow: { ...flow, states: withDerivedRegions(states, expansion) },
     issues: expansion.issues,
   }
 }

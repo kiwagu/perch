@@ -385,7 +385,8 @@ out, and the loader derives it, the same way every time:
 - **The region of a button.** A button bound to one action that no state of the flow
   handles gets its region, when the root of the flow has one parallel state. The region is
   named by the button without its screen and its kind (`organisation.notes.add-button` gives
-  `notes-add`) and comes after the regions written. It rests in `idle`; the button moves it
+  `notes-add`) and comes after the regions written; it counts among the two regions or more of
+  the parallel state, which may write fewer. It rests in `idle`; the button moves it
   to `running`, which invokes the action with the parameters the binding passes, and both
   outcomes lead back to `idle`. A failure shows its codes on the error of the button's part;
   the success of an action of the model says what the controls do by the word its name

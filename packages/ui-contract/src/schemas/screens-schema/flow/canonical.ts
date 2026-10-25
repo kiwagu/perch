@@ -22,5 +22,6 @@ export const flowSchema = flowSchemaOf({
   transition: transitionSchema,
   effect: effectSchema,
   region: (parts) => parts.region,
+  regions: { min: 2, description: 'The regions by name, two or more.' },
   description: 'The flow of the screen: an XState v5 machine config.',
 })
