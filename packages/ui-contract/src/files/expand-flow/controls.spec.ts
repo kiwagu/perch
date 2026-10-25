@@ -171,6 +171,29 @@ describe('the region of a button bound to one action', () => {
     expect(Object.keys(regions)).toEqual(['list', 'form'])
   })
 
+  it('keeps a target an outcome names, and names a mistake inside an outcome once, at its place', () => {
+    const { regions, issues } = regionsOf(
+      viewing({
+        list: {
+          by: 'sample.list.remove-button',
+          onDone: '#sample.done',
+          onError: { actions: [{ show: 'sample.list.nothing' }] },
+        },
+      }),
+      [REMOVE],
+    )
+
+    expect(regions['list']).toMatchObject({
+      states: { running: { invoke: { onDone: { target: '#sample.done' } } } },
+    })
+    expect(issues).toEqual([
+      {
+        at: ['flow', 'states', 'viewing', 'states', 'list', 'onError', 'actions', 0, 'show'],
+        message: 'no screen declares the anchor sample.list.nothing',
+      },
+    ])
+  })
+
   it('makes a flow the canonical schema takes', () => {
     const { flow } = expandFlow(
       viewing({ other: OTHER, list: { by: 'sample.list.remove-button', onError: 'idle' } }),

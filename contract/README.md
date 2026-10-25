@@ -330,10 +330,6 @@ run contract:flow <screen>` prints it. The shorter forms are four:
 - A region written by its pattern, a shape that two regions or more of the screens share,
   named by what the area does. A shape that one region has is written in full until a
   second one shares it.
-  - `submit`: a control starts an action and the area waits for it. `by` is the anchor of
-    the control, `as` the state that runs the action `src` with its `input`; the region rests
-    in `idle` and `onDone` and `onError` lead back to it (absent, back to `idle`; a
-    transition without a target, back to `idle` too).
   - `draft`: a control that follows a stored value or holds what was typed. In `following`
     the control `input` shows the stored value as it changes, here or on another device;
     typing moves it to `edited`, which goes back to `following` when what was typed is the

@@ -125,19 +125,19 @@ describe('the screen schema an editor reads', () => {
       },
     },
   })
-  const submit = (as: string) => ({
-    pattern: 'submit',
-    by: 'sample.page.save-button',
-    as,
-    src: 'thing.save',
-    onError: { actions: [{ show: { 'sample.page.error': ['failed'] } }] },
+  const removal = (extra: Record<string, unknown>) => ({
+    by: 'sample.page.remove-button',
+    onError: { actions: [{ show: 'sample.page.error' }] },
+    ...extra,
   })
 
-  it('takes a region by its pattern and an effect by its name', () => {
-    expect(validateAgainst('x.yaml', schema, screenWith(submit('saving')))).toEqual([])
+  it('takes a region by its button and an effect by its name', () => {
+    expect(validateAgainst('x.yaml', schema, screenWith(removal({})))).toEqual([])
   })
 
-  it('refuses a submit whose action runs in idle, as the loader does', () => {
-    expect(validateAgainst('x.yaml', schema, screenWith(submit('idle')))).not.toEqual([])
+  it('refuses a region by its button that names what the binding gives, as the loader does', () => {
+    expect(
+      validateAgainst('x.yaml', schema, screenWith(removal({ src: 'thing.remove' }))),
+    ).not.toEqual([])
   })
 })

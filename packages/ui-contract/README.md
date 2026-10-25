@@ -56,8 +56,8 @@ for Bun.
     `formatScenario(scenario)` writes one, its inverse.
   - The Zod sources of the files: `screenFileSchema` (a screen as every reader takes it, its
     flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
-    shorter forms too: `authoredFlowSchema`, with the region patterns `submitPatternSchema`
-    and `draftPatternSchema` and the region of a button `controlRegionSchema`, its anchors
+    shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
+    the region of a button `controlRegionSchema`, its anchors
     those of `authoredAnchorDefSchema`; the source of `contract/screen.schema.json`), `platformFileSchema`
     and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes

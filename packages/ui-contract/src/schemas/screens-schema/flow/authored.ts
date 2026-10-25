@@ -8,7 +8,7 @@
  *   it declares), `show: { <anchor>: [codes] }` (one of these), `clear: <anchor>`,
  *   `navigate: <path>` or `navigate: { to, search }`.
  * - A region may be a pattern, a shape two regions or more of the screens share, named by
- *   what it does: `submit` and `draft`. A region that fits no pattern is written in full.
+ *   what it does: `draft`. A region that fits no pattern is written in full.
  * - The region of a button bound to one action is derived from its binding: a flow that
  *   handles the button nowhere gets it, and `by: <button>` writes it with the outcomes the
  *   screen decides.
@@ -19,18 +19,11 @@
 import { z } from '@workspace/zod'
 
 import { anchorSchema, codeSchema } from '../../../names.schema'
-import { actionNameSchema } from '../anchor'
 import { routePathSchema } from '../binding'
-import { actionParamsSchema } from '../params'
 
 import { flowSchemaOf } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
-import {
-  flowStateNameSchema,
-  flowTargetSchema,
-  guardNameSchema,
-  modelEventNameSchema,
-} from './names'
+import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
 
 export const showAllSchema = z
@@ -80,37 +73,6 @@ export const authoredTransitionSchema = z
 
 const authoredTransitionsSchema = transitionsSchemaOf(authoredTransitionSchema)
 
-export const submitPatternSchema = z
-  .strictObject({
-    pattern: z
-      .literal('submit')
-      .describe(
-        'A control starts an action and the area waits for it: the region rests in `idle`, the event `by` moves it to the state `as`, which runs `src`, and its outcomes lead back to `idle`.',
-      ),
-    description: z.string().exactOptional().describe('What the area is, for a reader.'),
-    by: anchorSchema.describe('The anchor whose event starts the action (a button acted on).'),
-    as: flowStateNameSchema
-      .regex(/^(?!idle$)/, {
-        message: 'the state that runs the action cannot be "idle", where the region rests',
-      })
-      .describe('The state that runs the action, any name but `idle`: `adding`, `inviting`.'),
-    src: actionNameSchema.describe('The action, as a binding names it.'),
-    input: actionParamsSchema
-      .exactOptional()
-      .describe('Per parameter, the anchor whose value it takes or a constant.'),
-    onDone: authoredTransitionsSchema
-      .exactOptional()
-      .describe(
-        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.',
-      ),
-    onError: authoredTransitionsSchema
-      .exactOptional()
-      .describe(
-        'What follows when the action fails; absent, back to `idle`; a transition without a target goes back to `idle` too.',
-      ),
-  })
-  .describe('The region pattern `submit`: a control starts an action and the area waits for it.')
-
 export const controlRegionSchema = z
   .strictObject({
     by: anchorSchema.describe(
@@ -153,9 +115,9 @@ export const authoredFlowSchema = flowSchemaOf({
   effect: authoredEffectSchema,
   region: (parts) =>
     z
-      .union([submitPatternSchema, draftPatternSchema, controlRegionSchema, parts.region])
+      .union([draftPatternSchema, controlRegionSchema, parts.region])
       .describe(
-        'A region written in full, by its pattern (`submit`, `draft`), or as the region of a button (`by`).',
+        'A region written in full, by its pattern (`draft`), or as the region of a button (`by`).',
       ),
   description:
     'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',

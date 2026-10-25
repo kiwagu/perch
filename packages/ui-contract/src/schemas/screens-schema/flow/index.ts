@@ -8,7 +8,6 @@ export {
   navigateShortSchema,
   showAllSchema,
   showSomeSchema,
-  submitPatternSchema,
 } from './authored'
 export { flowSchema, transitionSchema } from './canonical'
 export { effectSchema, navigateParamsSchema } from './effects'

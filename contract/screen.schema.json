@@ -1087,117 +1087,6 @@
                           "properties": {
                             "pattern": {
                               "type": "string",
-                              "const": "submit",
-                              "description": "A control starts an action and the area waits for it: the region rests in `idle`, the event `by` moves it to the state `as`, which runs `src`, and its outcomes lead back to `idle`."
-                            },
-                            "description": {
-                              "description": "What the area is, for a reader.",
-                              "type": "string"
-                            },
-                            "by": {
-                              "type": "string",
-                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                              "description": "The anchor whose event starts the action (a button acted on)."
-                            },
-                            "as": {
-                              "type": "string",
-                              "allOf": [
-                                {
-                                  "pattern": "^[a-z][a-z0-9-]*$"
-                                },
-                                {
-                                  "pattern": "^(?!idle$)"
-                                }
-                              ],
-                              "description": "The state that runs the action, any name but `idle`: `adding`, `inviting`."
-                            },
-                            "src": {
-                              "type": "string",
-                              "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
-                              "description": "The action, as a binding names it."
-                            },
-                            "input": {
-                              "description": "Per parameter, the anchor whose value it takes or a constant.",
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string"
-                              },
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                    "description": "The anchor of the control whose value the parameter takes."
-                                  },
-                                  {
-                                    "type": "object",
-                                    "properties": {
-                                      "value": {
-                                        "description": "The constant: a string, a number or a boolean.",
-                                        "type": [
-                                          "string",
-                                          "number",
-                                          "boolean"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "value"
-                                    ],
-                                    "additionalProperties": false,
-                                    "description": "A constant the parameter always takes: `{ \"value\": true }`."
-                                  }
-                                ],
-                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
-                              }
-                            },
-                            "onDone": {
-                              "description": "What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.",
-                              "anyOf": [
-                                {
-                                  "$ref": "#/$defs/authoredTransition"
-                                },
-                                {
-                                  "minItems": 1,
-                                  "type": "array",
-                                  "items": {
-                                    "$ref": "#/$defs/authoredTransition"
-                                  },
-                                  "description": "Guarded transitions in order: the first whose guard holds is taken."
-                                }
-                              ]
-                            },
-                            "onError": {
-                              "description": "What follows when the action fails; absent, back to `idle`; a transition without a target goes back to `idle` too.",
-                              "anyOf": [
-                                {
-                                  "$ref": "#/$defs/authoredTransition"
-                                },
-                                {
-                                  "minItems": 1,
-                                  "type": "array",
-                                  "items": {
-                                    "$ref": "#/$defs/authoredTransition"
-                                  },
-                                  "description": "Guarded transitions in order: the first whose guard holds is taken."
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "pattern",
-                            "by",
-                            "as",
-                            "src"
-                          ],
-                          "additionalProperties": false,
-                          "description": "The region pattern `submit`: a control starts an action and the area waits for it."
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "pattern": {
-                              "type": "string",
                               "const": "draft",
                               "description": "A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it."
                             },
@@ -1460,7 +1349,7 @@
                           "description": "A region of a parallel state: one area of the screen, in one of its states at a time."
                         }
                       ],
-                      "description": "A region written in full, by its pattern (`submit`, `draft`), or as the region of a button (`by`)."
+                      "description": "A region written in full, by its pattern (`draft`), or as the region of a button (`by`)."
                     },
                     "description": "The regions by name, two or more.",
                     "minProperties": 2

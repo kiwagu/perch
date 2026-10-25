@@ -20,6 +20,5 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
-  submitPatternSchema,
   transitionSchema,
 } from './screens-schema'

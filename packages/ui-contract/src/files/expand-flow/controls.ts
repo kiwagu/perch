@@ -27,7 +27,7 @@ const DONE: ReadonlyArray<readonly [RegExp, string]> = [
 ]
 
 /** A transition that names no target goes back to `idle`; absent, so does it. */
-export function backToIdle(value: unknown): unknown {
+function backToIdle(value: unknown): unknown {
   if (value === undefined) {
     return { target: IDLE }
   }

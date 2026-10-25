@@ -17,7 +17,6 @@ export {
   flowStateNameSchema,
   guardNameSchema,
   platformEventNameSchema,
-  submitPatternSchema,
   transitionSchema,
 } from './flow'
 export { actionParamsSchema, paramValueSchema } from './params'

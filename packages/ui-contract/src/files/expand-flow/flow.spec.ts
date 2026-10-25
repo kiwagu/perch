@@ -241,70 +241,6 @@ describe('expandFlow', () => {
     })
   })
 
-  it('expands submit into idle, the state that runs the action, and its outcomes back to idle', () => {
-    expect(
-      expandedRegion({
-        pattern: 'submit',
-        description: 'The form.',
-        by: 'sample.form.save-button',
-        as: 'saving',
-        src: 'thing.save',
-        input: { name: 'sample.form.name-input' },
-        onDone: { description: 'Saved.' },
-        onError: { actions: [{ show: 'sample.form.error' }] },
-      }),
-    ).toEqual({
-      region: {
-        description: 'The form.',
-        initial: 'idle',
-        states: {
-          idle: { on: { 'sample.form.save-button': { target: 'saving' } } },
-          saving: {
-            invoke: {
-              src: 'thing.save',
-              input: { name: 'sample.form.name-input' },
-              onDone: { target: 'idle', description: 'Saved.' },
-              onError: {
-                target: 'idle',
-                actions: [
-                  {
-                    type: 'show',
-                    params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
-                  },
-                ],
-              },
-            },
-          },
-        },
-      },
-      issues: [],
-    })
-  })
-
-  it('takes idle for an outcome of submit that is absent, and keeps a target that is named', () => {
-    const { region } = expandedRegion({
-      pattern: 'submit',
-      by: 'sample.form.save-button',
-      as: 'saving',
-      src: 'thing.save',
-      onDone: '#sample.done',
-    })
-
-    expect(region).toEqual({
-      initial: 'idle',
-      states: {
-        idle: { on: { 'sample.form.save-button': { target: 'saving' } } },
-        saving: {
-          invoke: {
-            src: 'thing.save',
-            onDone: { target: '#sample.done' },
-            onError: { target: 'idle' },
-          },
-        },
-      },
-    })
-  })
-
   it('expands draft into following and edited, back to following whenever its guard holds', () => {
     expect(
       expandedRegion({
@@ -333,56 +269,28 @@ describe('expandFlow', () => {
   })
 
   it('names what is wrong in a pattern, and keeps the region as written', () => {
-    const wrong = { pattern: 'submit', by: 'sample.form.save-button', src: 'thing.save', at: 1 }
+    const wrong = {
+      pattern: 'draft',
+      input: 'sample.form.name-input',
+      stored: 'model.thing.name',
+      at: 1,
+    }
     const { region, issues } = expandedRegion(wrong)
 
     expect(region).toBe(wrong)
     expect(issues.map(({ at }) => at.join('.'))).toEqual(
       expect.arrayContaining([
-        'flow.states.viewing.states.form.as',
+        'flow.states.viewing.states.form.guard',
         'flow.states.viewing.states.form',
       ]),
     )
-  })
-
-  it('names a mistake inside an outcome of submit at its place in the file, once', () => {
-    expect(
-      expandedRegion({
-        pattern: 'submit',
-        by: 'sample.form.save-button',
-        as: 'saving',
-        src: 'thing.save',
-        onError: { actions: [{ show: 'sample.form.nothing' }] },
-      }).issues,
-    ).toEqual([
-      {
-        at: ['flow', 'states', 'viewing', 'states', 'form', 'onError', 'actions', 0, 'show'],
-        message: 'no screen declares the anchor sample.form.nothing',
-      },
-    ])
-  })
-
-  it('refuses idle as the state that runs the action of submit', () => {
-    expect(
-      expandedRegion({
-        pattern: 'submit',
-        by: 'sample.form.save-button',
-        as: 'idle',
-        src: 'thing.save',
-      }).issues,
-    ).toEqual([
-      {
-        at: ['flow', 'states', 'viewing', 'states', 'form', 'as'],
-        message: 'the state that runs the action cannot be "idle", where the region rests',
-      },
-    ])
   })
 
   it('names a pattern it does not know', () => {
     expect(expandedRegion({ pattern: 'wizard', initial: 'one' }).issues).toEqual([
       {
         at: ['flow', 'states', 'viewing', 'states', 'form', 'pattern'],
-        message: '"wizard" is not a region pattern: submit or draft',
+        message: '"wizard" is not a region pattern: draft',
       },
     ])
   })
@@ -390,11 +298,10 @@ describe('expandFlow', () => {
   it('makes a flow the canonical schema takes', () => {
     const { flow } = expandFlow(
       withRegion({
-        pattern: 'submit',
-        by: 'sample.form.save-button',
-        as: 'saving',
-        src: 'thing.save',
-        onError: { actions: [{ show: { 'sample.form.error': ['failed'] } }] },
+        pattern: 'draft',
+        input: 'sample.form.name-input',
+        stored: 'model.thing.name',
+        guard: 'nameIsStored',
       }),
       LOOKUPS,
     )
