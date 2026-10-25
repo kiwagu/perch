@@ -137,9 +137,15 @@ alike:
 - flow style for `entry`, and inside an anchor for its `roles`, `codes`, `states` and
   `derived` lists and for a `binding` that is one map with no map inside
   (`binding: { model: profile.name }`, `binding: { action: platform.sign-out }`);
+- inside the `flow`, one line for what its shorter forms make short: a transition that is
+  its target alone (`organisation.notes.add-button: adding`), an effect by its name
+  (`- show: organisation.notes.error`, `- navigate: /me`), the codes of a `show` in flow
+  style (`- show: { organisation.notes.error: [ forbidden, failed ] }`), and an `input` or a
+  pattern's outcome that is one map with no map inside (`input: { text:
+  organisation.notes.new-textarea }`);
 - block style for the rest: the `anchors` map and each anchor in it, an anchor's `binding`
-  that is a list or holds a map (its action's `params` included), the screen's `states`, its
-  `flow` with everything inside it, a `source`, and the `wireframe` as a block scalar.
+  that is a list or holds a map (its action's `params` included), the screen's `states`, the
+  rest of its `flow`, a `source`, and the `wireframe` as a block scalar.
 
 An excerpt of `screens/me.yaml`:
 
