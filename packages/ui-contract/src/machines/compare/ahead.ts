@@ -6,6 +6,8 @@
  * target, guard, effect and invoke source it has is the flow's, its effects in the flow's order.
  */
 
+import { sameValue } from '../../records'
+
 import type {
   ProjectedEffect,
   ProjectedRegion,
@@ -13,7 +15,6 @@ import type {
   ProjectedTransition,
   Projection,
 } from './projection'
-import { sameValue } from './records'
 
 /** Whether `part` is `whole` with some of its items left out, the rest in order. */
 const within = <T>(

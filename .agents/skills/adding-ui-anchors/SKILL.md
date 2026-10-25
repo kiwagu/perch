@@ -66,8 +66,10 @@ code and the tests follow; the checks hold them to the contract.
    list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply. Add its events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
-   of its parallel state, and an event belongs to one area) and the element to the
-   `wireframe`. A
+   of its parallel state, and an event belongs to one area; write it in the shorter forms
+   of `contract/README.md` where they fit, a transition as its target, an effect by its
+   name, a region by its pattern, and read the expansion with `bun run contract:flow
+   <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
    those tables are business, like the screen file.
    A new screen follows the checklist in `references/checklists.md`.

@@ -24,7 +24,8 @@ for Bun.
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
     `loadScreens(root)` (every `.yaml` file under `contract/screens`, sorted by path, one screen
-    each through `screenFileSchema`, named by the path of its first binding: `/me` is
+    each, its flow expanded from the shorter forms with the codes the anchors of every screen
+    declare and then parsed through `screenFileSchema`, named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/platform.yaml`, the version and the platform section, through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
@@ -49,7 +50,11 @@ for Bun.
     key of the front matter (`devices.A`), each section (`where`) and each list item
     (`steps[0]`), or returns its problems with their lines (`ScenarioProblem`);
     `formatScenario(scenario)` writes one, its inverse.
-  - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
+  - The Zod sources of the files: `screenFileSchema` (a screen as every reader takes it, its
+    flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
+    shorter forms too: `authoredFlowSchema`, with the region patterns `submitPatternSchema`
+    and `draftPatternSchema`; the source of `contract/screen.schema.json`), `platformFileSchema`
+    and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
     leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
@@ -284,6 +289,9 @@ for Bun.
   with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
   writing nothing). Not part of `bun run check`: the note is a report.
+- From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
+  flow of a screen, named by its id or its file, as every reader takes it, expanded from
+  the shorter forms its file may write it in). Not part of `bun run check`: it is a view.
 - From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
   screen files in four sections, the table (path, screen, guard, roles, history, params,
   search, file), one example link per binding, where each route is reached from and the

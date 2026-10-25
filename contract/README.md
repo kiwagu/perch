@@ -311,6 +311,34 @@ unchanged, as it carries a binding into the router.
   restores; the machine owns the transient one (signing in, confirming, failed). No state
   declares an address yet.
 
+A screen file may write its flow shorter; the loader expands it into the config above
+before anything reads it, so the checks, the walk in XState, the manifest and an app's
+machine see the full config, and `bun run contract:flow <screen>` prints it. The shorter
+forms are three:
+
+- A transition written as its target alone, as XState itself allows: `onDone: idle` is
+  `onDone: { target: idle }`.
+- An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it
+  declares, in its order; `show: { <anchor>: [codes] }`, one of these; `clear: <anchor>`;
+  `navigate: <path>` or `navigate: { to, search }`.
+- A region written by its pattern, a shape that two regions or more of the screens share,
+  named by what the area does. A shape that one region has is written in full until a
+  second one shares it.
+  - `submit`: a control starts an action and the area waits for it. `by` is the anchor of
+    the control, `as` the state that runs the action `src` with its `input`; the region rests
+    in `idle` and `onDone` and `onError` lead back to it (absent, back to `idle`; a
+    transition without a target, back to `idle` too).
+  - `draft`: a control that follows a stored value or holds what was typed. In `following`
+    the control `input` shows the stored value as it changes, here or on another device;
+    typing moves it to `edited`, which goes back to `following` when what was typed is the
+    stored value again, by typing it back or by the data event `stored`, both under `guard`.
+
+A pattern's states are the machine's, named by the pattern (`idle`, `following`, `edited`),
+and a scenario or a test reads them as it reads any state. What the shorter forms leave
+out is mechanics a tester or a user cannot tell apart; a `description` belongs to a
+decision (where a success leads, what a failure shows, what restarts what), not to every
+state.
+
 Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested
 deeper than a parallel state's regions, history states, targets by `.child` or by an id
 from anywhere but a region's state, or actions named by a string. A state of a region is

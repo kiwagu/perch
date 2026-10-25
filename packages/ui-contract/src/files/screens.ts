@@ -4,14 +4,18 @@
  * (`screenFile`); `contract/platform.yaml` holds the contract version and the platform
  * section. Each file is YAML, then its Zod schema. A missing or empty folder, a file that
  * is not `.yaml`, a file named otherwise than its screen's first binding says and a
- * missing platform file are problems of the file or folder concerned. Once every file
- * loads, they are assembled into one `ScreensFile`, each screen with its file.
+ * missing platform file are problems of the file or folder concerned. A file may author its
+ * flow in the shorter forms (a transition as its target, an effect by its name, a region by
+ * its pattern): once every file is read, each flow is expanded with the codes the anchors of
+ * all screens declare, then the screen is parsed as every reader takes it, its flow canonical.
+ * Once every file loads, they are assembled into one `ScreensFile`, each screen with its file.
  */
 
 import { join } from 'node:path'
 
 import type { z } from '@workspace/zod'
 
+import { isRecord } from '../records'
 import {
   type anchorBindingSchema,
   type anchorDefSchema,
@@ -27,10 +31,11 @@ import {
   type transitionSchema,
 } from '../schemas'
 
+import { type CodesOf, expandFlow } from './expand-flow'
 import { filesUnder } from './files-under'
 import { parseFile } from './parse-file'
 import { PLATFORM_FILE, SCREENS_DIR, screenFile } from './paths'
-import type { Problem } from './problems'
+import { jsonPath, type Problem } from './problems'
 import { readYaml } from './read-yaml'
 
 export type Screen = z.infer<typeof screenSchema>
@@ -84,14 +89,48 @@ function nameProblems(file: string, screen: Screen): Problem[] {
   ]
 }
 
-function readScreen(root: string, file: string): { screen?: Screen; problems: Problem[] } {
-  const read = readYaml(root, file)
+/** The codes each anchor of the screens as read declares, for `show: <anchor>`. */
+function codesOfRead(read: readonly unknown[]): CodesOf {
+  const codes = new Map<string, readonly string[]>()
 
-  if (read.problems.length > 0) {
-    return { problems: read.problems }
+  for (const screen of read) {
+    const anchors = isRecord(screen) ? screen['anchors'] : undefined
+
+    for (const [anchor, definition] of isRecord(anchors) ? Object.entries(anchors) : []) {
+      const declared = isRecord(definition) ? definition['codes'] : undefined
+
+      codes.set(
+        anchor,
+        Array.isArray(declared)
+          ? declared.filter((code: unknown): code is string => typeof code === 'string')
+          : [],
+      )
+    }
   }
 
-  const parsed = parseFile(file, screenFileSchema, read.value)
+  return (anchor) => codes.get(anchor)
+}
+
+/** The screen of one file as read, its flow expanded, parsed as every reader takes it. */
+function screenOf(
+  file: string,
+  read: unknown,
+  codesOf: CodesOf,
+): { screen?: Screen; problems: Problem[] } {
+  const flow = isRecord(read) ? read['flow'] : undefined
+  const expanded = flow === undefined ? undefined : expandFlow(flow, codesOf)
+
+  if (expanded !== undefined && expanded.issues.length > 0) {
+    return {
+      problems: expanded.issues.map((issue) => ({
+        file,
+        message: `${jsonPath(issue.at)}: ${issue.message}`,
+      })),
+    }
+  }
+
+  const data = expanded === undefined || !isRecord(read) ? read : { ...read, flow: expanded.flow }
+  const parsed = parseFile(file, screenFileSchema, data)
 
   if (parsed.value === undefined) {
     return { problems: parsed.problems }
@@ -118,24 +157,37 @@ function readScreenFiles(root: string): {
   }
 
   const problems: Problem[] = []
+  const read: Array<{ file: string; value: unknown }> = []
 
   for (const path of paths) {
     const file = `${SCREENS_DIR}/${path}`
 
     if (path.endsWith(SUFFIX)) {
-      const read = readScreen(root, file)
+      const yaml = readYaml(root, file)
 
-      problems.push(...read.problems)
+      problems.push(...yaml.problems)
 
-      if (read.screen !== undefined) {
-        screens.push(read.screen)
-        files.push(file)
+      if (yaml.problems.length === 0) {
+        read.push({ file, value: yaml.value })
       }
     } else {
       problems.push({
         file,
         message: `not a screen file: the folder holds \`<pathname>${SUFFIX}\` files only`,
       })
+    }
+  }
+
+  const codesOf = codesOfRead(read.map(({ value }) => value))
+
+  for (const { file, value } of read) {
+    const loaded = screenOf(file, value, codesOf)
+
+    problems.push(...loaded.problems)
+
+    if (loaded.screen !== undefined) {
+      screens.push(loaded.screen)
+      files.push(file)
     }
   }
 

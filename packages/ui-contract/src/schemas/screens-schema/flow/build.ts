@@ -1,0 +1,157 @@
+/**
+ * The shape of a flow, built over the transitions and effects it may hold and the regions a
+ * parallel state may have. The canonical flow, which `createMachine` takes verbatim, is built
+ * over the effects and transitions XState runs; the authored flow, which a screen file holds,
+ * over their shorthands too and with the region patterns, and the loader expands it into the
+ * canonical one. Building both here keeps one shape for the two.
+ */
+
+import { z } from '@workspace/zod'
+
+import { anchorSchema, kebabNameSchema } from '../../../names.schema'
+import { actionNameSchema } from '../anchor'
+import { routePathSchema } from '../binding'
+import { actionParamsSchema } from '../params'
+
+import {
+  flowStateNameSchema,
+  guardNameSchema,
+  modelEventNameSchema,
+  platformEventNameSchema,
+  searchSchema,
+} from './names'
+import { transitionsSchemaOf } from './transitions'
+
+/** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
+export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
+  transition: T
+  effect: E
+}) {
+  const transitions = transitionsSchemaOf(parts.transition)
+  const effects = z.array(parts.effect).min(1).describe('The effects, in order.')
+  const invoke = z
+    .strictObject({
+      src: actionNameSchema.describe('The action the state runs, as a binding names it.'),
+      input: actionParamsSchema
+        .exactOptional()
+        .describe('Per parameter, the anchor whose value it takes or a constant.'),
+      onDone: transitions.describe('What follows when the action succeeds.'),
+      onError: transitions.exactOptional().describe('What follows when the action fails.'),
+    })
+    .describe('The action the state runs while the machine is in it.')
+  const description = z.string().exactOptional().describe('What the state is, for a reader.')
+  const entry = effects.exactOptional().describe('The effects on entering the state.')
+  const exit = effects.exactOptional().describe('The effects on leaving the state.')
+  const on = z
+    .record(z.union([platformEventNameSchema, modelEventNameSchema, anchorSchema]), transitions)
+    .exactOptional()
+    .describe(
+      'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
+    )
+  const meta = z
+    .strictObject({
+      address: z
+        .strictObject({
+          path: routePathSchema.exactOptional().describe('The path of a binding of the screen.'),
+          search: searchSchema.exactOptional(),
+        })
+        .exactOptional()
+        .describe('The route that reaches this state: a link or a reload restores it.'),
+    })
+    .exactOptional()
+    .describe('What the contract says of the state beyond XState: its address.')
+  const state = z
+    .strictObject({
+      description,
+      type: z.literal('final').exactOptional().describe('The flow ends in this state.'),
+      meta,
+      entry,
+      exit,
+      on,
+      invoke: invoke.exactOptional(),
+    })
+    .describe('One state of the flow.')
+  const regionState = z
+    .strictObject({ description, entry, exit, on, invoke: invoke.exactOptional() })
+    .describe(
+      'One state of a region: a plain state that does not end, has no address and no nested states.',
+    )
+  const region = z
+    .strictObject({
+      description: z.string().exactOptional().describe('What the area is, for a reader.'),
+      initial: flowStateNameSchema.describe('The state the region starts in.'),
+      states: z
+        .record(flowStateNameSchema, regionState)
+        .describe('The states of the region by name.'),
+    })
+    .describe(
+      'A region of a parallel state: one area of the screen, in one of its states at a time.',
+    )
+
+  return { transitions, effects, invoke, description, entry, exit, on, meta, state, region }
+}
+
+/** The parts of a flow over one `T` transition and one `E` effect. */
+export type FlowParts<T extends z.ZodType, E extends z.ZodType> = ReturnType<
+  typeof flowPartsOf<T, E>
+>
+
+/**
+ * The flow over one `transition` and one `effect`, its parallel states holding the regions
+ * `region` makes of the parts (the plain region alone, or with the patterns that expand into
+ * one).
+ */
+export function flowSchemaOf<
+  T extends z.ZodType,
+  E extends z.ZodType,
+  R extends z.ZodType,
+>(options: {
+  transition: T
+  effect: E
+  region: (parts: FlowParts<T, E>) => R
+  description: string
+}) {
+  const parts = flowPartsOf({ transition: options.transition, effect: options.effect })
+  const parallel = z
+    .strictObject({
+      description: parts.description,
+      type: z.literal('parallel').describe('Its regions are all active at once, each on its own.'),
+      meta: parts.meta,
+      entry: parts.entry,
+      exit: parts.exit,
+      on: parts.on,
+      states: z
+        .record(flowStateNameSchema, options.region(parts))
+        .refine((regions) => Object.keys(regions).length >= 2, {
+          message: 'a parallel state has two regions or more',
+        })
+        .meta({ description: 'The regions by name, two or more.', minProperties: 2 }),
+    })
+    .describe(
+      'A parallel state: its regions are the independent areas of the screen; an event of its own `on` is handled whichever state each region is in.',
+    )
+
+  return z
+    .strictObject({
+      id: kebabNameSchema
+        .exactOptional()
+        .describe(
+          'The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
+        ),
+      description: z.string().exactOptional().describe('What the flow is, for a reader.'),
+      initial: flowStateNameSchema.describe('The state the screen opens in.'),
+      meta: z
+        .strictObject({
+          guards: z
+            .record(guardNameSchema, z.string())
+            .exactOptional()
+            .describe('The guards by name, each with what it holds.'),
+        })
+        .exactOptional()
+        .describe('What the contract says of the flow beyond XState: its guards.'),
+      states: z
+        .record(flowStateNameSchema, z.discriminatedUnion('type', [parts.state, parallel]))
+        .describe('The states by name: plain states, and parallel states of regions.'),
+    })
+    .describe(options.description)
+}

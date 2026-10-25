@@ -28,6 +28,10 @@
  *     markers of `contract/COVERAGE.md`, prints the measure as JSON, or lists the unmarked
  *     and the ignored controls as `file:line: <element>`. A coverage-ignore marker it cannot
  *     apply, or that ignores no control, is printed as a problem, and nothing is written.
+ *   ui-contract flow <screen> [--json]
+ *     prints the flow of a screen, named by its id or its file, as every reader takes it:
+ *     expanded from the shorter forms the file may author it in (a transition as its target,
+ *     an effect by its name, a region by its pattern), the config `createMachine` takes.
  *   ui-contract routes [--json]
  *     prints the routes of the screen files: the table (path, screen, guard, roles, history,
  *     params, search, file), one example link per binding (each path parameter from its
@@ -40,6 +44,7 @@
 import { check } from './check'
 import { coverage } from './coverage'
 import { diff } from './diff'
+import { flow } from './flow'
 import { manifest } from './manifest'
 import { routes } from './routes'
 import { schemas } from './schemas'
@@ -60,9 +65,11 @@ function dispatch(argv: readonly string[]): number {
       return coverage(rest)
     case 'routes':
       return routes(rest)
+    case 'flow':
+      return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write] [--json] [--unmarked]" or "routes [--json]"',
+        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write] [--json] [--unmarked]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

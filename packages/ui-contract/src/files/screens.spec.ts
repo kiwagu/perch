@@ -281,4 +281,51 @@ describe('loadScreens', () => {
       ),
     ])
   })
+  it('loads a flow written in the shorter forms as the flow every reader takes', () => {
+    const before = loadScreens(root).screens?.screens[0]?.flow
+
+    writeSample((screen) => {
+      screen['flow'] = {
+        initial: 'editing',
+        states: {
+          editing: { on: { 'sample.save-button': 'saving' } },
+          saving: {
+            invoke: {
+              src: 'thing.updateThing',
+              input: { title: 'sample.title-input' },
+              onDone: {
+                target: 'editing',
+                actions: [
+                  { show: { 'sample.save-button': ['saved'] } },
+                  { navigate: '/sample/$key' },
+                ],
+              },
+              onError: {
+                target: 'editing',
+                actions: [{ show: { 'sample.save-button': ['failed'] } }],
+              },
+            },
+          },
+        },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found).toEqual([])
+    expect(screens?.screens[0]?.flow).toEqual(before)
+  })
+
+  it('reports what keeps a flow from expanding, at its place in the file', () => {
+    writeSample((screen) => {
+      screen['flow'] = {
+        initial: 'editing',
+        states: { editing: { entry: [{ show: 'sample.nothing-button' }] } },
+      }
+    })
+
+    expect(messages()).toEqual([
+      'flow.states.editing.entry[0].show: no screen declares the anchor sample.nothing-button',
+    ])
+  })
 })

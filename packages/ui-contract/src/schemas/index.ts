@@ -6,8 +6,11 @@ export {
   actionParamsSchema,
   anchorBindingSchema,
   anchorDefSchema,
+  authoredFlowSchema,
+  authoredScreenFileSchema,
   bindingRefSchema,
   bindingSchema,
+  draftPatternSchema,
   effectSchema,
   flowSchema,
   paramValueSchema,
@@ -16,5 +19,6 @@ export {
   screenFileSchema,
   screenSchema,
   sourceSchema,
+  submitPatternSchema,
   transitionSchema,
 } from './screens-schema'
