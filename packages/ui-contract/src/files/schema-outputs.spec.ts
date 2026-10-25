@@ -4,8 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { SCREEN_SCHEMA_FILE } from './paths'
 import { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
-import { jsonSchemaProblems } from './validator'
+import { jsonSchemaProblems, validateAgainst } from './validator'
 
 let root: string
 
@@ -99,5 +100,44 @@ describe('schemaDrift', () => {
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])
+  })
+})
+
+describe('the screen schema an editor reads', () => {
+  const schema = SCHEMA_OUTPUTS.find(({ file }) => file === SCREEN_SCHEMA_FILE)?.schema() ?? {}
+
+  /** A screen whose parallel state has the region `form` written as `form`. */
+  const screenWith = (form: unknown) => ({
+    id: 'sample',
+    title: 'Sample',
+    description: 'A sample screen.',
+    flag: null,
+    bindings: [{ path: '/sample', roles: ['member'] }],
+    entry: ['sample.page'],
+    anchors: { 'sample.page': { kind: 'page' } },
+    flow: {
+      initial: 'viewing',
+      states: {
+        viewing: {
+          type: 'parallel',
+          states: { form, other: { initial: 'idle', states: { idle: {} } } },
+        },
+      },
+    },
+  })
+  const submit = (as: string) => ({
+    pattern: 'submit',
+    by: 'sample.page.save-button',
+    as,
+    src: 'thing.save',
+    onError: { actions: [{ show: { 'sample.page.error': ['failed'] } }] },
+  })
+
+  it('takes a region by its pattern and an effect by its name', () => {
+    expect(validateAgainst('x.yaml', schema, screenWith(submit('saving')))).toEqual([])
+  })
+
+  it('refuses a submit whose action runs in idle, as the loader does', () => {
+    expect(validateAgainst('x.yaml', schema, screenWith(submit('idle')))).not.toEqual([])
   })
 })

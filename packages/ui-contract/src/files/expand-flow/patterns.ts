@@ -1,7 +1,9 @@
 /**
  * A region written by its pattern, expanded into the region it stands for. A region without
  * `pattern` is left as it is; one with a pattern is parsed by the pattern's schema first, so a
- * mistake in it is named there, never as a mismatch of the region it would have become.
+ * mistake in it is named there, never as a mismatch of the region it would have become, and
+ * the shorter forms inside it (the outcomes of `submit`) are expanded at their place in the
+ * file: the region it becomes is complete, and nothing walks its states again.
  *
  * - `submit`: `idle` on the event `by` moves to the state `as`, which runs `src` with `input`;
  *   `onDone` and `onError` (absent: back to `idle`; a transition without a target goes back
@@ -16,6 +18,7 @@ import { isRecord } from '../../records'
 import { draftPatternSchema, submitPatternSchema } from '../../schemas'
 import { englishErrors } from '../parse-file'
 
+import { transitionsOf } from './effects'
 import type { Expansion } from './expansion'
 
 const IDLE = 'idle'
@@ -23,7 +26,7 @@ const IDLE = 'idle'
 /** A transition of `submit` that names no target goes back to `idle`; absent, so does it. */
 function backToIdle(value: unknown): unknown {
   if (value === undefined) {
-    return IDLE
+    return { target: IDLE }
   }
 
   const one = (each: unknown): unknown =>
@@ -32,7 +35,16 @@ function backToIdle(value: unknown): unknown {
   return Array.isArray(value) ? value.map(one) : one(value)
 }
 
-function submitOf(pattern: z.output<typeof submitPatternSchema>): unknown {
+function submitOf(
+  pattern: z.output<typeof submitPatternSchema>,
+  expansion: Expansion,
+  at: readonly PropertyKey[],
+): unknown {
+  const outcome = (key: 'onDone' | 'onError'): unknown =>
+    backToIdle(
+      pattern[key] === undefined ? undefined : transitionsOf(pattern[key], expansion, [...at, key]),
+    )
+
   return {
     ...(pattern.description === undefined ? {} : { description: pattern.description }),
     initial: IDLE,
@@ -42,8 +54,8 @@ function submitOf(pattern: z.output<typeof submitPatternSchema>): unknown {
         invoke: {
           src: pattern.src,
           ...(pattern.input === undefined ? {} : { input: pattern.input }),
-          onDone: backToIdle(pattern.onDone),
-          onError: backToIdle(pattern.onError),
+          onDone: outcome('onDone'),
+          onError: outcome('onError'),
         },
       },
     },
@@ -83,35 +95,33 @@ function parsed<S extends z.ZodType>(
   return undefined
 }
 
-/** The region a pattern stands for; a region without a pattern, as it is. */
+/**
+ * The region a pattern stands for, complete (`expanded`), or the region as it is: one without
+ * a pattern, for the caller to walk, or one whose pattern is wrong, with its issues reported.
+ */
 export function patternOf(
   region: unknown,
   expansion: Expansion,
   at: readonly PropertyKey[],
-): unknown {
+): { region: unknown; expanded: boolean } {
   if (!isRecord(region) || region['pattern'] === undefined) {
-    return region
+    return { region, expanded: false }
   }
 
   if (region['pattern'] === 'submit') {
     const pattern = parsed(submitPatternSchema, region, expansion, at)
 
-    if (pattern !== undefined && pattern.as === IDLE) {
-      expansion.issues.push({
-        at: [...at, 'as'],
-        message: `the state that runs the action cannot be "${IDLE}", where the region rests`,
-      })
-
-      return region
-    }
-
-    return pattern === undefined ? region : submitOf(pattern)
+    return pattern === undefined
+      ? { region, expanded: true }
+      : { region: submitOf(pattern, expansion, at), expanded: true }
   }
 
   if (region['pattern'] === 'draft') {
     const pattern = parsed(draftPatternSchema, region, expansion, at)
 
-    return pattern === undefined ? region : draftOf(pattern)
+    return pattern === undefined
+      ? { region, expanded: true }
+      : { region: draftOf(pattern), expanded: true }
   }
 
   expansion.issues.push({
@@ -119,5 +129,5 @@ export function patternOf(
     message: `"${String(region['pattern'])}" is not a region pattern: submit or draft`,
   })
 
-  return region
+  return { region, expanded: true }
 }

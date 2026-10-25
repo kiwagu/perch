@@ -288,6 +288,23 @@ describe('expandFlow', () => {
     )
   })
 
+  it('names a mistake inside an outcome of submit at its place in the file, once', () => {
+    expect(
+      expandedRegion({
+        pattern: 'submit',
+        by: 'sample.form.save-button',
+        as: 'saving',
+        src: 'thing.save',
+        onError: { actions: [{ show: 'sample.form.nothing' }] },
+      }).issues,
+    ).toEqual([
+      {
+        at: ['flow', 'states', 'viewing', 'states', 'form', 'onError', 'actions', 0, 'show'],
+        message: 'no screen declares the anchor sample.form.nothing',
+      },
+    ])
+  })
+
   it('refuses idle as the state that runs the action of submit', () => {
     expect(
       expandedRegion({

@@ -84,7 +84,11 @@ export const submitPatternSchema = z
       ),
     description: z.string().exactOptional().describe('What the area is, for a reader.'),
     by: anchorSchema.describe('The anchor whose event starts the action (a button acted on).'),
-    as: flowStateNameSchema.describe('The state that runs the action: `adding`, `inviting`.'),
+    as: flowStateNameSchema
+      .regex(/^(?!idle$)/, {
+        message: 'the state that runs the action cannot be "idle", where the region rests',
+      })
+      .describe('The state that runs the action, any name but `idle`: `adding`, `inviting`.'),
     src: actionNameSchema.describe('The action, as a binding names it.'),
     input: actionParamsSchema
       .exactOptional()

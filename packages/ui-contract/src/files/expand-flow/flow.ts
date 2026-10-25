@@ -61,9 +61,9 @@ function stateOf(state: unknown, expansion: Expansion, at: readonly PropertyKey[
 }
 
 function regionOf(region: unknown, expansion: Expansion, at: readonly PropertyKey[]): unknown {
-  const full = patternOf(region, expansion, at)
+  const { region: full, expanded } = patternOf(region, expansion, at)
 
-  if (!isRecord(full) || !isRecord(full['states'])) {
+  if (expanded || !isRecord(full) || !isRecord(full['states'])) {
     return full
   }
 

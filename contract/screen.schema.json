@@ -1101,8 +1101,15 @@
                             },
                             "as": {
                               "type": "string",
-                              "pattern": "^[a-z][a-z0-9-]*$",
-                              "description": "The state that runs the action: `adding`, `inviting`."
+                              "allOf": [
+                                {
+                                  "pattern": "^[a-z][a-z0-9-]*$"
+                                },
+                                {
+                                  "pattern": "^(?!idle$)"
+                                }
+                              ],
+                              "description": "The state that runs the action, any name but `idle`: `adding`, `inviting`."
                             },
                             "src": {
                               "type": "string",
