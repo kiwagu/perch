@@ -8,12 +8,12 @@ import { z } from '@workspace/zod'
 
 import { anchorSchema, baseAnchorSchema, screenNameSchema } from '../../names.schema'
 
-import { anchorDefSchema } from './anchor'
+import { anchorDefSchema, authoredAnchorDefSchema } from './anchor'
 import { bindingSchema } from './binding'
 import { authoredFlowSchema, flowSchema } from './flow'
 
-/** One screen over a flow `F`: the canonical one, or the authored one a file holds. */
-const screenSchemaOf = <F extends z.ZodType>(flow: F) =>
+/** One screen over a flow `F` and an anchor `A`: the canonical ones, or those a file holds. */
+const screenSchemaOf = <F extends z.ZodType, A extends z.ZodType>(flow: F, anchor: A) =>
   z
     .strictObject({
       id: screenNameSchema,
@@ -37,9 +37,7 @@ const screenSchemaOf = <F extends z.ZodType>(flow: F) =>
         .array(anchorSchema)
         .min(1)
         .describe('The anchors that are present once the screen is open.'),
-      anchors: z
-        .record(baseAnchorSchema, anchorDefSchema)
-        .describe('The declared anchors by name.'),
+      anchors: z.record(baseAnchorSchema, anchor).describe('The declared anchors by name.'),
       states: z
         .record(z.string(), z.string())
         .optional()
@@ -58,6 +56,6 @@ const screenSchemaOf = <F extends z.ZodType>(flow: F) =>
     })
     .describe('One screen of the application.')
 
-export const screenSchema = screenSchemaOf(flowSchema)
+export const screenSchema = screenSchemaOf(flowSchema, anchorDefSchema)
 
-export const authoredScreenSchema = screenSchemaOf(authoredFlowSchema)
+export const authoredScreenSchema = screenSchemaOf(authoredFlowSchema, authoredAnchorDefSchema)

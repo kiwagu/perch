@@ -4,11 +4,15 @@
  * (`screenFile`); `contract/platform.yaml` holds the contract version and the platform
  * section. Each file is YAML, then its Zod schema. A missing or empty folder, a file that
  * is not `.yaml`, a file named otherwise than its screen's first binding says and a
- * missing platform file are problems of the file or folder concerned. A file may author its
- * flow in the shorter forms (a transition as its target, an effect by its name, a region by
- * its pattern): once every file is read, each flow is expanded with the codes the anchors of
- * all screens declare, then the screen is parsed as every reader takes it, its flow canonical.
- * Once every file loads, they are assembled into one `ScreensFile`, each screen with its file.
+ * missing platform file are problems of the file or folder concerned. Once every file is
+ * read, what a file leaves to the contract is derived (`derive/`): an error anchor's codes and
+ * fields from the failures of the actions its part binds, as the model and the platform give
+ * them. A file may author its flow in the shorter forms (a transition as its target, an effect
+ * by its name, a region by its pattern or its button, the region of a button left out): each
+ * flow is expanded with the codes the anchors of all screens carry, the failures of the
+ * actions and the screen's buttons, then the screen is parsed as every reader takes it, its
+ * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
+ * screen with its file.
  */
 
 import { join } from 'node:path'
@@ -31,8 +35,10 @@ import {
   type transitionSchema,
 } from '../schemas'
 
+import { controlsOf, type FailureOf, failuresOf, withDerivedErrors } from './derive'
 import { type CodesOf, expandFlow } from './expand-flow'
 import { filesUnder } from './files-under'
+import { loadModel, type Model } from './model'
 import { parseFile } from './parse-file'
 import { PLATFORM_FILE, SCREENS_DIR, screenFile } from './paths'
 import { jsonPath, type Problem } from './problems'
@@ -89,7 +95,7 @@ function nameProblems(file: string, screen: Screen): Problem[] {
   ]
 }
 
-/** The codes each anchor of the screens as read declares, for `show: <anchor>`. */
+/** The codes each anchor of the screens as read carries, for `show: <anchor>`. */
 function codesOfRead(read: readonly unknown[]): CodesOf {
   const codes = new Map<string, readonly string[]>()
 
@@ -115,10 +121,14 @@ function codesOfRead(read: readonly unknown[]): CodesOf {
 function screenOf(
   file: string,
   read: unknown,
-  codesOf: CodesOf,
+  lookups: { codesOf: CodesOf; failureOf: FailureOf },
 ): { screen?: Screen; problems: Problem[] } {
   const flow = isRecord(read) ? read['flow'] : undefined
-  const expanded = flow === undefined ? undefined : expandFlow(flow, codesOf)
+  const id = isRecord(read) && typeof read['id'] === 'string' ? read['id'] : ''
+  const expanded =
+    flow === undefined
+      ? undefined
+      : expandFlow(flow, { ...lookups, controls: controlsOf(read), screen: id })
 
   if (expanded !== undefined && expanded.issues.length > 0) {
     return {
@@ -141,7 +151,10 @@ function screenOf(
   return misnamed.length > 0 ? { problems: misnamed } : { screen: parsed.value, problems: [] }
 }
 
-function readScreenFiles(root: string): {
+function readScreenFiles(
+  root: string,
+  failureOf: FailureOf,
+): {
   screens: Screen[]
   files: string[]
   problems: Problem[]
@@ -168,7 +181,7 @@ function readScreenFiles(root: string): {
       problems.push(...yaml.problems)
 
       if (yaml.problems.length === 0) {
-        read.push({ file, value: yaml.value })
+        read.push({ file, value: withDerivedErrors(yaml.value, failureOf) })
       }
     } else {
       problems.push({
@@ -181,7 +194,7 @@ function readScreenFiles(root: string): {
   const codesOf = codesOfRead(read.map(({ value }) => value))
 
   for (const { file, value } of read) {
-    const loaded = screenOf(file, value, codesOf)
+    const loaded = screenOf(file, value, { codesOf, failureOf })
 
     problems.push(...loaded.problems)
 
@@ -208,9 +221,17 @@ function readPlatform(root: string): { platform?: PlatformFile; problems: Proble
     : { platform: parsed.value, problems: [] }
 }
 
-export function loadScreens(root: string): { screens?: ScreensFile; problems: Problem[] } {
-  const { screens, files, problems: screenProblems } = readScreenFiles(root)
+/**
+ * The screens and the platform, what the screens leave out derived from the actions of `model`
+ * (undefined when it does not load: an action of the model then has no failure to derive).
+ */
+export function loadScreensWith(
+  root: string,
+  model: Model | undefined,
+): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
+  const failureOf = failuresOf(model, platform?.actions)
+  const { screens, files, problems: screenProblems } = readScreenFiles(root, failureOf)
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {
@@ -221,3 +242,10 @@ export function loadScreens(root: string): { screens?: ScreensFile; problems: Pr
 
   return { screens: { version, screens, files, platform: section }, problems: [] }
 }
+
+/**
+ * The screens and the platform, derived from the model when it loads; the model's own problems
+ * are the model loader's to report (`loadModel`).
+ */
+export const loadScreens = (root: string): { screens?: ScreensFile; problems: Problem[] } =>
+  loadScreensWith(root, loadModel(root).model)

@@ -16,24 +16,13 @@ import type { z } from '@workspace/zod'
 
 import { isRecord } from '../../records'
 import { draftPatternSchema, submitPatternSchema } from '../../schemas'
-import { englishErrors } from '../parse-file'
 
+import { backToIdle } from './controls'
 import { transitionsOf } from './effects'
 import type { Expansion } from './expansion'
+import { parsed } from './parsed'
 
 const IDLE = 'idle'
-
-/** A transition of `submit` that names no target goes back to `idle`; absent, so does it. */
-function backToIdle(value: unknown): unknown {
-  if (value === undefined) {
-    return { target: IDLE }
-  }
-
-  const one = (each: unknown): unknown =>
-    isRecord(each) && each['target'] === undefined ? { target: IDLE, ...each } : each
-
-  return Array.isArray(value) ? value.map(one) : one(value)
-}
 
 function submitOf(
   pattern: z.output<typeof submitPatternSchema>,
@@ -42,7 +31,14 @@ function submitOf(
 ): unknown {
   const outcome = (key: 'onDone' | 'onError'): unknown =>
     backToIdle(
-      pattern[key] === undefined ? undefined : transitionsOf(pattern[key], expansion, [...at, key]),
+      pattern[key] === undefined
+        ? undefined
+        : transitionsOf(
+            pattern[key],
+            expansion,
+            [...at, key],
+            key === 'onError' ? pattern.src : undefined,
+          ),
     )
 
   return {
@@ -73,26 +69,6 @@ function draftOf(pattern: z.output<typeof draftPatternSchema>): unknown {
       edited: { on: { [pattern.input]: back, [pattern.stored]: { ...back } } },
     },
   }
-}
-
-/** `region` parsed by `schema`, or undefined with its issues reported. */
-function parsed<S extends z.ZodType>(
-  schema: S,
-  region: unknown,
-  expansion: Expansion,
-  at: readonly PropertyKey[],
-): z.output<S> | undefined {
-  const result = schema.safeParse(region, { error: englishErrors })
-
-  if (result.success) {
-    return result.data
-  }
-
-  for (const issue of result.error.issues) {
-    expansion.issues.push({ at: [...at, ...issue.path], message: issue.message })
-  }
-
-  return undefined
 }
 
 /**

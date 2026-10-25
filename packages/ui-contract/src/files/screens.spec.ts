@@ -5,12 +5,13 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 
-import { PLATFORM_FILE, SCREENS_DIR } from './paths'
+import { MODEL_FILE, PLATFORM_FILE, SCREENS_DIR } from './paths'
 import { formatProblem } from './problems'
 import { loadScreens } from './screens'
 import { jsonSchemaProblems } from './validator'
 
 const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract')
+const MODEL_FIXTURE = join(import.meta.dirname, '../__fixtures__/model.schema.json')
 const SAMPLE_FILE = 'contract/screens/sample/$key.yaml'
 
 let root: string
@@ -314,6 +315,79 @@ describe('loadScreens', () => {
 
     expect(found).toEqual([])
     expect(screens?.screens[0]?.flow).toEqual(before)
+  })
+
+  it('derives what a screen leaves out from the model: an error and the region of a button', () => {
+    cpSync(MODEL_FIXTURE, join(root, MODEL_FILE))
+    writeSample((screen) => {
+      const { 'sample.sign-out-button': _signOut, ...anchors } = screen['anchors'] as Record<
+        string,
+        unknown
+      >
+
+      screen['anchors'] = {
+        ...anchors,
+        'sample.form.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        'sample.form.add-button': {
+          kind: 'button',
+          binding: { action: 'thing.createThing', params: { title: 'sample.form.title-input' } },
+        },
+        'sample.form.error': { kind: 'error' },
+      }
+      screen['flow'] = {
+        initial: 'viewing',
+        states: {
+          viewing: {
+            type: 'parallel',
+            states: { other: { initial: 'idle', states: { idle: {} } } },
+          },
+        },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+    const sample = screens?.screens[0]
+
+    expect(found).toEqual([])
+    expect(sample?.anchors['sample.form.error']).toEqual({
+      kind: 'error',
+      codes: ['forbidden', 'title-required', 'title-too-long', 'title-taken', 'failed'],
+      fields: {
+        'title-required': 'sample.form.title-input',
+        'title-too-long': 'sample.form.title-input',
+        'title-taken': 'sample.form.title-input',
+      },
+    })
+    expect(sample?.flow?.states['viewing']).toMatchObject({
+      states: {
+        'form-add': {
+          states: {
+            running: {
+              invoke: {
+                src: 'thing.createThing',
+                onError: {
+                  actions: [
+                    {
+                      type: 'show',
+                      params: {
+                        anchor: 'sample.form.error',
+                        codes: [
+                          'forbidden',
+                          'title-required',
+                          'title-too-long',
+                          'title-taken',
+                          'failed',
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    })
   })
 
   it('reports what keeps a flow from expanding, at its place in the file', () => {

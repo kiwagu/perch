@@ -10,6 +10,7 @@ export {
   authoredScreenFileSchema,
   bindingRefSchema,
   bindingSchema,
+  controlRegionSchema,
   draftPatternSchema,
   effectSchema,
   flowSchema,

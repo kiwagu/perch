@@ -11,7 +11,7 @@ import {
   loadActivities,
   loadModel,
   loadScenarios,
-  loadScreens,
+  loadScreensWith,
   type Problem,
   parseVocabulary,
   schemaDrift,
@@ -49,8 +49,8 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
 /** The contract files, the activities and the scenarios, or what keeps them from loading. */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
-  const { screens, problems: screensLoad } = loadScreens(root)
   const { model, problems: modelLoad } = loadModel(root)
+  const { screens, problems: screensLoad } = loadScreensWith(root, model)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
   const problems = [

@@ -1,2 +1,2 @@
-export type { CodesOf, ExpansionIssue } from './expansion'
+export type { CodesOf, ExpansionIssue, FlowLookups } from './expansion'
 export { expandFlow } from './flow'

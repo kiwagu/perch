@@ -24,8 +24,12 @@ for Bun.
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
     `loadScreens(root)` (every `.yaml` file under `contract/screens`, sorted by path, one screen
-    each, its flow expanded from the shorter forms with the codes the anchors of every screen
-    declare and then parsed through `screenFileSchema`, named by the path of its first binding: `/me` is
+    each: what it leaves out derived from the model and the platform (`files/derive/`: the
+    failures of the actions, an error's codes and fields, the buttons whose regions the flow
+    leaves out), its flow expanded from the shorter forms with the codes the anchors of every
+    screen carry and the failures of the actions, then parsed through `screenFileSchema`;
+    `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
+    check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/platform.yaml`, the version and the platform section, through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
@@ -53,7 +57,8 @@ for Bun.
   - The Zod sources of the files: `screenFileSchema` (a screen as every reader takes it, its
     flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
     shorter forms too: `authoredFlowSchema`, with the region patterns `submitPatternSchema`
-    and `draftPatternSchema`; the source of `contract/screen.schema.json`), `platformFileSchema`
+    and `draftPatternSchema` and the region of a button `controlRegionSchema`, its anchors
+    those of `authoredAnchorDefSchema`; the source of `contract/screen.schema.json`), `platformFileSchema`
     and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
@@ -170,8 +175,10 @@ for Bun.
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
     after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
     `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
-    added are a rename when they are the only ones of their screen and kind; per activity
-    both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`);
+    added are a rename when they are the only ones of their screen and kind; on the anchors
+    both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
+    -> <field>`, written or derived; per activity both sides hold, the transitions added and
+    removed as `<state> on <anchor> -> <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
@@ -275,7 +282,8 @@ for Bun.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`, the activities and the
+  `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
+  fields the anchors both hold gain or lose (derived ones included), the activities and the
   transitions changed in each included; prints the hand-over block, or the changes as JSON
   with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.
@@ -291,7 +299,8 @@ for Bun.
   writing nothing). Not part of `bun run check`: the note is a report.
 - From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
   flow of a screen, named by its id or its file, as every reader takes it, expanded from
-  the shorter forms its file may write it in). Not part of `bun run check`: it is a view.
+  the shorter forms its file may write it in, the regions it leaves out derived). Not part
+  of `bun run check`: it is a view.
 - From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
   screen files in four sections, the table (path, screen, guard, roles, history, params,
   search, file), one example link per binding, where each route is reached from and the

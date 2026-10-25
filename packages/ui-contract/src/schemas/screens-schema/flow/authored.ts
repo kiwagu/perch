@@ -9,6 +9,11 @@
  *   `navigate: <path>` or `navigate: { to, search }`.
  * - A region may be a pattern, a shape two regions or more of the screens share, named by
  *   what it does: `submit` and `draft`. A region that fits no pattern is written in full.
+ * - The region of a button bound to one action is derived from its binding: a flow that
+ *   handles the button nowhere gets it, and `by: <button>` writes it with the outcomes the
+ *   screen decides.
+ * - In the `onError` of an invoke, `show: <anchor>` shows one of the codes the failure of its
+ *   action shows.
  */
 
 import { z } from '@workspace/zod'
@@ -106,6 +111,27 @@ export const submitPatternSchema = z
   })
   .describe('The region pattern `submit`: a control starts an action and the area waits for it.')
 
+export const controlRegionSchema = z
+  .strictObject({
+    by: anchorSchema.describe(
+      'The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`.',
+    ),
+    description: z.string().exactOptional().describe('What the area is, for a reader.'),
+    onDone: authoredTransitionsSchema
+      .exactOptional()
+      .describe(
+        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.',
+      ),
+    onError: authoredTransitionsSchema
+      .exactOptional()
+      .describe(
+        'What follows when the action fails; absent, back to `idle` with the error of the part (`<part>.error`) showing the codes of the failure; a transition without a target goes back to `idle` too.',
+      ),
+  })
+  .describe(
+    'The region of a button bound to one action, with the outcomes the screen decides: the rest comes from its binding.',
+  )
+
 export const draftPatternSchema = z
   .strictObject({
     pattern: z
@@ -127,8 +153,10 @@ export const authoredFlowSchema = flowSchemaOf({
   effect: authoredEffectSchema,
   region: (parts) =>
     z
-      .union([submitPatternSchema, draftPatternSchema, parts.region])
-      .describe('A region written in full, or by its pattern (`submit`, `draft`).'),
+      .union([submitPatternSchema, draftPatternSchema, controlRegionSchema, parts.region])
+      .describe(
+        'A region written in full, by its pattern (`submit`, `draft`), or as the region of a button (`by`).',
+      ),
   description:
-    'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern; the loader expands it into the config `createMachine` takes.',
+    'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',
 })

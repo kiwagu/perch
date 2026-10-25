@@ -18,6 +18,16 @@ export const kindOf = (anchor: string): string => {
   return last.slice(last.lastIndexOf('-') + 1)
 }
 
+/** The kinds a person types into or picks with: what an error's code can concern. */
+export const FIELD_KINDS: ReadonlySet<string> = new Set([
+  'input',
+  'textarea',
+  'select',
+  'checkbox',
+  'radio',
+  'switch',
+])
+
 /** The longest screen name the anchor starts with on a segment boundary, if any. */
 export const screenOf = (anchor: string, screenNames: readonly string[]): string | undefined =>
   screenNames

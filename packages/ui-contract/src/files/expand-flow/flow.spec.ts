@@ -1,15 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
 import { flowSchema } from '../../schemas'
+import type { Failure } from '../derive'
 
-import { expandFlow } from '.'
+import { expandFlow, type FlowLookups } from '.'
 
 const CODES: Readonly<Record<string, readonly string[]>> = {
   'sample.form.error': ['required', 'taken', 'failed'],
   'sample.page.status': [],
 }
 
-const codesOf = (anchor: string) => CODES[anchor]
+const FAILURES: Readonly<Record<string, Failure>> = {
+  'thing.save': { codes: ['taken', 'failed'], params: {} },
+  'platform.things.open': { codes: [], params: {} },
+}
+
+const LOOKUPS: FlowLookups = {
+  codesOf: (anchor) => CODES[anchor],
+  failureOf: (action) => FAILURES[action],
+  controls: [],
+  screen: 'sample',
+}
 
 /** A flow of one plain state `idle` whose transition on `sample.form.save-button` is `on`. */
 const onSave = (on: unknown) => ({
@@ -19,7 +30,7 @@ const onSave = (on: unknown) => ({
 
 /** The transition `expandFlow` makes of `on`, with the issues. */
 function expandedOn(on: unknown) {
-  const { flow, issues } = expandFlow(onSave(on), codesOf)
+  const { flow, issues } = expandFlow(onSave(on), LOOKUPS)
   const states = (flow as { states: { idle: { on: Record<string, unknown> } } }).states
 
   return { transition: states.idle.on['sample.form.save-button'], issues }
@@ -38,7 +49,7 @@ const withRegion = (region: unknown) => ({
 
 /** The region `form` `expandFlow` makes of `region`, with the issues. */
 function expandedRegion(region: unknown) {
-  const { flow, issues } = expandFlow(withRegion(region), codesOf)
+  const { flow, issues } = expandFlow(withRegion(region), LOOKUPS)
   const viewing = (flow as { states: { viewing: { states: Record<string, unknown> } } }).states
     .viewing
 
@@ -54,7 +65,7 @@ describe('expandFlow', () => {
       },
     ])
 
-    expect(expandFlow(flow, codesOf)).toEqual({ flow, issues: [] })
+    expect(expandFlow(flow, LOOKUPS)).toEqual({ flow, issues: [] })
   })
 
   it('turns a transition written as its target into the transition', () => {
@@ -133,7 +144,7 @@ describe('expandFlow', () => {
             entry: [{ clear: 'sample.form.error' }],
             exit: [{ navigate: '/me' }],
             invoke: {
-              src: 'sample.save',
+              src: 'thing.save',
               onDone: 'done',
               onError: { target: 'done', actions: [{ show: 'sample.form.error' }] },
             },
@@ -141,7 +152,7 @@ describe('expandFlow', () => {
           done: { type: 'final' },
         },
       },
-      codesOf,
+      LOOKUPS,
     )
 
     expect(flow).toEqual({
@@ -151,14 +162,14 @@ describe('expandFlow', () => {
           entry: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
           exit: [{ type: 'navigate', params: { to: '/me' } }],
           invoke: {
-            src: 'sample.save',
+            src: 'thing.save',
             onDone: { target: 'done' },
             onError: {
               target: 'done',
               actions: [
                 {
                   type: 'show',
-                  params: { anchor: 'sample.form.error', codes: ['required', 'taken', 'failed'] },
+                  params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
                 },
               ],
             },
@@ -167,6 +178,55 @@ describe('expandFlow', () => {
         done: { type: 'final' },
       },
     })
+  })
+
+  it('shows the codes the failure of the action shows for show: <anchor> in an onError', () => {
+    const failing = (src: string) =>
+      expandFlow(
+        {
+          initial: 'saving',
+          states: {
+            saving: {
+              invoke: {
+                src,
+                onDone: 'saving',
+                onError: [
+                  { guard: 'left', target: 'saving' },
+                  { target: 'saving', actions: [{ show: 'sample.form.error' }] },
+                ],
+              },
+            },
+          },
+        },
+        LOOKUPS,
+      )
+
+    expect(failing('thing.save').flow).toMatchObject({
+      states: {
+        saving: {
+          invoke: {
+            onError: [
+              { guard: 'left', target: 'saving' },
+              {
+                target: 'saving',
+                actions: [
+                  {
+                    type: 'show',
+                    params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    })
+    expect(failing('thing.nothing').issues.map(({ message }) => message)).toEqual([
+      'thing.nothing is no action of the model or the platform, so the codes its failure shows are unknown; name the ones it shows here: show: { sample.form.error: [<code>] }',
+    ])
+    expect(failing('platform.things.open').issues.map(({ message }) => message)).toEqual([
+      'platform.things.open fails with no code; name the ones it shows here: show: { sample.form.error: [<code>] }',
+    ])
   })
 
   it('expands the shorter forms inside a region written in full', () => {
@@ -209,10 +269,7 @@ describe('expandFlow', () => {
                 actions: [
                   {
                     type: 'show',
-                    params: {
-                      anchor: 'sample.form.error',
-                      codes: ['required', 'taken', 'failed'],
-                    },
+                    params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
                   },
                 ],
               },
@@ -339,7 +396,7 @@ describe('expandFlow', () => {
         src: 'thing.save',
         onError: { actions: [{ show: { 'sample.form.error': ['failed'] } }] },
       }),
-      codesOf,
+      LOOKUPS,
     )
 
     expect(flowSchema.safeParse(flow).success).toBe(true)

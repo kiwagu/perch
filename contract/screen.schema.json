@@ -626,7 +626,7 @@
             "type": "boolean"
           },
           "codes": {
-            "description": "The data-code values the element carries.",
+            "description": "The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.",
             "type": "array",
             "items": {
               "type": "string",
@@ -635,7 +635,7 @@
             }
           },
           "fields": {
-            "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+            "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -725,7 +725,7 @@
           "kind"
         ],
         "additionalProperties": false,
-        "description": "One declared anchor."
+        "description": "One declared anchor, as a screen file writes it."
       },
       "description": "The declared anchors by name."
     },
@@ -1233,6 +1233,57 @@
                         {
                           "type": "object",
                           "properties": {
+                            "by": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                              "description": "The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`."
+                            },
+                            "description": {
+                              "description": "What the area is, for a reader.",
+                              "type": "string"
+                            },
+                            "onDone": {
+                              "description": "What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.",
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/authoredTransition"
+                                },
+                                {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/$defs/authoredTransition"
+                                  },
+                                  "description": "Guarded transitions in order: the first whose guard holds is taken."
+                                }
+                              ]
+                            },
+                            "onError": {
+                              "description": "What follows when the action fails; absent, back to `idle` with the error of the part (`<part>.error`) showing the codes of the failure; a transition without a target goes back to `idle` too.",
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/authoredTransition"
+                                },
+                                {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/$defs/authoredTransition"
+                                  },
+                                  "description": "Guarded transitions in order: the first whose guard holds is taken."
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "by"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The region of a button bound to one action, with the outcomes the screen decides: the rest comes from its binding."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
                             "description": {
                               "description": "What the area is, for a reader.",
                               "type": "string"
@@ -1409,7 +1460,7 @@
                           "description": "A region of a parallel state: one area of the screen, in one of its states at a time."
                         }
                       ],
-                      "description": "A region written in full, or by its pattern (`submit`, `draft`)."
+                      "description": "A region written in full, by its pattern (`submit`, `draft`), or as the region of a button (`by`)."
                     },
                     "description": "The regions by name, two or more.",
                     "minProperties": 2
@@ -1432,7 +1483,7 @@
         "states"
       ],
       "additionalProperties": false,
-      "description": "The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern; the loader expands it into the config `createMachine` takes."
+      "description": "The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes."
     },
     "wireframe": {
       "description": "A text sketch of the layout.",

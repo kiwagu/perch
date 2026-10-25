@@ -3,6 +3,7 @@ export {
   authoredFlowSchema,
   authoredTransitionSchema,
   clearShortSchema,
+  controlRegionSchema,
   draftPatternSchema,
   navigateShortSchema,
   showAllSchema,
