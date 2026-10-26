@@ -50,6 +50,41 @@ describe('withDerivedInputs', () => {
     )
   })
 
+  it('says a field submitted by a button holds input, though it binds the action too', () => {
+    const anchors = withDerivedInputs(
+      screen({
+        'sample.form.email-input': {
+          kind: 'input',
+          binding: [
+            { action: 'platform.sign-in', params: { email: 'sample.form.email-input' } },
+            { action: 'platform.sign-up', params: { email: 'sample.form.email-input' } },
+          ],
+        },
+        'sample.form.name-input': {
+          kind: 'input',
+          binding: { action: 'platform.sign-up', params: { name: 'sample.form.name-input' } },
+        },
+        'sample.form.submit-button': {
+          kind: 'button',
+          binding: [
+            { action: 'platform.sign-in', params: { email: 'sample.form.email-input' } },
+            {
+              action: 'platform.sign-up',
+              params: { email: 'sample.form.email-input', name: 'sample.form.name-input' },
+            },
+          ],
+        },
+      }),
+    )
+
+    expect(anchors).toMatchObject({
+      anchors: {
+        'sample.form.email-input': { holdsInput: true },
+        'sample.form.name-input': { holdsInput: true },
+      },
+    })
+  })
+
   it('keeps what the file writes', () => {
     const anchors = { 'sample.form.title-input': { kind: 'input', holdsInput: false } }
 

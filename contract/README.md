@@ -394,9 +394,11 @@ out, and the loader derives it, the same way every time:
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
   `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
   leave with it typed loses it, and the frame asks before such a leave. A field one of whose
-  bindings runs an action that takes the field itself as a parameter (the language select,
-  the organisation select) applies at once and holds none. The loader sets `holdsInput` on
-  every field; a written value wins. The manifest carries it, and `contract:diff` lists the
+  bindings runs an action that takes the field itself as a parameter, an action no other
+  anchor of its screen runs with it (the language select, the organisation select), applies
+  at once and holds none; a field whose action a submit button also runs with it (the
+  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
+  wins. The manifest carries it, and `contract:diff` lists the
   fields that start or stop holding input.
 - **Which leaves ask first.** A change of screen asks while a field holds unsaved input
   (the frame's `app-shell.leave-dialog`); reload, closing the tab and a URL typed by hand get

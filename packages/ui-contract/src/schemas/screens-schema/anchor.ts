@@ -151,7 +151,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .boolean()
       .optional()
       .describe(
-        'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter: a choice that applies at once.',
+        'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.',
       ),
   })
   .describe('One declared anchor, as a screen file writes it.')
