@@ -122,13 +122,16 @@ for Bun.
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
-    grammar is a problem) and an anchor built at runtime as a problem (`RUNTIME_ANCHOR`,
-    `RUNTIME_SUFFIX`); `scanSources(root)` collects
+    grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
+    element that carries a field's anchor as a literal; a prop passed through is let by, any
+    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`) and an anchor built
+    at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, and every suffix and code in the vocabulary.
+    a suffix, every suffix and code in the vocabulary, and a `holdsInput` written only as
+    `{false}` on a field the contract says holds no input.
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as

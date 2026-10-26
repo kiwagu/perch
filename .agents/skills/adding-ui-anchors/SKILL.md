@@ -76,7 +76,9 @@ code and the tests follow; the checks hold them to the contract.
    name, a region by its pattern or by its button, and read the expansion with `bun run
    contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
-   those tables are business, like the screen file.
+   those tables are business, like the screen file. A field holds input by itself; only a
+   field whose own change runs its action (a select that applies at once) carries
+   `holdsInput={false}` in the JSX, and the contract derives which.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with

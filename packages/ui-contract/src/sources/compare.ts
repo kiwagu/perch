@@ -4,10 +4,11 @@
  * them (the contract runs ahead of the app on a branch: a declared anchor not rendered yet is
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
- * `testIdFor()` and every code is in the vocabulary. The problems carry `file:line`.
+ * `testIdFor()` and every code is in the vocabulary; a `holdsInput` written in the sources is
+ * `{false}`, on a field the contract says holds no input. The problems carry `file:line`.
  */
 
-import { baseOf } from '../anchors'
+import { baseOf, FIELD_KINDS } from '../anchors'
 import { declaredAnchors, locate } from '../check'
 import {
   type Problem,
@@ -105,11 +106,29 @@ export function compareWithContract(
       .map(({ code, line }) => at({ file, line }, `"${code}" is not a code of ${VOCABULARY_FILE}`)),
   ])
 
+  const fields = new Map(
+    contract
+      .filter(({ def }) => FIELD_KINDS.has(def.kind))
+      .map(({ anchor, def, at: path }) => [anchor, { holds: def.holdsInput !== false, path }]),
+  )
+  const inputProblems = collected.flatMap(({ file, inputs }) =>
+    inputs.flatMap(({ anchor, holdsInput, line }) => {
+      if (holdsInput) {
+        return [at({ file, line }, `"${anchor}": holdsInput={true} is the default; leave it out`)]
+      }
+
+      return fields.get(anchor)?.holds === true
+        ? [at({ file, line }, `"${anchor}" holds input by the contract; drop holdsInput={false}`)]
+        : []
+    }),
+  )
+
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
     ...duplicates,
     ...literalProblems,
     ...unrendered,
     ...vocabularyProblems,
+    ...inputProblems,
   ])
 }

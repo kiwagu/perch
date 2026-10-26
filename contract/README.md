@@ -761,7 +761,11 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  suffix and every code in the vocabulary. An anchor built at runtime is a problem. A field
+  the contract says holds no input (a choice that applies at once) carries
+  `holdsInput={false}` on the element with its anchor; a field that holds input carries
+  nothing (`holdsInput={true}` is the default and is reported, and so is a
+  `holdsInput={false}` on a field that holds input), and the kit's fields track the rest. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
