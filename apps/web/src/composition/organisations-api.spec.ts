@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { fakeFetch, noContent, respond } from './__fixtures__/gateway-fetch'
+import { fakeFetch, noContent, respond, respondText } from './__fixtures__/gateway-fetch'
 import { organisationsApi } from './organisations-api'
 
 const acme: Membership = {
@@ -95,6 +95,90 @@ describe('organisationsApi', () => {
 
     expect((await api.list())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     expect(sent).toEqual([])
+  })
+
+  it.each([
+    [400, 'invalid-key'],
+    [403, 'not-admin'],
+    [404, 'no-such-tenant'],
+  ])('maps %i %s to data:WRITE_REJECTED with the code as message', async (status, code) => {
+    const { fetcher } = fakeFetch(respond(status, { code }))
+    const api = organisationsApi('/backend', {
+      token: () => 'access-1',
+      device: () => 'device-1',
+      renew: () => Promise.resolve(false),
+      fetcher,
+    })
+
+    expect((await api.members('acme'))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: code,
+    })
+  })
+
+  it('fails a 2xx answer that is not JSON with data:AUTH_FAILED naming the status, never the body', async () => {
+    const { fetcher } = fakeFetch(respondText(200, '<html>an error page</html>'))
+    const api = organisationsApi('/backend', {
+      token: () => 'access-1',
+      device: () => 'device-1',
+      renew: () => Promise.resolve(false),
+      fetcher,
+    })
+    const failure = (await api.list())._unsafeUnwrapErr()
+
+    expect(failure.code).toBe('data:AUTH_FAILED')
+    expect(failure.message).toContain('200')
+    expect(failure.message).not.toContain('html')
+  })
+
+  it.each([
+    ['is not JSON', respondText(409, '<html>conflict</html>')],
+    ['names no code', respond(409, { reason: 'taken' })],
+  ])('fails a refusal whose body %s with data:AUTH_FAILED naming the status', async (_, answer) => {
+    const { fetcher } = fakeFetch(answer)
+    const api = organisationsApi('/backend', {
+      token: () => 'access-1',
+      device: () => 'device-1',
+      renew: () => Promise.resolve(false),
+      fetcher,
+    })
+    const failure = (await api.create({ key: 'acme', name: 'Acme' }))._unsafeUnwrapErr()
+
+    // The status, never the body.
+    expect(failure.code).toBe('data:AUTH_FAILED')
+    expect(failure.message).toBe('the gateway answered 409 with something unexpected')
+  })
+
+  it('renews once only when the renewed token is refused too', async () => {
+    const { fetcher, sent } = fakeFetch(respond(401, { code: 'unauthorized' }))
+    let renewals = 0
+    const api = organisationsApi('/backend', {
+      token: () => `access-${renewals + 1}`,
+      device: () => 'device-1',
+      renew: () => {
+        renewals += 1
+
+        return Promise.resolve(true)
+      },
+      fetcher,
+    })
+
+    expect((await api.list())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect(renewals).toBe(1)
+    expect(sent).toHaveLength(2)
+  })
+
+  it('gives up with data:AUTH_FAILED, asking nothing more, when the renewal rejects', async () => {
+    const { fetcher, sent } = fakeFetch(respond(401, { code: 'unauthorized' }))
+    const api = organisationsApi('/backend', {
+      token: () => 'access-1',
+      device: () => 'device-1',
+      renew: () => Promise.reject(new Error('the leading tab is gone')),
+      fetcher,
+    })
+
+    expect((await api.list())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect(sent).toHaveLength(1)
   })
 
   it('maps 409 key-taken to data:WRITE_REJECTED with the code as message', async () => {

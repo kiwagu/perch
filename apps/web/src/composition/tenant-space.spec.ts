@@ -171,29 +171,39 @@ describe('TenantSpaces', () => {
     expect(told).toBe(3)
   })
 
-  it('closes the databases it opened when one organisation does not open', async () => {
-    const opened: LocalDb[] = []
-    const result = await TenantSpaces.open(
-      {
-        identity: ann,
-        openLocal: (_identity, key) =>
-          key === 'globex'
-            ? errAsync(dataError('data:OPEN_FAILED', 'the database of globex does not open'))
-            : openTenantDb().map((local) => {
-                opened.push(local)
+  it('does not tell a listener that stopped listening while the others were told', async () => {
+    const { tenants } = await openTenants([acme, globex], 'acme')
+    const told: string[] = []
+    let unlistenSecond = (): void => {}
 
-                return local
-              }),
-        schema: replicaSchema,
-        onError: () => {},
-      },
-      [acme, globex],
-      undefined,
-    )
+    tenants.onChange(() => {
+      told.push('first')
+      unlistenSecond()
+    })
+    unlistenSecond = tenants.onChange(() => {
+      told.push('second')
+    })
 
-    expect(result._unsafeUnwrapErr().message).toBe('the database of globex does not open')
-    expect(opened).toHaveLength(1)
-    expect(opened[0]?.db.isConnected).toBe(false)
+    tenants.select('globex')
+
+    expect(told).toEqual(['first'])
+  })
+
+  it('opens the others and reports an organisation whose database does not open, which the next change asks for again', async () => {
+    const { tenants, errors, asked } = await openTenants([acme, globex], 'globex', ['globex'])
+
+    // Globex stays a membership, unavailable on this device: it is not current and cannot be selected.
+    expect(tenants.memberships()).toEqual([acme, globex])
+    expect(tenants.keys()).toEqual(['acme'])
+    expect(tenants.current()).toBe('acme')
+    expect(tenants.spaces().map((tenant) => tenant.key)).toEqual(['acme'])
+    expect(errors.map((error) => error.message)).toEqual(['the database of globex does not open'])
+
+    tenants.select('globex')
+
+    expect(tenants.current()).toBe('acme')
+    expect(await tenants.change([acme, globex])).toEqual({ changed: false, left: [] })
+    expect(asked.map(({ key }) => key)).toEqual(['acme', 'globex', 'globex'])
   })
 
   it('a change opens new organisations, lets go of those left and reports one that does not open', async () => {

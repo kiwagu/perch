@@ -1,7 +1,8 @@
 import type { Shape } from '@workspace/data'
 
-import { openStand, type SeedManifest, type StandOptions } from '../seed'
+import { openStand, openStandTenant, type SeedManifest, type StandOptions } from '../seed'
 
+import membersText from './members.surql'
 import standCountsText from './stand-counts.surql'
 
 export interface LeftOnStand {
@@ -13,6 +14,7 @@ export interface LeftOnStand {
   /** How many of the manifest's organisation databases `t_<key>` exist. */
   readonly databases: number
   readonly profiles: number
+  readonly settings: number
   readonly regionRows: number
   /** The sum of the regions' heads: how many batches the server accepted into them. */
   readonly accepted: number
@@ -42,12 +44,21 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     'tenant',
     'membership',
     'profile',
+    'settings',
     '_replica_head',
     '_replica_snapshot',
     '_replica_update',
     '_replica_projected',
     '_replica_peer',
   ],
+}
+
+const members: Shape<Record<string, never>, readonly string[]> = {
+  id: 'fixture.members',
+  kind: 'shape',
+  text: membersText,
+  params: [],
+  tables: ['member'],
 }
 
 /** Reads, as the stand's operator, what a seed run left there for the accounts of its manifest. */
@@ -71,6 +82,17 @@ export async function leftOnStand(
         ),
       })
     )._unsafeUnwrap()
+  } finally {
+    await stand.close()
+  }
+}
+
+/** Reads, as the stand's operator, the identity keys of the member rows in the database of organisation `key`. */
+export async function membersIn(target: StandOptions, key: string): Promise<readonly string[]> {
+  const stand = (await openStandTenant(target, `t_${key}`))._unsafeUnwrap()
+
+  try {
+    return (await stand.runner.read(members, {}))._unsafeUnwrap()
   } finally {
     await stand.close()
   }

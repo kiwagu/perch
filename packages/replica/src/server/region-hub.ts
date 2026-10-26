@@ -4,8 +4,10 @@ import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
 import type { CompactionOutcome, ServerMessage } from '../protocol'
 import type { RegionRef } from '../region-doc'
+import { privateRegionId } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
 
 import { type BatchIntake, takeInBatch } from './batch-intake'
@@ -89,7 +91,7 @@ export class RegionHub {
     })
     this.#intake = {
       schema: options.schema,
-      compactionLogLimit: options.compactionLogLimit ?? 200,
+      compactionLogLimit: options.compactionLogLimit ?? COMPACTION_LOG_LIMIT,
       send: (subscriber, message) => this.#send(subscriber, message),
     }
   }
@@ -99,6 +101,9 @@ export class RegionHub {
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
    * it has no version. From then on the device receives every batch the others push, and the
    * batches it pushes are checked against `actor`: the identity id of the device and its ability.
+   * Once the hub is closed any subscription is answered with an internal error, before anything
+   * else; a private region is subscribed only by its own identity, `forbidden-region` for any
+   * other. Neither holds the region.
    */
   subscribe(
     region: RegionRef,
@@ -106,10 +111,26 @@ export class RegionHub {
     subscriber: Subscriber,
     vv: Uint8Array | null,
   ): ResultAsync<void, DataError> {
+    if (this.#held.closed) {
+      this.#send(subscriber, { type: 'error', code: 'internal', message: 'the hub is closed' })
+
+      return okAsync(undefined)
+    }
+
     const from = vv === null ? ok(null) : decodeVersion(vv)
 
     if (from.isErr()) {
       this.#send(subscriber, from.error)
+
+      return okAsync(undefined)
+    }
+
+    if (region.kind === 'private' && region.id !== privateRegionId(actor.id)) {
+      this.#send(subscriber, {
+        type: 'error',
+        code: 'forbidden-region',
+        message: `${region.id} is not the private region of ${actor.id}`,
+      })
 
       return okAsync(undefined)
     }

@@ -71,7 +71,12 @@ function renderSignIn(session: SessionPort) {
     providers: [
       {
         provide: SIGN_IN_SERVICE,
-        useFactory: () => new SignInService(session, { createProfile: () => okAsync(undefined) }),
+        useFactory: () =>
+          new SignInService(
+            session,
+            { createProfile: () => okAsync(undefined) },
+            { createSettings: () => okAsync(undefined) },
+          ),
       },
     ],
     declarations: { SignIn: SignInContainer, Me: () => <p>profile</p> },
@@ -107,7 +112,7 @@ describe('SignInContainer', () => {
     const { session, signedIn } = switchableSession()
     const router = renderSignIn(session)
 
-    await screen.findByTestId('user.sign-in.email')
+    await screen.findByTestId('user.sign-in.email-input')
     act(() => signedIn(ann))
 
     await screen.findByText('profile')
@@ -118,13 +123,13 @@ describe('SignInContainer', () => {
     const { session, signedIn, answer } = switchableSession()
     const router = renderSignIn(session)
 
-    fireEvent.change(await screen.findByTestId('user.sign-in.email'), {
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
       target: { value: ann.email },
     })
-    fireEvent.change(screen.getByTestId('user.sign-in.password'), {
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
       target: { value: 'pass-word-1' },
     })
-    fireEvent.click(screen.getByTestId('user.sign-in.submit'))
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
     // The session opens the space and tells its listeners before the sign-in answers.
     act(() => signedIn(ann))
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))

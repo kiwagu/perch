@@ -3,17 +3,19 @@ import { match } from 'ts-pattern'
 import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
 import { MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
 import { LocalCatchUp } from './local-catch-up'
+import { LocalCompaction } from './local-compaction'
 import { ownBytes } from './message-bytes'
 import type { DrainTarget } from './outbox-drain'
 import { RegionCompaction } from './region-compaction'
 import { RegionPull } from './region-pull'
 import { type PushOutcome, RegionPush } from './region-push'
 import { type Refusal, RegionRollback } from './region-rollback'
-import type { SyncTransport } from './transport'
+import type { RegionChannel, SyncTransport } from './transport'
 
 export interface RegionSyncOptions {
   readonly region: RegionDoc
@@ -32,6 +34,8 @@ export interface RegionSyncOptions {
    * push after a rollback carries every row up to the inverse, more when it takes more.
    */
   readonly batchRows?: number
+  /** How many rows past its snapshot the local log holds before it is compacted; 200 by default. */
+  readonly localCompactionRows?: number
 }
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
@@ -51,17 +55,19 @@ type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
  * seconds, is given up for now and goes out again later (an unanswered one also has the
  * transport connect again); a subscription the gateway failed is sent again on the next full
  * pass or push. Once the server asks for a compaction and the region is quiet, it proposes a
- * full snapshot.
+ * full snapshot; once the local log holds more rows past its snapshot than the limit, a full pass
+ * compacts it.
  */
 export class RegionSync implements DrainTarget {
   readonly #region: RegionDoc
-  readonly #transport: SyncTransport
+  readonly #transport: RegionChannel
   readonly #onError: (error: DataError) => void
   readonly #pull: RegionPull
   readonly #push: RegionPush
   readonly #rollback: RegionRollback
   readonly #compaction: RegionCompaction
   readonly #localCatchUp: LocalCatchUp
+  readonly #localCompaction: LocalCompaction
   /** Settles once the server messages handed over so far are handled. */
   #queue: Promise<void> = Promise.resolve()
   /** A subscription went out on the current connection. */
@@ -71,6 +77,11 @@ export class RegionSync implements DrainTarget {
   /** The server has answered the subscription of the current connection. */
   #answered = false
   #stopped = false
+  /**
+   * The gateway's last welcome named the region, so the device may name it on this connection.
+   * A region it did not name (the identity left its organisation meanwhile) is left alone.
+   */
+  #welcomed = true
 
   constructor(options: RegionSyncOptions) {
     const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
@@ -79,13 +90,30 @@ export class RegionSync implements DrainTarget {
       throw new RangeError(`batchRows must be an integer from 1 to ${MAX_PUSH_UPDATES}`)
     }
 
-    const { region, transport, clock, onError } = options
+    const localCompactionRows = options.localCompactionRows ?? COMPACTION_LOG_LIMIT
+
+    if (!Number.isInteger(localCompactionRows) || localCompactionRows < 0) {
+      throw new RangeError('localCompactionRows must be an integer from 0')
+    }
+
+    const { region, clock, onError } = options
     const stop = (error: DataError): void => this.#stop(error)
+    // Nothing goes out for the region once it no longer syncs on this connection (retired, or
+    // left out of the welcome), whatever work it had under way ends after that.
+    const transport: RegionChannel = {
+      send: (message) => this.syncing() && options.transport.send(message),
+      reconnect: () => {
+        if (this.syncing()) {
+          options.transport.reconnect()
+        }
+      },
+    }
 
     this.#region = region
     this.#transport = transport
     this.#onError = onError
     this.#localCatchUp = new LocalCatchUp(region, onError)
+    this.#localCompaction = new LocalCompaction(region, localCompactionRows, onError)
     this.#pull = new RegionPull({
       region,
       transport,
@@ -102,7 +130,8 @@ export class RegionSync implements DrainTarget {
       onError,
       batchRows,
       gate: {
-        stopped: () => this.#stopped,
+        // A region the welcome did not name pushes nothing on this connection, as a stopped one.
+        stopped: () => this.#stopped || !this.#welcomed,
         subscribed: () => this.#subscribed,
         resubscribe: () => this.resubscribe(),
         catchUpLocal: () => this.catchUpLocal(),
@@ -129,11 +158,29 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
+   * The gateway welcomed the device, naming the region or not: a named region subscribes; one it
+   * did not name is left alone on this connection (nothing is sent for it, and it counts as
+   * quiet) until a welcome names it again.
+   */
+  welcome(named: boolean): void {
+    this.#welcomed = named
+
+    if (named) {
+      this.subscribe()
+    }
+  }
+
+  /** The last welcome named the region; see `welcome`. */
+  welcomed(): boolean {
+    return this.#welcomed
+  }
+
+  /**
    * After `welcome`: subscribe with the document's version. Its answer is the updates the
    * document lacks, so it also serves as the pull an incomplete import left outstanding.
    */
   subscribe(): void {
-    if (this.#stopped) {
+    if (this.#stopped || !this.#welcomed) {
       return
     }
 
@@ -198,6 +245,16 @@ export class RegionSync implements DrainTarget {
     return this.#localCatchUp.run()
   }
 
+  /**
+   * Compacts the local log once it holds more rows past its snapshot than the limit; a failure is
+   * reported once until a compaction succeeds again. Every full pass asks for it.
+   */
+  async compactLocal(): Promise<void> {
+    if (!this.#stopped) {
+      await this.#localCompaction.run()
+    }
+  }
+
   /** Pulls when the server's head is ahead of the cursor. */
   catchUp(head: number): void {
     if (!this.#stopped && this.#answered && head > this.#region.pulled()) {
@@ -207,18 +264,19 @@ export class RegionSync implements DrainTarget {
 
   /** Repeats the pull an incomplete or failed import left outstanding; every full pass asks for it. */
   retryPull(): void {
-    if (!this.#stopped) {
+    if (!this.#stopped && this.#welcomed) {
       this.#pull.retry()
     }
   }
 
   /**
    * Nothing waits for an answer, and the server has answered the subscription of this
-   * connection. A region that stopped syncing is quiet.
+   * connection. A region that stopped syncing is quiet, and so is one the welcome did not name.
    */
   quiet(): boolean {
     return (
       this.#stopped ||
+      !this.#welcomed ||
       (this.#answered &&
         !this.#push.inFlight() &&
         !this.#pull.pulling() &&
@@ -230,12 +288,19 @@ export class RegionSync implements DrainTarget {
     return this.#stopped
   }
 
+  /** Syncs on this connection: it neither stopped nor was left out of the welcome. */
+  syncing(): boolean {
+    return !this.#stopped && this.#welcomed
+  }
+
   /**
-   * Stops for good without a report: the region's document is replaced. Ends a pull, forgets a
-   * compaction and lands the push as empty.
+   * Stops for good without a report: the region's document is replaced. Ends a pull and the
+   * subscription, forgets a compaction and lands the push as empty; from then on nothing goes out
+   * for the region, not even from work it had under way.
    */
   retire(): void {
     this.#stopped = true
+    this.#subscribed = false
     this.#pull.end()
     this.#compaction.forget()
     this.#push.land('empty')

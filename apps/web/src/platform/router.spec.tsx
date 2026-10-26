@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
+import {
+  createMemoryHistory,
+  Outlet,
+  RouterProvider,
+  SearchParamError,
+} from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AuthUser } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container, token } from '@workspace/di'
+import { z } from '@workspace/zod'
 
 import { defineModule, useService } from './module'
 import { createAppRouter } from './router'
@@ -53,6 +59,38 @@ const GreetingModule = defineModule({
   declarations: { Greeting },
   routes: [{ path: '/hello', page: 'Greeting' }],
 })
+
+const Tab = () => <p>the tab page</p>
+
+const tabSearch = z.object({ tab: z.enum(['a', 'b']).default('a') })
+
+const TabModule = defineModule({
+  id: 'tab',
+  declarations: { Tab },
+  routes: [
+    { path: '/x', page: 'Tab', search: tabSearch },
+    { path: '/y', page: 'Tab', search: tabSearch, retain: ['tab'] },
+    { path: '/z', page: 'Tab', search: tabSearch },
+  ],
+})
+
+/** The router of the tab module, rendered at `path`, so the router settles its URL. */
+function renderedAt(path: string) {
+  const router = createAppRouter({
+    modules: [TabModule],
+    session: fixed(undefined),
+    layout: () => <Outlet />,
+    history: createMemoryHistory({ initialEntries: [path] }),
+  })
+
+  render(
+    <ServicesProvider services={{ container: new Container(), runner: new FakeShapeRunner() }}>
+      <RouterProvider router={router} />
+    </ServicesProvider>,
+  )
+
+  return router
+}
 
 describe('createAppRouter', () => {
   it("renders a page inside its module's scope", async () => {
@@ -113,5 +151,41 @@ describe('createAppRouter', () => {
   it('opens the right start page', async () => {
     expect(await landing('/', undefined)).toBe('/sign-in')
     expect(await landing('/', me)).toBe('/me')
+  })
+
+  describe('with the search schema of a route', () => {
+    it('takes a search the schema accepts', async () => {
+      const router = renderedAt('/x?tab=b')
+
+      expect(await screen.findByText('the tab page')).toBeTruthy()
+      expect(router.state.location.href).toBe('/x?tab=b')
+      expect(router.state.location.search).toEqual({ tab: 'b' })
+    })
+
+    it('sends a search the schema refuses to the error component', async () => {
+      const router = renderedAt('/x?tab=zzz')
+
+      await vi.waitFor(() => expect(router.state.matches.at(-1)?.status).toBe('error'))
+      expect(router.state.matches.at(-1)?.error).toBeInstanceOf(SearchParamError)
+      expect(screen.queryByText('the tab page')).toBeNull()
+    })
+
+    it('strips a parameter that equals its default from the URL', async () => {
+      const router = renderedAt('/x?tab=a')
+
+      expect(await screen.findByText('the tab page')).toBeTruthy()
+      await vi.waitFor(() => expect(router.state.location.href).toBe('/x'))
+      expect(router.state.location.search).toEqual({})
+    })
+
+    it('carries a retained parameter to the next page, and only a retained one', async () => {
+      const router = renderedAt('/x?tab=b')
+
+      expect(await screen.findByText('the tab page')).toBeTruthy()
+      await router.navigate({ to: '/y' })
+      expect(router.state.location.href).toBe('/y?tab=b')
+      await router.navigate({ to: '/z' })
+      expect(router.state.location.href).toBe('/z')
+    })
   })
 })

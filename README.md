@@ -22,8 +22,9 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 
 ## Local stands
 
-A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves the
-web app's build (`apps/web/dist`) and, under `/backend/`, the gateway on one https origin; the
+A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves a
+web app build (`apps/web/dist-dev` on the dev stand, `apps/web/dist` on the e2e stand) and,
+under `/backend/`, the gateway on one https origin; the
 browser talks to nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
 by mcproc (pm2 underneath).
 
@@ -41,8 +42,21 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   gateway waits for its database and defines its namespace user there before it starts. The
   `web` app is a build watcher (`vite build --watch` in development mode, with source maps), not
   a dev server, so there is no hot module replacement: after a code change it rewrites
-  `apps/web/dist` in 1-3 s, then reload the page. Until its first build finishes the front
-  answers 404.
+  `apps/web/dist-dev` in 1-3 s, then reload the page. Until its first build finishes the front
+  answers 404. The watcher, the gateway and the front are restarted on a change of their
+  config or sources, so a running stand follows the tree, a landing included; the e2e stand's
+  build is `apps/web/dist`, apart from the dev stand's.
+- Both fronts serve the UI manifest, built from `contract/` and the scenario files by the web
+  build, at `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on
+  the dev stand, with `manifest.schema.json` and `model.schema.json` beside it;
+  `Cache-Control: no-store`). The mcproc var `ui_manifest` passes `PERCH_UI_MANIFEST` to
+  both: `'0'` (in `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404
+  there. Development and e2e builds also install `window.__perch.ui.anchors()`, which lists
+  the anchors a page renders now.
+- `bun run test`: every package's unit and functional tests, four packages at a time (each
+  vitest takes the cores it finds; all of them at once starved one another past vitest's 5 s
+  timeout in the pre-commit hook, at no gain in time). Part of the pre-commit hook.
+  `bun run check` runs its tasks four at a time for the same reason.
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
@@ -57,8 +71,8 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
   profile, waits for each of its apps and runs the Playwright specs through the front;
-  `mcproc stop e2e` stops the profile. Both fronts serve the one `apps/web/dist`, so
-  after an e2e run the dev stand serves the production build until the watcher's next rebuild.
+  `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
+  front serves, so it leaves the dev stand's build alone.
   The run holds a 4G memory lease for its build and browsers: when the host is short of
   memory it waits its turn (`mcproc leases` shows the queue).
 - A SurrealDB stand keeps nothing when it stops. After restarting one on its own, restart its
@@ -87,9 +101,10 @@ A branch gets a checkout of its own, with stands of its own, next to the reposit
 `bun run seed --reset` (dev stand) seeds the organisation `acme` with `ann` as its administrator
 and `beto` as a member, besides the demo accounts. Sign in as either one and open `/org` in the
 app: the organisation's name, your role and its shared notes; a note written by one member
-reaches the other's open page. The e2e specs in `tests/e2e/specs/organisation/` cover the
-sharing, an outsider and a change of membership across two accounts, and the gateway smoke
-test (`bun run test:db`) drives the organisation routes and the tenant region on the e2e stand.
+reaches the other's open page. The e2e scenarios of `tests/e2e/scenarios/organisation/flows/`
+cover the sharing, an outsider, a change of membership and who may edit which note across two
+accounts, and the gateway smoke test (`bun run test:db`) drives the organisation routes and the
+tenant region on the e2e stand.
 
 ## Workspaces
 
@@ -106,6 +121,8 @@ Each workspace has a README with its role, key exports and commands.
 - `database`: the shared schema, its permission suites and the generated replica schema.
 - `seed`: demo accounts seeded through the gateway like any device, and their sweep.
 - `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
+- `packages/ui-contract`: the anchor grammar of every `data-testid` and the UI contract tooling:
+  the loaders, the three checks, the manifest, coverage and the hand-over diff.
 - `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
   container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
   logger, the UI kit and the single Zod instance.
@@ -113,8 +130,9 @@ Each workspace has a README with its role, key exports and commands.
 ## Gates
 
 - `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
-  coverage checks; the gate for a change. `bun run check --force` runs every task afresh
-  instead of replaying turbo's cache.
+  coverage checks, and the three UI contract checks (`contract:check`,
+  `contract:check:sources`, `contract:check:consumers`); the gate for a change.
+  `bun run check --force` runs every task afresh instead of replaying turbo's cache.
 - `bun run test:db` with the `e2e` stand up: the schema permission suites, the seed and the
   gateway smoke test.
 - `CI=1 bun run test:e2e`: the Playwright specs, one worker.
@@ -123,10 +141,28 @@ Each workspace has a README with its role, key exports and commands.
 
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
+- `bun run contract:check`, `bun run contract:check:sources` and
+  `bun run contract:check:consumers` (all three in `check` and in the pre-commit hook): the
+  contract files and the scenarios against each other, then the anchors and codes of the web
+  app and the UI kit against them, then the anchors, codes, states and values the e2e tests
+  name. The contract comes first: `contract/README.md` says how a change runs from the model
+  to the screen file, the scenario, the code and the tests.
+- `bun run contract:schemas`: writes the JSON Schemas of the contract files from their Zod
+  sources (`-- --check` fails on drift).
+- `bun run contract:manifest`: builds the UI manifest from `contract/` and the scenario files
+  into `ui-manifest/`.
+- `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
+  ref; a change to the contract hands over the output of `bun run contract:diff main`.
+- `bun run contract:coverage`: the fields and actions of the model bound by anchors, the
+  controls carrying an anchor per feature module, and the anchors and scenarios per screen;
+  `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
+  the ones declared off with `ui-contract-ignore: <reason>`.
+- `bun run contract:routes`: the routes of the screen files, one example deep link each,
+  where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
   the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
-- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file written by the first run on a checkout (also in `check` and in the pre-commit hook): afterwards a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails.
+- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file that the first run on a checkout writes from the sizes committed where HEAD left `main`, never from the working tree (also in `check` and in the pre-commit hook): a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails, so a branch's growth fails from its checkout's first run.
 - `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.
 - `bun run --filter @workspace/replica measure` and `measure:validation`: the replica's write
   path and what checking a pushed batch costs the server, on this machine.

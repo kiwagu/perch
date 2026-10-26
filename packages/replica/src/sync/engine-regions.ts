@@ -23,6 +23,8 @@ export interface EngineRegionsOptions {
   readonly onError: (error: DataError) => void
   /** How many outbox rows one push of a region carries at most; the protocol's limit by default. */
   readonly batchRows?: number
+  /** How many rows past its snapshot a region's local log holds before it is compacted. */
+  readonly localCompactionRows?: number
   /** The document that takes a region's place; see `SyncEngineOptions.replaceRegion`. */
   readonly replaceRegion: (
     region: RegionDoc,
@@ -106,7 +108,8 @@ export class EngineRegions {
           const sync = this.#syncOf(region)
 
           this.#map.set(id, { region, sync })
-          sync.subscribe()
+          // On the current connection, as its welcome named the region or not.
+          sync.welcome(current.sync.welcomed())
           this.#options.drain()
         }
       },
@@ -164,6 +167,9 @@ export class EngineRegions {
       },
       onReset: (refusal) => this.replace(id, 'reset', refusal),
       ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
+      ...(options.localCompactionRows === undefined
+        ? {}
+        : { localCompactionRows: options.localCompactionRows }),
     })
 
     return sync

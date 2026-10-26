@@ -167,6 +167,8 @@ function aProfile(identity: string = ann.identity.id) {
  */
 async function twoTabs(options: {
   readonly online: boolean
+  /** Whether the browser says it has a network; as `online` by default. */
+  readonly network?: boolean
   readonly hints?: boolean
   readonly ownStorageOfB?: boolean
   /** Wraps the database connection of tab `b`, e.g. to hold its writes. */
@@ -178,6 +180,7 @@ async function twoTabs(options: {
     locks,
     databases: browserDatabases(),
     online: options.online,
+    ...(options.network === undefined ? {} : { network: options.network }),
     ...(options.hints ? { hints: new Set<FakeHintChannel>() } : {}),
   }
 
@@ -354,6 +357,36 @@ describe('SessionService', () => {
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
+  it('asks at once, waiting for no channel, when the browser has no network', async () => {
+    const { session, writeOffline } = await bootSession({ saved: ann, online: false })
+
+    await writeOffline()
+
+    // The clock stands still: a sign-out waiting for the channel would never answer.
+    expect((await session.signOut())._unsafeUnwrap()).toBe('needs-confirmation')
+  })
+
+  it("asks before signing out offline while an organisation's region holds an unsent change", async () => {
+    const { session, destroyed, driveClock } = await bootSession({
+      saved: annIn([acme]),
+      online: false,
+    })
+
+    expect(
+      (
+        await session.writePath.run(createNote, {
+          id: noteIdFactory.create(),
+          author: ann.identity.id,
+          text: 'not sent',
+        })
+      ).isOk(),
+    ).toBe(true)
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(destroyed()).toEqual([])
+  })
+
   it('signs out offline without asking when nothing is unsent', async () => {
     const { session, destroyed, gateway, driveClock } = await bootSession({
       saved: ann,
@@ -365,38 +398,47 @@ describe('SessionService', () => {
     expect(gateway.signOuts()).toBe(0)
   })
 
-  it('asks before signing out while a change fails to persist, though the outbox reads empty', async () => {
-    let failAppend = false
-    const storage = memoryStorage()
+  // A database that answers late lets no wait of the sign-out run out before its checks: the
+  // clock the test drives moves on only while no query is in flight.
+  it.each([0, 25])(
+    'asks before signing out while a change fails to persist, though the outbox reads empty (each query %i ms late)',
+    async (lateMs) => {
+      let failAppend = false
+      const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+      saveDevice(storage, ann)
 
-    const booted = await world({
-      storage,
-      wrap: (local) =>
-        interceptQueries(local, (text) => {
-          if (failAppend && text.includes('_replica_outbox SET')) {
-            throw new Error('the disk is full')
-          }
-        }),
-    })
-    const { session, stub, destroyed, failures, driveClock } = booted
+      const booted = await world({
+        storage,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failAppend && text.includes('_replica_outbox SET')) {
+              throw new Error('the disk is full')
+            }
 
-    expect((await session.restore()).isOk()).toBe(true)
-    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+            return failAppend && lateMs > 0
+              ? new Promise<void>((resolve) => setTimeout(resolve, lateMs))
+              : undefined
+          }),
+      })
+      const { session, stub, destroyed, failures, driveClock } = booted
 
-    failAppend = true
+      expect((await session.restore()).isOk()).toBe(true)
+      await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
 
-    // The command hears that its change was not made durable; the change lives on in memory.
-    const written = await session.writePath.run(createProfile, aProfile())
+      failAppend = true
 
-    expect(written._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
-    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
-    expect(stub.signOuts()).toBe(0)
-    expect(destroyed()).toEqual([])
-    expect(session.current()?.id).toBe(ann.identity.id)
-    expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
-  })
+      // The command hears that its change was not made durable; the change lives on in memory.
+      const written = await session.writePath.run(createProfile, aProfile())
+
+      expect(written._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+      expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+      expect(stub.signOuts()).toBe(0)
+      expect(destroyed()).toEqual([])
+      expect(session.current()?.id).toBe(ann.identity.id)
+      expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
+    },
+  )
 
   it('asks before signing out when the gateway never closes after the sign-out and a change landed meanwhile', async () => {
     const { session, stub, storage, destroyed, driveClock } = await bootSession({
@@ -745,7 +787,8 @@ describe('SessionService', () => {
   })
 
   it('lifts the barrier when the sign-out ends offline, so the other tab writes again', async () => {
-    const { a, b, storage } = await twoTabs({ online: false })
+    // The gateway is out of reach on a network: the sign-out waits for the channel meanwhile.
+    const { a, b, storage } = await twoTabs({ online: false, network: true })
 
     // A change the device cannot send: the sign-out asks first.
     expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
@@ -770,7 +813,13 @@ describe('SessionService', () => {
   })
 
   it('holds back the writes of a tab that hears of the sign-out before its storage shows it', async () => {
-    const { a, b } = await twoTabs({ online: false, hints: true, ownStorageOfB: true })
+    // The gateway is out of reach on a network: the sign-out waits for the channel meanwhile.
+    const { a, b } = await twoTabs({
+      online: false,
+      network: true,
+      hints: true,
+      ownStorageOfB: true,
+    })
 
     expect((await a.session.writePath.run(createProfile, aProfile())).isOk()).toBe(true)
 
@@ -1276,6 +1325,55 @@ describe('SessionService memberships', () => {
     })
   })
 
+  it('a tab on an older list asks before its sign-out deletes the database of a membership another tab saved, opened and wrote into', async () => {
+    const storage = memoryStorage()
+    const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
+    const holding = holdingRegionLoads()
+
+    saveDevice(storage, annIn([acme]))
+
+    const a = await world(shared)
+
+    expect((await a.session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(a.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+    // Tab B reads the memberships, Acme only, and starts to open; its region load waits.
+    const b = await world({ ...shared, gateway: a.gateway, wrap: holding.wrap })
+
+    holding.hold()
+
+    const restoring = b.session.restore()
+
+    await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
+
+    // Tab A hears Ann join Globex, opens its database and writes a note there, offline: unsent.
+    a.contexts()[0]?.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(a.session.space()?.tenants()).toEqual(['acme', 'globex']))
+    a.session.selectTenant('globex')
+    expect(
+      (
+        await a.session.writePath.run(createNote, {
+          id: noteIdFactory.create(),
+          author: ann.identity.id,
+          text: 'At Globex, unsent',
+        })
+      ).isOk(),
+    ).toBe(true)
+
+    holding.release()
+    expect((await restoring).isOk()).toBe(true)
+    expect(b.session.space()?.tenants()).toEqual(['acme'])
+
+    // B follows the older list, yet Globex is counted and saved: what it holds counts as unsent.
+    expect((await b.driveClock(b.session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    await settle()
+    expect(b.tenantsDeleted()).toEqual([])
+    expect(b.tenantsDestroyed()).toEqual([])
+    expect(a.tenantsDestroyed()).toEqual([])
+    expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
+    await expect(b.session.close()).resolves.toBeUndefined()
+  })
+
   it('a tab that opens on an older list leaves the database of a membership another tab saved and opened meanwhile', async () => {
     const storage = memoryStorage()
     const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
@@ -1314,7 +1412,7 @@ describe('SessionService memberships', () => {
     await expect(b.session.close()).resolves.toBeUndefined()
   })
 
-  it('sign-out destroys inventoried tenant databases that are not open', async () => {
+  it('sign-out asks before it deletes an inventoried tenant database that did not open, and deletes it once told to forget', async () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
@@ -1325,17 +1423,73 @@ describe('SessionService memberships', () => {
     expect((await session.restore()).isOk()).toBe(true)
     await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
 
-    // Globex's database does not open: it is no open space, yet the device may hold it.
+    // Globex's database does not open: it is no open space, yet the device may hold it. Both open
+    // at once, and globex's refusal comes before acme's database is open.
     contexts()[0]?.onMemberships([acme, globex])
     await vi.waitFor(() => expect(failures.map(({ code }) => code)).toEqual(['data:OPEN_FAILED']))
     failures.splice(0)
-    expect(session.space()?.tenants()).toEqual(['acme'])
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme', 'globex'])
 
-    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    // Globex's changes, if it holds any, cannot be read: the sign-out asks and deletes nothing.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+
+    expect((await driveClock(session.signOut({ forgetUnsent: true })))._unsafeUnwrap()).toBe(
+      'signed-out',
+    )
     expect(tenantsDestroyed()).toEqual(['acme'])
     expect(tenantsDeleted()).toEqual(['globex'])
     expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
+  })
+
+  it('asks before an online sign-out while an inventoried tenant database did not open, without asking the gateway', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme, globex]))
+
+    const booted = await world({
+      storage,
+      online: true,
+      memberships: [acme, globex],
+      refusedTenants: ['globex'],
+    })
+    const { session, stub, tenantsDestroyed, tenantsDeleted, driveClock, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(booted.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+
+    // Everything acme holds is sent, yet the gateway would revoke the device while globex's
+    // changes, if any, stay unreadable on it: the sign-out asks first.
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
+    expect(stub.signOuts()).toBe(0)
+    expect(tenantsDestroyed()).toEqual([])
+    expect(tenantsDeleted()).toEqual([])
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(new Set(failures.splice(0).map(({ code }) => code))).toEqual(
+      new Set(['data:OPEN_FAILED']),
+    )
+  })
+
+  it('keeps the chosen organisation when the one picked did not open on this device', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, annIn([acme, globex]))
+
+    const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
+    const { session, failures } = booted
+
+    expect((await session.restore()).isOk()).toBe(true)
+    await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
+    session.selectTenant('acme')
+    session.selectTenant('globex')
+
+    // Globex is unavailable here: acme stays current, and stays the choice the next start opens with.
+    expect(session.currentTenant()?.tenant.key).toBe('acme')
+    expect(storage.get('perch.session.tenant')).toBe('acme')
+    expect(failures.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
   })
 
   it('the sign-in page keeps nothing of the memberships after sign-out', async () => {
@@ -1452,6 +1606,36 @@ describe('SessionService memberships', () => {
     storage.changeElsewhere('perch.session.token', 'access-2')
 
     expect(await renewing).toBe(true)
+  })
+
+  it('renewKeys in a following tab resolves false when no new keys come within 10 seconds', async () => {
+    const { a, b, storage } = await twoTabs({ online: true, hints: true })
+    const before = storage.get('perch.session.token')
+    let renewed: boolean | undefined
+
+    void b.session.renewKeys().then((answer) => {
+      renewed = answer
+    })
+
+    // The leader asks the gateway, which answers nothing.
+    await vi.waitFor(() => expect(a.transports().at(-1)?.renews()).toBe(1))
+    await b.clock.advance(9_999)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(renewed).toBeUndefined()
+
+    await b.clock.advance(1)
+    await vi.waitFor(() => expect(renewed).toBe(false))
+    expect(storage.get('perch.session.token')).toBe(before)
+  })
+
+  it('renewKeys in a following tab resolves false at once when another tab removes the access key', async () => {
+    const { b, storage } = await twoTabs({ online: true, hints: true })
+    const renewing = b.session.renewKeys()
+
+    // Another tab signed out: the key is gone, not renewed.
+    storage.changeElsewhere('perch.session.token', undefined)
+
+    expect(await renewing).toBe(false)
   })
 
   it.each(['unauthorized', 'revoked'] as const)(

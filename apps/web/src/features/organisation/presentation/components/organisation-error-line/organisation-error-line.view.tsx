@@ -1,33 +1,34 @@
 import { useT } from '@workspace/i18n'
 import { FieldError } from '@workspace/ui/components/ui/field'
 
-function errorText(t: ReturnType<typeof useT>, code: string): string {
+/** The contract code of a refused change (a domain code or the gateway's), with its text. */
+function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
   switch (code) {
     case 'organisation:KEY_INVALID':
     case 'invalid-key':
-      return t('organisation.error.key-invalid')
+      return { code: 'key-invalid', text: t('organisation.error.key-invalid') }
     case 'organisation:NAME_REQUIRED':
-      return t('organisation.error.name-required')
+      return { code: 'name-required', text: t('organisation.error.name-required') }
     case 'organisation:NAME_TOO_LONG':
-      return t('organisation.error.name-too-long')
+      return { code: 'name-too-long', text: t('organisation.error.name-too-long') }
     case 'key-taken':
-      return t('organisation.error.key-taken')
+      return { code: 'key-taken', text: t('organisation.error.key-taken') }
     case 'no-such-identity':
-      return t('organisation.error.no-such-identity')
+      return { code: 'no-such-identity', text: t('organisation.error.no-such-identity') }
     case 'already-member':
-      return t('organisation.error.already-member')
+      return { code: 'already-member', text: t('organisation.error.already-member') }
     case 'rate-limited':
-      return t('organisation.error.rate-limited')
+      return { code: 'rate-limited', text: t('organisation.error.rate-limited') }
     case 'not-admin':
-      return t('organisation.error.not-admin')
+      return { code: 'not-admin', text: t('organisation.error.not-admin') }
     case 'note:FORBIDDEN':
-      return t('organisation.error.forbidden')
+      return { code: 'forbidden', text: t('organisation.error.forbidden') }
     case 'note:TEXT_REQUIRED':
-      return t('organisation.error.text-required')
+      return { code: 'text-required', text: t('organisation.error.text-required') }
     case 'note:TEXT_TOO_LONG':
-      return t('organisation.error.text-too-long')
+      return { code: 'text-too-long', text: t('organisation.error.text-too-long') }
     default:
-      return t('organisation.error.failed')
+      return { code: 'failed', text: t('organisation.error.failed') }
   }
 }
 
@@ -36,8 +37,11 @@ export function OrganisationErrorLine(props: {
   readonly testId: string
 }) {
   const t = useT()
+  const error = props.code ? errorOf(t, props.code) : undefined
 
-  return props.code ? (
-    <FieldError data-testid={props.testId}>{errorText(t, props.code)}</FieldError>
+  return error ? (
+    <FieldError data-testid={props.testId} data-code={error.code}>
+      {error.text}
+    </FieldError>
   ) : null
 }

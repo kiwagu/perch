@@ -9,7 +9,7 @@ import { errAsync, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb, type Region } from '@workspace/data'
 
-import { type OutboxRow, RegionStore, type StoredRow } from './region-store'
+import { type OutboxRow, RegionStore, type StoredRow, type StoredSnapshot } from './region-store'
 import loadStatement from './surql/replica-load.surql'
 
 export interface RegionRef {
@@ -82,14 +82,19 @@ export class RegionDoc {
     const load = async (generation: number): Promise<RegionDoc> => {
       // BEGIN yields a result of its own, before the snapshot's, the rows' and the cursor's.
       const [, snapshots, updates, cursor] = await local.db.query<
-        [unknown, ArrayBuffer[], StoredRow[], number[]]
+        [unknown, StoredSnapshot[], StoredRow[], number[]]
       >(loadStatement, { region: ref.id })
       const doc = createDoc(options.peerId ?? randomPeerId())
-      const batch = [...snapshots, ...updates.map((update) => update.bytes)]
+      const batch = [
+        ...snapshots.map((snapshot) => snapshot.bytes),
+        ...updates.map((update) => update.bytes),
+      ]
       const status =
         batch.length > 0 ? doc.importBatch(batch.map((bytes) => new Uint8Array(bytes))) : undefined
-      const loadedSeq = Math.max(0, ...updates.map((update) => update.seq))
-      const store = new RegionStore(local, ref.id, loadedSeq, generation)
+      // The rows the snapshot covers are read: a first catch-up starts after them.
+      const covers = snapshots[0]?.covers ?? 0
+      const loadedSeq = Math.max(covers, ...updates.map((update) => update.seq))
+      const store = new RegionStore(local, ref.id, loadedSeq, generation, covers)
       const region = new RegionDoc(ref, doc, store, cursor[0] ?? 0)
 
       if (status) {
@@ -238,27 +243,52 @@ export class RegionDoc {
       return okAsync(undefined)
     }
 
-    return store
-      .flush()
-      .andThen(() => this.catchUpLocal())
-      .andThen(
-        (): ResultAsync<void, DataError> =>
-          this.#waiting.size > 0
-            ? errAsync(
-                dataError(
-                  'data:WRITE_REJECTED',
-                  `cannot compact ${this.ref.id} while imported updates still wait for their history`,
-                ),
-              )
-            : store.saveSnapshot(
-                this.doc.export({ mode: 'snapshot' }),
-                this.doc.version().encode(),
-              ),
-      )
+    return this.#compact(store).andThen((saved) =>
+      saved
+        ? okAsync(undefined)
+        : errAsync(
+            dataError(
+              'data:WRITE_REJECTED',
+              `cannot compact ${this.ref.id} while imported updates still wait for their history`,
+            ),
+          ),
+    )
+  }
+
+  /**
+   * Compacts the log (`compact`) once it holds more than `limit` rows past the region's snapshot,
+   * as far as this document knows; resolves whether it did. Imported updates still waiting for
+   * their history leave it for later, unreported.
+   */
+  compactIfLong(limit: number): ResultAsync<boolean, DataError> {
+    if (!this.#store || this.#store.rowsPastSnapshot <= limit) {
+      return okAsync(false)
+    }
+
+    return this.#compact(this.#store)
   }
 
   close(): void {
     this.#unsubscribe()
+  }
+
+  /**
+   * Flushes, imports what other tabs wrote, then saves the snapshot, unless imported updates still
+   * wait for their history; resolves whether it saved one.
+   */
+  #compact(store: RegionStore): ResultAsync<boolean, DataError> {
+    return store
+      .flush()
+      .andThen(() => this.catchUpLocal())
+      .andThen((): ResultAsync<boolean, DataError> => {
+        if (this.#waiting.size > 0) {
+          return okAsync(false)
+        }
+
+        return store
+          .saveSnapshot(this.doc.export({ mode: 'snapshot' }), this.doc.version().encode())
+          .map(() => true)
+      })
   }
 
   /**

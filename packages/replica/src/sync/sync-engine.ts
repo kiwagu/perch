@@ -29,6 +29,11 @@ export interface SyncEngineOptions {
   /** How many outbox rows one push of a region carries at most; 256 by default, the protocol's limit. */
   readonly batchRows?: number
   /**
+   * How many rows past its snapshot a region's local log holds before a full pass compacts it;
+   * 200 by default, as on the server.
+   */
+  readonly localCompactionRows?: number
+  /**
    * The document that takes a region's place: `reset` when the gateway refused its batch again
    * after the rollback (the engine then loads the region from the server), `reopen` when another
    * tab reset it. A failure stops that region's sync and is reported.
@@ -50,7 +55,9 @@ export interface SyncEngine {
    * the outbox is empty and every local update is durable, nothing waits for an answer (a push,
    * a pull, a probe, a compaction), no pass runs and no message is being handled; rejects after
    * `timeoutMs` on the clock. A region that stopped syncing counts as settled: its failure was
-   * reported. An update that cannot be made durable is reported once, and is never settled.
+   * reported. So does a region the welcome did not name, without a report: its unsent rows are not
+   * waited for, and a sign-out answers `offline` while it holds any. An update that cannot be made
+   * durable is reported once, and is never settled.
    */
   settled(timeoutMs: number): Promise<void>
   /**
@@ -59,11 +66,11 @@ export interface SyncEngine {
    * sign-out close, which means the grant is revoked. Any other close after the sign-out was
    * asked for (a gateway that could not revoke the grant closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
-   * Resolves `offline`, without asking the gateway, when the channel stayed down, fell, the
-   * outbox did not drain in time, or a region that stopped syncing still holds what it has not
-   * sent. Never rejects.
+   * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
+   * the platform says there is no network, `network.online`), fell, the outbox did not drain in
+   * time, or a region that stopped syncing still holds what it has not sent. Never rejects.
    */
-  signOut(): Promise<'signed-out' | 'offline'>
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Whether a sign-out stopped this engine's channel: it asked the gateway, which then did not
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
@@ -177,15 +184,18 @@ class Engine implements SyncEngine {
     return this.#options.transport.send({ type: 'renew' })
   }
 
-  signOut(): Promise<'signed-out' | 'offline'> {
-    return this.#signOutFlow.run()
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#signOutFlow.run(network.online)
   }
 
   #receive(message: ServerMessage): void {
     match(message)
-      .with({ type: 'welcome' }, () => {
-        for (const { sync } of this.#regions.map.values()) {
-          sync.subscribe()
+      // Only the regions the welcome names may be named on this connection.
+      .with({ type: 'welcome' }, ({ regions }) => {
+        const named = new Set(regions.map(({ region }) => region))
+
+        for (const [id, { sync }] of this.#regions.map) {
+          sync.welcome(named.has(id))
         }
       })
       // The transport hands renewed keys and memberships to the app.

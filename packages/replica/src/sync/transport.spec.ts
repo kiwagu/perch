@@ -10,7 +10,7 @@ import {
   type ServerMessage,
   serverMessage,
 } from '../protocol'
-import { manualClock } from '../testing/manual-clock'
+import { manualClock } from '../testing'
 
 import { type DeviceCredentials, RECONNECT_DELAYS_MS, WebSocketTransport } from './transport'
 

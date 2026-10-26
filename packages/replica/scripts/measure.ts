@@ -1,6 +1,7 @@
 /**
  * Measures the replica on this machine: document size and write time for 1000
- * commands, and the time to project 1000 records into an embedded database.
+ * commands, the time to project 1000 records into an embedded database, and the
+ * time to open a region whose local log holds 1000 rows, then once it is compacted.
  *
  * Usage: bun run packages/replica/scripts/measure.ts
  */
@@ -10,7 +11,7 @@ import { identityIdFactory, profileIdFactory } from '@workspace/ids'
 
 import { createProfile, profileSchema, updateName } from '../src/__fixtures__/profile'
 import { Projector } from '../src/projector'
-import { RegionDoc } from '../src/region-doc'
+import { RegionDoc, type RegionRef } from '../src/region-doc'
 import { LoroWritePath } from '../src/write-path'
 
 const COUNT = 1000
@@ -108,11 +109,52 @@ async function projectMany(): Promise<Record<string, number>> {
   return { projectRecordsMs: projectMs }
 }
 
+async function openLog(): Promise<Record<string, number>> {
+  const local = (await openTestDb())._unsafeUnwrap()
+  const ref: RegionRef = { kind: 'private', id: `identity:${identityIdFactory.create()}` }
+  const opened = async (): Promise<RegionDoc> => (await RegionDoc.open(local, ref))._unsafeUnwrap()
+  const written = await opened()
+  const path = new LoroWritePath(written, profileSchema)
+  const id = profileIdFactory.create()
+
+  ;(
+    await path.run(createProfile, {
+      id,
+      identity: identityIdFactory.create(),
+      name: 'Ann',
+      email: 'ann@example.test',
+    })
+  )._unsafeUnwrap()
+
+  for (let index = 1; index < COUNT; index++) {
+    ;(await path.run(updateName, { id, name: `Ann ${index}` }))._unsafeUnwrap()
+  }
+
+  ;(await written.flush())._unsafeUnwrap()
+  written.close()
+
+  let start = performance.now()
+  const long = await opened()
+  const openLogMs = elapsed(start)
+
+  ;(await long.compact())._unsafeUnwrap()
+  long.close()
+
+  start = performance.now()
+  ;(await opened()).close()
+  const openCompactedMs = elapsed(start)
+
+  await local.close()
+
+  return { openLogMs, openCompactedMs }
+}
+
 const results = {
   count: COUNT,
   ...(await writeMany()),
   ...(await editOne()),
   ...(await projectMany()),
+  ...(await openLog()),
 }
 
 console.log(JSON.stringify(results, null, 2))

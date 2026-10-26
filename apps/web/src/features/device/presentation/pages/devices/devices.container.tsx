@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 
-import { useT } from '@workspace/i18n'
-
 import type { DeviceView } from '../../../../../platform/devices.port'
 import { useService } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
@@ -12,7 +10,6 @@ import { type DeviceItem, DevicesView } from './devices.view'
 export function DevicesContainer() {
   const devices = useService(DEVICES_SERVICE)
   const notify = useNotify()
-  const t = useT()
   const [list, setList] = useState<readonly DeviceView[] | undefined>(undefined)
   const [pending, setPending] = useState(false)
   const [reads, setReads] = useState(0)
@@ -30,7 +27,7 @@ export function DevicesContainer() {
       },
       () => {
         if (live) {
-          notify({ testId: 'device.notice', text: t('device.notice.read-failed') })
+          notify({ code: 'devices-read-failed', text: (t) => t('device.notice.read-failed') })
         }
       },
     )
@@ -38,11 +35,11 @@ export function DevicesContainer() {
     return () => {
       live = false
     }
-  }, [devices, reads, notify, t])
+  }, [devices, reads, notify])
 
   const failed = () => {
     setPending(false)
-    notify({ testId: 'device.notice', text: t('device.notice.sign-out-failed') })
+    notify({ code: 'device-sign-out-failed', text: (t) => t('device.notice.sign-out-failed') })
   }
 
   // Another device's sign-out comes back with the list read again (this device signs out from the

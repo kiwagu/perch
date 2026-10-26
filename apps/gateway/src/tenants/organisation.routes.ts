@@ -5,13 +5,16 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { bearerCaller, readBody } from '../auth/auth.routes'
+import { accountEmail } from '../auth/account-email'
+import { bearerCaller, bearerRefused } from '../auth/bearer-caller'
 import type { DeviceSessions } from '../auth/device-sessions'
 import type { IdentitySessions } from '../auth/identity-sessions'
 import type { RequestLimits } from '../limits/request-limits'
 import { tooMany } from '../limits/too-many'
+import { readBody } from '../read-body'
 
-import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
+import type { OrganisationError, OrganisationRefusalCode } from './organisation-refusal'
+import type { Organisations } from './organisations'
 
 /** What a device sends to create an organisation. */
 const createBody = z.object({
@@ -20,7 +23,7 @@ const createBody = z.object({
 })
 
 /** What an admin sends to invite an identity into an organisation. */
-const inviteBody = z.object({ email: z.email() })
+const inviteBody = z.object({ email: accountEmail })
 
 /** An organisation's key in a path: the kernel's key rule without its anchors. */
 const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
@@ -238,9 +241,7 @@ export function organisationRoutes(
 
     return match(caller)
       .with({ kind: 'caller' }, ({ identity }) => handler(identity, request, from))
-      .with({ kind: 'unauthorized' }, async () =>
-        Response.json({ code: 'unauthorized' }, { status: 401 }),
-      )
+      .with({ kind: 'unauthorized' }, async () => bearerRefused())
       .with({ kind: 'bad-request' }, async () => badRequest())
       .with({ kind: 'failed' }, async ({ error }) => errorResponse(error))
       .exhaustive()

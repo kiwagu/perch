@@ -3,25 +3,32 @@ import { join, relative, sep } from 'node:path'
 
 import { parseSync, Visitor } from 'oxc-parser'
 
-import { parseSpec } from './parse'
+import { readScenarios } from './scenarios'
 
 export interface StepMismatch {
-  readonly spec: string
+  readonly scenario: string
   readonly steps: number
   readonly testSteps: number
 }
 
-/** Specs and tests pair by name: `specs/<feature>/<nn>-<slug>.md` with `src/<feature>/<nn>-<slug>.e2e.spec.ts`. */
+/**
+ * Scenarios and tests pair by id: the scenario `tests/e2e/scenarios/user/base/sign-up.md`
+ * with `<testsDir>/user/base/sign-up.e2e.spec.ts`, whose first line is
+ * `// scenario: user/base/sign-up`.
+ */
 export interface CoverageReport {
   readonly missingTests: readonly string[]
-  readonly missingSpecs: readonly string[]
+  readonly missingScenarios: readonly string[]
   readonly stepMismatch: readonly StepMismatch[]
-  readonly invalidSpecs: readonly string[]
+  /** Paired tests whose first line is not `// scenario: <id>`. */
+  readonly wrongHeader: readonly string[]
+  /** The scenario files could not be read: `file:line: message`. */
+  readonly problems: readonly string[]
 }
 
-const SPEC_SUFFIX = '.md'
-
 const TEST_SUFFIX = '.e2e.spec.ts'
+
+const headerOf = (id: string): string => `// scenario: ${id}`
 
 function filesUnder(dir: string): string[] {
   if (!existsSync(dir)) {
@@ -39,11 +46,8 @@ function filesUnder(dir: string): string[] {
  * The `test.step(...)` calls in a test file's code; comments and strings do not
  * count. A static count: it cannot tell a step that runs from one that never does.
  */
-function countSteps(path: string): number {
-  const { program } = parseSync(path, readFileSync(path, 'utf8'), {
-    lang: 'ts',
-    sourceType: 'module',
-  })
+function countSteps(path: string, source: string): number {
+  const { program } = parseSync(path, source, { lang: 'ts', sourceType: 'module' })
   let steps = 0
 
   new Visitor({
@@ -66,40 +70,49 @@ function countSteps(path: string): number {
   return steps
 }
 
-/** Paired names (`user/01-sign-up`) of the files under `dir` that end in `suffix`. */
-function pairedNames(dir: string, suffix: string): Map<string, string> {
+/** The tests under `dir` by the id they pair with (`user/base/sign-up`). */
+function testsById(dir: string): Map<string, string> {
   return new Map(
     filesUnder(dir)
-      .filter((path) => path.endsWith(suffix))
-      .map((path) => [relative(dir, path).slice(0, -suffix.length).split(sep).join('/'), path]),
+      .filter((path) => path.endsWith(TEST_SUFFIX))
+      .map((path) => [
+        relative(dir, path).slice(0, -TEST_SUFFIX.length).split(sep).join('/'),
+        path,
+      ]),
   )
 }
 
-export function checkCoverage(specsDir: string, testsDir: string): CoverageReport {
-  const specs = pairedNames(specsDir, SPEC_SUFFIX)
-  const tests = pairedNames(testsDir, TEST_SUFFIX)
-  const invalidSpecs: string[] = []
+/** The scenarios of the repository at `root` against the tests under `testsDir`. */
+export function checkCoverage(root: string, testsDir: string): CoverageReport {
+  const { scenarios, problems } = readScenarios(root)
+  const tests = testsById(testsDir)
+  const ids = new Set(scenarios.map((scenario) => scenario.id))
   const stepMismatch: StepMismatch[] = []
+  const wrongHeader: string[] = []
 
-  for (const [name, specPath] of specs) {
-    const testPath = tests.get(name)
-    const parsed = parseSpec(readFileSync(specPath, 'utf8'))
+  for (const scenario of scenarios) {
+    const testPath = tests.get(scenario.id)
 
-    if (parsed.isErr()) {
-      invalidSpecs.push(name)
-    } else if (testPath) {
-      const testSteps = countSteps(testPath)
+    if (testPath) {
+      const source = readFileSync(testPath, 'utf8')
+      const testSteps = countSteps(testPath, source)
 
-      if (testSteps < parsed.value.steps.length) {
-        stepMismatch.push({ spec: name, steps: parsed.value.steps.length, testSteps })
+      if (source.split('\n', 1)[0]?.trim() !== headerOf(scenario.id)) {
+        wrongHeader.push(scenario.id)
+      }
+
+      if (testSteps < scenario.steps.length) {
+        stepMismatch.push({ scenario: scenario.id, steps: scenario.steps.length, testSteps })
       }
     }
   }
 
   return {
-    missingTests: [...specs.keys()].filter((name) => !tests.has(name)).sort(),
-    missingSpecs: [...tests.keys()].filter((name) => !specs.has(name)).sort(),
+    missingTests: [...ids].filter((id) => !tests.has(id)).sort(),
+    missingScenarios:
+      problems.length > 0 ? [] : [...tests.keys()].filter((id) => !ids.has(id)).sort(),
     stepMismatch,
-    invalidSpecs: invalidSpecs.sort(),
+    wrongHeader: wrongHeader.sort(),
+    problems,
   }
 }

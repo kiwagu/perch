@@ -15,18 +15,25 @@ const identity = identityIdFactory.create()
 const ref: RegionRef = { kind: 'private', id: privateRegionId(identity) }
 
 let local: LocalDb
+/** The spaces a test opened, closed after it before the database. */
+const spaces: RegionSpace[] = []
 
 beforeEach(async () => {
   local = (await openTestDb())._unsafeUnwrap()
 })
 
+// A space still projecting a write when its test ends finishes it before the database closes.
 afterEach(async () => {
+  for (const space of spaces.splice(0)) {
+    await space.close()
+  }
+
   await local.close()
 })
 
 /** A region space over `database`, which it never closes: the test closes the database. */
 async function openSpace(database: LocalDb = local): Promise<RegionSpace> {
-  return (
+  const space = (
     await openRegionSpace({
       openLocal: () => okAsync({ ...database, close: async () => {}, destroy: async () => {} }),
       ref,
@@ -36,6 +43,10 @@ async function openSpace(database: LocalDb = local): Promise<RegionSpace> {
       },
     })
   )._unsafeUnwrap()
+
+  spaces.push(space)
+
+  return space
 }
 
 /** A profile of `owner`: an identity has one profile, so a second one beside it names another. */

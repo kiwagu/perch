@@ -1,8 +1,7 @@
 import type { AuthUser } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
-import type { Membership } from '@workspace/replica/protocol'
-import { deviceId, membership } from '@workspace/replica/protocol'
+import { deviceId, type Membership, membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 

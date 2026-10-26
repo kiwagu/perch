@@ -8,9 +8,10 @@ import { z } from '@workspace/zod'
 
 import type { RequestLimits } from '../limits/request-limits'
 import { tooMany } from '../limits/too-many'
+import { readBody } from '../read-body'
 import type { ConnectionRegistry } from '../sync/connections'
 
-import { bearerCaller, DEVICE_HEADER, readBody } from './auth.routes'
+import { bearerCaller, bearerRefused, DEVICE_HEADER } from './bearer-caller'
 import type { DeviceSessionRow, DeviceSessions, SignOutError } from './device-sessions'
 import { grantIdOf, type IdentitySessions, keysRefused } from './identity-sessions'
 
@@ -346,7 +347,7 @@ export function deviceRoutes(
 
       return match(caller)
         .with({ kind: 'caller' }, ({ identity, device }) => handler({ identity, device }, request))
-        .with({ kind: 'unauthorized' }, async () => unauthorized())
+        .with({ kind: 'unauthorized' }, async () => bearerRefused())
         .with({ kind: 'bad-request' }, async () => badRequest())
         .with({ kind: 'failed' }, async ({ error }) => failed(error))
         .exhaustive()

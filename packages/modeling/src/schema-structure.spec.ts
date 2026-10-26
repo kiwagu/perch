@@ -46,12 +46,12 @@ describe('parseStructure', () => {
     const info: StructureInfo = {
       db: {
         tables: [
-          { name: 'tenant', kind: { kind: 'NORMAL' } },
-          { name: 'member_of', kind: { kind: 'RELATION', in: ['identity'], out: ['tenant'] } },
+          { name: 'shelf', kind: { kind: 'NORMAL' } },
+          { name: 'keeps', kind: { kind: 'RELATION', in: ['identity'], out: ['shelf'] } },
         ],
       },
       tables: {
-        tenant: {
+        shelf: {
           fields: [
             { name: 'address', kind: 'none | object' },
             { name: 'address.city', kind: 'string' },
@@ -59,15 +59,15 @@ describe('parseStructure', () => {
             { name: 'tags.*', kind: 'string' },
           ],
         },
-        member_of: { fields: [{ name: 'role', kind: "'member' | 'admin'" }] },
+        keeps: { fields: [{ name: 'side', kind: "'front' | 'back'" }] },
       },
     }
     const text =
-      '-- @region tenant\n-- @id tnt\nDEFINE TABLE tenant;\n-- @region tenant\n-- @id mbr\nDEFINE TABLE member_of TYPE RELATION;'
+      '-- @region tenant\n-- @id shf\nDEFINE TABLE shelf;\n-- @region tenant\n-- @id kep\nDEFINE TABLE keeps TYPE RELATION;'
     const parsed = parseStructure(info, text).model
 
-    expect(parsed.tables['member_of']?.relation).toEqual({ in: ['identity'], out: ['tenant'] })
-    expect(parsed.tables['tenant']?.fields).toEqual({
+    expect(parsed.tables['keeps']?.relation).toEqual({ in: ['identity'], out: ['shelf'] })
+    expect(parsed.tables['shelf']?.fields).toEqual({
       address: {
         kind: 'option',
         inner: { kind: 'object', fields: { city: { kind: 'scalar', name: 'string' } } },
@@ -150,6 +150,7 @@ describe('loadSchemaModel', () => {
       'identity',
       'membership',
       'profile',
+      'settings',
       'tenant',
     ])
     expect(model.tables['profile']?.region).toBe('private')

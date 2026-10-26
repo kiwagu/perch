@@ -1,9 +1,9 @@
 ---
-description: 'Use when: creating a file or a folder in a feature or a package.'
+description: 'Use when: creating a file or a folder in a feature or a package, turning a file into a folder of parts, adding a module to the gateway, or when ESLint reports workspace/import-through-index.'
 alwaysApply: true
 ---
 
-# Entity-first file names
+# Entity-first file names, folders as units, modules on the gateway
 
 ## Pyramid Layer
 
@@ -12,10 +12,13 @@ alwaysApply: true
 ## Use This When
 
 - You are about to create a file or folder.
+- A file becomes a folder of parts (see `file-size-tiers.mdc` for when).
+- You add a module to the gateway, or import across two of its modules.
+- ESLint reports `workspace/import-through-index`.
 
 ## Stop Here If
 
-- The name reads `<name>.<role>.<ext>` and sits in the layer folder that owns it.
+- The name reads `<name>.<role>.<ext>` and sits in the layer folder that owns it, and anything imported from a folder that has an `index.ts` comes through that index.
 
 ## Core rule
 
@@ -23,4 +26,8 @@ alwaysApply: true
 - Fixed roles in a feature: `module`, `shape`, `commands`, `model.gen`, `service`, `machine`, `container`, `view`, `spec`, `view.spec`, `stories`, plus `entity`, `port`, `rule` (one domain rule function, `profile-name.rule.ts`) and `policy` (one application business function, `locale-change.policy.ts`).
 - A component folder is kebab-case and has the component's name.
 - Feature layout: `<feature>/<feature>.module.ts`, `domain/`, `application/`, `presentation/pages/<page>/`, `presentation/components/<name>/`, `presentation/i18n/`.
+- A folder as a unit: when one file grows into several, they live in a folder named by what they share, without repeating that name inside (`region-sync/push.ts`, not `region-sync/region-push.ts`), with an `index.ts` that only re-exports the folder's public surface. A part keeps its role suffix when it has one (`members.view.tsx`, `invite.policy.ts`); a part that is an internal piece of one unit needs none (`push.ts`). Outside the folder, import the folder (`./region-sync`), never a file inside it. No folder for a single file.
+- The gateway is built from modules the same way: one folder per mechanism of the platform under `apps/gateway/src/` (`auth/`, `sync/`, `tenants/`, `limits/`), each with an `index.ts` as the only entry point for the rest of the server, its internals private to it, and its own README (`package-readme.mdc`). A module grows `domain/` and `application/` folders once it holds domain rules, not before. The composition root stays the only place that assembles adapters.
+- The index rule applies to folders that have an `index.ts`. Modules and folders that predate this rule have none and keep their flat layout: they are imported file by file, as today, until their next split gives them an index. A new module that needs something from such a module imports the file; it does not migrate the other module on the way.
+- Enforced by ESLint `workspace/import-through-index` (in `@workspace/eslint-config`, configured in the root `eslint.config.js`): an import that reaches inside a folder with an `index.ts` from outside it fails, and so does one into a gateway module that has no `index.ts` and is not on the module root's `flat` list. A fixture (`*.fixture.ts`, or a file under `__fixtures__/`) is test data and may be imported from anywhere. Two lists in the root config only shrink: the gateway's `flat` modules (they leave when they get an `index.ts`) and the `reachIn` entries, a folder or a single file that still imports inside another folder, because the index would close an import cycle or a test drives another unit's internals (they leave at the split that ends the need). Never add an entry; the rule fails the run on an entry whose folder has an `index.ts` now (a `flat` module) or no longer has one, or whose importing folder is gone (a `reachIn` entry).
 - Tests sit next to the code they test.

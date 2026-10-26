@@ -4,6 +4,14 @@ import { dataError } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container } from '@workspace/di'
 
+import {
+  settingsCommands,
+  settingsShape,
+} from '../../features/user/application/settings/settings.model.gen'
+import {
+  SETTINGS_SERVICE,
+  SettingsService,
+} from '../../features/user/application/settings/settings.service'
 import type { ServicesView } from '../services'
 import { type PushRejection, SESSION, type SessionPort } from '../session.port'
 
@@ -44,10 +52,27 @@ export function fakeSession(): {
   }
 }
 
-/** The services a component test provides: the container resolves `session`, reads find no shapes. */
-export function fakeServices(session: SessionPort): ServicesView {
+/** The services a component test provides: the container resolves `session`, reads find no shapes until the test sets one on `runner`. */
+export function fakeServices(
+  session: SessionPort,
+): ServicesView & { readonly runner: FakeShapeRunner } {
+  const runner = new FakeShapeRunner()
+  // The settings the frame reads; their commands are not in these tests.
+  const commands = {
+    execute: () => errAsync(dataError('data:WRITE_FAILED', 'not in this test')),
+  }
+
   return {
-    container: new Container().singleton(SESSION, () => session),
-    runner: new FakeShapeRunner(),
+    container: new Container()
+      .singleton(SESSION, () => session)
+      .singleton(
+        SETTINGS_SERVICE,
+        () =>
+          new SettingsService(runner, commands, {
+            shape: settingsShape,
+            commands: settingsCommands,
+          }),
+      ),
+    runner,
   }
 }

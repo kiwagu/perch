@@ -28,13 +28,21 @@ const signedIn: SignedIn = {
 }
 
 /** The sign-in service as the routes see it: Ann exists, with her password. */
-function stubSessions(): Pick<IdentitySessions, 'signUp' | 'signIn'> & {
+function stubSessions(): Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'> & {
   readonly calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]>
+  readonly withdrawn: SignedIn[]
 } {
   const calls: Array<readonly [SignUpInput | SignInInput, SignInDevice]> = []
+  const withdrawn: SignedIn[] = []
 
   return {
     calls,
+    withdrawn,
+    withdraw: (signed) => {
+      withdrawn.push(signed)
+
+      return okAsync(undefined)
+    },
     signUp: (input, device) => {
       calls.push([input, device])
 
@@ -65,7 +73,7 @@ const annsAddress = '203.0.113.7'
  * from an address, Ann's by default.
  */
 function limitedRoutes(
-  sessions: Pick<IdentitySessions, 'signUp' | 'signIn'>,
+  sessions: Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'>,
   organisations: Pick<Organisations, 'membershipsOf'> = noMemberships,
 ) {
   const clock = manualClock(1_000)
@@ -202,8 +210,9 @@ describe('authRoutes', () => {
     })
   })
 
-  it('answers 500 when the memberships of the identity cannot be read', async () => {
-    const { ask } = limitedRoutes(stubSessions(), {
+  it('answers 500 when the memberships of the identity cannot be read, and takes the sign-in back', async () => {
+    const sessions = stubSessions()
+    const { ask } = limitedRoutes(sessions, {
       membershipsOf: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is gone')),
     })
 
@@ -211,6 +220,8 @@ describe('authRoutes', () => {
       status: 500,
       body: { code: 'internal' },
     })
+    // Its pair never reached the device: no grant is left alive that nobody holds.
+    expect(sessions.withdrawn).toEqual([signedIn])
   })
 
   it('answers 405 to a method other than POST', async () => {
@@ -339,10 +350,12 @@ describe('authRoutes limits', () => {
     expect(refused?.headers.get('Retry-After')).toBe(String(15 * 60))
     expect(await answer(refused)).toEqual(rateLimited)
     expect(sessions.calls).toHaveLength(10)
-    // A case variant of the email is another account to the database, so it is counted apart.
+    // The email in another case is the same account, so it is refused with it.
     expect(
-      (await ask(post('/auth/sign-in', { ...wrongPassword, email: 'ANN@example.test' })))?.status,
-    ).toBe(401)
+      await answer(
+        await ask(post('/auth/sign-in', { ...wrongPassword, email: 'ANN@Example.test' })),
+      ),
+    ).toEqual(rateLimited)
     await clock.advance(15 * 60_000)
     expect((await ask(post('/auth/sign-in', annOnLaptop), addressOf(12)))?.status).toBe(200)
   })
@@ -444,7 +457,7 @@ function heldSignIns(answer: () => Promise<Result<SignedIn, DataError>>) {
     release = resolve
   })
   const state = { arrived: 0 }
-  const sessions: Pick<IdentitySessions, 'signUp' | 'signIn'> = {
+  const sessions: Pick<IdentitySessions, 'signUp' | 'signIn' | 'withdraw'> = {
     ...stubSessions(),
     signIn: () => {
       state.arrived += 1
@@ -555,24 +568,39 @@ describe('authRoutes over the organisations of the gateway', () => {
     expect(body).toMatchObject({ identity, memberships: [acme] })
   })
 
-  it('keeps the failed sign-ins of an email when an account of a case variant of it signs in', async () => {
+  it('takes an email in any case as one account: kept in lower case, one sign-up, any sign-in, one limit', async () => {
     const root = await openRoot()
     const { ask } = limitedRoutes(root.sessions, root.organisations)
-    const victim = { ...annOnLaptop, email: 'victim@example.test' }
-    const variant = { ...annOnLaptop, email: 'VICTIM@example.test', password: 'pass-word-2' }
-    const guess = { ...victim, password: 'wrong-password' }
+    const ann = { ...annOnLaptop, email: 'Ann.Lee@Example.Test' }
+    const shouted = { ...ann, email: 'ANN.LEE@EXAMPLE.TEST' }
+    const guess = (attempt: number) => ({
+      ...ann,
+      email: attempt % 2 === 0 ? 'ann.lee@example.test' : 'Ann.LEE@example.test',
+      password: 'wrong-password',
+    })
 
-    // The database keeps the two as two accounts, each with its own password.
-    expect((await ask(post('/auth/sign-up', victim), addressOf(0)))?.status).toBe(200)
-    expect((await ask(post('/auth/sign-up', variant), addressOf(1)))?.status).toBe(200)
+    const signedUp = await answer(await ask(post('/auth/sign-up', ann), addressOf(0)))
 
-    for (let attempt = 0; attempt < 9; attempt += 1) {
-      expect((await ask(post('/auth/sign-in', guess), addressOf(attempt)))?.status).toBe(401)
+    expect(signedUp.status).toBe(200)
+    expect(signedUp.body).toMatchObject({ identity: { email: 'ann.lee@example.test' } })
+    // The address in another case is taken already.
+    expect(
+      (await ask(post('/auth/sign-up', { ...shouted, password: 'pass-word-2' }), addressOf(1)))
+        ?.status,
+    ).toBe(409)
+    expect(await answer(await ask(post('/auth/sign-in', shouted), addressOf(2)))).toMatchObject({
+      status: 200,
+      body: { identity: { email: 'ann.lee@example.test' } },
+    })
+
+    // Failed sign-ins in any case count against the one account.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(
+        (await ask(post('/auth/sign-in', guess(attempt)), addressOf(3 + attempt)))?.status,
+      ).toBe(401)
     }
 
-    expect((await ask(post('/auth/sign-in', variant), addressOf(9)))?.status).toBe(200)
-    expect((await ask(post('/auth/sign-in', guess), addressOf(10)))?.status).toBe(401)
-    expect(await answer(await ask(post('/auth/sign-in', victim), addressOf(11)))).toEqual(
+    expect(await answer(await ask(post('/auth/sign-in', shouted), addressOf(13)))).toEqual(
       rateLimited,
     )
   })

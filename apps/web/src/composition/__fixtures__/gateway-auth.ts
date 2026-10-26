@@ -24,8 +24,9 @@ export interface FakeGatewayAuth extends GatewayAuth {
 }
 
 /**
- * The gateway's sign-up, sign-in and sign-out without a network: accounts live in memory,
- * each answer carries new keys and every account belongs to `memberships`.
+ * The gateway's sign-up, sign-in and sign-out without a network: accounts live in memory, keyed
+ * and answered by their email in lower case as the gateway keeps it, each answer carries new keys
+ * and every account belongs to `memberships`.
  */
 export function fakeGatewayAuth(memberships: readonly Membership[] = []): FakeGatewayAuth {
   const accounts = new Map<string, Account>()
@@ -46,20 +47,22 @@ export function fakeGatewayAuth(memberships: readonly Membership[] = []): FakeGa
     signUp: (input, device) => {
       requests.push({ kind: 'sign-up', email: input.email, device })
 
-      if (accounts.has(input.email)) {
+      const email = input.email.toLowerCase()
+
+      if (accounts.has(email)) {
         return errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected'))
       }
 
-      const identity = { id: identityIdFactory.create(), email: input.email }
+      const identity = { id: identityIdFactory.create(), email }
 
-      accounts.set(input.email, { device: { identity, memberships }, password: input.password })
+      accounts.set(email, { device: { identity, memberships }, password: input.password })
 
       return okAsync({ identity, tokens: keys(), memberships })
     },
     signIn: (input, device) => {
       requests.push({ kind: 'sign-in', email: input.email, device })
 
-      const account = accounts.get(input.email)
+      const account = accounts.get(input.email.toLowerCase())
 
       return account?.password === input.password
         ? okAsync({ ...account.device, tokens: keys() })

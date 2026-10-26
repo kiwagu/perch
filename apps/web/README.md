@@ -39,9 +39,14 @@ modeling stage.
   organisation that becomes current (or reports that none is). A reload opens the saved identity's space
   without the network. The session follows the memberships (`SessionOrganisations`): from the
   sign-in answer, from the leading tab's channel (the welcome and each `memberships` message)
-  and from the other tabs through the storage; a new organisation's database opens, the
+  and from the other tabs through the storage; an organisation database that does not open, at
+  the start or at a change, is reported and left out (the organisation stays a membership,
+  unavailable on this device: not current, not selectable, not synced, and the changes it may hold
+  count as unsent, so a sign-out asks before it deletes it and never has the gateway revoke the
+  device meanwhile) until the next change of memberships asks for it again, so one broken
+  database never blocks the others; a new organisation's database opens, the
   database of one the identity left is deleted, and a leading tab syncs the regions on a new
-  engine. Every organisation database the device holds for the identity is counted in
+  engine (`LeadingEngine`); a sign-out draining through the old one then ends `offline`. Every organisation database the device holds for the identity is counted in
   `perch.session.tenant-databases` (`{ [identity]: keys }`, each identity's count apart, so
   another identity signing in on this browser leaves it as it is) before it opens, and stops
   being counted once deleted; the count outlives the keys, so whenever the space opens or follows
@@ -63,7 +68,7 @@ modeling stage.
   which the organisation page words as "too many attempts"; any other status
   named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
   it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once. `devicesApi` is the `DEVICES` port over
+  creates its membership on the device at once, added to the newest list any tab kept. `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. A token is renewed through the
@@ -71,7 +76,8 @@ modeling stage.
   connecting again (a channel that is down renews at the hello that brings it up); another tab
   asks the leader with the `renew` hint and waits for the new access key in storage (10 seconds at
   most). A renewal gives up at once when the leading tab's channel ended for good (keys refused,
-  or the device signed out from another one) and when the gateway's limits refused it. One tab per browser leads the
+  or the device signed out from another one), when the gateway's limits refused it, and when
+  another tab removed the access key (it signed out): only a new key counts as renewed. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`) for the private region and every organisation's, keeping every renewed pair of
   keys; the tabs hint each other over a BroadcastChannel, so each reads what the others wrote or
@@ -134,7 +140,29 @@ modeling stage.
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for organisations and for devices,
-  notices the shell shows, the language state and the app-wide catalogs.
+  notices the shell shows, the language state and the app-wide catalogs. `ui-contract.ts` is
+  the page helper of development and e2e builds: `main.tsx` installs it when the build
+  constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
+  `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
+  lists every `data-testid` the page renders now with its kind, `data-state`, `data-code`,
+  `data-id`, `data-value` and whether it is visible, with the page's URL
+  (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
+  Zod object) validates the URL's search, drops a parameter equal to its default and carries
+  the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
+  route equals its binding in the screen files of `contract/screens/` (path, guard, history,
+  retained parameters, and the input view of the search schema as JSON Schema, without its
+  prose);
+  `routes-router.spec.ts` builds every binding on the real router (the contract's sample of
+  each parameter of its path, `parameterSample`, and the least search its schema accepts),
+  matches it back to the same route, parameters and search with the defaults applied, and
+  holds the binding's `params` to the parameters of its path; `routes-examples.spec.ts` holds
+  each binding's example link to the router (the path it builds, the search string it
+  writes, the route, parameters and search it matches) and the router's route tree to the
+  tree of the screen folder, both specs on the router of `__fixtures__/router.ts`.
+  `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
+  flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
+  (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added); running every flow and
+  activity in XState is the contract check's, not the app's.
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
@@ -153,23 +181,29 @@ composition root over an in-memory database, always leading its identity's sync,
 commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
 reads the profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
-signed-in account, `ensureOrganisation` creates an organisation (one that is already the
-account's is found), `ensureMember` invites an existing account by email, and
+signed-in account, `ensureOrganisation` creates an organisation (one the account already
+administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
 of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
 by default), which a test talking to the gateway directly uses to name a client address in
 `X-Forwarded-For`, as the front would. `openStand()` is the operator's connection to a stand as a system user, where seeded
 accounts and the organisations they created are swept; it applies the directory schema with the
 key the stand's gateway signs with (`signingKey`, required), so opening a stand never changes
-that key. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
+that key. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 
 ## Commands
 
-- `bun run dev`: the build watcher, `vite build --watch --mode development`: rewrites `dist/`
-  (source maps, no minifying) on every change. There is no dev server: the local stands'
-  Caddy front serves `dist/`, so reload the page after a rebuild.
-- `bun run build`: production build into `dist/`.
+- `bun run dev`: the build watcher, `vite build --watch --mode development --outDir dist-dev`:
+  rewrites `dist-dev/` (source maps, no minifying) on every change, then the UI manifest into
+  `dist-dev/ui-manifest/`
+  (`ui-contract manifest`; a change of a file under `contract/` or `tests/e2e/scenarios/`
+  rebuilds too). There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  reload the page after a rebuild; `dist/` is the production build's alone.
+- `bun run build`: production build into `dist/`, then `ui-contract manifest --out
+  dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
+  contract check passes, with its schema and the model's beside it, which the stands serve at
+  `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.

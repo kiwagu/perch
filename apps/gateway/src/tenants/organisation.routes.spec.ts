@@ -293,6 +293,39 @@ describe('organisationRoutes', () => {
     }
   })
 
+  it('answers 403 to a removal by an outsider, and removes nobody', async () => {
+    const { ann, bob, cat, ask, founded, invited } = await harness()
+
+    await founded()
+    await invited()
+
+    expect(
+      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, { as: cat }),
+    ).toEqual({ status: 403, body: { code: 'not-a-member' } })
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
+      status: 200,
+      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+    })
+  })
+
+  it('answers 204 to the removal of an identity that is not a member, and changes nothing', async () => {
+    const { ann, cat, ask, founded } = await harness()
+
+    await founded()
+
+    expect(
+      await ask('DELETE', `/organisations/acme/members/${cat.identity.id}`, { as: ann }),
+    ).toEqual({ status: 204, body: undefined })
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
+      status: 200,
+      body: { members: [memberOf(ann, 'admin')] },
+    })
+    expect(await ask('GET', '/organisations', { as: cat })).toEqual({
+      status: 200,
+      body: { memberships: [] },
+    })
+  })
+
   it('answers 403 to a removal by a member who is not admin', async () => {
     const { ann, bob, ask, founded, invited } = await harness()
 
@@ -350,6 +383,17 @@ describe('organisationRoutes', () => {
       status: 200,
       body: { memberships: [] },
     })
+  })
+
+  it('names the Bearer scheme in WWW-Authenticate when it answers 401', async () => {
+    const { ann, routes } = await harness()
+    const refused = await routes(
+      request('GET', '/organisations', { device: deviceOf(ann.identity.email) }),
+      ADDRESS,
+    )
+
+    expect(refused?.status).toBe(401)
+    expect(refused?.headers.get('WWW-Authenticate')).toBe('Bearer')
   })
 
   it('answers 400 to a call that names no device, and 401 to a call of a device signed out', async () => {

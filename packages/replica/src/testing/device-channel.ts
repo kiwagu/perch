@@ -1,7 +1,7 @@
 import { match } from 'ts-pattern'
 
 import type { ClientMessage, ServerMessage } from '../protocol'
-import { type ChannelState, type EndReason, endingOf } from '../sync/transport'
+import { type ChannelState, type EndReason, endingOf } from '../sync'
 
 import { compact, probe, pull, push, subscribe } from './stub-hub-requests'
 import { renew, signOut, welcome } from './stub-session'

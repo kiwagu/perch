@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=../activity.schema.json
+id: session
+title: The session of an account
+description: An account's session on this device, from the sign-in page to the profile and the devices page, and back to the sign-in page once the device signs out.
+roles: [ guest, identity ]
+data:
+  account:
+    description: The account signed in on this device, from the sign-in until the device signs out.
+  profile.name:
+    description: The name of the account, which the profile shows once it is signed in.
+    model: profile.name
+initial: sign-in
+meta:
+  guards:
+    noUnsentChanges: this device holds no changes the server has not received
+states:
+  sign-in:
+    description: The sign-in page, where a visitor signs in or creates an account.
+    meta: { screen: user.sign-in, address: { path: /sign-in } }
+    on:
+      user.sign-in.submit-button:
+        target: profile
+        description: The account signs in, or is created in the mode sign-up, and the profile opens.
+  profile:
+    description: The profile of the account signed in.
+    meta: { screen: user.profile, address: { path: /me } }
+    on:
+      app-shell.nav.devices-link:
+        target: devices
+      user.profile.sign-out-button:
+        - target: signed-out
+          guard: noUnsentChanges
+          description: The device signs out at once; with changes not sent, user.profile.sign-out-dialog asks first and the profile stays.
+      user.profile.sign-out-dialog.confirm-button:
+        target: signed-out
+        description: The device signs out and the changes it has not sent are lost.
+      app-shell.sign-out-here-button:
+        target: signed-out
+        description: The device whose data would not open signs out on the frame's button.
+  devices:
+    description: The devices of the account.
+    meta: { screen: device, address: { path: /devices } }
+    on:
+      app-shell.nav.profile-link:
+        target: profile
+      device.everywhere.dialog.confirm-button:
+        target: signed-out
+        description: Every device of the account signs out, this one included.
+      app-shell.sign-out-here-button:
+        target: signed-out
+        description: The device whose data would not open signs out on the frame's button.
+  signed-out:
+    description: The sign-in page again, once the device has signed out.
+    type: final
+    meta: { screen: user.sign-in, address: { path: /sign-in } }

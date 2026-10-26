@@ -82,7 +82,7 @@ async function testDb(schema = readSchema('directory'), signingKey?: string): Pr
 }
 
 /** The parts of the device sessions identity sessions use. */
-type SessionDevices = Pick<DeviceSessions, 'touch' | 'revokeGrant'>
+type SessionDevices = Pick<DeviceSessions, 'touch' | 'revokeGrant' | 'signedOut'>
 
 interface RecordingOptions {
   /** Refuses the touch when it says so. */
@@ -99,6 +99,7 @@ interface RecordingOptions {
 function recordingDevices(options: RecordingOptions = {}) {
   const touched: DeviceTouch[] = []
   const revoked: Array<{ readonly identity: string; readonly grant: string }> = []
+  const signedOut: Array<{ readonly identity: string; readonly grant: string }> = []
   const grants = new Map<string, string>()
   const devices: SessionDevices = {
     touch: (input) => {
@@ -134,9 +135,14 @@ function recordingDevices(options: RecordingOptions = {}) {
         ? errAsync(dataError('data:WRITE_FAILED', 'the directory refused the revoke'))
         : okAsync(undefined)
     },
+    signedOut: (input) => {
+      signedOut.push(input)
+
+      return okAsync(undefined)
+    },
   }
 
-  return { touched, revoked, devices }
+  return { touched, revoked, signedOut, devices }
 }
 
 /** Sessions over `local`, opening auth sessions as the composition root does. */
@@ -229,6 +235,20 @@ describe('IdentitySessions', () => {
     expect(device.identity.id).toBe(up.identity.id)
     expect(device.renewed).toBe(false)
     expect(device.tokens).toEqual(again.tokens)
+  })
+
+  // The directory itself matches an email in any case, whatever its callers hand it.
+  it('signs in the identity of an email written in another case', async () => {
+    const sessions = await testSessions()
+
+    const up = (
+      await sessions.signUp({ email: 'Ann@Example.Test', password: 'pass-word-1' }, laptop)
+    )._unsafeUnwrap()
+    const again = (
+      await sessions.signIn({ email: 'ANN@example.TEST', password: 'pass-word-1' }, laptop)
+    )._unsafeUnwrap()
+
+    expect(again.identity.id).toBe(up.identity.id)
   })
 
   it('renews the pair with the refresh key when the access token is not accepted', async () => {
@@ -666,6 +686,7 @@ describe('IdentitySessions and the devices', () => {
             ? errAsync(dataError('data:WRITE_FAILED', 'the directory refused the device'))
             : real.touch(input),
         revokeGrant: (input) => real.revokeGrant(input),
+        signedOut: (input) => real.signedOut(input),
       },
     })
     const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
@@ -698,6 +719,39 @@ describe('IdentitySessions and the devices', () => {
     expect(failures.map((failure) => [failure.code, failure.message])).toEqual([
       ['data:WRITE_FAILED', 'the directory refused the revoke'],
     ])
+  })
+
+  it('takes back a sign-in whose answer could not be given: its device signed out, its grant revoked', async () => {
+    const local = await testDb()
+    const devices = new DeviceSessions({ directory: local, clock: manualClock(Date.now()) })
+    const sessions = sessionsOver(local, { devices })
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const signed = (await sessions.signIn(ann, laptop))._unsafeUnwrap()
+
+    expect((await sessions.withdraw(signed)).isOk()).toBe(true)
+
+    const [grants] = await local.db.query<[unknown[]]>(liveGrantsStatement, {
+      identity: up.identity.id,
+    })
+    const [row] = (await devices.list(up.identity.id))._unsafeUnwrap()
+
+    expect(grants).toEqual([])
+    expect(row?.revokedAt).toBeInstanceOf(Date)
+  })
+
+  it('reports a sign-in it could not take back', async () => {
+    const { devices, signedOut } = recordingDevices({ failRevokes: true })
+    const failures: DataError[] = []
+    const sessions = sessionsOver(await testDb(), {
+      devices,
+      onFailure: (error) => failures.push(error),
+    })
+    const up = (await sessions.signUp(ann, laptop))._unsafeUnwrap()
+
+    expect((await sessions.withdraw(up)).isOk()).toBe(true)
+
+    expect(signedOut).toEqual([{ identity: up.identity.id, grant: grantIdOf(up.tokens.refresh) }])
+    expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
   })
 
   it("forgets the pairs parked for the device once it signs in again, and no other device's", async () => {

@@ -33,14 +33,17 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 
 - `RegionDoc`: `inMemory(kind)`, `open(local, ref)` with persistence, `records()`,
   `recordMap(key)`, `recordJson(key)`, `flush()` (reports an update that could not be made
-  durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`,
-  `close()`. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
+  durable; a failed update is retried before later ones), `persistedSeq()`, `compact()`
+  (saves a snapshot of the document and drops the log rows it covers; the outbox stays),
+  `compactIfLong(limit)` (compacts once the log holds more than `limit` rows past the snapshot,
+  and leaves it for later while imported updates wait for their history), `close()`. A document
+  opens from the snapshot and the rows after it. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
   the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
   what other tabs appended to the update log, one row at a time so a projector sees it as
-  an import. `stale()` tells whether another document of the region reset it since this one
+  an import; when a compaction dropped rows it had not read, the snapshot comes first. `stale()` tells whether another document of the region reset it since this one
   opened (an in-memory document never is); every write and catch-up of such a document fails
   `data:REGION_STALE`.
 - `replaceRegionDoc(local, current, how)` (`RegionReplacement`: `reset` or `reopen`): the
@@ -112,13 +115,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   The mergeable containers of a record's fields appear as roots in the operations and are
   exempt from that refusal when their path leads into the `records` map or when they have no
   path (their record is gone, or the field they belong to is not set).
-  `RegionDatabases` is the port the hub keeps regions through: `acquire(region)` resolves to a
-  `RegionDatabase` (`local`, `release()`); `singleDatabase(local)` keeps every region in one
-  database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
+  `RegionDatabases` is the port the hub keeps regions through: `databaseOf(region)` names the
+  database that keeps a region (the hub reads the heads of the regions of one name together, and
+  assumes no layout of its own), `acquire(region)` resolves to a `RegionDatabase` (`local`,
+  `release()`); `singleDatabase(local)` keeps every region in one database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
   that asks for a compaction, `onError`) holds a region's database from its load until it
   unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
-  (`Actor`: its identity id and its `Ability`); `push(region, subscriber, batch, updates)` answers
+  (`Actor`: its identity id and its `Ability`); a subscription after `close()` is answered with
+  an internal error before anything else, and a private region other than the actor's own with
+  `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
   ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in
@@ -128,14 +134,18 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
-  push carries, 256 by default; `replaceRegion(region, how)`, the app's document that takes a
-  region's place, below) returns a `SyncEngine` (`start`,
+  push carries, 256 by default; `localCompactionRows`, how many rows past its snapshot a region's
+  local log holds before a full pass compacts it, 200 by default as on the server;
+  `replaceRegion(region, how)`, the app's document that takes a
+  region's place, below; `online()`, whether the platform says the device has a network) returns
+  a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
   settles) and every region has its first answer on the current connection, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
   other close after it asked, or none within 10 seconds, stops the transport and answers
-  `offline`), or answers `offline` while anything stays unsent, rows of a region that stopped
+  `offline`; it answers `offline` at once while the channel is down and `online()` says there is
+  no network), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
   tells that such a sign-out stopped the channel, after which only a new engine syncs; `renew()`
   asks the gateway for new keys over the welcomed channel, and answers false,
@@ -154,7 +164,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
   report on `revoked`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
-  compaction proposals; before each push, and on every full pass, `catchUpLocal()` imports the
+  compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
+  that connection: one the identity left while offline is left alone, counts as settled, and
+  makes a sign-out answer `offline` while it holds unsent rows; a retired region sends nothing
+  more, not even from work under way; before each push, and on every full pass, `catchUpLocal()` imports the
   rows other tabs appended, and nothing is pushed while that fails, so an ack never moves the
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
@@ -180,7 +193,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
   `settled`, `sign-out`, `renew` (a tab asks the leader to renew the keys) and `reset` (a tab reset a region; the others open it again
   from the database) hints between tabs over a `BroadcastChannel` and ignores anything
-  else on it.
+  else on it. `invert(doc, rows)` applies to a region's document the undo of outbox rows the
+  server refused, as a rollback does.
 - `@workspace/replica/testing`: `manualClock(start)`, a `ManualClock` that runs scheduled
   tasks only when a test calls `advance(ms)`, and counts them with `pending()`;
   `gatewayStub({ local, schema, clock, memberships })`, a `GatewayStub` with a region hub on the
@@ -224,7 +238,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   hub, region sync
   and the sync engine (devices syncing through the gateway stub) on embedded in-memory databases.
 - `bun run measure`: the write path on this machine (1000 create commands, 1000 renames of one
-  record, projecting 1000 records into an embedded database), printed as JSON.
+  record, projecting 1000 records into an embedded database) and the time to open a region
+  whose local log holds 1000 rows, then once it is compacted, printed as JSON.
 - `bun run measure:validation`: what checking a pushed batch costs the server, as a table: p50
   and p95 of `validateBatch` for 200 batches of 1 and of 20 changes on regions of 10, 100 and
   1000 profile records, the time of `doc.fork()` alone and the region's snapshot size.

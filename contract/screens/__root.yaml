@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=../screen.schema.json
+id: app-shell
+title: Application frame
+description: "The frame around every screen: the readiness status, the latest notice, the navigation between the screens, the language choice, and a way out of a device whose data will not open."
+frame: true
+flag: null
+bindings: []
+entry: [ app-shell.status, app-shell.nav ]
+anchors:
+  app-shell.status:
+    kind: status
+    description: "The readiness line of the app: one element whose state says where the start is; in ready it is a visually hidden text, otherwise the visible message."
+    states: [ opening, ready, failed, storage-blocked ]
+  app-shell.notice-message:
+    kind: message
+    description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
+    codes: [ welcome, profile-saved, invited, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
+  app-shell.nav:
+    kind: nav
+    description: "The main navigation: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current."
+  app-shell.nav.profile-link:
+    kind: link
+    description: The link to the profile, shown to a signed-in account.
+    binding: { route: /me }
+    roles: [ identity, member, admin ]
+  app-shell.nav.organisation-link:
+    kind: link
+    description: The link to the organisation page, shown to a signed-in account.
+    binding: { route: /org }
+    roles: [ identity, member, admin ]
+  app-shell.nav.devices-link:
+    kind: link
+    description: The link to the devices of the account, shown to a signed-in account.
+    binding: { route: /devices }
+    roles: [ identity, member, admin ]
+  app-shell.nav.sign-in-link:
+    kind: link
+    description: The link to sign-in, the only link a guest sees.
+    binding: { route: /sign-in }
+    roles: [ guest ]
+  app-shell.locale-select:
+    kind: select
+    description: "The language of the app, the one the account's settings hold: a choice applies at once and is stored there, and a language another device stores applies here too."
+    binding:
+      - model: settings.locale
+      - action: settings.updateLocale
+        params:
+          locale: app-shell.locale-select
+    dataValue: true
+    derived: [ option ]
+  app-shell.sign-out-here-button:
+    kind: button
+    description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
+    binding: { action: platform.sign-out }
+states:
+  opening: app-shell.status says the data is being opened; no screen is rendered.
+  ready: The navigation, the language select and the open screen; app-shell.status is a visually hidden text.
+  failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
+  storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
+flow:
+  initial: opening
+  meta:
+    guards:
+      settingsHeld: the account's settings are on this device
+      signedOut: no account is signed in on this device
+      storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      accountLeft: the account the store was for has signed out since it began
+  states:
+    opening:
+      description: The local data is being opened; no screen is rendered.
+      on:
+        platform.opened: ready
+        platform.open-failed: failed
+        platform.storage-blocked: storage-blocked
+        app-shell.locale-select:
+          target: opening
+          description: The app speaks the chosen language; no account's settings are open yet to store it.
+    ready:
+      description: The frame with the open screen.
+      on:
+        app-shell.locale-select:
+          - target: storing-locale
+            guard: settingsHeld
+            description: The app speaks the chosen language at once; before the account's settings arrive on this device, the select takes no choice.
+          - target: ready
+            guard: signedOut
+            description: No account is signed in, so the app speaks the chosen language with no settings to store it.
+        model.settings.locale:
+          guard: storedElsewhere
+          description: Another device stored a language; the app speaks it at once.
+        platform.signed-out:
+          description: The notice goes with the account.
+          actions:
+            - clear: app-shell.notice-message
+    storing-locale:
+      description: The settings store the chosen language; the language select takes no other choice meanwhile.
+      on:
+        model.settings.locale:
+          guard: storedElsewhere
+          description: Another device stored a language; the app speaks it at once.
+        platform.signed-out:
+          description: The notice goes with the account; the store runs on.
+          actions:
+            - clear: app-shell.notice-message
+      invoke:
+        src: settings.updateLocale
+        input: { locale: app-shell.locale-select }
+        onDone:
+          target: ready
+          description: The settings hold the chosen language.
+        onError:
+          - target: ready
+            guard: accountLeft
+            description: The account signed out meanwhile; its notice went with it, and nothing is shown.
+          - target: ready
+            description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
+            actions:
+              - show: { app-shell.notice-message: [ locale-not-stored ] }
+    failed:
+      description: The saved account's data could not be opened; no screen is rendered.
+      on:
+        app-shell.sign-out-here-button: signing-out
+        app-shell.locale-select:
+          target: failed
+          description: The app speaks the chosen language; the account's data did not open, so no settings store it.
+    signing-out:
+      invoke:
+        src: platform.sign-out
+        onDone:
+          target: signed-out
+          description: The page loads again on sign-in.
+          actions:
+            - navigate: /sign-in
+        onError:
+          target: signed-out
+          description: A failed sign-out also loads the sign-in page again; no code is shown.
+          actions:
+            - navigate: /sign-in
+    storage-blocked:
+      description: The browser keeps no site data, so the app stops with a message.
+      type: final
+    signed-out:
+      description: The app has moved to /sign-in.
+      type: final
+wireframe: |-
+  - banner:
+    - text: Perch
+    - combobox "Language": English
+  - main:
+    - text: Saved on this device
+  - navigation "Main navigation":
+    - link "Profile"
+    - link "Organisation"
+    - link "My devices"

@@ -35,6 +35,12 @@ export interface StoredRow {
   readonly bytes: ArrayBuffer
 }
 
+/** The snapshot of a compaction as the driver returns it, with the last log row it covers. */
+export interface StoredSnapshot {
+  readonly covers: number
+  readonly bytes: ArrayBuffer
+}
+
 /** A row of the outbox as the driver returns it, with its record id. */
 interface StoredOutboxRow extends StoredRow {
   readonly id: unknown
@@ -92,7 +98,8 @@ function storeError(
  * durable watermark moves only after a write succeeded. A separate watermark marks
  * how far this document has read the log; it moves only when the log is read, never
  * on this document's own writes, since another tab may hold a lower number. A compaction
- * drops only the rows up to it. A store writes and reads in the generation of the region it
+ * drops only the rows up to it; a document that read less than a compaction covers takes its
+ * snapshot before the rows after it. A store writes and reads in the generation of the region it
  * loaded: once the device dropped the region's local copy (`reset`), every write and every
  * catch-up of a store loaded before fails `data:REGION_STALE`.
  */
@@ -102,15 +109,19 @@ export class RegionStore {
   #failure: DataError | undefined
   #persistedSeq: number
   #seenSeq: number
+  /** The last log row the region's snapshot covers, as far as this document knows. */
+  #covers: number
 
   constructor(
     private readonly local: LocalDb,
     private readonly region: string,
     loadedSeq: number,
     private readonly generation: number,
+    covers = 0,
   ) {
     this.#persistedSeq = loadedSeq
     this.#seenSeq = loadedSeq
+    this.#covers = covers
   }
 
   /**
@@ -142,6 +153,11 @@ export class RegionStore {
     return this.#persistedSeq
   }
 
+  /** How many log rows this document knows of past the region's snapshot. */
+  get rowsPastSnapshot(): number {
+    return Math.max(this.#seenSeq, this.#persistedSeq) - this.#covers
+  }
+
   append(bytes: Uint8Array): void {
     this.#pending.push(bytes)
     void this.#drain()
@@ -159,12 +175,18 @@ export class RegionStore {
    * it in the same synchronous step, so it holds every row up to the watermark read here.
    */
   saveSnapshot(bytes: Uint8Array, version: Uint8Array): ResultAsync<void, DataError> {
+    const covers = this.#seenSeq
+
     return this.#query(
       saveSnapshotStatement,
-      { region: this.region, bytes, version, covers: this.#seenSeq, generation: this.generation },
+      { region: this.region, bytes, version, covers, generation: this.generation },
       'data:WRITE_FAILED',
       `could not compact region ${this.region}`,
-    ).map(() => undefined)
+    )
+      .andTee(() => {
+        this.#covers = Math.max(this.#covers, covers)
+      })
+      .map(() => undefined)
   }
 
   /** Appends a server update to the update log, after every local update so far; the outbox does not take it. */
@@ -213,7 +235,11 @@ export class RegionStore {
     ).map(() => undefined)
   }
 
-  /** Hands `apply` the log rows past what this document has read, then moves past them; resolves to how many. */
+  /**
+   * Hands `apply` the log rows past what this document has read, then moves past them; resolves
+   * to how many. When a compaction covers rows this document has not read, its snapshot comes
+   * first: those rows are gone from the log, and the snapshot holds them.
+   */
   catchUp(apply: (updates: Uint8Array[]) => void): ResultAsync<number, DataError> {
     const message = `could not catch up with the update log of ${this.region}`
 
@@ -222,8 +248,9 @@ export class RegionStore {
       { region: this.region, after: this.#seenSeq },
       'data:QUERY_FAILED',
       message,
-    ).andThen(([tail, current]) =>
-      generationOf(current, this.region).andThen((read): Result<number, DataError> => {
+    ).andThen((results) =>
+      // BEGIN and COMMIT yield results of their own around the snapshot's and the rows'.
+      generationOf(results.at(-1), this.region).andThen((read): Result<number, DataError> => {
         // Rows of a later generation belong to a copy this document never held.
         if (read !== this.generation) {
           return err(
@@ -234,18 +261,20 @@ export class RegionStore {
           )
         }
 
-        const rows = tail as StoredRow[]
-        const last = rows.at(-1)
+        const [snapshot] = results[1] as StoredSnapshot[]
+        const rows = results[2] as StoredRow[]
+        const updates = [...(snapshot ? [snapshot.bytes] : []), ...rows.map((row) => row.bytes)]
 
-        if (!last) {
+        if (updates.length === 0) {
           return ok(0)
         }
 
         return Result.fromThrowable(
-          () => apply(rows.map((row) => new Uint8Array(row.bytes))),
+          () => apply(updates.map((bytes) => new Uint8Array(bytes))),
           (cause) => dataError('data:QUERY_FAILED', message, cause),
         )().map(() => {
-          this.#seenSeq = Math.max(this.#seenSeq, last.seq)
+          this.#covers = Math.max(this.#covers, snapshot?.covers ?? 0)
+          this.#seenSeq = Math.max(this.#seenSeq, this.#covers, rows.at(-1)?.seq ?? 0)
 
           return rows.length
         })

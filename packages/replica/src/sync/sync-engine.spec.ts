@@ -2,16 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 
+import { replicaSchema } from '../__fixtures__/note'
+import countsStatement from '../__fixtures__/replica-counts.surql'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
 import appendStatement from '../surql/replica-append.surql'
-import { interceptRegionResets } from '../testing/intercept-region-resets'
-import type { ManualClock } from '../testing/manual-clock'
+import { interceptRegionResets, type ManualClock } from '../testing'
 
 import {
+  acmeRegion,
+  ann,
   closeDevices,
+  type Device,
   identity,
   openDevice,
   openGateway,
@@ -41,6 +45,15 @@ async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 
   return settled
+}
+
+/** How many snapshots and update-log rows the device's database holds of the region. */
+async function localCounts(device: Device): Promise<{ snapshots: number; updates: number }> {
+  const [snapshots, updates] = (await device.local.db.query(countsStatement, {
+    region: regionId,
+  })) as number[][]
+
+  return { snapshots: snapshots?.[0] ?? 0, updates: updates?.[0] ?? 0 }
 }
 
 /** Moves the clock on a second at a time until the promise settles, for waits nothing else ends. */
@@ -113,7 +126,7 @@ describe('sync engine', () => {
 
     writeName(a.region, 'Ana')
 
-    expect(await a.engine.signOut()).toBe('signed-out')
+    expect(await a.engine.signOut({ online: true })).toBe('signed-out')
     expect(stub.signOuts()).toBe(1)
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(a.channel()).toBe('down')
@@ -214,7 +227,7 @@ describe('sync engine', () => {
     a.transport.goOffline()
     writeName(a.region, 'Ana')
 
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     // The channel comes back during the sign-out; the drain's batch is rejected, rolled back
     // and rejected again, and the region, which cannot reload, stops with the rows and their
@@ -235,7 +248,7 @@ describe('sync engine', () => {
     a.transport.goOffline()
     writeName(a.region, 'Ana')
 
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     // The batch is rejected, rolled back and rejected again: the region reloads from the server
     // without what the gateway refused, and nothing is left to send.
@@ -253,7 +266,7 @@ describe('sync engine', () => {
     const { a, clock } = await twoDevices()
 
     a.transport.goOffline()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await clock.advance(4_999)
 
@@ -270,7 +283,7 @@ describe('sync engine', () => {
     const { a, clock } = await twoDevices()
 
     a.transport.goOffline()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await clock.advance(1_000)
     a.transport.goOnline()
@@ -278,10 +291,27 @@ describe('sync engine', () => {
     expect(await outcome).toBe('signed-out')
   })
 
+  it('answers offline at once while the platform says the device has no network and the channel is down', async () => {
+    const { a } = await twoDevices()
+
+    a.transport.goOffline()
+
+    const waiting = new Promise((resolve) => setTimeout(resolve, 0, 'waiting'))
+
+    expect(await Promise.race([a.engine.signOut({ online: false }), waiting])).toBe('offline')
+  })
+
+  it('signs out through the gateway while its channel is up, whatever the platform says of the network', async () => {
+    const { a } = await twoDevices()
+
+    expect(a.channel()).toBe('up')
+    expect(await a.engine.signOut({ online: false })).toBe('signed-out')
+  })
+
   it('resolves offline, connecting no more, when the gateway closes as failed after the sign-out', async () => {
     const { a, stub } = await twoDevices()
     const received = stub.failNextSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
 
@@ -296,7 +326,7 @@ describe('sync engine', () => {
   it('resolves offline when the channel ends for any reason but a sign-out after it was asked for', async () => {
     const { a, stub } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
     stub.endWith('unauthorized')
@@ -307,7 +337,7 @@ describe('sync engine', () => {
   it('resolves offline 10 seconds after the sign-out when the gateway never closes the channel', async () => {
     const { a, stub, clock } = await twoDevices()
     const received = stub.keepOpenOnSignOut()
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await received
     await clock.advance(9_999)
@@ -353,7 +383,7 @@ describe('sync engine', () => {
     await gateway.clock.advance(1_000)
 
     await expect(settling).rejects.toThrow('1000 ms')
-    expect(await driven(gateway.clock, a.engine.signOut())).toBe('offline')
+    expect(await driven(gateway.clock, a.engine.signOut({ online: true }))).toBe('offline')
     expect(gateway.stub.signOuts()).toBe(0)
     expect(a.errors).toEqual([
       expect.objectContaining({
@@ -381,12 +411,101 @@ describe('sync engine', () => {
     follower.close()
   })
 
+  it('compacts its local log on a full pass once it holds more rows than the limit past its snapshot, also offline', async () => {
+    const gateway = await openGateway()
+    const device = await openDevice(gateway, { localCompactionRows: 2 })
+
+    device.transport.goOffline()
+    device.engine.start()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(device.region, name)
+    }
+
+    expect((await device.region.flush()).isOk()).toBe(true)
+
+    // The tab comes back into view: a full pass.
+    device.engine.visibility('hidden')
+    device.engine.visibility('visible')
+
+    await vi.waitFor(async () =>
+      expect(await localCounts(device)).toEqual({ snapshots: 1, updates: 0 }),
+    )
+    expect((await device.region.outbox(10))._unsafeUnwrap()).toHaveLength(3)
+    expect(device.errors).toEqual([])
+  })
+
+  it('compacts the local log of a device that only reads, grown by the updates it imported', async () => {
+    const gateway = await openGateway()
+    const writer = await openDevice(gateway)
+    const reader = await openDevice(gateway, { localCompactionRows: 2 })
+    const settle = () => settleAll([writer, reader])
+
+    writer.engine.start()
+    reader.engine.start()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(writer.region, name)
+      writer.engine.localWrite()
+      await settle()
+    }
+
+    const imported = await localCounts(reader)
+
+    // The subscription's answer is a row too: past the limit of 2, with no snapshot yet.
+    expect(imported.snapshots).toBe(0)
+    expect(imported.updates).toBeGreaterThan(2)
+
+    // The tab comes back into view: a full pass.
+    reader.engine.visibility('hidden')
+    reader.engine.visibility('visible')
+
+    await vi.waitFor(async () =>
+      expect(await localCounts(reader)).toEqual({ snapshots: 1, updates: 0 }),
+    )
+    expect(reader.region.recordJson(profileKey)).toMatchObject({ name: 'Anna' })
+    expect([...writer.errors, ...reader.errors]).toEqual([])
+  })
+
+  it('leaves alone on a connection a region its welcome does not name: no subscription, no probe, nothing pushed', async () => {
+    // The device still holds the organisation's region; the gateway, which removed it from the
+    // organisation while it was offline, no longer welcomes it there.
+    const gateway = await openGateway({ schema: replicaSchema })
+    const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
+
+    writeName(device.region, 'Ann')
+    device.engine.start()
+    device.engine.localWrite()
+    // The tab comes back into view: a full pass probes and pushes.
+    device.engine.visibility('hidden')
+    device.engine.visibility('visible')
+    await device.engine.settled(60_000)
+
+    expect(device.channel()).toBe('up')
+    expect(device.errors).toEqual([])
+    // What it holds stays where it is, for the app to drop with the region.
+    expect((await device.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('answers a sign-out offline while a region its welcome left out holds what it has not sent', async () => {
+    const gateway = await openGateway({ schema: replicaSchema })
+    const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
+
+    writeName(device.region, 'Ann')
+    device.engine.start()
+    await device.engine.settled(60_000)
+
+    // The gateway could never take those rows: the sign-out leaves them for the app to weigh.
+    expect(await driven(gateway.clock, device.engine.signOut({ online: true }))).toBe('offline')
+    expect(device.errors).toEqual([])
+  })
+
   it('resolves offline when a batch stays unanswered past the time a sign-out drains for', async () => {
     const { a, stub, clock } = await twoDevices()
     const swallowed = stub.swallowNextPush()
 
     writeName(a.region, 'Ana')
-    const outcome = a.engine.signOut()
+    const outcome = a.engine.signOut({ online: true })
 
     await swallowed
     await clock.advance(10_000)

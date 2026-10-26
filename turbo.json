@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["database/schema/**", "tests/e2e/specs/**"],
+  "globalDependencies": ["database/schema/**", "contract/**", "tests/e2e/scenarios/**"],
   "globalPassThroughEnv": [
     "CI",
     "SURREAL_URL",
@@ -19,7 +19,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["PERCH_UI_HOOKS"]
     },
     "dev": {
       "cache": false,
@@ -30,7 +31,8 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD"]
     },
     "model": {
       "dependsOn": ["^build"],
@@ -69,6 +71,16 @@
       "cache": false
     },
     "//#e2e:coverage": {
+      "cache": false
+    },
+    "//#contract:check": {
+      "cache": false
+    },
+    "//#contract:check:sources": {
+      "cache": false
+    },
+    "//#contract:check:consumers": {
+      "inputs": ["tests/e2e/src/**", "contract/**", "tests/e2e/scenarios/**"],
       "cache": false
     }
   }

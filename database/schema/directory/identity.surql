@@ -1,7 +1,9 @@
 -- Accounts and sign-in. Server-only: the table holds password hashes, so it never
 -- leaves the server and is not replicated to clients. A signed-in identity reads
 -- only its own record; identities are created only through the access method
--- below. The name people see lives in the replicated profile, not here.
+-- below. The name people see lives in the replicated profile, not here. An email is
+-- kept and matched in lower case: mail providers treat an address the same in any
+-- case, so an address in any case is one account.
 
 -- @replicate none
 -- @id idn
@@ -10,7 +12,9 @@ DEFINE TABLE OVERWRITE identity SCHEMAFULL
     FOR select WHERE id = $auth.id
     FOR create, update, delete NONE;
 
-DEFINE FIELD OVERWRITE email ON identity TYPE string ASSERT string::is_email($value);
+DEFINE FIELD OVERWRITE email ON identity TYPE string
+  VALUE string::lowercase($value)
+  ASSERT string::is_email($value);
 DEFINE FIELD OVERWRITE password ON identity TYPE string
   PERMISSIONS
     FOR select NONE;
@@ -42,7 +46,7 @@ DEFINE ACCESS OVERWRITE identity ON DATABASE TYPE RECORD
     SELECT *
     FROM identity
     WHERE
-      email = $email
+      email = string::lowercase($email)
       AND crypto::argon2::compare(password, $password)
   )
   WITH REFRESH

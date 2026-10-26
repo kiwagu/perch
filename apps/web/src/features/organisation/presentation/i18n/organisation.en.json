@@ -1,5 +1,6 @@
 {
   "organisation.none": "You are not a member of any organisation yet.",
+  "organisation.unavailable": "Your organisation's data could not be opened on this device.",
   "organisation.create.title": "Create an organisation",
   "organisation.create.key": "Key",
   "organisation.create.key-hint": "Lowercase letters, digits and underscores, 2 to 32 characters.",
