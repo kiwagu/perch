@@ -116,8 +116,8 @@ for Bun.
     path parameter, and a value for each `$param`, else `needs an example` at its property),
     `leavingProblems` (each action of `platform.leaving` exists and is listed once),
     `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
-    reserved dialog with a code, a confirm-button and a cancel-button, and actions that ask
-    need an action under `leaving`)
+    reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
+    its own, and actions that ask need an action under `leaving`)
     and `scenariosProblems` (bracket references, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.

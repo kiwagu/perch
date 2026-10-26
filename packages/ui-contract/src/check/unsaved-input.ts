@@ -1,13 +1,14 @@
 /**
  * Rule 12: how a leave that would lose unsaved input asks first. `platform.leaving` comes
  * with `platform.unsavedInput`; its question is a declared, reserved dialog with a code and
- * both answers (confirm-button leaves, cancel-button stays); actions that ask need an action
- * listed under `leaving`.
+ * both answers (confirm-button leaves, cancel-button stays) that runs no action of its own:
+ * leaving lets the leave that opened it go on; actions that ask need an action listed under
+ * `leaving`.
  */
 
 import type { Problem } from '../files'
 
-import { type Contract, declaredAnchors, locate } from './contract'
+import { bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
 
 const ANSWERS = ['confirm-button', 'cancel-button'] as const
 
@@ -47,6 +48,16 @@ export function unsavedInputProblems({ screens }: Contract): Problem[] {
               at,
               `"${question}" renders no ${answer}: leaving and staying are its two answers`,
             ),
+          ),
+          ...bindingRefsOf(def).flatMap(({ ref }) =>
+            'action' in ref
+              ? [
+                  inScreens(
+                    at,
+                    `"${question}" runs "${ref.action}"; its confirm-button only lets the leave that opened it go on`,
+                  ),
+                ]
+              : [],
           ),
         ]
 

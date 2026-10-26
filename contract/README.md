@@ -403,15 +403,16 @@ out, and the loader derives it, the same way every time:
   fields that start or stop holding input.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
-  a reserved dialog whose code names what it asks, its confirm-button leaves and its
-  cancel-button stays. `screen` (a link, Back, Forward) and `actions` (a control bound to an
-  action listed under `leaving`: a sign-out, a switch of organisation, a change of language)
-  ask through it. `unload` (a reload, closing the tab, an address typed by hand) is the
-  browser's own prompt, drawn outside the page, so no anchor or code marks it. `state` (a
-  tab, a search parameter inside one screen) and `flow` (a navigation a flow makes after its
-  action completed: the action took the input) never ask, and `elsewhere` (another tab or
-  device, a database that will not open) cannot. The manifest carries it, and
-  `contract:diff` lists a change of it.
+  a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
+  its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and
+  `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask
+  through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by
+  hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code
+  marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or
+  `question`; `flow` (a navigation a flow makes after its action completed: the action took
+  the input) is always `never`, and `elsewhere` (another tab or device, a database that will
+  not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
+  it.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -761,7 +762,7 @@ gap is fixed in the contract files first, never worked around in a test.
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a
-  code and both answers; the versions agree; the generated schemas
+  code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.

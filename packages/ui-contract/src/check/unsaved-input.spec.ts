@@ -1,30 +1,34 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
-import { fixtureContract } from '../manifest/manifest.fixture'
 
+import { bindingsProblems } from './bindings'
 import type { Contract } from './contract'
+import { sampleContract, screenIn } from './contract.fixture'
+import { leavingProblems } from './leaving'
+import { screensProblems } from './screens'
 import { unsavedInputProblems } from './unsaved-input'
+import { vocabularyProblems } from './vocabulary'
 
-const QUESTION = 'sample.leave-dialog'
+const QUESTION = 'app-shell.leave-dialog'
 
-/** The fixture with a reserved dialog that asks, and every leave declared. */
+/** The sample with the frame's reserved dialog that asks, and every leave declared. */
 function asking(): Contract {
-  const contract = fixtureContract()
-  const [screen] = contract.screens.screens
+  const contract = sampleContract()
+  const { vocabulary, screens } = contract
 
-  if (screen === undefined) {
-    throw new Error('the fixture has no screen')
-  }
-
-  screen.anchors[QUESTION] = {
+  vocabulary.kinds['dialog'] = 'a modal question'
+  vocabulary.suffixes['cancel-button'] = 'the button that closes a dialog without its action'
+  vocabulary.codes['unsaved-input'] = { where: QUESTION, meaning: 'asks whether to leave' }
+  vocabulary.reserved[QUESTION] = 'the question before a leave loses unsaved input'
+  screenIn(contract, 'app-shell').anchors[QUESTION] = {
     kind: 'dialog',
-    codes: ['saved'],
+    codes: ['unsaved-input'],
     derived: ['confirm-button', 'cancel-button'],
   }
-  contract.screens.platform.reserved = [...contract.screens.platform.reserved, QUESTION]
-  contract.screens.platform.leaving = ['platform.sign-out']
-  contract.screens.platform.unsavedInput = {
+  screens.platform.reserved = [...screens.platform.reserved, QUESTION]
+  screens.platform.leaving = ['platform.sign-out']
+  screens.platform.unsavedInput = {
     question: QUESTION,
     screen: 'question',
     actions: 'question',
@@ -40,16 +44,26 @@ function asking(): Contract {
 const printed = (contract: Contract): string[] => unsavedInputProblems(contract).map(formatProblem)
 
 describe('unsavedInputProblems', () => {
-  it('accepts every leave declared, asked through a reserved dialog with its code and both answers', () => {
-    expect(printed(asking())).toEqual([])
+  it('accepts every leave declared, asked through a reserved dialog of the frame', () => {
+    const contract = asking()
+
+    expect(printed(contract)).toEqual([])
+    expect(
+      [
+        ...vocabularyProblems(contract),
+        ...screensProblems(contract),
+        ...bindingsProblems(contract),
+        ...leavingProblems(contract),
+      ].map(formatProblem),
+    ).toEqual([])
   })
 
   it('accepts a contract that declares neither', () => {
-    expect(printed(fixtureContract())).toEqual([])
+    expect(printed(sampleContract())).toEqual([])
   })
 
   it('wants the leaving actions to come with the declaration of how a leave asks', () => {
-    const contract = fixtureContract()
+    const contract = sampleContract()
 
     contract.screens.platform.leaving = ['platform.sign-out']
 
@@ -58,24 +72,42 @@ describe('unsavedInputProblems', () => {
     ])
   })
 
-  it('wants the question to be a reserved dialog with a code, a confirm-button and a cancel-button', () => {
+  it('wants the question bound to no action: its confirm-button resumes the leave that opened it', () => {
     const contract = asking()
-    const [screen] = contract.screens.screens
 
-    if (screen === undefined) {
-      throw new Error('the fixture has no screen')
+    const frame = screenIn(contract, 'app-shell')
+
+    frame.anchors[QUESTION] = {
+      kind: 'dialog',
+      codes: ['unsaved-input'],
+      derived: ['confirm-button', 'cancel-button'],
+      binding: [
+        { model: 'thing.title' },
+        { action: 'platform.sign-out', params: { forgetUnsent: { value: true } } },
+      ],
     }
 
-    screen.anchors[QUESTION] = { kind: 'message', derived: ['confirm-button'] }
+    expect(printed(contract)).toEqual([
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.leave-dialog" runs "platform.sign-out"; its confirm-button only lets the leave that opened it go on',
+    ])
+  })
+
+  it('wants the question to be a reserved dialog with a code, a confirm-button and a cancel-button', () => {
+    const contract = asking()
+
+    screenIn(contract, 'app-shell').anchors[QUESTION] = {
+      kind: 'status',
+      derived: ['confirm-button'],
+    }
     contract.screens.platform.reserved = contract.screens.platform.reserved.filter(
       (anchor) => anchor !== QUESTION,
     )
 
     expect(printed(contract)).toEqual([
-      'contract/domain/platform.yaml:1: unsavedInput.question: "sample.leave-dialog" is a message, not a dialog',
-      'contract/domain/platform.yaml:1: unsavedInput.question: "sample.leave-dialog" is not a reserved anchor of the frame',
-      'contract/domain/platform.yaml:1: unsavedInput.question: "sample.leave-dialog" carries no code: its code names what it asks',
-      'contract/domain/platform.yaml:1: unsavedInput.question: "sample.leave-dialog" renders no cancel-button: leaving and staying are its two answers',
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.leave-dialog" is a status, not a dialog',
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.leave-dialog" is not a reserved anchor of the frame',
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.leave-dialog" carries no code: its code names what it asks',
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.leave-dialog" renders no cancel-button: leaving and staying are its two answers',
     ])
   })
 
@@ -87,12 +119,12 @@ describe('unsavedInputProblems', () => {
       throw new Error('the declaration is missing')
     }
 
-    contract.screens.platform.unsavedInput = { ...declaration, question: 'sample.gone-dialog' }
+    contract.screens.platform.unsavedInput = { ...declaration, question: 'app-shell.gone-dialog' }
     contract.screens.platform.leaving = []
 
     expect(printed(contract)).toEqual([
       'contract/domain/platform.yaml:1: unsavedInput.actions: the controls ask before an action of leaving, and none is listed',
-      'contract/domain/platform.yaml:1: unsavedInput.question: "sample.gone-dialog" is not a declared anchor',
+      'contract/domain/platform.yaml:1: unsavedInput.question: "app-shell.gone-dialog" is not a declared anchor',
     ])
   })
 })
