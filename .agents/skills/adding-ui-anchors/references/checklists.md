@@ -6,11 +6,11 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 ## A new screen or a new area of a screen
 
 1. **The model.** The entities the screen shows and changes are in
-   `contract/model.schema.json` with their fields and actions; an action of the platform is
-   in the `actions` of `contract/platform.yaml`.
+   `contract/domain/model.schema.json` with their fields and actions; an action of the platform is
+   in the `actions` of `contract/domain/platform.yaml`.
 2. **The name.** The screen name is a row of "Screen names in use" in
    `contract/vocabulary.md`, added in the same change.
-3. **The screen file** `contract/screens/<pathname>.yaml`, named by its first binding's path
+3. **The screen file** `contract/domain/screens/<pathname>.yaml`, named by its first binding's path
    (nested segments as folders), the editor hint on its first line, keys in the order `id`,
    `title`, `description` (what the screen is for), `flag`, `bindings`, `entry`.
 4. **The routes.** `bindings` in TanStack Router's format: `path`, `guard`, `roles`,
@@ -77,7 +77,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 ## An activity across screens
 
 1. **The model.** What the activity carries from screen to screen and is a field of an
-   entity is in `contract/model.schema.json`; what is not (the account signed in) is only
+   entity is in `contract/domain/model.schema.json`; what is not (the account signed in) is only
    named in the activity's `data`.
 2. **The screens' flows.** Every screen the activity visits has its screen file, and each
    step from one screen to the next is already there: a transition on an anchor whose flow
@@ -85,7 +85,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    entering one, or after an invoke's `onDone` or `onError`), or a link with
    `binding: { route: <path> }`. A
    step the screens cannot take yet goes into their flows first, never into the activity.
-3. **The activity file** `contract/activities/<id>.yaml`, named by its id, the editor hint on
+3. **The activity file** `contract/domain/activities/<id>.yaml`, named by its id, the editor hint on
    its first line, keys in the order `id`, `title`, `description`, `roles`, `data`,
    `initial`, `meta`, `states`. A state is a visit to a screen: a dot-free name (`sign-in`,
    `signed-out`), `meta: { screen: <screen id>, address: { path: <a binding of it> } }` on

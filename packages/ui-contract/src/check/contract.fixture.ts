@@ -174,7 +174,7 @@ export function sampleContract(): Contract {
     screens: {
       version: 1,
       screens: [APP_SHELL, SAMPLE],
-      files: ['contract/screens/__root.yaml', 'contract/screens/sample/$key.yaml'],
+      files: ['contract/domain/screens/__root.yaml', 'contract/domain/screens/sample/$key.yaml'],
       platform: {
         actions: {
           'sign-out': {

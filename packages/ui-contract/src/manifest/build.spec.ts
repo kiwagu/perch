@@ -106,7 +106,9 @@ describe('buildManifest', () => {
     const real = buildManifest({ ...repository, product: PRODUCT, now: NOW })
     const declared = repository.screens.screens.flatMap((screen) => Object.keys(screen.anchors))
 
-    expect(real.scenarios.map((scenario) => scenario.id)).toContain('user/base/sign-up')
+    expect(real.scenarios.map((scenario) => scenario.id)).toEqual(
+      repository.scenarios.map((scenario) => scenario.id),
+    )
 
     expect(real.contract.instructions.readiness).toContain(
       '[data-testid="app-shell.status"][data-state="ready"]',

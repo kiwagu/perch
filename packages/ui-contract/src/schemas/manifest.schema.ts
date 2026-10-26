@@ -167,7 +167,7 @@ export const manifestSchema = z
     screens: z
       .array(manifestScreenSchema)
       .describe(
-        'The screens of `contract/screens/`, verbatim: routes with their example links, anchors, flows.',
+        'The screens of `contract/domain/screens/`, verbatim: routes with their example links, anchors, flows.',
       ),
     routeParams: z
       .record(z.string(), flatJsonSchema)
@@ -179,7 +179,7 @@ export const manifestSchema = z
     activities: z
       .array(activitySchema)
       .describe(
-        'The activities of `contract/activities/`, verbatim: machines whose states are visits to screens.',
+        'The activities of `contract/domain/activities/`, verbatim: machines whose states are visits to screens.',
       ),
     scenarios: z
       .array(scenarioSchema)
@@ -188,6 +188,8 @@ export const manifestSchema = z
       ),
     model: z
       .record(z.string(), z.unknown().describe('A keyword of the model document.'))
-      .describe('`contract/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.'),
+      .describe(
+        '`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.',
+      ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

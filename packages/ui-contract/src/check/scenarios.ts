@@ -2,7 +2,7 @@
  * Rule 6: the scenarios speak of what the contract declares. Every bracket reference in
  * their text resolves (an anchor declared, or derived from a declared base with a suffix it
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
- * pattern row matches), the activity a scenario names is one of `contract/activities`, and
+ * pattern row matches), the activity a scenario names is one of `contract/domain/activities`, and
  * every device acts as a role of the vocabulary. Each problem is one of the scenario's file,
  * named by its field and at the line of that field (of the deepest part of its path the file
  * holds); the ids are paths, so each is used once.

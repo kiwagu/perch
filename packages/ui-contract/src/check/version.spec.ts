@@ -19,7 +19,7 @@ describe('versionProblems', () => {
     Object.assign(contract.screens, { version: 3 })
 
     expect(printed(contract)).toEqual([
-      'contract/platform.yaml:1: version: 3 differs from the contract version 1 of the tooling',
+      'contract/domain/platform.yaml:1: version: 3 differs from the contract version 1 of the tooling',
       'contract/vocabulary.md:1: Contract version: 2 differs from the contract version 1 of the tooling',
     ])
   })

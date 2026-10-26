@@ -9,7 +9,7 @@ import { flowProblems } from './problems'
 
 const printed = (contract: Contract): string[] => flowProblems(contract).map(formatProblem)
 
-const AT = 'contract/screens/sample/$key.yaml:1: flow'
+const AT = 'contract/domain/screens/sample/$key.yaml:1: flow'
 
 const show = (anchor: string, codes: string[]) =>
   ({ type: 'show', params: { anchor, codes } }) as const

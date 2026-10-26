@@ -4406,7 +4406,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The screens of `contract/screens/`, verbatim: routes with their example links, anchors, flows."
+      "description": "The screens of `contract/domain/screens/`, verbatim: routes with their example links, anchors, flows."
     },
     "routeParams": {
       "type": "object",
@@ -5201,7 +5201,7 @@
         "additionalProperties": false,
         "description": "An activity across screens: an XState v5 machine config whose states are visits."
       },
-      "description": "The activities of `contract/activities/`, verbatim: machines whose states are visits to screens."
+      "description": "The activities of `contract/domain/activities/`, verbatim: machines whose states are visits to screens."
     },
     "scenarios": {
       "type": "array",
@@ -5230,7 +5230,7 @@
             "description": "The test tags: `smoke` or `full`."
           },
           "activity": {
-            "description": "The activity of `contract/activities/` the scenario walks, by its id.",
+            "description": "The activity of `contract/domain/activities/` the scenario walks, by its id.",
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
@@ -5306,7 +5306,7 @@
       "additionalProperties": {
         "description": "A keyword of the model document."
       },
-      "description": "`contract/model.schema.json`, verbatim: the data model as JSON Schema 2020-12."
+      "description": "`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12."
     }
   },
   "required": [

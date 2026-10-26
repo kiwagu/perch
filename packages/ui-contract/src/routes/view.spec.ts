@@ -16,7 +16,7 @@ describe('routesOf', () => {
         history: 'push',
         params: ['key'],
         search: ['tab'],
-        file: 'contract/screens/sample/$key.yaml',
+        file: 'contract/domain/screens/sample/$key.yaml',
         example: '/sample/a?tab=a',
         reachedFrom: {
           links: ['sample.home-link'],

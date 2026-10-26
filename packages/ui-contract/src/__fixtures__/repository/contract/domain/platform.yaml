@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=../schemas/platform.schema.json
+version: 1
+actions:
+  sign-out:
+    description: Signs this device out.
+    params:
+      forgetUnsent:
+        type: boolean
+        description: Drop the unsent changes.
+    result: this device signs out
+    codes:
+      - failed
+reserved:
+  - app-shell.status
+  - app-shell.notice-message
+status:
+  anchor: app-shell.status
+  states:
+    - opening
+    - ready

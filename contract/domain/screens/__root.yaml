@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
 description: "The frame around every screen: the readiness status, the latest notice, the navigation between the screens, the language choice, and a way out of a device whose data will not open."

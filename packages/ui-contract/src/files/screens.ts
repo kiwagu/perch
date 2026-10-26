@@ -1,7 +1,7 @@
 /**
- * Reads the screens and the platform. Each `.yaml` file under `contract/screens`, at any
+ * Reads the screens and the platform. Each `.yaml` file under `contract/domain/screens`, at any
  * depth and sorted by path, is one screen, named by the path of its first binding
- * (`screenFile`); `contract/platform.yaml` holds the contract version and the platform
+ * (`screenFile`); `contract/domain/platform.yaml` holds the contract version and the platform
  * section. Each file is YAML, then its Zod schema. A missing or empty folder, a file that
  * is not `.yaml`, a file named otherwise than its screen's first binding says and a
  * missing platform file are problems of the file or folder concerned. Once every file is
@@ -68,7 +68,7 @@ export type PlatformFile = z.infer<typeof platformFileSchema>
 export interface ScreensFile {
   version: PlatformFile['version']
   screens: Screen[]
-  /** The file of each screen, at the index of the screen: `contract/screens/me.yaml`. */
+  /** The file of each screen, at the index of the screen: `contract/domain/screens/me.yaml`. */
   files: readonly string[]
   platform: Platform
 }
