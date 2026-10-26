@@ -26,7 +26,7 @@ export interface Contract {
   readonly vocabulary: Vocabulary
   readonly screens: ScreensFile
   readonly model: Model
-  /** The activities of `contract/activities`, sorted by the path of their files. */
+  /** The activities of `contract/domain/activities`, sorted by the path of their files. */
   readonly activities: Activity[]
   /** The line of each key and item of each activity's file, by the activity's id. */
   readonly activityLines: ReadonlyMap<string, Lines>

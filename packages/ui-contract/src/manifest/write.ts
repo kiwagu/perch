@@ -1,5 +1,5 @@
 /**
- * Writes a manifest into its folder: checked first against `contract/manifest.schema.json`
+ * Writes a manifest into its folder: checked first against `contract/schemas/manifest.schema.json`
  * (a manifest that breaks it writes nothing), then the folder is emptied and receives
  * `manifest.json` with the manifest's schema and the model's schema beside it. The file is
  * indented by two spaces, except that each entry of `ids` takes one line, so a search for an

@@ -149,7 +149,7 @@ modeling stage.
   (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
   Zod object) validates the URL's search, drops a parameter equal to its default and carries
   the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
-  route equals its binding in the screen files of `contract/screens/` (path, guard, history,
+  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
   `routes-router.spec.ts` builds every binding on the real router (the contract's sample of

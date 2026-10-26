@@ -108,7 +108,7 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
   binds is `unbound`. That is a report, not a rule: a field may be internal, such as an id
   or a creation time, and an action may run outside the screens (`createProfile` runs at
   sign-up, through the platform). The totals line counts the fields and the actions bound.
-- **Activities.** Each activity of `contract/activities/`, the scenarios whose front matter
+- **Activities.** Each activity of `contract/domain/activities/`, the scenarios whose front matter
   names it in `activity`, its transitions (one per transition of each `on`, a guarded list
   counting each of its branches), and how many of them are walked: a transition from a
   state on an anchor is walked when one of those scenarios names the anchor in a step while

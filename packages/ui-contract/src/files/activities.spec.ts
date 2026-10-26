@@ -9,8 +9,8 @@ import { loadActivities } from './activities'
 import { ACTIVITIES_DIR } from './paths'
 import { formatProblem } from './problems'
 
-const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract/activities')
-const THING_FILE = 'contract/activities/thing.yaml'
+const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract/domain/activities')
+const THING_FILE = 'contract/domain/activities/thing.yaml'
 
 let root: string
 
@@ -69,8 +69,8 @@ describe('loadActivities', () => {
     expect(loadActivities(root)).toEqual({ activities: [], lines: new Map(), problems: [] })
   })
   it('reads the folder sorted by path', () => {
-    writeAs('contract/activities/session.yaml', 'session')
-    writeAs('contract/activities/invite.yaml', 'invite')
+    writeAs('contract/domain/activities/session.yaml', 'session')
+    writeAs('contract/domain/activities/invite.yaml', 'invite')
 
     expect(loadActivities(root).activities.map((activity) => activity.id)).toEqual([
       'invite',
@@ -78,25 +78,25 @@ describe('loadActivities', () => {
     ])
   })
   it('reports a file named otherwise than its id, a nested one and one that is not YAML', () => {
-    writeAs('contract/activities/session.yaml', 'sessions')
-    writeAs('contract/activities/user/session.yaml', 'session')
-    write('contract/activities/notes.txt', 'Notes.\n')
+    writeAs('contract/domain/activities/session.yaml', 'sessions')
+    writeAs('contract/domain/activities/user/session.yaml', 'session')
+    write('contract/domain/activities/notes.txt', 'Notes.\n')
 
     expect(loadActivities(root)).toEqual({
       activities: [],
       lines: new Map(),
       problems: [
         {
-          file: 'contract/activities/notes.txt',
+          file: 'contract/domain/activities/notes.txt',
           message: 'not an activity file: the folder holds `<id>.yaml` files only',
         },
         {
-          file: 'contract/activities/session.yaml',
-          message: 'its id is "sessions", so its file is contract/activities/sessions.yaml',
+          file: 'contract/domain/activities/session.yaml',
+          message: 'its id is "sessions", so its file is contract/domain/activities/sessions.yaml',
         },
         {
-          file: 'contract/activities/user/session.yaml',
-          message: 'its id is "session", so its file is contract/activities/session.yaml',
+          file: 'contract/domain/activities/user/session.yaml',
+          message: 'its id is "session", so its file is contract/domain/activities/session.yaml',
         },
       ],
     })
@@ -115,7 +115,7 @@ describe('loadActivities', () => {
     write(THING_FILE, 'id: thing\ntitle: [Edit,\nroles: [ member ]\n')
 
     expect(loadActivities(root).problems.map(formatProblem)).toEqual([
-      expect.stringMatching(/^contract\/activities\/thing\.yaml:3: not YAML: /),
+      expect.stringMatching(/^contract\/domain\/activities\/thing\.yaml:3: not YAML: /),
     ])
   })
 })

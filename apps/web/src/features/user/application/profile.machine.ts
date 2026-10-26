@@ -117,7 +117,7 @@ const ASKED = {
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 
 /**
- * The profile page as the screen's flow says (`contract/screens/me.yaml`): the name and the
+ * The profile page as the screen's flow says (`contract/domain/screens/me.yaml`): the name and the
  * bio each follow the stored value or hold what was typed, Save writes what changed, and the
  * sign-out runs on its own, each area a region. A button is enabled while a state handles its
  * event (`snapshot.can`). Its `show` keeps the code of the form's own error for the view and

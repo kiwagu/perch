@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../screen.schema.json
+# yaml-language-server: $schema=../../../schemas/screen.schema.json
 id: sample
 title: One thing, edited
 description: The one thing of the sample, shown and edited in place; the proof of the contract's rules.

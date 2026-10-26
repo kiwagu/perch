@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
 description: "Where a visitor signs in with an existing account or creates one: the only screen a guest sees, and where a signed-out device returns."

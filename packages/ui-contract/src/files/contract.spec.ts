@@ -76,7 +76,7 @@ describe('the contract folder of the repository', () => {
 
     expect(printed(problems)).toEqual([])
     expect(files).toEqual([...files].sort())
-    expect(files).toContain('contract/screens/__root.yaml')
+    expect(files).toContain('contract/domain/screens/__root.yaml')
     expect(screens?.screens.map((screen) => screen.id)).toHaveLength(files.length)
     expect(screens?.screens[0]?.id).toBe('app-shell')
   })

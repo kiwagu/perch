@@ -6,7 +6,7 @@ import { currentContract } from './problems'
 
 /**
  * Prints the flow of the screen named by its id or by its file (`organisation`,
- * `contract/screens/org.yaml`) as every reader takes it: expanded from the shorter forms the
+ * `contract/domain/screens/org.yaml`) as every reader takes it: expanded from the shorter forms the
  * file may author it in, the machine config `createMachine` takes.
  */
 export function flow(argv: readonly string[]): number {

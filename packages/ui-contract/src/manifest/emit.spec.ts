@@ -86,7 +86,7 @@ describe('emitManifest', () => {
 
     expect(emitManifest(root, out).map(formatProblem)).toEqual([
       expect.stringMatching(
-        /^contract\/screens\/sign-in\.yaml:1: bindings\[0\]\.search: not a valid JSON Schema \(screen "user\.sign-in"\): \/required: must NOT have duplicate items/,
+        /^contract\/domain\/screens\/sign-in\.yaml:1: bindings\[0\]\.search: not a valid JSON Schema \(screen "user\.sign-in"\): \/required: must NOT have duplicate items/,
       ),
     ])
     expect(existsSync(out)).toBe(false)
@@ -111,7 +111,7 @@ describe('emitManifest', () => {
     )
 
     expect(emitManifest(root, out).map(formatProblem)).toEqual([
-      'contract/screens/devices.yaml:1: bindings[1].params.properties.device: needs an example (no value of its schema can be built)',
+      'contract/domain/screens/devices.yaml:1: bindings[1].params.properties.device: needs an example (no value of its schema can be built)',
     ])
     expect(existsSync(out)).toBe(false)
   })

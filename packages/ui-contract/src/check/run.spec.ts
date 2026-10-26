@@ -53,9 +53,9 @@ describe('checkContract', () => {
     edit(activityFile('session'), (text) => text.replace('id: session', 'id: sessions'))
 
     expect(printed()).toEqual([
-      'contract/activities/session.yaml:1: its id is "sessions", so its file is contract/activities/sessions.yaml',
-      'contract/model.schema.json:1: cannot read the file',
-      'contract/platform.yaml:1: version: Invalid input: expected 1',
+      'contract/domain/activities/session.yaml:1: its id is "sessions", so its file is contract/domain/activities/sessions.yaml',
+      'contract/domain/model.schema.json:1: cannot read the file',
+      'contract/domain/platform.yaml:1: version: Invalid input: expected 1',
       'contract/vocabulary.md:1: missing section "Kinds"',
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: unknown section "Kind list"$/),
       expect.stringMatching(/^contract\/vocabulary\.md:\d+: section "Roles" appears twice$/),
@@ -72,7 +72,7 @@ describe('checkContract', () => {
     edit(SCREEN_SCHEMA_FILE, (text) => `${text}\n`)
 
     expect(printed()).toEqual([
-      'contract/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
+      'contract/schemas/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
@@ -82,8 +82,8 @@ describe('checkContract', () => {
     )
 
     expect(printed()).toEqual([
-      'contract/activities/session.yaml:28: states.profile.on["app-shell.nav.devices-link"]: "app-shell.nav.devices-link" leads to "/device" through neither a navigate of the flow of "app-shell" nor a link',
-      'contract/activities/session.yaml:42: states.devices.meta.address.path: "/device" is the path of no binding of "device"',
+      'contract/domain/activities/session.yaml:28: states.profile.on["app-shell.nav.devices-link"]: "app-shell.nav.devices-link" leads to "/device" through neither a navigate of the flow of "app-shell" nor a link',
+      'contract/domain/activities/session.yaml:42: states.devices.meta.address.path: "/device" is the path of no binding of "device"',
     ])
   })
   it('refuses a derived anchor of the repository whose base does not list the suffix', () => {
@@ -102,7 +102,7 @@ describe('checkContract', () => {
     edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
 
     expect(printed()).toEqual([
-      'contract/model.schema.json:1: $defs.note["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.note["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
     ])
   })
 })

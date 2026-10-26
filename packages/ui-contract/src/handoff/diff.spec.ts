@@ -14,8 +14,8 @@ useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/activities/thing.yaml'
+const SCREEN = 'contract/domain/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/domain/activities/thing.yaml'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
@@ -245,7 +245,7 @@ describe('contractAt', () => {
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/platform.yaml:1: version:',
+      'the contract at HEAD does not load: contract/domain/platform.yaml:1: version:',
     )
   })
 })

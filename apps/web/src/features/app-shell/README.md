@@ -2,7 +2,7 @@
 
 ## Role in the architecture
 
-The page frame every module renders into. It runs the frame's flow (`contract/screens/__root.yaml`)
+The page frame every module renders into. It runs the frame's flow (`contract/domain/screens/__root.yaml`)
 as its machine from the start of the page, before the local database finishes opening, and
 carries the navigation (sign-in, or the profile, the organisation page and My devices), the
 language switch, which stores the chosen language in the account's settings from any page and
@@ -24,7 +24,7 @@ modules' routes.
   machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the
   data, a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved.
-- Anchors: screen `app-shell` in `contract/screens/__root.yaml`.
+- Anchors: screen `app-shell` in `contract/domain/screens/__root.yaml`.
 - No shapes or commands of its own: it reads the session and the notices through the platform
   ports, and the account's settings through `SETTINGS_SERVICE` and the settings shape of the
   user module, which the composition root provides app-wide.
