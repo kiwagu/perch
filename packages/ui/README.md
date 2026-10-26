@@ -18,7 +18,9 @@ than its portal or overlay. A control that is not a test target carries a
 ## Key exports
 
 - `./components/ui/*`: shadcn primitives (button, card, input, textarea, label, field, alert,
-  alert-dialog, separator, dropdown-menu, select, sheet). Add more with `bunx shadcn add <name>`
+  alert-dialog, separator, dropdown-menu, select, sheet), and `Form`: a form whose `onSubmit`
+  returns whether it saved; on `true` its own fields hold no unsaved input, and the default
+  submit is always prevented. Add more with `bunx shadcn add <name>`
   in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
   alias; the file then belongs to us and is edited in place.
 - `./components/platform/*`: props-driven building blocks of the application shell.
