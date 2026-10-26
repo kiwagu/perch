@@ -4,7 +4,9 @@
  * for the tree it ran against. The receipt is the proof the pre-commit check on
  * `main` asks for before a landing is accepted; it lives in the gitignored
  * `.gates/` directory and is keyed by the working tree's id, so any later change
- * to a tracked file needs a fresh run.
+ * to a tracked file needs a fresh run. The id is read before the run and again
+ * after it: a tree that changed in between (a file edited while the suite ran)
+ * is one the suite did not run against, so the run fails and records nothing.
  *
  * The command's arguments pass through untouched. A run given any (a spec, a
  * filter, a reporter) passes or fails as usual and records no receipt.
@@ -31,6 +33,7 @@ function main(argv: readonly string[]): number {
     usage()
   }
 
+  const before = workingTreeId()
   const run = spawnSync(command, args, { stdio: 'inherit' })
 
   if (run.error) {
@@ -53,6 +56,16 @@ function main(argv: readonly string[]): number {
   }
 
   const treeId = workingTreeId()
+
+  if (treeId !== before) {
+    console.error(
+      `gates: the tree changed during the ${gate} run (${before} before, ${treeId} after): ` +
+        'no receipt recorded; run it again with no edits while it runs',
+    )
+
+    return 1
+  }
+
   const receipt = receiptPath(gate, treeId)
 
   mkdirSync(dirname(receipt), { recursive: true })
