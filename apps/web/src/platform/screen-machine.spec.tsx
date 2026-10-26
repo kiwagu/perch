@@ -63,6 +63,7 @@ type WatchedEvent =
   | { readonly type: 'x.save-button' }
   | { readonly type: 'x.cancel-button' }
   | { readonly type: 'x.note-button' }
+  | { readonly type: 'x.publish-button' }
 
 /** A background actor that runs from the start, beside a slow save and a note that fails. */
 const watched = setup({
@@ -102,7 +103,11 @@ const watched = setup({
         idle: { on: { 'x.save-button': 'saving' } },
         saving: {
           invoke: { src: 'save', onDone: 'idle', onError: 'idle' },
-          on: { 'x.cancel-button': 'idle' },
+          on: {
+            'x.cancel-button': 'idle',
+            // Saving again starts the save anew: a new actor under the same id.
+            'x.save-button': { target: 'saving', reenter: true },
+          },
         },
       },
     },
@@ -111,6 +116,13 @@ const watched = setup({
       states: {
         idle: { on: { 'x.note-button': 'noting' } },
         noting: { invoke: { src: 'note', onDone: 'idle', onError: 'idle' } },
+      },
+    },
+    publish: {
+      initial: 'idle',
+      states: {
+        idle: { on: { 'x.publish-button': 'published' } },
+        published: {},
       },
     },
   },
@@ -276,6 +288,39 @@ describe('useScreenMachine', () => {
     act(() => running.send({ type: 'x.cancel-button' }))
 
     expect(await act(() => saved)).toBe(false)
+  })
+
+  it('resolves a submit false when another submit starts its action anew under the same id', async () => {
+    const running = await openWatched()
+    let first: Promise<boolean> = Promise.resolve(true)
+    let second: Promise<boolean> = Promise.resolve(false)
+
+    act(() => {
+      first = running.submit({ type: 'x.save-button' })
+    })
+    act(() => {
+      second = running.submit({ type: 'x.save-button' })
+    })
+
+    expect(await act(() => first)).toBe(false)
+    await act(async () => control.finishSave())
+    expect(await act(() => second)).toBe(true)
+  })
+
+  it('resolves false a queued submit whose event the state no longer takes when its turn comes', async () => {
+    const running = await openWatched()
+    const outcomes: Array<Promise<boolean>> = []
+    const asked = running.actor.subscribe((snapshot) => {
+      if (snapshot.matches({ notes: 'noting' })) {
+        asked.unsubscribe()
+        outcomes.push(running.submit({ type: 'x.publish-button' }))
+        outcomes.push(running.submit({ type: 'x.publish-button' }))
+      }
+    })
+
+    await act(async () => running.send({ type: 'x.note-button' }))
+
+    expect(await act(() => Promise.all(outcomes))).toEqual([true, false])
   })
 
   it('waits for an event sent while the machine is busy, and judges it by its own action', async () => {

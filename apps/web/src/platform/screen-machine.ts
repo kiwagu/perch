@@ -21,12 +21,13 @@ import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
 
 /**
- * A submit under way: whether the machine has taken its event yet, the actors it owns (those its
- * event started, and those an owned actor's end started in turn), whether one of them failed or
- * was stopped before it ended.
+ * A submit under way: whether the machine took its event yet and whether that event selected a
+ * transition, the actor instances it owns (those its event started, and those an owned actor's
+ * end started in turn), whether one of them failed or was stopped before it ended.
  */
 interface Run {
   taken: boolean
+  accepted: boolean | undefined
   readonly owned: Set<string>
   failed: boolean
   readonly settle: (saved: boolean) => void
@@ -35,9 +36,17 @@ interface Run {
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null
 
-/** The ids of the actors a snapshot of the root runs. */
-const childrenOf = (snapshot: unknown): string[] =>
-  isRecord(snapshot) && isRecord(snapshot['children']) ? Object.keys(snapshot['children']) : []
+/** The actors a snapshot of the root runs: each instance's session id, by its id. */
+const childrenOf = (snapshot: unknown): Map<string, string> =>
+  new Map(
+    Object.entries(
+      isRecord(snapshot) && isRecord(snapshot['children']) ? snapshot['children'] : {},
+    ).flatMap(([id, child]: [string, unknown]) =>
+      isRecord(child) && typeof child['sessionId'] === 'string'
+        ? [[id, child['sessionId']] as const]
+        : [],
+    ),
+  )
 
 /** A flow's `navigate` effect: where to go, with its search when it gives one. */
 const isNavigate = (
@@ -65,53 +74,66 @@ const controlOf = (event: { readonly type: unknown }): string =>
 export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
   const navigate = useNavigate()
   const guard = useLeaveGuard()
-  // Each snapshot of the root carries the event that made it: a submit's own event object, or
-  // the end of an actor it owns. The actors that snapshot adds are that submit's; an owned actor
-  // that leaves without its own end was stopped, which saved nothing.
+  // Each step of the root carries the event that made it: a submit's own event object, or the end
+  // of an actor instance a submit owns. Its first microstep says whether that event selected a
+  // transition; the actor instances its snapshot adds belong to that submit, and an owned instance
+  // that goes without its own end was stopped, which saved nothing.
   const runs = useRef(new Set<Run>())
   const byEvent = useRef(new WeakMap<object, Run>())
   const owners = useRef(new Map<string, Run>())
-  const previous = useRef(new Set<string>())
+  const previous = useRef(new Map<string, string>())
   const inspect = useCallback((inspected: InspectionEvent) => {
-    if (
-      inspected.type !== '@xstate.snapshot' ||
-      inspected.actorRef.sessionId !== inspected.rootId
-    ) {
+    if (inspected.actorRef.sessionId !== inspected.rootId) {
+      return
+    }
+
+    if (inspected.type === '@xstate.microstep') {
+      const own = byEvent.current.get(inspected.event)
+
+      if (own !== undefined && own.accepted === undefined) {
+        own.accepted = inspected._transitions.length > 0
+      }
+
+      return
+    }
+
+    if (inspected.type !== '@xstate.snapshot') {
       return
     }
 
     const cause = inspected.event
     const ended = endedBy(cause.type)
+    const endedInstance = ended === undefined ? undefined : previous.current.get(ended)
     const own = byEvent.current.get(cause)
-    const run = own ?? (ended === undefined ? undefined : owners.current.get(ended))
-    const children = new Set(childrenOf(inspected.snapshot))
+    const run = own ?? (endedInstance === undefined ? undefined : owners.current.get(endedInstance))
+    const children = childrenOf(inspected.snapshot)
 
     if (own !== undefined) {
       own.taken = true
     }
 
-    if (ended !== undefined && cause.type.startsWith(FAILED)) {
-      const owner = owners.current.get(ended)
+    if (endedInstance !== undefined && cause.type.startsWith(FAILED)) {
+      const owner = owners.current.get(endedInstance)
 
       if (owner !== undefined) {
         owner.failed = true
       }
     }
 
-    for (const id of previous.current) {
-      const owner = owners.current.get(id)
+    for (const [id, instance] of previous.current) {
+      const owner = owners.current.get(instance)
 
-      if (!children.has(id) && owner !== undefined) {
-        owners.current.delete(id)
-        owner.owned.delete(id)
-        owner.failed ||= id !== ended
+      if (children.get(id) !== instance && owner !== undefined) {
+        owners.current.delete(instance)
+        owner.owned.delete(instance)
+        owner.failed ||= instance !== endedInstance
       }
     }
 
-    for (const id of children) {
-      if (run !== undefined && !previous.current.has(id)) {
-        owners.current.set(id, run)
-        run.owned.add(id)
+    for (const [id, instance] of children) {
+      if (run !== undefined && previous.current.get(id) !== instance) {
+        owners.current.set(instance, run)
+        run.owned.add(instance)
       }
     }
 
@@ -120,7 +142,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
     for (const settled of runs.current) {
       if (settled.taken && settled.owned.size === 0) {
         runs.current.delete(settled)
-        settled.settle(!settled.failed)
+        settled.settle(settled.accepted === true && !settled.failed)
       }
     }
   }, [])
@@ -157,7 +179,13 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
           return
         }
 
-        const run: Run = { taken: false, owned: new Set(), failed: false, settle }
+        const run: Run = {
+          taken: false,
+          accepted: undefined,
+          owned: new Set(),
+          failed: false,
+          settle,
+        }
 
         runs.current.add(run)
         byEvent.current.set(event, run)
