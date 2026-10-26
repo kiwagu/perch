@@ -5,7 +5,34 @@ import { cn } from 'cn'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type * as React from 'react'
 
-const Select = SelectPrimitive.Root
+import { useTracksInput } from '@workspace/ui/unsaved-input'
+
+export interface SelectProps<Value> extends SelectPrimitive.Root.Props<Value> {
+  /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
+  readonly holdsInput?: boolean | undefined
+}
+
+/** A value as the select holds it; none chosen is the empty text. */
+const text = (value: unknown): string | undefined =>
+  value === undefined ? undefined : value === null ? '' : String(value)
+
+function Select<Value>({ holdsInput = true, onValueChange, ...props }: SelectProps<Value>) {
+  const { typed } = useTracksInput({
+    holdsInput,
+    value: text(props.value),
+    defaultValue: text(props.defaultValue),
+  })
+
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      onValueChange={(value, details) => {
+        typed(text(value) ?? '')
+        onValueChange?.(value, details)
+      }}
+    />
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

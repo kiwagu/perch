@@ -37,7 +37,10 @@ than its portal or overlay. A control that is not a test target carries a
   says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
   scope), and `useTracksInput` is what a field component uses to track itself against the
   last value the app gave it. `FormScopeContext` lets a form tell its fields a submit saved
-  them.
+  them. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
+  while its value differs from the last value the app gave it (the `value` prop whenever it
+  did not come from the field's own last change, or the `defaultValue` at mount), and takes
+  `holdsInput={false}` for a choice that applies at once.
 - `./lib/utils`: `cn` for class names.
 - `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the
   app. It points Tailwind at the kit's components, so their classes are generated in apps.
