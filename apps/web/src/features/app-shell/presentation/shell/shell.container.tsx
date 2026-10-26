@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { useT } from '@workspace/i18n'
 
+import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useClearNotice, useNotice, useNotify } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
@@ -32,6 +33,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const notify = useNotify()
   const clearNotice = useClearNotice()
   const t = useT()
+  const guard = useLeaveGuard()
 
   // What the frame's machine reads, current before it is asked anything below: the account signed
   // in, the language its settings hold here, how to store one; another account, or none, starts
@@ -109,7 +111,14 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       signedIn={user !== undefined}
       activePath={pathname}
       canChooseLocale={canChoose}
-      onLocaleChange={(locale) => actor.send({ type: 'app-shell.locale-select', locale })}
+      onLocaleChange={(locale) => {
+        // A change of language is a leave the frame asks about while a field holds unsaved input.
+        void guard.before('app-shell.locale-select').then((leave) => {
+          if (leave) {
+            actor.send({ type: 'app-shell.locale-select', locale })
+          }
+        })
+      }}
       link={RouterLink}
       notice={notice && { code: notice.code, text: notice.text(t) }}
     >

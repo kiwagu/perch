@@ -24,6 +24,16 @@ modules' routes.
   machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the
   data, a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved.
+- `presentation/leave-guard/leave-guard.container.tsx`: the guard of unsaved input, which the
+  start mounts inside the kit's `UnsavedInputScope` around the shell. It follows the
+  platform's `unsavedInput` (`platform/leaving.ts`, `LEAVE_POLICY`): while a field holds
+  unsaved input it asks through `app-shell.leave-dialog` (code `unsaved-input`; leave or
+  stay) before another screen opens, a link, Back or Forward, and before a leaving control
+  runs (`useLeaveGuard().before(control)`), and turns on the browser's own prompt for a
+  reload, a closed tab or an address typed by hand. A change of search inside one screen, a
+  flow's own navigation (`useScreenMachine`) and a leave nobody started here pass. The
+  language select asks it first, and carries `holdsInput={false}`: its choice applies at
+  once.
 - Anchors: screen `app-shell` in `contract/domain/screens/__root.yaml`.
 - No shapes or commands of its own: it reads the session and the notices through the platform
   ports, and the account's settings through `SETTINGS_SERVICE` and the settings shape of the
@@ -33,4 +43,4 @@ modules' routes.
 ## Commands
 
 - `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `locale-writes.spec.ts`,
-  `shell.container.spec.tsx`, `shell.view.spec.tsx`).
+  `shell.container.spec.tsx`, `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`).
