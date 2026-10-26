@@ -1,5 +1,5 @@
 ---
-description: 'Use when: about to start a branch, to pick up work on an area again, to put a change on a branch, to land a branch on main, or to start or end an experiment.'
+description: 'Use when: about to start a branch, to pick up work on an area again, to put a change on a branch, to land a branch on main, to start or end an experiment, or to choose between the main checkout and a worktree.'
 alwaysApply: true
 ---
 
@@ -15,6 +15,7 @@ alwaysApply: true
 - A change is about to be committed on a branch: it belongs to that branch's context.
 - A branch is about to land on `main`.
 - An experiment is about to start, or to end.
+- You are about to choose where to work: the main checkout or a worktree.
 
 ## Stop Here If
 
@@ -34,6 +35,7 @@ alwaysApply: true
   - Every commit of an experiment can be cherry-picked on its own: it has one destination, one epic's branch, and one kind of commit (meta, business or implementation, `ui-contract.mdc`), never two epics or two kinds, and it builds only on commits that go to the same branch or to one that lands before it.
   - A later meta commit does not remove a form an earlier business commit of the experiment uses; if it has to, those business commits are written anew on the final engine when the experiment is split.
   - When the experiment ends, its commits go to their destinations: merged into the parent when they all belong to it, otherwise cherry-picked one by one onto each destination's branch, each through the pre-commit hook. A commit then lives in one history only: once its work is on its destination, the experiment's branch is deleted, tagged first (`archive/<area>`) when notes cite its hashes.
+- **Work in the main checkout unless it is busy.** One activity runs in the main checkout, the one the developer's editor shows, so the developer sees each change where it is made. A worktree (`mcproc worktree add`) is only for relatively autonomous agent work, or for when the main checkout is busy: it has uncommitted changes, or a session is working in it right now. A clean main checkout on a branch that has landed, with no session at work there, is free, and switching it to the branch at hand is the first step. A worktree is removed (`mcproc worktree remove`, the branch stays) once its branch lands or is retired.
 - **Example: a feature over the UI contract.** The profile's fixes needed a new facet of the contract's engine, so they took the three kinds of commit of `ui-contract.mdc` on two branches, the engine's and the profile's:
   1. The engine's area already had its branch, `feat/contract-first-pass`, landed before. The latest `main` was merged into it, the meta commits went on it (the engine learns data events and error fields, with the rules and the skill about the contract), and it landed as one squash.
   2. `fix/profile-ux`, the profile's branch, came off `main` after that landing. The business commit of the contract went first (the screen's flow regions and error fields, the scenarios: the review stop), then the implementation commits (the code and its tests), and it landed as one squash.
