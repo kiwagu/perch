@@ -225,24 +225,6 @@ flow:
                   description: The form stays open with what was typed.
                   actions:
                     - show: organisation.create.error
-        note-add:
-          description: The form of a new note.
-          initial: idle
-          states:
-            idle:
-              on:
-                organisation.notes.add-button: adding
-            adding:
-              invoke:
-                src: note.createNote
-                input: { text: organisation.notes.new-textarea }
-                onDone:
-                  target: idle
-                  description: The note appears last in the list; the textarea empties.
-                onError:
-                  target: idle
-                  actions:
-                    - show: organisation.notes.error
         note-items:
           description: The notes' items; in the app each item edits on its own, and the region follows the item acted on last.
           initial: idle
@@ -288,8 +270,8 @@ flow:
           states:
             idle:
               on:
-                organisation.invite.submit-button: inviting
-            inviting:
+                organisation.invite.submit-button: running
+            running:
               invoke:
                 src: platform.organisations.invite
                 input: { email: organisation.invite.email-input }
@@ -308,8 +290,8 @@ flow:
           states:
             idle:
               on:
-                organisation.members.remove-button: removing
-            removing:
+                organisation.members.remove-button: running
+            running:
               invoke:
                 src: platform.organisations.remove
                 input: { identity: organisation.members.item }
@@ -320,6 +302,24 @@ flow:
                   target: idle
                   actions:
                     - show: { organisation.invite.error: [ not-admin, failed ] }
+        notes-add:
+          description: The form of a new note.
+          initial: idle
+          states:
+            idle:
+              on:
+                organisation.notes.add-button: running
+            running:
+              invoke:
+                src: note.createNote
+                input: { text: organisation.notes.new-textarea }
+                onDone:
+                  target: idle
+                  description: The note appears last in the list; the textarea empties.
+                onError:
+                  target: idle
+                  actions:
+                    - show: organisation.notes.error
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:
