@@ -126,6 +126,8 @@ describe('diffContracts', () => {
         renamed: [{ from: 'sample.save-button', to: 'sample.store-button' }],
       },
       codes: { added: ['spare'], removed: [] },
+      anchorCodes: { added: [], removed: [] },
+      errorFields: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -135,6 +137,38 @@ describe('diffContracts', () => {
         transitions: { thing: { added: [], removed: [] } },
       },
     })
+  })
+  it('lists the codes and the error fields gained or lost by the anchors both contracts hold', () => {
+    const more = structuredClone(after)
+    const screen = more.screens.screens[0]
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    screen.anchors['sample.store-button'] = {
+      ...screen.anchors['sample.store-button'],
+      kind: 'button',
+      codes: ['saved', 'spare'],
+    }
+    screen.anchors['sample.title-error'] = { kind: 'error', codes: ['spare'] }
+    screen.anchors['sample.page'] = {
+      ...screen.anchors['sample.page'],
+      kind: 'page',
+      fields: { spare: 'sample.title-input' },
+    }
+
+    const changes = diffContracts(before, more)
+
+    expect(changes.anchorCodes).toEqual({
+      added: ['sample.store-button spare'],
+      removed: ['sample.store-button failed'],
+    })
+    expect(changes.errorFields).toEqual({
+      added: ['sample.page spare -> sample.title-input'],
+      removed: [],
+    })
+    expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(

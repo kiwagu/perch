@@ -5,12 +5,13 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 
-import { PLATFORM_FILE, SCREENS_DIR } from './paths'
+import { MODEL_FILE, PLATFORM_FILE, SCREENS_DIR } from './paths'
 import { formatProblem } from './problems'
 import { loadScreens } from './screens'
 import { jsonSchemaProblems } from './validator'
 
 const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract')
+const MODEL_FIXTURE = join(import.meta.dirname, '../__fixtures__/model.schema.json')
 const SAMPLE_FILE = 'contract/screens/sample/$key.yaml'
 
 let root: string
@@ -279,6 +280,177 @@ describe('loadScreens', () => {
       expect.stringMatching(
         /^contract\/screens\/sample\/\$key\.yaml:3: not YAML: Flow sequence in block collection/,
       ),
+    ])
+  })
+  it('loads a flow written in the shorter forms as the flow every reader takes', () => {
+    const before = loadScreens(root).screens?.screens[0]?.flow
+
+    writeSample((screen) => {
+      screen['flow'] = {
+        initial: 'editing',
+        states: {
+          editing: { on: { 'sample.save-button': 'saving' } },
+          saving: {
+            invoke: {
+              src: 'thing.updateThing',
+              input: { title: 'sample.title-input' },
+              onDone: {
+                target: 'editing',
+                actions: [
+                  { show: { 'sample.save-button': ['saved'] } },
+                  { navigate: '/sample/$key' },
+                ],
+              },
+              onError: {
+                target: 'editing',
+                actions: [{ show: { 'sample.save-button': ['failed'] } }],
+              },
+            },
+          },
+        },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found).toEqual([])
+    expect(screens?.screens[0]?.flow).toEqual(before)
+  })
+
+  it('derives what a screen leaves out from the model: an error and the region of a button', () => {
+    cpSync(MODEL_FIXTURE, join(root, MODEL_FILE))
+    writeSample((screen) => {
+      const { 'sample.sign-out-button': _signOut, ...anchors } = screen['anchors'] as Record<
+        string,
+        unknown
+      >
+
+      screen['anchors'] = {
+        ...anchors,
+        'sample.form.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        'sample.form.add-button': {
+          kind: 'button',
+          binding: { action: 'thing.createThing', params: { title: 'sample.form.title-input' } },
+        },
+        'sample.form.error': { kind: 'error' },
+      }
+      screen['flow'] = {
+        initial: 'viewing',
+        states: {
+          viewing: {
+            type: 'parallel',
+            states: { other: { initial: 'idle', states: { idle: {} } } },
+          },
+        },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+    const sample = screens?.screens[0]
+
+    expect(found).toEqual([])
+    expect(sample?.anchors['sample.form.error']).toEqual({
+      kind: 'error',
+      codes: ['forbidden', 'title-required', 'title-too-long', 'title-taken', 'failed'],
+      fields: {
+        'title-required': 'sample.form.title-input',
+        'title-too-long': 'sample.form.title-input',
+        'title-taken': 'sample.form.title-input',
+      },
+    })
+    expect(sample?.flow?.states['viewing']).toMatchObject({
+      states: {
+        'form-add': {
+          states: {
+            running: {
+              invoke: {
+                src: 'thing.createThing',
+                onError: {
+                  actions: [
+                    {
+                      type: 'show',
+                      params: {
+                        anchor: 'sample.form.error',
+                        codes: [
+                          'forbidden',
+                          'title-required',
+                          'title-too-long',
+                          'title-taken',
+                          'failed',
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+  })
+
+  it('counts the derived regions among the two a parallel state has, after the expansion', () => {
+    cpSync(MODEL_FIXTURE, join(root, MODEL_FILE))
+
+    const withRegions = (states: Record<string, unknown>, buttons: Record<string, unknown>) =>
+      writeSample((screen) => {
+        const anchors = Object.fromEntries(
+          Object.entries(screen['anchors'] as Record<string, unknown>).filter(
+            ([name]) => name !== 'sample.sign-out-button' && !name.startsWith('sample.form.'),
+          ),
+        )
+
+        screen['anchors'] = {
+          ...anchors,
+          'sample.form.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+          'sample.form.error': { kind: 'error' },
+          ...buttons,
+        }
+        screen['flow'] = { initial: 'viewing', states: { viewing: { type: 'parallel', states } } }
+      })
+    const button = (action: string) => ({
+      kind: 'button',
+      binding: { action, params: { title: 'sample.form.title-input' } },
+    })
+
+    withRegions(
+      {},
+      {
+        'sample.form.add-button': button('thing.createThing'),
+        'sample.form.rename-button': button('thing.updateThing'),
+      },
+    )
+
+    const viewing = loadScreens(root).screens?.screens[0]?.flow?.states['viewing']
+
+    expect(problems()).toEqual([])
+    expect(Object.keys(viewing !== undefined && 'states' in viewing ? viewing.states : {})).toEqual(
+      ['form-add', 'form-rename'],
+    )
+
+    withRegions(
+      { form: { by: 'sample.form.add-button' } },
+      {
+        'sample.form.add-button': button('thing.createThing'),
+      },
+    )
+
+    expect(messages()).toEqual([
+      'flow.states.viewing.states: a parallel state has two regions or more',
+    ])
+  })
+
+  it('reports what keeps a flow from expanding, at its place in the file', () => {
+    writeSample((screen) => {
+      screen['flow'] = {
+        initial: 'editing',
+        states: { editing: { entry: [{ show: 'sample.nothing-button' }] } },
+      }
+    })
+
+    expect(messages()).toEqual([
+      'flow.states.editing.entry[0].show: no screen declares the anchor sample.nothing-button',
     ])
   })
 })

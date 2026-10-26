@@ -4,8 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { SCREEN_SCHEMA_FILE } from './paths'
 import { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
-import { jsonSchemaProblems } from './validator'
+import { jsonSchemaProblems, validateAgainst } from './validator'
 
 let root: string
 
@@ -99,5 +100,54 @@ describe('schemaDrift', () => {
       'contract/x-perch.schema.json',
       'contract/manifest.schema.json',
     ])
+  })
+})
+
+describe('the screen schema an editor reads', () => {
+  const schema = SCHEMA_OUTPUTS.find(({ file }) => file === SCREEN_SCHEMA_FILE)?.schema() ?? {}
+
+  /** A screen whose parallel state has the region `form` written as `form`. */
+  const screenWith = (form: unknown) => ({
+    id: 'sample',
+    title: 'Sample',
+    description: 'A sample screen.',
+    flag: null,
+    bindings: [{ path: '/sample', roles: ['member'] }],
+    entry: ['sample.page'],
+    anchors: { 'sample.page': { kind: 'page' } },
+    flow: {
+      initial: 'viewing',
+      states: {
+        viewing: {
+          type: 'parallel',
+          states: { form, other: { initial: 'idle', states: { idle: {} } } },
+        },
+      },
+    },
+  })
+  const removal = (extra: Record<string, unknown>) => ({
+    by: 'sample.page.remove-button',
+    onError: { actions: [{ show: 'sample.page.error' }] },
+    ...extra,
+  })
+
+  it('takes a region by its button and an effect by its name', () => {
+    expect(validateAgainst('x.yaml', schema, screenWith(removal({})))).toEqual([])
+  })
+
+  it('takes a parallel state that writes fewer than two regions, the loader deriving the rest', () => {
+    const parallel = (states: Record<string, unknown>) => ({
+      ...screenWith(removal({})),
+      flow: { initial: 'viewing', states: { viewing: { type: 'parallel', states } } },
+    })
+
+    expect(validateAgainst('x.yaml', schema, parallel({ list: removal({}) }))).toEqual([])
+    expect(validateAgainst('x.yaml', schema, parallel({}))).toEqual([])
+  })
+
+  it('refuses a region by its button that names what the binding gives, as the loader does', () => {
+    expect(
+      validateAgainst('x.yaml', schema, screenWith(removal({ src: 'thing.remove' }))),
+    ).not.toEqual([])
   })
 })

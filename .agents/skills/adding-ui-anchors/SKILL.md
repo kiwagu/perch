@@ -64,10 +64,17 @@ code and the tests follow; the checks hold them to the contract.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
    `description`, its `binding` (the model field, the action with its params, a route, or a
    list of them), and its `codes` (an error's `fields` with them: the field each code
-   concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply. Add its events to the `flow` (XState's language: see the pattern
+   concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
+   Leave out what the contract says elsewhere ("What a screen leaves out" in
+   `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
+   actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
+   and the region of a button bound to one action when it only runs the action. Add its
+   events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
-   of its parallel state, and an event belongs to one area) and the element to the
-   `wireframe`. A
+   of its parallel state, and an event belongs to one area; write it in the shorter forms
+   of `contract/README.md` where they fit, a transition as its target, an effect by its
+   name, a region by its pattern or by its button, and read the expansion with `bun run
+   contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
    those tables are business, like the screen file.
    A new screen follows the checklist in `references/checklists.md`.
