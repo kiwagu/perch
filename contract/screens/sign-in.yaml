@@ -57,6 +57,7 @@ anchors:
           email: user.sign-in.email-input
           password: user.sign-in.password-input
           name: user.sign-in.name-input
+          locale: app-shell.locale-select
   user.sign-in.toggle-button:
     kind: button
     description: Switches between signing in and creating an account; its value is the mode it switches to.

@@ -20,6 +20,8 @@ export interface ShellViewProps {
   readonly status: 'opening' | 'ready' | 'failed' | 'storage-blocked'
   readonly signedIn: boolean
   readonly activePath: string
+  /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
+  readonly canChooseLocale: boolean
   readonly onLocaleChange: (locale: Locale) => void
   readonly link?: ComponentType<ShellLinkProps>
   /** Signs the saved account out on this device when its data could not be opened; offered while `failed`. */
@@ -90,6 +92,7 @@ export function ShellView(props: ShellViewProps) {
           value={locale}
           options={locales}
           onChange={props.onLocaleChange}
+          disabled={!props.canChooseLocale}
           testId="app-shell.locale-select"
         />
       }

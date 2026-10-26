@@ -35,7 +35,7 @@ alwaysApply: true
 - A source file at or past 300 lines, or a failing size gate: `file-size-tiers.mdc`.
 - A new class, a new domain or application function, or a one-unit lint error: `one-unit-per-file.mdc`.
 - Before any commit: `security-review-before-commit.mdc`.
-- Starting a branch, picking up an area again, landing a branch on `main`: `branch-reuse-first.mdc`.
+- Starting a branch, picking up an area again, putting a change on a branch (one context per branch), landing a branch on `main`: `branch-reuse-first.mdc`.
 - SurrealQL, schema and SurrealKit: vendor skills `.agents/skills/surrealql/`, `.agents/skills/surrealkit/`, `.agents/skills/surrealdb-js/`.
 
 ## Core rule

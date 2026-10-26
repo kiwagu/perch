@@ -2,7 +2,6 @@ import type { ResultAsync } from 'neverthrow'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
-import { useT } from '@workspace/i18n'
 import type { IdentityId, NoteId } from '@workspace/ids'
 import { ownerKeyOf } from '@workspace/kernel'
 
@@ -76,7 +75,6 @@ export function OrganisationContainer() {
   >(undefined)
   const [membersRead, setMembersRead] = useState(0)
   const notify = useNotify()
-  const t = useT()
 
   // Adjusting state while rendering: React renders again at once, before anything is shown.
   if (errors.key !== key) {
@@ -154,7 +152,7 @@ export function OrganisationContainer() {
       : organisations.invite(key, email).match(
           () => {
             report('members', undefined, key)
-            notify({ code: 'invited', text: t('organisation.invite.invited') })
+            notify({ code: 'invited', text: (t) => t('organisation.invite.invited') })
             setMembersRead((count) => count + 1)
 
             return true
