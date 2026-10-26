@@ -73,78 +73,41 @@ flow:
         user.sign-in.toggle-button:
           target: sign-up
           description: The name input appears; the error is cleared.
-        user.sign-in.submit-button:
-          target: signing-in
+        user.sign-in.submit-button: signing-in
     sign-up:
       description: The form in the mode sign-up, with the name input.
       on:
         user.sign-in.toggle-button:
           target: sign-in
           description: The name input goes; the error is cleared.
-        user.sign-in.submit-button:
-          target: signing-up
+        user.sign-in.submit-button: signing-up
     signing-in:
-      description: The attempt to sign in runs; the submit button is disabled meanwhile.
       invoke:
         src: platform.sign-in
-        input:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
+        input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
         onDone:
           target: done
           actions:
-            - type: show
-              params:
-                anchor: app-shell.notice-message
-                codes:
-                  - welcome
-            - type: navigate
-              params:
-                to: /me
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
         onError:
           target: sign-in
           actions:
-            - type: show
-              params:
-                anchor: user.sign-in.error
-                codes:
-                  - invalid-credentials
-                  - rate-limited
-                  - other-account
-                  - failed
+            - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
     signing-up:
-      description: The attempt to create the account runs; the submit button is disabled meanwhile.
       invoke:
         src: platform.sign-up
-        input:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
-          name: user.sign-in.name-input
+        input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
         onDone:
           target: done
           description: The account is created with its profile.
           actions:
-            - type: show
-              params:
-                anchor: app-shell.notice-message
-                codes:
-                  - welcome
-            - type: navigate
-              params:
-                to: /me
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
         onError:
           target: sign-up
           actions:
-            - type: show
-              params:
-                anchor: user.sign-in.error
-                codes:
-                  - sign-up-rejected
-                  - rate-limited
-                  - other-account
-                  - name-required
-                  - name-too-long
-                  - failed
+            - show: { user.sign-in.error: [ sign-up-rejected, rate-limited, other-account, name-required, name-too-long, failed ] }
     done:
       description: The app has moved to /me.
       type: final

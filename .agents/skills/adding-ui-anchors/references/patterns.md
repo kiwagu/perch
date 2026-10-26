@@ -263,37 +263,24 @@ inside. Among JSX children the marker is the only content of a comment container
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
 that config with the implementations added. From `contract/screens/sign-in.yaml` (lines
-85-113), the state that signs in:
+84-96), the state that signs in, written in the shorter forms (a transition as its target,
+an effect by its name; `bun run contract:flow user.sign-in` prints the config they expand
+into, `{ type: show, params: { anchor, codes } }` and `{ target }`):
 
 ```yaml
 signing-in:
   invoke:
     src: platform.sign-in
-    input:
-      email: user.sign-in.email-input
-      password: user.sign-in.password-input
+    input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
     onDone:
       target: done
       actions:
-        - type: show
-          params:
-            anchor: app-shell.notice-message
-            codes:
-              - welcome
-        - type: navigate
-          params:
-            to: /me
+        - show: { app-shell.notice-message: [ welcome ] }
+        - navigate: /me
     onError:
       target: sign-in
       actions:
-        - type: show
-          params:
-            anchor: user.sign-in.error
-            codes:
-              - invalid-credentials
-              - rate-limited
-              - other-account
-              - failed
+        - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
 ```
 
 And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 72-121): an actor
@@ -349,44 +336,54 @@ machine's config to the flow through the engine's comparison
 (`@workspace/ui-contract/machines`); a new app machine for a screen joins its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
-From `contract/screens/org.yaml` (lines 198-237, the descriptions and the error's `show` left
-out), the organisation page: its own event leaves `viewing` whatever each region is in, and
-each region moves on its own events only, the create included.
+From `contract/screens/org.yaml` (lines 198-245, the descriptions left out), the
+organisation page: its own event leaves `viewing` whatever each region is in, and each
+region moves on its own events only, the create included. The create form keeps a failure
+open; the new note rests in `idle`, runs `note.createNote` in `adding` and goes back to
+`idle` either way.
 
 ```yaml
 viewing:
   type: parallel
   on:
-    organisation.page.current-select:
-      target: selecting
+    organisation.page.current-select: selecting
   states:
     create-form:
       initial: closed
       states:
         closed:
           on:
-            organisation.create.toggle-button:
-              target: open
-            organisation.create.submit-button:
-              target: submitting
+            organisation.create.toggle-button: open
+            organisation.create.submit-button: submitting
         open:
           on:
-            organisation.create.toggle-button:
-              target: closed
-            organisation.create.submit-button:
-              target: submitting
+            organisation.create.toggle-button: closed
+            organisation.create.submit-button: submitting
         submitting:
           invoke:
             src: platform.organisations.create
-            input:
-              key: organisation.create.key-input
-              name: organisation.create.name-input
+            input: { key: organisation.create.key-input, name: organisation.create.name-input }
             onDone:
               target: "#organisation.viewing"
             onError:
               target: open
+              actions:
+                - show: organisation.create.error
     note-add:
-      # idle, adding (invokes note.createNote) ...
+      initial: idle
+      states:
+        idle:
+          on:
+            organisation.notes.add-button: adding
+        adding:
+          invoke:
+            src: note.createNote
+            input: { text: organisation.notes.new-textarea }
+            onDone: idle
+            onError:
+              target: idle
+              actions:
+                - show: organisation.notes.error
 ```
 
 A target in a region names a state of that region or, by the flow's `id` (a one-segment
