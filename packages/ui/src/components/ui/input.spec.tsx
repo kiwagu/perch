@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { Suspense, startTransition, use, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { Input } from '@workspace/ui/components/ui/input'
@@ -33,6 +33,44 @@ function Controlled(props: { readonly given: string; readonly holdsInput?: boole
 
 const probe = () => screen.getByTestId('probe').textContent
 
+/** A promise that never settles: whatever reads it stays suspended. */
+const NEVER = new Promise<never>(() => {})
+
+/** Suspends while `on`, so a transition that turns it on never commits. */
+function Stall(props: { readonly on: boolean }) {
+  if (props.on) {
+    use(NEVER)
+  }
+
+  return null
+}
+
+/** A controlled input whose "later" button renders a new value in a transition that never commits. */
+function Abandoned() {
+  const [value, setValue] = useState('Ann')
+  const [stalled, setStalled] = useState(false)
+
+  return (
+    <>
+      <Input aria-label="name" value={value} onChange={(event) => setValue(event.target.value)} />
+      <button
+        type="button"
+        onClick={() =>
+          startTransition(() => {
+            setValue('Cy')
+            setStalled(true)
+          })
+        }
+      >
+        later
+      </button>
+      <Suspense fallback={null}>
+        <Stall on={stalled} />
+      </Suspense>
+    </>
+  )
+}
+
 // Without vitest globals, Testing Library cannot register its own cleanup.
 afterEach(() => cleanup())
 
@@ -62,6 +100,22 @@ describe('Input', () => {
       </UnsavedInputScope>,
     )
     expect(probe()).toBe('false')
+  })
+
+  it('takes no value from a render that never committed', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <UnsavedInputScope>
+        <Abandoned />
+        <Probe />
+      </UnsavedInputScope>,
+    )
+
+    await user.click(screen.getByText('later'))
+    await user.clear(screen.getByLabelText('name'))
+    await user.type(screen.getByLabelText('name'), 'Cy')
+    expect(probe()).toBe('true')
   })
 
   it('tracks an uncontrolled field from its default value', async () => {
