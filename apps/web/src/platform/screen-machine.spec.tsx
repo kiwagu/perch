@@ -59,10 +59,20 @@ const control: { finishSave: () => void; failBackground: () => void } = {
   failBackground: () => {},
 }
 
-/** A background actor that runs from the start, beside a slow save. */
+type WatchedEvent =
+  | { readonly type: 'x.save-button' }
+  | { readonly type: 'x.cancel-button' }
+  | { readonly type: 'x.note-button' }
+
+/** A background actor that runs from the start, beside a slow save and a note that fails. */
 const watched = setup({
-  types: { events: {} as { readonly type: 'x.save-button' } },
+  types: { events: {} as WatchedEvent },
   actors: {
+    note: fromPromise(async () => {
+      await Promise.resolve()
+
+      throw new Error('refused')
+    }),
     background: fromPromise(
       () =>
         new Promise<void>((_, reject) => {
@@ -90,7 +100,17 @@ const watched = setup({
       initial: 'idle',
       states: {
         idle: { on: { 'x.save-button': 'saving' } },
-        saving: { invoke: { src: 'save', onDone: 'idle', onError: 'idle' } },
+        saving: {
+          invoke: { src: 'save', onDone: 'idle', onError: 'idle' },
+          on: { 'x.cancel-button': 'idle' },
+        },
+      },
+    },
+    notes: {
+      initial: 'idle',
+      states: {
+        idle: { on: { 'x.note-button': 'noting' } },
+        noting: { invoke: { src: 'note', onDone: 'idle', onError: 'idle' } },
       },
     },
   },
@@ -161,6 +181,17 @@ async function open(guard: LeaveGuard, at = '/here') {
   return { router, running }
 }
 
+/** Opens the page of the machine with a background actor, and gives its running screen. */
+async function openWatched(): Promise<Watched> {
+  await open(passing(), '/watched')
+
+  if (held.watched === undefined) {
+    throw new Error('the page did not render')
+  }
+
+  return held.watched
+}
+
 const passing = (): LeaveGuard => ({
   confirm: vi.fn(() => Promise.resolve(true)),
   before: vi.fn(() => Promise.resolve(true)),
@@ -208,14 +239,7 @@ describe('useScreenMachine', () => {
   })
 
   it('judges a submit only by the actions it started, not by one that ran before it', async () => {
-    await open(passing(), '/watched')
-
-    const running = held.watched
-
-    if (running === undefined) {
-      throw new Error('the page did not render')
-    }
-
+    const running = await openWatched()
     let saved: Promise<boolean> = Promise.resolve(false)
 
     act(() => {
@@ -226,6 +250,48 @@ describe('useScreenMachine', () => {
 
     expect(await act(() => saved)).toBe(true)
     expect(screen.getByTestId('state').textContent).toContain('"watch":"lost"')
+  })
+
+  it('settles a submit when its save ends, though an actor that ran before it still runs', async () => {
+    const running = await openWatched()
+    let saved: Promise<boolean> = Promise.resolve(false)
+
+    act(() => {
+      saved = running.submit({ type: 'x.save-button' })
+    })
+    await act(async () => control.finishSave())
+
+    expect(await act(() => saved)).toBe(true)
+    expect(screen.getByTestId('state').textContent).toContain('"watch":"watching"')
+    await act(async () => control.failBackground())
+  })
+
+  it('resolves a submit false when its action is stopped before it ends', async () => {
+    const running = await openWatched()
+    let saved: Promise<boolean> = Promise.resolve(true)
+
+    act(() => {
+      saved = running.submit({ type: 'x.save-button' })
+    })
+    act(() => running.send({ type: 'x.cancel-button' }))
+
+    expect(await act(() => saved)).toBe(false)
+  })
+
+  it('waits for an event sent while the machine is busy, and judges it by its own action', async () => {
+    const running = await openWatched()
+    let noted: Promise<boolean> = Promise.resolve(true)
+    const asked = running.actor.subscribe((snapshot) => {
+      if (snapshot.matches({ form: 'saving' })) {
+        asked.unsubscribe()
+        noted = running.submit({ type: 'x.note-button' })
+      }
+    })
+
+    await act(async () => running.send({ type: 'x.save-button' }))
+
+    expect(await act(() => noted)).toBe(false)
+    await act(async () => control.finishSave())
   })
 
   it("runs a flow's navigation past the frame's blocker", async () => {
