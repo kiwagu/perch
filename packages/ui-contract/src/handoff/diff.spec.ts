@@ -129,6 +129,7 @@ describe('diffContracts', () => {
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
+      leaving: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },

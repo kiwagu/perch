@@ -104,8 +104,8 @@ The authored files, edited by hand or by a model in the modeling thread:
 - `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), the reserved anchors and the
-  readiness line.
+  in a flow (the local data opened, or could not be), and `leaving`, the actions whose run
+  leaves what the user typed behind, the reserved anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -398,6 +398,13 @@ out, and the loader derives it, the same way every time:
   the organisation select) applies at once and holds none. The loader sets `holdsInput` on
   every field; a written value wins. The manifest carries it, and `contract:diff` lists the
   fields that start or stop holding input.
+- **Which leaves ask first.** A change of screen asks while a field holds unsaved input
+  (the frame's `app-shell.leave-dialog`); reload, closing the tab and a URL typed by hand get
+  the browser's own prompt; a change of state inside one screen (a tab, a search parameter)
+  never asks. An action that leaves what was typed behind, a sign-out, a switch of
+  organisation, a change of language, is listed in `platform.yaml` under `leaving`, and the
+  control that runs it asks first. A navigation a flow makes after its action completed
+  never asks: the action took the input.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -745,7 +752,8 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
-  and leaves each one that is not final; the versions agree; the generated schemas
+  and leaves each one that is not final; every action of `leaving` exists and is listed
+  once; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
