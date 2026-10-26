@@ -19,7 +19,8 @@ than its portal or overlay. A control that is not a test target carries a
 
 - `./components/ui/*`: shadcn primitives (button, card, input, textarea, label, field, alert,
   alert-dialog, separator, dropdown-menu, select, sheet), and `Form`: a form whose `onSubmit`
-  returns whether it saved; on `true` its own fields hold no unsaved input, and the default
+  returns whether it saved; on `true` each of its own fields takes the value it held when the
+  submit started as saved (what was typed during the save stays unsaved), and the default
   submit is always prevented. Add more with `bunx shadcn add <name>`
   in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
   alias; the file then belongs to us and is edited in place.
@@ -38,8 +39,8 @@ than its portal or overlay. A control that is not a test target carries a
   took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`
   says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
   scope), and `useTracksInput` is what a field component uses to track itself against the
-  last value the app gave it. `FormScopeContext` lets a form tell its fields a submit saved
-  them. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
+  last value the app gave it. `FormScopeContext` lets a form capture what its fields hold when
+  a submit starts and mark those values saved when it saved. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
   while its value differs from the last value the app gave it (the `value` prop whenever it
   did not come from the field's own last change, or the `defaultValue` at mount), and takes
   `holdsInput={false}` for a choice that applies at once.

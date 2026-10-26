@@ -1,4 +1,4 @@
-export { type FormScope, FormScopeContext, useFormScope } from './form-scope'
+export { type Capture, type FormScope, FormScopeContext, useFormScope } from './form-scope'
 export {
   type UnsavedInputChannel,
   UnsavedInputScope,

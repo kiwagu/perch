@@ -2,7 +2,7 @@
  * What a field does to know whether it holds unsaved input: it remembers the last value the
  * app gave it (the `value` prop whenever it did not come from the field's own last change, or
  * the `defaultValue` at mount) and is unsaved while its current value differs from it. It
- * reports to the scope's channel, and lets its form mark it clean after a submit that saved.
+ * reports to the scope's channel, and lets its form mark the value a saved submit took.
  */
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
@@ -52,13 +52,16 @@ export function useTracksInput(input: TrackedInput): { readonly typed: (next: st
   }, [channel, id, unsaved])
   useEffect(() => () => channel?.forget(id), [channel, id])
 
-  const markClean = useCallback(() => {
-    given.current = current.current
-    typedLast.current = undefined
-    rerender()
+  const capture = useCallback(() => {
+    const submitted = current.current
+
+    return () => {
+      given.current = submitted
+      rerender()
+    }
   }, [])
 
-  useEffect(() => form?.enlist(markClean), [form, markClean])
+  useEffect(() => form?.enlist(capture), [form, capture])
 
   const typed = useCallback((next: string) => {
     typedLast.current = next

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -42,6 +42,39 @@ describe('Form', () => {
 
     await user.click(screen.getByText('save two'))
     await waitFor(() => expect(probe()).toBe('false'))
+  })
+
+  it('marks clean only what the save took: a field typed into meanwhile, or added since, stays unsaved', async () => {
+    const user = userEvent.setup()
+    const settles: Array<(saved: boolean) => void> = []
+    const submit = () =>
+      new Promise<boolean>((settle) => {
+        settles.push(settle)
+      })
+    const page = (more: boolean) => (
+      <UnsavedInputScope>
+        <Form onSubmit={submit}>
+          <Input aria-label="first" defaultValue="" />
+          {more ? <Input aria-label="second" defaultValue="" /> : null}
+          <button type="submit">save</button>
+        </Form>
+        <Probe />
+      </UnsavedInputScope>
+    )
+    const { rerender } = render(page(false))
+
+    await user.type(screen.getByLabelText('first'), 'a')
+    await user.click(screen.getByText('save'))
+    await user.type(screen.getByLabelText('first'), 'b')
+    rerender(page(true))
+    await user.type(screen.getByLabelText('second'), 'c')
+    await act(async () => settles[0]?.(true))
+    expect(probe()).toBe('true')
+
+    await user.clear(screen.getByLabelText('second'))
+    expect(probe()).toBe('true')
+    await user.type(screen.getByLabelText('first'), '{backspace}')
+    expect(probe()).toBe('false')
   })
 
   it('keeps its fields unsaved when the submit did not save', async () => {
