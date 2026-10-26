@@ -104,8 +104,9 @@ The authored files, edited by hand or by a model in the modeling thread:
 - `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), and `leaving`, the actions whose run
-  leaves what the user typed behind, the reserved anchors and the readiness line.
+  in a flow (the local data opened, or could not be), `leaving`, the actions whose run
+  leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
+  first, the reserved anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -400,13 +401,18 @@ out, and the loader derives it, the same way every time:
   sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
   wins. The manifest carries it, and `contract:diff` lists the
   fields that start or stop holding input.
-- **Which leaves ask first.** While a field holds unsaved input, the app is to ask before a
-  change of screen, and before an action that leaves what was typed behind, a sign-out, a
-  switch of organisation, a change of language, runs from its control; those actions are
-  listed in `platform.yaml` under `leaving`. Reload, closing the tab and a URL typed by hand
-  are the browser's own prompt to give. A change of state inside one screen (a tab, a search
-  parameter) is no leave, and a navigation a flow makes after its action completed never
-  asks: the action took the input.
+- **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
+  would lose what was typed, and how the app asks first. `question` names the frame's dialog:
+  a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
+  its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and
+  `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask
+  through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by
+  hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code
+  marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or
+  `question`; `flow` (a navigation a flow makes after its action completed: the action took
+  the input) is always `never`, and `elsewhere` (another tab or device, a database that will
+  not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
+  it.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -755,7 +761,8 @@ gap is fixed in the contract files first, never worked around in a test.
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
-  once; the versions agree; the generated schemas
+  once, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a
+  code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.

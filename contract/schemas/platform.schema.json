@@ -102,6 +102,69 @@
         "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
       }
     },
+    "unsavedInput": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+          "description": "The reserved dialog that asks in the app whether to leave and lose what was typed: its code names what it asks, its confirm-button leaves, its cancel-button stays."
+        },
+        "screen": {
+          "type": "string",
+          "enum": [
+            "question",
+            "never"
+          ],
+          "description": "A change of screen the user starts: a link, Back, Forward."
+        },
+        "actions": {
+          "type": "string",
+          "enum": [
+            "question",
+            "never"
+          ],
+          "description": "A control bound to an action of `leaving`, before the action runs."
+        },
+        "unload": {
+          "type": "string",
+          "enum": [
+            "browser",
+            "never"
+          ],
+          "description": "A reload, closing the tab or the window, an address typed by hand: the browser's own prompt, drawn outside the page, so no anchor or code marks it."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "never",
+            "question"
+          ],
+          "description": "A change of state inside one screen: a tab, a search parameter, a form opened or closed."
+        },
+        "flow": {
+          "type": "string",
+          "const": "never",
+          "description": "A navigation a flow makes after its action completed: the action took the input."
+        },
+        "elsewhere": {
+          "type": "string",
+          "const": "cannot",
+          "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+        }
+      },
+      "required": [
+        "question",
+        "screen",
+        "actions",
+        "unload",
+        "state",
+        "flow",
+        "elsewhere"
+      ],
+      "additionalProperties": false,
+      "description": "Every leave that would lose what the user typed and did not save, and how the app asks first: through the question, by the browser, never, or it cannot."
+    },
     "reserved": {
       "type": "array",
       "items": {
