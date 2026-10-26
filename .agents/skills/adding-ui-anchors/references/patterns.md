@@ -263,9 +263,10 @@ inside. Among JSX children the marker is the only content of a comment container
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
 that config with the implementations added. From `contract/screens/sign-in.yaml` (lines
-84-96), the state that signs in, written in the shorter forms (a transition as its target,
-an effect by its name; `bun run contract:flow user.sign-in` prints the config they expand
-into, `{ type: show, params: { anchor, codes } }` and `{ target }`):
+83-95), the state that signs in, written in the shorter forms (a transition as its target,
+an effect by its name, the codes of the failure left to the platform's `sign-in`; `bun run
+contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
+anchor, codes } }` and `{ target }`):
 
 ```yaml
 signing-in:
@@ -280,7 +281,7 @@ signing-in:
     onError:
       target: sign-in
       actions:
-        - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+        - show: user.sign-in.error
 ```
 
 And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 72-121): an actor
@@ -336,11 +337,14 @@ machine's config to the flow through the engine's comparison
 (`@workspace/ui-contract/machines`); a new app machine for a screen joins its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
-From `contract/screens/org.yaml` (lines 198-245, the descriptions left out), the
-organisation page: its own event leaves `viewing` whatever each region is in, and each
-region moves on its own events only, the create included. The create form keeps a failure
-open; the new note rests in `idle`, runs `note.createNote` in `adding` and goes back to
-`idle` either way.
+From `contract/screens/org.yaml` (lines 195-277, the descriptions, the notes' items and the
+invitation left out), the organisation page: its own event leaves `viewing` whatever each
+region is in, and each region moves on its own events only, the create included. The create
+form is written in full, a shape no other region has. The new note is not written at all:
+`organisation.notes.add-button` runs one action, so the loader derives its region
+`notes-add` (`idle`, and `running`, which invokes `note.createNote` and shows a failure on
+`organisation.notes.error`). The members are the region of their button, with the one thing
+the screen decides: a failure shows under the invitation.
 
 ```yaml
 viewing:
@@ -369,21 +373,11 @@ viewing:
               target: open
               actions:
                 - show: organisation.create.error
-    note-add:
-      initial: idle
-      states:
-        idle:
-          on:
-            organisation.notes.add-button: adding
-        adding:
-          invoke:
-            src: note.createNote
-            input: { text: organisation.notes.new-textarea }
-            onDone: idle
-            onError:
-              target: idle
-              actions:
-                - show: organisation.notes.error
+    members:
+      by: organisation.members.remove-button
+      onError:
+        actions:
+          - show: organisation.invite.error
 ```
 
 A target in a region names a state of that region or, by the flow's `id` (a one-segment

@@ -32,11 +32,6 @@ anchors:
   user.profile.error:
     kind: error
     description: Why the last save failed, under the field its code concerns, which is marked invalid; failed concerns the form and shows above Save.
-    codes: [ name-required, name-too-long, bio-too-long, failed ]
-    fields:
-      name-required: user.profile.name-input
-      name-too-long: user.profile.name-input
-      bio-too-long: user.profile.bio-textarea
   user.profile.save-button:
     kind: button
     description: Saves the name, then the bio, each only when it changed.

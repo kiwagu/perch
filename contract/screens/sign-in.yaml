@@ -16,7 +16,6 @@ anchors:
   user.sign-in.error:
     kind: error
     description: Why the last attempt failed; the next attempt or a switch of mode clears it.
-    codes: [ invalid-credentials, sign-up-rejected, rate-limited, other-account, name-required, name-too-long, failed ]
   user.sign-in.email-input:
     kind: input
     description: The email of the account (type email).
@@ -93,7 +92,7 @@ flow:
         onError:
           target: sign-in
           actions:
-            - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+            - show: user.sign-in.error
     signing-up:
       invoke:
         src: platform.sign-up
@@ -107,7 +106,7 @@ flow:
         onError:
           target: sign-up
           actions:
-            - show: { user.sign-in.error: [ sign-up-rejected, rate-limited, other-account, name-required, name-too-long, failed ] }
+            - show: user.sign-in.error
     done:
       description: The app has moved to /me.
       type: final

@@ -54,7 +54,6 @@ anchors:
   organisation.create.error:
     kind: error
     description: Why the last creation failed.
-    codes: [ key-invalid, name-required, name-too-long, key-taken, rate-limited, failed ]
   organisation.create.submit-button:
     kind: button
     description: Creates the organisation; disabled while it runs.
@@ -132,7 +131,6 @@ anchors:
     kind: error
     description: Why the last change of a note failed, under the new note.
     roles: [ member, admin ]
-    codes: [ forbidden, text-required, text-too-long, failed ]
   organisation.notes.add-button:
     kind: button
     description: Adds the new note by the signed-in member and empties the textarea.
@@ -176,7 +174,6 @@ anchors:
     kind: error
     description: Why the last invitation, removal or read of the members failed.
     roles: [ admin ]
-    codes: [ no-such-identity, already-member, not-admin, rate-limited, failed ]
   organisation.invite.submit-button:
     kind: button
     description: Invites the account and empties the field; disabled while it runs.
@@ -263,63 +260,21 @@ flow:
                 onError:
                   target: idle
                   actions:
-                    - show: { organisation.notes.error: [ forbidden, failed ] }
-        invite:
-          description: The invite form, for an administrator.
-          initial: idle
-          states:
-            idle:
-              on:
-                organisation.invite.submit-button: running
-            running:
-              invoke:
-                src: platform.organisations.invite
-                input: { email: organisation.invite.email-input }
-                onDone:
-                  target: idle
-                  description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
-                  actions:
-                    - show: { app-shell.notice-message: [ invited ] }
-                onError:
-                  target: idle
-                  actions:
-                    - show: organisation.invite.error
-        members:
-          description: The members, for an administrator.
-          initial: idle
-          states:
-            idle:
-              on:
-                organisation.members.remove-button: running
-            running:
-              invoke:
-                src: platform.organisations.remove
-                input: { identity: organisation.members.item }
-                onDone:
-                  target: idle
-                  description: The members are read again; the removed member's devices lose the organisation without a reload.
-                onError:
-                  target: idle
-                  actions:
-                    - show: { organisation.invite.error: [ not-admin, failed ] }
-        notes-add:
-          description: The form of a new note.
-          initial: idle
-          states:
-            idle:
-              on:
-                organisation.notes.add-button: running
-            running:
-              invoke:
-                src: note.createNote
-                input: { text: organisation.notes.new-textarea }
-                onDone:
-                  target: idle
-                  description: The note appears last in the list; the textarea empties.
-                onError:
-                  target: idle
-                  actions:
                     - show: organisation.notes.error
+        invite:
+          by: organisation.invite.submit-button
+          onDone:
+            description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
+            actions:
+              - show: { app-shell.notice-message: [ invited ] }
+        members:
+          by: organisation.members.remove-button
+          onDone:
+            description: The members are read again; the removed member's devices lose the organisation without a reload.
+          onError:
+            description: The removal has no error of its own; it shows under the invitation.
+            actions:
+              - show: organisation.invite.error
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:

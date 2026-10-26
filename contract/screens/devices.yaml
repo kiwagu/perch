@@ -73,7 +73,7 @@ flow:
           target: viewing
           description: The list is read again, unless the gateway is out of reach.
           actions:
-            - show: { app-shell.notice-message: [ device-sign-out-failed ] }
+            - show: app-shell.notice-message
     confirming:
       description: device.everywhere.dialog asks whether to sign every device out, this one included.
       on:
@@ -93,7 +93,7 @@ flow:
         onError:
           target: viewing
           actions:
-            - show: { app-shell.notice-message: [ device-sign-out-failed ] }
+            - show: app-shell.notice-message
     signed-out:
       description: The app has moved to /sign-in.
       type: final
