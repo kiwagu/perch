@@ -25,7 +25,8 @@ function git(cwd: string, ...args: string[]): void {
 
 /**
  * A checkout of its own with one commit, whose e2e launcher passes, or exits with the code in
- * `EXIT_CODE`.
+ * `EXIT_CODE`. While it runs it edits the tracked file `notes.md` when `EDIT_DURING_RUN` is set,
+ * and edits it and puts the committed bytes back when `EDIT_AND_REVERT` is.
  */
 function checkout(): string {
   const root = mkdtempSync(join(tmpdir(), 'record-after-'))
@@ -33,7 +34,21 @@ function checkout(): string {
 
   made.push(root)
   mkdirSync(join(launcher, '..'), { recursive: true })
-  writeFileSync(launcher, 'process.exit(Number(process.env.EXIT_CODE ?? 0))\n')
+  writeFileSync(
+    launcher,
+    [
+      "import { appendFileSync, writeFileSync } from 'node:fs'",
+      "if (process.env.EDIT_DURING_RUN) appendFileSync('notes.md', 'edited during the run\\n')",
+      'if (process.env.EDIT_AND_REVERT) {',
+      "  writeFileSync('notes.md', 'what the suite read\\n')",
+      "  writeFileSync('notes.md', 'as committed\\n')",
+      '}',
+      'process.exit(Number(process.env.EXIT_CODE ?? 0))',
+      '',
+    ].join('\n'),
+  )
+  writeFileSync(join(root, 'notes.md'), 'as committed\n')
+  writeFileSync(join(root, '.gitignore'), '.gates/\n')
   git(root, 'init', '-q')
   git(root, 'add', '-A')
   git(root, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '-m', 'start')
@@ -86,6 +101,24 @@ describe('record-after', () => {
     expect(run.stdout).toContain(
       'gates: e2e passed on a partial run (bun tests/e2e/scripts/run-e2e.ts user/flows/key-renewal): no receipt recorded',
     )
+    expect(receipts(root)).toEqual([])
+  })
+
+  it('records no receipt when the tree changed during the run, and fails', () => {
+    const root = checkout()
+    const run = recordAfter(root, FULL_RUN.e2e, { EDIT_DURING_RUN: '1' })
+
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('gates: files changed during the e2e run: notes.md')
+    expect(receipts(root)).toEqual([])
+  })
+
+  it('records no receipt when a file was edited and put back during the run, and fails', () => {
+    const root = checkout()
+    const run = recordAfter(root, FULL_RUN.e2e, { EDIT_AND_REVERT: '1' })
+
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('gates: files changed during the e2e run: notes.md')
     expect(receipts(root)).toEqual([])
   })
 

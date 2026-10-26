@@ -19,7 +19,7 @@ describe('runsProblems', () => {
 
     expect(printed).toHaveLength(1)
     expect(printed[0]).toMatch(
-      /^contract\/screens\/sample\/\$key\.yaml:\d+: flow: XState does not build or run the machine: /,
+      /^contract\/domain\/screens\/sample\/\$key\.yaml:\d+: flow: XState does not build or run the machine: /,
     )
   })
 
@@ -35,7 +35,7 @@ describe('runsProblems', () => {
     }
 
     expect(runsProblems(contract).map(formatProblem)).toEqual([
-      'contract/activities/thing.yaml:12: island: XState does not reach this state',
+      'contract/domain/activities/thing.yaml:12: island: XState does not reach this state',
     ])
   })
 
@@ -50,7 +50,7 @@ describe('runsProblems', () => {
 
     expect(printed).toHaveLength(1)
     expect(printed[0]).toMatch(
-      /^contract\/activities\/thing\.yaml:\d+: XState does not build or run the machine: /,
+      /^contract\/domain\/activities\/thing\.yaml:\d+: XState does not build or run the machine: /,
     )
   })
 })

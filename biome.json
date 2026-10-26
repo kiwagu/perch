@@ -14,7 +14,7 @@
       "!**/*.gen.ts",
       "!**/*.surql.d.ts",
       "!**/pages.model.json",
-      "!contract/*.schema.json"
+      "!contract/schemas"
     ]
   },
   "formatter": {

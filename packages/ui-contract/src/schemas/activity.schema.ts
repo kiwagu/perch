@@ -1,5 +1,5 @@
 /**
- * An activity across screens, `contract/activities/<id>.yaml`: what it is for, the roles that
+ * An activity across screens, `contract/domain/activities/<id>.yaml`: what it is for, the roles that
  * take part, what it carries from screen to screen, and an XState v5 machine config whose
  * states are visits to screens. A state names its screen and its address (a binding of that
  * screen) in `meta`, and leaves on an anchor of that screen or of the frame; the screens'

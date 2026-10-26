@@ -57,7 +57,7 @@ The call site passes the base and the code (`profile.view.tsx`):
 />
 ```
 
-The screen file lists what the base renders (`contract/screens/me.yaml`):
+The screen file lists what the base renders (`contract/domain/screens/me.yaml`):
 
 ```yaml
 user.profile.sign-out-dialog:
@@ -113,7 +113,7 @@ none. From `apps/web/src/features/device/presentation/pages/devices/devices.view
 >
 ```
 
-Declared in `contract/screens/devices.yaml`:
+Declared in `contract/domain/screens/devices.yaml`:
 
 ```yaml
 device.list.session-item:
@@ -262,7 +262,7 @@ inside. Among JSX children the marker is the only content of a comment container
 ## 12. A machine from the flow
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
-that config with the implementations added. From `contract/screens/sign-in.yaml` (lines
+that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
 83-95), the state that signs in, written in the shorter forms (a transition as its target,
 an effect by its name, the codes of the failure left to the platform's `sign-in`; `bun run
 contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
@@ -337,7 +337,7 @@ machine's config to the flow through the engine's comparison
 (`@workspace/ui-contract/machines`); a new app machine for a screen joins its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
-From `contract/screens/org.yaml` (lines 195-277, the descriptions, the notes' items and the
+From `contract/domain/screens/org.yaml` (lines 195-277, the descriptions, the notes' items and the
 invitation left out), the organisation page: its own event leaves `viewing` whatever each
 region is in, and each region moves on its own events only, the create included. The create
 form is written in full, a shape no other region has. The new note is not written at all:
@@ -393,7 +393,7 @@ follows the item acted on last and its `description` says so.
 A field whose value the person types and the store changes on its own is a region of its own,
 following the stored value or holding what was typed. A data event, `model.<entity>.<field>`,
 is the stored value of a field the screen shows changing, here or on another device. From
-`contract/screens/me.yaml`, the profile's name (descriptions left out):
+`contract/domain/screens/me.yaml`, the profile's name (descriptions left out):
 
 ```yaml
 name:

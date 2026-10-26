@@ -1,5 +1,5 @@
 /**
- * Reads `contract/model.schema.json`: a JSON Schema 2020-12 document (checked against the
+ * Reads `contract/domain/model.schema.json`: a JSON Schema 2020-12 document (checked against the
  * meta-schema) whose `$defs` are the entities, each through the entity schema.
  */
 

@@ -49,11 +49,11 @@ afterEach(() => {
 describe('writeSchemas', () => {
   it('writes the schemas', () => {
     expect(writeSchemas(root)).toEqual([
-      'contract/screen.schema.json',
-      'contract/platform.schema.json',
-      'contract/activity.schema.json',
-      'contract/x-perch.schema.json',
-      'contract/manifest.schema.json',
+      'contract/schemas/screen.schema.json',
+      'contract/schemas/platform.schema.json',
+      'contract/schemas/activity.schema.json',
+      'contract/schemas/x-perch.schema.json',
+      'contract/schemas/manifest.schema.json',
     ])
   })
   it.each(SCHEMA_OUTPUTS.map((output) => output.file))(
@@ -79,7 +79,7 @@ describe('schemaDrift', () => {
   it('names a file whose content changed by one byte', () => {
     writeSchemas(root)
 
-    const file = join(root, 'contract/x-perch.schema.json')
+    const file = join(root, 'contract/schemas/x-perch.schema.json')
     const text = readFileSync(file, 'utf8')
     const at = text.indexOf('object')
 
@@ -87,18 +87,18 @@ describe('schemaDrift', () => {
 
     expect(schemaDrift(root)).toEqual([
       {
-        file: 'contract/x-perch.schema.json',
+        file: 'contract/schemas/x-perch.schema.json',
         message: 'differs from its Zod source; run `bun run contract:schemas`',
       },
     ])
   })
   it('names a missing file', () => {
     expect(schemaDrift(root).map((problem) => problem.file)).toEqual([
-      'contract/screen.schema.json',
-      'contract/platform.schema.json',
-      'contract/activity.schema.json',
-      'contract/x-perch.schema.json',
-      'contract/manifest.schema.json',
+      'contract/schemas/screen.schema.json',
+      'contract/schemas/platform.schema.json',
+      'contract/schemas/activity.schema.json',
+      'contract/schemas/x-perch.schema.json',
+      'contract/schemas/manifest.schema.json',
     ])
   })
 })

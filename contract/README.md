@@ -75,6 +75,15 @@ developer approved; the code takes no architectural decision of its own.
 
 ## The folder
 
+```text
+contract/
+  README.md          this guide
+  COVERAGE.md        the coverage note
+  vocabulary.md      the closed lists
+  domain/            what a feature describes: the model, the platform, the screens, the activities
+  schemas/           the JSON Schemas generated from the tooling, never edited by hand
+```
+
 The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
@@ -84,36 +93,37 @@ The authored files, edited by hand or by a model in the modeling thread:
   heading. The grammar, the kinds, the suffixes, the attributes and the contract version are
   the engine's (meta); every other table is content a feature adds with the screen file that
   first uses it (business).
-- `screens/<pathname>.yaml`: one screen per file, named by the path of the screen's first
-  binding without the leading `/`. `/sign-in` is `screens/sign-in.yaml` and `/me` is
-  `screens/me.yaml`; a nested path is a folder (`/org/$org` would be `screens/org/$org.yaml`)
-  and `/` would be `screens/index.yaml`. The frame, the one screen without a binding, is
-  `screens/__root.yaml`, as in file-based routers. The screen's `id` (`user.profile`) is the
+- `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
+  first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
+  is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
+  `domain/screens/org/$org.yaml`) and `/` would be `domain/screens/index.yaml`. The frame, the
+  one screen without a binding, is `domain/screens/__root.yaml`, as in file-based routers. The screen's `id` (`user.profile`) is the
   prefix of its anchors, not its file name. The loader reads the folder sorted by path; a
   file that is not `.yaml`, or one named otherwise than its first binding says, is a problem
   of that file.
-- `platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
+- `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), the reserved anchors and the
-  readiness line.
-- `model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
+  in a flow (the local data opened, or could not be), and `leaving`, the actions whose run
+  leaves what the user typed behind, the reserved anchors and the readiness line.
+- `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
-- `activities/<id>.yaml`: one activity across screens per file, named by its `id`
-  (`activities/session.yaml`); the folder is optional (see "Activities").
+- `domain/activities/<id>.yaml`: one activity across screens per file, named by its `id`
+  (`domain/activities/session.yaml`); the folder is optional (see "Activities").
 
 Each YAML file opens with a comment that points an editor at its schema, so the editor
 validates and completes it; the loader does not read the comment:
 
 ```yaml
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 ```
 
-`platform.yaml` points at `./platform.schema.json`, an activity at `../activity.schema.json`,
-and a screen file one folder deeper points one folder further up.
+`domain/platform.yaml` points at `../schemas/platform.schema.json`, an activity at
+`../../schemas/activity.schema.json`, and a screen file one folder deeper points one folder
+further up.
 
-Generated beside them, never edited by hand: `screen.schema.json` (one screen file),
+Generated into `schemas/`, never edited by hand: `screen.schema.json` (one screen file),
 `platform.schema.json` (the platform file), `activity.schema.json` (one activity file),
 `x-perch.schema.json` (the `x-perch` keyword of the model) and `manifest.schema.json` (the
 manifest). `bun run contract:schemas` writes them
@@ -132,7 +142,7 @@ alike:
 - keys in the order `id`, `title`, `description`, `frame` or `flag`, `bindings`, `entry`, then the rest;
 - flow style, on one line, for `bindings` and each binding with everything it holds: its
   `roles`, `params`, `search`, `history` and `retain`, nested maps included (the test
-  fixture `packages/ui-contract/src/__fixtures__/contract/screens/sample/$key.yaml` has a
+  fixture `packages/ui-contract/src/__fixtures__/contract/domain/screens/sample/$key.yaml` has a
   binding whose `params` is a nested JSON Schema, still on one line);
 - flow style for `entry`, and inside an anchor for its `roles`, `codes`, `states` and
   `derived` lists and for a `binding` that is one map with no map inside
@@ -146,10 +156,10 @@ alike:
   that is a list or holds a map (its action's `params` included), the screen's `states`, the
   rest of its `flow`, a `source`, and the `wireframe` as a block scalar.
 
-An excerpt of `screens/me.yaml`:
+An excerpt of `domain/screens/me.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.profile
 title: Profile
 description: "The signed-in account's own profile: its name and bio, saved together and kept in step across the account's devices; signing this device out, with a warning when changes are unsent."
@@ -255,8 +265,9 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
-come from).
+screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
+from).
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -380,6 +391,22 @@ out, and the loader derives it, the same way every time:
   code of a field to the control its binding passes for that field (`name-too-long` to
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
+- **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
+  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
+  bindings runs an action that takes the field itself as a parameter, an action no other
+  anchor of its screen runs with it (the language select, the organisation select), applies
+  at once and holds none; a field whose action a submit button also runs with it (the
+  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
+  wins. The manifest carries it, and `contract:diff` lists the
+  fields that start or stop holding input.
+- **Which leaves ask first.** While a field holds unsaved input, the app is to ask before a
+  change of screen, and before an action that leaves what was typed behind, a sign-out, a
+  switch of organisation, a change of language, runs from its control; those actions are
+  listed in `platform.yaml` under `leaving`. Reload, closing the tab and a URL typed by hand
+  are the browser's own prompt to give. A change of state inside one screen (a tab, a search
+  parameter) is no leave, and a navigation a flow makes after its action completed never
+  asks: the action took the input.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -407,7 +434,7 @@ derived, so a constraint added to the model shows on review as the codes it adds
 A screen file describes one screen, and a scenario one path through the app with its data
 ready; an activity is the composition between them: which screens form one task, in which
 order, and what the task carries from one screen to the next. Each one is a file,
-`activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
+`domain/activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
 `.yaml`, or one named otherwise than its id, is a problem of that file.
 
 An activity has an `id` (kebab-case), a `title`, a `description` (what it is for), the
@@ -430,12 +457,12 @@ An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the
 and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
 written, as the flows do. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
-state's `meta` on one line. An excerpt of `activities/session.yaml`, the session of an
+state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
 page:
 
 ```yaml
-# yaml-language-server: $schema=../activity.schema.json
+# yaml-language-server: $schema=../../schemas/activity.schema.json
 id: session
 title: The session of an account
 description: An account's session on this device, from the sign-in page to the profile and the devices page, and back to the sign-in page once the device signs out.
@@ -661,7 +688,7 @@ problem of its file.
 The file opens with a YAML front matter that holds only the structured header:
 
 - `tags`: a list holding `smoke` or `full`;
-- `activity`, when the scenario walks one: the id of an activity of `contract/activities/`
+- `activity`, when the scenario walks one: the id of an activity of `contract/domain/activities/`
   (see "Activities");
 - `devices`: a letter per browser with the role it acts as by the end of the scenario; every
   device starts as `guest` until a step signs it in;
@@ -727,7 +754,8 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
-  and leaves each one that is not final; the versions agree; the generated schemas
+  and leaves each one that is not final; every action of `leaving` exists and is listed
+  once; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
@@ -735,7 +763,11 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  suffix and every code in the vocabulary. An anchor built at runtime is a problem. A field
+  the contract says holds no input (a choice that applies at once) carries
+  `holdsInput={false}` on the element with its anchor; a field that holds input carries
+  nothing (`holdsInput={true}` is the default and is reported, and so is a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field). On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a

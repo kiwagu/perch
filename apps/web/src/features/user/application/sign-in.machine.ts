@@ -63,7 +63,7 @@ function formInput({ event }: { readonly event: SignInEvent }): { readonly form:
 }
 
 /**
- * The sign-in form as the screen's flow says (`contract/screens/sign-in.yaml`): the mode is
+ * The sign-in form as the screen's flow says (`contract/domain/screens/sign-in.yaml`): the mode is
  * the state, an attempt is an invoke of its platform action, a failure goes back to the
  * mode with its code. Its `show` keeps the code of the form's own error for the view and
  * emits any other; its `navigate` emits the path, for the host to move to.

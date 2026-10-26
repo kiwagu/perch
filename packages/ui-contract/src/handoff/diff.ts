@@ -2,8 +2,9 @@
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
  * it renames, the codes and the error fields it adds or removes on the anchors both hold
- * (written or derived, so a constraint added to the model shows as the code it gives), and the
- * transitions it adds or removes in each activity both contracts hold.
+ * (written or derived, so a constraint added to the model shows as the code it gives), the
+ * fields that start or stop holding input, the actions that leave what the user typed behind,
+ * and the transitions it adds or removes in each activity both contracts hold.
  * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
  */
 
@@ -40,6 +41,10 @@ export interface ContractChanges {
   anchorCodes: Change
   /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
   errorFields: Change
+  /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
+  inputs: Change
+  /** As the action's name, the actions that leave what the user typed behind. */
+  leaving: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
@@ -258,6 +263,13 @@ export function diffContracts(
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
       Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
     ),
+    inputs: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.holdsInput === true ? ['holds input'] : [],
+    ),
+    leaving: changeOf(
+      before?.screens.platform.leaving ?? [],
+      after?.screens.platform.leaving ?? [],
+    ),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),
@@ -278,6 +290,8 @@ const LISTS = [
   ['codes', 'code', 'codes'],
   ['anchorCodes', 'anchor code', 'anchor codes'],
   ['errorFields', 'error field', 'error fields'],
+  ['inputs', 'field holding input', 'fields holding input'],
+  ['leaving', 'leaving action', 'leaving actions'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
   ['activities', 'activity', 'activities'],

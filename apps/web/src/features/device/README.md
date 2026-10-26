@@ -18,7 +18,7 @@ and the i18n catalogs.
   `POST /auth/sign-out-everywhere`.
 - Providers: `DEVICES_SERVICE`, over the `DEVICES` port and the session (`SESSION`).
 - i18n namespace `device.*` (`presentation/i18n/device.en.json`, `device.es.json`).
-- Anchors: screen `device` in `contract/screens/devices.yaml`.
+- Anchors: screen `device` in `contract/domain/screens/devices.yaml`.
 - Behaviour: every device signed in, and those signed out within 30 days, with the label each
   gave itself, when it was last seen (and signed out), this device marked "This device".
   Another device signs out from its row (its grant revoked, its channel closed), after which

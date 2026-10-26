@@ -11,7 +11,7 @@ describe('renderRoutes', () => {
     expect(renderRoutes(routesOf(fixtureContract()))).toBe(
       [
         'path          screen  guard          roles   history  params  search  file',
-        '/sample/$key  sample  authenticated  member  push     key     -       contract/screens/sample/$key.yaml',
+        '/sample/$key  sample  authenticated  member  push     key     -       contract/domain/screens/sample/$key.yaml',
         '',
         'example links (parameters from examples, search from defaults)',
         "(every search key at its default on purpose; the app's own links leave a default out, the same state)",

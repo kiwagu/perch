@@ -73,7 +73,7 @@ function notices(platform: Platform): string {
 }
 
 const ACTIVITIES = [
-  '`activities` are the activities across screens, one file each in `contract/activities/<id>.yaml`, carried here verbatim: which screens form one task, in which order, and what the task carries from one screen to the next.',
+  '`activities` are the activities across screens, one file each in `contract/domain/activities/<id>.yaml`, carried here verbatim: which screens form one task, in which order, and what the task carries from one screen to the next.',
   'An activity has an `id`, a `title`, a `description` (what it is for), the `roles` that take part and `data` (what it carries, by name, each with a `description` and, when it is a field of the model, its `model` as `<entity>.<field>`).',
   'The rest is an XState v5 machine config in the subset of the flows, without effects or `invoke`: `initial`, `meta.guards` and `states`, where a state is a visit to a screen: `meta.screen` names the screen (one screen may be visited by several states), `meta.address` the `path` of a binding of that screen (the activity is where its address is), and `type: final` ends the activity.',
   "A state's `on` maps an anchor of its screen or of the frame to where acting on it leads: `target` (the next visit), `guard` and `description`. The activity says where a task leads and the screens do the work: after that anchor, the flow of its screen navigates to the target's address, or the anchor is a link to it (`binding.route`).",

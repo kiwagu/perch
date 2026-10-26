@@ -12,7 +12,7 @@ import { jsonSchemaProblems } from './validator'
 
 const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract')
 const MODEL_FIXTURE = join(import.meta.dirname, '../__fixtures__/model.schema.json')
-const SAMPLE_FILE = 'contract/screens/sample/$key.yaml'
+const SAMPLE_FILE = 'contract/domain/screens/sample/$key.yaml'
 
 let root: string
 
@@ -99,24 +99,24 @@ describe('loadScreens', () => {
     expect(loadScreens(root).screens?.screens[0]?.bindings[0]?.history).toBe('push')
   })
   it('reads the folder at any depth, sorted by path, the frame first', () => {
-    write('contract/screens/sign-in.yaml', screenAt('user.sign-in', '/sign-in'))
-    write('contract/screens/org/$org.yaml', screenAt('organisation.one', '/org/$org'))
-    write('contract/screens/org.yaml', screenAt('organisation', '/org'))
-    write('contract/screens/me.yaml', screenAt('user.profile', '/me'))
-    write('contract/screens/__root.yaml', screenAt('app-shell'))
-    write('contract/screens/index.yaml', screenAt('home', '/'))
+    write('contract/domain/screens/sign-in.yaml', screenAt('user.sign-in', '/sign-in'))
+    write('contract/domain/screens/org/$org.yaml', screenAt('organisation.one', '/org/$org'))
+    write('contract/domain/screens/org.yaml', screenAt('organisation', '/org'))
+    write('contract/domain/screens/me.yaml', screenAt('user.profile', '/me'))
+    write('contract/domain/screens/__root.yaml', screenAt('app-shell'))
+    write('contract/domain/screens/index.yaml', screenAt('home', '/'))
 
     const { screens, problems: found } = loadScreens(root)
 
     expect(found).toEqual([])
     expect(screens?.files).toEqual([
-      'contract/screens/__root.yaml',
-      'contract/screens/index.yaml',
-      'contract/screens/me.yaml',
-      'contract/screens/org.yaml',
-      'contract/screens/org/$org.yaml',
+      'contract/domain/screens/__root.yaml',
+      'contract/domain/screens/index.yaml',
+      'contract/domain/screens/me.yaml',
+      'contract/domain/screens/org.yaml',
+      'contract/domain/screens/org/$org.yaml',
       SAMPLE_FILE,
-      'contract/screens/sign-in.yaml',
+      'contract/domain/screens/sign-in.yaml',
     ])
     expect(screens?.screens.map((screen) => screen.id)).toEqual([
       'app-shell',
@@ -129,43 +129,44 @@ describe('loadScreens', () => {
     ])
   })
   it('reports a file not named by the first binding of its screen', () => {
-    write('contract/screens/profile.yaml', screenAt('user.profile', '/me'))
-    write('contract/screens/org.yaml', screenAt('organisation.one', '/org/$org'))
+    write('contract/domain/screens/profile.yaml', screenAt('user.profile', '/me'))
+    write('contract/domain/screens/org.yaml', screenAt('organisation.one', '/org/$org'))
 
     expect(problems()).toEqual([
       {
-        file: 'contract/screens/org.yaml',
-        message: 'its first binding is "/org/$org", so its file is contract/screens/org/$org.yaml',
+        file: 'contract/domain/screens/org.yaml',
+        message:
+          'its first binding is "/org/$org", so its file is contract/domain/screens/org/$org.yaml',
       },
       {
-        file: 'contract/screens/profile.yaml',
-        message: 'its first binding is "/me", so its file is contract/screens/me.yaml',
+        file: 'contract/domain/screens/profile.yaml',
+        message: 'its first binding is "/me", so its file is contract/domain/screens/me.yaml',
       },
     ])
   })
   it('reports a second screen without bindings: the one frame is __root.yaml', () => {
-    write('contract/screens/__root.yaml', screenAt('app-shell'))
-    write('contract/screens/frame.yaml', screenAt('frame'))
+    write('contract/domain/screens/__root.yaml', screenAt('app-shell'))
+    write('contract/domain/screens/frame.yaml', screenAt('frame'))
 
     expect(problems()).toEqual([
       {
-        file: 'contract/screens/frame.yaml',
+        file: 'contract/domain/screens/frame.yaml',
         message:
-          'a screen without bindings is the frame, whose file is contract/screens/__root.yaml',
+          'a screen without bindings is the frame, whose file is contract/domain/screens/__root.yaml',
       },
     ])
   })
   it('reports a file that is not a screen file', () => {
-    write('contract/screens/me.yml', screenAt('user.profile', '/me'))
-    write('contract/screens/sample/notes.txt', 'Notes.\n')
+    write('contract/domain/screens/me.yml', screenAt('user.profile', '/me'))
+    write('contract/domain/screens/sample/notes.txt', 'Notes.\n')
 
     expect(problems()).toEqual([
       {
-        file: 'contract/screens/me.yml',
+        file: 'contract/domain/screens/me.yml',
         message: 'not a screen file: the folder holds `<pathname>.yaml` files only',
       },
       {
-        file: 'contract/screens/sample/notes.txt',
+        file: 'contract/domain/screens/sample/notes.txt',
         message: 'not a screen file: the folder holds `<pathname>.yaml` files only',
       },
     ])
@@ -176,16 +177,16 @@ describe('loadScreens', () => {
 
     expect(loadScreens(root)).toEqual({
       problems: [
-        { file: 'contract/screens', message: 'cannot read the folder' },
-        { file: 'contract/platform.yaml', message: 'cannot read the file' },
+        { file: 'contract/domain/screens', message: 'cannot read the folder' },
+        { file: 'contract/domain/platform.yaml', message: 'cannot read the file' },
       ],
     })
 
     mkdirSync(join(root, SCREENS_DIR))
 
     expect(problems()).toEqual([
-      { file: 'contract/screens', message: 'holds no screen file' },
-      { file: 'contract/platform.yaml', message: 'cannot read the file' },
+      { file: 'contract/domain/screens', message: 'holds no screen file' },
+      { file: 'contract/domain/platform.yaml', message: 'cannot read the file' },
     ])
   })
   it('locates each problem in the file that holds it, by its path there', () => {
@@ -199,7 +200,7 @@ describe('loadScreens', () => {
 
     expect(problems()).toEqual([
       { file: SAMPLE_FILE, message: 'entry: Invalid input: expected array, received undefined' },
-      { file: 'contract/platform.yaml', message: 'version: Invalid input: expected 1' },
+      { file: 'contract/domain/platform.yaml', message: 'version: Invalid input: expected 1' },
     ])
   })
   it('reports an anchor key that breaks the grammar', () => {
@@ -278,7 +279,7 @@ describe('loadScreens', () => {
     expect(screens).toBeUndefined()
     expect(found.map(formatProblem)).toEqual([
       expect.stringMatching(
-        /^contract\/screens\/sample\/\$key\.yaml:3: not YAML: Flow sequence in block collection/,
+        /^contract\/domain\/screens\/sample\/\$key\.yaml:3: not YAML: Flow sequence in block collection/,
       ),
     ])
   })
@@ -358,6 +359,7 @@ describe('loadScreens', () => {
         'title-taken': 'sample.form.title-input',
       },
     })
+    expect(sample?.anchors['sample.form.title-input']?.holdsInput).toBe(true)
     expect(sample?.flow?.states['viewing']).toMatchObject({
       states: {
         'form-add': {
@@ -388,6 +390,29 @@ describe('loadScreens', () => {
         },
       },
     })
+  })
+
+  it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
+    writeSample((screen) => {
+      screen['anchors'] = {
+        ...(screen['anchors'] as Record<string, unknown>),
+        'sample.kind-select': {
+          kind: 'select',
+          binding: { action: 'platform.sign-out', params: { forgetUnsent: 'sample.kind-select' } },
+        },
+        'sample.title-input': {
+          kind: 'input',
+          binding: { model: 'thing.title' },
+          holdsInput: false,
+        },
+      }
+    })
+
+    const anchors = loadScreens(root).screens?.screens[0]?.anchors
+
+    expect(anchors?.['sample.kind-select']?.holdsInput).toBe(false)
+    expect(anchors?.['sample.title-input']?.holdsInput).toBe(false)
+    expect(anchors?.['sample.save-button']?.holdsInput).toBeUndefined()
   })
 
   it('counts the derived regions among the two a parallel state has, after the expansion', () => {

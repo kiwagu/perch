@@ -14,8 +14,8 @@ useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/activities/thing.yaml'
+const SCREEN = 'contract/domain/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/domain/activities/thing.yaml'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
@@ -128,6 +128,8 @@ describe('diffContracts', () => {
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
+      inputs: { added: [], removed: [] },
+      leaving: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -167,6 +169,16 @@ describe('diffContracts', () => {
     expect(changes.errorFields).toEqual({
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
+    })
+    screen.anchors['sample.title-input'] = {
+      ...screen.anchors['sample.title-input'],
+      kind: 'input',
+      holdsInput: false,
+    }
+
+    expect(diffContracts(before, more).inputs).toEqual({
+      added: [],
+      removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
   })
@@ -245,7 +257,7 @@ describe('contractAt', () => {
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/platform.yaml:1: version:',
+      'the contract at HEAD does not load: contract/domain/platform.yaml:1: version:',
     )
   })
 })

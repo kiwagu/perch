@@ -23,7 +23,7 @@ const SCREENS: ScreensFile = {
       anchors: { 'sample.page': { kind: 'page' }, 'sample.mode-select': { kind: 'select' } },
     },
   ],
-  files: ['contract/screens/__root.yaml'],
+  files: ['contract/domain/screens/__root.yaml'],
 }
 
 const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected => ({
@@ -31,6 +31,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   literals: [],
   derived: [],
   codes: [],
+  inputs: [],
   problems: [],
   ...part,
 })
@@ -50,6 +51,31 @@ const agreeing = (): Collected[] => [
 const printed = (collected: readonly Collected[]): string[] =>
   compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
 
+/** The contract with a field that holds input and one whose own change runs its action. */
+const WITH_FIELDS: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.form.name-input': { kind: 'input', holdsInput: true },
+      'sample.page.kind-select': { kind: 'select', holdsInput: false },
+    },
+  })),
+}
+
+/** The sources that render the two fields, with `inputs` as their holdsInput. */
+const withInputs = (inputs: Collected['inputs']): Collected[] => [
+  ...agreeing(),
+  source('x.tsx', {
+    literals: [
+      { anchor: 'sample.form.name-input', form: 'attribute', line: 3 },
+      { anchor: 'sample.page.kind-select', form: 'prop', line: 4 },
+    ],
+    inputs,
+  }),
+]
+
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
     expect(printed(agreeing())).toEqual([])
@@ -66,7 +92,7 @@ describe('compareWithContract', () => {
     expect(
       compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
     ).toEqual([
-      'b.tsx:2: "sample.other-button" is not in contract/screens; add it there or rename it',
+      'b.tsx:2: "sample.other-button" is not in contract/domain/screens; add it there or rename it',
     ])
   })
   it('keeps every other problem when the contract runs ahead', () => {
@@ -88,6 +114,45 @@ describe('compareWithContract', () => {
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
   })
+  it("holds a field's holdsInput to the contract", () => {
+    expect(
+      compareWithContract(
+        withInputs([
+          { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+          { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+        ]),
+        WITH_FIELDS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([
+      'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
+      'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+    ])
+    expect(
+      compareWithContract(
+        withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
+        WITH_FIELDS,
+        vocabulary,
+      ),
+    ).toEqual([])
+  })
+  it('reports holdsInput on an anchor that is not a field', () => {
+    expect(
+      compareWithContract(
+        [
+          source('a.tsx', {
+            literals: [
+              { anchor: 'sample.page', form: 'attribute', line: 3 },
+              { anchor: 'sample.mode-select', form: 'prop', line: 4 },
+            ],
+            inputs: [{ anchor: 'sample.page', holdsInput: false, line: 3 }],
+          }),
+        ],
+        SCREENS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual(['a.tsx:3: "sample.page" is a page, not a field; only a field holds input'])
+  })
   it('reports a literal declared twice at the second place, naming the first', () => {
     const collected = [
       ...agreeing(),
@@ -107,7 +172,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(printed(collected)).toEqual([
-      'b.tsx:2: "sample.other-button" is not in contract/screens; add it there or rename it',
+      'b.tsx:2: "sample.other-button" is not in contract/domain/screens; add it there or rename it',
     ])
   })
   it('reports an anchor of the contract that no source renders', () => {
@@ -117,7 +182,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(printed(collected)).toEqual([
-      'contract/screens/__root.yaml:1: anchors["sample.mode-select"]: declared in the contract, but no source renders it',
+      'contract/domain/screens/__root.yaml:1: anchors["sample.mode-select"]: declared in the contract, but no source renders it',
     ])
   })
   it('reports a literal named like another literal plus a suffix of the vocabulary', () => {
@@ -175,7 +240,7 @@ describe('compareWithContract', () => {
     ]
 
     expect(compareWithContract(collected, screens, vocabulary).map(formatProblem)).toEqual([
-      'b.tsx:6: "sample.mode-select.option" is not in contract/screens; add it there or rename it',
+      'b.tsx:6: "sample.mode-select.option" is not in contract/domain/screens; add it there or rename it',
       'b.tsx:6: "sample.mode-select.option" is "sample.mode-select" plus the suffix "option"; derive it with testIdFor()',
     ])
   })
