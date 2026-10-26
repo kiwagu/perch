@@ -145,6 +145,7 @@ reserved:
   - app-shell.nav.devices-link
   - app-shell.locale-select
   - app-shell.sign-out-here-button
+  - app-shell.leave-dialog
 status:
   anchor: app-shell.status
   states:
