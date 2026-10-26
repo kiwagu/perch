@@ -950,6 +950,10 @@
                   "description": "Shown to a member only on the entries the member owns.",
                   "type": "boolean"
                 },
+                "holdsInput": {
+                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
+                  "type": "boolean"
+                },
                 "codes": {
                   "description": "The data-code values the element carries.",
                   "type": "array",
@@ -4835,6 +4839,10 @@
           },
           "own": {
             "description": "Shown to a member only on the entries it owns.",
+            "type": "boolean"
+          },
+          "holdsInput": {
+            "description": "The field holds input: the frame asks before a leave that would lose what is typed into it.",
             "type": "boolean"
           }
         },

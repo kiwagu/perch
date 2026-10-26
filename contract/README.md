@@ -265,8 +265,9 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
-come from).
+screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
+from).
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -390,6 +391,13 @@ out, and the loader derives it, the same way every time:
   code of a field to the control its binding passes for that field (`name-too-long` to
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
+- **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
+  leave with it typed loses it, and the frame asks before such a leave. A field one of whose
+  bindings runs an action that takes the field itself as a parameter (the language select,
+  the organisation select) applies at once and holds none. The loader sets `holdsInput` on
+  every field; a written value wins. The manifest carries it, and `contract:diff` lists the
+  fields that start or stop holding input.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow

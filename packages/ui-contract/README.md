@@ -26,7 +26,7 @@ for Bun.
     `loadScreens(root)` (every `.yaml` file under `contract/domain/screens`, sorted by path, one screen
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
     failures of the actions, an error's codes and fields, the buttons whose regions the flow
-    leaves out), its flow expanded from the shorter forms with the codes the anchors of every
+    leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
     screen carry and the failures of the actions, then parsed through `screenFileSchema`;
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
@@ -161,7 +161,7 @@ for Bun.
     states taken from the vocabulary and the platform section), the screens verbatim with
     each binding's `example` link (`exampleOf`), the platform section and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes), `routeParams` and the model document.
+    with its kind, its screen and its attributes, `holdsInput` of a field among them), `routeParams` and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
     `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing
@@ -177,8 +177,9 @@ for Bun.
     `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
     added are a rename when they are the only ones of their screen and kind; on the anchors
     both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
-    -> <field>`, written or derived; per activity both sides hold, the transitions added and
-    removed as `<state> on <anchor> -> <target>`);
+    -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
+    per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
+    <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
@@ -283,7 +284,8 @@ for Bun.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
-  fields the anchors both hold gain or lose (derived ones included), the activities and the
+  fields the anchors both hold gain or lose (derived ones included), the fields that start or
+  stop holding input, the activities and the
   transitions changed in each included; prints the hand-over block, or the changes as JSON
   with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.
