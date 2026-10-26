@@ -13,32 +13,41 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useFormScope } from './form-scope'
 import { useUnsavedInputChannel } from './scope'
 
-export interface TrackedInput {
+export interface TrackedInput<Value> {
   /** False for a field whose own change runs its action: it never holds unsaved input. */
   readonly holdsInput: boolean
-  /** The controlled value, as text; undefined for an uncontrolled field. */
-  readonly value: string | undefined
-  readonly defaultValue: string | undefined
+  /** The controlled value; undefined for an uncontrolled field. */
+  readonly value: Value | undefined
+  /** What an uncontrolled field starts with: its default value, else its empty one. */
+  readonly defaultValue: Value
+  /** Whether two values are the same; `Object.is` when left out. */
+  readonly same?: ((a: Value, b: Value) => boolean) | undefined
 }
 
 const bump = (count: number): number => count + 1
 
-export function useTracksInput(input: TrackedInput): { readonly typed: (next: string) => void } {
+export function useTracksInput<Value>(input: TrackedInput<Value>): {
+  readonly typed: (next: Value) => void
+} {
   const channel = useUnsavedInputChannel()
   const form = useFormScope()
+  const same = input.same ?? Object.is
   const [id] = useState(() => Symbol('field'))
-  const [uncontrolled, setUncontrolled] = useState(input.defaultValue ?? '')
+  const [uncontrolled, setUncontrolled] = useState(input.defaultValue)
   const [, rerender] = useState(0)
   // As of the last commit: the last value the app gave the field, and what it showed.
-  const given = useRef(input.value ?? input.defaultValue ?? '')
+  const given = useRef(input.value === undefined ? input.defaultValue : input.value)
   const shown = useRef(given.current)
   // What the field's own last change was; set by the change, before the render it causes.
-  const typedLast = useRef<string | undefined>(undefined)
+  const typedLast = useRef<{ readonly value: Value } | undefined>(undefined)
 
-  const current = input.value ?? uncontrolled
-  const givenNow =
-    input.value !== undefined && input.value !== typedLast.current ? input.value : given.current
-  const unsaved = input.holdsInput && current !== givenNow
+  const current = input.value === undefined ? uncontrolled : input.value
+  const echoed =
+    input.value !== undefined &&
+    typedLast.current !== undefined &&
+    same(input.value, typedLast.current.value)
+  const givenNow = input.value !== undefined && !echoed ? input.value : given.current
+  const unsaved = input.holdsInput && !same(current, givenNow)
 
   useLayoutEffect(() => {
     given.current = givenNow
@@ -60,9 +69,9 @@ export function useTracksInput(input: TrackedInput): { readonly typed: (next: st
 
   useEffect(() => form?.enlist(capture), [form, capture])
 
-  const typed = useCallback((next: string) => {
-    typedLast.current = next
-    setUncontrolled(next)
+  const typed = useCallback((next: Value) => {
+    typedLast.current = { value: next }
+    setUncontrolled(() => next)
   }, [])
 
   return { typed }

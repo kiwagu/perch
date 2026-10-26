@@ -7,27 +7,57 @@ import type * as React from 'react'
 
 import { useTracksInput } from '@workspace/ui/unsaved-input'
 
-export interface SelectProps<Value> extends SelectPrimitive.Root.Props<Value> {
+export interface SelectProps<Value, Multiple extends boolean | undefined = false>
+  extends SelectPrimitive.Root.Props<Value, Multiple> {
   /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
 }
 
-/** A value as the select holds it; none chosen is the empty text. */
-const text = (value: unknown): string | undefined =>
-  value === undefined ? undefined : value === null ? '' : String(value)
+/** What a select holds: one value, several, or none chosen. */
+type Choice<Value> = Value | readonly Value[] | null
 
-function Select<Value>({ holdsInput = true, onValueChange, ...props }: SelectProps<Value>) {
-  const { typed } = useTracksInput({
+const isSeveral = <Value,>(choice: Choice<Value>): choice is readonly Value[] =>
+  Array.isArray(choice)
+
+/** Whether two choices are the same, each value compared as the select compares an item. */
+function sameChoice<Value>(
+  equal: (item: Value, value: Value) => boolean,
+): (a: Choice<Value>, b: Choice<Value>) => boolean {
+  return (a, b) => {
+    if (isSeveral(a) || isSeveral(b)) {
+      return (
+        isSeveral(a) &&
+        isSeveral(b) &&
+        a.length === b.length &&
+        a.every((item, index) => {
+          const other = b[index]
+
+          return other !== undefined && equal(item, other)
+        })
+      )
+    }
+
+    return a === null || b === null ? a === b : equal(a, b)
+  }
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  holdsInput = true,
+  onValueChange,
+  ...props
+}: SelectProps<Value, Multiple>) {
+  const { typed } = useTracksInput<Choice<Value>>({
     holdsInput,
-    value: text(props.value),
-    defaultValue: text(props.defaultValue),
+    value: props.value,
+    defaultValue: props.defaultValue ?? null,
+    same: sameChoice(props.isItemEqualToValue ?? Object.is),
   })
 
   return (
     <SelectPrimitive.Root
       {...props}
       onValueChange={(value, details) => {
-        typed(text(value) ?? '')
+        typed(value)
         onValueChange?.(value, details)
       }}
     />

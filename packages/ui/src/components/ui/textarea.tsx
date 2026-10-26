@@ -16,7 +16,7 @@ function Textarea({ className, holdsInput = true, onChange, ...props }: Textarea
   const { typed } = useTracksInput({
     holdsInput,
     value: text(props.value),
-    defaultValue: text(props.defaultValue),
+    defaultValue: text(props.defaultValue) ?? '',
   })
 
   return (

@@ -17,7 +17,7 @@ function Input({ className, type, holdsInput = true, onChange, ...props }: Input
   const { typed } = useTracksInput({
     holdsInput,
     value: text(props.value),
-    defaultValue: text(props.defaultValue),
+    defaultValue: text(props.defaultValue) ?? '',
   })
 
   return (

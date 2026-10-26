@@ -42,8 +42,9 @@ than its portal or overlay. A control that is not a test target carries a
   last value the app gave it. `FormScopeContext` lets a form capture what its fields hold when
   a submit starts and mark those values saved when it saved. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
   while its value differs from the last value the app gave it (the `value` prop whenever it
-  did not come from the field's own last change, or the `defaultValue` at mount), and takes
-  `holdsInput={false}` for a choice that applies at once.
+  did not come from the field's own last change, or the `defaultValue` at mount; a select
+  compares its choices, one or several, as it compares an item, `isItemEqualToValue` or
+  `Object.is`), and takes `holdsInput={false}` for a choice that applies at once.
 - `./lib/utils`: `cn` for class names.
 - `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the
   app. It points Tailwind at the kit's components, so their classes are generated in apps.
