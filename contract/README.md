@@ -137,9 +137,14 @@ alike:
 - flow style for `entry`, and inside an anchor for its `roles`, `codes`, `states` and
   `derived` lists and for a `binding` that is one map with no map inside
   (`binding: { model: profile.name }`, `binding: { action: platform.sign-out }`);
+- inside the `flow`, one line for what its shorter forms make short: a transition that is
+  its target alone (`organisation.notes.delete-button: deleting`), an effect by its name
+  (`- show: organisation.notes.error`, `- navigate: /me`), the codes of a `show` in flow
+  style (`- show: { app-shell.notice-message: [ invited ] }`), and an `input` or an outcome
+  that is one map with no map inside (`input: { id: organisation.notes.item }`);
 - block style for the rest: the `anchors` map and each anchor in it, an anchor's `binding`
-  that is a list or holds a map (its action's `params` included), the screen's `states`, its
-  `flow` with everything inside it, a `source`, and the `wireframe` as a block scalar.
+  that is a list or holds a map (its action's `params` included), the screen's `states`, the
+  rest of its `flow`, a `source`, and the `wireframe` as a block scalar.
 
 An excerpt of `screens/me.yaml`:
 
@@ -247,7 +252,7 @@ A list of bindings means the anchor runs them in that order, or one of them by t
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
 values the element carries), `fields` (an error's codes, each with the field of its screen it
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
-form), `dataId` (what its `data-id` holds), `dataValue` (it, or its
+form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
@@ -305,11 +310,39 @@ unchanged, as it carries a binding into the router.
   success and its failure. Every `input` key is a parameter of the action; a parameter left
   out is the implementation's to compute (a minted `$id`, the `author`). An event that runs
   an action is a transition into such a state, named for what it does (`signing-in`,
-  `saving-name`, `inviting`).
+  `saving-name`, `deleting`), or `running` in the region of a button.
 - A state that a route reaches says so in `meta.address`: its `path`, a binding of the
   screen, and its `search`. The route owns the addressable state, what a link or a reload
   restores; the machine owns the transient one (signing in, confirming, failed). No state
   declares an address yet.
+
+A screen file may write its flow shorter, and leave out what the contract says elsewhere
+(below); the loader expands it into the config above before anything reads it, so the
+checks, the walk in XState, the manifest and an app's machine see the full config, and `bun
+run contract:flow <screen>` prints it. The shorter forms are four:
+
+- A transition written as its target alone, as XState itself allows: `onDone: idle` is
+  `onDone: { target: idle }`.
+- An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it
+  carries, in its order (in the `onError` of an invoke, one of the codes the failure of its
+  action shows); `show: { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `navigate:
+  <path>` or `navigate: { to, search }`.
+- A region written by its pattern, a shape that two regions or more of the screens share,
+  named by what the area does. A shape that one region has is written in full until a
+  second one shares it.
+  - `draft`: a control that follows a stored value or holds what was typed. In `following`
+    the control `input` shows the stored value as it changes, here or on another device;
+    typing moves it to `edited`, which goes back to `following` when what was typed is the
+    stored value again, by typing it back or by the data event `stored`, both under `guard`.
+- A region written by its button, `by: <button>`: the region of a button bound to one action
+  (below) with what the screen decides of it, its `description`, `onDone` and `onError`. An
+  outcome left out is the derived one; a transition without a target goes back to `idle`.
+
+The states of a pattern and of a button's region are the machine's, named by the loader
+(`idle`, `running`, `following`, `edited`), and a scenario or a test reads them as it reads
+any state. What the shorter forms leave out is mechanics a tester or a user cannot tell
+apart; a `description` belongs to a decision (where a success leads, what a failure shows,
+what restarts what), not to every state.
 
 Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested
 deeper than a parallel state's regions, history states, targets by `.child` or by an id
@@ -325,6 +358,49 @@ builds its own machine for a screen holds it to the flow with the engine's compa
 (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
 the machine has the config of its flow (on a branch, the flow less what it added and the
 machine has not built yet).
+
+### What a screen leaves out
+
+What a screen would only repeat of the model, the platform and its own bindings, it leaves
+out, and the loader derives it, the same way every time:
+
+- **What an action fails with.** A platform action fails with the codes `platform.yaml`
+  declares for it. An action of the model fails with `forbidden` first when its entity says
+  who may change it (`x-perch.can`), then with the codes of the fields its parameters set,
+  then with `failed`. A field gives, from its JSON Schema: `<field>-required` for a
+  `minLength` of 1, `<field>-too-short` for a larger one, `<field>-too-long` for a
+  `maxLength`, `<field>-invalid` for a `pattern` or a `format`, and `<field>-taken` when the
+  field alone is unique (`x-perch.unique`); a new id and a read-only field give none, and a
+  field's name is kebab-case in a code. So `note.createNote` fails with `forbidden`,
+  `text-required`, `text-too-long` and `failed`, and a `maxLength` added to a field adds its
+  code wherever an action sets the field.
+- **An error's codes and fields.** An error `<part>.error` that writes no `codes` carries the
+  codes of the failures of the actions the anchors of its part bind (`<part>.<name>`, in the
+  order they are declared), each once, `failed` last. One that writes no `fields` maps each
+  code of a field to the control its binding passes for that field (`name-too-long` to
+  `user.profile.name-input`), when that control is a field of the screen; a code that two
+  bindings pass from two controls concerns the form. What the file writes wins.
+- **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
+  codes the failure of the invoked action shows.
+- **The region of a button.** A button bound to one action that no state of the flow
+  handles gets its region, when the root of the flow has one parallel state. The region is
+  named by the button without its screen and its kind (`organisation.notes.add-button` gives
+  `notes-add`) and comes after the regions written; it counts among the two regions or more of
+  the parallel state, which may write fewer. It rests in `idle`; the button moves it
+  to `running`, which invokes the action with the parameters the binding passes, and both
+  outcomes lead back to `idle`. A failure shows its codes on the error of the button's part;
+  the success of an action of the model says what the controls do by the word its name
+  starts with: `create` (`createNote`), the controls whose values it took are emptied;
+  `update`, they show the stored value; `delete`, the entry leaves its list. A failure with
+  codes and no error in
+  the part is a problem: the screen declares the error, or writes the region by its button
+  with its `onError`.
+
+What stays in a screen is what a tester or a user can tell apart: the areas and their
+states, where each control leads, a success or a failure that goes elsewhere than the derived
+one or shows something else, guards, confirmations and chains of actions. `bun run
+contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or
+derived, so a constraint added to the model shows on review as the codes it adds.
 
 ## Activities
 
@@ -752,7 +828,8 @@ inside it, holds none) makes the command fail and write nothing.
 This is the delivery of a finished change; the review before the code is described in "The
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
-renamed, and the transitions added or removed in each activity both sides hold), and below
+renamed, the codes and the error fields the anchors both sides hold gain or lose, and the
+transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -777,7 +854,8 @@ Scenarios and tests changed with it: device/base/my-devices
 
 The diff lists the screens, anchors, codes, entities and fields added and removed, and
 takes an anchor removed and one added for a rename when they are the only ones of their
-screen and kind. The tests are in this repository, so the same change updates them, and
+screen and kind. The codes and the error fields of an anchor are those the loader gives it,
+written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. The tests are in this repository, so the same change updates them, and
 the consumers check fails until it does.
 
 ## Asking for a missing anchor

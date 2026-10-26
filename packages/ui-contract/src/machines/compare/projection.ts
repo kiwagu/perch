@@ -1,4 +1,4 @@
-import { entriesOf, isRecord, listOf, recordOf } from './records'
+import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 
 export interface ProjectedEffect {
   readonly type: unknown

@@ -11,10 +11,10 @@ import { z } from '@workspace/zod'
 
 import {
   activitySchema,
+  authoredScreenFileSchema,
   entityDefinitionSchema,
   manifestSchema,
   platformFileSchema,
-  screenFileSchema,
 } from '../schemas'
 
 import {
@@ -31,7 +31,7 @@ const jsonSchemaOf = (schema: z.ZodType): object =>
   z.toJSONSchema(schema, { target: 'draft-2020-12', io: 'input' })
 
 export const SCHEMA_OUTPUTS: ReadonlyArray<{ file: string; schema: () => object }> = [
-  { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(screenFileSchema) },
+  { file: SCREEN_SCHEMA_FILE, schema: () => jsonSchemaOf(authoredScreenFileSchema) },
   { file: PLATFORM_SCHEMA_FILE, schema: () => jsonSchemaOf(platformFileSchema) },
   { file: ACTIVITY_SCHEMA_FILE, schema: () => jsonSchemaOf(activitySchema) },
   { file: ENTITY_SCHEMA_FILE, schema: () => jsonSchemaOf(entityDefinitionSchema) },

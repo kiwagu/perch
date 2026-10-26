@@ -7,10 +7,13 @@
 import { z } from '@workspace/zod'
 
 import { platformSchema } from './platform'
-import { screenSchema } from './screen'
+import { authoredScreenSchema, screenSchema } from './screen'
 
-/** One file of `contract/screens/`: one screen, as written. */
+/** One screen as every reader takes it, its flow expanded. */
 export const screenFileSchema = screenSchema
+
+/** One file of `contract/screens/`: one screen, as written, its flow possibly in the authored forms. */
+export const authoredScreenFileSchema = authoredScreenSchema
 
 export const platformFileSchema = z
   .strictObject({
