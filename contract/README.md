@@ -156,7 +156,7 @@ alike:
   that is a list or holds a map (its action's `params` included), the screen's `states`, the
   rest of its `flow`, a `source`, and the `wireframe` as a block scalar.
 
-An excerpt of `screens/me.yaml`:
+An excerpt of `domain/screens/me.yaml`:
 
 ```yaml
 # yaml-language-server: $schema=../../schemas/screen.schema.json
@@ -417,7 +417,7 @@ derived, so a constraint added to the model shows on review as the codes it adds
 A screen file describes one screen, and a scenario one path through the app with its data
 ready; an activity is the composition between them: which screens form one task, in which
 order, and what the task carries from one screen to the next. Each one is a file,
-`activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
+`domain/activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
 `.yaml`, or one named otherwise than its id, is a problem of that file.
 
 An activity has an `id` (kebab-case), a `title`, a `description` (what it is for), the
@@ -440,7 +440,7 @@ An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the
 and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
 written, as the flows do. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
-state's `meta` on one line. An excerpt of `activities/session.yaml`, the session of an
+state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
 page:
 
