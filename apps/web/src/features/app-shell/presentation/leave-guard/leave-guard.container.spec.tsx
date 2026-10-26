@@ -158,6 +158,20 @@ describe('LeaveGuard', () => {
     expect(unload()).toBe(true)
   })
 
+  it('drops an open question as Stay when a leave nobody started here moves the page', async () => {
+    const user = userEvent.setup()
+    const router = await open()
+
+    await user.type(screen.getByLabelText('name'), 'Ann')
+    await user.click(screen.getByText('app-shell.locale-select: none'))
+    await screen.findByTestId('app-shell.leave-dialog')
+
+    await act(() => router.navigate({ to: '/two', ignoreBlocker: true }))
+
+    expect(await screen.findByText('two')).toBeDefined()
+    expect(dialog()).toBeNull()
+  })
+
   it('asks before a leaving control while a field holds unsaved input, and not before another', async () => {
     const user = userEvent.setup()
 

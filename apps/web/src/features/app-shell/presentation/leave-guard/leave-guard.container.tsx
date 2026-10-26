@@ -6,8 +6,16 @@
  * flow's own navigation passes (`useScreenMachine`), and a leave nobody started here cannot ask.
  */
 
-import { useBlocker } from '@tanstack/react-router'
-import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useBlocker, useRouterState } from '@tanstack/react-router'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { useT } from '@workspace/i18n'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
@@ -76,11 +84,18 @@ export function LeaveGuard(props: { readonly children: ReactNode }) {
     enableBeforeUnload: () => LEAVE_POLICY.unload === 'browser' && unsavedNow.current,
   })
 
-  const answer = (leave: boolean) => {
+  const answer = useCallback((leave: boolean) => {
     pending.current?.settle(leave)
     pending.current = undefined
     setAsking(undefined)
-  }
+  }, [])
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+
+  // A leave nobody started here (a sign-out elsewhere) moved the page under an open question: the
+  // leave it asked about can no longer go on, so it stays.
+  useEffect(() => {
+    answer(false)
+  }, [pathname, answer])
 
   return (
     <LeaveGuardContext.Provider value={guard}>
