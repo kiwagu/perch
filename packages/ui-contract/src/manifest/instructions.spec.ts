@@ -1,18 +1,37 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import { writeContractRepository } from '../contract-repository.fixture'
+
 import { instructionsOf } from './instructions'
-import { contractAt, REPOSITORY_ROOT } from './manifest.fixture'
+import { contractAt } from './manifest.fixture'
+
+/** The contract of the fixture repository, read from a temporary root removed afterwards. */
+function fixtureRepositoryContract() {
+  const root = mkdtempSync(join(tmpdir(), 'ui-contract-instructions-'))
+
+  try {
+    writeContractRepository(root)
+
+    return contractAt(root)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
 
 describe('instructionsOf', () => {
-  const { vocabulary, screens } = contractAt(REPOSITORY_ROOT)
+  const { vocabulary, screens } = fixtureRepositoryContract()
   const instructions = instructionsOf(vocabulary, screens.platform, 'ready')
 
   it('says what to wait for with the status anchor and the states of the vocabulary', () => {
     expect(instructions.readiness).toContain(
       '`[data-testid="app-shell.status"][data-state="ready"]`',
     )
-    expect(instructions.readiness).toContain('`opening`, `failed`, `storage-blocked`')
-    expect(instructions.readiness).toContain('`loading`, `ready`, `empty`, `error`')
+    expect(instructions.readiness).toContain('Its other states (`opening`)')
+    expect(instructions.readiness).toContain('one of `loading`')
   })
   it("names the shell's notice from the reserved anchors", () => {
     expect(instructions.notices).toContain('(`app-shell.notice-message`)')
