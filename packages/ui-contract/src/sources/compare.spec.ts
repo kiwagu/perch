@@ -136,6 +136,23 @@ describe('compareWithContract', () => {
       ),
     ).toEqual([])
   })
+  it('reports holdsInput on an anchor that is not a field', () => {
+    expect(
+      compareWithContract(
+        [
+          source('a.tsx', {
+            literals: [
+              { anchor: 'sample.page', form: 'attribute', line: 3 },
+              { anchor: 'sample.mode-select', form: 'prop', line: 4 },
+            ],
+            inputs: [{ anchor: 'sample.page', holdsInput: false, line: 3 }],
+          }),
+        ],
+        SCREENS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual(['a.tsx:3: "sample.page" is a page, not a field; only a field holds input'])
+  })
   it('reports a literal declared twice at the second place, naming the first', () => {
     const collected = [
       ...agreeing(),

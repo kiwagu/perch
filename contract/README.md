@@ -767,7 +767,8 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
-  `holdsInput={false}` on a field that holds input), and the kit's fields track the rest. On a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and
+  the kit's fields track the rest. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a

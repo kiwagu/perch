@@ -5,7 +5,8 @@
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
  * `testIdFor()` and every code is in the vocabulary; a `holdsInput` written in the sources is
- * `{false}`, on a field the contract says holds no input. The problems carry `file:line`.
+ * `{false}`, on a field the contract says holds no input, never on an anchor that is not a
+ * field. The problems carry `file:line`.
  */
 
 import { baseOf, FIELD_KINDS } from '../anchors'
@@ -111,8 +112,17 @@ export function compareWithContract(
       .filter(({ def }) => FIELD_KINDS.has(def.kind))
       .map(({ anchor, def, at: path }) => [anchor, { holds: def.holdsInput !== false, path }]),
   )
+  const kinds = new Map(contract.map(({ anchor, def }) => [anchor, def.kind]))
   const inputProblems = collected.flatMap(({ file, inputs }) =>
     inputs.flatMap(({ anchor, holdsInput, line }) => {
+      const kind = kinds.get(anchor)
+
+      if (kind !== undefined && !FIELD_KINDS.has(kind)) {
+        return [
+          at({ file, line }, `"${anchor}" is a ${kind}, not a field; only a field holds input`),
+        ]
+      }
+
       if (holdsInput) {
         return [at({ file, line }, `"${anchor}": holdsInput={true} is the default; leave it out`)]
       }
