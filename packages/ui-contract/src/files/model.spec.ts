@@ -59,9 +59,9 @@ describe('loadModel', () => {
     expect(thing?.fields).toEqual({
       id: { type: 'string', readonly: true },
       author: { type: 'string', readonly: true, record: 'member' },
-      title: { type: 'string', readonly: false, crdt: 'text' },
+      title: { type: 'string', minLength: 1, maxLength: 80, readonly: false, crdt: 'text' },
       size: { enum: ['small', 'large'], readonly: false, crdt: 'none' },
-      created_at: { type: 'string', readonly: true },
+      created_at: { type: 'string', format: 'date-time', readonly: true },
     })
   })
   it('reports a document that is not a JSON Schema 2020-12', () => {
