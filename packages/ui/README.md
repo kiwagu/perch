@@ -32,6 +32,12 @@ than its portal or overlay. A control that is not a test target carries a
     `testId` marks the dialog, with `code` as its `data-code`, and its buttons carry
     `<testId>.confirm-button` and `<testId>.cancel-button`.
   - `navItemVariants`: the classes of a navigation item, active or not.
+- `./unsaved-input`: whether the fields of a page hold input the user typed and no action
+  took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`
+  says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
+  scope), and `useTracksInput` is what a field component uses to track itself against the
+  last value the app gave it. `FormScopeContext` lets a form tell its fields a submit saved
+  them.
 - `./lib/utils`: `cn` for class names.
 - `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the
   app. It points Tailwind at the kit's components, so their classes are generated in apps.
