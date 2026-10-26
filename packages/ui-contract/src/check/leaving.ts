@@ -1,6 +1,6 @@
 /**
  * Rule 11: each action of `platform.leaving` is an action of the model or the platform, and is
- * listed once; the frame asks before one runs while a field holds unsaved input.
+ * listed once; the app is to ask before one runs while a field holds unsaved input.
  */
 
 import type { Problem } from '../files'

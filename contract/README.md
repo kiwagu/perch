@@ -393,20 +393,20 @@ out, and the loader derives it, the same way every time:
   bindings pass from two controls concerns the form. What the file writes wins.
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
   `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
-  leave with it typed loses it, and the frame asks before such a leave. A field one of whose
+  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
   bindings runs an action that takes the field itself as a parameter, an action no other
   anchor of its screen runs with it (the language select, the organisation select), applies
   at once and holds none; a field whose action a submit button also runs with it (the
   sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
   wins. The manifest carries it, and `contract:diff` lists the
   fields that start or stop holding input.
-- **Which leaves ask first.** A change of screen asks while a field holds unsaved input
-  (the frame's `app-shell.leave-dialog`); reload, closing the tab and a URL typed by hand get
-  the browser's own prompt; a change of state inside one screen (a tab, a search parameter)
-  never asks. An action that leaves what was typed behind, a sign-out, a switch of
-  organisation, a change of language, is listed in `platform.yaml` under `leaving`, and the
-  control that runs it asks first. A navigation a flow makes after its action completed
-  never asks: the action took the input.
+- **Which leaves ask first.** While a field holds unsaved input, the app is to ask before a
+  change of screen, and before an action that leaves what was typed behind, a sign-out, a
+  switch of organisation, a change of language, runs from its control; those actions are
+  listed in `platform.yaml` under `leaving`. Reload, closing the tab and a URL typed by hand
+  are the browser's own prompt to give. A change of state inside one screen (a tab, a search
+  parameter) is no leave, and a navigation a flow makes after its action completed never
+  asks: the action took the input.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -767,8 +767,7 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
-  `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and
-  the kit's fields track the rest. On a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field). On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a

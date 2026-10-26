@@ -129,7 +129,7 @@ const idSchema = z
       .boolean()
       .optional()
       .describe(
-        'The field holds input: the frame asks before a leave that would lose what is typed into it.',
+        'The field holds input: the app is to ask before a leave that would lose what is typed into it.',
       ),
   })
   .describe('One declared anchor, as a test looks it up.')

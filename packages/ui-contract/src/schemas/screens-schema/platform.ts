@@ -50,7 +50,7 @@ export const platformSchema = z
       .array(actionNameSchema)
       .optional()
       .describe(
-        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the frame asks before one runs while a field holds unsaved input.',
+        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
       ),
     reserved: z
       .array(baseAnchorSchema)

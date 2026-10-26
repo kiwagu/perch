@@ -4842,7 +4842,7 @@
             "type": "boolean"
           },
           "holdsInput": {
-            "description": "The field holds input: the frame asks before a leave that would lose what is typed into it.",
+            "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
           }
         },
@@ -4945,7 +4945,7 @@
           }
         },
         "leaving": {
-          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the frame asks before one runs while a field holds unsaved input.",
+          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
           "type": "array",
           "items": {
             "type": "string",
