@@ -89,6 +89,48 @@ function Objects() {
   )
 }
 
+type Pair = readonly [number, number]
+
+/** A single select whose values are pairs, compared by their first element. */
+function Pairs() {
+  const [value, setValue] = useState<Pair | null>([1, 10])
+
+  return (
+    <Select<Pair>
+      value={value}
+      onValueChange={setValue}
+      isItemEqualToValue={(item, chosen) => item[0] === chosen[0]}
+      itemToStringLabel={(item) => `${item[0]}`}
+    >
+      <SelectTrigger aria-label="kind">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={[1, 10]}>Alpha</SelectItem>
+        <SelectItem value={[2, 20]}>Beta</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+}
+
+/** An uncontrolled select of several choices, starting with none. */
+function SeveralUncontrolled() {
+  return (
+    <Select items={ITEMS} multiple>
+      <SelectTrigger aria-label="kind">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {ITEMS.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 /** A select of several choices at once. */
 function Several() {
   const [values, setValues] = useState<string[]>(['a'])
@@ -153,6 +195,35 @@ describe('Select', () => {
 
     await choose('Beta')
     expect(probe()).toBe('true')
+  })
+
+  it('compares a single choice whole, even when its value is a list', async () => {
+    render(
+      <UnsavedInputScope>
+        <Pairs />
+        <Probe />
+      </UnsavedInputScope>,
+    )
+
+    await choose('Beta')
+    expect(probe()).toBe('true')
+  })
+
+  it('comes back clean when an uncontrolled multiple select is emptied again', async () => {
+    render(
+      <UnsavedInputScope>
+        <SeveralUncontrolled />
+        <Probe />
+      </UnsavedInputScope>,
+    )
+
+    await choose('Beta')
+    expect(probe()).toBe('true')
+
+    const beta = screen.getByRole('option', { name: 'Beta' })
+
+    await userEvent.click(beta)
+    expect(probe()).toBe('false')
   })
 
   it('never holds unsaved input when holdsInput is false', async () => {

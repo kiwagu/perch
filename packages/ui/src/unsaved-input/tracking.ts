@@ -33,7 +33,7 @@ export function useTracksInput<Value>(input: TrackedInput<Value>): {
   const form = useFormScope()
   const same = input.same ?? Object.is
   const [id] = useState(() => Symbol('field'))
-  const [uncontrolled, setUncontrolled] = useState(input.defaultValue)
+  const [uncontrolled, setUncontrolled] = useState(() => input.defaultValue)
   const [, rerender] = useState(0)
   // As of the last commit: the last value the app gave the field, and what it showed.
   const given = useRef(input.value === undefined ? input.defaultValue : input.value)

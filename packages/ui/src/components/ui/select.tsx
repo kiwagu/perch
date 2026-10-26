@@ -19,25 +19,34 @@ type Choice<Value> = Value | readonly Value[] | null
 const isSeveral = <Value,>(choice: Choice<Value>): choice is readonly Value[] =>
   Array.isArray(choice)
 
-/** Whether two choices are the same, each value compared as the select compares an item. */
+/**
+ * Whether two choices are the same, each value compared as the select compares an item: a
+ * multiple select's choices in order, a single select's value whole (a list is one value there).
+ */
 function sameChoice<Value>(
   equal: (item: Value, value: Value) => boolean,
+  several: boolean,
 ): (a: Choice<Value>, b: Choice<Value>) => boolean {
   return (a, b) => {
-    if (isSeveral(a) || isSeveral(b)) {
-      return (
-        isSeveral(a) &&
-        isSeveral(b) &&
-        a.length === b.length &&
-        a.every((item, index) => {
-          const other = b[index]
-
-          return other !== undefined && equal(item, other)
-        })
-      )
+    if (a === null || b === null) {
+      return a === b
     }
 
-    return a === null || b === null ? a === b : equal(a, b)
+    if (!several) {
+      // A single select holds one value, whatever its shape, a list included.
+      return equal(a as Value, b as Value)
+    }
+
+    return (
+      isSeveral(a) &&
+      isSeveral(b) &&
+      a.length === b.length &&
+      a.every((item, index) => {
+        const other = b[index]
+
+        return other !== undefined && equal(item, other)
+      })
+    )
   }
 }
 
@@ -46,11 +55,13 @@ function Select<Value, Multiple extends boolean | undefined = false>({
   onValueChange,
   ...props
 }: SelectProps<Value, Multiple>) {
+  const several = props.multiple === true
   const { typed } = useTracksInput<Choice<Value>>({
     holdsInput,
     value: props.value,
-    defaultValue: props.defaultValue ?? null,
-    same: sameChoice(props.isItemEqualToValue ?? Object.is),
+    // Base UI starts a multiple select with none chosen as an empty list, a single one as null.
+    defaultValue: props.defaultValue ?? (several ? [] : null),
+    same: sameChoice(props.isItemEqualToValue ?? Object.is, several),
   })
 
   return (
