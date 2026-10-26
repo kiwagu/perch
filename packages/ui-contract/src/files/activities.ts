@@ -1,7 +1,7 @@
 /**
- * Reads the activities: each `.yaml` file under `contract/activities`, sorted by path, is one
+ * Reads the activities: each `.yaml` file under `contract/domain/activities`, sorted by path, is one
  * activity through `activitySchema`, its file named by its id (`session` is
- * `contract/activities/session.yaml`). The folder is optional: without it the contract has no
+ * `contract/domain/activities/session.yaml`). The folder is optional: without it the contract has no
  * activity. A file that is not `.yaml`, one named otherwise than its id, and the problems of
  * its YAML and its shape are problems of that file. Beside the activities, the line of each
  * key and item of each one's file, by its id.

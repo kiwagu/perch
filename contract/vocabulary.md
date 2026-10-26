@@ -3,8 +3,8 @@
 Contract version: 1
 
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
-value, role and screen name that the screen files (`contract/screens/`) and the platform
-file (`contract/platform.yaml`) use is listed here once; the anchors themselves are declared
+value, role and screen name that the screen files (`contract/domain/screens/`) and the platform
+file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
 in the screen files. A name that is not here is a problem of the contract, not a new word:
 a new word is added to its table in the same change that first uses it.
 

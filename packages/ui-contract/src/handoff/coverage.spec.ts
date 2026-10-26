@@ -13,8 +13,8 @@ useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/activities/thing.yaml'
+const SCREEN = 'contract/domain/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/domain/activities/thing.yaml'
 const ALPHA = 'apps/web/src/features/alpha/presentation/alpha.view.tsx'
 const KIT = 'packages/ui/src/components/ui/button.tsx'
 

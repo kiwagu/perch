@@ -27,7 +27,7 @@ on the replica schema are applied on the device before a command runs
   sits beside its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
-- Anchors: screen `organisation` in `contract/screens/org.yaml`.
+- Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
 - Behaviour: without memberships the page offers to create an organisation (a key checked
   by the kernel's `isTenantKey`, a name of at most 80 characters); the creator becomes its
   administrator and the new organisation the current one. With several memberships the page

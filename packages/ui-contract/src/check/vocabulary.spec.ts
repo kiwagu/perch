@@ -24,11 +24,11 @@ describe('vocabularyProblems', () => {
     })
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].kind: "pane" is not a kind of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].derived[0]: "close-button" is not a derived suffix of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].codes[0]: "gone" is not a code of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].states[0]: "busy" is not a state of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: anchors["sample.page"].roles[0]: "owner" is not a role of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].kind: "pane" is not a kind of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].derived[0]: "close-button" is not a derived suffix of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].codes[0]: "gone" is not a code of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].states[0]: "busy" is not a state of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].roles[0]: "owner" is not a role of the vocabulary',
     ])
   })
   it('checks the roles of bindings and platform actions and the codes of actions', () => {
@@ -40,9 +40,9 @@ describe('vocabularyProblems', () => {
     Object.assign(action ?? {}, { roles: ['root'], codes: ['devices-read-failed', 'nope'] })
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: bindings[0].roles[0]: "visitor" is not a role of the vocabulary',
-      'contract/platform.yaml:1: actions["devices.list"].roles[0]: "root" is not a role of the vocabulary',
-      'contract/platform.yaml:1: actions["devices.list"].codes[1]: "nope" is not a code of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].roles[0]: "visitor" is not a role of the vocabulary',
+      'contract/domain/platform.yaml:1: actions["devices.list"].roles[0]: "root" is not a role of the vocabulary',
+      'contract/domain/platform.yaml:1: actions["devices.list"].codes[1]: "nope" is not a code of the vocabulary',
     ])
   })
   it('names a screen id and an anchor prefix that are not screen names', () => {
@@ -53,8 +53,8 @@ describe('vocabularyProblems', () => {
     sample.anchors['stray.thing-button'] = { kind: 'button' }
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: id: "other" is not a screen name of the vocabulary',
-      'contract/screens/sample/$key.yaml:1: anchors["stray.thing-button"]: starts with no screen name of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: id: "other" is not a screen name of the vocabulary',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["stray.thing-button"]: starts with no screen name of the vocabulary',
     ])
   })
   it('wants every choice-values anchor to exist and a pattern to be its only row', () => {
@@ -85,7 +85,7 @@ describe('vocabularyProblems', () => {
     contract.screens.platform.status.states = ['ready', 'opening']
 
     expect(printed(contract)).toEqual([
-      'contract/platform.yaml:1: status.states: must equal the app states of the vocabulary, in order: opening, ready',
+      'contract/domain/platform.yaml:1: status.states: must equal the app states of the vocabulary, in order: opening, ready',
     ])
   })
   it('wants the platform reserved anchors to equal the vocabulary ones, each on app-shell', () => {
@@ -95,10 +95,10 @@ describe('vocabularyProblems', () => {
     contract.vocabulary.reserved['app-shell.nav'] = 'the navigation'
 
     expect(printed(contract)).toEqual([
-      'contract/platform.yaml:1: reserved: misses the reserved anchor "app-shell.status" of the vocabulary',
-      'contract/platform.yaml:1: reserved[0]: "sample.page" is not a reserved anchor of the vocabulary',
-      'contract/platform.yaml:1: reserved[0]: "sample.page" is not an anchor of the app-shell screen',
-      'contract/platform.yaml:1: reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
+      'contract/domain/platform.yaml:1: reserved: misses the reserved anchor "app-shell.status" of the vocabulary',
+      'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not a reserved anchor of the vocabulary',
+      'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not an anchor of the app-shell screen',
+      'contract/domain/platform.yaml:1: reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
     ])
   })
   it('takes a choice-values anchor derived only through a suffix its base lists in derived', () => {
@@ -124,7 +124,7 @@ describe('vocabularyProblems', () => {
     })
 
     expect(printed(contract)).toEqual([
-      'contract/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
     ])
   })
 })

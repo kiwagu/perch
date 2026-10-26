@@ -75,7 +75,7 @@ const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 /** The notice goes with the account that was signed in when it was raised. */
 const CLEAR_NOTICE = { type: 'clear', params: { anchor: 'app-shell.notice-message' } } as const
 
-/** The frame's flow (`contract/screens/__root.yaml`) as the app runs it. */
+/** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
   /** The stored language, when another device stored it and this one has not seen it yet. */
   const storedElsewhere = (): Locale | undefined => {

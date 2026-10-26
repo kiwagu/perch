@@ -9,7 +9,7 @@ import { searchProblems } from './search'
 const printed = (contract = sampleContract()): string[] =>
   searchProblems(contract).map(formatProblem)
 
-const AT = 'contract/screens/sample/$key.yaml:1: bindings[0]'
+const AT = 'contract/domain/screens/sample/$key.yaml:1: bindings[0]'
 
 /** The first binding of the sample screen, for a spec to change. */
 function sampleBinding(contract: ReturnType<typeof sampleContract>) {
@@ -229,7 +229,7 @@ describe('searchProblems', () => {
 
     expect(printed(contract)).toEqual([
       expect.stringMatching(
-        /^contract\/screens\/sample\/\$key\.yaml:1: bindings\[0\]\.params: not a valid JSON Schema \(screen "sample"\): the schema does not compile: Invalid regular expression/,
+        /^contract\/domain\/screens\/sample\/\$key\.yaml:1: bindings\[0\]\.params: not a valid JSON Schema \(screen "sample"\): the schema does not compile: Invalid regular expression/,
       ),
       `${AT}.search: not a valid JSON Schema (screen "sample"): /required: must NOT have duplicate items (items ## 1 and 0 are identical)`,
     ])

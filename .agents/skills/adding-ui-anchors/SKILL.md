@@ -1,6 +1,6 @@
 ---
 name: adding-ui-anchors
-description: "Change what the web app shows or does contract first: the model in contract/model.schema.json, the screen in contract/screens/<pathname>.yaml, the scenario in tests/e2e/scenarios/, then the anchors (data-testid) in the code and the literals in the e2e tests, held together by the three contract checks. Use when a view gains, renames or loses a control, list, dialog, message or screen that a test or an agent must find, when a scenario is written, when a component is rewritten, or when a test or an agent cannot find an element."
+description: "Change what the web app shows or does contract first: the model in contract/domain/model.schema.json, the screen in contract/domain/screens/<pathname>.yaml, the scenario in tests/e2e/scenarios/, then the anchors (data-testid) in the code and the literals in the e2e tests, held together by the three contract checks. Use when a view gains, renames or loses a control, list, dialog, message or screen that a test or an agent must find, when a scenario is written, when a component is rewritten, or when a test or an agent cannot find an element."
 ---
 
 # Adding UI anchors
@@ -45,7 +45,7 @@ description: "Change what the web app shows or does contract first: the model in
 The contract comes first. Completeness comes from the model, the screen unfolds it, and the
 code and the tests follow; the checks hold them to the contract.
 
-1. **Read what exists.** Open the screen file, `contract/screens/<pathname>.yaml`
+1. **Read what exists.** Open the screen file, `contract/domain/screens/<pathname>.yaml`
    (`__root.yaml` for the frame): its `entry`, `anchors`, `states` and `flow`. On the dev
    stand (`mcproc start dev`), `window.__perch.ui.anchors()` in the page's console lists the
    anchors the page renders now, with their kind, `data-state`, `data-code`, `data-id`,
@@ -53,8 +53,8 @@ code and the tests follow; the checks hold them to the contract.
    says of it stays as it is, use it and stop. A change of its behaviour (a transition, a
    state, a guard, a code, a facet) goes on through steps 2 to 5 like a new element.
 2. **The model.** A field or an action the screen needs goes into its entity of
-   `contract/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
-   `contract/platform.yaml` when the platform runs it.
+   `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
+   `contract/domain/platform.yaml` when the platform runs it.
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -154,7 +154,8 @@ code and the tests follow; the checks hold them to the contract.
 - Assert or locate by the page's wording, a CSS class or the shape of the DOM.
 - Put a domain or bus code (`note:FORBIDDEN`) into `data-code`.
 - Declare or render a reserved anchor of the shell from a feature.
-- Edit a generated schema (`screen.schema.json`, `platform.schema.json`,
-  `activity.schema.json`, `x-perch.schema.json`, `manifest.schema.json`) by hand, or copy
+- Edit a generated schema in `contract/schemas/` (`screen.schema.json`,
+  `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json`,
+  `manifest.schema.json`) by hand, or copy
   the vocabulary's tables into another file.
 - Strip anchors from any build.

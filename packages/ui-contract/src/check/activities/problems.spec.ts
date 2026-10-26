@@ -18,7 +18,7 @@ import { activitiesProblems } from './problems'
 const printed = (contract = sampleContract()): string[] =>
   activitiesProblems(contract).map(formatProblem)
 
-const AT = 'contract/activities/thing.yaml:1:'
+const AT = 'contract/domain/activities/thing.yaml:1:'
 
 const SAMPLE = { screen: 'sample', address: { path: '/sample/$key' } }
 
@@ -39,7 +39,7 @@ const OTHER: Screen = {
 /** The sample contract with the other screen, and a final state of the activity on it. */
 function withOther(contract = sampleContract()): Contract {
   contract.screens.screens.push(structuredClone(OTHER))
-  contract.screens.files = [...contract.screens.files, 'contract/screens/other.yaml']
+  contract.screens.files = [...contract.screens.files, 'contract/domain/screens/other.yaml']
   activityIn(contract).states['away'] = {
     type: 'final',
     meta: { screen: 'other', address: { path: '/other' } },
@@ -64,10 +64,10 @@ describe('activitiesProblems', () => {
     editing.on = { 'sample.save-button': { target: 'gone', guard: 'titleGiven' } }
 
     expect(printed(contract)).toEqual([
-      'contract/activities/thing.yaml:5: roles[1]: "visitor" is not a role of the vocabulary',
-      'contract/activities/thing.yaml:19: states.editing.on["sample.save-button"].target: "gone" is not a state of the activity',
-      'contract/activities/thing.yaml:18: states.editing.on["sample.save-button"].guard: "titleGiven" is not a guard of meta.guards',
-      'contract/activities/thing.yaml:21: states.saved: is not reachable from "editing"',
+      'contract/domain/activities/thing.yaml:5: roles[1]: "visitor" is not a role of the vocabulary',
+      'contract/domain/activities/thing.yaml:19: states.editing.on["sample.save-button"].target: "gone" is not a state of the activity',
+      'contract/domain/activities/thing.yaml:18: states.editing.on["sample.save-button"].guard: "titleGiven" is not a guard of meta.guards',
+      'contract/domain/activities/thing.yaml:21: states.saved: is not reachable from "editing"',
     ])
   })
   it('wants roles of the vocabulary and data that are fields of the model', () => {
