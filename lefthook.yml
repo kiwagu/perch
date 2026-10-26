@@ -5,7 +5,7 @@
 
 pre-commit:
   piped: true
-  jobs:
+  jobs: &checks
     - name: format staged files
       glob: '*.{js,mjs,cjs,ts,tsx,json,jsonc,css}'
       run: . scripts/ensure-path.sh && biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
@@ -69,3 +69,9 @@ pre-commit:
     # passed on exactly this tree (receipts under .gates/, see scripts/gates).
     - name: suites recorded before landing on main
       run: . scripts/ensure-path.sh && bun run scripts/gates/check-main-gates.ts
+
+# A merge git commits itself (`git merge` without a conflict to resolve) runs this hook,
+# not pre-commit: the same checks, so no commit skips them, a merge into main included.
+pre-merge-commit:
+  piped: true
+  jobs: *checks
