@@ -8,7 +8,9 @@
  * after it, its id and the stamp of each file (when it was last written, its
  * size): a file written in between, even one put back to the same bytes, may
  * have been read by the suite as other content, so the run fails and records
- * nothing.
+ * nothing. Two readings cannot see a file created and removed again during the
+ * run, nor a modification time set back on purpose; the rule that no edit is
+ * made while a gate runs covers those.
  *
  * The command's arguments pass through untouched. A run given any (a spec, a
  * filter, a reporter) passes or fails as usual and records no receipt.
