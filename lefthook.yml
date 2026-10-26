@@ -5,7 +5,7 @@
 
 pre-commit:
   piped: true
-  jobs: &checks
+  jobs:
     - name: format staged files
       glob: '*.{js,mjs,cjs,ts,tsx,json,jsonc,css}'
       run: . scripts/ensure-path.sh && biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
@@ -71,7 +71,10 @@ pre-commit:
       run: . scripts/ensure-path.sh && bun run scripts/gates/check-main-gates.ts
 
 # A merge git commits itself (`git merge` without a conflict to resolve) runs this hook,
-# not pre-commit: the same checks, so no commit skips them, a merge into main included.
+# not pre-commit. It runs pre-commit as a whole, the machine-local jobs included, so an
+# automatic merge, into main too, is checked as a commit is, and what a formatter fixes is
+# staged into it (lefthook stages fixed files only for a hook named pre-commit).
 pre-merge-commit:
-  piped: true
-  jobs: *checks
+  jobs:
+    - name: the pre-commit checks
+      run: . scripts/ensure-path.sh && lefthook run pre-commit
