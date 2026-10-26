@@ -24,7 +24,7 @@ globs: '**/*.tsx'
 
 ## Core rule
 
-- No raw `<button>`, `<input>` or `<select>` in views; use the `@workspace/ui` primitives. Raw elements are fine for layout only.
+- No raw `<button>`, `<input>`, `<textarea>`, `<select>` or `<form>` in views; use the `@workspace/ui` primitives (`Form` awaits its submit and clears its fields' unsaved input once it saved; `Input`, `Textarea` and `Select` track what is typed against the last value the app gave them). Raw elements are fine for layout only.
 - A class cluster that repeats becomes a `cva` variant of the primitive, not a copy.
 - One `Hint` wrapper for tooltips; the accessible name (`aria-label`) uses the same i18n key as the visible hint.
 - Mobile first: unprefixed utilities describe the 360x640 layout; widen with `sm:`, `md:`, `lg:`. No `max-*` variants without a comment that says why.

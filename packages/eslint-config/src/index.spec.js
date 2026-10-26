@@ -58,6 +58,16 @@ describe('workspace eslint config', () => {
     ])
   })
 
+  it('keeps raw fields out of views: the kit tracks unsaved input', async () => {
+    const [result] = await eslint.lintFiles(['feature/presentation/raw-field.view.tsx'])
+
+    expect(result.messages.map((message) => [message.ruleId, message.line])).toEqual([
+      ['react/forbid-elements', 4],
+      ['react/forbid-elements', 5],
+      ['react/forbid-elements', 6],
+    ])
+  })
+
   it('lets application code use data-layer port types but not its adapters', async () => {
     expect(await rulesFiredIn('feature/application/port-types.ts')).toEqual([])
     expect(await rulesFiredIn('feature/application/adapter-leak.ts')).toEqual([
