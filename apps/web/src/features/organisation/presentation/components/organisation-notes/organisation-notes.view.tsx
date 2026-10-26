@@ -1,10 +1,11 @@
-import { type SubmitEvent, useState } from 'react'
+import { useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import type { NoteId } from '@workspace/ids'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field } from '@workspace/ui/components/ui/field'
+import { Form } from '@workspace/ui/components/ui/form'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
@@ -36,13 +37,16 @@ function NoteEntry(props: {
   const t = useT()
   const [draft, setDraft] = useState<string | undefined>(undefined)
   const [pending, run] = useAction()
-  const save = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    run(props.onEdit({ id: props.note.id, text: draft ?? '' }), (done) => {
+  const save = () => {
+    const edited = props.onEdit({ id: props.note.id, text: draft ?? '' })
+
+    run(edited, (done) => {
       if (done) {
         setDraft(undefined)
       }
     })
+
+    return edited
   }
 
   return (
@@ -92,7 +96,7 @@ function NoteEntry(props: {
           </div>
         </div>
       ) : (
-        <form className="flex flex-col gap-2" onSubmit={save}>
+        <Form className="flex flex-col gap-2" onSubmit={save}>
           <Textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -103,7 +107,7 @@ function NoteEntry(props: {
           <Button type="submit" disabled={pending} data-testid="organisation.notes.save-button">
             {t('organisation.notes.save')}
           </Button>
-        </form>
+        </Form>
       )}
     </li>
   )
@@ -121,13 +125,16 @@ export function OrganisationNotes(props: {
   const [text, setText] = useState('')
   const [pending, run] = useAction()
   const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? 'ready' : 'empty'
-  const add = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    run(props.onAdd(text), (done) => {
+  const add = () => {
+    const added = props.onAdd(text)
+
+    run(added, (done) => {
       if (done) {
         setText('')
       }
     })
+
+    return added
   }
 
   return (
@@ -163,7 +170,7 @@ export function OrganisationNotes(props: {
             {t('organisation.notes.empty')}
           </p>
         ) : null}
-        <form onSubmit={add}>
+        <Form onSubmit={add}>
           <Field data-invalid={props.error ? true : undefined}>
             <Textarea
               value={text}
@@ -179,7 +186,7 @@ export function OrganisationNotes(props: {
               {t('organisation.notes.add')}
             </Button>
           </Field>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   )

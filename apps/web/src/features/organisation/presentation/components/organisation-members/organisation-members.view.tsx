@@ -1,10 +1,11 @@
-import { type SubmitEvent, useId, useState } from 'react'
+import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import type { IdentityId } from '@workspace/ids'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
+import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
 import { useAction } from '../../pages/organisation/use-action'
@@ -27,13 +28,16 @@ export function OrganisationMembers(props: {
   const emailId = useId()
   const [email, setEmail] = useState('')
   const [pending, run] = useAction()
-  const invite = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    run(props.onInvite(email), (done) => {
+  const invite = () => {
+    const invited = props.onInvite(email)
+
+    run(invited, (done) => {
       if (done) {
         setEmail('')
       }
     })
+
+    return invited
   }
 
   return (
@@ -68,7 +72,7 @@ export function OrganisationMembers(props: {
             ))}
           </ul>
         ) : null}
-        <form onSubmit={invite} data-testid="organisation.invite.form">
+        <Form onSubmit={invite} data-testid="organisation.invite.form">
           <Field data-invalid={props.error ? true : undefined}>
             <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
             <Input
@@ -89,7 +93,7 @@ export function OrganisationMembers(props: {
               {t('organisation.invite.submit')}
             </Button>
           </Field>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   )

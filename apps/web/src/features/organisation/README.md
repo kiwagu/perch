@@ -30,8 +30,12 @@ on the replica schema are applied on the device before a command runs
 - Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
 - Behaviour: without memberships the page offers to create an organisation (a key checked
   by the kernel's `isTenantKey`, a name of at most 80 characters); the creator becomes its
-  administrator and the new organisation the current one. With several memberships the page
-  offers a choice. Notes are at most 500 characters. A member edits and deletes only its own
+  administrator and the new organisation the current one; closed by its toggle, the create
+  form is only hidden and keeps what was typed. With several memberships the page offers a
+  choice, which applies at once (`holdsInput={false}`), after the frame's guard of unsaved
+  input asks while a field holds some: the page has no machine yet, so it asks the guard by
+  hand (`useLeaveGuard`). Another organisation starts the page's forms afresh. Every form is
+  the kit's `Form`, whose saved submit leaves its fields with nothing unsaved. Notes are at most 500 characters. A member edits and deletes only its own
   notes and an administrator any, so "Edit" and "Delete" appear only where allowed, the
   member's own notes are marked "Yours", and a change the rules forbid is explained
   (`note:FORBIDDEN`). An administrator also sees the members, invites an existing account by

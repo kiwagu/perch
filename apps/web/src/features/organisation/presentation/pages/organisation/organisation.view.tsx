@@ -84,6 +84,7 @@ function OrganisationHeader(props: {
             }))}
             onChange={props.onSelect}
             testId="organisation.page.current-select"
+            holdsInput={false}
           />
         ) : null}
       </CardContent>
@@ -157,13 +158,14 @@ export function OrganisationView(props: OrganisationViewProps) {
           {unavailable ? t('organisation.unavailable') : t('organisation.none')}
         </p>
       )}
-      {current === undefined || creating ? (
+      {/* Closed, the create form is hidden and keeps what was typed; another organisation starts it afresh. */}
+      <div key={current?.key ?? ''} hidden={current !== undefined && !creating}>
         <OrganisationCreate
           error={props.errors?.create}
           onCreate={props.onCreate}
           onCreated={() => setCreating(false)}
         />
-      ) : null}
+      </div>
     </div>
   )
 }
