@@ -1,4 +1,4 @@
-import { entriesOf, isRecord, listOf, recordOf } from './records'
+import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 
 /** What a mechanism outside the flow subset is, by the key of a config that holds it. */
 const ON_THE_ROOT = {

@@ -1,4 +1,4 @@
-/** Reading a machine config, or a flow, as plain records: what XState and the contract give. */
+/** Reading a machine config, or a flow, as plain records: what XState, the contract and its files give. */
 
 export const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

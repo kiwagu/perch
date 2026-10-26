@@ -121,3 +121,24 @@ export const anchorDefSchema = z
     source: sourceSchema.optional(),
   })
   .describe('One declared anchor.')
+
+/**
+ * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
+ * and the loader derives them from the actions its part binds.
+ */
+export const authoredAnchorDefSchema = anchorDefSchema
+  .extend({
+    codes: z
+      .array(codeSchema)
+      .optional()
+      .describe(
+        'The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.',
+      ),
+    fields: z
+      .record(codeSchema, baseAnchorSchema)
+      .optional()
+      .describe(
+        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.",
+      ),
+  })
+  .describe('One declared anchor, as a screen file writes it.')

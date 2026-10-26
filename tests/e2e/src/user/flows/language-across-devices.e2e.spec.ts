@@ -1,5 +1,5 @@
 // scenario: user/flows/language-across-devices
-import { appReady, expect, test } from '../../support/fixtures'
+import { appReady, expect, pageLoads, test } from '../../support/fixtures'
 
 test.describe('Keep the language of an account on every device', { tag: '@full' }, () => {
   test('A language chosen on one device is the language of the account on the next device it signs in on', async ({
@@ -19,16 +19,32 @@ test.describe('Keep the language of an account on every device', { tag: '@full' 
       await expect(page.getByTestId('app-shell.locale-select')).toHaveAttribute('data-value', 'es')
     })
 
-    await test.step('3. On device B, sign in with the same account and wait for [/me]', async () => {
-      const deviceB = await secondDevice.signIn()
+    const deviceB =
+      await test.step('3. On device B, sign in with the same account and wait for [/me]', async () => {
+        const b = await secondDevice.signIn()
 
-      // Expected: After step 3 device B shows [app-shell.locale-select] with [value:es], with no
-      //   choice made on device B
+        // Expected: After step 3 device B shows [app-shell.locale-select] with [value:es], with no
+        //   choice made on device B
+        await expect(b.getByTestId('app-shell.locale-select')).toHaveAttribute('data-value', 'es', {
+          timeout: 10_000,
+        })
+
+        return b
+      })
+
+    await test.step('4. On device A, choose [value:en] in [app-shell.locale-select]', async () => {
+      const loads = pageLoads(deviceB)
+
+      await page.getByTestId('app-shell.locale-select').click()
+      await page.locator('[data-testid="app-shell.locale-select.option"][data-value="en"]').click()
+      // Expected: After step 4 device B shows [app-shell.locale-select] with [value:en], without a
+      //   reload
       await expect(deviceB.getByTestId('app-shell.locale-select')).toHaveAttribute(
         'data-value',
-        'es',
+        'en',
         { timeout: 10_000 },
       )
+      expect(loads()).toBe(0)
     })
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { flowSchema } from './flow'
+import { flowSchema } from '.'
 
 const SHOW_ERROR = {
   type: 'show',

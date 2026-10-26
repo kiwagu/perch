@@ -14,7 +14,9 @@ import { DEVICES } from '../../../../../platform/devices.port'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
 import { ShellContainer } from '../../../../app-shell/presentation/shell/shell.container'
+import { ShellFrameContext } from '../../../../app-shell/presentation/shell/shell-frame'
 import { DeviceModule } from '../../../device.module'
 import en from '../../i18n/device.en.json'
 
@@ -56,9 +58,11 @@ async function openPage(): Promise<void> {
 
   render(
     <I18nProvider locale="en" catalogs={{ en: englishCatalog }}>
-      <ServicesProvider services={services}>
-        <RouterProvider router={router} />
-      </ServicesProvider>
+      <ShellFrameContext.Provider value={openedFrame()}>
+        <ServicesProvider services={services}>
+          <RouterProvider router={router} />
+        </ServicesProvider>
+      </ShellFrameContext.Provider>
     </I18nProvider>,
   )
   await screen.findByTestId('app-shell.nav.devices-link')

@@ -32,11 +32,6 @@ anchors:
   user.profile.error:
     kind: error
     description: Why the last save failed, under the field its code concerns, which is marked invalid; failed concerns the form and shows above Save.
-    codes: [ name-required, name-too-long, bio-too-long, failed ]
-    fields:
-      name-required: user.profile.name-input
-      name-too-long: user.profile.name-input
-      bio-too-long: user.profile.bio-textarea
   user.profile.save-button:
     kind: button
     description: Saves the name, then the bio, each only when it changed.
@@ -82,53 +77,22 @@ flow:
       description: The profile with its form, its Save and its sign-out.
       states:
         name:
+          pattern: draft
           description: The name input.
-          initial: following
-          states:
-            following:
-              description: user.profile.name-input shows the stored name, as it changes here or on another device.
-              on:
-                user.profile.name-input:
-                  target: edited
-                  description: The person types into the name.
-            edited:
-              description: user.profile.name-input holds what was typed; the stored name changing on another device leaves it as typed, and Save writes it.
-              on:
-                user.profile.name-input:
-                  target: following
-                  guard: nameIsStored
-                  description: Typed back to the stored name, it follows the stored name again.
-                model.profile.name:
-                  target: following
-                  guard: nameIsStored
-                  description: The stored name became what was typed, by its Save here (the profile stores it trimmed) or on another device; it follows the stored name again.
+          input: user.profile.name-input
+          stored: model.profile.name
+          guard: nameIsStored
         bio:
+          pattern: draft
           description: The bio textarea.
-          initial: following
-          states:
-            following:
-              description: user.profile.bio-textarea shows the stored bio, as it changes here or on another device.
-              on:
-                user.profile.bio-textarea:
-                  target: edited
-                  description: The person types into the bio.
-            edited:
-              description: user.profile.bio-textarea holds what was typed; the stored bio changing on another device leaves it as typed, and Save writes it.
-              on:
-                user.profile.bio-textarea:
-                  target: following
-                  guard: bioIsStored
-                  description: Typed back to the stored bio, it follows the stored bio again.
-                model.profile.bio:
-                  target: following
-                  guard: bioIsStored
-                  description: The stored bio became what was typed, by its Save here or on another device; it follows the stored bio again.
+          input: user.profile.bio-textarea
+          stored: model.profile.bio
+          guard: bioIsStored
         save:
           description: Save, which writes what changed.
           initial: idle
           states:
             idle:
-              description: Save waits for a click.
               on:
                 user.profile.save-button:
                   - target: saving-name
@@ -137,128 +101,79 @@ flow:
                     guard: bioChanged
                   - description: With nothing changed, Save still says profile-saved.
                     actions:
-                      - type: show
-                        params:
-                          anchor: app-shell.notice-message
-                          codes:
-                            - profile-saved
+                      - show: { app-shell.notice-message: [ profile-saved ] }
             saving-name:
               description: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; the error is cleared.
               invoke:
                 src: profile.updateName
-                input:
-                  name: user.profile.name-input
+                input: { name: user.profile.name-input }
                 onDone:
                   - target: saving-bio
                     guard: bioChanged
                   - target: idle
                     actions:
-                      - type: show
-                        params:
-                          anchor: app-shell.notice-message
-                          codes:
-                            - profile-saved
+                      - show: { app-shell.notice-message: [ profile-saved ] }
                 onError:
                   target: idle
                   description: The first refused write stops the save; user.profile.error shows its code until a save succeeds.
                   actions:
-                    - type: show
-                      params:
-                        anchor: user.profile.error
-                        codes:
-                          - name-required
-                          - name-too-long
-                          - bio-too-long
-                          - failed
+                    - show: { user.profile.error: [ name-required, name-too-long, bio-too-long, failed ] }
             saving-bio:
-              description: profile.updateBio runs, after the name when that changed too.
               invoke:
                 src: profile.updateBio
-                input:
-                  bio: user.profile.bio-textarea
+                input: { bio: user.profile.bio-textarea }
                 onDone:
                   target: idle
                   actions:
-                    - type: show
-                      params:
-                        anchor: app-shell.notice-message
-                        codes:
-                          - profile-saved
+                    - show: { app-shell.notice-message: [ profile-saved ] }
                 onError:
                   target: idle
-                  description: user.profile.error shows the code until a save succeeds.
                   actions:
-                    - type: show
-                      params:
-                        anchor: user.profile.error
-                        codes:
-                          - name-required
-                          - name-too-long
-                          - bio-too-long
-                          - failed
+                    - show: { user.profile.error: [ name-required, name-too-long, bio-too-long, failed ] }
         session:
-          description: The sign-out of this device.
+          description: The sign-out of this device; it asks first when this device holds changes the server has not received.
           initial: idle
           states:
             idle:
-              description: The sign-out waits for a click.
               on:
-                user.profile.sign-out-button:
-                  target: signing-out
+                user.profile.sign-out-button: signing-out
             signing-out:
-              description: The sign-out runs; it asks first when this device holds changes the server has not received.
               invoke:
                 src: platform.sign-out
                 onDone:
                   - target: confirming
                     guard: holdsUnsentChanges
-                    description: "Nothing changes yet: user.profile.sign-out-dialog opens."
                     actions:
-                      - type: show
-                        params:
-                          anchor: user.profile.sign-out-dialog
-                          codes:
-                            - unsent-changes
+                      - show: user.profile.sign-out-dialog
                   - target: "#profile.signed-out"
                     actions:
-                      - type: navigate
-                        params:
-                          to: /sign-in
+                      - navigate: /sign-in
                 onError:
                   target: "#profile.signed-out"
                   description: A failed sign-out also moves to the sign-in page; no code is shown.
                   actions:
-                    - type: navigate
-                      params:
-                        to: /sign-in
+                    - navigate: /sign-in
             confirming:
               description: user.profile.sign-out-dialog asks whether to sign out and lose the changes not sent.
               on:
-                user.profile.sign-out-dialog.confirm-button:
-                  target: signing-out-anyway
+                user.profile.sign-out-dialog.confirm-button: signing-out-anyway
                 user.profile.sign-out-dialog.cancel-button:
                   target: idle
                   description: The dialog closes.
             signing-out-anyway:
-              description: The sign-out runs with forgetUnsent.
               invoke:
                 src: platform.sign-out
                 input:
-                  forgetUnsent:
-                    value: true
+                  forgetUnsent: { value: true }
                 onDone:
                   target: "#profile.signed-out"
                   description: The changes not sent are lost.
                   actions:
-                    - type: navigate
-                      params:
-                        to: /sign-in
+                    - navigate: /sign-in
                 onError:
                   target: "#profile.signed-out"
                   actions:
-                    - type: navigate
-                      params:
-                        to: /sign-in
+                    - navigate: /sign-in
     signed-out:
       description: The app has moved to /sign-in.
       type: final

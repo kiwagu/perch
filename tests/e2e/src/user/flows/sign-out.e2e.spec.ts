@@ -46,9 +46,11 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('3. On device A, click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      // Expected: After step 3 device A is on [/sign-in] and its browser keeps no local database of
-      //   the account
+      // Expected: After step 3 device A is on [/sign-in], shows no [app-shell.notice-message] (the
+      //   notice of step 1 went with the account), and its browser keeps no local database of the
+      //   account
       await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page.getByTestId('app-shell.notice-message')).toHaveCount(0)
       await expect.poll(() => databases(page), { timeout: 10_000 }).not.toContain(database)
     })
 

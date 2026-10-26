@@ -6,7 +6,7 @@
  * fields of its own screen.
  */
 
-import { kindOf, screenOf } from '../anchors'
+import { FIELD_KINDS, kindOf, screenOf } from '../anchors'
 import type { Problem } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
@@ -127,16 +127,6 @@ function nameProblems({ screens }: Contract): Problem[] {
         ]),
   ])
 }
-
-/** The kinds a person types into or picks with: what an error's code can concern. */
-const FIELD_KINDS: ReadonlySet<string> = new Set([
-  'input',
-  'textarea',
-  'select',
-  'checkbox',
-  'radio',
-  'switch',
-])
 
 function fieldsProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)

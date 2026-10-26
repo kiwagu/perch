@@ -1,7 +1,9 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
- * it renames, and the transitions it adds or removes in each activity both contracts hold.
+ * it renames, the codes and the error fields it adds or removes on the anchors both hold
+ * (written or derived, so a constraint added to the model shows as the code it gives), and the
+ * transitions it adds or removes in each activity both contracts hold.
  * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
  */
 
@@ -14,6 +16,7 @@ import { type Contract, declaredAnchors, loadContract } from '../check'
 import {
   ACTIVITIES_DIR,
   type Activity,
+  type AnchorDef,
   CONTRACT_DIR,
   formatProblem,
   MODEL_FILE,
@@ -33,6 +36,10 @@ interface Change {
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
   codes: Change
+  /** As `<anchor> <code>`, on the anchors both contracts hold (a renamed one by its new name). */
+  anchorCodes: Change
+  /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
+  errorFields: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
@@ -176,6 +183,35 @@ function anchorChanges(before: Contract | undefined, after: Contract | undefined
   }
 }
 
+/** Each anchor's definition, by its name. */
+const defsOf = (contract: Contract | undefined): Map<string, AnchorDef> =>
+  new Map(
+    contract === undefined
+      ? []
+      : declaredAnchors(contract.screens).map(({ anchor, def }) => [anchor, def]),
+  )
+
+/**
+ * What `entriesOf` lists of each anchor both contracts hold, as `<anchor> <entry>`, added and
+ * removed; an anchor renamed is held by both under its new name.
+ */
+function carriedChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+  renamed: ReadonlyArray<{ from: string; to: string }>,
+  entriesOf: (def: AnchorDef) => readonly string[],
+): Change {
+  const to = new Map(renamed.map(({ from, to: name }) => [from, name]))
+  const was = new Map([...defsOf(before)].map(([anchor, def]) => [to.get(anchor) ?? anchor, def]))
+  const is = defsOf(after)
+  const listed = (defs: Map<string, AnchorDef>, other: Map<string, AnchorDef>) =>
+    [...defs].flatMap(([anchor, def]) =>
+      other.has(anchor) ? entriesOf(def).map((entry) => `${anchor} ${entry}`) : [],
+    )
+
+  return changeOf(listed(was, is), listed(is, was))
+}
+
 const fieldsOf = (contract: Contract | undefined): string[] =>
   Object.values(contract?.model.entities ?? {}).flatMap(({ name, fields }) =>
     Object.keys(fields).map((field) => `${name}.${field}`),
@@ -206,32 +242,42 @@ function activityChanges(
 }
 
 /** The changes from `before` to `after`; a contract left undefined is an empty one. */
-export const diffContracts = (
+export function diffContracts(
   before: Contract | undefined,
   after: Contract | undefined,
-): ContractChanges => ({
-  anchors: anchorChanges(before, after),
-  codes: changeOf(
-    Object.keys(before?.vocabulary.codes ?? {}),
-    Object.keys(after?.vocabulary.codes ?? {}),
-  ),
-  screens: changeOf(
-    (before?.screens.screens ?? []).map(({ id }) => id),
-    (after?.screens.screens ?? []).map(({ id }) => id),
-  ),
-  entities: changeOf(
-    Object.keys(before?.model.entities ?? {}),
-    Object.keys(after?.model.entities ?? {}),
-  ),
-  fields: changeOf(fieldsOf(before), fieldsOf(after)),
-  activities: activityChanges(before, after),
-})
+): ContractChanges {
+  const anchors = anchorChanges(before, after)
+
+  return {
+    anchors,
+    codes: changeOf(
+      Object.keys(before?.vocabulary.codes ?? {}),
+      Object.keys(after?.vocabulary.codes ?? {}),
+    ),
+    anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
+    errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
+      Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
+    ),
+    screens: changeOf(
+      (before?.screens.screens ?? []).map(({ id }) => id),
+      (after?.screens.screens ?? []).map(({ id }) => id),
+    ),
+    entities: changeOf(
+      Object.keys(before?.model.entities ?? {}),
+      Object.keys(after?.model.entities ?? {}),
+    ),
+    fields: changeOf(fieldsOf(before), fieldsOf(after)),
+    activities: activityChanges(before, after),
+  }
+}
 
 /** The lists in the order of the block, each with its singular and plural noun. */
 const LISTS = [
   ['screens', 'screen', 'screens'],
   ['anchors', 'anchor', 'anchors'],
   ['codes', 'code', 'codes'],
+  ['anchorCodes', 'anchor code', 'anchor codes'],
+  ['errorFields', 'error field', 'error fields'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
   ['activities', 'activity', 'activities'],
