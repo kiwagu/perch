@@ -9,14 +9,20 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useActorRef, useSelector } from '@xstate/react'
 import { useCallback, useEffect, useRef } from 'react'
-import type { AnyActorRef, AnyStateMachine, EventFromLogic, InspectionEvent } from 'xstate'
+import type {
+  AnyActorRef,
+  AnyMachineSnapshot,
+  AnyStateMachine,
+  EventFromLogic,
+  InspectionEvent,
+} from 'xstate'
 
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
 
-/** A submit under way: the actors running when it started, whether an action failed since. */
+/** A submit under way: the actors it started and still runs, whether one of them failed. */
 interface Run {
-  readonly running: ReadonlySet<string>
+  readonly owned: Set<string>
   failed: boolean
   readonly settle: (saved: boolean) => void
 }
@@ -36,7 +42,16 @@ const isNavigate = (
   typeof event['to'] === 'string' &&
   (event['search'] === undefined || isRecord(event['search']))
 
+const DONE = 'xstate.done.actor.'
 const FAILED = 'xstate.error.actor.'
+
+/** The actor whose end an event of the root reports: its id, or none. */
+const endedBy = (type: string): string | undefined =>
+  type.startsWith(DONE)
+    ? type.slice(DONE.length)
+    : type.startsWith(FAILED)
+      ? type.slice(FAILED.length)
+      : undefined
 
 /** The anchor an event of a screen's machine is named by. */
 const controlOf = (event: { readonly type: unknown }): string =>
@@ -45,27 +60,41 @@ const controlOf = (event: { readonly type: unknown }): string =>
 export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
   const navigate = useNavigate()
   const guard = useLeaveGuard()
-  const runs = useRef(new Set<Run>())
+  // Each actor a submit's event started, or one an actor of that submit started on its end, is
+  // that submit's; the submit settles once it owns none, and fails if one of them failed.
+  const owners = useRef(new Map<string, Run>())
+  const sending = useRef<Run | undefined>(undefined)
   const inspect = useCallback((event: InspectionEvent) => {
-    if (event.actorRef.sessionId !== event.rootId) {
+    if (event.type !== '@xstate.snapshot' || event.actorRef.sessionId !== event.rootId) {
       return
     }
 
-    if (event.type === '@xstate.event' && event.event.type.startsWith(FAILED)) {
-      for (const run of runs.current) {
-        run.failed = true
+    const ended = endedBy(event.event.type)
+    const owner = ended === undefined ? sending.current : owners.current.get(ended)
+    const children = new Set(childrenOf(event.snapshot))
+
+    if (owner !== undefined && event.event.type.startsWith(FAILED)) {
+      owner.failed = true
+    }
+
+    for (const [id, run] of owners.current) {
+      if (!children.has(id)) {
+        owners.current.delete(id)
+        run.owned.delete(id)
       }
     }
 
-    if (event.type === '@xstate.snapshot') {
-      const children = childrenOf(event.snapshot)
-
-      for (const run of runs.current) {
-        if (children.every((id) => run.running.has(id))) {
-          runs.current.delete(run)
-          run.settle(!run.failed)
+    if (owner !== undefined) {
+      for (const id of children) {
+        if (!owners.current.has(id) && (ended !== undefined || owner === sending.current)) {
+          owners.current.set(id, owner)
+          owner.owned.add(id)
         }
       }
+    }
+
+    if (ended !== undefined && owner !== undefined && owner.owned.size === 0) {
+      owner.settle(!owner.failed)
     }
   }, [])
   const actor = useActorRef(machine, { inspect })
@@ -86,16 +115,39 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
     return () => moved.unsubscribe()
   }, [actor, navigate])
 
-  /** Sends `event` and resolves with the outcome of what it started. */
+  /**
+   * Sends `event` and resolves with the outcome of the actions it started: `false` when the state
+   * does not take it, at once when it started none.
+   */
   const start = useCallback(
     (event: EventFromLogic<TMachine>) =>
       new Promise<boolean>((settle) => {
-        runs.current.add({
-          running: new Set(childrenOf(actor.getSnapshot())),
-          failed: false,
-          settle,
-        })
+        const now: AnyMachineSnapshot = actor.getSnapshot()
+
+        if (!now.can(event)) {
+          settle(false)
+
+          return
+        }
+
+        const run: Run = { owned: new Set(), failed: false, settle }
+        // What the root already runs is not this submit's, whatever the event does to it.
+        const before = new Set(childrenOf(now))
+
+        sending.current = run
         actor.send(event)
+        sending.current = undefined
+
+        for (const id of before) {
+          if (owners.current.get(id) === run) {
+            owners.current.delete(id)
+            run.owned.delete(id)
+          }
+        }
+
+        if (run.owned.size === 0) {
+          settle(!run.failed)
+        }
       }),
     [actor],
   )

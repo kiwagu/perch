@@ -35,7 +35,7 @@ const machine = setup({
     idle: {
       on: {
         'x.save-button': 'saving-one',
-        'x.nothing-button': {},
+        'x.nothing-button': { actions: emit({ type: 'navigate', to: '/here' }) },
         'x.leave-button': { actions: emit({ type: 'navigate', to: '/there' }) },
         'user.profile.sign-out-button': 'out',
       },
@@ -53,9 +53,53 @@ const machine = setup({
   },
 })
 
-type Screen = ReturnType<typeof useScreenMachine<typeof machine>>
+/** Settles the slow save and fails the background actor, when a test says so. */
+const control: { finishSave: () => void; failBackground: () => void } = {
+  finishSave: () => {},
+  failBackground: () => {},
+}
 
-const held: { screen?: Screen } = {}
+/** A background actor that runs from the start, beside a slow save. */
+const watched = setup({
+  types: { events: {} as { readonly type: 'x.save-button' } },
+  actors: {
+    background: fromPromise(
+      () =>
+        new Promise<void>((_, reject) => {
+          control.failBackground = () => reject(new Error('lost'))
+        }),
+    ),
+    save: fromPromise(
+      () =>
+        new Promise<void>((resolve) => {
+          control.finishSave = resolve
+        }),
+    ),
+  },
+}).createMachine({
+  type: 'parallel',
+  states: {
+    watch: {
+      initial: 'watching',
+      states: {
+        watching: { invoke: { src: 'background', onError: 'lost' } },
+        lost: {},
+      },
+    },
+    form: {
+      initial: 'idle',
+      states: {
+        idle: { on: { 'x.save-button': 'saving' } },
+        saving: { invoke: { src: 'save', onDone: 'idle', onError: 'idle' } },
+      },
+    },
+  },
+})
+
+type Screen = ReturnType<typeof useScreenMachine<typeof machine>>
+type Watched = ReturnType<typeof useScreenMachine<typeof watched>>
+
+const held: { screen?: Screen; watched?: Watched } = {}
 
 function Page() {
   const running = useScreenMachine(machine)
@@ -63,6 +107,14 @@ function Page() {
   held.screen = running
 
   return <output data-testid="state">{String(running.state.value)}</output>
+}
+
+function WatchedPage() {
+  const running = useScreenMachine(watched)
+
+  held.watched = running
+
+  return <output data-testid="state">{JSON.stringify(running.state.value)}</output>
 }
 
 /** A layout whose blocker refuses every move it is asked about. */
@@ -74,20 +126,21 @@ function Blocking() {
 
 const PageModule = defineModule({
   id: 'page',
-  declarations: { Page, There: () => <p>there</p> },
+  declarations: { Page, WatchedPage, There: () => <p>there</p> },
   routes: [
     { path: '/here', page: 'Page' },
+    { path: '/watched', page: 'WatchedPage' },
     { path: '/there', page: 'There' },
   ],
 })
 
-async function open(guard: LeaveGuard) {
+async function open(guard: LeaveGuard, at = '/here') {
   const { session } = fakeSession()
   const router = createAppRouter({
     modules: [PageModule],
     session,
     layout: Blocking,
-    history: createMemoryHistory({ initialEntries: ['/here'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   })
 
   render(
@@ -140,6 +193,39 @@ describe('useScreenMachine', () => {
     const { running } = await open(passing())
 
     expect(await act(() => running.submit({ type: 'x.nothing-button' }))).toBe(true)
+  })
+
+  it('resolves a submit false when the state does not take its event, and keeps the first one going', async () => {
+    const { running } = await open(passing())
+    let first: Promise<boolean> = Promise.resolve(false)
+
+    act(() => {
+      first = running.submit({ type: 'x.save-button', fail: false })
+    })
+
+    expect(await act(() => running.submit({ type: 'x.save-button', fail: false }))).toBe(false)
+    expect(await act(() => first)).toBe(true)
+  })
+
+  it('judges a submit only by the actions it started, not by one that ran before it', async () => {
+    await open(passing(), '/watched')
+
+    const running = held.watched
+
+    if (running === undefined) {
+      throw new Error('the page did not render')
+    }
+
+    let saved: Promise<boolean> = Promise.resolve(false)
+
+    act(() => {
+      saved = running.submit({ type: 'x.save-button' })
+    })
+    await act(async () => control.failBackground())
+    await act(async () => control.finishSave())
+
+    expect(await act(() => saved)).toBe(true)
+    expect(screen.getByTestId('state').textContent).toContain('"watch":"lost"')
   })
 
   it("runs a flow's navigation past the frame's blocker", async () => {

@@ -171,7 +171,8 @@ modeling stage.
   a provider); `screen-machine.ts` is the one way a screen runs its machine
   (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a leaving
   control's event waits for it, and `submit(event)` resolves with the outcome of the actions
-  the event started); `leave-now.ts` is the unguarded move for a leave nobody started here
+  the event started, and of the ones they started in turn, judged apart from any other submit
+  or actor; `false` when the state does not take the event); `leave-now.ts` is the unguarded move for a leave nobody started here
   (`useLeaveNow()`).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
