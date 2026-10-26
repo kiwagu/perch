@@ -29,6 +29,7 @@ import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { unsavedInputProblems } from './unsaved-input'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
 
@@ -88,6 +89,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   runsProblems,
   routesProblems,
   leavingProblems,
+  unsavedInputProblems,
   searchProblems,
   scenariosProblems,
 ]
