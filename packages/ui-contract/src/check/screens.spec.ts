@@ -87,6 +87,16 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "sample.gone-input" is not an anchor of the screen',
     ])
   })
+  it('says only a field holds input', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.page').holdsInput = true
+    anchorIn(contract, 'sample.title-input').holdsInput = false
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].holdsInput: only a field holds input',
+    ])
+  })
   it('wants every anchor to start with its screen id and end with its kind', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')

@@ -25,6 +25,7 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { leavingProblems } from './leaving'
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'

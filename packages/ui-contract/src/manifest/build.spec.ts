@@ -42,6 +42,7 @@ describe('buildManifest', () => {
       kind: 'input',
       screen: 'sample',
       binding: { model: 'thing.title' },
+      holdsInput: true,
     })
     expect(manifest.ids['sample.save-button']).toMatchObject({
       kind: 'button',

@@ -44,7 +44,19 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
       Object.entries(screen.anchors).map(
         ([
           anchor,
-          { kind, binding, codes, fields, dataId, dataValue, states, derived, roles, own },
+          {
+            kind,
+            binding,
+            codes,
+            fields,
+            dataId,
+            dataValue,
+            states,
+            derived,
+            roles,
+            own,
+            holdsInput,
+          },
         ]) => [
           anchor,
           {
@@ -59,6 +71,7 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(derived === undefined ? {} : { derived }),
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
+            ...(holdsInput === undefined ? {} : { holdsInput }),
           },
         ],
       ),

@@ -7,3 +7,4 @@ export {
   failuresOf,
   type PlatformCodes,
 } from './failures'
+export { withDerivedInputs } from './inputs'

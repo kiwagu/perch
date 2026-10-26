@@ -950,6 +950,10 @@
                   "description": "Shown to a member only on the entries the member owns.",
                   "type": "boolean"
                 },
+                "holdsInput": {
+                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
+                  "type": "boolean"
+                },
                 "codes": {
                   "description": "The data-code values the element carries.",
                   "type": "array",
@@ -4836,6 +4840,10 @@
           "own": {
             "description": "Shown to a member only on the entries it owns.",
             "type": "boolean"
+          },
+          "holdsInput": {
+            "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -4934,6 +4942,15 @@
           },
           "additionalProperties": {
             "type": "string"
+          }
+        },
+        "leaving": {
+          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
+            "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
           }
         },
         "reserved": {

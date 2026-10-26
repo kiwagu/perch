@@ -104,8 +104,8 @@ The authored files, edited by hand or by a model in the modeling thread:
 - `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), the reserved anchors and the
-  readiness line.
+  in a flow (the local data opened, or could not be), and `leaving`, the actions whose run
+  leaves what the user typed behind, the reserved anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -265,8 +265,9 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
-come from).
+screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
+from).
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -390,6 +391,22 @@ out, and the loader derives it, the same way every time:
   code of a field to the control its binding passes for that field (`name-too-long` to
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
+- **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
+  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
+  bindings runs an action that takes the field itself as a parameter, an action no other
+  anchor of its screen runs with it (the language select, the organisation select), applies
+  at once and holds none; a field whose action a submit button also runs with it (the
+  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
+  wins. The manifest carries it, and `contract:diff` lists the
+  fields that start or stop holding input.
+- **Which leaves ask first.** While a field holds unsaved input, the app is to ask before a
+  change of screen, and before an action that leaves what was typed behind, a sign-out, a
+  switch of organisation, a change of language, runs from its control; those actions are
+  listed in `platform.yaml` under `leaving`. Reload, closing the tab and a URL typed by hand
+  are the browser's own prompt to give. A change of state inside one screen (a tab, a search
+  parameter) is no leave, and a navigation a flow makes after its action completed never
+  asks: the action took the input.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -737,7 +754,8 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
-  and leaves each one that is not final; the versions agree; the generated schemas
+  and leaves each one that is not final; every action of `leaving` exists and is listed
+  once; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
@@ -745,7 +763,11 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  suffix and every code in the vocabulary. An anchor built at runtime is a problem. A field
+  the contract says holds no input (a choice that applies at once) carries
+  `holdsInput={false}` on the element with its anchor; a field that holds input carries
+  nothing (`holdsInput={true}` is the default and is reported, and so is a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field). On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
