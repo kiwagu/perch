@@ -131,6 +131,44 @@ function SeveralUncontrolled() {
   )
 }
 
+/** A select of kinds that starts with several choices and, on "one", turns single. */
+function Switching() {
+  const [several, setSeveral] = useState(true)
+  const [value, setValue] = useState<Kind | readonly Kind[] | null>([])
+
+  return (
+    <>
+      <Select<Kind, boolean>
+        multiple={several}
+        value={value}
+        onValueChange={setValue}
+        isItemEqualToValue={(item, chosen) => item.name.toLowerCase() === chosen.name.toLowerCase()}
+        itemToStringLabel={(item) => item.name}
+      >
+        <SelectTrigger aria-label="kind">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {KINDS.map((kind) => (
+            <SelectItem key={kind.id} value={kind}>
+              {kind.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <button
+        type="button"
+        onClick={() => {
+          setSeveral(false)
+          setValue(KINDS[0] ?? null)
+        }}
+      >
+        one
+      </button>
+    </>
+  )
+}
+
 /** A select of several choices at once. */
 function Several() {
   const [values, setValues] = useState<string[]>(['a'])
@@ -223,6 +261,21 @@ describe('Select', () => {
     const beta = screen.getByRole('option', { name: 'Beta' })
 
     await userEvent.click(beta)
+    expect(probe()).toBe('false')
+  })
+
+  it('starts afresh when a select turns from several choices to one', async () => {
+    render(
+      <UnsavedInputScope>
+        <Switching />
+        <Probe />
+      </UnsavedInputScope>,
+    )
+
+    await choose('Beta')
+    expect(probe()).toBe('true')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByText('one'))
     expect(probe()).toBe('false')
   })
 

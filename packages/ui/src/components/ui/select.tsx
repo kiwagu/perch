@@ -50,7 +50,8 @@ function sameChoice<Value>(
   }
 }
 
-function Select<Value, Multiple extends boolean | undefined = false>({
+/** The select's root, tracking what is chosen with the comparison of its one mode. */
+function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
   holdsInput = true,
   onValueChange,
   ...props
@@ -73,6 +74,13 @@ function Select<Value, Multiple extends boolean | undefined = false>({
       }}
     />
   )
+}
+
+/** A select; one that turns from one choice to several, or back, is a new field. */
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectProps<Value, Multiple>,
+) {
+  return <TrackedSelect key={props.multiple === true ? 'several' : 'one'} {...props} />
 }
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
