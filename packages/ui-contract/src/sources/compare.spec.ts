@@ -31,6 +31,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   literals: [],
   derived: [],
   codes: [],
+  inputs: [],
   problems: [],
   ...part,
 })
@@ -49,6 +50,31 @@ const agreeing = (): Collected[] => [
 
 const printed = (collected: readonly Collected[]): string[] =>
   compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
+
+/** The contract with a field that holds input and one whose own change runs its action. */
+const WITH_FIELDS: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.form.name-input': { kind: 'input', holdsInput: true },
+      'sample.page.kind-select': { kind: 'select', holdsInput: false },
+    },
+  })),
+}
+
+/** The sources that render the two fields, with `inputs` as their holdsInput. */
+const withInputs = (inputs: Collected['inputs']): Collected[] => [
+  ...agreeing(),
+  source('x.tsx', {
+    literals: [
+      { anchor: 'sample.form.name-input', form: 'attribute', line: 3 },
+      { anchor: 'sample.page.kind-select', form: 'prop', line: 4 },
+    ],
+    inputs,
+  }),
+]
 
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
@@ -87,6 +113,45 @@ describe('compareWithContract', () => {
       compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
+  })
+  it("holds a field's holdsInput to the contract", () => {
+    expect(
+      compareWithContract(
+        withInputs([
+          { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+          { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+        ]),
+        WITH_FIELDS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([
+      'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
+      'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+    ])
+    expect(
+      compareWithContract(
+        withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
+        WITH_FIELDS,
+        vocabulary,
+      ),
+    ).toEqual([])
+  })
+  it('reports holdsInput on an anchor that is not a field', () => {
+    expect(
+      compareWithContract(
+        [
+          source('a.tsx', {
+            literals: [
+              { anchor: 'sample.page', form: 'attribute', line: 3 },
+              { anchor: 'sample.mode-select', form: 'prop', line: 4 },
+            ],
+            inputs: [{ anchor: 'sample.page', holdsInput: false, line: 3 }],
+          }),
+        ],
+        SCREENS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual(['a.tsx:3: "sample.page" is a page, not a field; only a field holds input'])
   })
   it('reports a literal declared twice at the second place, naming the first', () => {
     const collected = [

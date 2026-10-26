@@ -7,7 +7,7 @@
  * missing platform file are problems of the file or folder concerned. Once every file is
  * read, what a file leaves to the contract is derived (`derive/`): an error anchor's codes and
  * fields from the failures of the actions its part binds, as the model and the platform give
- * them. A file may author its flow in the shorter forms (a transition as its target, an effect
+ * them, and whether a field holds input, from its kind and its bindings. A file may author its flow in the shorter forms (a transition as its target, an effect
  * by its name, a region by its pattern or its button, the region of a button left out): each
  * flow is expanded with the codes the anchors of all screens carry, the failures of the
  * actions and the screen's buttons, then the screen is parsed as every reader takes it, its
@@ -35,7 +35,13 @@ import {
   type transitionSchema,
 } from '../schemas'
 
-import { controlsOf, type FailureOf, failuresOf, withDerivedErrors } from './derive'
+import {
+  controlsOf,
+  type FailureOf,
+  failuresOf,
+  withDerivedErrors,
+  withDerivedInputs,
+} from './derive'
 import { type CodesOf, expandFlow } from './expand-flow'
 import { filesUnder } from './files-under'
 import { loadModel, type Model } from './model'
@@ -181,7 +187,7 @@ function readScreenFiles(
       problems.push(...yaml.problems)
 
       if (yaml.problems.length === 0) {
-        read.push({ file, value: withDerivedErrors(yaml.value, failureOf) })
+        read.push({ file, value: withDerivedInputs(withDerivedErrors(yaml.value, failureOf)) })
       }
     } else {
       problems.push({

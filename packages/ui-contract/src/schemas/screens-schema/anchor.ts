@@ -98,6 +98,12 @@ export const anchorDefSchema = z
       .optional()
       .describe('The roles that see the element; absent: every role of the screen.'),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
+    holdsInput: z
+      .boolean()
+      .optional()
+      .describe(
+        'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
+      ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
     fields: z
       .record(codeSchema, baseAnchorSchema)
@@ -124,7 +130,8 @@ export const anchorDefSchema = z
 
 /**
  * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
- * and the loader derives them from the actions its part binds.
+ * and the loader derives them from the actions its part binds; a field may leave `holdsInput`
+ * out, and the loader derives it from its kind and its bindings.
  */
 export const authoredAnchorDefSchema = anchorDefSchema
   .extend({
@@ -139,6 +146,12 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .optional()
       .describe(
         "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.",
+      ),
+    holdsInput: z
+      .boolean()
+      .optional()
+      .describe(
+        'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.',
       ),
   })
   .describe('One declared anchor, as a screen file writes it.')

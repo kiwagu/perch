@@ -125,6 +125,12 @@ const idSchema = z
       .describe('The derived suffixes the element renders.'),
     roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
+    holdsInput: z
+      .boolean()
+      .optional()
+      .describe(
+        'The field holds input: the app is to ask before a leave that would lose what is typed into it.',
+      ),
   })
   .describe('One declared anchor, as a test looks it up.')
 

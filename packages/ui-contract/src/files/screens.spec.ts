@@ -359,6 +359,7 @@ describe('loadScreens', () => {
         'title-taken': 'sample.form.title-input',
       },
     })
+    expect(sample?.anchors['sample.form.title-input']?.holdsInput).toBe(true)
     expect(sample?.flow?.states['viewing']).toMatchObject({
       states: {
         'form-add': {
@@ -389,6 +390,29 @@ describe('loadScreens', () => {
         },
       },
     })
+  })
+
+  it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
+    writeSample((screen) => {
+      screen['anchors'] = {
+        ...(screen['anchors'] as Record<string, unknown>),
+        'sample.kind-select': {
+          kind: 'select',
+          binding: { action: 'platform.sign-out', params: { forgetUnsent: 'sample.kind-select' } },
+        },
+        'sample.title-input': {
+          kind: 'input',
+          binding: { model: 'thing.title' },
+          holdsInput: false,
+        },
+      }
+    })
+
+    const anchors = loadScreens(root).screens?.screens[0]?.anchors
+
+    expect(anchors?.['sample.kind-select']?.holdsInput).toBe(false)
+    expect(anchors?.['sample.title-input']?.holdsInput).toBe(false)
+    expect(anchors?.['sample.save-button']?.holdsInput).toBeUndefined()
   })
 
   it('counts the derived regions among the two a parallel state has, after the expansion', () => {

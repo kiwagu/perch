@@ -1,6 +1,6 @@
 /**
- * What the platform offers every screen: its actions, the events it raises in a flow, its
- * reserved anchors, its status line.
+ * What the platform offers every screen: its actions, the events it raises in a flow, the
+ * actions that leave what the user typed behind, its reserved anchors, its status line.
  */
 
 import { z } from '@workspace/zod'
@@ -14,7 +14,7 @@ import {
   stateSchema,
 } from '../../names.schema'
 
-import { platformActionNameSchema } from './anchor'
+import { actionNameSchema, platformActionNameSchema } from './anchor'
 
 const actionParameterSchema = z
   .strictObject({
@@ -45,6 +45,12 @@ export const platformSchema = z
       .optional()
       .describe(
         'The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.',
+      ),
+    leaving: z
+      .array(actionNameSchema)
+      .optional()
+      .describe(
+        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
       ),
     reserved: z
       .array(baseAnchorSchema)

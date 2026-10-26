@@ -128,6 +128,8 @@ describe('diffContracts', () => {
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
+      inputs: { added: [], removed: [] },
+      leaving: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -167,6 +169,16 @@ describe('diffContracts', () => {
     expect(changes.errorFields).toEqual({
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
+    })
+    screen.anchors['sample.title-input'] = {
+      ...screen.anchors['sample.title-input'],
+      kind: 'input',
+      holdsInput: false,
+    }
+
+    expect(diffContracts(before, more).inputs).toEqual({
+      added: [],
+      removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
   })
