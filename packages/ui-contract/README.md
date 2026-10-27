@@ -27,7 +27,10 @@ for Bun.
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
     failures of the actions, an error's codes and fields, the buttons whose regions the flow
     leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, then parsed through `screenFileSchema`;
+    screen carry and the failures of the actions, the success of each model action said on the
+    frame's toast anchor, which carries every code a flow shows on it
+    (`files/expand-flow/toasts.ts`, `files/derive/toasts.ts`), then parsed through
+    `screenFileSchema`;
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
@@ -35,7 +38,7 @@ for Bun.
     events, `leaving` actions, `unsavedInput` (how each leave that would lose unsaved input
     asks first), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
-    screen, problems named by the file and the path inside it, a YAML error by its line),
+    screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
     `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
