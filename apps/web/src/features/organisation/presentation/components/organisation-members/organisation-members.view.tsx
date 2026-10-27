@@ -8,7 +8,7 @@ import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
-import { useAction } from '../../pages/organisation/use-action'
+import type { OrganisationEvent } from '../../../application/organisation.machine'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 export interface MemberItem {
@@ -21,17 +21,18 @@ export interface MemberItem {
 export function OrganisationMembers(props: {
   readonly members: readonly MemberItem[] | undefined
   readonly error: string | undefined
+  /** Whether the page's flow takes the event now. */
+  readonly can: (event: OrganisationEvent) => boolean
   readonly onInvite: (email: string) => Promise<boolean>
   readonly onRemove: (id: IdentityId) => void
 }) {
   const t = useT()
   const emailId = useId()
   const [email, setEmail] = useState('')
-  const [pending, run] = useAction()
   const invite = () => {
     const invited = props.onInvite(email)
 
-    run(invited, (done) => {
+    void invited.then((done) => {
       if (done) {
         setEmail('')
       }
@@ -62,6 +63,12 @@ export function OrganisationMembers(props: {
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={
+                      !props.can({
+                        type: 'organisation.members.remove-button',
+                        identity: member.id,
+                      })
+                    }
                     onClick={() => props.onRemove(member.id)}
                     data-testid="organisation.members.remove-button"
                   >
@@ -87,7 +94,7 @@ export function OrganisationMembers(props: {
             <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
             <Button
               type="submit"
-              disabled={pending}
+              disabled={!props.can({ type: 'organisation.invite.submit-button', email })}
               data-testid="organisation.invite.submit-button"
             >
               {t('organisation.invite.submit')}

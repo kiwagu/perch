@@ -22,6 +22,8 @@ import { aheadOf, beyondTheSubset, projected } from '@workspace/ui-contract/mach
 
 import { LocaleWrites } from '../features/app-shell/application/locale-writes'
 import { createShellMachine } from '../features/app-shell/application/shell.machine'
+import { createDevicesMachine } from '../features/device/application/devices.machine'
+import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
@@ -46,6 +48,22 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       }),
       storeLocale: () => okAsync(undefined),
       signOutHere: () => okAsync(undefined),
+    }),
+  device: () =>
+    createDevicesMachine({
+      revoke: () => okAsync(undefined),
+      signOutEverywhere: () => okAsync(undefined),
+    }),
+  organisation: () =>
+    createOrganisationMachine({
+      select: () => undefined,
+      create: () => okAsync(undefined),
+      addNote: () => okAsync(undefined),
+      editNote: () => okAsync(undefined),
+      deleteNote: () => okAsync(undefined),
+      invite: () => okAsync(undefined),
+      remove: () => okAsync(undefined),
+      current: () => undefined,
     }),
   'user.sign-in': () =>
     createSignInMachine(

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { flowSchema } from '.'
+import { authoredFlowSchema, controlRegionSchema, flowSchema } from '.'
 
 const SHOW_ERROR = {
   type: 'show',
@@ -341,5 +341,36 @@ describe('flowSchema with a parallel state', () => {
     ]) {
       expect(at(target), target).toBe(false)
     }
+  })
+})
+
+describe('the toast opt-out', () => {
+  const flowWith = (invoke: Record<string, unknown>) => ({
+    initial: 'saving',
+    states: { saving: { invoke: { src: 'thing.createThing', onDone: 'saving', ...invoke } } },
+  })
+
+  it('lets an authored invoke and a region by its button say no toast', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ toast: false })).success).toBe(true)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', toast: false }).success,
+    ).toBe(true)
+  })
+
+  it('takes only false, and the canonical flow knows no toast at all', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ toast: true })).success).toBe(false)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', toast: true }).success,
+    ).toBe(false)
+    expect(
+      flowSchema.safeParse({
+        initial: 'saving',
+        states: {
+          saving: {
+            invoke: { src: 'thing.createThing', onDone: { target: 'saving' }, toast: false },
+          },
+        },
+      }).success,
+    ).toBe(false)
   })
 })

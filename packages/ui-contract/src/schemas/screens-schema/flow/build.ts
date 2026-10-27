@@ -22,23 +22,35 @@ import {
 } from './names'
 import { transitionsSchemaOf } from './transitions'
 
+/** The opt-out of a derived toast, which only an authored flow writes and the loader takes away. */
+export const toastOptOutSchema = z
+  .literal(false)
+  .describe(
+    'No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself.',
+  )
+
 /** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
 export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
   transition: T
   effect: E
+  /** The authored flow's invoke may say `toast: false`; the canonical one has no such key. */
+  toastOptOut?: boolean
 }) {
   const transitions = transitionsSchemaOf(parts.transition)
   const effects = z.array(parts.effect).min(1).describe('The effects, in order.')
-  const invoke = z
-    .strictObject({
-      src: actionNameSchema.describe('The action the state runs, as a binding names it.'),
-      input: actionParamsSchema
-        .exactOptional()
-        .describe('Per parameter, the anchor whose value it takes or a constant.'),
-      onDone: transitions.describe('What follows when the action succeeds.'),
-      onError: transitions.exactOptional().describe('What follows when the action fails.'),
-    })
-    .describe('The action the state runs while the machine is in it.')
+  const invokeShape = {
+    src: actionNameSchema.describe('The action the state runs, as a binding names it.'),
+    input: actionParamsSchema
+      .exactOptional()
+      .describe('Per parameter, the anchor whose value it takes or a constant.'),
+    onDone: transitions.describe('What follows when the action succeeds.'),
+    onError: transitions.exactOptional().describe('What follows when the action fails.'),
+  }
+  const invoke = (
+    parts.toastOptOut === true
+      ? z.strictObject({ ...invokeShape, toast: toastOptOutSchema.exactOptional() })
+      : z.strictObject(invokeShape)
+  ).describe('The action the state runs while the machine is in it.')
   const description = z.string().exactOptional().describe('What the state is, for a reader.')
   const entry = effects.exactOptional().describe('The effects on entering the state.')
   const exit = effects.exactOptional().describe('The effects on leaving the state.')
@@ -113,9 +125,15 @@ export function flowSchemaOf<
   region: (parts: FlowParts<T, E>) => R
   regions: { min: number; description: string }
   description: string
+  /** An invoke may say `toast: false` (the authored flow). */
+  toastOptOut?: boolean
 }) {
   const { min, description: regionsDescription } = options.regions
-  const parts = flowPartsOf({ transition: options.transition, effect: options.effect })
+  const parts = flowPartsOf({
+    transition: options.transition,
+    effect: options.effect,
+    ...(options.toastOptOut === undefined ? {} : { toastOptOut: options.toastOptOut }),
+  })
   const parallel = z
     .strictObject({
       description: parts.description,

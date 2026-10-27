@@ -125,6 +125,7 @@ describe('compareWithContract', () => {
         vocabulary,
       ).map(formatProblem),
     ).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
       'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
       'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
     ])
@@ -136,6 +137,20 @@ describe('compareWithContract', () => {
       ),
     ).toEqual([])
   })
+  it('wants the opt-out on the element of a field that holds no input, once it is rendered', () => {
+    expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary).map(formatProblem)).toEqual(
+      [
+        'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
+      ],
+    )
+    // On a branch the contract may run ahead: the element gains its opt-out in the code's commit.
+    expect(
+      compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead: true }).map(
+        formatProblem,
+      ),
+    ).toEqual([])
+  })
+
   it('reports holdsInput on an anchor that is not a field', () => {
     expect(
       compareWithContract(
