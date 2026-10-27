@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DeviceView } from '../../../../../platform/devices.port'
 import { useService } from '../../../../../platform/module'
@@ -14,11 +14,18 @@ export function DevicesContainer() {
   const notify = useNotify()
   const [list, setList] = useState<readonly DeviceView[] | undefined>(undefined)
   const [reads, setReads] = useState(0)
+  // The shell's `notify` changes when it clears the notice, as the account signs out: the read
+  // must not run again for that, and raises through the one taken when it started, which a
+  // reply after the sign-out finds spent.
+  const latestNotify = useRef(notify)
+
+  latestNotify.current = notify
 
   // The devices are read when the page opens, and again after a sign-out that did not come back
   // with them.
   useEffect(() => {
     let live = true
+    const raise = latestNotify.current
 
     void devices.list().match(
       (read) => {
@@ -28,7 +35,7 @@ export function DevicesContainer() {
       },
       () => {
         if (live) {
-          notify({ code: 'devices-read-failed', text: (t) => t('device.notice.read-failed') })
+          raise({ code: 'devices-read-failed', text: (t) => t('device.notice.read-failed') })
         }
       },
     )
@@ -36,7 +43,7 @@ export function DevicesContainer() {
     return () => {
       live = false
     }
-  }, [devices, reads, notify])
+  }, [devices, reads])
 
   // Another device's sign-out comes back with the list read again (this device signs out from the
   // profile). A sign-out that failed reads the list again, unless the gateway is out of reach: a
