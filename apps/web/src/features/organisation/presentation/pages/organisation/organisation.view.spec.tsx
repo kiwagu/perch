@@ -35,6 +35,7 @@ const plans: NoteItem = {
   editable: false,
   deletable: false,
 }
+const agenda: NoteItem = { ...hello, id: noteIdFactory.create(), text: 'Agenda' }
 
 const ann: MemberItem = {
   id: identityIdFactory.create(),
@@ -49,11 +50,13 @@ const bea: MemberItem = {
 
 function renderView(props: Partial<OrganisationViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = {
+    onToggleCreate: vi.fn(),
     onCreate: vi.fn(() => Promise.resolve(true)),
     onSelect: vi.fn(),
     onAddNote: vi.fn(() => Promise.resolve(true)),
+    onOpenEdit: vi.fn(),
     onEditNote: vi.fn(() => Promise.resolve(true)),
-    onDeleteNote: vi.fn(() => Promise.resolve(true)),
+    onDeleteNote: vi.fn(),
     onInvite: vi.fn(() => Promise.resolve(true)),
     onRemoveMember: vi.fn(),
   }
@@ -62,6 +65,9 @@ function renderView(props: Partial<OrganisationViewProps> = {}, locale: 'en' | '
       organisations={[acme]}
       current={acme}
       notes={[hello, plans]}
+      can={() => true}
+      creating={false}
+      editing={undefined}
       {...handlers}
       {...props}
       {...more}
@@ -244,12 +250,16 @@ describe('OrganisationView of a member', () => {
     )
   })
 
-  it('edits a note in place', async () => {
-    const { onEditNote } = renderView()
+  it('edits a note in place', () => {
+    const { onOpenEdit, onEditNote, rerender } = renderView()
     const [first] = screen.getAllByTestId('organisation.notes.item')
     const item = first ?? expect.unreachable('a note item')
 
     fireEvent.click(within(item).getByTestId('organisation.notes.edit-button'))
+
+    expect(onOpenEdit).toHaveBeenCalledWith(hello.id)
+
+    rerender({ editing: hello.id })
 
     const input = within(item).getByTestId(
       'organisation.notes.edit-textarea',
@@ -261,9 +271,64 @@ describe('OrganisationView of a member', () => {
     fireEvent.click(within(item).getByTestId('organisation.notes.save-button'))
 
     expect(onEditNote).toHaveBeenCalledWith({ id: hello.id, text: 'Hello, all' })
-    await waitFor(() =>
-      expect(within(item).queryByTestId('organisation.notes.edit-textarea')).toBeNull(),
-    )
+
+    rerender({ editing: undefined })
+
+    expect(within(item).queryByTestId('organisation.notes.edit-textarea')).toBeNull()
+    expect(within(item).getByTestId('organisation.notes.text-cell').textContent).toBe('Hello')
+  })
+
+  it('shows one edit form, and drops what was typed into it when another note opens its own', () => {
+    const { rerender } = renderView({ notes: [hello, agenda], editing: hello.id })
+
+    expect(screen.getAllByTestId('organisation.notes.edit-textarea')).toHaveLength(1)
+
+    type('organisation.notes.edit-textarea', 'Hello, all')
+    rerender({ notes: [hello, agenda], editing: agenda.id })
+
+    const [first, second] = screen.getAllByTestId('organisation.notes.item')
+
+    expect(
+      within(first ?? expect.unreachable('a note item')).getByTestId('organisation.notes.text-cell')
+        .textContent,
+    ).toBe('Hello')
+    expect(field('organisation.notes.edit-textarea').value).toBe('Agenda')
+    expect(
+      within(second ?? expect.unreachable('a second note item')).getByTestId(
+        'organisation.notes.edit-textarea',
+      ),
+    ).toBeTruthy()
+
+    rerender({ notes: [hello, agenda], editing: hello.id })
+
+    expect(field('organisation.notes.edit-textarea').value).toBe('Hello')
+  })
+
+  it("disables the controls the page's flow does not take now", () => {
+    renderView({
+      current: acmeAdmin,
+      organisations: [acmeAdmin, globex],
+      members: [ann, bea],
+      can: (event) => event.type === 'organisation.notes.add-button',
+    })
+
+    for (const testId of [
+      'organisation.notes.edit-button',
+      'organisation.notes.delete-button',
+      'organisation.invite.submit-button',
+      'organisation.members.remove-button',
+      'organisation.create.toggle-button',
+      'organisation.create.submit-button',
+    ]) {
+      expect((screen.getByTestId(testId) as HTMLButtonElement).disabled, testId).toBe(true)
+    }
+
+    expect(
+      (screen.getByTestId('organisation.notes.add-button') as HTMLButtonElement).disabled,
+    ).toBe(false)
+    expect(
+      screen.getByTestId('organisation.page.current-select').hasAttribute('data-disabled'),
+    ).toBe(true)
   })
 
   it('shows "Yours" and the edit and delete buttons only on the notes the member may change', () => {
@@ -315,53 +380,51 @@ describe('OrganisationView of a member', () => {
   })
 
   it('keeps what was typed into the create form while its toggle closes and opens it', () => {
-    renderView({ organisations: [acme, globex] })
+    const { onToggleCreate, rerender } = renderView({ organisations: [acme, globex] })
     const toggle = () => screen.getByTestId('organisation.create.toggle-button')
 
     fireEvent.click(toggle())
+
+    expect(onToggleCreate).toHaveBeenCalledTimes(1)
+
+    rerender({ organisations: [acme, globex], creating: true })
     type('organisation.create.key-input', 'initech')
-    fireEvent.click(toggle())
+    rerender({ organisations: [acme, globex], creating: false })
 
     expect(toggle().getAttribute('aria-expanded')).toBe('false')
     expect(createHidden()).toBe(true)
 
-    fireEvent.click(toggle())
+    rerender({ organisations: [acme, globex], creating: true })
 
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
     expect(createHidden()).toBe(false)
     expect(field('organisation.create.key-input').value).toBe('initech')
   })
 
-  it('closes the create form and starts it afresh when the current organisation changes', () => {
-    const { rerender } = renderView({ organisations: [acme, globex] })
-    const toggle = () => screen.getByTestId('organisation.create.toggle-button')
+  it('starts the create form afresh when another organisation becomes current', () => {
+    const { rerender } = renderView({ organisations: [acme, globex], creating: true })
 
-    fireEvent.click(toggle())
     type('organisation.create.key-input', 'initech')
+    rerender({ organisations: [acme, globex], current: globex, notes: [], creating: false })
 
-    expect(toggle().getAttribute('aria-expanded')).toBe('true')
-    expect(createHidden()).toBe(false)
-
-    rerender({ organisations: [acme, globex], current: globex, notes: [] })
-
-    expect(toggle().getAttribute('aria-expanded')).toBe('false')
     expect(createHidden()).toBe(true)
     expect(field('organisation.create.key-input').value).toBe('')
   })
 
-  it('keeps the create form open when the creation fails', async () => {
-    renderView({ onCreate: vi.fn(() => Promise.resolve(false)) })
+  it('keeps what was typed into the create form when the creation fails', async () => {
+    const onCreate = vi.fn(() => Promise.resolve(false))
 
-    fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+    renderView({ creating: true, onCreate })
+
     type('organisation.create.key-input', 'globex')
     type('organisation.create.name-input', 'Globex')
     fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
 
-    await waitFor(() => {
-      expect(field('organisation.create.key-input').value).toBe('globex')
-    })
-    expect(
-      screen.getByTestId('organisation.create.toggle-button').getAttribute('aria-expanded'),
-    ).toBe('true')
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith({ key: 'globex', name: 'Globex' }))
+    await act(() => Promise.resolve())
+
+    expect(field('organisation.create.key-input').value).toBe('globex')
+    expect(field('organisation.create.name-input').value).toBe('Globex')
   })
 
   it('shows neither the members nor the invite form', () => {
@@ -373,11 +436,11 @@ describe('OrganisationView of a member', () => {
   })
 
   it('offers to create another organisation', () => {
-    const { onCreate } = renderView()
+    const { onCreate, rerender } = renderView()
 
     expect(createHidden()).toBe(true)
 
-    fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+    rerender({ creating: true })
     type('organisation.create.key-input', 'globex')
     type('organisation.create.name-input', 'Globex')
     fireEvent.click(screen.getByTestId('organisation.create.submit-button'))

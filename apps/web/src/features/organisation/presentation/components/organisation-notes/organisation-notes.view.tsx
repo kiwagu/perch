@@ -8,8 +8,8 @@ import { Field } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
+import type { OrganisationEvent } from '../../../application/organisation.machine'
 import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
-import { useAction } from '../../pages/organisation/use-action'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 export interface NoteItem {
@@ -23,48 +23,70 @@ export interface NoteItem {
   readonly deletable: boolean
 }
 
-/** What a note's own buttons do; each resolves true once done. */
+/** What a note's own controls do, and whether the page's flow takes each now. */
 interface NoteActions {
+  readonly can: (event: OrganisationEvent) => boolean
+  readonly onOpenEdit: (id: NoteId) => void
+  /** Resolves true once saved. */
   readonly onEdit: (input: { readonly id: NoteId; readonly text: string }) => Promise<boolean>
-  readonly onDelete: (id: NoteId) => Promise<boolean>
+  readonly onDelete: (id: NoteId) => void
 }
 
-function NoteEntry(props: {
+/** The edit form of a note: it starts from the note's text, and what was typed goes with it. */
+function NoteEditForm(props: {
   readonly note: NoteItem
+  readonly can: NoteActions['can']
   readonly onEdit: NoteActions['onEdit']
-  readonly onDelete: NoteActions['onDelete']
 }) {
   const t = useT()
-  const [draft, setDraft] = useState<string | undefined>(undefined)
-  const [pending, run] = useAction()
-  const save = () => {
-    const edited = props.onEdit({ id: props.note.id, text: draft ?? '' })
-
-    run(edited, (done) => {
-      if (done) {
-        setDraft(undefined)
-      }
-    })
-
-    return edited
+  const [draft, setDraft] = useState(props.note.text)
+  const save: OrganisationEvent = {
+    type: 'organisation.notes.save-button',
+    id: props.note.id,
+    text: draft,
   }
 
   return (
-    <li
+    <Form
       className="flex flex-col gap-2"
-      data-testid="organisation.notes.item"
-      data-id={props.note.id}
+      onSubmit={() => props.onEdit({ id: props.note.id, text: draft })}
     >
-      {draft === undefined ? (
+      <Textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        maxLength={NOTE_TEXT_MAX}
+        aria-label={t('organisation.notes.edit')}
+        data-testid="organisation.notes.edit-textarea"
+      />
+      <Button
+        type="submit"
+        disabled={!props.can(save)}
+        data-testid="organisation.notes.save-button"
+      >
+        {t('organisation.notes.save')}
+      </Button>
+    </Form>
+  )
+}
+
+function NoteEntry(props: NoteActions & { readonly note: NoteItem; readonly editing: boolean }) {
+  const t = useT()
+  const { note } = props
+
+  return (
+    <li className="flex flex-col gap-2" data-testid="organisation.notes.item" data-id={note.id}>
+      {props.editing ? (
+        <NoteEditForm note={note} can={props.can} onEdit={props.onEdit} />
+      ) : (
         <div className="flex items-start justify-between gap-2">
           <p
             className="min-w-0 break-words whitespace-pre-wrap"
             data-testid="organisation.notes.text-cell"
           >
-            {props.note.text}
+            {note.text}
           </p>
           <div className="flex shrink-0 items-center gap-2">
-            {props.note.mine ? (
+            {note.mine ? (
               <span
                 className="text-sm text-muted-foreground"
                 data-testid="organisation.notes.mine-badge"
@@ -72,22 +94,23 @@ function NoteEntry(props: {
                 {t('organisation.notes.mine')}
               </span>
             ) : null}
-            {props.note.editable ? (
+            {note.editable ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDraft(props.note.text)}
+                disabled={!props.can({ type: 'organisation.notes.edit-button', id: note.id })}
+                onClick={() => props.onOpenEdit(note.id)}
                 data-testid="organisation.notes.edit-button"
               >
                 {t('organisation.notes.edit')}
               </Button>
             ) : null}
-            {props.note.deletable ? (
+            {note.deletable ? (
               <Button
                 type="button"
                 variant="outline"
-                disabled={pending}
-                onClick={() => run(props.onDelete(props.note.id), () => {})}
+                disabled={!props.can({ type: 'organisation.notes.delete-button', id: note.id })}
+                onClick={() => props.onDelete(note.id)}
                 data-testid="organisation.notes.delete-button"
               >
                 {t('organisation.notes.delete')}
@@ -95,40 +118,32 @@ function NoteEntry(props: {
             ) : null}
           </div>
         </div>
-      ) : (
-        <Form className="flex flex-col gap-2" onSubmit={save}>
-          <Textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            maxLength={NOTE_TEXT_MAX}
-            aria-label={t('organisation.notes.edit')}
-            data-testid="organisation.notes.edit-textarea"
-          />
-          <Button type="submit" disabled={pending} data-testid="organisation.notes.save-button">
-            {t('organisation.notes.save')}
-          </Button>
-        </Form>
       )}
     </li>
   )
 }
 
-/** The notes card: the current organisation's notes, oldest first, and the new note form. */
-export function OrganisationNotes(props: {
-  readonly notes: readonly NoteItem[] | undefined
-  readonly error: string | undefined
-  readonly onAdd: (text: string) => Promise<boolean>
-  readonly onEdit: NoteActions['onEdit']
-  readonly onDelete: NoteActions['onDelete']
-}) {
+/**
+ * The notes card: the current organisation's notes, oldest first, one of them in its edit form
+ * while it is edited, and the new note form.
+ */
+export function OrganisationNotes(
+  props: NoteActions & {
+    readonly notes: readonly NoteItem[] | undefined
+    /** The note whose edit form is shown; none while no note is edited. */
+    readonly editing: NoteId | undefined
+    readonly error: string | undefined
+    /** Resolves true once the note is written. */
+    readonly onAdd: (text: string) => Promise<boolean>
+  },
+) {
   const t = useT()
   const [text, setText] = useState('')
-  const [pending, run] = useAction()
   const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? 'ready' : 'empty'
   const add = () => {
     const added = props.onAdd(text)
 
-    run(added, (done) => {
+    void added.then((done) => {
       if (done) {
         setText('')
       }
@@ -155,6 +170,9 @@ export function OrganisationNotes(props: {
               <NoteEntry
                 key={note.id}
                 note={note}
+                editing={props.editing === note.id}
+                can={props.can}
+                onOpenEdit={props.onOpenEdit}
                 onEdit={props.onEdit}
                 onDelete={props.onDelete}
               />
@@ -182,7 +200,11 @@ export function OrganisationNotes(props: {
               data-testid="organisation.notes.new-textarea"
             />
             <OrganisationErrorLine code={props.error} testId="organisation.notes.error" />
-            <Button type="submit" disabled={pending} data-testid="organisation.notes.add-button">
+            <Button
+              type="submit"
+              disabled={!props.can({ type: 'organisation.notes.add-button', text })}
+              data-testid="organisation.notes.add-button"
+            >
               {t('organisation.notes.add')}
             </Button>
           </Field>

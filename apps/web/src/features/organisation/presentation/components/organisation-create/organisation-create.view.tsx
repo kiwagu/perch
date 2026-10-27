@@ -7,14 +7,15 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@workspace/ui/c
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
-import { useAction } from '../../pages/organisation/use-action'
+import type { OrganisationEvent } from '../../../application/organisation.machine'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 /** The form that creates an organisation; the creator becomes its administrator. */
 export function OrganisationCreate(props: {
   readonly error: string | undefined
+  /** Whether the page's flow takes the event now. */
+  readonly can: (event: OrganisationEvent) => boolean
   readonly onCreate: (input: { readonly key: string; readonly name: string }) => Promise<boolean>
-  readonly onCreated: () => void
 }) {
   const t = useT()
   const keyId = useId()
@@ -22,15 +23,13 @@ export function OrganisationCreate(props: {
   const hintId = useId()
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
-  const [pending, run] = useAction()
   const submit = () => {
     const created = props.onCreate({ key, name })
 
-    run(created, (done) => {
+    void created.then((done) => {
       if (done) {
         setKey('')
         setName('')
-        props.onCreated()
       }
     })
 
@@ -74,7 +73,7 @@ export function OrganisationCreate(props: {
               <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
               <Button
                 type="submit"
-                disabled={pending}
+                disabled={!props.can({ type: 'organisation.create.submit-button', key, name })}
                 data-testid="organisation.create.submit-button"
               >
                 {t('organisation.create.submit')}
