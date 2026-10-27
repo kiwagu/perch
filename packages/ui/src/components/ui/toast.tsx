@@ -80,7 +80,7 @@ function Toast({
     >
       <button type="button" onClick={onDismiss} className={toastVariants({ tone })}>
         <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
-        <span className="flex-1">{children}</span>
+        <span className="min-w-0 flex-1">{children}</span>
         <XIcon aria-hidden className="mt-0.5 size-4 shrink-0 opacity-60" />
       </button>
     </li>
