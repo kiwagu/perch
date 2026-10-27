@@ -1,4 +1,4 @@
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import type { DomainEvent } from '@workspace/kernel'
@@ -136,5 +136,48 @@ describe('EventBus', () => {
       causes: [{ code: 'bus:SUBSCRIBER_THREW', message: 'Error: broken' }],
     })
     expect(seen).toEqual(['any'])
+  })
+
+  it('calls a subscriber taken once once only, though two publishes overlap', async () => {
+    const seen: string[] = []
+    const bus = new EventBus<Renamed>()
+
+    bus.subscribe('profile.renamed', () => okAsync(undefined))
+    bus.once('profile.renamed', (event) => {
+      seen.push(event.payload.name)
+
+      throw new Error('once and broken')
+    })
+
+    const [first, second] = await Promise.all([bus.publish([renamed]), bus.publish([renamed])])
+
+    expect(seen).toEqual(['Ann'])
+    expect([first.isErr(), second.isOk()]).toEqual([true, true])
+  })
+
+  it('stops telling a subscriber of any event once it unsubscribes', async () => {
+    const seen: string[] = []
+    const bus = new EventBus<Renamed>()
+    const off = bus.onAny(() => {
+      seen.push('any')
+
+      return okAsync(undefined)
+    })
+
+    off()
+
+    expect((await bus.publish([renamed])).isOk()).toBe(true)
+    expect(seen).toEqual([])
+  })
+
+  it('collects a subscriber whose result rejects instead of failing', async () => {
+    const bus = new EventBus<Renamed>()
+
+    bus.subscribe('profile.renamed', () => new ResultAsync(Promise.reject(new Error('lost'))))
+
+    expect((await bus.publish([renamed]))._unsafeUnwrapErr()).toEqual({
+      code: 'bus:SUBSCRIBER_FAILED',
+      causes: [{ code: 'bus:SUBSCRIBER_THREW', message: 'Error: lost' }],
+    })
   })
 })

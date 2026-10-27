@@ -9,7 +9,10 @@ export interface FakeEventBus<E extends DomainEvent> {
   readonly bus: EventBus<E>
   readonly published: readonly E[]
   /** Throws unless an event of `name` was published, and one that `predicate` holds for when given. */
-  assertPublished(name: E['name'], predicate?: (event: E) => boolean): void
+  assertPublished<Name extends E['name']>(
+    name: Name,
+    predicate?: (event: Extract<E, { readonly name: Name }>) => boolean,
+  ): void
 }
 
 export function fakeEventBus<E extends DomainEvent>(): FakeEventBus<E> {
@@ -25,8 +28,13 @@ export function fakeEventBus<E extends DomainEvent>(): FakeEventBus<E> {
   return {
     bus,
     published,
-    assertPublished: (name, predicate = () => true) => {
-      if (!published.some((event) => event.name === name && predicate(event))) {
+    assertPublished: <Name extends E['name']>(
+      name: Name,
+      predicate: (event: Extract<E, { readonly name: Name }>) => boolean = () => true,
+    ) => {
+      const named = (event: E): event is Extract<E, { readonly name: Name }> => event.name === name
+
+      if (!published.some((event) => named(event) && predicate(event))) {
         throw new Error(`no ${name} was published that matches`)
       }
     },

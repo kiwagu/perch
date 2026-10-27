@@ -1,4 +1,4 @@
-import { err, ok, ResultAsync } from 'neverthrow'
+import { err, ok, okAsync, ResultAsync } from 'neverthrow'
 
 import type { DomainEvent } from '@workspace/kernel'
 
@@ -45,18 +45,30 @@ export class EventBus<E extends DomainEvent> {
     }
   }
 
-  /** Subscribes for the first event of `name` only; it is gone before it runs. */
+  /**
+   * Subscribes for the first event of `name` only; it is gone before it runs. A publish that took
+   * its list before then, still under way, finds it spent and calls nothing.
+   */
   once<Name extends E['name']>(
     name: Name,
     subscriber: Subscriber<Extract<E, { readonly name: Name }>>,
   ): () => void {
+    let spent = false
     const unsubscribe = this.subscribe(name, (event) => {
+      if (spent) {
+        return okAsync(undefined)
+      }
+
+      spent = true
       unsubscribe()
 
       return subscriber(event)
     })
 
-    return unsubscribe
+    return () => {
+      spent = true
+      unsubscribe()
+    }
   }
 
   /** Subscribes to every event, told after the subscribers of its name. */
