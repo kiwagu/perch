@@ -208,23 +208,29 @@ describe('createCommandBus', () => {
     expect(fake.published).toEqual([])
   })
 
-  it('keeps the result of a command whose subscriber fails, and logs that', async () => {
+  it('keeps the result of a command whose subscribers fail, and logs what each said', async () => {
     const fake = fakeEventBus<AppEvent>()
 
     fake.bus.onAny(() => errAsync({ code: 'test:BROKEN' }))
+    fake.bus.onAny(() => {
+      throw new Error('subscriber bug')
+    })
 
     const result = await bus(undefined, fake.bus).execute(
       profileCommands.createProfile,
       newProfile(),
     )
+    const warned = logged.find(({ event }) => event === 'user.profile.createProfile.done')
 
     expect(result.isOk()).toBe(true)
-    expect(logged).toContainEqual(
-      expect.objectContaining({
-        level: 'warn',
-        event: 'user.profile.createProfile.done',
-        outcome: 'bus:SUBSCRIBER_FAILED',
-      }),
-    )
+    expect(warned).toEqual({
+      level: 'warn',
+      event: 'user.profile.createProfile.done',
+      outcome: 'bus:SUBSCRIBER_FAILED',
+      causes: [
+        { code: 'test:BROKEN' },
+        { code: 'bus:SUBSCRIBER_THREW', message: 'Error: subscriber bug' },
+      ],
+    })
   })
 })

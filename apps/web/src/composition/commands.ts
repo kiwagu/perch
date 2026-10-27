@@ -76,7 +76,7 @@ function announce(
   event: CommandDone | CommandFailed,
 ): ResultAsync<void, never> {
   return options.events.publish([event]).orElse((failure) => {
-    options.logger.warn({ event: event.name, outcome: failure.code })
+    options.logger.warn({ event: event.name, outcome: failure.code, causes: failure.causes })
 
     return okAsync(undefined)
   })

@@ -154,7 +154,8 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     publish: (event) => {
       void events.publish([event]).match(
         () => undefined,
-        (failure) => options.logger.warn({ event: event.name, outcome: failure.code }),
+        (failure) =>
+          options.logger.warn({ event: event.name, outcome: failure.code, causes: failure.causes }),
       )
     },
   })
