@@ -10,7 +10,7 @@
  */
 
 import { baseOf, FIELD_KINDS } from '../anchors'
-import { declaredAnchors, locate } from '../check'
+import { codesOf, declaredAnchors, locate } from '../check'
 import {
   type Problem,
   SCREENS_DIR,
@@ -67,7 +67,7 @@ export function compareWithContract(
   const contract = declaredAnchors(screens)
   const declared = new Set(contract.map(({ anchor }) => anchor))
   const suffixes = Object.keys(vocabulary.suffixes)
-  const codes = new Set(Object.keys(vocabulary.codes))
+  const codes = codesOf(vocabulary, screens)
 
   const literalProblems = [...first].flatMap(([anchor, place]) => {
     const base = baseOf(anchor, suffixes)

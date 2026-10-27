@@ -12,7 +12,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { baseOf } from '../anchors'
-import { type Contract, declaredAnchors, loadContract, textsOf } from '../check'
+import { type Contract, codesOf, declaredAnchors, loadContract, textsOf } from '../check'
 import { formatProblem, type Problem, sortProblems } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources'
@@ -92,7 +92,7 @@ function screensReached(contract: Contract): (scenario: Scenario) => Set<string>
 /** The totals the note opens with. */
 export const totalsOf = ({ screens, vocabulary }: Contract) => ({
   anchors: declaredAnchors(screens).length,
-  codes: Object.keys(vocabulary.codes).length,
+  codes: codesOf(vocabulary, screens).size,
   screens: screens.screens.length,
 })
 
