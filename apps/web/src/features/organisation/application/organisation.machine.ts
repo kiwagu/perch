@@ -4,7 +4,7 @@ import { assertEvent, assign, enqueueActions, fromPromise, setup } from 'xstate'
 import type { BusError } from '@workspace/cqrs'
 import type { IdentityId, NoteId } from '@workspace/ids'
 
-import { failureOf, settled } from '../../../platform/actor-outcome'
+import { failureOf } from '../../../platform/actor-outcome'
 
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'organisation:UNKNOWN'
@@ -119,9 +119,22 @@ const REMOVE_REFUSED = {
 /** Forgets the error of a part once a change of that part was done. */
 const forget = (part: ErrorPart) => ({ type: 'forget', params: { part } }) as const
 
-/** A write of the page as an invoke: it resolves once done, or rejects with its failure. */
-const write = <I, T>(run: (input: I) => ResultAsync<T, BusError>) =>
-  fromPromise<T, I>(({ input }) => settled(run(input)))
+/** The organisation a write ran in, which its outcome carries: the one current when it started. */
+interface Origin {
+  readonly of: string | undefined
+}
+
+/** The organisation a write's outcome carries, read off the done or error event of its invoke. */
+function originOf(event: object): string | undefined {
+  const outcome = 'output' in event ? event.output : 'error' in event ? event.error : undefined
+
+  return typeof outcome === 'object' &&
+    outcome !== null &&
+    'of' in outcome &&
+    typeof outcome.of === 'string'
+    ? outcome.of
+    : undefined
+}
 
 /** The event that entered the state, as the input of its invoke. */
 const taken =
@@ -141,6 +154,19 @@ const taken =
  * any other.
  */
 export function createOrganisationMachine(deps: OrganisationMachineDeps) {
+  /**
+   * A write of the page as an invoke, in the organisation current when it starts: it resolves
+   * with that organisation once done, or rejects with its failure and that organisation, so a
+   * late outcome is kept away from another organisation that became current meanwhile.
+   */
+  const write = <I>(run: (input: I) => ResultAsync<unknown, BusError>) =>
+    fromPromise<Origin, I>(async ({ input }) => {
+      const of = deps.current()
+      const outcome = await run(input)
+
+      return outcome.isOk() ? { of } : Promise.reject({ ...outcome.error, of })
+    })
+
   return setup({
     types: {
       context: {} as OrganisationContext,
@@ -175,16 +201,30 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
           return
         }
 
-        const of = deps.current()
+        const of = originOf(event)
+
+        // A failure in an organisation no longer current is not this page's to show.
+        if (of !== deps.current()) {
+          return
+        }
+
         const kept = context.errors.of === of ? context.errors.codes : {}
 
         enqueue.assign({
           errors: { of, codes: { ...kept, [part]: failureOf(event, UNKNOWN_FAILURE) } },
         })
       }),
-      forget: assign(({ context }, params: { readonly part: ErrorPart }) => ({
-        errors: { ...context.errors, codes: { ...context.errors.codes, [params.part]: undefined } },
-      })),
+      // A change done in another organisation leaves the errors of this one as they are.
+      forget: assign(({ context, event }, params: { readonly part: ErrorPart }) =>
+        originOf(event) === context.errors.of
+          ? {
+              errors: {
+                ...context.errors,
+                codes: { ...context.errors.codes, [params.part]: undefined },
+              },
+            }
+          : {},
+      ),
       startAfresh: assign({ errors: { of: undefined, codes: {} }, editing: undefined }),
       open: assign({
         editing: ({ event }) => {

@@ -1,4 +1,4 @@
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
@@ -12,6 +12,22 @@ const agenda = noteIdFactory.create()
 const bea = identityIdFactory.create()
 
 const refused = (code: string): ResultAsync<never, BusError> => errAsync({ code })
+
+/** A write that ends when the test says: done, or refused with a code. */
+function later() {
+  let end: (outcome: Result<undefined, BusError>) => void = () => undefined
+  const result = new ResultAsync<undefined, BusError>(
+    new Promise((resolve) => {
+      end = resolve
+    }),
+  )
+
+  return {
+    result,
+    done: () => end(ok(undefined)),
+    refuse: (code: string) => end(err({ code })),
+  }
+}
 
 /** An organisation page: the organisation current, the page's writes, and the machine over them. */
 function page(writes: Partial<OrganisationMachineDeps> = {}) {
@@ -200,6 +216,43 @@ describe('organisation machine', () => {
       of: 'globex',
       codes: { members: 'already-member' },
     })
+  })
+
+  it('keeps a late outcome of a write away from the organisation that became current meanwhile', async () => {
+    const invite = later()
+    const { actor, snapshot, becomes, region } = page({
+      invite: () => invite.result,
+      remove: () => refused('not-admin'),
+    })
+
+    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    becomes('globex')
+    actor.send({ type: 'organisation.members.remove-button', identity: bea })
+    await region('members', 'idle')
+
+    expect(snapshot().context.errors).toEqual({ of: 'globex', codes: { members: 'not-admin' } })
+
+    invite.done()
+    await region('invite', 'idle')
+
+    expect(snapshot().context.errors).toEqual({ of: 'globex', codes: { members: 'not-admin' } })
+  })
+
+  it('shows no late failure of a write in the organisation that became current meanwhile', async () => {
+    const invite = later()
+    const { actor, snapshot, becomes, region } = page({
+      invite: () => invite.result,
+      addNote: () => refused('failed'),
+    })
+
+    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    becomes('globex')
+    actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })
+    await region('notes-add', 'idle')
+    invite.refuse('already-member')
+    await region('invite', 'idle')
+
+    expect(snapshot().context.errors).toEqual({ of: 'globex', codes: { notes: 'failed' } })
   })
 
   it('makes the chosen organisation current and starts every area afresh', async () => {
