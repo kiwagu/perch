@@ -65,6 +65,9 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
   }
 }
 
+/** What the machine emits for the frame's toast: the success of a note's change. */
+const toast = (code: string) => ({ type: 'show', anchor: 'app-shell.toast', codes: [code] })
+
 describe('organisation machine', () => {
   it('opens and closes the create form by its toggle, and creates from it', async () => {
     const { actor, deps, snapshot, region } = page()
@@ -110,8 +113,8 @@ describe('organisation machine', () => {
     expect(snapshot().context.editing).toBeUndefined()
   })
 
-  it('edits one note at a time, the one acted on last', async () => {
-    const { actor, deps, snapshot, region } = page()
+  it('edits one note at a time, the one acted on last, and says the save in a toast', async () => {
+    const { actor, deps, snapshot, region, emitted } = page()
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.edit-button', id: agenda })
@@ -132,20 +135,24 @@ describe('organisation machine', () => {
     expect(snapshot().can({ type: 'organisation.notes.save-button', id: agenda, text: '' })).toBe(
       false,
     )
+    expect(emitted).toEqual([toast('note-updated')])
   })
 
-  it('closes the open edit form when another note is deleted', async () => {
-    const { actor, deps, region } = page()
+  it('closes the open edit form when another note is deleted, and says the deletion in a toast', async () => {
+    const { actor, deps, region, emitted } = page()
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.delete-button', id: agenda })
     await region('note-items', 'idle')
 
     expect(deps.deleteNote).toHaveBeenCalledWith(agenda)
+    expect(emitted).toEqual([toast('note-deleted')])
   })
 
   it('keeps the edit form open with the code of a refused save, and forgets it once a change of a note is done', async () => {
-    const { actor, snapshot, region } = page({ editNote: () => refused('note:FORBIDDEN') })
+    const { actor, snapshot, region, emitted } = page({
+      editNote: () => refused('note:FORBIDDEN'),
+    })
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.save-button', id: hello, text: 'Hello, all' })
@@ -157,6 +164,7 @@ describe('organisation machine', () => {
     await region('notes-add', 'idle')
 
     expect(snapshot().context.errors.codes.notes).toBeUndefined()
+    expect(emitted).toEqual([toast('note-created')])
   })
 
   it('shows the invited notice and reads the members again after an invitation', async () => {

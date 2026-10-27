@@ -71,19 +71,7 @@ export function DevicesContainer() {
       }),
     [devices],
   )
-  const { state, send, actor } = useScreenMachine(machine)
-
-  // The effects of the flow on the shell: its notice (the hook runs the move to sign-in, and the
-  // session leaves the sign-in page its own word).
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('device-sign-out-failed')) {
-        notify('device-sign-out-failed')
-      }
-    })
-
-    return () => shown.unsubscribe()
-  }, [actor, notify])
+  const { state, send } = useScreenMachine(machine)
 
   return (
     <DevicesView

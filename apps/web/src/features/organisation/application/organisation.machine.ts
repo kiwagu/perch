@@ -104,6 +104,19 @@ const INVITED = {
   type: 'show',
   params: { anchor: 'app-shell.notice-message', codes: ['invited'] },
 } as const
+/** The toasts the contract derives for the notes' changes. */
+const NOTE_CREATED = {
+  type: 'show',
+  params: { anchor: 'app-shell.toast', codes: ['note-created'] },
+} as const
+const NOTE_UPDATED = {
+  type: 'show',
+  params: { anchor: 'app-shell.toast', codes: ['note-updated'] },
+} as const
+const NOTE_DELETED = {
+  type: 'show',
+  params: { anchor: 'app-shell.toast', codes: ['note-deleted'] },
+} as const
 const INVITE_REFUSED = {
   type: 'show',
   params: {
@@ -290,7 +303,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 invoke: {
                   src: 'note.updateNote',
                   input: taken('organisation.notes.save-button'),
-                  onDone: { target: 'idle', actions: [forget('notes')] },
+                  onDone: { target: 'idle', actions: [forget('notes'), NOTE_UPDATED] },
                   onError: { target: 'editing', actions: [NOTE_REFUSED] },
                 },
               },
@@ -298,7 +311,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 invoke: {
                   src: 'note.deleteNote',
                   input: taken('organisation.notes.delete-button'),
-                  onDone: { target: 'idle', actions: [forget('notes')] },
+                  onDone: { target: 'idle', actions: [forget('notes'), NOTE_DELETED] },
                   onError: { target: 'idle', actions: [DELETE_REFUSED] },
                 },
               },
@@ -340,7 +353,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 invoke: {
                   src: 'note.createNote',
                   input: taken('organisation.notes.add-button'),
-                  onDone: { target: 'idle', actions: [forget('notes')] },
+                  onDone: { target: 'idle', actions: [forget('notes'), NOTE_CREATED] },
                   onError: { target: 'idle', actions: [NOTE_REFUSED] },
                 },
               },

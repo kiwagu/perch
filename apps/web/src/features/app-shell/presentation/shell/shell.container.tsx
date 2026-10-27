@@ -4,9 +4,10 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { useT } from '@workspace/i18n'
 
+import { useFrameEffects } from '../../../../platform/frame-effects'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
-import { useClearNotice, useNotice, useNotify } from '../../../../platform/notices'
+import { useNotice, useNotify } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
@@ -31,7 +32,6 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const notice = useNotice()
   const notify = useNotify()
-  const clearNotice = useClearNotice()
   const t = useT()
   const guard = useLeaveGuard()
 
@@ -75,23 +75,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     }
   }, [user?.id, actor])
 
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('locale-not-stored')) {
-        notify('locale-not-stored')
-      }
-    })
-    const cleared = actor.on('clear', ({ anchor }) => {
-      if (anchor === 'app-shell.notice-message') {
-        clearNotice()
-      }
-    })
-
-    return () => {
-      shown.unsubscribe()
-      cleared.unsubscribe()
-    }
-  }, [actor, notify, clearNotice])
+  // The frame's flow says its notice and clears it, as every screen's flow does.
+  useFrameEffects(actor)
 
   useEffect(
     () =>

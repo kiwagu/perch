@@ -174,8 +174,11 @@ modeling stage.
   (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a leaving
   control's event waits for it, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
-  or actor; `false` when the state does not take the event); `leave-now.ts` is the unguarded move for a leave nobody started here
-  (`useLeaveNow()`).
+  or actor; `false` when the state does not take the event; and the flow's effects on the
+  frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
+  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
+  a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
+  for a leave nobody started here (`useLeaveNow()`).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
