@@ -22,7 +22,8 @@ modules' routes.
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `locale-writes.ts`
   tells a language another device stored from this device's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation,
-  the notice, whose line is held while there is none so the page does not move, and the toasts
+  the notice, whose line is held as tall as the longest notice (three lines on a phone, two
+  wider up, a guard in `texts-contract.spec.ts`) so the page does not move, and the toasts
   (`app-shell.toast`, the kit's `Toaster` centred at the top, the newest first, each in its tone
   and gone after a few seconds or a click); the language select and "Sign out on this device" are enabled while the
   machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the

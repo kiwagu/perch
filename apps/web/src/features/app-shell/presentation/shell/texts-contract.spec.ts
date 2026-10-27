@@ -10,10 +10,18 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
 
+import { englishCatalog, loadSpanishCatalog } from '../../../../platform/catalogs'
+
 import { NOTICE_TEXTS } from './notice-texts'
 import { TOAST_TEXTS } from './toast-texts'
 
 const ROOT = join(import.meta.dirname, '../../../../../../..')
+
+/**
+ * What the notice's line holds without growing (`shell.view.tsx`): three lines on a 360px phone,
+ * about 44 characters each at the notice's size; wider up it holds two longer ones.
+ */
+const NOTICE_LINE_CHARACTERS = 132
 
 describe('the words of the frame', () => {
   const { screens, problems } = loadScreens(ROOT)
@@ -32,5 +40,18 @@ describe('the words of the frame', () => {
   it('give every code of the notice and of the toast its words, and no other', () => {
     expect(gaps('app-shell.notice-message', NOTICE_TEXTS)).toEqual({ unworded: [], stale: [] })
     expect(gaps('app-shell.toast', TOAST_TEXTS)).toEqual({ unworded: [], stale: [] })
+  })
+
+  it('keep every notice, in either language, within the line the frame holds for it', async () => {
+    const catalogs = [englishCatalog, await loadSpanishCatalog()]
+    const longer = catalogs.flatMap((catalog) =>
+      Object.entries(NOTICE_TEXTS).flatMap(([code, text]) => {
+        const words = text((key) => catalog[key] ?? key)
+
+        return words.length > NOTICE_LINE_CHARACTERS ? [`${code}: ${words}`] : []
+      }),
+    )
+
+    expect(longer).toEqual([])
   })
 })

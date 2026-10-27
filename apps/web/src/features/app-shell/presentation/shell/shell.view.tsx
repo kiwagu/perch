@@ -123,9 +123,10 @@ export function ShellView(props: ShellViewProps) {
       ))}
       status={status}
     >
-      {/* The notice's line is held while there is none (two lines on a phone, one wider up), so
-          the page below does not move when a notice comes or goes. */}
-      <div data-slot="notice" className="min-h-10 sm:min-h-5">
+      {/* The notice's line is held, as tall as the longest notice (three lines on a phone, two
+          wider up; `texts-contract.spec.ts` keeps every notice within it), so the page below does
+          not move when a notice comes, changes or goes. */}
+      <div data-slot="notice" className="min-h-15 sm:min-h-10">
         {props.notice ? (
           <p
             className="text-sm text-muted-foreground"
