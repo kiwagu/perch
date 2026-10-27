@@ -10,16 +10,18 @@
  * them, and whether a field holds input, from its kind and its bindings. A file may author its flow in the shorter forms (a transition as its target, an effect
  * by its name, a region by its pattern or its button, the region of a button left out): each
  * flow is expanded with the codes the anchors of all screens carry, the failures of the
- * actions and the screen's buttons, then the screen is parsed as every reader takes it, its
+ * actions, the screen's buttons and the frame's toast anchor, which says the success of each
+ * model action a flow invokes (`expand-flow/toasts.ts`); that anchor then carries every code a
+ * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
  * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
- * screen with its file.
+ * screen with its file, with the toasts the loader derived.
  */
 
 import { join } from 'node:path'
 
 import type { z } from '@workspace/zod'
 
-import { isRecord } from '../records'
+import { isRecord, recordOf } from '../records'
 import {
   type anchorBindingSchema,
   type anchorDefSchema,
@@ -39,10 +41,12 @@ import {
   controlsOf,
   type FailureOf,
   failuresOf,
+  toastCodesOf,
   withDerivedErrors,
   withDerivedInputs,
+  withToastCodes,
 } from './derive'
-import { type CodesOf, expandFlow } from './expand-flow'
+import { type CodesOf, type DerivedToast, expandFlow } from './expand-flow'
 import { filesUnder } from './files-under'
 import { loadModel, type Model } from './model'
 import { parseFile } from './parse-file'
@@ -77,6 +81,11 @@ export interface ScreensFile {
   /** The file of each screen, at the index of the screen: `contract/domain/screens/me.yaml`. */
   files: readonly string[]
   platform: Platform
+  /**
+   * The toasts the loader derived on the frame's toast anchor, one per code, each with the model
+   * action whose success it says: the vocabulary vouches for them by one rule row.
+   */
+  toasts: readonly DerivedToast[]
 }
 
 const SUFFIX = '.yaml'
@@ -140,12 +149,18 @@ function toastOfRead(read: readonly unknown[]): string | undefined {
   return undefined
 }
 
-/** The screen of one file as read, its flow expanded, parsed as every reader takes it. */
-function screenOf(
+interface Lookups {
+  readonly codesOf: CodesOf
+  readonly failureOf: FailureOf
+  readonly toast: string | undefined
+}
+
+/** The screen of one file as read, its flow expanded, with the toasts the expansion derived. */
+function expandedOf(
   file: string,
   read: unknown,
-  lookups: { codesOf: CodesOf; failureOf: FailureOf; toast: string | undefined },
-): { screen?: Screen; problems: Problem[] } {
+  lookups: Lookups,
+): { value?: unknown; toasts: readonly DerivedToast[]; problems: Problem[] } {
   const flow = isRecord(read) ? read['flow'] : undefined
   const id = isRecord(read) && typeof read['id'] === 'string' ? read['id'] : ''
   const expanded =
@@ -155,6 +170,7 @@ function screenOf(
 
   if (expanded !== undefined && expanded.issues.length > 0) {
     return {
+      toasts: [],
       problems: expanded.issues.map((issue) => ({
         file,
         message: `${jsonPath(issue.at)}: ${issue.message}`,
@@ -162,8 +178,16 @@ function screenOf(
     }
   }
 
-  const data = expanded === undefined || !isRecord(read) ? read : { ...read, flow: expanded.flow }
-  const parsed = parseFile(file, screenFileSchema, data)
+  return {
+    value: expanded === undefined || !isRecord(read) ? read : { ...read, flow: expanded.flow },
+    toasts: expanded?.toasts ?? [],
+    problems: [],
+  }
+}
+
+/** The screen of one file, expanded, parsed as every reader takes it. */
+function parsedOf(file: string, value: unknown): { screen?: Screen; problems: Problem[] } {
+  const parsed = parseFile(file, screenFileSchema, value)
 
   if (parsed.value === undefined) {
     return { problems: parsed.problems }
@@ -174,6 +198,15 @@ function screenOf(
   return misnamed.length > 0 ? { problems: misnamed } : { screen: parsed.value, problems: [] }
 }
 
+/** Whether the frame as read writes the codes of its toast anchor itself. */
+const writesToastCodes = (read: readonly unknown[], toast: string): boolean =>
+  read.some(
+    (screen) =>
+      isRecord(screen) &&
+      screen['frame'] === true &&
+      recordOf(recordOf(screen['anchors'])[toast])['codes'] !== undefined,
+  )
+
 function readScreenFiles(
   root: string,
   failureOf: FailureOf,
@@ -181,6 +214,7 @@ function readScreenFiles(
   screens: Screen[]
   files: string[]
   problems: Problem[]
+  toasts: DerivedToast[]
 } {
   const screens: Screen[] = []
   const files: string[] = []
@@ -189,7 +223,7 @@ function readScreenFiles(
   if (paths === undefined || paths.length === 0) {
     const message = paths === undefined ? 'cannot read the folder' : 'holds no screen file'
 
-    return { screens, files, problems: [{ file: SCREENS_DIR, message }] }
+    return { screens, files, problems: [{ file: SCREENS_DIR, message }], toasts: [] }
   }
 
   const problems: Problem[] = []
@@ -214,21 +248,49 @@ function readScreenFiles(
     }
   }
 
-  const codesOf = codesOfRead(read.map(({ value }) => value))
-  const toast = toastOfRead(read.map(({ value }) => value))
+  const values = read.map(({ value }) => value)
+  const lookups: Lookups = { codesOf: codesOfRead(values), failureOf, toast: toastOfRead(values) }
+  const expanded = read.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
+  const { toast } = lookups
+  const codes =
+    toast === undefined
+      ? []
+      : toastCodesOf(
+          expanded.map(({ value }) => (isRecord(value) ? value['flow'] : undefined)),
+          toast,
+        )
+  const derived = new Map<string, DerivedToast>()
 
-  for (const { file, value } of read) {
-    const loaded = screenOf(file, value, { codesOf, failureOf, toast })
+  for (const each of expanded) {
+    problems.push(...each.problems)
 
-    problems.push(...loaded.problems)
-
-    if (loaded.screen !== undefined) {
-      screens.push(loaded.screen)
-      files.push(file)
+    for (const one of each.toasts) {
+      if (!derived.has(one.code)) {
+        derived.set(one.code, one)
+      }
     }
   }
 
-  return { screens, files, problems }
+  for (const { file, value } of expanded) {
+    if (value !== undefined) {
+      const loaded = parsedOf(
+        file,
+        toast === undefined ? value : withToastCodes(value, toast, codes),
+      )
+
+      problems.push(...loaded.problems)
+
+      if (loaded.screen !== undefined) {
+        screens.push(loaded.screen)
+        files.push(file)
+      }
+    }
+  }
+
+  // Codes the frame writes on its toast anchor are written codes, each with its own vocabulary row.
+  const written = toast !== undefined && writesToastCodes(values, toast)
+
+  return { screens, files, problems, toasts: written ? [] : [...derived.values()] }
 }
 
 function readPlatform(root: string): { platform?: PlatformFile; problems: Problem[] } {
@@ -255,7 +317,7 @@ export function loadScreensWith(
 ): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
   const failureOf = failuresOf(model, platform?.actions)
-  const { screens, files, problems: screenProblems } = readScreenFiles(root, failureOf)
+  const { screens, files, problems: screenProblems, toasts } = readScreenFiles(root, failureOf)
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {
@@ -264,7 +326,7 @@ export function loadScreensWith(
 
   const { version, ...section } = platform
 
-  return { screens: { version, screens, files, platform: section }, problems: [] }
+  return { screens: { version, screens, files, platform: section, toasts }, problems: [] }
 }
 
 /**

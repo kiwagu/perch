@@ -392,6 +392,90 @@ describe('loadScreens', () => {
     })
   })
 
+  describe('the toast of a model action', () => {
+    /** The frame with a toast anchor, and the sample screen whose add button runs `thing.createThing`. */
+    function writeToastScreens(regions: Record<string, unknown>): void {
+      cpSync(MODEL_FIXTURE, join(root, MODEL_FILE))
+      write(
+        'contract/domain/screens/__root.yaml',
+        stringify({
+          ...(parse(screenAt('app-shell')) as Record<string, unknown>),
+          anchors: { 'app-shell.page': { kind: 'page' }, 'app-shell.toast': { kind: 'toast' } },
+        }),
+      )
+      writeSample((screen) => {
+        const { 'sample.sign-out-button': _signOut, ...anchors } = screen['anchors'] as Record<
+          string,
+          unknown
+        >
+
+        screen['anchors'] = {
+          ...anchors,
+          'sample.form.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+          'sample.form.add-button': {
+            kind: 'button',
+            binding: { action: 'thing.createThing', params: { title: 'sample.form.title-input' } },
+          },
+          'sample.form.error': { kind: 'error' },
+        }
+        screen['flow'] = {
+          initial: 'viewing',
+          states: {
+            viewing: {
+              type: 'parallel',
+              states: { other: { initial: 'idle', states: { idle: {} } }, ...regions },
+            },
+          },
+        }
+      })
+    }
+
+    it('is derived on the frame toast anchor, which carries its code', () => {
+      writeToastScreens({})
+
+      const { screens, problems: found } = loadScreens(root)
+      const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
+      const sample = screens?.screens.find((screen) => screen.id === 'sample')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(frame?.anchors['app-shell.toast']?.codes).toEqual(['thing-created'])
+      expect(screens?.toasts).toEqual([
+        { anchor: 'app-shell.toast', code: 'thing-created', action: 'thing.createThing' },
+      ])
+      expect(sample?.flow?.states['viewing']).toMatchObject({
+        states: {
+          'form-add': {
+            states: {
+              running: {
+                invoke: {
+                  onDone: {
+                    actions: [
+                      {
+                        type: 'show',
+                        params: { anchor: 'app-shell.toast', codes: ['thing-created'] },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    })
+
+    it('is not derived for a region by its button that says toast: false', () => {
+      writeToastScreens({ add: { by: 'sample.form.add-button', toast: false } })
+
+      const { screens, problems: found } = loadScreens(root)
+      const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(screens?.toasts).toEqual([])
+      expect(frame?.anchors['app-shell.toast']?.codes).toBeUndefined()
+    })
+  })
+
   it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
     writeSample((screen) => {
       screen['anchors'] = {
