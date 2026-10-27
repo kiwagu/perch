@@ -2,6 +2,10 @@ import { expect, type Page } from '@playwright/test'
 
 import { notice } from './fixtures'
 
+/** The item of the note whose text holds `text`. */
+export const noteItem = (device: Page, text: string) =>
+  device.getByTestId('organisation.notes.item').filter({ hasText: text })
+
 /**
  * Creates the organisation from the open "/org" page: the heading then names it and the role
  * badge says the creator administers it.
