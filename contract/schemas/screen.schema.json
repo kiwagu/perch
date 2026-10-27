@@ -963,6 +963,11 @@
                             "description": "Guarded transitions in order: the first whose guard holds is taken."
                           }
                         ]
+                      },
+                      "toast": {
+                        "type": "boolean",
+                        "const": false,
+                        "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                       }
                     },
                     "required": [
@@ -1166,6 +1171,11 @@
                                   "description": "Guarded transitions in order: the first whose guard holds is taken."
                                 }
                               ]
+                            },
+                            "toast": {
+                              "type": "boolean",
+                              "const": false,
+                              "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                             }
                           },
                           "required": [
@@ -1329,6 +1339,11 @@
                                             "description": "Guarded transitions in order: the first whose guard holds is taken."
                                           }
                                         ]
+                                      },
+                                      "toast": {
+                                        "type": "boolean",
+                                        "const": false,
+                                        "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                                       }
                                     },
                                     "required": [

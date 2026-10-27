@@ -20,6 +20,7 @@ const LOOKUPS: FlowLookups = {
   failureOf: (action) => FAILURES[action],
   controls: [],
   screen: 'sample',
+  toast: undefined,
 }
 
 /** A flow of one plain state `idle` whose transition on `sample.form.save-button` is `on`. */
@@ -65,7 +66,7 @@ describe('expandFlow', () => {
       },
     ])
 
-    expect(expandFlow(flow, LOOKUPS)).toEqual({ flow, issues: [] })
+    expect(expandFlow(flow, LOOKUPS)).toEqual({ flow, issues: [], toasts: [] })
   })
 
   it('turns a transition written as its target into the transition', () => {

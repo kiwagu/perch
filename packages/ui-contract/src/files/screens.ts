@@ -123,11 +123,28 @@ function codesOfRead(read: readonly unknown[]): CodesOf {
   return (anchor) => codes.get(anchor)
 }
 
+/** The frame's toast anchor as read: the anchor of kind `toast` of the screen marked `frame`. */
+function toastOfRead(read: readonly unknown[]): string | undefined {
+  for (const screen of read) {
+    if (isRecord(screen) && screen['frame'] === true && isRecord(screen['anchors'])) {
+      const found = Object.entries(screen['anchors']).find(
+        ([, def]) => isRecord(def) && def['kind'] === 'toast',
+      )
+
+      if (found !== undefined) {
+        return found[0]
+      }
+    }
+  }
+
+  return undefined
+}
+
 /** The screen of one file as read, its flow expanded, parsed as every reader takes it. */
 function screenOf(
   file: string,
   read: unknown,
-  lookups: { codesOf: CodesOf; failureOf: FailureOf },
+  lookups: { codesOf: CodesOf; failureOf: FailureOf; toast: string | undefined },
 ): { screen?: Screen; problems: Problem[] } {
   const flow = isRecord(read) ? read['flow'] : undefined
   const id = isRecord(read) && typeof read['id'] === 'string' ? read['id'] : ''
@@ -198,9 +215,10 @@ function readScreenFiles(
   }
 
   const codesOf = codesOfRead(read.map(({ value }) => value))
+  const toast = toastOfRead(read.map(({ value }) => value))
 
   for (const { file, value } of read) {
-    const loaded = screenOf(file, value, { codesOf, failureOf })
+    const loaded = screenOf(file, value, { codesOf, failureOf, toast })
 
     problems.push(...loaded.problems)
 

@@ -73,6 +73,7 @@ interface Written {
   readonly description?: string
   readonly onDone?: unknown
   readonly onError?: unknown
+  readonly toast?: false
 }
 
 function regionOf(
@@ -94,6 +95,7 @@ function regionOf(
         invoke: {
           src,
           ...(input === undefined ? {} : { input }),
+          ...(written.toast === false ? { toast: false } : {}),
           onDone:
             written.onDone === undefined
               ? doneOf(control)
