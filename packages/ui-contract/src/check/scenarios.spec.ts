@@ -44,6 +44,21 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
+  it('resolves a toast code the loader derived, which the vocabulary lists by its rule row', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = ['It shows [code:thing-created]']
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:thing-created] is not a code of the vocabulary',
+    ])
+
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
   it('wants every device to act as a role of the vocabulary', () => {
     const contract = sampleContract()
 

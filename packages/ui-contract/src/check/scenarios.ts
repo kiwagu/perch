@@ -14,6 +14,7 @@ import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import {
   bindingPaths,
   type Contract,
+  codesOf,
   has,
   inFile,
   isChoiceValue,
@@ -40,6 +41,7 @@ export function referenceResolver(
   const known = knownAnchors(contract)
   const paths = bindingPaths(contract.screens)
   const states = statesOf(contract.vocabulary)
+  const codes = codesOf(contract.vocabulary, contract.screens)
   const { vocabulary } = contract
 
   return ({ kind, value, raw }) => {
@@ -49,7 +51,7 @@ export function referenceResolver(
       case 'route':
         return paths.has(value) ? undefined : `${raw} is the path of no binding`
       case 'code':
-        return has(vocabulary.codes, value) ? undefined : `${raw} is not a code of the vocabulary`
+        return codes.has(value) ? undefined : `${raw} is not a code of the vocabulary`
       case 'state':
         return states.has(value) ? undefined : `${raw} is not a state of the vocabulary`
       case 'value':

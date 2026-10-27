@@ -137,7 +137,9 @@ for Bun.
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, every suffix and code in the vocabulary, and a `holdsInput` written only as
+    a suffix, every suffix in the vocabulary and every code a code of the contract
+    (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
+    codes the loader derived), and a `holdsInput` written only as
     `{false}` on a field the contract says holds no input, never on another kind, and on every
     such field rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
