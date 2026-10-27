@@ -135,7 +135,8 @@ for Bun.
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
     a suffix, every suffix and code in the vocabulary, and a `holdsInput` written only as
-    `{false}` on a field the contract says holds no input, never on another kind.
+    `{false}` on a field the contract says holds no input, never on another kind, and on every
+    such field rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as

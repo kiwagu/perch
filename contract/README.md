@@ -774,9 +774,11 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
-  `holdsInput={false}` on a field that holds input or on an anchor that is not a field). On a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and a
+  rendered field that holds no input without its opt-out is reported at its anchor. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
-  contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
+  contract run ahead of the app (an anchor declared, not rendered yet, passes, and so does a
+  field's opt-out not written yet); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
