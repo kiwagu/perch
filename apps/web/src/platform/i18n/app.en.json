@@ -19,5 +19,8 @@
   "app.shell.locale.es": "Español",
   "app.shell.rejected": "The server refused a change and undid it on this device.",
   "app.shell.reloaded": "The server refused a change again, so it and the later changes not yet sent were undone on this device.",
-  "app.shell.sync.local": "Saved on this device"
+  "app.shell.sync.local": "Saved on this device",
+  "app.shell.toast.note-created": "Note added.",
+  "app.shell.toast.note-updated": "Note saved.",
+  "app.shell.toast.note-deleted": "Note deleted."
 }

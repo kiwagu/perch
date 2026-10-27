@@ -58,7 +58,7 @@ export function SignInContainer() {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('welcome')) {
-        notify({ code: 'welcome', text: (t) => t('user.sign-in.welcome') })
+        notify('welcome')
       }
     })
 

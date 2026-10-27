@@ -78,7 +78,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('locale-not-stored')) {
-        notify({ code: 'locale-not-stored', text: (t) => t('app.shell.locale-not-stored') })
+        notify('locale-not-stored')
       }
     })
     const cleared = actor.on('clear', ({ anchor }) => {
@@ -96,11 +96,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   useEffect(
     () =>
       session.subscribeRejections((rejection) =>
-        notify(
-          rejection.reloaded
-            ? { code: 'changes-reloaded', text: (t) => t('app.shell.reloaded') }
-            : { code: 'change-rejected', text: (t) => t('app.shell.rejected') },
-        ),
+        notify(rejection.reloaded ? 'changes-reloaded' : 'change-rejected'),
       ),
     [session, notify],
   )

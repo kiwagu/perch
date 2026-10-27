@@ -17,6 +17,7 @@ import type { SessionPort } from '../../../../platform/session.port'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 
 import { openedFrame } from './__fixtures__/frame'
+import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
 
@@ -33,7 +34,7 @@ describe('ShellContainer', () => {
       modules: [HomeModule],
       session,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -99,7 +100,7 @@ describe('ShellContainer', () => {
       modules: [HomeModule],
       session,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -151,7 +152,7 @@ describe('ShellContainer', () => {
       modules: [HomeModule],
       session: signedIn,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -206,7 +207,7 @@ describe('ShellContainer', () => {
       modules: [HomeModule],
       session: switching,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>

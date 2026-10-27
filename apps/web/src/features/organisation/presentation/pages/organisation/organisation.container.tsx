@@ -107,7 +107,7 @@ export function OrganisationContainer() {
   useEffect(() => {
     const said = actor.on('show', ({ codes }) => {
       if (codes.includes('invited')) {
-        notify({ code: 'invited', text: (t) => t('organisation.invite.invited') })
+        notify('invited')
       }
     })
 

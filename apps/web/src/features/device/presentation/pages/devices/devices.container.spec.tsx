@@ -15,6 +15,7 @@ import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
 import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
+import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from '../../../../app-shell/presentation/shell/shell.container'
 import { ShellFrameContext } from '../../../../app-shell/presentation/shell/shell-frame'
 import { DeviceModule } from '../../../device.module'
@@ -66,7 +67,7 @@ async function openPage(): Promise<void> {
     modules: [DeviceModule],
     session,
     layout: () => (
-      <NoticeProvider>
+      <NoticeProvider texts={NOTICE_TEXTS}>
         <ShellContainer>
           <Outlet />
         </ShellContainer>

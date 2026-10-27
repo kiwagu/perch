@@ -61,7 +61,7 @@ export function ProfileContainer() {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('profile-saved')) {
-        notify({ code: 'profile-saved', text: (t) => t('user.profile.saved') })
+        notify('profile-saved')
       }
     })
 

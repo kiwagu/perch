@@ -140,7 +140,9 @@ modeling stage.
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for organisations and for devices,
-  notices the shell shows, the language state and the app-wide catalogs. `ui-contract.ts` is
+  the notice and the toasts the shell shows (each raised by its contract code, the frame
+  giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
+  app-wide catalogs. `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then

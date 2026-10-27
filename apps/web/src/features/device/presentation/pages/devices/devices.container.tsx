@@ -35,7 +35,7 @@ export function DevicesContainer() {
       },
       () => {
         if (live) {
-          raise({ code: 'devices-read-failed', text: (t) => t('device.notice.read-failed') })
+          raise('devices-read-failed')
         }
       },
     )
@@ -78,7 +78,7 @@ export function DevicesContainer() {
   useEffect(() => {
     const shown = actor.on('show', ({ codes }) => {
       if (codes.includes('device-sign-out-failed')) {
-        notify({ code: 'device-sign-out-failed', text: (t) => t('device.notice.sign-out-failed') })
+        notify('device-sign-out-failed')
       }
     })
 
