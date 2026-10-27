@@ -3,8 +3,9 @@
  * entities, fields and activities one contract adds or removes against another, the anchors
  * it renames, the codes and the error fields it adds or removes on the anchors both hold
  * (written or derived, so a constraint added to the model shows as the code it gives), the
- * fields that start or stop holding input, the actions that leave what the user typed behind,
- * and the transitions it adds or removes in each activity both contracts hold.
+ * fields that start or stop holding input, the actions that leave what the user typed behind
+ * and how each leave that would lose it asks, and the transitions it adds or removes in each
+ * activity both contracts hold.
  * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
  */
 
@@ -45,6 +46,8 @@ export interface ContractChanges {
   inputs: Change
   /** As the action's name, the actions that leave what the user typed behind. */
   leaving: Change
+  /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
+  unsavedInput: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
@@ -123,6 +126,12 @@ export function contractAt(ref: string, root: string): Contract | { missing: tru
 }
 
 const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
+
+/** How each leave that would lose unsaved input asks, as `<leave>: <how>`; none when undeclared. */
+const unsavedInputOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.unsavedInput ?? {}).map(
+    ([leave, how]) => `${leave}: ${how}`,
+  )
 
 function changeOf(before: readonly string[], after: readonly string[]): Change {
   const was = new Set(before)
@@ -270,6 +279,7 @@ export function diffContracts(
       before?.screens.platform.leaving ?? [],
       after?.screens.platform.leaving ?? [],
     ),
+    unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),
@@ -292,6 +302,7 @@ const LISTS = [
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['leaving', 'leaving action', 'leaving actions'],
+  ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
   ['activities', 'activity', 'activities'],

@@ -34,4 +34,42 @@ export default [
       },
     ],
   }),
+  {
+    // The web app's views keep every leave and every field under the frame's guard of unsaved
+    // input: a screen moves through its machine (useScreenMachine runs a flow's navigation) or the
+    // unguarded move the platform offers for a leave nobody started here (useLeaveNow), and a form
+    // is the kit's, whose saved submit clears its fields' unsaved input. The shared config's raw
+    // fields are listed again, since this block's list replaces its list for these files.
+    files: ['apps/web/src/features/**/presentation/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@tanstack/react-router',
+              importNames: ['useNavigate'],
+              message:
+                "Move through useScreenMachine (a flow's navigation) or useLeaveNow (a leave nobody started here): both know the frame's guard.",
+            },
+          ],
+        },
+      ],
+      'react/forbid-elements': [
+        'error',
+        {
+          forbid: [
+            { element: 'input', message: "Use the kit's Input: it tracks unsaved input." },
+            { element: 'textarea', message: "Use the kit's Textarea: it tracks unsaved input." },
+            { element: 'select', message: "Use the kit's Select: it tracks unsaved input." },
+            {
+              element: 'form',
+              message: "Use the kit's Form: a saved submit clears its fields' unsaved input.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]

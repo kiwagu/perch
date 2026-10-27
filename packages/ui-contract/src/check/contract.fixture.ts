@@ -194,6 +194,7 @@ export function sampleContract(): Contract {
         reserved: ['app-shell.status'],
         status: { anchor: 'app-shell.status', states: ['opening', 'ready'] },
       },
+      toasts: [],
     },
     activities: [THING],
     activityLines: new Map(),

@@ -34,6 +34,34 @@ describe('buildManifest', () => {
     expect(manifest.contract.readyValue).toBe('ready')
     expect(manifest.contract.pageHelper).toBe('__perch.ui')
   })
+  it('lists each derived toast code with its action, and leaves the rule row out', () => {
+    const base = fixtureContract()
+    const derived = buildManifest({
+      ...base,
+      vocabulary: {
+        ...base.vocabulary,
+        codes: {
+          ...base.vocabulary.codes,
+          '<object>-<verb>ed': {
+            where: 'app-shell.toast',
+            meaning: 'the success of an action of the model',
+          },
+        },
+      },
+      screens: {
+        ...base.screens,
+        toasts: [{ anchor: 'app-shell.toast', code: 'note-created', action: 'note.createNote' }],
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(derived.contract.codes['note-created']).toBe(
+      '`app-shell.toast`: the success of `note.createNote`',
+    )
+    expect(derived.contract.codes).not.toHaveProperty('<object>-<verb>ed')
+    expect(manifestSchema.safeParse(derived).success).toBe(true)
+  })
   it('lists every declared anchor once, with its kind, its screen and its attributes', () => {
     const declared = contract.screens.screens.flatMap((screen) => Object.keys(screen.anchors))
 

@@ -4,10 +4,19 @@
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
  * permission to; every choice value belongs to an anchor that exists; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
+ * A code the loader derived on the toast anchor needs no row: the rule row
+ * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
 import { screenOf } from '../anchors'
-import { jsonPath, MODEL_FILE, type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
+import {
+  jsonPath,
+  MODEL_FILE,
+  type Problem,
+  type ScreensFile,
+  TOAST_RULE_ROW,
+  VOCABULARY_FILE,
+} from '../files'
 
 import {
   type Contract,
@@ -44,6 +53,14 @@ function screenProblems(contract: Contract): Problem[] {
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
   const anchors = declaredAnchors(screens)
+  // A code the loader derived on the toast anchor is vouched for by the rule row, not a row of its own.
+  const codesFor = (anchor: string): Readonly<Record<string, unknown>> => {
+    const derived = screens.toasts.filter((toast) => toast.anchor === anchor)
+
+    return derived.length === 0
+      ? vocabulary.codes
+      : { ...vocabulary.codes, ...Object.fromEntries(derived.map(({ code }) => [code, true])) }
+  }
 
   return screens.screens.flatMap((screen, index) => [
     ...(has(vocabulary.screenNames, screen.id)
@@ -64,7 +81,7 @@ function screenProblems(contract: Contract): Problem[] {
           ? []
           : [inScreens([...at, 'kind'], `"${def.kind}" is not a kind of the vocabulary`)]),
         ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
-        ...unlisted(def.codes, [...at, 'codes'], vocabulary.codes, 'a code'),
+        ...unlisted(def.codes, [...at, 'codes'], codesFor(anchor), 'a code'),
         ...unlisted(def.states, [...at, 'states'], states, 'a state'),
         ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
       ]),
@@ -182,7 +199,25 @@ const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
     ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
+    ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
   ])
+
+/** The derived toasts want the vocabulary's rule row. */
+function toastRuleProblems({ vocabulary, screens }: Contract): Problem[] {
+  const [first] = screens.toasts
+
+  if (first === undefined || has(vocabulary.codes, TOAST_RULE_ROW)) {
+    return []
+  }
+
+  const codes = screens.toasts.map(({ code }) => code).join(', ')
+
+  return [
+    inVocabulary(
+      `section "Codes": the toasts derived on ${first.anchor} (${codes}) want the rule row \`${TOAST_RULE_ROW}\``,
+    ),
+  ]
+}
 
 function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
   const used = usedCodes(screens)
@@ -198,4 +233,5 @@ export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
+  ...toastRuleProblems(contract),
 ]

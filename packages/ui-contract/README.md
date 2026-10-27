@@ -27,14 +27,18 @@ for Bun.
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
     failures of the actions, an error's codes and fields, the buttons whose regions the flow
     leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, then parsed through `screenFileSchema`;
+    screen carry and the failures of the actions, the success of each model action said on the
+    frame's toast anchor, which carries every code a flow shows on it
+    (`files/expand-flow/toasts.ts`, `files/derive/toasts.ts`), then parsed through
+    `screenFileSchema`;
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/domain/platform.yaml`, the version and the platform section (its actions,
-    events, `leaving` actions, reserved anchors and status line), through
+    events, `leaving` actions, `unsavedInput` (how each leave that would lose unsaved input
+    asks first), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
-    screen, problems named by the file and the path inside it, a YAML error by its line),
+    screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
     `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
@@ -113,7 +117,10 @@ for Bun.
     (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
     path parameter, and a value for each `$param`, else `needs an example` at its property),
-    `leavingProblems` (each action of `platform.leaving` exists and is listed once)
+    `leavingProblems` (each action of `platform.leaving` exists and is listed once),
+    `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
+    reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
+    its own, and actions that ask need an action under `leaving`)
     and `scenariosProblems` (bracket references, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
@@ -131,7 +138,8 @@ for Bun.
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
     a suffix, every suffix and code in the vocabulary, and a `holdsInput` written only as
-    `{false}` on a field the contract says holds no input, never on another kind.
+    `{false}` on a field the contract says holds no input, never on another kind, and on every
+    such field rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
@@ -183,7 +191,8 @@ for Bun.
     added are a rename when they are the only ones of their screen and kind; on the anchors
     both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
     -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
-    the actions of `platform.leaving` added and removed;
+    the actions of `platform.leaving` added and removed, and the entries of
+    `platform.unsavedInput` as `<leave>: <how it asks>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
     <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
@@ -291,7 +300,7 @@ for Bun.
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
   fields the anchors both hold gain or lose (derived ones included), the fields that start or
-  stop holding input, the leaving actions, the activities and the
+  stop holding input, the leaving actions, how each leave asks, the activities and the
   transitions changed in each included; prints the hand-over block, or the changes as JSON
   with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.

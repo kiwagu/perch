@@ -10,4 +10,5 @@ export {
 } from './bus'
 export type { ExecutionContext } from './context'
 export { EventBus, type Subscriber } from './event-bus'
+export { type FakeEventBus, fakeEventBus } from './fake-event-bus'
 export { validatePayloads } from './middleware'

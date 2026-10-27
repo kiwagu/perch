@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
@@ -27,13 +27,35 @@ let devices: FakeDevices
 /** How many times the page had the session sign this device out. */
 let signedOutHere = 0
 
+/** Whether Ann is still signed in, and who hears the account change. */
+let signedIn = true
+const accountListeners = new Set<(user: typeof ann | undefined) => void>()
+
+/** Ann's account goes away, as a sign-out here or from another device leaves it. */
+function signOut(): void {
+  signedIn = false
+
+  for (const listener of accountListeners) {
+    listener(undefined)
+  }
+}
+
 /** The devices page in the application's frame, for Ann signed in, over `devices`. */
 async function openPage(): Promise<void> {
   signedOutHere = 0
+  signedIn = true
+  accountListeners.clear()
 
   const session = {
     ...fakeSession().session,
-    current: () => ann,
+    current: () => (signedIn ? ann : undefined),
+    subscribe: (listener: (user: typeof ann | undefined) => void) => {
+      accountListeners.add(listener)
+
+      return () => {
+        accountListeners.delete(listener)
+      }
+    },
     signingOutEverywhere: () => () => {
       signedOutHere += 1
 
@@ -173,6 +195,22 @@ describe('DevicesContainer', () => {
 
     await waitFor(() => expect(signedOutHere).toBe(1))
     expect(devices.calls).toEqual([['list'], ['everywhere']])
+  })
+
+  it('neither reads the devices again nor says they could not be read once the account signs out', async () => {
+    devices = new FakeDevices()
+
+    await openPage()
+    await row(phone.label)
+    // With no account a read fails: it must not be made at all.
+    devices.refusal = offline()
+    act(() => signOut())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(devices.calls).toEqual([['list']])
+    expect(screen.queryByTestId('app-shell.notice-message')?.getAttribute('data-code')).not.toBe(
+      'devices-read-failed',
+    )
   })
 
   it('says so when signing out everywhere fails, and lets it be asked again', async () => {

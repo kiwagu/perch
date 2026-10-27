@@ -104,8 +104,9 @@ The authored files, edited by hand or by a model in the modeling thread:
 - `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), and `leaving`, the actions whose run
-  leaves what the user typed behind, the reserved anchors and the readiness line.
+  in a flow (the local data opened, or could not be), `leaving`, the actions whose run
+  leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
+  first, the reserved anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -400,13 +401,18 @@ out, and the loader derives it, the same way every time:
   sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
   wins. The manifest carries it, and `contract:diff` lists the
   fields that start or stop holding input.
-- **Which leaves ask first.** While a field holds unsaved input, the app is to ask before a
-  change of screen, and before an action that leaves what was typed behind, a sign-out, a
-  switch of organisation, a change of language, runs from its control; those actions are
-  listed in `platform.yaml` under `leaving`. Reload, closing the tab and a URL typed by hand
-  are the browser's own prompt to give. A change of state inside one screen (a tab, a search
-  parameter) is no leave, and a navigation a flow makes after its action completed never
-  asks: the action took the input.
+- **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
+  would lose what was typed, and how the app asks first. `question` names the frame's dialog:
+  a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
+  its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and
+  `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask
+  through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by
+  hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code
+  marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or
+  `question`; `flow` (a navigation a flow makes after its action completed: the action took
+  the input) is always `never`, and `elsewhere` (another tab or device, a database that will
+  not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
+  it.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -422,6 +428,20 @@ out, and the loader derives it, the same way every time:
   codes and no error in
   the part is a problem: the screen declares the error, or writes the region by its button
   with its `onError`.
+- **The toast of a success.** With a toast anchor on the frame (`app-shell.toast`), every
+  invoke of an action of the model, written or in a derived region, says its success there:
+  each branch of its `onDone` gets `show: { app-shell.toast: [<code>] }`, the code being the
+  action's object in kebab case and the past of its verb (`note.createNote` gives
+  `note-created`, `profile.updateBio` gives `bio-updated`), or `<action>-done` for a verb
+  other than create, update and delete. An `onDone` any branch of which shows something
+  already gets none (what the file writes wins); an invoke, or a region written `by` its
+  button, that says `toast: false` gets none (the language select's store: the change is
+  visible by itself). A platform action never toasts, and a failure never does: it shows on
+  the part's error. The toast anchor carries every code a flow shows on it; the vocabulary
+  documents the derived ones by one rule row, `<object>-<verb>ed`, the manifest lists each
+  with its action, and `contract:diff` reports a new one. A code a flow writes on the toast
+  itself (a warning of its own), or the frame lists on it, has its own row, even where a
+  derivation gives the same code.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived
@@ -755,7 +775,8 @@ gap is fixed in the contract files first, never worked around in a test.
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
-  once; the versions agree; the generated schemas
+  once, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a
+  code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
@@ -767,9 +788,11 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
-  `holdsInput={false}` on a field that holds input or on an anchor that is not a field). On a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and a
+  rendered field that holds no input without its opt-out is reported at its anchor. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
-  contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
+  contract run ahead of the app (an anchor declared, not rendered yet, passes, and so does a
+  field's opt-out not written yet); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does

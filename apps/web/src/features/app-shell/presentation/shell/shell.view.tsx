@@ -94,6 +94,7 @@ export function ShellView(props: ShellViewProps) {
           onChange={props.onLocaleChange}
           disabled={!props.canChooseLocale}
           testId="app-shell.locale-select"
+          holdsInput={false}
         />
       }
       navigation={items.map((item) => (

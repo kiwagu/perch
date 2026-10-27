@@ -130,6 +130,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
+      unsavedInput: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -181,6 +182,64 @@ describe('diffContracts', () => {
       removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists a toast code a new model action derives as an anchor code added', () => {
+    const withToast = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+      const screen = contract.screens.screens[0]
+
+      if (screen === undefined) {
+        throw new Error('the fixture has no screen')
+      }
+
+      screen.anchors['sample.toast'] = {
+        kind: 'toast',
+        ...(codes.length > 0 ? { codes: [...codes] } : {}),
+      }
+
+      return contract
+    }
+
+    expect(diffContracts(withToast([]), withToast(['note-created'])).anchorCodes).toEqual({
+      added: ['sample.toast note-created'],
+      removed: [],
+    })
+  })
+  it('lists how each leave that would lose unsaved input asks, as it changes', () => {
+    const asking = structuredClone(before)
+
+    asking.screens.platform.unsavedInput = {
+      question: 'sample.leave-dialog',
+      screen: 'question',
+      actions: 'question',
+      unload: 'browser',
+      state: 'never',
+      flow: 'never',
+      elsewhere: 'cannot',
+    }
+
+    const quieter = structuredClone(asking)
+
+    if (quieter.screens.platform.unsavedInput !== undefined) {
+      quieter.screens.platform.unsavedInput.unload = 'never'
+    }
+
+    expect(diffContracts(before, asking).unsavedInput.added).toEqual([
+      'actions: question',
+      'elsewhere: cannot',
+      'flow: never',
+      'question: sample.leave-dialog',
+      'screen: question',
+      'state: never',
+      'unload: browser',
+    ])
+    expect(diffContracts(asking, quieter).unsavedInput).toEqual({
+      added: ['unload: never'],
+      removed: ['unload: browser'],
+    })
+    expect(formatChanges(diffContracts(asking, quieter))).toContain(
+      'unsaved-input entries added: unload: never',
+    )
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(
