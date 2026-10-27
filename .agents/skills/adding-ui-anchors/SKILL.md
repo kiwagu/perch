@@ -78,7 +78,9 @@ code and the tests follow; the checks hold them to the contract.
    name, a region by its pattern or by its button, and read the expansion with `bun run
    contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
-   those tables are business, like the screen file. A field holds input by itself; only a
+   those tables are business, like the screen file. The toast codes the contract derives for
+   model actions' successes are the exception: the rule row `<object>-<verb>ed` stands for them,
+   and only their words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
    `holdsInput={false}` in the JSX, and the contract derives which.
    A new screen follows the checklist in `references/checklists.md`.
@@ -149,7 +151,7 @@ code and the tests follow; the checks hold them to the contract.
 - Emulate a facet the contract lacks in a component, a hook, a store or a test; signal the gap
   as `contract-gap-no-emulation.mdc` says.
 - Invent a kind, a suffix, a state, a code or a value outside the vocabulary; add it to its
-  table in the same change.
+  table in the same change (a derived toast code has the rule row already).
 - Build an anchor at runtime, join a derived name by hand instead of `testIdFor`, or write
   one literal twice; pass it as a prop or share a `<NAME>_TEST_ID` constant.
 - Put an anchor on a wrapper, a fragment, a portal or a backdrop, or use an `id` attribute in
