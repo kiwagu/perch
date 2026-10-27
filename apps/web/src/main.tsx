@@ -6,9 +6,11 @@ import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
@@ -40,9 +42,13 @@ type Boot =
 function Layout() {
   return (
     <NoticeProvider>
-      <ShellContainer>
-        <Outlet />
-      </ShellContainer>
+      <UnsavedInputScope>
+        <LeaveGuard>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </LeaveGuard>
+      </UnsavedInputScope>
     </NoticeProvider>
   )
 }

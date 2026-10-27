@@ -163,6 +163,17 @@ modeling stage.
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
   (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added); running every flow and
   activity in XState is the contract check's, not the app's.
+  The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
+  lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the
+  anchors bound to an action of `leaving`, both held to the contract by
+  `leaving-contract.spec.ts`; `leave-guard.port.ts` is how a screen asks the frame before such
+  a leave (`useLeaveGuard()`: `confirm()`, `before(control)`; every leave goes ahead without
+  a provider); `screen-machine.ts` is the one way a screen runs its machine
+  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a leaving
+  control's event waits for it, and `submit(event)` resolves with the outcome of the actions
+  the event started, and of the ones they started in turn, judged apart from any other submit
+  or actor; `false` when the state does not take the event); `leave-now.ts` is the unguarded move for a leave nobody started here
+  (`useLeaveNow()`).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

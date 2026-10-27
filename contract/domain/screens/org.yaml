@@ -204,11 +204,15 @@ flow:
           states:
             closed:
               on:
-                organisation.create.toggle-button: open
+                organisation.create.toggle-button:
+                  target: open
+                  description: The form shows again with what was typed before it closed.
                 organisation.create.submit-button: submitting
             open:
               on:
-                organisation.create.toggle-button: closed
+                organisation.create.toggle-button:
+                  target: closed
+                  description: The form is hidden, and what was typed into it stays; it still counts as unsaved input.
                 organisation.create.submit-button: submitting
             submitting:
               invoke:

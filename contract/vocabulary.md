@@ -177,6 +177,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
+| `unsaved-input` | `app-shell.leave-dialog` | the dialog asks whether to leave and lose what was typed but not saved |
 
 ## Choice values
 
@@ -232,3 +233,4 @@ included.
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
+| `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
