@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 
 import { useLocale, useT } from '@workspace/i18n'
 import type { DeviceSessionId } from '@workspace/ids'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
+
+import type { DevicesEvent } from '../../../application/devices.machine'
 
 /** A device of the signed-in identity, as the list shows it. */
 export interface DeviceItem {
@@ -20,16 +22,20 @@ export interface DeviceItem {
 export interface DevicesViewProps {
   /** The devices, the earliest signed in first; undefined until they are read. */
   readonly devices: readonly DeviceItem[] | undefined
-  /** A sign-out runs: the buttons wait for it. */
-  readonly pending?: boolean
+  /** Whether the page's flow takes the event now: a control is enabled exactly while it does. */
+  readonly can: (event: DevicesEvent) => boolean
+  /** The dialog asks whether to sign every device out. */
+  readonly confirming: boolean
   readonly onRevoke: (device: DeviceItem) => void
+  readonly onOpenEverywhere: () => void
   readonly onSignOutEverywhere: () => void
+  readonly onCancelEverywhere: () => void
 }
 
 function DeviceRow(props: {
   readonly device: DeviceItem
   readonly when: (date: Date) => string
-  readonly pending: boolean
+  readonly can: DevicesViewProps['can']
   readonly onRevoke: DevicesViewProps['onRevoke']
 }) {
   const t = useT()
@@ -69,7 +75,7 @@ function DeviceRow(props: {
         <Button
           type="button"
           variant="outline"
-          disabled={props.pending}
+          disabled={!props.can({ type: 'device.list.revoke-button', device: device.id })}
           onClick={() => props.onRevoke(device)}
           data-testid="device.list.revoke-button"
         >
@@ -88,8 +94,6 @@ function DeviceRow(props: {
 export function DevicesView(props: DevicesViewProps) {
   const t = useT()
   const locale = useLocale()
-  const [confirming, setConfirming] = useState(false)
-  const pending = props.pending ?? false
   const when = useMemo(() => {
     const format = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -111,7 +115,7 @@ export function DevicesView(props: DevicesViewProps) {
                 key={device.id}
                 device={device}
                 when={when}
-                pending={pending}
+                can={props.can}
                 onRevoke={props.onRevoke}
               />
             ))}
@@ -129,24 +133,21 @@ export function DevicesView(props: DevicesViewProps) {
         <Button
           type="button"
           variant="destructive"
-          disabled={pending}
-          onClick={() => setConfirming(true)}
+          disabled={!props.can({ type: 'device.everywhere.open-button' })}
+          onClick={props.onOpenEverywhere}
           data-testid="device.everywhere.open-button"
         >
           {t('device.everywhere.open')}
         </Button>
         <ConfirmDialog
-          open={confirming}
+          open={props.confirming}
           title={t('device.everywhere.title')}
           description={t('device.everywhere.body')}
           confirmLabel={t('device.everywhere.confirm')}
           cancelLabel={t('device.everywhere.cancel')}
           destructive
-          onConfirm={() => {
-            setConfirming(false)
-            props.onSignOutEverywhere()
-          }}
-          onCancel={() => setConfirming(false)}
+          onConfirm={props.onSignOutEverywhere}
+          onCancel={props.onCancelEverywhere}
           testId="device.everywhere.dialog"
           code="sign-out-everywhere"
         />

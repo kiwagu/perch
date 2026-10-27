@@ -37,14 +37,25 @@ const when = (date: Date, locale: 'en' | 'es' = 'en') =>
   new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 
 function renderView(props: Partial<DevicesViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onRevoke: vi.fn(), onSignOutEverywhere: vi.fn() }
+  const handlers = {
+    onRevoke: vi.fn(),
+    onOpenEverywhere: vi.fn(),
+    onSignOutEverywhere: vi.fn(),
+    onCancelEverywhere: vi.fn(),
+  }
+  const view = (more: Partial<DevicesViewProps>) => (
+    <DevicesView
+      devices={[laptop, phone, tablet]}
+      can={() => true}
+      confirming={false}
+      {...handlers}
+      {...props}
+      {...more}
+    />
+  )
+  const { rerender } = renderWithProviders(view({}), { locale, es })
 
-  renderWithProviders(<DevicesView devices={[laptop, phone, tablet]} {...handlers} {...props} />, {
-    locale,
-    es,
-  })
-
-  return handlers
+  return { ...handlers, rerender: (more: Partial<DevicesViewProps>) => rerender(view(more)) }
 }
 
 /** The rows of the list, by the label each shows. */
@@ -110,11 +121,15 @@ describe('DevicesView', () => {
   })
 
   it('asks before signing out everywhere, and signs out only once confirmed', async () => {
-    const { onSignOutEverywhere } = renderView()
+    const { onOpenEverywhere, onSignOutEverywhere, onCancelEverywhere, rerender } = renderView()
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
 
     fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+
+    expect(onOpenEverywhere).toHaveBeenCalledOnce()
+
+    rerender({ confirming: true })
 
     const dialog = await screen.findByRole('alertdialog')
 
@@ -125,17 +140,21 @@ describe('DevicesView', () => {
 
     fireEvent.click(screen.getByTestId('device.everywhere.dialog.cancel-button'))
 
+    expect(onCancelEverywhere).toHaveBeenCalled()
+
+    rerender({ confirming: false })
+
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(onSignOutEverywhere).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    rerender({ confirming: true })
     fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
 
     expect(onSignOutEverywhere).toHaveBeenCalledOnce()
   })
 
-  it('holds the sign-out buttons while a sign-out runs', () => {
-    renderView({ pending: true })
+  it("holds the sign-out buttons while the page's flow does not take them", () => {
+    renderView({ can: () => false })
 
     expect((screen.getByTestId('device.list.revoke-button') as HTMLButtonElement).disabled).toBe(
       true,
