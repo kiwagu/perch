@@ -9,6 +9,7 @@ import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice, useNotify } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
+import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
 import { LocaleWrites } from '../../application/locale-writes'
@@ -31,6 +32,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const notice = useNotice()
+  const toasts = useToasts()
+  const dismissToast = useDismissToast()
   const notify = useNotify()
   const t = useT()
   const guard = useLeaveGuard()
@@ -102,6 +105,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       }}
       link={RouterLink}
       notice={notice && { code: notice.code, text: notice.text(t) }}
+      toasts={toasts.map(({ id, code, text }) => ({ id, code, text: text(t) }))}
+      onDismissToast={dismissToast}
     >
       {props.children}
     </ShellView>

@@ -186,4 +186,27 @@ describe('ShellView', () => {
     expect(within(navigation).getByText(es['app.shell.nav.sign-in'])).toBeTruthy()
     expect(screen.getByText(es['app.shell.title'])).toBeTruthy()
   })
+
+  it('renders the toasts, newest first, each dismissed by a click', () => {
+    const onDismissToast = vi.fn()
+
+    renderShell({
+      toasts: [
+        { id: 2, code: 'note-updated', text: 'Note saved.' },
+        { id: 1, code: 'note-created', text: 'Note added.' },
+      ],
+      onDismissToast,
+    })
+
+    const toasts = screen.getAllByTestId('app-shell.toast')
+
+    expect(toasts.map((toast) => toast.getAttribute('data-code'))).toEqual([
+      'note-updated',
+      'note-created',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note saved.' }))
+
+    expect(onDismissToast).toHaveBeenCalledWith(2)
+  })
 })

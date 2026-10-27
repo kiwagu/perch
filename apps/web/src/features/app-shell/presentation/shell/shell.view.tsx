@@ -6,6 +6,7 @@ import { AppShell } from '@workspace/ui/components/platform/app-shell'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
+import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
 
 export interface ShellLinkProps {
   readonly to: string
@@ -30,6 +31,11 @@ export interface ShellViewProps {
   readonly signingOutHere?: boolean | undefined
   /** The latest message for the user: its contract code and its text, already translated. */
   readonly notice?: { readonly code: string; readonly text: string } | undefined
+  /** The toasts shown, the newest first, each with its words in the language the app speaks. */
+  readonly toasts?:
+    | readonly { readonly id: number; readonly code: string; readonly text: string }[]
+    | undefined
+  readonly onDismissToast?: ((id: number) => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -120,6 +126,18 @@ export function ShellView(props: ShellViewProps) {
           {props.notice.text}
         </p>
       ) : null}
+      <Toaster>
+        {(props.toasts ?? []).map((toast) => (
+          <Toast
+            key={toast.id}
+            data-testid="app-shell.toast"
+            code={toast.code}
+            onDismiss={() => props.onDismissToast?.(toast.id)}
+          >
+            {toast.text}
+          </Toast>
+        ))}
+      </Toaster>
       {props.status === 'failed' && props.onSignOutHere ? (
         <Button
           type="button"
