@@ -10,7 +10,11 @@ import {
   useToasts,
 } from './toasts'
 
-const TEXTS = { 'note-created': () => 'Note added', 'note-deleted': () => 'Note deleted' }
+const TEXTS = {
+  'note-created': { tone: 'success', text: () => 'Note added' },
+  'note-deleted': { tone: 'success', text: () => 'Note deleted' },
+  'slow-network': { tone: 'warning', text: () => 'Slow network' },
+} as const
 
 let push: (code: string) => void = () => {}
 let dismiss: (id: number) => void = () => {}
@@ -22,7 +26,13 @@ function Probe() {
   return (
     <ol>
       {useToasts().map((toast) => (
-        <li key={toast.id} data-testid="toast" data-code={toast.code} data-id={toast.id} />
+        <li
+          key={toast.id}
+          data-testid="toast"
+          data-code={toast.code}
+          data-id={toast.id}
+          data-tone={toast.tone}
+        />
       ))}
     </ol>
   )
@@ -83,6 +93,20 @@ describe('the toast channel', () => {
     })
 
     expect(codes()).toEqual(['note-created'])
+  })
+
+  it('gives each toast the tone the frame says for its code', () => {
+    act(() => {
+      push('note-created')
+    })
+    act(() => {
+      push('slow-network')
+    })
+
+    expect(screen.getAllByTestId('toast').map((toast) => toast.getAttribute('data-tone'))).toEqual([
+      'warning',
+      'success',
+    ])
   })
 
   it('refuses a code the frame gives no words', () => {

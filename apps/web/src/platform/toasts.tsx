@@ -1,7 +1,7 @@
 /**
  * The toasts of what the user changed, for a short while in the tab that acted: the newest at the
- * top, each gone after `TOAST_LIFETIME_MS` or when dismissed. The frame gives the words of each
- * code and renders the list.
+ * top, each gone after `TOAST_LIFETIME_MS` or when dismissed. The frame gives the tone and the
+ * words of each code and renders the list.
  */
 
 import {
@@ -17,14 +17,23 @@ import {
 
 import type { Translate } from '@workspace/i18n'
 
-import { type Texts, textOf } from './texts'
+import { entryOf } from './texts'
 
 export const TOAST_LIFETIME_MS = 5_000
+
+/** What a toast says: a success, a warning or an error. */
+export type ToastTone = 'success' | 'warning' | 'error'
+
+/** What the toast says for each code: its tone and its words. */
+export type ToastWords = Readonly<
+  Record<string, { readonly tone: ToastTone; readonly text: (t: Translate) => string }>
+>
 
 export interface Toast {
   readonly id: number
   /** The contract code of what it says (`note-created`), shown as `data-code`. */
   readonly code: string
+  readonly tone: ToastTone
   readonly text: (t: Translate) => string
 }
 
@@ -40,7 +49,7 @@ const ToastContext = createContext<ToastChannel>({
   dismiss: () => {},
 })
 
-export function ToastProvider(props: { readonly texts: Texts; readonly children: ReactNode }) {
+export function ToastProvider(props: { readonly texts: ToastWords; readonly children: ReactNode }) {
   const { texts } = props
   const [toasts, setToasts] = useState<readonly Toast[]>([])
   const last = useRef(0)
@@ -52,13 +61,13 @@ export function ToastProvider(props: { readonly texts: Texts; readonly children:
   }, [])
   const push = useCallback(
     (code: string) => {
-      const text = textOf(texts, code, 'toast')
+      const { tone, text } = entryOf(texts, code, 'toast')
 
       last.current += 1
 
       const id = last.current
 
-      setToasts((shown) => [{ id, code, text }, ...shown])
+      setToasts((shown) => [{ id, code, tone, text }, ...shown])
       timers.current.set(
         id,
         setTimeout(() => dismiss(id), TOAST_LIFETIME_MS),

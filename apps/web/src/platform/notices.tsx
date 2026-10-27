@@ -18,7 +18,7 @@ import {
 
 import type { Translate } from '@workspace/i18n'
 
-import { type Texts, textOf } from './texts'
+import { entryOf, type Texts } from './texts'
 
 export interface Notice {
   /** The contract code of what it says (`welcome`, `profile-saved`), shown as `data-code`. */
@@ -53,7 +53,7 @@ export function NoticeProvider(props: { readonly texts: Texts; readonly children
     const raisedIn = generation
 
     return (code: string) => {
-      const text = textOf(texts, code, 'notice')
+      const text = entryOf(texts, code, 'notice')
 
       if (current.current === raisedIn) {
         setNotice({ code, text })

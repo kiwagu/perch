@@ -102,7 +102,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       }}
       link={RouterLink}
       notice={notice && { code: notice.code, text: notice.text(t) }}
-      toasts={toasts.map(({ id, code, text }) => ({ id, code, text: text(t) }))}
+      toasts={toasts.map(({ id, code, tone, text }) => ({ id, code, tone, text: text(t) }))}
       onDismissToast={dismissToast}
     >
       {props.children}

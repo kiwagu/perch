@@ -22,13 +22,15 @@ modules' routes.
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `locale-writes.ts`
   tells a language another device stored from this device's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation,
-  the notice and the toasts (`app-shell.toast`, the kit's `Toaster`, the newest at the top,
-  each gone after a few seconds or a click); the language select and "Sign out on this device" are enabled while the
+  the notice, whose line is held while there is none so the page does not move, and the toasts
+  (`app-shell.toast`, the kit's `Toaster` centred at the top, the newest first, each in its tone
+  and gone after a few seconds or a click); the language select and "Sign out on this device" are enabled while the
   machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the
   data, a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved.
 - `presentation/shell/notice-texts.ts` and `toast-texts.ts`: the words of each code of
-  `app-shell.notice-message` and of `app-shell.toast`, one literal key each; the start hands
+  `app-shell.notice-message` and of `app-shell.toast` (a toast's tone too: a derived code says a
+  success), one literal key each; the start hands
   them to the platform's notice and toast channels (`NoticeProvider`, `ToastProvider`).
   `texts-contract.spec.ts` holds both maps to the codes the contract gives the two anchors, the
   toast's codes derived from the model actions the flows invoke: a new one fails it until its

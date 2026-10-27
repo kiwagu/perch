@@ -10,8 +10,6 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
 
-import type { Texts } from '../../../../platform/texts'
-
 import { NOTICE_TEXTS } from './notice-texts'
 import { TOAST_TEXTS } from './toast-texts'
 
@@ -21,7 +19,7 @@ describe('the words of the frame', () => {
   const { screens, problems } = loadScreens(ROOT)
   const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
   const codesOf = (anchor: string): readonly string[] => frame?.anchors[anchor]?.codes ?? []
-  const gaps = (anchor: string, texts: Texts) => ({
+  const gaps = (anchor: string, texts: Readonly<Record<string, unknown>>) => ({
     unworded: codesOf(anchor).filter((code) => !Object.hasOwn(texts, code)),
     stale: Object.keys(texts).filter((code) => !codesOf(anchor).includes(code)),
   })
