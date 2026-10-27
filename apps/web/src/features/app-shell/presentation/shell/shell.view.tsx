@@ -132,6 +132,7 @@ export function ShellView(props: ShellViewProps) {
             key={toast.id}
             data-testid="app-shell.toast"
             code={toast.code}
+            tone="success"
             onDismiss={() => props.onDismissToast?.(toast.id)}
           >
             {toast.text}
