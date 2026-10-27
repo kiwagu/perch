@@ -134,12 +134,18 @@ modeling stage.
   another tab saved one meanwhile, whose new pair is then left to revoke. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  and correlation ids). The root makes the app's domain event bus (`EventBus` of
+  `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
+  publishes `<command id>.done` or `.failed` once the write path resolved (a failing
+  subscriber is logged, never the command's failure), the session publishes
+  `sync.change-rejected` and `sync.changes-reloaded`, and a development build logs every
+  event's name. `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
-  and the current organisation), for commands, for organisations and for devices,
+  and the current organisation), for commands, for the app's events (`events.port.ts`:
+  subscribe, once, onAny), for organisations and for devices,
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs. `ui-contract.ts` is

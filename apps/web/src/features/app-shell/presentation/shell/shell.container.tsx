@@ -4,15 +4,17 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { useT } from '@workspace/i18n'
 
+import { EVENTS } from '../../../../platform/events.port'
 import { useFrameEffects } from '../../../../platform/frame-effects'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
-import { useNotice, useNotify } from '../../../../platform/notices'
+import { useNotice } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
 import { LocaleWrites } from '../../application/locale-writes'
+import { shellEvents } from '../../application/shell.events'
 
 import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
@@ -21,6 +23,7 @@ const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props
 
 export function ShellContainer(props: { readonly children?: ReactNode }) {
   const session = useService(SESSION)
+  const events = useService(EVENTS)
   const settings = useService(SETTINGS_SERVICE)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
@@ -34,7 +37,6 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const notice = useNotice()
   const toasts = useToasts()
   const dismissToast = useDismissToast()
-  const notify = useNotify()
   const t = useT()
   const guard = useLeaveGuard()
 
@@ -81,13 +83,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // The frame's flow says its notice and clears it, as every screen's flow does.
   useFrameEffects(actor)
 
-  useEffect(
-    () =>
-      session.subscribeRejections((rejection) =>
-        notify(rejection.reloaded ? 'changes-reloaded' : 'change-rejected'),
-      ),
-    [session, notify],
-  )
+  // The bus's refusals reach the frame's flow, which says them on the notice.
+  useEffect(() => shellEvents(events, actor), [events, actor])
 
   return (
     <ShellView
