@@ -6,7 +6,7 @@
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
  * `testIdFor()` and every code is in the vocabulary; a `holdsInput` written in the sources is
  * `{false}`, on a field the contract says holds no input, never on an anchor that is not a
- * field. The problems carry `file:line`.
+ * field, and every such field rendered carries it. The problems carry `file:line`.
  */
 
 import { baseOf, FIELD_KINDS } from '../anchors'
@@ -133,6 +133,25 @@ export function compareWithContract(
     }),
   )
 
+  // A field that holds no input (a choice that applies at once) says so on its element, once
+  // rendered; on a branch the contract may run ahead of that element, as of an anchor not rendered.
+  const optedOut = new Set(
+    collected.flatMap(({ inputs }) =>
+      inputs.filter(({ holdsInput }) => !holdsInput).map(({ anchor }) => anchor),
+    ),
+  )
+  const missingOptOuts = [...fields]
+    .filter(
+      ([anchor, { holds }]) =>
+        !options.ahead && !holds && first.has(anchor) && !optedOut.has(anchor),
+    )
+    .map(([, { path }]) =>
+      inScreens(
+        path,
+        'does not hold input by the contract; its element carries holdsInput={false}',
+      ),
+    )
+
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
     ...duplicates,
@@ -140,5 +159,6 @@ export function compareWithContract(
     ...unrendered,
     ...vocabularyProblems,
     ...inputProblems,
+    ...missingOptOuts,
   ])
 }
