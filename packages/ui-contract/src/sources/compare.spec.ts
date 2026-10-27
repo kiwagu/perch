@@ -229,6 +229,26 @@ describe('compareWithContract', () => {
       'b.tsx:4: "note:TEXT_REQUIRED" is not a code of contract/vocabulary.md',
     ])
   })
+  it('takes a toast code the loader derived as a code of the contract', () => {
+    const collected = [
+      ...agreeing(),
+      source('b.tsx', { codes: [{ code: 'thing-created', form: 'key', line: 4 }] }),
+    ]
+
+    expect(printed(collected)).toEqual([
+      'b.tsx:4: "thing-created" is not a code of contract/vocabulary.md',
+    ])
+    expect(
+      compareWithContract(
+        collected,
+        {
+          ...SCREENS,
+          toasts: [{ anchor: 'sample.page', code: 'thing-created', action: 'thing.createThing' }],
+        },
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([])
+  })
   it('keeps the problems of the collector, sorted by file and line', () => {
     const collected = [
       source('c.tsx', { problems: [{ file: 'c.tsx', line: 9, message: 'built at runtime' }] }),

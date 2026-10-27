@@ -14,7 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { type Contract, declaredAnchors, loadContract } from '../check'
+import { type Contract, codesOf, declaredAnchors, loadContract } from '../check'
 import {
   ACTIVITIES_DIR,
   type Activity,
@@ -265,8 +265,8 @@ export function diffContracts(
   return {
     anchors,
     codes: changeOf(
-      Object.keys(before?.vocabulary.codes ?? {}),
-      Object.keys(after?.vocabulary.codes ?? {}),
+      before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
+      after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>

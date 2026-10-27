@@ -18,6 +18,7 @@ import {
   type Problem,
   type Screen,
   type ScreensFile,
+  TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
 import type { Scenario } from '../scenarios'
@@ -165,6 +166,16 @@ export function knownAnchors(contract: Contract): (anchor: string) => boolean {
     return base !== undefined && (derived ?? []).includes(anchor.slice(base.length + 1))
   }
 }
+
+/**
+ * The codes of the contract: the vocabulary's rows, the rule row aside (it is no code), and each
+ * toast code the loader derived, which the rule row stands for.
+ */
+export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<string> =>
+  new Set([
+    ...Object.keys(vocabulary.codes).filter((code) => code !== TOAST_RULE_ROW),
+    ...screens.toasts.map(({ code }) => code),
+  ])
 
 /** Every state of the vocabulary: app, container and row states. */
 export const statesOf = (vocabulary: Vocabulary): Set<string> =>

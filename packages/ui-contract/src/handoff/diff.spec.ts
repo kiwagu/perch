@@ -205,6 +205,39 @@ describe('diffContracts', () => {
       removed: [],
     })
   })
+  it('lists the codes of the contract, the derived toast codes in and the rule row out', () => {
+    const toasts = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      if (codes.length > 0) {
+        contract.vocabulary.codes['<object>-<verb>ed'] = {
+          where: 'app-shell.toast',
+          meaning: 'the success of an action of the model',
+        }
+      }
+
+      contract.screens.toasts = codes.map((code) => ({
+        anchor: 'app-shell.toast',
+        code,
+        action: `note.${code}`,
+      }))
+
+      return contract
+    }
+
+    expect(diffContracts(toasts([]), toasts(['note-created', 'note-deleted'])).codes).toEqual({
+      added: ['note-created', 'note-deleted'],
+      removed: [],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts([])).codes).toEqual({
+      added: [],
+      removed: ['note-created'],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts(['note-updated'])).codes).toEqual({
+      added: ['note-updated'],
+      removed: ['note-created'],
+    })
+  })
   it('lists how each leave that would lose unsaved input asks, as it changes', () => {
     const asking = structuredClone(before)
 
