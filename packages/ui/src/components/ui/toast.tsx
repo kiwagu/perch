@@ -1,7 +1,8 @@
 /**
  * Short-lived notifications. `Toaster` is the region they stack in, at the top right, in the order
- * given (the app puts the newest first); `Toast` is one of them, carrying the code of what it
- * says, and a click on it dismisses it. The app owns the list and how long each stays.
+ * given (the app puts the newest first): a polite live region that stays mounted from empty on and
+ * announces each addition alone, around a list; `Toast` is one of them, carrying the code of what
+ * it says, and a click on it dismisses it. The app owns the list and how long each stays.
  */
 
 import { cn } from 'cn'
@@ -9,16 +10,18 @@ import type * as React from 'react'
 
 function Toaster({ className, ...props }: React.ComponentProps<'ol'>) {
   return (
-    <ol
+    <div
       data-slot="toaster"
       role="status"
       aria-live="polite"
+      aria-atomic="false"
       className={cn(
-        'pointer-events-none fixed top-4 right-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2',
+        'pointer-events-none fixed top-4 right-4 z-50 w-[calc(100%-2rem)] max-w-sm',
         className,
       )}
-      {...props}
-    />
+    >
+      <ol className="flex flex-col gap-2" {...props} />
+    </div>
   )
 }
 
@@ -45,7 +48,7 @@ function Toast({
       <button
         type="button"
         onClick={onDismiss}
-        className="w-full rounded-lg border bg-card px-4 py-3 text-left text-sm text-card-foreground shadow-md"
+        className="w-full rounded-lg border bg-card px-4 py-3 text-left text-sm break-words text-card-foreground shadow-md"
       >
         {children}
       </button>

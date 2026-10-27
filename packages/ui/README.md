@@ -24,9 +24,9 @@ than its portal or overlay. A control that is not a test target carries a
   submit is always prevented. Add more with `bunx shadcn add <name>`
   in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
   alias; the file then belongs to us and is edited in place. `toast` is the kit's own:
-  `Toaster`, the polite live region (`role="status"`) the app's toasts stack in at the top
-  right, in the order given, and `Toast`, one toast carrying its `data-code`, dismissed by a
-  click; the app owns the list and how long each stays.
+  `Toaster`, the polite live region (`role="status"`, each addition announced alone) around the
+  list the app's toasts stack in at the top right, in the order given, and `Toast`, one toast
+  carrying its `data-code`, dismissed by a click; the app owns the list and how long each stays.
 - `./components/platform/*`: props-driven building blocks of the application shell.
   - `AppShell`: the page frame (brand, actions, status, the navigation as a bottom bar on
     small screens and a side rail from `lg`); `navigationTestId` is the anchor of its
