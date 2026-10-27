@@ -89,7 +89,7 @@ function regionOf(region: unknown, expansion: Expansion, at: readonly PropertyKe
 
 /**
  * `flow` expanded, with the issues that kept a part of it from expanding (that part is left as
- * written) and the toasts it derived. `lookups` give the codes an anchor carries and an action's
+ * written), the toasts it derived and the codes it writes on the toast anchor itself. `lookups` give the codes an anchor carries and an action's
  * failure shows, for `show: <anchor>`, the screen's buttons bound to one action and the frame's
  * toast anchor; `at` is where the flow sits in its file.
  */
@@ -97,11 +97,16 @@ export function expandFlow(
   flow: unknown,
   lookups: FlowLookups,
   at: readonly PropertyKey[] = ['flow'],
-): { flow: unknown; issues: ExpansionIssue[]; toasts: DerivedToast[] } {
-  const expansion: Expansion = { ...lookups, issues: [], toasts: [] }
+): {
+  flow: unknown
+  issues: ExpansionIssue[]
+  toasts: DerivedToast[]
+  writtenToasts: string[]
+} {
+  const expansion: Expansion = { ...lookups, issues: [], toasts: [], writtenToasts: [] }
 
   if (!isRecord(flow) || !isRecord(flow['states'])) {
-    return { flow, issues: [], toasts: [] }
+    return { flow, issues: [], toasts: [], writtenToasts: [] }
   }
 
   const states = Object.fromEntries(
@@ -115,5 +120,6 @@ export function expandFlow(
     flow: { ...flow, states: withDerivedToasts(withDerivedRegions(states, expansion), expansion) },
     issues: expansion.issues,
     toasts: expansion.toasts,
+    writtenToasts: expansion.writtenToasts,
   }
 }

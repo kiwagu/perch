@@ -465,6 +465,22 @@ describe('loadScreens', () => {
       })
     })
 
+    it('leaves a code out of the derived toasts when a flow also writes it, so it needs its own row', () => {
+      writeToastScreens({})
+      writeSample((screen) => {
+        const flow = screen['flow'] as { states: { viewing: Record<string, unknown> } }
+
+        flow.states.viewing['entry'] = [{ show: { 'app-shell.toast': ['thing-created'] } }]
+      })
+
+      const { screens, problems: found } = loadScreens(root)
+      const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(frame?.anchors['app-shell.toast']?.codes).toEqual(['thing-created'])
+      expect(screens?.toasts).toEqual([])
+    })
+
     it('is not derived for a region by its button that says toast: false', () => {
       writeToastScreens({ add: { by: 'sample.form.add-button', toast: false } })
 

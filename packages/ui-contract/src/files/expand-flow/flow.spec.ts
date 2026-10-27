@@ -66,7 +66,7 @@ describe('expandFlow', () => {
       },
     ])
 
-    expect(expandFlow(flow, LOOKUPS)).toEqual({ flow, issues: [], toasts: [] })
+    expect(expandFlow(flow, LOOKUPS)).toEqual({ flow, issues: [], toasts: [], writtenToasts: [] })
   })
 
   it('turns a transition written as its target into the transition', () => {

@@ -34,4 +34,6 @@ export interface ExpansionIssue {
 export interface Expansion extends FlowLookups {
   readonly issues: ExpansionIssue[]
   readonly toasts: DerivedToast[]
+  /** The codes the flow's own `show`s put on the toast anchor. */
+  readonly writtenToasts: string[]
 }

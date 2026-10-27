@@ -117,7 +117,12 @@ describe('the region of a button bound to one action', () => {
 
     const flat = { initial: 'viewing', states: { viewing: {} } }
 
-    expect(expandFlow(flat, lookups([ADD]))).toEqual({ flow: flat, issues: [], toasts: [] })
+    expect(expandFlow(flat, lookups([ADD]))).toEqual({
+      flow: flat,
+      issues: [],
+      toasts: [],
+      writtenToasts: [],
+    })
   })
 
   it('is written as by: <button> with the outcomes the screen decides, the rest derived', () => {

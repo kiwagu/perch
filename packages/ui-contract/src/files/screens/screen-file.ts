@@ -36,7 +36,12 @@ export function expandedOf(
   file: string,
   read: unknown,
   lookups: Lookups,
-): { value?: unknown; toasts: readonly DerivedToast[]; problems: Problem[] } {
+): {
+  value?: unknown
+  toasts: readonly DerivedToast[]
+  writtenToasts: readonly string[]
+  problems: Problem[]
+} {
   const flow = isRecord(read) ? read['flow'] : undefined
   const id = isRecord(read) && typeof read['id'] === 'string' ? read['id'] : ''
   const expanded =
@@ -47,6 +52,7 @@ export function expandedOf(
   if (expanded !== undefined && expanded.issues.length > 0) {
     return {
       toasts: [],
+      writtenToasts: [],
       problems: expanded.issues.map((issue) => ({
         file,
         message: `${jsonPath(issue.at)}: ${issue.message}`,
@@ -57,6 +63,7 @@ export function expandedOf(
   return {
     value: expanded === undefined || !isRecord(read) ? read : { ...read, flow: expanded.flow },
     toasts: expanded?.toasts ?? [],
+    writtenToasts: expanded?.writtenToasts ?? [],
     problems: [],
   }
 }

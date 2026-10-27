@@ -439,7 +439,9 @@ out, and the loader derives it, the same way every time:
   visible by itself). A platform action never toasts, and a failure never does: it shows on
   the part's error. The toast anchor carries every code a flow shows on it; the vocabulary
   documents the derived ones by one rule row, `<object>-<verb>ed`, the manifest lists each
-  with its action, and `contract:diff` reports a new one.
+  with its action, and `contract:diff` reports a new one. A code a flow writes on the toast
+  itself (a warning of its own), or the frame lists on it, has its own row, even where a
+  derivation gives the same code.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived

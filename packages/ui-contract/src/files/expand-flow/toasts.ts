@@ -5,19 +5,22 @@
  * `<action>-done` for another verb. An `onDone` that shows something already gets none (what
  * the file writes wins), and an invoke that says `toast: false` gets none and loses the key, which
  * the canonical flow does not know. It runs on the flow as expanded, written and derived regions
- * alike; without a toast anchor on the frame it derives nothing.
+ * alike; without a toast anchor on the frame it derives nothing. The codes the flow's own `show`s
+ * put on the toast anchor are written codes, reported apart: each needs its own vocabulary row,
+ * even where a derivation elsewhere gives the same code.
  */
 
 import { isRecord, listOf, recordOf } from '../../records'
+import { toastCodesOf } from '../derive'
 
 import type { Expansion } from './expansion'
 
 const PLATFORM = 'platform.'
-const PAST: Readonly<Record<string, string>> = {
-  create: 'created',
-  update: 'updated',
-  delete: 'deleted',
-}
+const PAST: ReadonlyMap<string, string> = new Map([
+  ['create', 'created'],
+  ['update', 'updated'],
+  ['delete', 'deleted'],
+])
 
 /** `camelCase` as `kebab-case`. */
 const kebab = (name: string): string =>
@@ -31,7 +34,7 @@ export function toastCodeOf(src: string): string | undefined {
 
   const action = src.slice(src.indexOf('.') + 1)
   const [, verb = '', object = ''] = /^([a-z]+)([A-Z].*)?$/.exec(action) ?? []
-  const past = PAST[verb]
+  const past = PAST.get(verb)
 
   return past === undefined || object === '' ? `${kebab(action)}-done` : `${kebab(object)}-${past}`
 }
@@ -130,8 +133,17 @@ function walked(node: unknown, expansion: Expansion): unknown {
   }
 }
 
-/** `states`, the states of the root as expanded, with the toasts of the model actions' successes. */
-export const withDerivedToasts = (
+/**
+ * `states`, the states of the root as expanded, with the toasts of the model actions' successes;
+ * the codes the flow writes on the toast anchor itself are recorded first.
+ */
+export function withDerivedToasts(
   states: Readonly<Record<string, unknown>>,
   expansion: Expansion,
-): Readonly<Record<string, unknown>> => walkedAll(states, expansion)
+): Readonly<Record<string, unknown>> {
+  if (expansion.toast !== undefined) {
+    expansion.writtenToasts.push(...toastCodesOf([states], expansion.toast))
+  }
+
+  return walkedAll(states, expansion)
+}

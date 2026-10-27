@@ -123,10 +123,15 @@ function readScreenFiles(
     }
   }
 
-  // Codes the frame writes on its toast anchor are written codes, each with its own vocabulary row.
-  const written = toast !== undefined && writesToastCodes(values, toast)
+  // Codes the frame writes on its toast anchor, or a flow shows there itself, are written codes,
+  // each with its own vocabulary row.
+  const written = new Set(expanded.flatMap(({ writtenToasts }) => writtenToasts))
+  const toasts =
+    toast !== undefined && writesToastCodes(values, toast)
+      ? []
+      : [...derived.values()].filter(({ code }) => !written.has(code))
 
-  return { screens, files, problems, toasts: written ? [] : [...derived.values()] }
+  return { screens, files, problems, toasts }
 }
 
 function readPlatform(root: string): { platform?: PlatformFile; problems: Problem[] } {

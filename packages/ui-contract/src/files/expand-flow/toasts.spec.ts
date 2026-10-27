@@ -13,6 +13,7 @@ const expansionWith = (toast: string | undefined): Expansion => ({
   toast,
   issues: [],
   toasts: [],
+  writtenToasts: [],
 })
 
 /** One plain state `saving` running `src`, with `extra` on its invoke. */
@@ -39,6 +40,11 @@ describe('toastCodeOf', () => {
     expect(toastCodeOf('organisation.inviteMember')).toBe('invite-member-done')
     expect(toastCodeOf('thing.publish')).toBe('publish-done')
     expect(toastCodeOf('platform.organisations.invite')).toBeUndefined()
+  })
+
+  it('reads a verb only from its own table, never from what every object inherits', () => {
+    expect(toastCodeOf('thing.constructorThing')).toBe('constructor-thing-done')
+    expect(toastCodeOf('thing.toStringThing')).toBe('to-string-thing-done')
   })
 })
 
