@@ -3,6 +3,7 @@ export { bindingsProblems } from './bindings'
 export {
   bindingRefsOf,
   type Contract,
+  codesOf,
   declaredAnchors,
   locate,
   modelTargetOf,

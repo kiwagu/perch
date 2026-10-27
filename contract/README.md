@@ -783,8 +783,10 @@ gap is fixed in the contract files first, never worked around in a test.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
-  problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. A field
+  problem too), no literal equal to another plus a derived suffix, every `testIdFor()`
+  suffix in the vocabulary, and every code a code of the contract: a row of the vocabulary, or
+  a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself). An
+  anchor built at runtime is a problem. A field
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
@@ -804,7 +806,8 @@ gap is fixed in the contract files first, never worked around in a test.
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or
   template, and `expect(...).toHaveAttribute(...)` on `data-testid`, `data-code`,
   `data-state` or `data-value`, `.not` included. Every anchor must be declared, or derived
-  from a declared base with a suffix it lists; every code, state and value must be in the
+  from a declared base with a suffix it lists; every code must be a code of the contract (a
+  row of the vocabulary or a derived toast code), and every state and value in the
   vocabulary. A plain string or a template without `${}` is a literal; an anchor built with
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
