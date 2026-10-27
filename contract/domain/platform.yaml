@@ -135,6 +135,8 @@ events:
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
+  change-rejected: The server refused a change, and this device undid it.
+  changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere
@@ -159,6 +161,7 @@ reserved:
   - app-shell.locale-select
   - app-shell.sign-out-here-button
   - app-shell.leave-dialog
+  - app-shell.toast
 status:
   anchor: app-shell.status
   states:
