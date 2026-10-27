@@ -5,13 +5,14 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 
-import { MODEL_FILE, PLATFORM_FILE, SCREENS_DIR } from './paths'
-import { formatProblem } from './problems'
-import { loadScreens } from './screens'
-import { jsonSchemaProblems } from './validator'
+import { MODEL_FILE, PLATFORM_FILE, SCREENS_DIR } from '../paths'
+import { formatProblem } from '../problems'
+import { jsonSchemaProblems } from '../validator'
 
-const FIXTURE = join(import.meta.dirname, '../__fixtures__/contract')
-const MODEL_FIXTURE = join(import.meta.dirname, '../__fixtures__/model.schema.json')
+import { loadScreens } from './load'
+
+const FIXTURE = join(import.meta.dirname, '../../__fixtures__/contract')
+const MODEL_FIXTURE = join(import.meta.dirname, '../../__fixtures__/model.schema.json')
 const SAMPLE_FILE = 'contract/domain/screens/sample/$key.yaml'
 
 let root: string
