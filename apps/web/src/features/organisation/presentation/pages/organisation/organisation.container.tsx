@@ -5,6 +5,7 @@ import type { BusError } from '@workspace/cqrs'
 import type { IdentityId, NoteId } from '@workspace/ids'
 import { ownerKeyOf } from '@workspace/kernel'
 
+import { useLeaveGuard } from '../../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
 import type { MemberView } from '../../../../../platform/organisations.port'
@@ -44,6 +45,7 @@ export function OrganisationContainer() {
   const session = useService(SESSION)
   const organisations = useService(ORGANISATION_SERVICE)
   const notes = useService(NOTES_SERVICE)
+  const guard = useLeaveGuard()
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
@@ -194,7 +196,15 @@ export function OrganisationContainer() {
       }
       errors={errors.key === key ? errors.codes : {}}
       onCreate={create}
-      onSelect={(next) => organisations.select(next)}
+      onSelect={(next) => {
+        // A switch of organisation leaves what was typed for this one: the frame asks first.
+        // The page has no machine of its own yet, so it asks by hand.
+        void guard.before('organisation.page.current-select').then((leave) => {
+          if (leave) {
+            organisations.select(next)
+          }
+        })
+      }}
       onAddNote={addNote}
       onEditNote={editNote}
       onDeleteNote={deleteNote}

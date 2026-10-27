@@ -135,6 +135,19 @@ events:
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
+leaving:
+  - platform.sign-out
+  - platform.sign-out-everywhere
+  - platform.organisations.select
+  - settings.updateLocale
+unsavedInput:
+  question: app-shell.leave-dialog
+  screen: question
+  actions: question
+  unload: browser
+  state: never
+  flow: never
+  elsewhere: cannot
 reserved:
   - app-shell.status
   - app-shell.notice-message
@@ -145,6 +158,7 @@ reserved:
   - app-shell.nav.devices-link
   - app-shell.locale-select
   - app-shell.sign-out-here-button
+  - app-shell.leave-dialog
 status:
   anchor: app-shell.status
   states:

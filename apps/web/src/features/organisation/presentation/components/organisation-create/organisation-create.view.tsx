@@ -1,9 +1,10 @@
-import { type SubmitEvent, useId, useState } from 'react'
+import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
+import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
 import { useAction } from '../../pages/organisation/use-action'
@@ -22,15 +23,18 @@ export function OrganisationCreate(props: {
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
   const [pending, run] = useAction()
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    run(props.onCreate({ key, name }), (done) => {
+  const submit = () => {
+    const created = props.onCreate({ key, name })
+
+    run(created, (done) => {
       if (done) {
         setKey('')
         setName('')
         props.onCreated()
       }
     })
+
+    return created
   }
 
   return (
@@ -41,7 +45,7 @@ export function OrganisationCreate(props: {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} data-testid="organisation.create.form">
+        <Form onSubmit={submit} data-testid="organisation.create.form">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor={keyId}>{t('organisation.create.key')}</FieldLabel>
@@ -77,7 +81,7 @@ export function OrganisationCreate(props: {
               </Button>
             </Field>
           </FieldGroup>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   )

@@ -74,6 +74,10 @@ function renderView(props: Partial<OrganisationViewProps> = {}, locale: 'en' | '
 
 const field = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
+/** Whether the create form is closed: hidden, with what was typed into it kept. */
+const createHidden = () =>
+  screen.getByTestId('organisation.create.form').closest('[hidden]') !== null
+
 const type = (testId: string, value: string) =>
   fireEvent.change(field(testId), { target: { value } })
 
@@ -310,19 +314,38 @@ describe('OrganisationView of a member', () => {
     expect(field('organisation.notes.new-textarea').value).toBe('')
   })
 
-  it('closes the create form when the current organisation changes', () => {
+  it('keeps what was typed into the create form while its toggle closes and opens it', () => {
+    renderView({ organisations: [acme, globex] })
+    const toggle = () => screen.getByTestId('organisation.create.toggle-button')
+
+    fireEvent.click(toggle())
+    type('organisation.create.key-input', 'initech')
+    fireEvent.click(toggle())
+
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(createHidden()).toBe(true)
+
+    fireEvent.click(toggle())
+
+    expect(createHidden()).toBe(false)
+    expect(field('organisation.create.key-input').value).toBe('initech')
+  })
+
+  it('closes the create form and starts it afresh when the current organisation changes', () => {
     const { rerender } = renderView({ organisations: [acme, globex] })
     const toggle = () => screen.getByTestId('organisation.create.toggle-button')
 
     fireEvent.click(toggle())
+    type('organisation.create.key-input', 'initech')
 
     expect(toggle().getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByTestId('organisation.create.form')).toBeTruthy()
+    expect(createHidden()).toBe(false)
 
     rerender({ organisations: [acme, globex], current: globex, notes: [] })
 
     expect(toggle().getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByTestId('organisation.create.form')).toBeNull()
+    expect(createHidden()).toBe(true)
+    expect(field('organisation.create.key-input').value).toBe('')
   })
 
   it('keeps the create form open when the creation fails', async () => {
@@ -352,7 +375,7 @@ describe('OrganisationView of a member', () => {
   it('offers to create another organisation', () => {
     const { onCreate } = renderView()
 
-    expect(screen.queryByTestId('organisation.create.key-input')).toBeNull()
+    expect(createHidden()).toBe(true)
 
     fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
     type('organisation.create.key-input', 'globex')
