@@ -79,6 +79,38 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('asks no row of a derived toast code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const toast = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(toast, { codes: [...(toast.codes ?? []), 'thing-created'] })
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the toasts derived on sample.save-button (thing-created) want the rule row `<object>-<verb>ed`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'sample.save-button',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('calls the rule row unused when no toast is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'app-shell.toast',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>ed" is documented but unused',
+    ])
+  })
   it('wants the platform status states to equal the app states', () => {
     const contract = sampleContract()
 

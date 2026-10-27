@@ -183,6 +183,28 @@ describe('diffContracts', () => {
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
   })
+  it('lists a toast code a new model action derives as an anchor code added', () => {
+    const withToast = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+      const screen = contract.screens.screens[0]
+
+      if (screen === undefined) {
+        throw new Error('the fixture has no screen')
+      }
+
+      screen.anchors['sample.toast'] = {
+        kind: 'toast',
+        ...(codes.length > 0 ? { codes: [...codes] } : {}),
+      }
+
+      return contract
+    }
+
+    expect(diffContracts(withToast([]), withToast(['note-created'])).anchorCodes).toEqual({
+      added: ['sample.toast note-created'],
+      removed: [],
+    })
+  })
   it('lists how each leave that would lose unsaved input asks, as it changes', () => {
     const asking = structuredClone(before)
 
