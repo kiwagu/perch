@@ -101,7 +101,6 @@ flow:
                     guard: bioChanged
                   - description: With nothing changed, Save still says profile-saved.
                     actions:
-                      - show: { app-shell.notice-message: [ profile-saved ] }
                       - show: { app-shell.toast: [ profile-saved ] }
             saving-name:
               description: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; the error is cleared. The toast says the save once, where it ends.
@@ -112,8 +111,6 @@ flow:
                   - target: saving-bio
                     guard: bioChanged
                   - target: idle
-                    actions:
-                      - show: { app-shell.notice-message: [ profile-saved ] }
                 onError:
                   target: idle
                   description: The first refused write stops the save; user.profile.error shows its code until a save succeeds.
@@ -125,8 +122,6 @@ flow:
                 input: { bio: user.profile.bio-textarea }
                 onDone:
                   target: idle
-                  actions:
-                    - show: { app-shell.notice-message: [ profile-saved ] }
                 onError:
                   target: idle
                   actions:
