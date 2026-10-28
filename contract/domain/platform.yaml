@@ -137,6 +137,10 @@ events:
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
   change-rejected: The server refused a change, and this device undid it.
   changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
+toasts:
+  organisations.create: organisation-created
+  organisations.remove: member-removed
+  devices.revoke: device-signed-out
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere

@@ -27,6 +27,7 @@ Where: [/org] and [/me] on device A (user A)
 7. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and click [user.profile.save-button]
 
 ### Expected result
+- After step 1 device A shows [app-shell.toast] carrying [code:organisation-created]
 - After step 2 device A shows [app-shell.toast] carrying [code:note-created]
 - After step 3 device A shows two [app-shell.toast] carrying [code:note-created], the newer one at the top
 - After step 4 device A shows no [app-shell.toast], and [app-shell.notice-message] still carries [code:welcome]

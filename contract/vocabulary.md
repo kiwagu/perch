@@ -155,7 +155,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
-| `<object>-<verb>ed` | `app-shell.toast` | the success of an action of the model, derived for each one a flow invokes: its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb |
+| `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |

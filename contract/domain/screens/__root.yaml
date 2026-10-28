@@ -17,7 +17,7 @@ anchors:
     codes: [ welcome, profile-saved, invited, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
   app-shell.toast:
     kind: toast
-    description: "The outcome of a mutation, shown for a short while in the tab that acted: several may show at once, stacked with the newest at the top and the earlier ones moving down; a click dismisses one. It renders once per toast shown, each carrying data-code; its codes are derived, one per model action a flow invokes."
+    description: "The outcome of a mutation, shown for a short while in the tab that acted: several may show at once, stacked with the newest at the top and the earlier ones moving down; a click dismisses one. It renders once per toast shown, each carrying data-code; its codes are derived, one per operation a flow runs: an action of the model, or a platform action the platform's toasts map lists."
   app-shell.nav:
     kind: nav
     description: "The main navigation: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current."
