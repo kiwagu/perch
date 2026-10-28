@@ -5,12 +5,16 @@ import { toastCodeOf, withDerivedToasts } from './toasts'
 
 const TOAST = 'app-shell.toast'
 
-const expansionWith = (toast: string | undefined): Expansion => ({
+const expansionWith = (
+  toast: string | undefined,
+  platformToasts: Readonly<Record<string, string>> = {},
+): Expansion => ({
   codesOf: () => [],
   failureOf: () => undefined,
   controls: [],
   screen: 'sample',
   toast,
+  platformToasts,
   issues: [],
   toasts: [],
   writtenToasts: [],
@@ -86,17 +90,14 @@ describe('withDerivedToasts', () => {
     ])
   })
 
-  it('derives nothing where the onDone shows something already: what the file writes wins', () => {
-    const saved = {
-      type: 'show',
-      params: { anchor: 'app-shell.notice-message', codes: ['saved'] },
-    }
+  it('derives nothing where the onDone shows on the toast itself: a written message wins', () => {
+    const unique = shown('name-kept')
     const expansion = expansionWith(TOAST)
     const states = withDerivedToasts(
       saving('profile.updateName', {
         onDone: [
           { target: 'idle', guard: 'left' },
-          { target: 'idle', actions: [saved] },
+          { target: 'idle', actions: [unique] },
         ],
       }),
       expansion,
@@ -104,9 +105,40 @@ describe('withDerivedToasts', () => {
 
     expect(invokeOf(states)['onDone']).toEqual([
       { target: 'idle', guard: 'left' },
-      { target: 'idle', actions: [saved] },
+      { target: 'idle', actions: [unique] },
     ])
     expect(expansion.toasts).toEqual([])
+  })
+
+  it('keeps the toast on where the onDone shows on another anchor, a notice or an error', () => {
+    const saved = {
+      type: 'show',
+      params: { anchor: 'app-shell.notice-message', codes: ['saved'] },
+    }
+    const states = withDerivedToasts(
+      saving('profile.updateName', { onDone: { target: 'idle', actions: [saved] } }),
+      expansionWith(TOAST),
+    )
+
+    expect(invokeOf(states)['onDone']).toEqual({
+      target: 'idle',
+      actions: [saved, shown('name-updated')],
+    })
+  })
+
+  it("toasts a platform action the platform's map names, with its code, and no other", () => {
+    const expansion = expansionWith(TOAST, { 'organisations.create': 'organisation-created' })
+    const listed = withDerivedToasts(saving('platform.organisations.create'), expansion)
+    const unlisted = withDerivedToasts(saving('platform.organisations.invite'), expansion)
+
+    expect(invokeOf(listed)['onDone']).toEqual({
+      target: 'idle',
+      actions: [shown('organisation-created')],
+    })
+    expect(invokeOf(unlisted)['onDone']).toEqual({ target: 'idle' })
+    expect(expansion.toasts).toEqual([
+      { anchor: TOAST, code: 'organisation-created', action: 'platform.organisations.create' },
+    ])
   })
 
   it('takes toast: false away and derives nothing for it', () => {
@@ -170,7 +202,7 @@ describe('withDerivedToasts', () => {
     expect(expansion.toasts).toEqual([])
   })
 
-  it('derives nothing for a platform action', () => {
+  it('derives nothing for a platform action the map does not name', () => {
     const states = withDerivedToasts(saving('platform.sign-out'), expansionWith(TOAST))
 
     expect(invokeOf(states)['onDone']).toEqual({ target: 'idle' })

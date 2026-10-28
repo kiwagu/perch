@@ -21,6 +21,7 @@ const LOOKUPS: FlowLookups = {
   controls: [],
   screen: 'sample',
   toast: undefined,
+  platformToasts: {},
 }
 
 /** A flow of one plain state `idle` whose transition on `sample.form.save-button` is `on`. */

@@ -1,10 +1,11 @@
 /**
- * The success of an action of the model, said on the frame's toast. Each invoke of a model action
- * (`<entity>.<verb><Object>`, never `platform.*`) gets, on every branch of its `onDone`,
- * `show: { <toast>: [<code>] }`: `<object>-created`, `-updated` or `-deleted` by the verb, or
- * `<action>-done` for another verb. An `onDone` that shows something already gets none (what
- * the file writes wins), and an invoke that says `toast: false` gets none and loses the key, which
- * the canonical flow does not know. It runs on the flow as expanded, written and derived regions
+ * The success of a mutation, said on the frame's toast. Each invoke of a model action
+ * (`<entity>.<verb><Object>`) gets, on every branch of its `onDone`, `show: { <toast>: [<code>] }`:
+ * `<object>-created`, `-updated` or `-deleted` by the verb, or `<action>-done` for another verb;
+ * a platform action toasts only when the platform's `toasts` map names it, with the code the map
+ * gives. An `onDone` that shows on the toast itself gets none (a written message wins on its
+ * anchor; a notice or an error written there leaves the toast on), and an invoke that says
+ * `toast: false`, the one ban, gets none and loses the key, which the canonical flow does not know. It runs on the flow as expanded, written and derived regions
  * alike; without a toast anchor on the frame it derives nothing. The codes the flow's own `show`s
  * put on the toast anchor are written codes, reported apart: each needs its own vocabulary row,
  * even where a derivation elsewhere gives the same code.
@@ -39,11 +40,23 @@ export function toastCodeOf(src: string): string | undefined {
   return past === undefined || object === '' ? `${kebab(action)}-done` : `${kebab(object)}-${past}`
 }
 
-/** Whether a branch of `onDone` shows something. */
-const shows = (onDone: unknown): boolean =>
+/** Whether a branch of `onDone` shows something on `anchor`. */
+const showsOn = (onDone: unknown, anchor: string): boolean =>
   listOf(onDone).some((branch) =>
-    listOf(recordOf(branch)['actions']).some((effect) => recordOf(effect)['type'] === 'show'),
+    listOf(recordOf(branch)['actions']).some(
+      (effect) =>
+        recordOf(effect)['type'] === 'show' &&
+        recordOf(recordOf(effect)['params'])['anchor'] === anchor,
+    ),
   )
+
+/** The code the toast of `src`'s success says: the platform's map for a platform action. */
+const codeOf = (src: string, expansion: Expansion): string | undefined =>
+  src.startsWith(PLATFORM)
+    ? Object.hasOwn(expansion.platformToasts, src.slice(PLATFORM.length))
+      ? expansion.platformToasts[src.slice(PLATFORM.length)]
+      : undefined
+    : toastCodeOf(src)
 
 /** `branch` with `show` after its own effects; what is no transition is left as it is. */
 function withShow(branch: unknown, show: unknown): unknown {
@@ -68,7 +81,7 @@ function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansio
   }
 
   const src = typeof invoke['src'] === 'string' ? invoke['src'] : undefined
-  const code = src === undefined ? undefined : toastCodeOf(src)
+  const code = src === undefined ? undefined : codeOf(src, expansion)
   const { toast } = expansion
   const { onDone } = invoke
 
@@ -79,7 +92,7 @@ function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansio
     src === undefined ||
     code === undefined ||
     onDone === undefined ||
-    shows(onDone)
+    showsOn(onDone, toast)
   ) {
     return invoke
   }

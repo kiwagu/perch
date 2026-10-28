@@ -46,6 +46,7 @@ const SUFFIX = '.yaml'
 function readScreenFiles(
   root: string,
   failureOf: FailureOf,
+  platformToasts: Readonly<Record<string, string>>,
 ): {
   screens: Screen[]
   files: string[]
@@ -85,7 +86,12 @@ function readScreenFiles(
   }
 
   const values = read.map(({ value }) => value)
-  const lookups: Lookups = { codesOf: codesOfRead(values), failureOf, toast: toastOfRead(values) }
+  const lookups: Lookups = {
+    codesOf: codesOfRead(values),
+    failureOf,
+    toast: toastOfRead(values),
+    platformToasts,
+  }
   const expanded = read.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
   const { toast } = lookups
   const codes =
@@ -158,7 +164,12 @@ export function loadScreensWith(
 ): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
   const failureOf = failuresOf(model, platform?.actions)
-  const { screens, files, problems: screenProblems, toasts } = readScreenFiles(root, failureOf)
+  const {
+    screens,
+    files,
+    problems: screenProblems,
+    toasts,
+  } = readScreenFiles(root, failureOf, platform?.toasts ?? {})
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {

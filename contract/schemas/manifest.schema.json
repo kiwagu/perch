@@ -4953,6 +4953,20 @@
             "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
           }
         },
+        "toasts": {
+          "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+            "description": "A platform action: `sign-in`, `organisations.create`."
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "A code of the vocabulary (data-code)."
+          }
+        },
         "unsavedInput": {
           "type": "object",
           "properties": {
