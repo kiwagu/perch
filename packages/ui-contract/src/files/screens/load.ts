@@ -11,7 +11,7 @@
  * by its name, a region by its pattern or its button, the region of a button left out): each
  * flow is expanded with the codes the anchors of all screens carry, the failures of the
  * actions, the screen's buttons and the frame's toast anchor, which says the success of each
- * model action a flow invokes (`expand-flow/toasts.ts`); that anchor then carries every code a
+ * model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
  * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
  * screen with its file, with the toasts the loader derived.

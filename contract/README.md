@@ -437,12 +437,19 @@ out, and the loader derives it, the same way every time:
   `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a
   platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed
   (`organisations.create: organisation-created`), and an unlisted one never does. The toast
-  says an operation's outcome once, where it ends: a branch that leads into another such
-  action (one Save running `updateName`, then `updateBio`) toasts nothing, so one press gives
-  one toast; a branch leads on when a state it enters runs one, the states a parallel state's
-  regions start in included (each such area then says its own outcome), and not when it
-  targets its own state, which re-enters nothing. A screen that wants the operation's whole
-  outcome in one message writes it. The
+  says an operation's outcome once, where it ends: an operation starts with an event that
+  enters a state running such an action and goes on along the branches of its `onDone` that
+  enter another (one Save running `updateName`, then `updateBio`); such a step toasts nothing,
+  and a branch that targets its own state re-enters nothing. An operation of one action says
+  that action's code; one of several says the operation, `<object>-<verb>ed` from the control
+  whose event starts it: the verb is the control's name without its kind, in the past
+  (`save-button` gives `saved`), the object the part the control sits in, or the screen's last
+  segment for a control of the screen itself (`user.profile.save-button` gives
+  `profile-saved`). An operation of several that no control starts (a platform event), or that
+  controls with different codes start, is refused until the screen writes its own message on
+  the toast or bans it; so is one event that starts several such actions at once (the regions
+  of a parallel state it enters, or two regions handling one press), until the screen writes
+  `toast: false` on all but one. One press gives one toast. The
   toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
   message on the toast keeps it (a written message wins on its anchor, branch by branch; the
   other branches still get the standard one), and the one ban is `toast: false` on

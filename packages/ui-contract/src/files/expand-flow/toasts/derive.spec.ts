@@ -1,24 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Expansion } from './expansion'
-import { toastCodeOf, withDerivedToasts } from './toasts'
+import type { Expansion } from '../expansion'
+
+import { withDerivedToasts } from './derive'
 
 const TOAST = 'app-shell.toast'
 
+/** An expansion of the screen `screen`, whose anchors are the names under it. */
 const expansionWith = (
   toast: string | undefined,
-  platformToasts: Readonly<Record<string, string>> = {},
+  {
+    platformToasts = {},
+    screen = 'sample',
+  }: { platformToasts?: Readonly<Record<string, string>>; screen?: string } = {},
 ): Expansion => ({
-  codesOf: () => [],
+  codesOf: (anchor) => (anchor.startsWith(`${screen}.`) ? [] : undefined),
   failureOf: () => undefined,
   controls: [],
-  screen: 'sample',
+  screen,
   toast,
   platformToasts,
   issues: [],
   toasts: [],
   writtenToasts: [],
 })
+
+const derived = (states: Readonly<Record<string, unknown>>, expansion: Expansion) =>
+  withDerivedToasts(states, expansion, ['flow'])
 
 /** One plain state `saving` running `src`, with `extra` on its invoke. */
 const saving = (src: string, extra: Record<string, unknown> = {}) => ({
@@ -31,31 +39,10 @@ const invokeOf = (states: Readonly<Record<string, unknown>>) =>
 
 const shown = (code: string) => ({ type: 'show', params: { anchor: TOAST, codes: [code] } })
 
-describe('toastCodeOf', () => {
-  it('names the object, then the past of create, update or delete', () => {
-    expect(toastCodeOf('note.createNote')).toBe('note-created')
-    expect(toastCodeOf('note.updateNote')).toBe('note-updated')
-    expect(toastCodeOf('note.deleteNote')).toBe('note-deleted')
-    expect(toastCodeOf('profile.updateBio')).toBe('bio-updated')
-    expect(toastCodeOf('settings.updateLocaleChoice')).toBe('locale-choice-updated')
-  })
-
-  it('says another verb is done, and a platform action has no toast', () => {
-    expect(toastCodeOf('organisation.inviteMember')).toBe('invite-member-done')
-    expect(toastCodeOf('thing.publish')).toBe('publish-done')
-    expect(toastCodeOf('platform.organisations.invite')).toBeUndefined()
-  })
-
-  it('reads a verb only from its own table, never from what every object inherits', () => {
-    expect(toastCodeOf('thing.constructorThing')).toBe('constructor-thing-done')
-    expect(toastCodeOf('thing.toStringThing')).toBe('to-string-thing-done')
-  })
-})
-
 describe('withDerivedToasts', () => {
   it('shows the toast on the success of a model action, and records it', () => {
     const expansion = expansionWith(TOAST)
-    const states = withDerivedToasts(saving('note.createNote'), expansion)
+    const states = derived(saving('note.createNote'), expansion)
 
     expect(invokeOf(states)['onDone']).toEqual({ target: 'idle', actions: [shown('note-created')] })
     expect(expansion.toasts).toEqual([
@@ -65,7 +52,7 @@ describe('withDerivedToasts', () => {
 
   it('keeps the effects an onDone writes, the toast after them', () => {
     const forget = { type: 'clear', params: { anchor: 'sample.form.error' } }
-    const states = withDerivedToasts(
+    const states = derived(
       saving('note.createNote', { onDone: { target: 'idle', actions: [forget] } }),
       expansionWith(TOAST),
     )
@@ -77,7 +64,7 @@ describe('withDerivedToasts', () => {
   })
 
   it('gives every branch of a guarded onDone the toast', () => {
-    const states = withDerivedToasts(
+    const states = derived(
       saving('note.updateNote', {
         onDone: [{ target: 'idle', guard: 'left' }, { target: 'idle' }],
       }),
@@ -93,7 +80,7 @@ describe('withDerivedToasts', () => {
   it('keeps a message a branch writes on the toast, and gives the other branches the standard one', () => {
     const unique = shown('name-kept')
     const expansion = expansionWith(TOAST)
-    const states = withDerivedToasts(
+    const states = derived(
       saving('profile.updateName', {
         onDone: [
           { target: 'idle', guard: 'left' },
@@ -113,8 +100,10 @@ describe('withDerivedToasts', () => {
   })
 
   it('derives nothing where every branch writes its own message on the toast', () => {
-    const expansion = expansionWith(TOAST, { 'organisations.create': 'organisation-created' })
-    const states = withDerivedToasts(
+    const expansion = expansionWith(TOAST, {
+      platformToasts: { 'organisations.create': 'organisation-created' },
+    })
+    const states = derived(
       saving('platform.organisations.create', {
         onDone: { target: 'idle', actions: [shown('organisation-welcome')] },
       }),
@@ -133,7 +122,7 @@ describe('withDerivedToasts', () => {
       type: 'show',
       params: { anchor: 'app-shell.notice-message', codes: ['saved'] },
     }
-    const states = withDerivedToasts(
+    const states = derived(
       saving('profile.updateName', { onDone: { target: 'idle', actions: [saved] } }),
       expansionWith(TOAST),
     )
@@ -145,9 +134,11 @@ describe('withDerivedToasts', () => {
   })
 
   it("toasts a platform action the platform's map names, with its code, and no other", () => {
-    const expansion = expansionWith(TOAST, { 'organisations.create': 'organisation-created' })
-    const listed = withDerivedToasts(saving('platform.organisations.create'), expansion)
-    const unlisted = withDerivedToasts(saving('platform.organisations.invite'), expansion)
+    const expansion = expansionWith(TOAST, {
+      platformToasts: { 'organisations.create': 'organisation-created' },
+    })
+    const listed = derived(saving('platform.organisations.create'), expansion)
+    const unlisted = derived(saving('platform.organisations.invite'), expansion)
 
     expect(invokeOf(listed)['onDone']).toEqual({
       target: 'idle',
@@ -160,54 +151,173 @@ describe('withDerivedToasts', () => {
   })
 
   it('takes toast: false away and derives nothing for it', () => {
-    const states = withDerivedToasts(
-      saving('settings.updateLocale', { toast: false }),
-      expansionWith(TOAST),
-    )
+    const states = derived(saving('settings.updateLocale', { toast: false }), expansionWith(TOAST))
 
     expect(invokeOf(states)).toEqual({ src: 'settings.updateLocale', onDone: { target: 'idle' } })
   })
 
   it('leaves any other toast value for the canonical schema to refuse', () => {
-    const states = withDerivedToasts(
-      saving('note.createNote', { toast: true }),
-      expansionWith(TOAST),
-    )
+    const states = derived(saving('note.createNote', { toast: true }), expansionWith(TOAST))
 
     expect(invokeOf(states)['toast']).toBe(true)
     expect(invokeOf(states)['onDone']).toEqual({ target: 'idle' })
   })
 
-  it('toasts an operation once, where it ends, not on a step that leads into the next mutation', () => {
-    const expansion = expansionWith(TOAST)
-    const states = withDerivedToasts(
-      {
-        'saving-name': {
-          invoke: {
-            src: 'profile.updateName',
-            onDone: [{ target: 'saving-bio', guard: 'bioChanged' }, { target: 'idle' }],
-          },
-        },
-        'saving-bio': { invoke: { src: 'profile.updateBio', onDone: { target: 'idle' } } },
-        idle: {},
-      },
-      expansion,
-    )
-
-    expect(states).toMatchObject({
+  describe('an operation of several actions, as one Save runs them', () => {
+    /** The profile's Save: the name, then the bio when it changed; `on` starts it from `idle`. */
+    const profile = (
+      on: Record<string, unknown>,
+      ban: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
+      idle: { on },
       'saving-name': {
         invoke: {
-          onDone: [
-            { target: 'saving-bio', guard: 'bioChanged' },
-            { target: 'idle', actions: [shown('name-updated')] },
-          ],
+          src: 'profile.updateName',
+          onDone: [{ target: 'saving-bio', guard: 'bioChanged' }, { target: 'idle' }],
+          ...ban,
         },
       },
-      'saving-bio': { invoke: { onDone: { target: 'idle', actions: [shown('bio-updated')] } } },
+      'saving-bio': { invoke: { src: 'profile.updateBio', onDone: { target: 'idle' }, ...ban } },
     })
-    expect(
-      (states['saving-name'] as { invoke: { onDone: unknown[] } }).invoke.onDone[0],
-    ).not.toHaveProperty('actions')
+    const save = [
+      { target: 'saving-name', guard: 'nameChanged' },
+      { target: 'saving-bio', guard: 'bioChanged' },
+    ]
+
+    it('toasts once, where it ends, with the code of the control that starts it', () => {
+      const expansion = expansionWith(TOAST, { screen: 'user.profile' })
+      const states = derived(profile({ 'user.profile.save-button': save }), expansion)
+      const saved = { anchor: TOAST, code: 'profile-saved', action: 'user.profile.save-button' }
+
+      expect(states).toMatchObject({
+        'saving-name': {
+          invoke: {
+            onDone: [
+              { target: 'saving-bio', guard: 'bioChanged' },
+              { target: 'idle', actions: [shown('profile-saved')] },
+            ],
+          },
+        },
+        'saving-bio': {
+          invoke: { onDone: { target: 'idle', actions: [shown('profile-saved')] } },
+        },
+      })
+      expect(
+        (states['saving-name'] as { invoke: { onDone: unknown[] } }).invoke.onDone[0],
+      ).not.toHaveProperty('actions')
+      expect(expansion.toasts).toEqual([saved, saved])
+      expect(expansion.issues).toEqual([])
+    })
+
+    it('refuses one that no control starts, at the invoke of its first action', () => {
+      const expansion = expansionWith(TOAST, { screen: 'user.profile' })
+      const states = derived(profile({ 'platform.change-rejected': save }), expansion)
+
+      expect(expansion.issues).toEqual([
+        {
+          at: ['flow', 'states', 'saving-name', 'invoke'],
+          message:
+            'the operation of profile.updateName, profile.updateBio is started by no control of the screen, so it has no code: show its own message on app-shell.toast or write toast: false',
+        },
+      ])
+      expect(states['saving-bio']).toEqual({
+        invoke: { src: 'profile.updateBio', onDone: { target: 'idle' } },
+      })
+      expect(expansion.toasts).toEqual([])
+    })
+
+    it('refuses one that controls with different codes start', () => {
+      const expansion = expansionWith(TOAST, { screen: 'user.profile' })
+
+      derived(
+        profile({
+          'user.profile.save-button': { target: 'saving-name' },
+          'user.profile.save-bio-button': { target: 'saving-bio' },
+        }),
+        expansion,
+      )
+
+      expect(expansion.issues).toEqual([
+        {
+          at: ['flow', 'states', 'saving-name', 'invoke'],
+          message:
+            'the operation of profile.updateName, profile.updateBio is started by controls whose codes differ (profile-saved, profile-saved-bio): show its own message on app-shell.toast or write toast: false',
+        },
+      ])
+    })
+
+    it('refuses nothing where the operation toasts nothing', () => {
+      const expansion = expansionWith(TOAST, { screen: 'user.profile' })
+
+      derived(profile({ 'platform.change-rejected': save }, { toast: false }), expansion)
+
+      expect(expansion.issues).toEqual([])
+      expect(expansion.toasts).toEqual([])
+    })
+  })
+
+  describe('one event that starts several toasting actions at once', () => {
+    const region = (src: string, extra: Record<string, unknown> = {}) => ({
+      initial: 'running',
+      states: { running: { invoke: { src, onDone: { target: 'done' }, ...extra } }, done: {} },
+    })
+    const pressed = (src: string, extra: Record<string, unknown> = {}) => ({
+      initial: 'idle',
+      states: {
+        idle: { on: { 'sample.save-button': { target: 'saving' } } },
+        saving: { invoke: { src, onDone: { target: 'idle' }, ...extra } },
+      },
+    })
+
+    it('refuses the entry of a parallel state whose regions start them, until all but one are banned', () => {
+      const flow = (ban: Record<string, unknown>) => ({
+        idle: { on: { 'sample.open-button': { target: 'viewing' } } },
+        viewing: {
+          type: 'parallel',
+          states: { notes: region('note.createNote'), tags: region('tag.createTag', ban) },
+        },
+      })
+      const refused = expansionWith(TOAST)
+      const settled = expansionWith(TOAST)
+
+      derived(flow({}), refused)
+      derived(flow({ toast: false }), settled)
+
+      expect(refused.issues).toEqual([
+        {
+          at: ['flow', 'states', 'idle', 'on', 'sample.open-button'],
+          message:
+            'starts 2 toasting actions at once (note.createNote, tag.createTag): write toast: false on all but one',
+        },
+      ])
+      expect(settled.issues).toEqual([])
+    })
+
+    it('refuses one press that two regions handle side by side, until all but one are banned', () => {
+      const flow = (ban: Record<string, unknown>) => ({
+        editing: {
+          type: 'parallel',
+          states: {
+            name: pressed('profile.updateName'),
+            bio: pressed('profile.updateBio', ban),
+          },
+        },
+      })
+      const refused = expansionWith(TOAST)
+      const settled = expansionWith(TOAST)
+
+      derived(flow({}), refused)
+      derived(flow({ toast: false }), settled)
+
+      expect(refused.issues).toEqual([
+        {
+          at: ['flow', 'states', 'editing'],
+          message:
+            'sample.save-button starts a toasting action in 2 regions at once (name, bio): write toast: false on all but one',
+        },
+      ])
+      expect(settled.issues).toEqual([])
+    })
   })
 
   describe('a step into the next mutation, wherever the transition enters it', () => {
@@ -223,17 +333,22 @@ describe('withDerivedToasts', () => {
         branch.actions === undefined ? [branch.target] : [],
       )
     }
-    const editor = (saving: Record<string, unknown>) => ({
+    /** A region editing in `saving`, which Save starts from `idle`. */
+    const editor = (saving: Record<string, unknown>, started = true) => ({
       initial: 'idle',
-      states: { idle: {}, saving },
+      states: {
+        idle: started ? { on: { 'sample.save-button': { target: 'saving' } } } : {},
+        saving,
+      },
     })
+    const create = { idle: { on: { 'sample.create-button': { target: 'creating' } } } }
     const running = (src: string) => ({
       initial: 'running',
       states: { running: { invoke: { src, onDone: { target: 'done' } } }, done: {} },
     })
 
     it('keeps the toast on a target that is the invoking state itself, which re-enters nothing', () => {
-      const states = withDerivedToasts(
+      const states = derived(
         {
           saving: { invoke: { src: 'note.createNote', onDone: { target: 'saving' } } },
           viewing: {
@@ -253,7 +368,7 @@ describe('withDerivedToasts', () => {
     })
 
     it("leads on from a region into a state of the root by the flow's id", () => {
-      const states = withDerivedToasts(
+      const states = derived(
         {
           publishing: { invoke: { src: 'thing.publishThing', onDone: { target: 'viewing' } } },
           viewing: {
@@ -275,8 +390,9 @@ describe('withDerivedToasts', () => {
     })
 
     it("leads on into a parallel state whose region starts in a mutation, by name or into another region's state", () => {
-      const states = withDerivedToasts(
+      const states = derived(
         {
+          ...create,
           creating: {
             invoke: {
               src: 'thing.createThing',
@@ -303,8 +419,9 @@ describe('withDerivedToasts', () => {
     })
 
     it("leads on into a region's state that runs a mutation, named from the root", () => {
-      const states = withDerivedToasts(
+      const states = derived(
         {
+          ...create,
           creating: {
             invoke: {
               src: 'thing.createThing',
@@ -314,9 +431,10 @@ describe('withDerivedToasts', () => {
           viewing: {
             type: 'parallel',
             states: {
-              editor: editor({
-                invoke: { src: 'thing.updateThing', onDone: { target: 'idle' } },
-              }),
+              editor: editor(
+                { invoke: { src: 'thing.updateThing', onDone: { target: 'idle' } } },
+                false,
+              ),
             },
           },
         },
@@ -328,7 +446,7 @@ describe('withDerivedToasts', () => {
   })
 
   it('reaches the invokes of the regions of a parallel state', () => {
-    const states = withDerivedToasts(
+    const states = derived(
       {
         viewing: {
           type: 'parallel',
@@ -360,17 +478,17 @@ describe('withDerivedToasts', () => {
   it('derives nothing without a toast anchor on the frame, and still takes the opt-out away', () => {
     const expansion = expansionWith(undefined)
 
-    expect(invokeOf(withDerivedToasts(saving('note.createNote'), expansion))['onDone']).toEqual({
+    expect(invokeOf(derived(saving('note.createNote'), expansion))['onDone']).toEqual({
       target: 'idle',
     })
     expect(
-      invokeOf(withDerivedToasts(saving('note.createNote', { toast: false }), expansion)),
+      invokeOf(derived(saving('note.createNote', { toast: false }), expansion)),
     ).not.toHaveProperty('toast')
     expect(expansion.toasts).toEqual([])
   })
 
   it('derives nothing for a platform action the map does not name', () => {
-    const states = withDerivedToasts(saving('platform.sign-out'), expansionWith(TOAST))
+    const states = derived(saving('platform.sign-out'), expansionWith(TOAST))
 
     expect(invokeOf(states)['onDone']).toEqual({ target: 'idle' })
   })

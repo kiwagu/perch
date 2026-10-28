@@ -69,7 +69,8 @@ code and the tests follow; the checks hold them to the contract.
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
    the region of a button bound to one action when it only runs the action, and the toast of a
-   mutation's success (one per operation, where it ends; on by default for an action of the
+   mutation's success (one per operation, where it ends, a chain of actions named by the control
+   that starts it; one event starting several at once is refused; on by default for an action of the
    model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own). Add its
