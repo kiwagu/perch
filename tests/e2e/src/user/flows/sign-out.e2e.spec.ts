@@ -110,6 +110,9 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('9. On device A, click [user.profile.sign-out-button] and click [user.profile.sign-out-dialog.confirm-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
+      // The notice of step 5 still stands while the dialog asks, so only the sign-out takes it.
+      await expect(page.getByTestId('user.profile.sign-out-dialog')).toBeVisible()
+      await expect(notice(page, 'welcome')).toBeVisible()
       await page.getByTestId('user.profile.sign-out-dialog.confirm-button').click()
       // Expected: After step 9 device A is on [/sign-in] and shows no [app-shell.notice-message]:
       //   the notice of step 5 went with the account

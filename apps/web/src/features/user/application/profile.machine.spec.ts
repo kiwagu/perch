@@ -168,6 +168,25 @@ describe('profile machine', () => {
     expect(actor.getSnapshot().can({ type: 'user.profile.save-button' })).toBe(true)
   })
 
+  it('says a Save that writes the name and the bio once, when the bio is written', async () => {
+    const bios = Promise.withResolvers<void>()
+    const { actor, type, save, idle, emitted } = page({
+      updateBio: () => ResultAsync.fromSafePromise(bios.promise),
+    })
+
+    type('name', 'Bea')
+    type('bio', 'About me')
+    save()
+    await waitFor(actor, (state) => state.matches({ editing: { save: 'saving-bio' } }))
+
+    expect(emitted).toEqual([])
+
+    bios.resolve()
+    await idle()
+
+    expect(emitted).toEqual([SAVED])
+  })
+
   it('keeps what is typed while a save runs: the value it stores takes neither field back', async () => {
     const names = Promise.withResolvers<void>()
     const bios = Promise.withResolvers<void>()

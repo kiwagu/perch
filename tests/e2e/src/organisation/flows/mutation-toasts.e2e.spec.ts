@@ -87,9 +87,10 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       // Expected: After step 8 device A shows one [app-shell.toast], carrying [code:profile-saved]:
       //   the Save wrote the name and the bio and says it once; [app-shell.notice-message] still
       //   carries [code:welcome]
-      // The toast comes where the Save ends, after both writes, and a toast of the name's write
-      // would still show then, so the count is read once it shows.
+      // Save takes a click again once both writes are done; a toast said before the end would
+      // still show then, beside the one said at the end, so the count is read after it.
       await expect(toast(page, 'profile-saved')).toBeVisible()
+      await expect(page.getByTestId('user.profile.save-button')).toBeEnabled()
       await expect(page.getByTestId('app-shell.toast')).toHaveCount(1)
       await expect(notice(page, 'welcome')).toBeVisible()
     })
