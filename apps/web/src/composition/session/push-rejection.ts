@@ -1,7 +1,7 @@
 import type { DataError } from '@workspace/data'
 import { z } from '@workspace/zod'
 
-import type { PushRejection } from '../platform/session.port'
+import type { PushRejection } from '../../platform/session.port'
 
 /** What a refused push, or the reload of a region whose refused push was refused again, carries as its cause. */
 const refusal = z.object({

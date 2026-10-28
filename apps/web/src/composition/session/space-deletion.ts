@@ -18,14 +18,15 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import type { LockManagerLike } from '@workspace/replica/sync'
 
-import type { IdentitySpace } from './identity-space'
+import type { IdentitySpace } from '../identity-space'
+import { RetainedTenantDatabases, type TenantDatabaseInventory } from '../retained-tenant-databases'
+import { type KeyValueStorage, savedIdentity, saveNotice } from '../storage'
+
 import {
   addLeftoverIdentity,
   dropLeftoverIdentity,
   leftoverIdentities,
 } from './leftover-identities'
-import { RetainedTenantDatabases, type TenantDatabaseInventory } from './retained-tenant-databases'
-import { type KeyValueStorage, savedIdentity, saveNotice } from './storage'
 
 /**
  * How long a sign-out waits for its delete. Deleting a closed database takes moments, a little

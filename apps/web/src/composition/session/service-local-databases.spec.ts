@@ -3,10 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { identityIdFactory } from '@workspace/ids'
 import { FakeLocks } from '@workspace/replica/testing'
 
-import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
-import { openTestWorld, type TestWorld, type TestWorldOptions } from './__fixtures__/session'
-import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
-import { spaceLockName } from './space-deletion'
+import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
 import {
   type MemoryStorage,
   memoryStorage,
@@ -14,7 +12,10 @@ import {
   saveDevice,
   saveTenantDatabases,
   signingOutSince,
-} from './storage'
+} from '../storage'
+
+import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
+import { spaceLockName } from './space-deletion'
 
 const annSignUp = { email: 'ann@example.test', password: 'pass-word-1' }
 const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2' }

@@ -18,7 +18,7 @@ import {
   writeLockName,
 } from '@workspace/replica/sync'
 
-import { forgetSigningOut, type KeyValueStorage, saveSigningOut, signingOutSince } from './storage'
+import { forgetSigningOut, type KeyValueStorage, saveSigningOut, signingOutSince } from '../storage'
 
 /** When this tab heard another one begin a sign-out, until it hears the sign-out end. */
 export interface HeardSignOut {

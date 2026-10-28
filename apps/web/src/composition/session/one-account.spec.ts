@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { memoryStorage, saveDevice } from '../storage'
+
 import { otherAccountSaved, otherIdentitySaved } from './one-account'
-import { memoryStorage, saveDevice } from './storage'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },

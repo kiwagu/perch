@@ -5,10 +5,11 @@ import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
+import type { TenantDatabaseInventory } from '../retained-tenant-databases'
+import { memoryStorage, saveDevice } from '../storage'
+
 import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
-import type { TenantDatabaseInventory } from './retained-tenant-databases'
 import { DELETE_GRACE_MS, SpaceDeletion } from './space-deletion'
-import { memoryStorage, saveDevice } from './storage'
 
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }

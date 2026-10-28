@@ -3,8 +3,9 @@ import { match, P } from 'ts-pattern'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { TransportContext } from './session-options'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys, saveKeys } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys, saveKeys } from '../storage'
+
+import type { TransportContext } from './options'
 
 /** What the session does with what the channel of one identity hears from the gateway. */
 export interface SessionChannelEvents {

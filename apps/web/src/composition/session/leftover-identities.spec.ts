@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { memoryStorage } from '../storage'
+
 import {
   addLeftoverIdentity,
   dropLeftoverIdentity,
   LEFTOVER_IDENTITIES_KEY,
   leftoverIdentities,
 } from './leftover-identities'
-import { memoryStorage } from './storage'
 
 const ann = identityIdFactory.create()
 const bob = identityIdFactory.create()

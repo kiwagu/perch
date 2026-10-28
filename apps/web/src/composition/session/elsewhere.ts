@@ -9,14 +9,14 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import type { TransportContext } from '../session-options'
-import type { SessionOrganisations } from '../session-organisations'
-import { sessionTransportContext } from '../session-transport-context'
 import { savedIdentity } from '../storage'
 
 import type { SessionHost } from './host'
+import type { TransportContext } from './options'
+import type { SessionOrganisations } from './organisations'
 import type { SessionSignIn } from './sign-in'
 import type { SessionSignOut } from './sign-out'
+import { sessionTransportContext } from './transport-context'
 
 export interface SessionElsewhereOptions {
   readonly host: SessionHost

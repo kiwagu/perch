@@ -12,11 +12,10 @@ import type {
   SyncTransport,
 } from '@workspace/replica/sync'
 
-import type { ChangeRejected, ChangesReloaded } from '../platform/events.port'
-
-import type { GatewayAuth, SignedInDevice } from './gateway-auth'
-import type { SyncState, Visibility } from './identity-space'
-import type { KeyValueStorage } from './storage'
+import type { ChangeRejected, ChangesReloaded } from '../../platform/events.port'
+import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
+import type { SyncState, Visibility } from '../identity-space'
+import type { KeyValueStorage } from '../storage'
 
 /**
  * What the channel of one identity needs: the device it names in its hello, its keys, where

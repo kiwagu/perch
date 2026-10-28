@@ -12,7 +12,7 @@ import type { Clock } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
 import type { SyncHints } from '@workspace/replica/sync'
 
-import type { IdentitySpace, TenantDatabaseInventory } from './identity-space'
+import type { IdentitySpace, TenantDatabaseInventory } from '../identity-space'
 import {
   ACCESS_KEY,
   type KeyValueStorage,
@@ -23,7 +23,7 @@ import {
   saveMemberships,
   saveTenant,
   saveTenantDatabases,
-} from './storage'
+} from '../storage'
 
 /** The space of the identity signed in on this tab, and the hints between the identity's tabs. */
 export interface OpenIdentity {

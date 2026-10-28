@@ -2,9 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 
-import { fakeFetch, noContent, respond } from './__fixtures__/gateway-fetch'
-import { gatewayAuth } from './gateway-auth'
-import { PendingRevoke } from './pending-revoke'
+import { fakeFetch, noContent, respond } from '../__fixtures__/gateway-fetch'
+import { gatewayAuth } from '../gateway-auth'
 import {
   addPendingRevoke,
   type KeyValueStorage,
@@ -12,7 +11,9 @@ import {
   pendingRevokes,
   savedKeys,
   saveKeys,
-} from './storage'
+} from '../storage'
+
+import { PendingRevoke } from './pending-revoke'
 
 /** A pair a sign-out left to revoke, with the device it signed out. */
 const pair = { access: 'access-1', refresh: 'refresh-1', device: 'device-1' }

@@ -1,6 +1,7 @@
 import type { Leadership, SyncHints } from '@workspace/replica/sync'
 
-import type { IdentitySpace } from './identity-space'
+import type { IdentitySpace } from '../identity-space'
+
 import type { HeardSignOut } from './write-barrier'
 
 /** Whether an open space still speaks for the tab: a space being closed reports nothing more. */

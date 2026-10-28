@@ -2,16 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
-import { openTestWorld, type TestWorld, type TestWorldOptions } from './__fixtures__/session'
-import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
+import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 import {
   type MemoryStorage,
   memoryStorage,
   pendingRevokes,
   saveDevice,
   savedIdentity,
-} from './storage'
+} from '../storage'
 
 const ann: SignedInDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },

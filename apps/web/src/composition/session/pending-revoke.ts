@@ -10,7 +10,7 @@
 
 import { type DataError, dataError } from '@workspace/data'
 
-import type { GatewayAuth } from './gateway-auth'
+import type { GatewayAuth } from '../gateway-auth'
 import {
   addPendingRevoke,
   deviceIdFrom,
@@ -20,7 +20,7 @@ import {
   type PendingPair,
   pendingRevokes,
   savedKeys,
-} from './storage'
+} from '../storage'
 
 /**
  * Whether the keys a sign-out forgets still work at the gateway: `live` when it did not revoke

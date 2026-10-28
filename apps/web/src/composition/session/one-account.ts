@@ -8,7 +8,7 @@
 import { dataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { type KeyValueStorage, savedIdentity } from './storage'
+import { type KeyValueStorage, savedIdentity } from '../storage'
 
 /** The refusal of a sign-in while another account is signed in on this browser. */
 export const otherAccountSignedIn = () =>

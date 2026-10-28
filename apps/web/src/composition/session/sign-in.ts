@@ -17,17 +17,17 @@ import { leadership, lockName } from '@workspace/replica/sync'
 
 import type { NamedDevice, SignedInDevice } from '../gateway-auth'
 import { openIdentitySpace } from '../identity-space'
-import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from '../one-account'
-import type { SpaceStatus } from '../open-space'
-import type { PendingRevoke } from '../pending-revoke'
-import { rejectionOf } from '../push-rejection'
-import type { TransportContext } from '../session-options'
-import type { SessionOrganisations } from '../session-organisations'
-import type { SpaceDeletion } from '../space-deletion'
 import { deviceIdFrom, forgetDevice, IDENTITY_KEY, saveDevice, savedIdentity } from '../storage'
-import type { HeardSignOut, WriteBarrier } from '../write-barrier'
 
 import type { SessionHost } from './host'
+import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from './one-account'
+import type { SpaceStatus } from './open-space'
+import type { TransportContext } from './options'
+import type { SessionOrganisations } from './organisations'
+import type { PendingRevoke } from './pending-revoke'
+import { rejectionOf } from './push-rejection'
+import type { SpaceDeletion } from './space-deletion'
+import type { HeardSignOut, WriteBarrier } from './write-barrier'
 
 const closedDuringSignIn = () =>
   dataError('data:AUTH_FAILED', 'the session was closed during this sign-in')

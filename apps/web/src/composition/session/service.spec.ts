@@ -8,19 +8,18 @@ import { CLOSE, type Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
 
-import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
-
-import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
-import { createNote, organisationShape } from './__fixtures__/note'
-import { createProfile, profileById } from './__fixtures__/profile'
+import { profileCommands } from '../../features/user/presentation/pages/profile/profile.model.gen'
+import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { createNote, organisationShape } from '../__fixtures__/note'
+import { createProfile, profileById } from '../__fixtures__/profile'
 import {
   browserDatabases,
   openTestWorld,
   TEST_DEVICE_LABEL,
   type TestWorld,
   type TestWorldOptions,
-} from './__fixtures__/session'
-import type { GatewayAuth, SignedInDevice } from './gateway-auth'
+} from '../__fixtures__/session'
+import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 import {
   addPendingRevoke,
   memoryStorage,
@@ -31,7 +30,7 @@ import {
   savedTenantDatabases,
   saveMemberships,
   TENANT_DATABASES_KEY,
-} from './storage'
+} from '../storage'
 
 const ann: SignedInDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },

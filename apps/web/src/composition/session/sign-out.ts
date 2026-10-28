@@ -10,13 +10,13 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import type { OpenSpace } from '../open-space'
-import type { KeysLeft, PendingRevoke } from '../pending-revoke'
-import type { SpaceDeletion } from '../space-deletion'
 import { forgetDevice, savedIdentity, saveNotice } from '../storage'
-import type { WriteBarrier } from '../write-barrier'
 
 import type { SessionHost } from './host'
+import type { OpenSpace } from './open-space'
+import type { KeysLeft, PendingRevoke } from './pending-revoke'
+import type { SpaceDeletion } from './space-deletion'
+import type { WriteBarrier } from './write-barrier'
 
 export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 

@@ -4,8 +4,8 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError } from '@workspace/data'
 
-import type { OpenSpace } from '../open-space'
-import type { SessionOptions } from '../session-options'
+import type { OpenSpace } from './open-space'
+import type { SessionOptions } from './options'
 
 export interface SessionHost {
   readonly options: SessionOptions
