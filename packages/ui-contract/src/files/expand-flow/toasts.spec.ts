@@ -178,6 +178,84 @@ describe('withDerivedToasts', () => {
     expect(invokeOf(states)['onDone']).toEqual({ target: 'idle' })
   })
 
+  it('toasts an operation once, where it ends, not on a step that leads into the next mutation', () => {
+    const expansion = expansionWith(TOAST)
+    const states = withDerivedToasts(
+      {
+        'saving-name': {
+          invoke: {
+            src: 'profile.updateName',
+            onDone: [{ target: 'saving-bio', guard: 'bioChanged' }, { target: 'idle' }],
+          },
+        },
+        'saving-bio': { invoke: { src: 'profile.updateBio', onDone: { target: 'idle' } } },
+        idle: {},
+      },
+      expansion,
+    )
+
+    expect(states).toMatchObject({
+      'saving-name': {
+        invoke: {
+          onDone: [
+            { target: 'saving-bio', guard: 'bioChanged' },
+            { target: 'idle', actions: [shown('name-updated')] },
+          ],
+        },
+      },
+      'saving-bio': { invoke: { onDone: { target: 'idle', actions: [shown('bio-updated')] } } },
+    })
+    expect(
+      (states['saving-name'] as { invoke: { onDone: unknown[] } }).invoke.onDone[0],
+    ).not.toHaveProperty('actions')
+  })
+
+  it('follows a step into the next mutation through a region path or an id target too', () => {
+    const states = withDerivedToasts(
+      {
+        creating: {
+          invoke: {
+            src: 'thing.createThing',
+            onDone: [{ target: '#sample.publishing', guard: 'publish' }, { target: 'viewing' }],
+          },
+        },
+        publishing: { invoke: { src: 'thing.publishThing', onDone: { target: 'viewing' } } },
+        viewing: {
+          type: 'parallel',
+          states: {
+            editor: {
+              initial: 'idle',
+              states: {
+                idle: {},
+                saving: {
+                  invoke: {
+                    src: 'thing.updateThing',
+                    onDone: [{ target: 'creating' }, { target: 'idle' }],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      expansionWith(TOAST),
+    )
+
+    expect(states).toMatchObject({
+      creating: {
+        invoke: {
+          onDone: [
+            { target: '#sample.publishing', guard: 'publish' },
+            { target: 'viewing', actions: [shown('thing-created')] },
+          ],
+        },
+      },
+    })
+    expect(
+      (states['creating'] as { invoke: { onDone: unknown[] } }).invoke.onDone[0],
+    ).not.toHaveProperty('actions')
+  })
+
   it('reaches the invokes of the regions of a parallel state', () => {
     const states = withDerivedToasts(
       {

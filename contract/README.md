@@ -437,7 +437,10 @@ out, and the loader derives it, the same way every time:
   `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a
   platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed
   (`organisations.create: organisation-created`), and an unlisted one never does. The toast
-  stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
+  says an operation's outcome once, where it ends: a branch that leads into another such
+  action (one Save running `updateName`, then `updateBio`) toasts nothing, so one press gives
+  one toast; a screen that wants the operation's whole outcome in one message writes it. The
+  toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
   message on the toast keeps it (a written message wins on its anchor, branch by branch; the
   other branches still get the standard one), and the one ban is `toast: false` on
   the invoke, or on a region written `by` its button (the language select's store: the change

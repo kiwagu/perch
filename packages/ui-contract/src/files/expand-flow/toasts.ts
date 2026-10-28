@@ -3,13 +3,14 @@
  * (`<entity>.<verb><Object>`) gets, on every branch of its `onDone`, `show: { <toast>: [<code>] }`:
  * `<object>-created`, `-updated` or `-deleted` by the verb, or `<action>-done` for another verb;
  * a platform action toasts only when the platform's `toasts` map names it, with the code the map
- * gives. A branch that shows its own message on the toast keeps it (a written message wins on its
- * anchor, branch by branch; a notice or an error written there leaves the toast on), and an
- * invoke that says `toast: false`, the one ban, gets none and loses the key, which the canonical
- * flow does not know. It runs on the flow as expanded, written and derived regions alike; without
- * a toast anchor on the frame it derives nothing. The codes the flow's own `show`s put on the
- * toast anchor are written codes, reported apart: each needs its own vocabulary row, even where a
- * derivation elsewhere gives the same code.
+ * gives. The toast says an operation's outcome once, where it ends: a branch that leads into
+ * another such action (one Save running two) toasts nothing. A branch that shows its own message
+ * on the toast keeps it (a written message wins on its anchor, branch by branch; a notice or an
+ * error written there leaves the toast on), and an invoke that says `toast: false`, the one ban,
+ * gets none and loses the key, which the canonical flow does not know. It runs on the flow as
+ * expanded, written and derived regions alike; without a toast anchor on the frame it derives
+ * nothing. The codes the flow's own `show`s put on the toast anchor are written codes, reported
+ * apart: each needs its own vocabulary row, even where a derivation elsewhere gives the same code.
  */
 
 import { isRecord, listOf, recordOf } from '../../records'
@@ -57,12 +58,56 @@ const codeOf = (src: string, expansion: Expansion): string | undefined =>
       : undefined
     : toastCodeOf(src)
 
+/** Where an invoke stands: the states beside it, and the states of the root. */
+interface Place {
+  readonly siblings: Readonly<Record<string, unknown>>
+  readonly root: Readonly<Record<string, unknown>>
+}
+
+/**
+ * The state a transition's `target` names: a state beside it, a region's state of the root by
+ * `<parallel>.<region>.<state>`, or a state of the root by `#<flow id>.<state>`.
+ */
+function stateAt(target: string, place: Place): unknown {
+  const path = target.startsWith('#') ? target.split('.').slice(1) : target.split('.')
+
+  if (!target.startsWith('#') && path.length === 1) {
+    return place.siblings[target]
+  }
+
+  return path
+    .slice(1)
+    .reduce<unknown>(
+      (node, name) => recordOf(recordOf(node)['states'])[name],
+      place.root[path[0] ?? ''],
+    )
+}
+
+/**
+ * Whether `branch` leads into another mutation of the same operation: its target runs an action
+ * whose success toasts. Such a step says nothing; the operation's toast comes where it ends.
+ */
+function continues(branch: unknown, place: Place, expansion: Expansion): boolean {
+  const { target } = recordOf(branch)
+  const src = recordOf(
+    recordOf(typeof target === 'string' ? stateAt(target, place) : undefined)['invoke'],
+  )['src']
+
+  return typeof src === 'string' && codeOf(src, expansion) !== undefined
+}
+
 /**
  * `branch` with the standard toast after its own effects, unless it shows its own message on the
- * toast; what is no transition is left as it is.
+ * toast or leads into the next mutation of its operation; what is no transition is left as it is.
  */
-function withShow(branch: unknown, show: unknown, toast: string): unknown {
-  if (!isRecord(branch) || showsOn(branch, toast)) {
+function withShow(
+  branch: unknown,
+  show: unknown,
+  toast: string,
+  place: Place,
+  expansion: Expansion,
+): unknown {
+  if (!isRecord(branch) || showsOn(branch, toast) || continues(branch, place, expansion)) {
     return branch
   }
 
@@ -75,7 +120,11 @@ function withShow(branch: unknown, show: unknown, toast: string): unknown {
   return { ...branch, actions: [...listOf(actions), show] }
 }
 
-function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansion): unknown {
+function invokeOf(
+  invoke: Readonly<Record<string, unknown>>,
+  place: Place,
+  expansion: Expansion,
+): unknown {
   const { toast: optOut, ...rest } = invoke
 
   if (optOut === false) {
@@ -100,9 +149,9 @@ function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansio
 
   const show = { type: 'show', params: { anchor: toast, codes: [code] } }
   const branches = listOf(onDone)
-  const shown = branches.map((branch) => withShow(branch, show, toast))
+  const shown = branches.map((branch) => withShow(branch, show, toast, place, expansion))
 
-  // Every branch says its own message on the toast: nothing is derived.
+  // Every branch says its own message on the toast, or leads on: nothing is derived.
   if (shown.every((branch, at) => branch === branches[at])) {
     return invoke
   }
@@ -112,14 +161,15 @@ function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansio
   return { ...invoke, onDone: Array.isArray(onDone) ? shown : shown[0] }
 }
 
-/** `nodes` by name, each walked; the same record when none of them changed. */
+/** `nodes` by name, each walked beside the others; the same record when none of them changed. */
 function walkedAll(
   nodes: Readonly<Record<string, unknown>>,
+  root: Readonly<Record<string, unknown>>,
   expansion: Expansion,
 ): Readonly<Record<string, unknown>> {
   const entries = Object.entries(nodes).map(([name, node]): [string, unknown] => [
     name,
-    walked(node, expansion),
+    walked(node, { siblings: nodes, root }, expansion),
   ])
 
   return entries.every(([name, node]) => node === nodes[name]) ? nodes : Object.fromEntries(entries)
@@ -129,14 +179,14 @@ function walkedAll(
  * A state, a parallel state or a region, its invoke and the nodes under it walked; the node
  * itself when nothing in it changed, so what the expansion left as written stays so.
  */
-function walked(node: unknown, expansion: Expansion): unknown {
+function walked(node: unknown, place: Place, expansion: Expansion): unknown {
   if (!isRecord(node)) {
     return node
   }
 
   const { invoke, states } = node
-  const nextInvoke = isRecord(invoke) ? invokeOf(invoke, expansion) : invoke
-  const nextStates = isRecord(states) ? walkedAll(states, expansion) : states
+  const nextInvoke = isRecord(invoke) ? invokeOf(invoke, place, expansion) : invoke
+  const nextStates = isRecord(states) ? walkedAll(states, place.root, expansion) : states
 
   if (nextInvoke === invoke && nextStates === states) {
     return node
@@ -161,5 +211,5 @@ export function withDerivedToasts(
     expansion.writtenToasts.push(...toastCodesOf([states], expansion.toast))
   }
 
-  return walkedAll(states, expansion)
+  return walkedAll(states, states, expansion)
 }
