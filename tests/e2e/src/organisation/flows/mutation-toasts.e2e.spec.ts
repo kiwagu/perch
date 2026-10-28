@@ -20,6 +20,9 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       await createOrganisation(page, data)
+      // Expected: After step 1 device A shows [app-shell.toast] carrying
+      //   [code:organisation-created]
+      await expect(toast(page, 'organisation-created')).toBeVisible()
     })
 
     await test.step('2. On device A, enter the first note into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {

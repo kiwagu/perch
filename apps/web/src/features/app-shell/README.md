@@ -34,8 +34,9 @@ modules' routes.
   success), one literal key each; the start hands
   them to the platform's notice and toast channels (`NoticeProvider`, `ToastProvider`).
   `texts-contract.spec.ts` holds both maps to the codes the contract gives the two anchors, the
-  toast's codes derived from the model actions the flows invoke: a new one fails it until its
-  words are written.
+  toast's codes derived from the operations the flows run (an action of the model, or a
+  platform action the platform's `toasts` map lists): a new one fails it until its words are
+  written, except on a branch (`CONTRACT_AHEAD=1`), where a business commit may run ahead.
 - `presentation/leave-guard/leave-guard.container.tsx`: the guard of unsaved input, which the
   start mounts inside the kit's `UnsavedInputScope` around the shell. It follows the
   platform's `unsavedInput` (`platform/leaving.ts`, `LEAVE_POLICY`): while a field holds

@@ -104,19 +104,14 @@ const INVITED = {
   type: 'show',
   params: { anchor: 'app-shell.notice-message', codes: ['invited'] },
 } as const
-/** The toasts the contract derives for the notes' changes. */
-const NOTE_CREATED = {
-  type: 'show',
-  params: { anchor: 'app-shell.toast', codes: ['note-created'] },
-} as const
-const NOTE_UPDATED = {
-  type: 'show',
-  params: { anchor: 'app-shell.toast', codes: ['note-updated'] },
-} as const
-const NOTE_DELETED = {
-  type: 'show',
-  params: { anchor: 'app-shell.toast', codes: ['note-deleted'] },
-} as const
+/** The toasts the contract derives for the changes of the notes and of the organisations. */
+const toast = <Code extends string>(code: Code) =>
+  ({ type: 'show', params: { anchor: 'app-shell.toast', codes: [code] } }) as const
+const NOTE_CREATED = toast('note-created')
+const NOTE_UPDATED = toast('note-updated')
+const NOTE_DELETED = toast('note-deleted')
+const ORGANISATION_CREATED = toast('organisation-created')
+const MEMBER_REMOVED = toast('member-removed')
 const INVITE_REFUSED = {
   type: 'show',
   params: {
@@ -277,7 +272,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 invoke: {
                   src: 'platform.organisations.create',
                   input: taken('organisation.create.submit-button'),
-                  onDone: { target: '#organisation.viewing' },
+                  onDone: { target: '#organisation.viewing', actions: [ORGANISATION_CREATED] },
                   onError: { target: 'open', actions: [CREATE_REFUSED] },
                 },
               },
@@ -339,7 +334,10 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 invoke: {
                   src: 'platform.organisations.remove',
                   input: taken('organisation.members.remove-button'),
-                  onDone: { target: 'idle', actions: [forget('members'), 'reread'] },
+                  onDone: {
+                    target: 'idle',
+                    actions: [forget('members'), 'reread', MEMBER_REMOVED],
+                  },
                   onError: { target: 'idle', actions: [REMOVE_REFUSED] },
                 },
               },

@@ -22,5 +22,8 @@
   "app.shell.sync.local": "Guardado en este dispositivo",
   "app.shell.toast.note-created": "Nota añadida.",
   "app.shell.toast.note-updated": "Nota guardada.",
-  "app.shell.toast.note-deleted": "Nota eliminada."
+  "app.shell.toast.note-deleted": "Nota eliminada.",
+  "app.shell.toast.organisation-created": "Organización creada.",
+  "app.shell.toast.member-removed": "Miembro quitado.",
+  "app.shell.toast.device-signed-out": "Sesión cerrada en ese dispositivo."
 }

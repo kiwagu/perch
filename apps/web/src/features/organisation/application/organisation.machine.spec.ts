@@ -69,8 +69,8 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
 const toast = (code: string) => ({ type: 'show', anchor: 'app-shell.toast', codes: [code] })
 
 describe('organisation machine', () => {
-  it('opens and closes the create form by its toggle, and creates from it', async () => {
-    const { actor, deps, snapshot, region } = page()
+  it('opens and closes the create form by its toggle, and creates from it with its toast', async () => {
+    const { actor, deps, snapshot, region, emitted } = page()
 
     actor.send({ type: 'organisation.create.toggle-button' })
 
@@ -90,6 +90,7 @@ describe('organisation machine', () => {
     expect(deps.create).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'globex', name: 'Globex' }),
     )
+    expect(emitted).toEqual([toast('organisation-created')])
   })
 
   it('keeps the create form open with the code of a refused creation, until a creation starts every area afresh', async () => {
@@ -167,7 +168,7 @@ describe('organisation machine', () => {
     expect(emitted).toEqual([toast('note-created')])
   })
 
-  it('shows the invited notice and reads the members again after an invitation', async () => {
+  it('shows the invited notice, and a removal its toast, reading the members again after each', async () => {
     const { actor, deps, snapshot, emitted, region } = page()
 
     actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
@@ -183,6 +184,7 @@ describe('organisation machine', () => {
     await region('members', 'idle')
 
     expect(deps.remove).toHaveBeenCalledWith(bea)
+    expect(emitted.slice(1)).toEqual([toast('member-removed')])
     expect(snapshot().context.membersChanged).toBe(2)
   })
 
