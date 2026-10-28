@@ -6,6 +6,9 @@ import { AppShell } from '@workspace/ui/components/platform/app-shell'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
+import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
+
+import type { ToastTone } from '../../../../platform/toasts'
 
 export interface ShellLinkProps {
   readonly to: string
@@ -30,6 +33,16 @@ export interface ShellViewProps {
   readonly signingOutHere?: boolean | undefined
   /** The latest message for the user: its contract code and its text, already translated. */
   readonly notice?: { readonly code: string; readonly text: string } | undefined
+  /** The toasts shown, the newest first, each with its tone and its words in the language the app speaks. */
+  readonly toasts?:
+    | readonly {
+        readonly id: number
+        readonly code: string
+        readonly tone: ToastTone
+        readonly text: string
+      }[]
+    | undefined
+  readonly onDismissToast?: ((id: number) => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -110,16 +123,34 @@ export function ShellView(props: ShellViewProps) {
       ))}
       status={status}
     >
-      {props.notice ? (
-        <p
-          className="text-sm text-muted-foreground"
-          role="status"
-          data-testid="app-shell.notice-message"
-          data-code={props.notice.code}
-        >
-          {props.notice.text}
-        </p>
-      ) : null}
+      {/* The notice's line is held, as tall as the longest notice (three lines on a phone, two
+          wider up; `texts-contract.spec.ts` keeps every notice within it), so the page below does
+          not move when a notice comes, changes or goes. */}
+      <div data-slot="notice" className="min-h-15 sm:min-h-10">
+        {props.notice ? (
+          <p
+            className="text-sm text-muted-foreground"
+            role="status"
+            data-testid="app-shell.notice-message"
+            data-code={props.notice.code}
+          >
+            {props.notice.text}
+          </p>
+        ) : null}
+      </div>
+      <Toaster>
+        {(props.toasts ?? []).map((toast) => (
+          <Toast
+            key={toast.id}
+            data-testid="app-shell.toast"
+            code={toast.code}
+            tone={toast.tone}
+            onDismiss={() => props.onDismissToast?.(toast.id)}
+          >
+            {toast.text}
+          </Toast>
+        ))}
+      </Toaster>
       {props.status === 'failed' && props.onSignOutHere ? (
         <Button
           type="button"

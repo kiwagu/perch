@@ -9,7 +9,6 @@ import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
 
 import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
-import type { PushRejection } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
 import { createNote, organisationShape } from './__fixtures__/note'
@@ -522,30 +521,35 @@ describe('SessionService', () => {
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
-  it('tells the rejection listeners and the error log of a push the gateway rejects, with its region and reason', async () => {
+  it('publishes a push the gateway rejects, and the reload of its region, with the error log', async () => {
     const booted = await bootSession({ saved: ann, online: true })
-    const { session, gateway, failures, writeOffline } = booted
-    const heard: PushRejection[] = []
-    const unsubscribe = session.subscribeRejections((rejection) => heard.push(rejection))
+    const { gateway, failures, writeOffline, published } = booted
 
     gateway.rejectEverything()
     await writeOffline()
-    // Its rollback is refused too: the region is loaded again from the server, which the
-    // listeners hear of as well, and nothing stops.
-    await vi.waitFor(() => expect(heard).toHaveLength(2))
+    // Its rollback is refused too: the region is loaded again from the server, which is
+    // published as well, and nothing stops.
+    await vi.waitFor(() => expect(published).toHaveLength(2))
 
     const region = `identity:${ann.identity.id}`
 
-    expect(heard).toMatchObject([
-      { region, reason: 'foreign-table', reloaded: false },
-      { region, reason: 'foreign-table', reloaded: true },
+    expect(published).toMatchObject([
+      {
+        name: 'sync.change-rejected',
+        payload: { region, reason: 'foreign-table', reloaded: false },
+        actorId: ann.identity.id,
+      },
+      {
+        name: 'sync.changes-reloaded',
+        payload: { region, reason: 'foreign-table', reloaded: true },
+        actorId: ann.identity.id,
+      },
     ])
     expect(failures.map((failure) => failure.code)).toEqual([
       'data:PUSH_REJECTED',
       'data:REGION_RELOADED',
     ])
 
-    unsubscribe()
     failures.splice(0)
   })
 

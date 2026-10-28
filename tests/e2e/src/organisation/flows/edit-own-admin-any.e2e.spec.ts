@@ -1,12 +1,7 @@
 // scenario: organisation/flows/edit-own-admin-any
-import type { Page } from '@playwright/test'
-
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test } from '../../support/fixtures'
-import { createOrganisation, inviteMember } from '../../support/organisation'
-
-const noteItem = (device: Page, text: string) =>
-  device.getByTestId('organisation.notes.item').filter({ hasText: text })
+import { createOrganisation, inviteMember, noteItem } from '../../support/organisation'
 
 test.describe('Edit only your own notes; an administrator edits any', {
   tag: '@full',

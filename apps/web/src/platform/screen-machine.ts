@@ -4,6 +4,8 @@
  * control's event, and lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
+ * It also runs the flow's effects on the frame (`frame-effects.ts`): a toast, the notice and its
+ * clearing, so no container subscribes to them by hand.
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -17,6 +19,7 @@ import type {
   InspectionEvent,
 } from 'xstate'
 
+import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
 
@@ -148,6 +151,8 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
   }, [])
   const actor = useActorRef(machine, { inspect })
   const state = useSelector(actor, (snapshot) => snapshot)
+
+  useFrameEffects(actor)
 
   useEffect(() => {
     const emitter: Pick<AnyActorRef, 'on'> = actor

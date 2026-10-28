@@ -11,12 +11,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { leadership, lockName } from '@workspace/replica/sync'
 
-import type {
-  PushRejection,
-  SessionNotice,
-  SessionPort,
-  SignOutOptions,
-} from '../platform/session.port'
+import type { SessionNotice, SessionPort, SignOutOptions } from '../platform/session.port'
 
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from './current-space'
 import type { NamedDevice, SignedInDevice } from './gateway-auth'
@@ -68,7 +63,6 @@ export class SessionService implements SessionPort {
   readonly writePath: CurrentSpaceWritePath
   readonly #options: SessionOptions
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
-  readonly #rejections = new Set<(rejection: PushRejection) => void>()
   readonly #organisations: SessionOrganisations
   readonly #barrier: WriteBarrier
   readonly #pendingRevoke: PendingRevoke
@@ -250,22 +244,22 @@ export class SessionService implements SessionPort {
     this.#organisations.select(key)
   }
 
-  subscribeRejections(listener: (rejection: PushRejection) => void): () => void {
-    this.#rejections.add(listener)
-
-    return () => {
-      this.#rejections.delete(listener)
-    }
-  }
-
-  /** Reports an error of the space; a refused push is also told to the rejection listeners. */
+  /** Reports an error of the space; a refused push is also published (`sync.change-rejected`, `sync.changes-reloaded`). */
   #report(error: DataError): void {
     const rejection = rejectionOf(error)
 
     if (rejection) {
-      for (const listener of this.#rejections) {
-        listener(rejection)
+      const about = {
+        payload: rejection,
+        actorId: this.current()?.id ?? 'anonymous',
+        occurredAt: new Date(),
       }
+
+      this.#options.publish(
+        rejection.reloaded
+          ? { name: 'sync.changes-reloaded', ...about }
+          : { name: 'sync.change-rejected', ...about },
+      )
     }
 
     this.#options.onError(error)

@@ -186,4 +186,61 @@ describe('ShellView', () => {
     expect(within(navigation).getByText(es['app.shell.nav.sign-in'])).toBeTruthy()
     expect(screen.getByText(es['app.shell.title'])).toBeTruthy()
   })
+
+  it('renders the toasts, newest first, each dismissed by a click', () => {
+    const onDismissToast = vi.fn()
+
+    renderShell({
+      toasts: [
+        { id: 2, code: 'note-updated', tone: 'success', text: 'Note saved.' },
+        { id: 1, code: 'note-created', tone: 'success', text: 'Note added.' },
+      ],
+      onDismissToast,
+    })
+
+    const toasts = screen.getAllByTestId('app-shell.toast')
+
+    expect(toasts.map((toast) => toast.getAttribute('data-code'))).toEqual([
+      'note-updated',
+      'note-created',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note saved.' }))
+
+    expect(onDismissToast).toHaveBeenCalledWith(2)
+  })
+
+  it('draws each toast in its tone', () => {
+    renderShell({ toasts: [{ id: 1, code: 'note-lost', tone: 'error', text: 'Note lost.' }] })
+
+    const icon = screen.getByRole('button', { name: 'Note lost.' }).querySelector('svg')
+
+    expect(icon?.getAttribute('class')).toContain('lucide-circle-x')
+  })
+
+  it("keeps the notice's line while there is no notice, so the page does not move", () => {
+    const { container, rerender } = renderShell()
+    const slot = container.querySelector('[data-slot="notice"]')
+
+    expect(slot).not.toBeNull()
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale={true}
+          onLocaleChange={() => {}}
+          notice={{ code: 'welcome', text: 'Welcome' }}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(container.querySelector('[data-slot="notice"]')).toBe(slot)
+    expect(slot?.contains(screen.getByTestId('app-shell.notice-message'))).toBe(true)
+  })
 })

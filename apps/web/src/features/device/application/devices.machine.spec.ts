@@ -35,7 +35,7 @@ const FAILED = {
 }
 
 describe('devices machine', () => {
-  it('signs another device out, holding the sign-out buttons while it runs', async () => {
+  it('signs another device out with its toast, holding the sign-out buttons while it runs', async () => {
     const { actor, revoke, snapshot, emitted } = page()
 
     actor.send({ type: 'device.list.revoke-button', device: phone })
@@ -46,7 +46,9 @@ describe('devices machine', () => {
     await waitFor(actor, (state) => state.matches('viewing'))
 
     expect(revoke).toHaveBeenCalledWith(phone)
-    expect(emitted).toEqual([])
+    expect(emitted).toEqual([
+      { type: 'show', anchor: 'app-shell.toast', codes: ['device-signed-out'] },
+    ])
   })
 
   it('says so on the shell when a sign-out fails', async () => {

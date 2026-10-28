@@ -72,8 +72,6 @@ export interface SessionPort {
   currentTenant(): Membership | undefined
   /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
   selectTenant(key: string): void
-  /** Hears each change the gateway refused and this device undid, and again when that dropped later changes. */
-  subscribeRejections(listener: (rejection: PushRejection) => void): () => void
 }
 
 export const SESSION = token<SessionPort>('Session')

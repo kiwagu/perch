@@ -7,11 +7,18 @@ import type { Translate } from '@workspace/i18n'
 
 import { NoticeProvider, useClearNotice, useNotice, useNotify } from './notices'
 
+/** The words of the codes these tests raise. */
+const TEXTS = {
+  'profile-saved': () => 'Saved',
+  welcome: () => 'Welcome',
+  invited: () => 'Invited',
+}
+
 function Trigger(props: { readonly code: string; readonly text: string }) {
   const notify = useNotify()
 
   return (
-    <button type="button" onClick={() => notify({ code: props.code, text: () => props.text })}>
+    <button type="button" onClick={() => notify(props.code)}>
       {props.text}
     </button>
   )
@@ -28,7 +35,7 @@ function Current() {
 describe('notices', () => {
   it('shows the latest notice wherever the application renders it', () => {
     render(
-      <NoticeProvider>
+      <NoticeProvider texts={TEXTS}>
         <Trigger code="profile-saved" text="Saved" />
         <Trigger code="welcome" text="Welcome" />
         <Current />
@@ -60,7 +67,7 @@ describe('notices', () => {
     }
 
     render(
-      <NoticeProvider>
+      <NoticeProvider texts={TEXTS}>
         <Trigger code="profile-saved" text="Saved" />
         <Clear />
         <Current />
@@ -84,10 +91,7 @@ describe('notices', () => {
       const first = useRef(notify)
 
       return (
-        <button
-          type="button"
-          onClick={() => first.current({ code: 'invited', text: () => 'Invited' })}
-        >
+        <button type="button" onClick={() => first.current('invited')}>
           late
         </button>
       )
@@ -104,7 +108,7 @@ describe('notices', () => {
     }
 
     render(
-      <NoticeProvider>
+      <NoticeProvider texts={TEXTS}>
         <Late />
         <Trigger code="welcome" text="Welcome" />
         <Clear />
@@ -120,5 +124,23 @@ describe('notices', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Welcome' }))
 
     expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('welcome')
+  })
+
+  it('refuses a code the frame gives no words', () => {
+    let raise: (code: string) => void = () => {}
+
+    function Grab() {
+      raise = useNotify()
+
+      return null
+    }
+
+    render(
+      <NoticeProvider texts={TEXTS}>
+        <Grab />
+      </NoticeProvider>,
+    )
+
+    expect(() => raise('lost')).toThrow('the notice has no text for the code lost')
   })
 })

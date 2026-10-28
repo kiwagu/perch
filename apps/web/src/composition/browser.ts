@@ -142,6 +142,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
       info: (fields) => logger.info(fields, 'command'),
       warn: (fields) => logger.warn(fields, 'command'),
     },
+    logEvents: import.meta.env.DEV,
     onStep: (step) => {
       html.dataset['bootStep'] = step
     },
