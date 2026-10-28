@@ -166,6 +166,7 @@ reserved:
   - app-shell.sign-out-here-button
   - app-shell.leave-dialog
   - app-shell.toast
+  - app-shell.confirmation
 status:
   anchor: app-shell.status
   states:
