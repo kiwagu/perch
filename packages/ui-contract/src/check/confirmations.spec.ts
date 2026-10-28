@@ -55,7 +55,30 @@ describe('confirmationsProblems', () => {
     expect(messages(contract)).toEqual([
       'anchors["app-shell.confirmation"]: "app-shell.confirmation" is not a reserved anchor of the frame',
       'anchors["app-shell.confirmation"]: "app-shell.confirmation" renders no cancel-button: going on and staying are its two answers',
-      'anchors["app-shell.confirmation"]: "app-shell.confirmation" runs "platform.sign-out"; its confirm-button only lets the action that opened it run',
+      'anchors["app-shell.confirmation"]: "app-shell.confirmation" is bound; it runs nothing of its own, its confirm-button only lets the action that opened it run',
+    ])
+  })
+
+  it('wants every question asked of the confirmation, with a code it carries', () => {
+    const contract = confirming()
+    const dialog = screenIn(contract, 'app-shell').anchors[DIALOG]
+    const save = screenIn(contract, 'sample').anchors['sample.save-button']
+
+    Object.assign(dialog ?? {}, { codes: ['thing-delete'] })
+    Object.assign(save ?? {}, { asks: { dialog: DIALOG, code: 'thing-delete' } })
+
+    expect(messages(contract)).toEqual([])
+
+    Object.assign(save ?? {}, { asks: { dialog: 'sample.other', code: 'thing-delete' } })
+
+    expect(messages(contract)).toEqual([
+      'anchors["sample.save-button"].asks: asks "sample.other", not the frame\'s confirmation app-shell.confirmation',
+    ])
+
+    Object.assign(save ?? {}, { asks: { dialog: DIALOG, code: 'invented' } })
+
+    expect(messages(contract)).toEqual([
+      'anchors["sample.save-button"].asks: asks with "invented", which app-shell.confirmation does not carry',
     ])
   })
 })

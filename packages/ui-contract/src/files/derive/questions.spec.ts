@@ -100,16 +100,51 @@ describe('withDerivedQuestions', () => {
   })
 })
 
+describe('a question written in a screen file', () => {
+  const written = { dialog: 'elsewhere.confirmation', code: 'invented' }
+  const message = (anchor: string) =>
+    `anchors["${anchor}"].asks: asks is derived from the control's action: a screen file never writes it`
+
+  it('is refused and taken away, on any control, banned or not, and the derived one stands', () => {
+    const { value, problems } = withDerivedQuestions(
+      FILE,
+      screenWith({
+        'sample.open-button': { kind: 'button', binding: { route: '/' }, asks: written },
+        'sample.notes.delete-button': { ...deleting, asks: written },
+        'sample.other-button': { ...deleting, confirm: false, asks: written },
+      }),
+      DIALOG,
+    )
+
+    expect(value).toEqual(
+      screenWith({
+        'sample.open-button': { kind: 'button', binding: { route: '/' } },
+        'sample.notes.delete-button': {
+          ...deleting,
+          asks: { dialog: DIALOG, code: 'note-delete' },
+        },
+        'sample.other-button': deleting,
+      }),
+    )
+    expect(problems.map(({ message: text }) => text)).toEqual([
+      message('sample.open-button'),
+      message('sample.notes.delete-button'),
+      message('sample.other-button'),
+    ])
+  })
+})
+
 describe('withQuestionCodes', () => {
   const dialog = { kind: 'confirmation', derived: ['confirm-button', 'cancel-button'] }
 
-  it("gives the frame's confirmation the codes it asks with, unless it writes its own", () => {
+  it("gives the frame's confirmation the codes it asks with, in place of any it writes", () => {
     expect(withQuestionCodes(screenWith({ [DIALOG]: dialog }), DIALOG, ['note-delete'])).toEqual(
       screenWith({ [DIALOG]: { ...dialog, codes: ['note-delete'] } }),
     )
-
-    const written = screenWith({ [DIALOG]: { ...dialog, codes: ['own'] } })
-
-    expect(withQuestionCodes(written, DIALOG, ['note-delete'])).toBe(written)
+    expect(
+      withQuestionCodes(screenWith({ [DIALOG]: { ...dialog, codes: [] } }), DIALOG, [
+        'note-delete',
+      ]),
+    ).toEqual(screenWith({ [DIALOG]: { ...dialog, codes: ['note-delete'] } }))
   })
 })

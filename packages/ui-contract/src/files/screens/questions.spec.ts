@@ -14,12 +14,16 @@ const DIALOG = 'app-shell.confirmation'
 
 let root: string
 
-/** The frame, with the confirmation when `confirming`. */
-function writeFrame(confirming: boolean): void {
+/** The frame, with the confirmation when `confirming`, and `extra` on it. */
+function writeFrame(confirming: boolean, extra: Record<string, unknown> = {}): void {
   const anchors: Record<string, unknown> = { 'app-shell.page': { kind: 'page' } }
 
   if (confirming) {
-    anchors[DIALOG] = { kind: 'confirmation', derived: ['confirm-button', 'cancel-button'] }
+    anchors[DIALOG] = {
+      kind: 'confirmation',
+      derived: ['confirm-button', 'cancel-button'],
+      ...extra,
+    }
   }
 
   writeFileSync(
@@ -109,5 +113,21 @@ describe('the question before a destructive action', () => {
           'anchors["sample.list.open-button"].confirm: confirm: false bans no question: the control runs no destructive action',
       },
     ])
+  })
+
+  it("refuses codes the frame writes on its confirmation, which carries every question's code", () => {
+    writeFrame(true, { codes: [] })
+    writeSample({ 'sample.list.delete-button': deleting })
+
+    const { screens, problems } = loadScreens(root)
+
+    expect(problems).toEqual([
+      {
+        file: FRAME_FILE,
+        message:
+          'anchors["app-shell.confirmation"].codes: the codes of the confirmation are derived from the questions its controls ask: the frame writes none',
+      },
+    ])
+    expect(screens).toBeUndefined()
   })
 })

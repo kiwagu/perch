@@ -39,7 +39,7 @@ import { filesUnder } from '../files-under'
 import { loadModel, type Model } from '../model'
 import { parseFile } from '../parse-file'
 import { PLATFORM_FILE, SCREENS_DIR } from '../paths'
-import type { Problem } from '../problems'
+import { jsonPath, type Problem } from '../problems'
 import { readYaml } from '../read-yaml'
 
 import {
@@ -114,6 +114,15 @@ function readScreenFiles(
     }
   }
 
+  const frame = asked.find(({ value }) => isRecord(value) && value['frame'] === true)
+
+  if (dialog !== undefined && frame !== undefined && frameWritesCodes([frame.value], dialog)) {
+    problems.push({
+      file: frame.file,
+      message: `${jsonPath(['anchors', dialog, 'codes'])}: the codes of the confirmation are derived from the questions its controls ask: the frame writes none`,
+    })
+  }
+
   const values = asked.map(({ value }) => value)
   const lookups: Lookups = {
     codesOf: codesOfRead(values),
@@ -166,11 +175,8 @@ function readScreenFiles(
     toast !== undefined && frameWritesCodes(values, toast)
       ? []
       : [...derived.values()].filter(({ code }) => !written.has(code))
-  // A confirmation that writes its own codes has written codes, each with its own row.
-  const questions =
-    dialog !== undefined && frameWritesCodes(values, dialog) ? [] : [...asking.values()]
 
-  return { screens, files, problems, toasts, questions }
+  return { screens, files, problems, toasts, questions: [...asking.values()] }
 }
 
 function readPlatform(root: string): { platform?: PlatformFile; problems: Problem[] } {

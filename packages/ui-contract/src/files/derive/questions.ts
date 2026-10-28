@@ -3,8 +3,9 @@
  * (`confirmations.ts`, any of its bindings when it has several) asks the frame's confirmation,
  * and carries `asks: { dialog, code }`, unless its anchor writes `confirm: false`, the one ban,
  * which the loader takes away (the canonical anchor does not know it). A ban on a control that
- * destroys nothing is a problem of its file. Without a confirmation on the frame nothing asks.
- * The confirmation then carries every code asked with, unless it writes its own.
+ * destroys nothing, and an `asks` a file writes itself, are problems of its file, the written
+ * `asks` taken away. Without a confirmation on the frame nothing asks. The confirmation then
+ * carries every code asked with: its codes are derived only.
  */
 
 import { entriesOf, isRecord, listOf } from '../../records'
@@ -57,8 +58,17 @@ export function withDerivedQuestions(
       return [name, def]
     }
 
-    const { confirm, ...rest } = def
-    const destroyed = destroyedBy(def)
+    const { asks: written, ...authored } = def
+
+    if (written !== undefined) {
+      problems.push({
+        file,
+        message: `${jsonPath(['anchors', name, 'asks'])}: asks is derived from the control's action: a screen file never writes it`,
+      })
+    }
+
+    const { confirm, ...rest } = authored
+    const destroyed = destroyedBy(authored)
 
     if (confirm === false) {
       if (destroyed === undefined) {
@@ -73,18 +83,21 @@ export function withDerivedQuestions(
 
     // Any other `confirm` value stays for the canonical schema to refuse.
     if (confirm !== undefined || destroyed === undefined || dialog === undefined) {
-      return [name, def]
+      return [name, authored]
     }
 
     questions.push({ anchor: dialog, ...destroyed })
 
-    return [name, { ...def, asks: { dialog, code: destroyed.code } }]
+    return [name, { ...authored, asks: { dialog, code: destroyed.code } }]
   })
 
   return { value: { ...screen, anchors: Object.fromEntries(derived) }, questions, problems }
 }
 
-/** `screen` as read, its anchor `dialog` carrying `codes` unless it writes its own. */
+/**
+ * `screen` as read, its anchor `dialog` carrying `codes` in place of any it writes (the loader
+ * reports a written list: the confirmation's codes are derived only).
+ */
 export function withQuestionCodes(
   screen: unknown,
   dialog: string,
@@ -93,13 +106,7 @@ export function withQuestionCodes(
   const anchors = isRecord(screen) ? screen['anchors'] : undefined
   const def = isRecord(anchors) ? anchors[dialog] : undefined
 
-  if (
-    !isRecord(screen) ||
-    !isRecord(anchors) ||
-    !isRecord(def) ||
-    def['codes'] !== undefined ||
-    codes.length === 0
-  ) {
+  if (!isRecord(screen) || !isRecord(anchors) || !isRecord(def) || codes.length === 0) {
     return screen
   }
 

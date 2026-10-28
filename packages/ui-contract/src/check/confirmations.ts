@@ -2,14 +2,21 @@
  * Rule 14: the frame's confirmation, which asks before every destructive action (the loader
  * derives the controls that ask, `files/derive/questions.ts`). An anchor of kind `confirmation`
  * is declared by the frame alone, once, reserved, with both answers (confirm-button lets the
- * action that opened it run, cancel-button stays) and no action of its own.
+ * action that opened it run, cancel-button stays) and no binding; every control that asks,
+ * asks it, with a code it carries.
  */
 
 import type { Problem } from '../files'
 
-import { ANSWERS, bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
+import { ANSWERS, type Contract, declaredAnchors, locate } from './contract'
 
-export function confirmationsProblems({ screens }: Contract): Problem[] {
+export const confirmationsProblems = (contract: Contract): Problem[] => [
+  ...declarationProblems(contract),
+  ...askingProblems(contract),
+]
+
+/** The confirmation itself: on the frame, once, reserved, with both answers and no binding. */
+function declarationProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)
   const found = declaredAnchors(screens).filter(({ def }) => def.kind === 'confirmation')
   const [first] = found.filter(({ screen }) => screen.frame === true)
@@ -33,16 +40,42 @@ export function confirmationsProblems({ screens }: Contract): Problem[] {
               `"${anchor}" renders no ${answer}: going on and staying are its two answers`,
             ),
           ),
-          ...bindingRefsOf(def).flatMap(({ ref }) =>
-            'action' in ref
-              ? [
-                  inScreens(
-                    at,
-                    `"${anchor}" runs "${ref.action}"; its confirm-button only lets the action that opened it run`,
-                  ),
-                ]
-              : [],
-          ),
+          ...(def.binding === undefined
+            ? []
+            : [
+                inScreens(
+                  at,
+                  `"${anchor}" is bound; it runs nothing of its own, its confirm-button only lets the action that opened it run`,
+                ),
+              ]),
         ]),
   ])
+}
+
+/** Every control that asks, asks the frame's confirmation, with a code it carries. */
+function askingProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
+  const anchors = declaredAnchors(screens)
+  const dialog = anchors.find(({ def, screen }) => def.kind === 'confirmation' && screen.frame)
+
+  return anchors.flatMap(({ def, at }) => {
+    const { asks } = def
+
+    if (asks === undefined) {
+      return []
+    }
+
+    const where = [...at, 'asks']
+
+    return dialog === undefined || asks.dialog !== dialog.anchor
+      ? [
+          inScreens(
+            where,
+            `asks "${asks.dialog}", not the frame's confirmation ${dialog?.anchor ?? '(none declared)'}`,
+          ),
+        ]
+      : (dialog.def.codes ?? []).includes(asks.code)
+        ? []
+        : [inScreens(where, `asks with "${asks.code}", which ${dialog.anchor} does not carry`)]
+  })
 }

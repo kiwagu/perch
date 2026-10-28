@@ -470,7 +470,8 @@ out, and the loader derives it, the same way every time:
   code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
   the platform action's name with `.` as `-` (`organisations.remove` gives
   `organisations-remove`); the confirmation carries every code asked with, which the
-  vocabulary documents by one rule row, `<object>-<verb>`. The flow says nothing of it: the
+  vocabulary documents by one rule row, `<object>-<verb>`. Both are derived only: a screen file
+  never writes `asks`, nor the frame the confirmation's codes. The flow says nothing of it: the
   press still leads to the state that runs the action, and the app's gate asks in front of the
   event, its confirm-button letting the event through and its cancel-button dropping it. The
   one line a screen writes is `confirm: false` on the control, which runs the action without
