@@ -176,9 +176,13 @@ modeling stage.
   anchors bound to an action of `leaving`, both held to the contract by
   `leaving-contract.spec.ts`; `leave-guard.port.ts` is how a screen asks the frame before such
   a leave (`useLeaveGuard()`: `confirm()`, `before(control)`; every leave goes ahead without
-  a provider); `screen-machine.ts` is the one way a screen runs its machine
-  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a leaving
-  control's event waits for it, and `submit(event)` resolves with the outcome of the actions
+  a provider). The question before a destructive action: `confirmations.ts` holds
+  `ASKING_CONTROLS`, the anchors that carry `asks` with their codes, held to the contract by
+  `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
+  confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
+  ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
+  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a destructive
+  control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on

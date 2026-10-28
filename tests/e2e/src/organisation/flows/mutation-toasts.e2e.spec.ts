@@ -58,18 +58,31 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       await expect(toast(page, 'note-updated')).toBeVisible()
     })
 
-    await test.step('6. On device A, click [organisation.notes.delete-button] on the second note', async () => {
+    await test.step('6. On device A, click [organisation.notes.delete-button] on the second note and answer [app-shell.confirmation.cancel-button]', async () => {
       await noteItem(page, data.secondNote).getByTestId('organisation.notes.delete-button').click()
-      // Expected: After step 6 device A shows [app-shell.toast] carrying [code:note-deleted]
+      // Expected: In step 6 device A shows [app-shell.confirmation] carrying [code:note-delete];
+      //   after the answer the second note is still in [organisation.notes.list]
+      await expect(
+        page.locator('[data-testid="app-shell.confirmation"][data-code="note-delete"]'),
+      ).toBeVisible()
+      await page.getByTestId('app-shell.confirmation.cancel-button').click()
+      await expect(page.getByTestId('app-shell.confirmation')).toHaveCount(0)
+      await expect(noteItem(page, data.secondNote)).toBeVisible()
+    })
+
+    await test.step('7. On device A, click [organisation.notes.delete-button] on the second note again and confirm with [app-shell.confirmation.confirm-button]', async () => {
+      await noteItem(page, data.secondNote).getByTestId('organisation.notes.delete-button').click()
+      await page.getByTestId('app-shell.confirmation.confirm-button').click()
+      // Expected: After step 7 device A shows [app-shell.toast] carrying [code:note-deleted]
       await expect(toast(page, 'note-deleted')).toBeVisible()
     })
 
-    await test.step('7. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
+    await test.step('8. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
       await expect(page.getByTestId('app-shell.toast')).toHaveCount(0, { timeout: 10_000 })
       await page.getByTestId('app-shell.nav.profile-link').click()
       await page.getByTestId('user.profile.name-input').fill(data.newName)
       await page.getByTestId('user.profile.save-button').click()
-      // Expected: After step 7 device A shows [app-shell.notice-message] carrying
+      // Expected: After step 8 device A shows [app-shell.notice-message] carrying
       //   [code:profile-saved] and no [app-shell.toast]; a toast would come with the notice,
       //   from the same outcome, so its absence is read once the notice shows.
       await expect(notice(page, 'profile-saved')).toBeVisible()

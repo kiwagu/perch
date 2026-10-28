@@ -47,6 +47,14 @@ modules' routes.
   flow's own navigation (`useScreenMachine`) and a leave nobody started here pass. The
   language select asks it first, and carries `holdsInput={false}`: its choice applies at
   once.
+- `presentation/confirm-guard/confirm-guard.container.tsx`: the frame's confirmation, which the
+  start mounts around the shell. Before a control whose action destroys what it acts on sends
+  its event (`useScreenMachine` asks `useConfirmGuard().before(control)`, then the leave guard
+  for a leaving control), it asks through `app-shell.confirmation` with the code of that action
+  (`platform/confirmations.ts`); confirm lets the event go, cancel drops it, a second question
+  replaces the first and another screen drops it. `presentation/shell/confirm-texts.ts`
+  (`CONFIRM_TEXTS`) words each code (title, body, the confirm label), held to the
+  confirmation's codes by `texts-contract.spec.ts`.
 - Anchors: screen `app-shell` in `contract/domain/screens/__root.yaml`.
 - No shapes or commands of its own: it reads the session, the notices, the toasts and the app's
   events through the platform ports, and the account's settings through `SETTINGS_SERVICE` and the settings shape of the
@@ -56,4 +64,5 @@ modules' routes.
 ## Commands
 
 - `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `locale-writes.spec.ts`,
-  `shell.container.spec.tsx`, `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`).
+  `shell.container.spec.tsx`, `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`,
+  `confirm-guard.container.spec.tsx`).

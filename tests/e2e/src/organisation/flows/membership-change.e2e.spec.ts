@@ -104,12 +104,13 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         return name
       })
 
-    await test.step("4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item]", async () => {
+    await test.step("4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await page
         .getByTestId('organisation.members.item')
         .filter({ hasText: userB.email })
         .getByTestId('organisation.members.remove-button')
         .click()
+      await page.getByTestId('app-shell.confirmation.confirm-button').click()
     })
 
     // Expected:
