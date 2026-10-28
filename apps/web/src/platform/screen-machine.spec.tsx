@@ -409,4 +409,13 @@ describe('useScreenMachine', () => {
     expect(guard.before).not.toHaveBeenCalled()
     expect(screen.getByTestId('state').textContent).toBe('deleted')
   })
+
+  it('resolves a destructive submit false when the user stays, and sends nothing', async () => {
+    const { running } = await open(passing(), '/here', confirming(false))
+
+    expect(await act(() => running.submit({ type: 'organisation.notes.delete-button' }))).toBe(
+      false,
+    )
+    expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
 })

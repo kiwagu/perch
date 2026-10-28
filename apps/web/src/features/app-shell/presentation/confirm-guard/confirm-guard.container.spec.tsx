@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Link, Outlet, RouterProvider } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,6 +19,9 @@ import { ConfirmGuard } from './confirm-guard.container'
 
 const DIALOG = 'app-shell.confirmation'
 
+/** Every answer given, as `<control>: <go>`, kept past the page that asked. */
+const answers: string[] = []
+
 /** Asks the frame before a control, and shows the answer. */
 function Asking(props: { readonly control: string }) {
   const guard = useConfirmGuard()
@@ -27,7 +30,12 @@ function Asking(props: { readonly control: string }) {
   return (
     <button
       type="button"
-      onClick={() => void guard.before(props.control).then((go) => setAnswer(String(go)))}
+      onClick={() =>
+        void guard.before(props.control).then((go) => {
+          answers.push(`${props.control}: ${String(go)}`)
+          setAnswer(String(go))
+        })
+      }
     >
       {`${props.control}: ${answer}`}
     </button>
@@ -79,12 +87,17 @@ async function open() {
     </I18nProvider>,
   )
   await screen.findByText('to two')
+
+  return router
 }
 
 const dialog = (code: string) =>
   document.querySelector(`[data-testid="${DIALOG}"][data-code="${code}"]`)
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  answers.length = 0
+})
 
 describe('ConfirmGuard', () => {
   it('asks before a destructive action with its code and words: cancel stays, confirm goes on', async () => {
@@ -126,5 +139,42 @@ describe('ConfirmGuard', () => {
     expect(await screen.findByText('organisation.notes.delete-button: false')).toBeDefined()
     expect(await screen.findByText('Sign out that device?')).toBeDefined()
     expect(dialog('devices-revoke')).not.toBeNull()
+  })
+
+  it('takes the focus to cancel, stays on Escape, and gives the focus back to the control', async () => {
+    const user = userEvent.setup()
+
+    await open()
+
+    const control = screen.getByText('organisation.notes.delete-button: none')
+
+    await user.click(control)
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByTestId(`${DIALOG}.cancel-button`))
+    })
+
+    await user.keyboard('{Escape}')
+
+    expect(await screen.findByText('organisation.notes.delete-button: false')).toBeDefined()
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByText('organisation.notes.delete-button: false'),
+      )
+    })
+  })
+
+  it('drops an open question when another screen opens: the action stays', async () => {
+    const user = userEvent.setup()
+    const router = await open()
+
+    await user.click(screen.getByText('organisation.notes.delete-button: none'))
+    await screen.findByText('Delete this note?')
+    await act(() => router.navigate({ to: '/two' }))
+
+    expect(await screen.findByText('two')).toBeDefined()
+    await waitFor(() => {
+      expect(answers).toEqual(['organisation.notes.delete-button: false'])
+    })
+    expect(screen.queryByText('Delete this note?')).toBeNull()
   })
 })
