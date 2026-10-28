@@ -9,8 +9,9 @@ import { privateRegionId, RegionDoc, type RegionRef, replaceRegionDoc } from '@w
 import { type SyncHint, syncHints } from '@workspace/replica/sync'
 import { FakeHintChannel } from '@workspace/replica/testing'
 
+import { openRegionSpace, type RegionSpace } from '../region-space'
+
 import { RegionReloads } from './region-reloads'
-import { openRegionSpace, type RegionSpace } from './region-space'
 
 const ref: RegionRef = { kind: 'private', id: privateRegionId(identityIdFactory.create()) }
 

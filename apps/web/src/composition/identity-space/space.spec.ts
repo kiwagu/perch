@@ -30,17 +30,15 @@ import {
   type StubTransport,
 } from '@workspace/replica/testing'
 
-import { profileCommands } from '../features/user/presentation/pages/profile/profile.model.gen'
+import { profileCommands } from '../../features/user/presentation/pages/profile/profile.model.gen'
+import { createNote, organisationShape } from '../__fixtures__/note'
+import { createProfile, profileById } from '../__fixtures__/profile'
+import { QueryTracker } from '../__fixtures__/query-tracker'
+import type { TenantDatabaseInventory } from '../retained-tenant-databases'
 
-import { createNote, organisationShape } from './__fixtures__/note'
-import { createProfile, profileById } from './__fixtures__/profile'
-import { QueryTracker } from './__fixtures__/query-tracker'
-import {
-  type IdentitySpace,
-  openIdentitySpace,
-  type SyncState,
-  type TenantDatabaseInventory,
-} from './identity-space'
+import type { SyncState } from './leading-engine'
+import { openIdentitySpace } from './open'
+import type { IdentitySpace } from './space'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 

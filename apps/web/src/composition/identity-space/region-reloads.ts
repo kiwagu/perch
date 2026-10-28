@@ -9,7 +9,7 @@ import { type DataError, dataError } from '@workspace/data'
 import type { RegionDoc, RegionReplacement } from '@workspace/replica'
 import type { SyncHints } from '@workspace/replica/sync'
 
-import type { RegionSpace } from './region-space'
+import type { RegionSpace } from '../region-space'
 
 export interface RegionReloadsOptions {
   /** The region spaces open now. */
