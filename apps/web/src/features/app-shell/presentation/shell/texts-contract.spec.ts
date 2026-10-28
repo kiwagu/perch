@@ -1,7 +1,10 @@
 /**
  * The one thing a new mutation asks a human to write is its words: every code the frame's
  * notice and toast carry in the contract has its entry in the frame's map, and the maps hold no
- * code the contract dropped. The i18n check holds the keys to both catalogs.
+ * code the contract dropped. The i18n check holds the keys to both catalogs. On a branch the
+ * pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may give the frame a code before
+ * its implementation writes the words, so a map may lack a code the contract added but holds
+ * none it does not say; `bun run check` and a commit on `main` want every code worded.
  */
 
 import { join } from 'node:path'
@@ -16,6 +19,7 @@ import { NOTICE_TEXTS } from './notice-texts'
 import { TOAST_TEXTS } from './toast-texts'
 
 const ROOT = join(import.meta.dirname, '../../../../../../..')
+const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
 /**
  * What the notice's line holds without growing (`shell.view.tsx`): three lines on a 360px phone,
@@ -28,7 +32,7 @@ describe('the words of the frame', () => {
   const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
   const codesOf = (anchor: string): readonly string[] => frame?.anchors[anchor]?.codes ?? []
   const gaps = (anchor: string, texts: Readonly<Record<string, unknown>>) => ({
-    unworded: codesOf(anchor).filter((code) => !Object.hasOwn(texts, code)),
+    unworded: AHEAD ? [] : codesOf(anchor).filter((code) => !Object.hasOwn(texts, code)),
     stale: Object.keys(texts).filter((code) => !codesOf(anchor).includes(code)),
   })
 
