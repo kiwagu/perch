@@ -1,5 +1,6 @@
 {
   "organisation.none": "You are not a member of any organisation yet.",
+  "organisation.unavailable": "Your organisation's data could not be opened on this device.",
   "organisation.create.title": "Create an organisation",
   "organisation.create.key": "Key",
   "organisation.create.key-hint": "Lowercase letters, digits and underscores, 2 to 32 characters.",
@@ -28,6 +29,7 @@
   "organisation.error.key-taken": "This key is taken.",
   "organisation.error.no-such-identity": "No account has this email.",
   "organisation.error.already-member": "This account is already a member.",
+  "organisation.error.rate-limited": "Too many attempts. Try again later.",
   "organisation.error.not-admin": "Only an administrator can do this.",
   "organisation.error.forbidden": "Only the author or an administrator can change this note.",
   "organisation.error.text-required": "Write the note first.",

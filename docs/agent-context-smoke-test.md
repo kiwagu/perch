@@ -1,7 +1,7 @@
 # Agent context smoke test
 
-Run through this table after editing a rule in `.cursor/rules/` or a vendor
-skill, to confirm that prompts still route to the narrowest relevant document.
+Run through this table after editing a rule in `.cursor/rules/` or a skill in
+`.agents/skills/`, to confirm that prompts still route to the narrowest relevant document.
 
 ## How to use
 
@@ -20,6 +20,12 @@ skill, to confirm that prompts still route to the narrowest relevant document.
 | Read a JSON value from local storage and use its fields | process -> no-any, then zod-schema-first-contracts |
 | Add a "Saved" notice to the profile page | process -> ui-i18n-direct-keys |
 | Add a delete button with a confirmation menu | process -> ui-primitive-hygiene -> shadcn skill |
+| Add a delete button to the notes list and make it testable | process -> ui-contract -> adding-ui-anchors |
+| Describe a new screen for the modeling thread | process -> ui-contract -> adding-ui-anchors |
+| An e2e test cannot find the invite button | process -> ui-contract |
+| Show a new field of the profile on the profile page | process -> ui-contract -> adding-ui-anchors (the model first), then surrealql skill |
+| Write an e2e scenario for removing a member | process -> ui-contract -> adding-ui-anchors |
+| Keep a button that no test drives off the coverage | process -> ui-contract |
 | Load the Spanish catalog only when the user picks Spanish | process -> static-imports-only |
 | Make the database port configurable per machine | process -> monorepo-env-minimalism |
 | Keep the old profile table working while adding the new one | process -> reset-mode-default, poc-no-fallbacks |
@@ -27,6 +33,10 @@ skill, to confirm that prompts still route to the narrowest relevant document.
 | Add a new workspace package for the gateway | process -> package-readme |
 | Add a feature module with a new page | process -> package-readme |
 | Add a handler to a 450-line service | process -> file-size-tiers |
+| Split a 520-line sync file into its push, pull and rollback parts | process -> file-size-tiers -> entity-first-module-naming |
+| Add a rate-limits module to the gateway | process -> entity-first-module-naming, then package-readme |
+| ESLint reports workspace/import-through-index on an import of `./region-sync/push` | process -> entity-first-module-naming |
+| Add a second validation function to a domain entity file | process -> one-unit-per-file |
 | Add a field to the profile table and expose it in a shape | process -> surrealql skill, then domain-context-first-analysis |
 | Write a permission test for the new table | process -> surrealkit skill |
 | Commit a change to the access method | process -> security-review-before-commit |

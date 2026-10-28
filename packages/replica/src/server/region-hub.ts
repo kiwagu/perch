@@ -1,30 +1,22 @@
 import { type LoroDoc, VersionVector } from 'loro-crdt'
-import { errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
+import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError } from '@workspace/data'
-import type { Ability } from '@workspace/kernel'
+import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
-import { messageOf } from '../failure'
-import type { CompactionOutcome, RejectReason, ServerMessage } from '../protocol'
+import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
+import type { CompactionOutcome, ServerMessage } from '../protocol'
 import type { RegionRef } from '../region-doc'
-import { regionRefOf } from '../region-ref'
+import { privateRegionId } from '../region-ref'
 import type { ReplicaSchema } from '../schema'
 
-import { validateBatch } from './batch-validator'
-import type { RegionDatabase, RegionDatabases } from './region-databases'
-import { RegionLog } from './region-log'
-import headsStatement from './surql/server-heads.surql'
+import { type BatchIntake, takeInBatch } from './batch-intake'
+import { HeldRegions } from './held-regions'
+import type { RegionDatabases } from './region-databases'
+import { storedHeads } from './stored-heads'
+import { type Actor, deliver, type Subscriber } from './subscription'
 
-/** One device's end of its subscriptions. */
-export interface Subscriber {
-  readonly id: string
-  /**
-   * Hands a message to the device; the hub never waits for it. A send that throws is reported
-   * through `onError`, and the hub's work goes on.
-   */
-  send(message: ServerMessage): void
-}
+export type { Actor, Subscriber }
 
 export interface RegionHubOptions {
   /** Where each region's log and projection live: held while the region is loaded. */
@@ -40,49 +32,6 @@ export interface RegionHubOptions {
    * error for, a compaction snapshot the log refused to read, and a send that threw.
    */
   readonly onError: (error: DataError) => void
-}
-
-/** The longest `detail` a reject carries. */
-const MAX_DETAIL = 200
-
-/** A region's log and its authoritative document, and the hold on the database that keeps them. */
-interface Loaded {
-  readonly log: RegionLog
-  readonly doc: LoroDoc
-  readonly database: RegionDatabase
-}
-
-/** Who pushes through a subscription: the identity id its batches are checked against, and what it may do. */
-export interface Actor {
-  readonly id: string
-  readonly ability: Ability
-}
-
-/** A device's subscription: its end, and the actor its batches are checked as. */
-interface Subscription {
-  readonly subscriber: Subscriber
-  readonly actor: Actor
-}
-
-/** What the hub keeps of one region, from the first subscription until it unloads the region. */
-interface RegionState {
-  readonly ref: RegionRef
-  /** Devices whose subscription was answered: each receives the batches the others push. */
-  readonly subscribers: Map<string, Subscription>
-  /** Devices whose subscription waits in the queue for its answer. */
-  readonly joining: Map<string, Subscription>
-  /** Settles once the work asked of the region so far has; the next work waits for it. */
-  queue: Promise<void>
-  /** The region's log and document, once the first subscription has loaded them. */
-  loaded: Loaded | undefined
-  /** Cancels the unload scheduled when the last device left. */
-  unload: (() => void) | undefined
-}
-
-/** A region's head row as the database holds it. */
-interface StoredHead {
-  readonly region: string
-  readonly head: number
 }
 
 const decodeVersion = Result.fromThrowable(
@@ -115,36 +64,36 @@ function snapshotAt(doc: LoroDoc, version: VersionVector | undefined): Uint8Arra
   return at.export({ mode: 'snapshot' })
 }
 
-function notSubscribed(region: string): ServerMessage {
-  return { type: 'error', code: 'protocol', message: `not subscribed to region ${region}` }
-}
-
 /**
  * The server's copy of every region a device subscribes to: the region's log and its
  * authoritative document in memory, from the region's own database, held while the region is
  * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
  * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
- * checked on a fork of the document against the identity of the device that pushed it,
- * accepted by the log with its projection, then imported and sent to the region's other
+ * checked on a fork of the document against the identity of the device that pushed it, and its
+ * peers against the identities they write as, accepted by the log with its projection, then imported and sent to the region's other
  * subscribers. A region nobody subscribes to any more is dropped from memory after an idle
  * time, and its database released.
  */
 export class RegionHub {
-  readonly #regions = new Map<string, RegionState>()
+  readonly #held: HeldRegions
   readonly #databases: RegionDatabases
-  readonly #schema: ReplicaSchema
-  readonly #clock: Clock
-  readonly #idleUnloadMs: number
-  readonly #compactionLogLimit: number
   readonly #onError: (error: DataError) => void
+  readonly #intake: BatchIntake
 
   constructor(options: RegionHubOptions) {
     this.#databases = options.databases
-    this.#schema = options.schema
-    this.#clock = options.clock
-    this.#idleUnloadMs = options.idleUnloadMs ?? 60_000
-    this.#compactionLogLimit = options.compactionLogLimit ?? 200
     this.#onError = options.onError
+    this.#held = new HeldRegions({
+      databases: options.databases,
+      clock: options.clock,
+      idleUnloadMs: options.idleUnloadMs ?? 60_000,
+      onError: options.onError,
+    })
+    this.#intake = {
+      schema: options.schema,
+      compactionLogLimit: options.compactionLogLimit ?? COMPACTION_LOG_LIMIT,
+      send: (subscriber, message) => this.#send(subscriber, message),
+    }
   }
 
   /**
@@ -152,6 +101,9 @@ export class RegionHub {
    * and answers with what the device lacks: the updates after `vv`, or a full snapshot when
    * it has no version. From then on the device receives every batch the others push, and the
    * batches it pushes are checked against `actor`: the identity id of the device and its ability.
+   * Once the hub is closed any subscription is answered with an internal error, before anything
+   * else; a private region is subscribed only by its own identity, `forbidden-region` for any
+   * other. Neither holds the region.
    */
   subscribe(
     region: RegionRef,
@@ -159,6 +111,12 @@ export class RegionHub {
     subscriber: Subscriber,
     vv: Uint8Array | null,
   ): ResultAsync<void, DataError> {
+    if (this.#held.closed) {
+      this.#send(subscriber, { type: 'error', code: 'internal', message: 'the hub is closed' })
+
+      return okAsync(undefined)
+    }
+
     const from = vv === null ? ok(null) : decodeVersion(vv)
 
     if (from.isErr()) {
@@ -167,15 +125,26 @@ export class RegionHub {
       return okAsync(undefined)
     }
 
-    const state = this.#regions.get(region.id) ?? this.#hold(region)
+    if (region.kind === 'private' && region.id !== privateRegionId(actor.id)) {
+      this.#send(subscriber, {
+        type: 'error',
+        code: 'forbidden-region',
+        message: `${region.id} is not the private region of ${actor.id}`,
+      })
+
+      return okAsync(undefined)
+    }
+
+    const state = this.#held.get(region.id) ?? this.#held.hold(region)
     const subscription = { subscriber, actor }
 
     state.unload?.()
     state.unload = undefined
     state.joining.set(subscriber.id, subscription)
 
-    return this.#answer(state, subscriber, () =>
-      this.#load(state)
+    return this.#held.answer(state, subscriber, () =>
+      this.#held
+        .load(state)
         .andThen(({ log, doc }) => {
           // A device that left while its subscription waited is not answered.
           if (!state.joining.delete(subscriber.id) && !state.subscribers.has(subscriber.id)) {
@@ -196,7 +165,7 @@ export class RegionHub {
         .mapErr((error) => {
           // A device whose region could not be loaded is not subscribed.
           state.joining.delete(subscriber.id)
-          this.#unloadWhenIdle(state)
+          this.#held.unloadWhenIdle(state)
 
           return error
         }),
@@ -205,7 +174,7 @@ export class RegionHub {
 
   /** Ends a device's subscription; the region unloads once nobody has subscribed for the idle time. */
   unsubscribe(regionId: string, subscriberId: string): void {
-    const state = this.#regions.get(regionId)
+    const state = this.#held.get(regionId)
 
     if (!state) {
       return
@@ -213,7 +182,7 @@ export class RegionHub {
 
     state.joining.delete(subscriberId)
     state.subscribers.delete(subscriberId)
-    this.#unloadWhenIdle(state)
+    this.#held.unloadWhenIdle(state)
   }
 
   /** Answers a subscribed device with the updates the region holds after `vv`. */
@@ -226,7 +195,7 @@ export class RegionHub {
       return okAsync(undefined)
     }
 
-    return this.#subscribed(regionId, subscriber, (_, { log, doc }) => {
+    return this.#held.subscribed(regionId, subscriber, (_, { log, doc }) => {
       this.#send(subscriber, {
         type: 'updates',
         region: regionId,
@@ -239,98 +208,16 @@ export class RegionHub {
     })
   }
 
-  /**
-   * Checks a batch a subscribed device pushed and, when the log accepts it, acknowledges it
-   * with its number and sends it to the region's other subscribers. A refused batch is
-   * answered with a reject and changes nothing (`foreign-owner` when it writes a record of
-   * another region); a batch the region already holds, delivered again, is acknowledged
-   * without a new log row.
-   */
+  /** Takes in a batch a subscribed device pushed; the contract is `takeInBatch`'s. */
   push(
     regionId: string,
     subscriber: Subscriber,
     batch: number,
     updates: readonly Uint8Array[],
   ): ResultAsync<void, DataError> {
-    const reject = (reason: RejectReason, detail: string) =>
-      this.#send(subscriber, {
-        type: 'reject',
-        region: regionId,
-        batch,
-        reason,
-        detail: detail.slice(0, MAX_DETAIL),
-      })
-
-    return this.#subscribed(regionId, subscriber, (state, { log, doc }, actor) => {
-      const validated = validateBatch({
-        doc,
-        region: state.ref,
-        actor: actor.id,
-        ability: actor.ability,
-        schema: this.#schema,
-        updates,
-      })
-
-      if (validated.isErr()) {
-        reject(validated.error.reason, validated.error.detail)
-
-        return okAsync(undefined)
-      }
-
-      const { fork, plan } = validated.value
-
-      // A batch delivered again brings nothing new: it is acknowledged under the current head,
-      // without a log row that would move the head for nothing.
-      if (fork.version().compare(doc.version()) === 0) {
-        this.#send(subscriber, {
-          type: 'ack',
-          region: regionId,
-          batch,
-          head: log.head(),
-          compact: false,
-        })
-
-        return okAsync(undefined)
-      }
-
-      return log
-        .accept(plan)
-        .andThen((head) => {
-          // In a buffer of their own, as a message holds them (see `exportFrom`).
-          const bytes = new Uint8Array(plan.bytes)
-
-          doc.import(bytes)
-          this.#send(subscriber, {
-            type: 'ack',
-            region: regionId,
-            batch,
-            head,
-            compact: head - log.covers() > this.#compactionLogLimit,
-          })
-
-          for (const { subscriber: other } of state.subscribers.values()) {
-            if (other.id !== subscriber.id) {
-              this.#send(other, { type: 'updates', region: regionId, bytes, head, snapshot: false })
-            }
-          }
-
-          return okAsync(undefined)
-        })
-        .orElse((error) => {
-          if (error.code !== 'data:WRITE_REJECTED') {
-            return errAsync(error)
-          }
-
-          // A record of another region, or a projection that breaks a schema rule.
-          if (error.message.startsWith('ownership')) {
-            reject('foreign-owner', error.message)
-          } else {
-            reject('invalid-record', messageOf(error.cause))
-          }
-
-          return okAsync(undefined)
-        })
-    })
+    return this.#held.subscribed(regionId, subscriber, (state, loaded, actor) =>
+      takeInBatch(this.#intake, { regionId, subscriber, batch, updates }, state, loaded, actor),
+    )
   }
 
   /**
@@ -340,12 +227,12 @@ export class RegionHub {
   heads(
     regionIds: readonly string[],
   ): ResultAsync<ReadonlyArray<{ readonly region: string; readonly head: number }>, DataError> {
-    const inMemory = (region: string) => this.#regions.get(region)?.loaded?.log.head()
+    const inMemory = (region: string) => this.#held.get(region)?.loaded?.log.head()
     // A region may unload while the others are read, so the heads in memory are taken now.
     const held = new Map(regionIds.map((region) => [region, inMemory(region)]))
     const unloaded = regionIds.filter((region) => held.get(region) === undefined)
 
-    return this.#storedHeads(unloaded).map((heads) =>
+    return storedHeads(this.#databases, unloaded).map((heads) =>
       regionIds.map((region) => ({
         region,
         head: inMemory(region) ?? held.get(region) ?? heads.get(region) ?? 0,
@@ -366,7 +253,7 @@ export class RegionHub {
     covers: number,
     proposal: Uint8Array,
   ): ResultAsync<void, DataError> {
-    return this.#subscribed(regionId, subscriber, (_, { log, doc }) =>
+    return this.#held.subscribed(regionId, subscriber, (_, { log, doc }) =>
       log
         .compact(covers, proposal, (version) =>
           snapshotAt(doc, covers === log.head() ? undefined : version),
@@ -388,204 +275,19 @@ export class RegionHub {
 
   /** How many regions have their document in memory. */
   loadedRegions(): number {
-    return [...this.#regions.values()].filter((state) => state.loaded).length
+    return this.#held.loadedRegions()
   }
 
   /**
    * Cancels the scheduled unloads, drops every region, waits for the work under way, then
    * releases the databases of the regions it held.
    */
-  async close(): Promise<void> {
-    const states = [...this.#regions.values()]
-
-    this.#regions.clear()
-
-    for (const state of states) {
-      state.unload?.()
-    }
-
-    await Promise.all(states.map((state) => state.queue))
-
-    for (const state of states) {
-      state.loaded?.database.release()
-    }
-  }
-
-  /**
-   * The heads the databases hold for regions not in memory, by region: one query per
-   * database, which is released once it answered. A region the hub does not know is not asked.
-   */
-  #storedHeads(regionIds: readonly string[]): ResultAsync<ReadonlyMap<string, number>, DataError> {
-    // Every private region lives in the same database; each tenant region has one of its own.
-    const groups = new Map<string, { readonly ref: RegionRef; readonly ids: string[] }>()
-
-    for (const id of regionIds) {
-      const ref = regionRefOf(id)
-      const database = ref?.kind === 'private' ? 'directory' : ref?.id
-
-      if (ref && database) {
-        const group = groups.get(database) ?? { ref, ids: [] }
-
-        group.ids.push(id)
-        groups.set(database, group)
-      }
-    }
-
-    return ResultAsync.combine(
-      [...groups.values()].map(({ ref, ids }) => this.#headsIn(ref, ids)),
-    ).map((lists) => new Map(lists.flat().map((row) => [row.region, row.head])))
-  }
-
-  /** The heads the database of `ref` holds for `regionIds`, all kept in that database. */
-  #headsIn(ref: RegionRef, regionIds: readonly string[]): ResultAsync<StoredHead[], DataError> {
-    return this.#databases.acquire(ref).andThen(({ local, release }) => {
-      const read = async (): Promise<Result<StoredHead[], DataError>> => {
-        try {
-          return await ResultAsync.fromPromise(
-            local.db.query<[StoredHead[]]>(headsStatement, { regions: regionIds }),
-            (cause) => dataError('data:QUERY_FAILED', 'could not read the heads of regions', cause),
-          ).map(([rows]) => rows)
-        } finally {
-          release()
-        }
-      }
-
-      return new ResultAsync(read())
-    })
-  }
-
-  #hold(ref: RegionRef): RegionState {
-    const state: RegionState = {
-      ref,
-      subscribers: new Map(),
-      joining: new Map(),
-      queue: Promise.resolve(),
-      loaded: undefined,
-      unload: undefined,
-    }
-
-    this.#regions.set(ref.id, state)
-
-    return state
-  }
-
-  /** Loads the region from its database, which stays held until the region unloads. */
-  #load(state: RegionState): ResultAsync<Loaded, DataError> {
-    if (state.loaded) {
-      return okAsync(state.loaded)
-    }
-
-    return this.#databases.acquire(state.ref).andThen((database) =>
-      RegionLog.load(database.local, state.ref.id)
-        .map(({ log, doc }) => {
-          const loaded = { log, doc, database }
-
-          state.loaded = loaded
-
-          return loaded
-        })
-        .orElse((error) => {
-          database.release()
-
-          return errAsync(error)
-        }),
-    )
-  }
-
-  /**
-   * Runs `work` on the region once the device has subscribed to it, with the actor its
-   * subscription named (identity id and ability); any other device is refused.
-   */
-  #subscribed(
-    regionId: string,
-    subscriber: Subscriber,
-    work: (state: RegionState, loaded: Loaded, actor: Actor) => ResultAsync<void, DataError>,
-  ): ResultAsync<void, DataError> {
-    const state = this.#regions.get(regionId)
-
-    if (!state) {
-      this.#send(subscriber, notSubscribed(regionId))
-
-      return okAsync(undefined)
-    }
-
-    return this.#answer(state, subscriber, () => {
-      const subscription = state.subscribers.get(subscriber.id)
-
-      // A subscribed device's region is loaded: a region unloads only after its last device left.
-      if (!state.loaded || !subscription) {
-        this.#send(subscriber, notSubscribed(regionId))
-
-        return okAsync(undefined)
-      }
-
-      return work(state, state.loaded, subscription.actor)
-    })
-  }
-
-  /**
-   * Runs `work` in the region's queue. A failure is reported and answered to the device as an
-   * internal error, so the work always settles as answered.
-   */
-  #answer(
-    state: RegionState,
-    subscriber: Subscriber,
-    work: () => ResultAsync<void, DataError>,
-  ): ResultAsync<void, DataError> {
-    const run = state.queue.then(() =>
-      work().orElse((error) => {
-        this.#onError(error)
-        this.#send(subscriber, { type: 'error', code: 'internal', message: error.message })
-
-        return ok(undefined)
-      }),
-    )
-
-    // The next work waits for this one to settle, whatever its outcome.
-    state.queue = run.then(
-      () => undefined,
-      () => undefined,
-    )
-
-    return new ResultAsync(run)
+  close(): Promise<void> {
+    return this.#held.close()
   }
 
   /** Hands a message to a device; a send that throws is reported, and the work goes on. */
   #send(subscriber: Subscriber, message: ServerMessage): void {
-    try {
-      subscriber.send(message)
-    } catch (cause) {
-      this.#onError(
-        dataError(
-          'data:WRITE_FAILED',
-          `could not send ${message.type} to subscriber ${subscriber.id}`,
-          cause,
-        ),
-      )
-    }
-  }
-
-  /**
-   * Schedules the region's unload once no device subscribes to it. The unload runs in the
-   * region's queue, after the work asked before it, and only if still nobody subscribes; it
-   * releases the region's database.
-   */
-  #unloadWhenIdle(state: RegionState): void {
-    if (state.unload || state.subscribers.size > 0 || state.joining.size > 0) {
-      return
-    }
-
-    state.unload = this.#clock.schedule(this.#idleUnloadMs, () => {
-      state.unload = undefined
-      state.queue = state.queue.then(() => {
-        const idle = state.subscribers.size === 0 && state.joining.size === 0
-
-        if (idle && this.#regions.get(state.ref.id) === state) {
-          this.#regions.delete(state.ref.id)
-          state.loaded?.database.release()
-          state.loaded = undefined
-        }
-      })
-    })
+    deliver(subscriber, message, this.#onError)
   }
 }

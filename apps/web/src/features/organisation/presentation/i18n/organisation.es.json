@@ -1,5 +1,6 @@
 {
   "organisation.none": "Todavía no eres miembro de ninguna organización.",
+  "organisation.unavailable": "Los datos de tu organización no se pudieron abrir en este dispositivo.",
   "organisation.create.title": "Crear una organización",
   "organisation.create.key": "Clave",
   "organisation.create.key-hint": "Letras minúsculas, dígitos y guiones bajos, de 2 a 32 caracteres.",
@@ -28,6 +29,7 @@
   "organisation.error.key-taken": "Esta clave ya está en uso.",
   "organisation.error.no-such-identity": "Ninguna cuenta tiene este correo.",
   "organisation.error.already-member": "Esta cuenta ya es miembro.",
+  "organisation.error.rate-limited": "Demasiados intentos. Vuelve a intentarlo más tarde.",
   "organisation.error.not-admin": "Solo un administrador puede hacer esto.",
   "organisation.error.forbidden": "Solo el autor o un administrador puede cambiar esta nota.",
   "organisation.error.text-required": "Escribe primero la nota.",

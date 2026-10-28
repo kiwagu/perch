@@ -4,7 +4,8 @@
 }
 
 # One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
-# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT).
+# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT), and
+# PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there).
 https://localhost:{$FRONT_PORT} {
 	bind 127.0.0.1
 	tls /certs/localhost.pem /certs/localhost-key.pem
@@ -13,6 +14,13 @@ https://localhost:{$FRONT_PORT} {
 
 	@shell path / /index.html
 
+	# The UI manifest the build ships, for tests and agents; PERCH_UI_MANIFEST=0 switches it off.
+	@manifestOff expression `"{$PERCH_UI_MANIFEST:1}" == "0"`
+	handle /ui-manifest/* {
+		header Cache-Control "no-store"
+		respond @manifestOff 404
+		file_server
+	}
 	handle_path /backend/* {
 		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
 	}

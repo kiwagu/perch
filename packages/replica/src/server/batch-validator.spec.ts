@@ -14,7 +14,7 @@ import {
   replicaSchema,
 } from '../__fixtures__/note'
 import type { ReplicaSchema } from '../schema'
-import { invert } from '../sync/region-sync'
+import { invert } from '../sync'
 
 import { documentWithProfile, exportSince, forkOf, input } from './__fixtures__/batch'
 import { validateBatch } from './batch-validator'

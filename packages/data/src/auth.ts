@@ -1,5 +1,5 @@
 import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow'
-import type { RecordId, SurrealSession } from 'surrealdb'
+import { ErrorKind, QueryError, type RecordId, ServerError, type SurrealSession } from 'surrealdb'
 
 import { identityIdFactory } from '@workspace/ids'
 
@@ -29,6 +29,27 @@ function toUser(record: AccountRecord | undefined): Result<AuthUser | undefined,
   return identityIdFactory.is(key)
     ? ok({ id: key, email: record.email })
     : err(dataError('data:AUTH_FAILED', `account key ${key} is not an identity id`))
+}
+
+/**
+ * Whether the database judged the call and refused it. A connection that failed, an engine that
+ * is closed, and a statement the database could not finish (timed out, cancelled, or in conflict
+ * with another transaction) judged nothing: the same keys may work once it answers again.
+ */
+function isRefusal(cause: unknown): boolean {
+  if (!(cause instanceof ServerError) || cause.kind === ErrorKind.Connection) {
+    return false
+  }
+
+  return !(
+    cause instanceof QueryError &&
+    (cause.isTimedOut || cause.isCancelled || cause.isTransactionConflict)
+  )
+}
+
+/** A call the database did not judge: it could not be asked, or its session could not open. */
+function unjudged(message: string, cause?: unknown): DataError {
+  return dataError('data:QUERY_FAILED', message, cause)
 }
 
 /**
@@ -66,14 +87,28 @@ export function createAuth(local: LocalDb, options: AuthOptions): AuthPort {
     return session
   }
 
+  /**
+   * Runs `run` on the session: a refusal by the database fails with `code`, anything else that
+   * fails (the session could not open, the database could not be asked) with
+   * `data:QUERY_FAILED`.
+   */
   const attempt = <T>(
     code: DataErrorCode,
     message: string,
     run: (s: SurrealSession) => Promise<T>,
   ): ResultAsync<T, DataError> =>
     closed
-      ? errAsync(dataError('data:AUTH_FAILED', 'the auth session is closed'))
-      : ResultAsync.fromPromise(open().then(run), (cause) => dataError(code, message, cause))
+      ? errAsync(unjudged('the auth session is closed'))
+      : ResultAsync.fromPromise(open(), (cause) =>
+          unjudged('the auth session could not be opened', cause),
+        ).andThen((s) =>
+          // Through `then`, so a call that throws before it answers fails like one that rejects.
+          ResultAsync.fromPromise(Promise.resolve(s).then(run), (cause) =>
+            isRefusal(cause)
+              ? dataError(code, message, cause)
+              : unjudged('the database could not be asked', cause),
+          ),
+        )
 
   const readCurrent = (s: SurrealSession): Promise<AccountRecord | undefined> =>
     s.accessToken ? (s.auth() as Promise<AccountRecord | undefined>) : Promise.resolve(undefined)

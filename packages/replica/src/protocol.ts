@@ -3,11 +3,12 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 6
 
 /**
  * Close codes of the gateway: a message the protocol refuses, keys it refuses, a region of
- * somebody else, a hello that did not come in time, and a sign-out.
+ * somebody else, a hello that did not come in time, a sign-out, and a device signed out from
+ * another device (one device, or every device of the identity).
  */
 export const CLOSE = {
   protocol: 4400,
@@ -15,7 +16,11 @@ export const CLOSE = {
   forbidden: 4403,
   timeout: 4408,
   signedOut: 4000,
+  revoked: 4001,
 } as const
+
+/** The id a device names itself with: the browser's own stable id, minted on first use. */
+export const deviceId = z.string().min(1).max(64)
 
 export const MAX_PUSH_UPDATES = 256
 
@@ -47,6 +52,7 @@ const head = z.int().nonnegative()
 
 const batch = z.int().positive()
 
+/** `foreign-peer`: the batch brings changes under a Loro peer another identity writes as in the region. */
 export const rejectReason = z.enum([
   'malformed',
   'pending-dependencies',
@@ -54,6 +60,7 @@ export const rejectReason = z.enum([
   'foreign-owner',
   'forbidden-action',
   'invalid-record',
+  'foreign-peer',
 ])
 
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])
@@ -75,6 +82,8 @@ export const clientMessage = z.discriminatedUnion('type', [
     protocol: z.literal(PROTOCOL_VERSION),
     access: z.string().min(1),
     refresh: z.string().min(1).optional(),
+    /** The device saying hello; a hello without it breaks the protocol (4400). */
+    device: deviceId,
   }),
   z.object({ type: z.literal('subscribe'), region, vv: bytes.nullable() }),
   z.object({ type: z.literal('pull'), region, vv: bytes }),
@@ -87,6 +96,8 @@ export const clientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('probe'), regions: z.array(region).max(64) }),
   z.object({ type: z.literal('compact'), region, covers: head, snapshot: bytes }),
   z.object({ type: z.literal('sign-out'), scope: z.literal('device') }),
+  /** Asks for a new pair over the open channel; the gateway holds the pair it renews. */
+  z.object({ type: z.literal('renew') }),
 ])
 
 export const serverMessage = z.discriminatedUnion('type', [
@@ -108,7 +119,7 @@ export const serverMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('compaction'), region, covers: head, outcome: compactionOutcome }),
   z.object({
     type: z.literal('error'),
-    code: z.enum(['protocol', 'unauthorized', 'forbidden-region', 'internal']),
+    code: z.enum(['protocol', 'unauthorized', 'forbidden-region', 'internal', 'rate-limited']),
     message: z.string(),
   }),
 ])

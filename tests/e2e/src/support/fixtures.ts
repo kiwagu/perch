@@ -45,18 +45,44 @@ interface Fixtures {
   readonly anotherAccount: AnotherAccount
 }
 
-/** Waits until the shell says the local database is open. */
+/** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
+export const APP_READY = '[data-testid="app-shell.status"][data-state="ready"]'
+
+/** Waits until the shell says the app is ready (the local database is open). */
 export async function appReady(page: Page): Promise<void> {
-  await page.getByTestId('app-shell.ready').waitFor({ state: 'attached' })
+  await page.locator(APP_READY).waitFor({ state: 'attached' })
 }
 
-/** Signs in with an existing account through the sign-in page and waits for `/me`. */
+/** The shell's notice, located by its anchor and its contract code together. */
+export const notice = (page: Page, code: string) =>
+  page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
+
+/** One toast of the frame, located by its anchor and its contract code together. */
+export const toast = (page: Page, code: string) =>
+  page.locator(`[data-testid="app-shell.toast"][data-code="${code}"]`)
+
+/** The sign-in page's word on how the last session ended, by its anchor and its code. */
+export const signInNotice = (page: Page, code: string) =>
+  page.locator(`[data-testid="user.sign-in.notice-message"][data-code="${code}"]`)
+
+/**
+ * Signs in with an existing account through the sign-in page and waits for `/me`; fails at once
+ * when the page shows its error instead.
+ */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
   await appReady(page)
-  await page.getByTestId('user.sign-in.email').fill(account.email)
-  await page.getByTestId('user.sign-in.password').fill(account.password)
-  await page.getByTestId('user.sign-in.submit').click()
+  await page.getByTestId('user.sign-in.email-input').fill(account.email)
+  await page.getByTestId('user.sign-in.password-input').fill(account.password)
+  await page.getByTestId('user.sign-in.submit-button').click()
+
+  const outcome = await page.waitForFunction(
+    () =>
+      window.location.pathname === '/me' ||
+      document.querySelector('[data-testid="user.sign-in.error"]')?.getAttribute('data-code'),
+  )
+
+  expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
   await page.waitForURL('**/me')
 }
 
@@ -67,11 +93,11 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
 export async function signUp(page: Page, account = freshAccount()): Promise<SeedAccount> {
   await page.goto('/sign-in')
   await appReady(page)
-  await page.getByTestId('user.sign-in.toggle').click()
-  await page.getByTestId('user.sign-in.email').fill(account.email)
-  await page.getByTestId('user.sign-in.password').fill(account.password)
-  await page.getByTestId('user.sign-in.name').fill(account.name)
-  await page.getByTestId('user.sign-in.submit').click()
+  await page.getByTestId('user.sign-in.toggle-button').click()
+  await page.getByTestId('user.sign-in.email-input').fill(account.email)
+  await page.getByTestId('user.sign-in.password-input').fill(account.password)
+  await page.getByTestId('user.sign-in.name-input').fill(account.name)
+  await page.getByTestId('user.sign-in.submit-button').click()
   await page.waitForURL('**/me')
 
   return account

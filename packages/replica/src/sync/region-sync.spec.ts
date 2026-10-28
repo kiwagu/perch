@@ -5,14 +5,15 @@ import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { type NoteId, noteIdFactory } from '@workspace/ids'
 
-import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import { noteCreate, noteDelete, noteUpdate } from '../__fixtures__/note'
 import { recordKey } from '../keys'
 import { type ClientMessage, MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
 import { RegionDoc } from '../region-doc'
+import { replaceRegionDoc } from '../region-replacement'
 import localTailStatement from '../surql/local-tail.surql'
 import outboxReadStatement from '../surql/outbox-read.surql'
 import importStatement from '../surql/replica-import.surql'
-import { manualClock } from '../testing/manual-clock'
+import { type GatewayStub, interceptRegionResets, manualClock } from '../testing'
 
 import {
   ann,
@@ -89,6 +90,8 @@ async function alone(
     actor: regionId,
     onSettled: () => {},
     onError: (error) => errors.push(error),
+    // Only an engine replaces a region's document.
+    onReset: () => {},
   })
   const count = (type: ClientMessage['type']) =>
     sent.filter((message) => message.type === type).length
@@ -150,6 +153,41 @@ const notSubscribed: ServerMessage = {
   code: 'protocol',
   message: `not subscribed to region ${regionId}`,
 }
+
+/** Ann's note, written and synced; then Bob's device goes offline. */
+async function annsNoteThenOffline(batchRows?: number) {
+  const members = await twoMembers(batchRows === undefined ? {} : { batchRows })
+  const annsNote = noteIdFactory.create()
+
+  noteCreate(members.a.region.doc, { id: annsNote, author: ann, text: 'hello' })
+  members.a.engine.localWrite()
+  await members.settle()
+  members.b.transport.goOffline()
+
+  return { ...members, annsNote, anns: recordKey('note', annsNote) }
+}
+
+/** `edits` edits of Ann's note by Bob, made durable: rows the gateway refuses, as Bob is a member. */
+async function editOffline(region: RegionDoc, annsNote: NoteId, edits: number) {
+  for (let edit = 0; edit < edits; edit += 1) {
+    noteUpdate(region.doc, { id: annsNote, text: `mine ${edit}` })
+  }
+
+  expect((await region.flush()).isOk()).toBe(true)
+}
+
+/** The gateway's head of `region`. */
+async function headOf(stub: GatewayStub, region: string): Promise<number> {
+  const [entry] = (await stub.hub.heads([region]))._unsafeUnwrap()
+
+  return entry?.head ?? expect.unreachable('the hub answers every region asked')
+}
+
+/** A device database on which every region reset fails, as on a broken database. */
+const refuseResets = (local: LocalDb) =>
+  interceptRegionResets(local, () => {
+    throw new Error('the database refuses the reset')
+  })
 
 describe('region sync on its own', () => {
   it('repeats an outstanding pull on every full pass until an import completes', async () => {
@@ -223,6 +261,81 @@ describe('region sync on its own', () => {
     sync.retryPull()
 
     expect(count('pull')).toBe(2)
+  })
+
+  /** A database that holds `statement` once `holding` is set, until `release`; `reached` resolves once held. */
+  function holdOn(statement: string) {
+    let release = (): void => {}
+    let reach = (): void => {}
+    const gate = { holding: false }
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve
+    })
+    const wrap = (local: LocalDb) =>
+      interceptQueries(local, (text) => {
+        if (gate.holding && text === statement) {
+          reach()
+
+          return held
+        }
+      })
+
+    return { gate, wrap, reached, release }
+  }
+
+  it('sends nothing for its region once retired, though an import under way ends after it', async () => {
+    const hold = holdOn(importStatement)
+    const { sync, count, reconnects } = await alone({ persisted: true, wrap: hold.wrap })
+    const { gap } = serverHistory()
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+
+    // This update lacks its history: once imported, it would ask for a pull.
+    hold.gate.holding = true
+    const handled = sync.handle(updates(gap, 2))
+
+    await hold.reached
+    sync.retire()
+    hold.release()
+    await handled
+
+    expect(count('pull')).toBe(0)
+    expect(reconnects()).toBe(0)
+  })
+
+  it('sends nothing for its region once retired, though a compaction proposal under way ends after it', async () => {
+    const hold = holdOn(outboxReadStatement)
+    const { sync, count, region, lastBatch } = await alone({ persisted: true, wrap: hold.wrap })
+
+    sync.subscribe()
+    await sync.handle(updates(emptyRegion, 0, true))
+    writeName(region, 'Ann')
+
+    const pushed = sync.pushNext()
+
+    await vi.waitFor(() => expect(count('push')).toBe(1))
+
+    // The ack asks for a compaction: the proposal reads the outbox before it goes out.
+    hold.gate.holding = true
+    const handled = sync.handle({
+      type: 'ack',
+      region: regionId,
+      batch: lastBatch(),
+      head: 1,
+      compact: true,
+    })
+
+    await hold.reached
+    sync.retire()
+    hold.release()
+    await handled
+    await pushed
+
+    expect(count('compact')).toBe(0)
   })
 
   it('gives up on a pull whose answer never comes after 30 seconds, reports it once and reconnects', async () => {
@@ -627,28 +740,6 @@ describe('region sync through the gateway', () => {
   })
 
   describe('a refused batch the push limit fills', () => {
-    /** Ann's note, written and synced; then Bob's device goes offline. */
-    async function annsNoteThenOffline(batchRows?: number) {
-      const members = await twoMembers(batchRows === undefined ? {} : { batchRows })
-      const annsNote = noteIdFactory.create()
-
-      noteCreate(members.a.region.doc, { id: annsNote, author: ann, text: 'hello' })
-      members.a.engine.localWrite()
-      await members.settle()
-      members.b.transport.goOffline()
-
-      return { ...members, annsNote, anns: recordKey('note', annsNote) }
-    }
-
-    /** `edits` edits of Ann's note by Bob, made durable: rows the gateway refuses, as Bob is a member. */
-    async function editOffline(region: RegionDoc, annsNote: NoteId, edits: number) {
-      for (let edit = 0; edit < edits; edit += 1) {
-        noteUpdate(region.doc, { id: annsNote, text: `mine ${edit}` })
-      }
-
-      expect((await region.flush()).isOk()).toBe(true)
-    }
-
     it('pushes the refused rows of a full batch and their undo together, and keeps syncing', async () => {
       const { a, b, settle, errors, annsNote, anns } = await annsNoteThenOffline(3)
       const bobsNote = noteIdFactory.create()
@@ -724,19 +815,6 @@ describe('region sync through the gateway', () => {
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
   })
 
-  it('stops syncing a region whose rollback is rejected too, and reports it', async () => {
-    const { a, settle, stub, errors } = await twoDevices()
-
-    stub.rejectEverything()
-    writeName(a.region, 'Ana')
-    a.engine.localWrite()
-    await settle()
-
-    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED', 'data:SYNC_STOPPED'])
-    expect(stub.rejections()).toBe(2)
-    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
-  })
-
   it('proposes a compaction when asked and quiet', async () => {
     const { a, settle, stub } = await twoDevices({ compactionLogLimit: 1 })
 
@@ -749,5 +827,198 @@ describe('region sync through the gateway', () => {
 
     // The profile was created as the first batch; naming it A made the second.
     expect(stub.compactions()).toEqual([{ covers: 2, outcome: 'accepted' }])
+  })
+})
+
+describe('a region whose rollback the gateway refuses again', () => {
+  it('reloads the region from the server when another tab wrote on top of the refused rows, and keeps syncing', async () => {
+    const { a, b, settle, errors, stub, annsNote, anns } = await annsNoteThenOffline(3)
+    const head = await headOf(stub, a.region.ref.id)
+    const tabsNote = noteIdFactory.create()
+    const bobsNote = noteIdFactory.create()
+
+    await editOffline(b.region, annsNote, 3)
+
+    // Another tab of Bob's browser takes the refused rows in, then writes a note on top of them.
+    const tab = (await RegionDoc.open(b.local, b.region.ref))._unsafeUnwrap()
+
+    expect((await tab.catchUpLocal()).isOk()).toBe(true)
+    noteCreate(tab.doc, { id: tabsNote, author: bob, text: 'from the other tab' })
+    expect((await tab.flush()).isOk()).toBe(true)
+    b.transport.goOnline()
+    await settle()
+
+    expect(errors().map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
+    expect(stub.rejections()).toBe(2)
+    // The server took nothing of Bob's; the other tab's note went with the refused rows.
+    expect(await headOf(stub, a.region.ref.id)).toBe(head)
+    expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+    expect(a.region.recordJson(recordKey('note', tabsNote))).toBeUndefined()
+    expect(b.region.recordJson(recordKey('note', tabsNote))).toBeUndefined()
+    expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
+    // The tab, still on the copy that was dropped, is refused.
+    expect((await tab.catchUpLocal())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    tab.close()
+
+    noteCreate(b.region.doc, { id: bobsNote, author: bob, text: 'mine' })
+    b.engine.localWrite()
+    await settle()
+    noteUpdate(a.region.doc, { id: annsNote, text: 'hello again' })
+    a.engine.localWrite()
+    await settle()
+
+    expect(a.region.recordJson(recordKey('note', bobsNote))).toMatchObject({ text: 'mine' })
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello again' })
+    expect(errors().map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
+  })
+
+  it('reloads the region from the server when an undone delete meets an edit the device had not heard, and keeps syncing', async () => {
+    const { a, b, settle, errors, stub } = await twoMembers()
+    const annsNote = noteIdFactory.create()
+    const bobsNote = noteIdFactory.create()
+    const anns = recordKey('note', annsNote)
+
+    noteCreate(a.region.doc, { id: annsNote, author: ann, text: 'hello' })
+    a.engine.localWrite()
+    await settle()
+    stub.dropNextFanOutTo(b.transport)
+    noteUpdate(a.region.doc, { id: annsNote, text: 'hello again' })
+    a.engine.localWrite()
+    await a.engine.settled(60_000)
+
+    const head = await headOf(stub, a.region.ref.id)
+
+    // Bob is a member: the gateway refuses his delete of Ann's note, and the undo brings back
+    // the text he last heard, which the gateway refuses as his edit.
+    noteDelete(b.region.doc, { id: annsNote })
+    b.engine.localWrite()
+    await settle()
+
+    expect(errors().map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
+    expect(await headOf(stub, a.region.ref.id)).toBe(head)
+    expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello again' })
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello again' })
+    expect((await b.region.outbox(10))._unsafeUnwrap()).toEqual([])
+
+    noteCreate(b.region.doc, { id: bobsNote, author: bob, text: 'mine' })
+    b.engine.localWrite()
+    await settle()
+    noteUpdate(a.region.doc, { id: annsNote, text: 'hello at last' })
+    a.engine.localWrite()
+    await settle()
+
+    expect(a.region.recordJson(recordKey('note', bobsNote))).toMatchObject({ text: 'mine' })
+    expect(b.region.recordJson(anns)).toMatchObject({ text: 'hello at last' })
+    expect(errors().map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
+  })
+
+  it('reloads from the server a region whose rollback is rejected too, with the one rejection reported', async () => {
+    const { a, settle, stub, errors } = await twoDevices()
+
+    stub.rejectEverything()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      { code: 'data:PUSH_REJECTED' },
+      {
+        code: 'data:REGION_RELOADED',
+        cause: { region: a.region.ref.id, reason: 'foreign-table' },
+      },
+    ])
+    expect(stub.rejections()).toBe(2)
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('stops syncing a region whose reload fails, and reports it', async () => {
+    const { a, settle, stub, errors } = await twoDevices({}, { wrap: refuseResets })
+    const before = a.region
+
+    stub.rejectEverything()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED', 'data:SYNC_STOPPED'])
+    expect(a.region).toBe(before)
+    expect((await a.region.outbox(10))._unsafeUnwrap().length).toBeGreaterThan(0)
+  })
+
+  it('opens again a region another tab reset, and syncs it', async () => {
+    const { a, b, settle, errors } = await twoDevices()
+    const before = b.region
+    const other = (await RegionDoc.open(b.local, b.region.ref))._unsafeUnwrap()
+
+    ;(await replaceRegionDoc(b.local, other, 'reset'))._unsafeUnwrap().close()
+    b.engine.localWrite()
+    await settle()
+
+    expect(b.region).not.toBe(before)
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+
+    writeName(b.region, 'Bea')
+    b.engine.localWrite()
+    await settle()
+
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Bea' })
+    expect(errors()).toEqual([])
+  })
+
+  it('settles only once a reload has finished', async () => {
+    let reached = () => {}
+    const resetting = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { a, settle, stub } = await twoDevices(
+      {},
+      {
+        wrap: (local) =>
+          interceptRegionResets(local, () => {
+            reached()
+
+            return held
+          }),
+      },
+    )
+
+    stub.rejectEverything()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await resetting
+
+    let done = false
+    const settled = settle().then(() => {
+      done = true
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(done).toBe(false)
+
+    release()
+    await settled
+
+    expect(a.errors.map((error) => error.code)).toEqual([
+      'data:PUSH_REJECTED',
+      'data:REGION_RELOADED',
+    ])
   })
 })

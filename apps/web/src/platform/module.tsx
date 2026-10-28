@@ -17,6 +17,7 @@ import {
 import type { Shape } from '@workspace/data'
 import type { Container, Token } from '@workspace/di'
 import type { Catalog } from '@workspace/i18n'
+import type { z } from '@workspace/zod'
 
 import { useServices } from './services'
 
@@ -31,6 +32,12 @@ export interface RouteDef {
   readonly page: string
   /** Pages behind `authenticated` redirect to sign-in when nobody is signed in. */
   readonly guard?: 'authenticated' | 'guest'
+  /** The search parameters the page reads; one equal to its default leaves the URL. */
+  readonly search?: z.ZodObject<z.ZodRawShape>
+  /** The search parameters carried across navigations. */
+  readonly retain?: readonly string[]
+  /** Whether opening the page adds a history entry or replaces the current one. */
+  readonly history?: 'push' | 'replace'
 }
 
 export interface ModuleDef {
@@ -83,30 +90,35 @@ export interface ShapeState<T> {
   readonly status: 'idle' | 'loading' | 'ready'
 }
 
-/** Keeps a component on the current tree of a shape; null parameters mean nothing to read yet. */
+/**
+ * Keeps a component on the current tree of a shape; null parameters mean nothing to read yet. A
+ * tree is the one of the parameters it was read for: from the render the parameters change in, the
+ * previous ones' tree (another account's settings, say) is no longer given out.
+ */
 export function useShape<Params, Result>(
   shape: Shape<Params, Result>,
   params: Params | null,
 ): ShapeState<Result> {
   const { runner } = useServices()
-  const [state, setState] = useState<ShapeState<Result>>({
-    tree: undefined,
-    status: params === null ? 'idle' : 'loading',
-  })
+  const [read, setRead] = useState<{ readonly key: string; readonly tree: Result } | undefined>()
   const key = JSON.stringify(params)
 
   useEffect(() => {
     if (params === null) {
-      setState({ tree: undefined, status: 'idle' })
+      setRead(undefined)
 
       return undefined
     }
 
-    setState((current) => ({ tree: current.tree, status: 'loading' }))
-
-    return runner.watch(shape, params, (tree) => setState({ tree, status: 'ready' }))
+    return runner.watch(shape, params, (tree) => setRead({ key, tree }))
     // `key` stands for `params`: callers pass a fresh object on every render.
   }, [runner, shape, key])
 
-  return state
+  if (params === null) {
+    return { tree: undefined, status: 'idle' }
+  }
+
+  return read?.key === key
+    ? { tree: read.tree, status: 'ready' }
+    : { tree: undefined, status: 'loading' }
 }

@@ -4,75 +4,23 @@
 
 The server process in front of the central SurrealDB database (namespace `app`, database
 `directory`), and that database's only client: it connects as its own namespace user
-and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
-routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in`, answering
-`{ identity, tokens, memberships }`, the memberships being the organisations the identity
-belongs to), each call on a database session of its own that is closed when the call ends;
-`GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
-device says hello with its keys at protocol 3 (the pair is renewed with the refresh key when
-the access token no longer works, and the new pair is sent first), is welcomed with its
-identity's private region, the region `tenant:<key>` of each organisation the identity belongs
-to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
-and compacts there through the region hub, the server's copy of the replicated regions, which
-answers it and sends each accepted batch to the region's other devices. The hub keeps a private
-region in the directory and a tenant region in its organisation's database
-(`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
-note names its own member as its author, and nobody changes the author of a note. Each
-subscription carries the device's ability, built from its membership's role and the replica
-schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
-deletes only its own notes, an admin any, and the hub rejects any other write as
-`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
-role applies to a device's subscriptions from its next subscribe or hello.
-A connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
-accepted; when an identity's memberships change, each of its connections leaves the regions it
-may no longer name at once, without waiting for the device's messages under way (one handled
-from then on that names such a region closes the socket with 4403, and the hub sends it nothing
-more there), and is sent a `memberships` message; it subscribes to a new organisation's region
-itself. A change told while a connection's hello is under way applies right after its welcome.
-Text the protocol refuses (4400, a hello of protocol 1
-included), refused keys (4401), a region the device may not name (4403) and a hello that did
-not come within 10 seconds (4408, after which the device connects again) close the socket
-with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
-grant through the database's RPC and closes the socket with 4000, which means the grant is
-revoked; a revoke that fails is tried once more, and a grant that still cannot be revoked
-closes the socket with 1011 (`revoke failed`) instead. A renewed pair the socket closed
-before it could take is logged at warn as `renewed pair not delivered`. Keys, tokens and
-grant ids never reach its logs.
+and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
+sign devices up, in and out, list and sign out an identity's devices, and serve organisations
+and their members; devices sync over a WebSocket at `/sync`; `GET /health` answers `ok`.
 
-Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
-the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
-(`membership`), and the organisation's database holds its `member` rows. Two services in
-`src/tenants`, built by the composition root over the directory, serve them; on shutdown the
-organisations' databases close after the region hub and before the directory. `TenantDatabases`
-keeps one connection per organisation database in use, shared by every holder and closed once
-nobody has held it for five minutes. `Organisations` creates an organisation (its directory
-rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished is completed when the creator asks again), lists an identity's memberships in ready
-organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to an admin, answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
-and tells its listeners an identity's new memberships whenever they change, answering once they
-heard them: the composition root has the registry tell the identity's devices. A removal takes
-the organisation's region from the removed identity's open connections as soon as the
-directory's membership is gone, before the member row is deleted and before the memberships are
-read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it. The changes of one identity's memberships (its
-creations, the invites of it, its removals) run one after the other, each once the one before
-it and its notification have settled, so the directory and the organisation's database end as
-the last change left them and its devices hear the lists in that order. This holds within one
-gateway process; gateways in several processes would need a durable revision of the memberships.
+The source is one module per mechanism of the platform under `src/`, each with its own README
+for its role, surface and commands. `src/server.ts` routes each request to its module and
+`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
+time (one identity's membership changes, one device's key operations). The modules that
+predate the index rule have no `index.ts` yet and are imported file by file.
 
-The organisation routes act for the identity a device's access token signs in, sent as
-`Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
-access token that works answers 401 (`unauthorized`). `GET /organisations` lists the caller's
-memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
-as its admin (201); `GET /organisations/:key/members` lists the members to an admin (403 `not-admin` to a member);
-`POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
-`DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
-an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
-code, with 400 for `invalid-key` and `invalid-name`, 403 for `not-a-member` and `not-admin`, 404
-for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-member` and
-`self`; a failure of the gateway answers 500 (`internal`).
+- [auth](src/auth/README.md): sign-up, sign-in and sign-out, device sessions, tokens and the
+  Bearer caller.
+- [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
+  connections.
+- [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
+  and their routes.
+- [limits](src/limits/README.md): the request limits and the 429 they answer.
 
 ## Key exports
 
@@ -80,9 +28,25 @@ None: this is an application. Its entry point is `src/index.ts`, which registers
 `.surql` loader and runs `src/main.ts`; `SIGINT` and `SIGTERM` stop the server and close
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
-`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, and optionally the logger's `LOG_LEVEL`
-and `LOG_FORMAT`. `scripts/smoke.ts` is the entry point of the smoke test against a
-stand.
+`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
+optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
+an issue that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
+HTTP helpers the load test reuses).
+
+Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
+which the gateway gives the directory schema when it applies it, so a schema applied again (at a
+restart after a schema change, or on a deployment) keeps every issued token valid. It is
+required, with no default and at least 64 characters: generate one with `openssl rand -hex 64`
+(128 characters on one line).
+The local stands use a literal of the mcproc manifest (`stand_jwt_key`), for those stands only;
+everything else that opens a stand's directory (the smoke, the load test's gateway, the seed's
+sweep) applies the schema with that same key, from `mcproc exec`, or it would give the stand a
+key of its own.
+To rotate it, set a new value and restart the gateway: the schema is applied again under the new
+key, earlier access tokens are refused, and each device renews its pair once with its refresh
+key at its next hello; nobody is signed out. The organisations' databases have no access method
+of their own yet; when they get one, it takes its key from this variable too.
 
 ## Commands
 
@@ -94,14 +58,40 @@ stand.
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
-  operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
+  operator defines, `scripts/stand-operator.ts` at the repository root) and with
+  `GATEWAY_JWT_KEY`, the key the stand's gateway signs with (required, no default; the root
+  `bun run test:db` sets it from the manifest), signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out, then
   the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives,
-  the owner editing that note as an admin, the invited device deleting its own note, its edit of
-  the owner's note rejected as `forbidden-action`, the member list refused to it with 403, a
-  note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
-  4403), one line per step.
+  each device welcomed with its membership and role, the invited device writing a note into the
+  organisation's region that the owner's device receives, the owner editing that note as an
+  admin, the invited device deleting its own note, a late device of the owner subscribing to a
+  snapshot that holds the admin's note and not the deleted one, the invited device's edit of
+  the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
+  `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
+  owner's next note still acknowledged and delivered, the member list refused to it with 403,
+  the removal that closes the region with 4403, and the removed identity's sign-out, after
+  which its refresh key is refused with 4401), on a further identity the clause of the access method: its fresh token accepted, the
+  same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
+  the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
+  that the refresh is refused; on a further identity the directory schema applied again with the
+  stand's key, the access token issued before it still accepted without a renewal; the limits of
+  the credential routes, each from a device, so a simulated client address, of its own (21
+  sign-ins of unknown emails within 10 s, the 21st answered 429 with `Retry-After`; 11 wrong
+  passwords for a further identity, the 11th answered 429); the renewal limit of a device (11
+  hellos of one device with a dead access token and a made-up refresh key within 15 minutes,
+  the first 10 closed with 4401, the 11th with 1013, counted by the smoke's own gateway); and on
+  another identity its device sessions: a hello under a
+  device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
+  laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
+  from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
+  with its still working access token closed with 4001) and signed in again in a later second
+  (that old token refused at hello with 4401 and by `GET /devices` with 401, the new pair
+  welcomed), a tablet signed in and
+  then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
+  and the tablet's sockets closed with 4001, in a later second than every token issued before),
+  a sign-in right after it answered 200 with a working token, the laptop's old pair refused at
+  hello (4401) and by `POST /auth/sign-out` (401); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
@@ -111,7 +101,8 @@ stand.
 `bun run load -- [arguments]` at the repository root drives simulated devices against a
 gateway of its own: it starts `src/index.ts` as a child process on port 5197, in front of the
 e2e stand's SurrealDB (`SURREAL_URL` from `mcproc exec`), and waits for its `/health`. Each step
-signs up the devices it adds (`load-<run>-<n>@example.test`), groups every `--members` of them
+signs up the devices it adds (`load-<run>-<n>@example.test`, each device from a simulated client
+address of its own, as in the smoke), groups every `--members` of them
 into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends

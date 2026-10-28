@@ -1,8 +1,7 @@
 import type { AuthUser } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
-import type { Membership } from '@workspace/replica/protocol'
-import { membership } from '@workspace/replica/protocol'
+import { deviceId, type Membership, membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 import { z } from '@workspace/zod'
 
@@ -64,7 +63,7 @@ export interface StorageEvents {
   removeEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
 }
 
-/** The browser's localStorage; when it is unavailable (private mode, blocked), nothing is kept. */
+/** The browser's localStorage, as `siteStorage` found it working; a write it then refuses is lost. */
 export function browserStorage(store: Storage, events: StorageEvents): KeyValueStorage {
   const attempt = <T>(run: () => T, fallback: T): T => {
     try {
@@ -94,12 +93,15 @@ export function browserStorage(store: Storage, events: StorageEvents): KeyValueS
 
 const DEVICE_KEY = 'perch.device.id'
 
-/** This browser's stable name, minted on first use; commands carry it in their context. */
+/**
+ * This browser's stable name, minted on first use; commands carry it in their context. A stored
+ * value the protocol does not take as a device id (empty, too long) is replaced by a new one.
+ */
 export function deviceIdFrom(storage: KeyValueStorage): string {
-  const saved = storage.get(DEVICE_KEY)
+  const saved = deviceId.safeParse(storage.get(DEVICE_KEY))
 
-  if (saved) {
-    return saved
+  if (saved.success) {
+    return saved.data
   }
 
   const minted = crypto.randomUUID()
@@ -278,7 +280,7 @@ export function savedKeys(storage: KeyValueStorage): DeviceCredentials | undefin
 
 const NOTICE_KEY = 'perch.session.notice'
 
-const sessionNotice = z.enum(['resend-after-sign-in'])
+const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere', 'delete-pending'])
 
 /** Leaves the sign-in page a word about how the last session ended. */
 export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {
@@ -294,6 +296,94 @@ export function savedNotice(storage: KeyValueStorage): SessionNotice | undefined
 
 export function forgetNotice(storage: KeyValueStorage): void {
   storage.remove(NOTICE_KEY)
+}
+
+/**
+ * The pairs of the sign-outs the gateway did not confirm (offline, or giving unsent changes up),
+ * each with the device it signs out: their grants still live at the gateway until each is sent to
+ * be revoked. One list for every account signed out on this browser, oldest first; it outlives
+ * the keys.
+ */
+const PENDING_REVOKE_KEY = 'perch.session.pending-revoke'
+
+/** How many pairs wait at most: one more drops the oldest. */
+export const PENDING_REVOKE_LIMIT = 8
+
+const keyPair = z.object({ access: z.string().min(1), refresh: z.string().min(1) })
+
+const pendingPair = keyPair.extend({ device: deviceId })
+
+/** A pair left to revoke, and the device its sign-out named. */
+export type PendingPair = z.infer<typeof pendingPair>
+
+/**
+ * The pairs left to revoke, oldest first. An entry that does not describe one is skipped; a
+ * single pair kept on its own, as before the list, is read as a list of one from this device.
+ */
+export function pendingRevokes(storage: KeyValueStorage): readonly PendingPair[] {
+  const text = storage.get(PENDING_REVOKE_KEY)
+
+  if (text === undefined) {
+    return []
+  }
+
+  try {
+    const value = JSON.parse(text) as unknown
+    const entries = z.array(z.unknown()).safeParse(value)
+
+    if (entries.success) {
+      return entries.data.flatMap((entry) => {
+        const parsed = pendingPair.safeParse(entry)
+
+        return parsed.success ? [parsed.data] : []
+      })
+    }
+
+    const alone = keyPair.safeParse(value)
+
+    return alone.success ? [{ ...alone.data, device: deviceIdFrom(storage) }] : []
+  } catch {
+    return []
+  }
+}
+
+function savePendingRevokes(storage: KeyValueStorage, pairs: readonly PendingPair[]): void {
+  if (pairs.length === 0) {
+    storage.remove(PENDING_REVOKE_KEY)
+  } else {
+    storage.set(PENDING_REVOKE_KEY, JSON.stringify(pairs))
+  }
+}
+
+/**
+ * Keeps a pair to revoke after those kept before (a pair kept already stays where it is), read
+ * and written at once so a pair another tab kept meanwhile stays too. Answers the oldest pairs it
+ * dropped to keep at most `PENDING_REVOKE_LIMIT`.
+ */
+export function addPendingRevoke(
+  storage: KeyValueStorage,
+  pair: PendingPair,
+): readonly PendingPair[] {
+  const kept = pendingRevokes(storage)
+
+  if (kept.some((each) => each.refresh === pair.refresh)) {
+    return []
+  }
+
+  const next = [...kept, pair]
+  const dropped = next.slice(0, Math.max(0, next.length - PENDING_REVOKE_LIMIT))
+
+  savePendingRevokes(storage, next.slice(dropped.length))
+
+  return dropped
+}
+
+/** Forgets the pair whose refresh key is `refresh`; the others stay, those another tab kept included. */
+export function forgetPendingRevoke(storage: KeyValueStorage, refresh: string): void {
+  savePendingRevokes(
+    storage,
+    pendingRevokes(storage).filter((pair) => pair.refresh !== refresh),
+  )
 }
 
 const SIGNING_OUT_KEY = 'perch.session.signing-out'
@@ -316,7 +406,7 @@ export function forgetSigningOut(storage: KeyValueStorage): void {
 
 /**
  * Forgets who is signed in and the keys; the other tabs hear the identity go. The inventory of
- * the organisation databases stays: the databases may stay too.
+ * the organisation databases stays: the databases may stay too. So do the pairs left to revoke.
  */
 export function forgetDevice(storage: KeyValueStorage): void {
   storage.remove(ACCESS_KEY)

@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { gatewayConfig, httpRpcUrl } from './config'
+import { gatewayConfig } from './config'
+
+/** A signing key of the shortest length the gateway takes. Test-only. */
+const key = 'config-spec-signing-key-'.padEnd(64, '0')
 
 const env = {
   GATEWAY_PORT: '8080',
   SURREAL_URL: 'ws://127.0.0.1:8000/rpc',
   GATEWAY_SURREAL_USER: 'gateway',
   GATEWAY_SURREAL_PASS: 'gateway-pass',
+  GATEWAY_JWT_KEY: key,
   PATH: '/usr/bin',
 }
 
@@ -17,6 +21,7 @@ describe('gatewayConfig', () => {
       SURREAL_URL: 'ws://127.0.0.1:8000/rpc',
       GATEWAY_SURREAL_USER: 'gateway',
       GATEWAY_SURREAL_PASS: 'gateway-pass',
+      GATEWAY_JWT_KEY: key,
     })
   })
 
@@ -54,9 +59,26 @@ describe('gatewayConfig.SURREAL_URL', () => {
   })
 })
 
-describe('httpRpcUrl', () => {
-  it('turns the WebSocket address of the database into its HTTP RPC endpoint', () => {
-    expect(httpRpcUrl('ws://127.0.0.1:8000/rpc')).toBe('http://127.0.0.1:8000/rpc')
-    expect(httpRpcUrl('wss://db.example.test')).toBe('https://db.example.test/rpc')
+describe('gatewayConfig.GATEWAY_JWT_KEY', () => {
+  it('is required, and its issue names it', () => {
+    const { GATEWAY_JWT_KEY: _missing, ...partial } = env
+    const parsed = gatewayConfig.safeParse(partial)
+
+    expect(parsed.error?.issues.map((issue) => issue.path.join('.'))).toEqual(['GATEWAY_JWT_KEY'])
+  })
+
+  it('refuses a key of 63 characters, naming the rule and never the value', () => {
+    const short = 'config-spec-short-key-'.padEnd(63, '1')
+    const parsed = gatewayConfig.safeParse({ ...env, GATEWAY_JWT_KEY: short })
+
+    expect(parsed.error?.issues.map(({ path, message }) => [path.join('.'), message])).toEqual([
+      ['GATEWAY_JWT_KEY', 'must be at least 64 characters, such as openssl rand -hex 64'],
+    ])
+    expect(parsed.error?.message).not.toContain(short)
+    expect(JSON.stringify(parsed.error?.issues)).not.toContain(short)
+  })
+
+  it('takes a key of 64 characters', () => {
+    expect(gatewayConfig.parse(env).GATEWAY_JWT_KEY).toBe(key)
   })
 })

@@ -11,7 +11,7 @@
  * still hold, though the list it follows may be older.
  */
 
-import { errAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
@@ -24,26 +24,25 @@ import {
 import type { IdentityId } from '@workspace/ids'
 import { type Clock, privateRegionId, type ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
-import {
-  type ChannelState,
-  createSyncEngine,
-  type Leadership,
-  type SyncEngine,
-  type SyncHint,
-  type SyncHints,
-  type SyncTransport,
+import type {
+  Leadership,
+  SyncEngine,
+  SyncHint,
+  SyncHints,
+  SyncTransport,
 } from '@workspace/replica/sync'
 
+import { FOLLOWING, LeadingEngine, type SyncState, type Visibility } from './leading-engine'
+import { RegionReloads } from './region-reloads'
+import {
+  keysOf,
+  RetainedTenantDatabases,
+  type TenantDatabaseInventory,
+} from './retained-tenant-databases'
 import { RoutingShapeRunner, RoutingWritePath } from './routing'
 import { openRegionSpace, type RegionSpace, TenantSpaces } from './tenant-space'
 
-export type Visibility = 'visible' | 'hidden'
-
-/** Whether this tab leads the browser's sync, and the state of its channel to the gateway. */
-export interface SyncState {
-  readonly leader: boolean
-  readonly channel: ChannelState
-}
+export type { SyncState, Visibility } from './leading-engine'
 
 export interface IdentitySpace {
   readonly identity: AuthUser
@@ -81,8 +80,17 @@ export interface IdentitySpace {
   tenants(): readonly string[]
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
-  /** Has the leading tab's engine connect again at once; nothing happens while another tab leads. */
-  reconnectSync(): void
+  /**
+   * Has the leading tab's engine ask the gateway for new keys over its channel. Nothing happens
+   * while another tab leads, or while the channel is down: the hello that brings it up renews.
+   */
+  renewSync(): void
+  /**
+   * Has the leading tab's engine sign the device out (`SyncEngine.signOut`); `offline` when this
+   * tab runs no engine. A change of memberships meanwhile replaces that engine, which ends the
+   * sign-out `offline`.
+   */
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Has this tab sync again after a sign-out that asked the gateway in vain, which stopped the
    * engine's channel: as on a change of leader, a new engine over a new channel replaces it
@@ -100,22 +108,7 @@ export interface IdentitySpace {
   destroy(): Promise<void>
 }
 
-/**
- * The organisation databases this device may hold for an identity, kept across its sessions
- * and shared by its tabs, with the memberships saved for it. Every writer saves the memberships
- * before it counts the databases of a list: a database counted for a current membership is in
- * the memberships read after the count.
- */
-export interface TenantDatabaseInventory {
-  /** Their keys, those of databases not open included. */
-  keys(): readonly string[]
-  /** Counts the databases of `keys`, before they open. */
-  add(keys: readonly string[]): void
-  /** Stops counting the databases of `keys`, once they are deleted. */
-  drop(keys: readonly string[]): void
-  /** The memberships saved for the identity on this device now, by whichever of its tabs heard them last. */
-  savedMemberships(): readonly Membership[]
-}
+export type { TenantDatabaseInventory } from './retained-tenant-databases'
 
 export interface IdentitySpaceOptions {
   readonly identity: AuthUser
@@ -140,22 +133,16 @@ export interface IdentitySpaceOptions {
   readonly onError: (error: DataError) => void
 }
 
-const FOLLOWING: SyncState = { leader: false, channel: 'down' }
-
-/** The keys of the organisations of `memberships`. */
-function keysOf(memberships: readonly Membership[]): ReadonlySet<string> {
-  return new Set(memberships.map(({ tenant }) => tenant.key))
-}
-
 class Space implements IdentitySpace {
   readonly runner: ShapeRunnerPort
   readonly writePath: WritePathPort
   readonly #own: RegionSpace
   readonly #tenants: TenantSpaces
+  readonly #retained: RetainedTenantDatabases
+  readonly #reloads: RegionReloads
   readonly #options: IdentitySpaceOptions
   readonly #listening: Array<() => void> = []
-  #engine: SyncEngine | undefined
-  #visibility: Visibility = 'visible'
+  readonly #leading: LeadingEngine
   #closing: Promise<void> | undefined
   /** The change of memberships under way, if any; the next one waits for it. It never rejects. */
   #changing: Promise<void> = Promise.resolve()
@@ -164,6 +151,18 @@ class Space implements IdentitySpace {
     this.#own = own
     this.#tenants = tenants
     this.#options = options
+    this.#retained = new RetainedTenantDatabases({
+      identity: options.identity.id,
+      inventory: options.tenantDatabases,
+      deleteTenantLocal: options.deleteTenantLocal,
+      open: () => tenants.keys(),
+      onError: options.onError,
+    })
+    this.#reloads = new RegionReloads({
+      spaces: () => this.#spaces(),
+      hints: options.hints,
+      onError: options.onError,
+    })
     this.runner = new RoutingShapeRunner(
       own.runner,
       () => tenants.currentSpace()?.runner,
@@ -174,12 +173,29 @@ class Space implements IdentitySpace {
     const path = new RoutingWritePath(own.writePath, () => tenants.currentSpace()?.writePath)
 
     this.writePath = {
-      run: (command, params, meta) => path.run(command, params, meta).andTee(() => this.#wrote()),
+      run: (command, params, meta) =>
+        path
+          .run(command, params, meta)
+          .andTee(() => this.#wrote())
+          .orTee((error) => this.#stale(error)),
     }
+    this.#leading = new LeadingEngine({
+      regions: () => this.#spaces().map((space) => space.region),
+      transport: options.transport,
+      clock: options.clock,
+      actor: options.identity.id,
+      hints: options.hints,
+      replaceRegion: (region, how) => this.#reloads.replace(region, how),
+      onState: options.onState,
+      onError: (error) => {
+        options.onError(error)
+        this.#stale(error)
+      },
+    })
     this.#listening.push(options.hints.on((hint) => this.#hint(hint)))
     this.#followLeadership(options.leadership)
     // The databases the device holds of organisations the identity left meanwhile go first.
-    this.#changing = this.#deleteRetained(keysOf(options.memberships))
+    this.#changing = this.#retained.deleteRetained(keysOf(options.memberships))
   }
 
   get identity(): AuthUser {
@@ -187,16 +203,25 @@ class Space implements IdentitySpace {
   }
 
   get sync(): SyncEngine | undefined {
-    return this.#engine
+    return this.#leading.current
   }
 
   flush(): ResultAsync<void, DataError> {
     return ResultAsync.combine(this.#spaces().map((space) => space.flush())).map(() => undefined)
   }
 
+  /**
+   * Whether the space holds changes not sent yet, once a change of memberships under way ended. A
+   * database the device holds for a membership but could not open counts: nobody can read what it
+   * holds.
+   */
   unsent(): ResultAsync<boolean, DataError> {
-    return ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
-      regions.some(Boolean),
+    return ResultAsync.fromSafePromise(this.#changing).andThen(() =>
+      this.#unopened().length > 0
+        ? okAsync(true)
+        : ResultAsync.combine(this.#spaces().map((space) => space.unsent())).map((regions) =>
+            regions.some(Boolean),
+          ),
     )
   }
 
@@ -229,23 +254,24 @@ class Space implements IdentitySpace {
   }
 
   visibility(state: Visibility): void {
-    this.#visibility = state
-
-    if (this.#engine) {
-      this.#engine.visibility(state)
-    } else if (state === 'visible') {
-      this.#options.hints.post('visible')
-    }
+    this.#leading.visibility(state)
   }
 
-  reconnectSync(): void {
-    this.#engine?.reconnect()
+  renewSync(): void {
+    this.#leading.current?.renew()
+  }
+
+  /**
+   * Has the gateway sign the device out once everything is sent. While a database the device
+   * holds for a membership did not open, the gateway is not asked (`offline`), as for a region
+   * that stopped syncing: what it holds may be unsent.
+   */
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#unopened().length > 0 ? Promise.resolve('offline') : this.#leading.signOut(network)
   }
 
   resumeSync(): void {
-    if (this.#engine?.channelStopped()) {
-      this.#relead()
-    }
+    this.#leading.resume()
   }
 
   close(): Promise<void> {
@@ -258,9 +284,25 @@ class Space implements IdentitySpace {
     await this.close()
     await Promise.all([
       ...this.#spaces().map((space) => space.destroy()),
-      this.#deleteCounted(this.#options.tenantDatabases.keys()),
+      this.#retained.deleteCounted(this.#options.tenantDatabases.keys()),
     ])
     this.#options.tenantDatabases.drop(this.#tenants.keys())
+  }
+
+  /**
+   * The organisations the identity belongs to whose database the device counts but this space did
+   * not open: by the list it follows, or by a newer one another tab saved and opened from. The
+   * count is read first: a tab saves the memberships before it counts their databases.
+   */
+  #unopened(): readonly string[] {
+    const counted = this.#options.tenantDatabases.keys()
+    const belongs = new Set([
+      ...keysOf(this.#tenants.memberships()),
+      ...keysOf(this.#options.tenantDatabases.savedMemberships()),
+    ])
+    const open = new Set(this.#tenants.keys())
+
+    return counted.filter((key) => belongs.has(key) && !open.has(key))
   }
 
   /** The identity's own region first, then each organisation's. */
@@ -281,50 +323,11 @@ class Space implements IdentitySpace {
     const { changed, left } = await this.#tenants.change(next)
 
     if (changed) {
-      this.#relead()
+      this.#leading.relead()
     }
 
     this.#options.tenantDatabases.drop(await this.#tenants.delete(left))
-    await this.#deleteRetained(keys)
-  }
-
-  /**
-   * Deletes the organisation databases the device holds for the identity of organisations it no
-   * longer belongs to: neither of `keep` (the list this tab follows) nor of the memberships saved
-   * for the identity now, which another tab may have heard after this one. The count is read
-   * before the saved memberships, so a database another tab counted and opened for a newer
-   * membership is kept. Never rejects.
-   */
-  #deleteRetained(keep: ReadonlySet<string>): Promise<void> {
-    const counted = this.#options.tenantDatabases.keys()
-    const saved = keysOf(this.#options.tenantDatabases.savedMemberships())
-
-    return this.#deleteCounted(counted.filter((key) => !keep.has(key) && !saved.has(key)))
-  }
-
-  /**
-   * Deletes the counted databases of `keys` that are not open, and stops counting those
-   * deleted; one that cannot be deleted is reported and stays counted, for a later change or
-   * sign-out to try again. Never rejects.
-   */
-  async #deleteCounted(keys: readonly string[]): Promise<void> {
-    const open = new Set(this.#tenants.keys())
-    const deleted = await Promise.all(
-      keys
-        .filter((key) => !open.has(key))
-        .map((key) =>
-          this.#options.deleteTenantLocal(this.identity.id, key).match(
-            () => [key],
-            (error) => {
-              this.#options.onError(error)
-
-              return []
-            },
-          ),
-        ),
-    )
-
-    this.#options.tenantDatabases.drop(deleted.flat())
+    await this.#retained.deleteRetained(keys)
   }
 
   #followLeadership(leadership: Leadership | undefined): void {
@@ -340,72 +343,20 @@ class Space implements IdentitySpace {
       return
     }
 
-    this.#listening.push(leadership.onChange((leader) => (leader ? this.#lead() : this.#follow())))
+    this.#listening.push(
+      leadership.onChange((leader) => (leader ? this.#leading.lead() : this.#leading.follow())),
+    )
 
     if (leadership.isLeader()) {
-      this.#lead()
+      this.#leading.lead()
     } else {
       this.#options.onState(FOLLOWING)
     }
   }
 
-  /** This tab starts to lead: a new engine over a new channel (an engine never starts twice). */
-  #lead(): void {
-    if (this.#engine || this.#closing) {
-      return
-    }
-
-    const engine = createSyncEngine({
-      regions: this.#spaces().map((space) => space.region),
-      transport: this.#options.transport(),
-      clock: this.#options.clock,
-      actor: this.identity.id,
-      onState: ({ channel }) => {
-        if (this.#engine === engine) {
-          this.#options.onState({ leader: true, channel })
-        }
-      },
-      onSettled: () => this.#options.hints.post('settled'),
-      // Work a stopped engine still had under way fails once the database closes under it;
-      // that is not reported: what it did not store, the next leader pulls again.
-      onError: (error) => {
-        if (this.#engine === engine) {
-          this.#options.onError(error)
-        }
-      },
-    })
-
-    this.#engine = engine
-    engine.visibility(this.#visibility)
-    this.#options.onState({ leader: true, channel: 'down' })
-    engine.start()
-  }
-
-  /** A leading tab replaces its engine with a new one over a new channel; a follower has none. */
-  #relead(): void {
-    const engine = this.#engine
-
-    if (!engine) {
-      return
-    }
-
-    this.#engine = undefined
-    engine.stop()
-    this.#lead()
-  }
-
-  /** Another tab leads now: this one stops syncing. */
-  #follow(): void {
-    const engine = this.#engine
-
-    this.#engine = undefined
-    engine?.stop()
-    this.#options.onState(FOLLOWING)
-  }
-
   /** A write of this tab is durable: the leader drains it, the other tabs read it from the log. */
   #wrote(): void {
-    this.#engine?.localWrite()
+    this.#leading.current?.localWrite()
     this.#options.hints.post('journal')
   }
 
@@ -414,25 +365,36 @@ class Space implements IdentitySpace {
       // Another tab wrote to the log: read it, and drain it when leading.
       case 'journal':
         this.#catchUp()
-        this.#engine?.localWrite()
+        this.#leading.current?.localWrite()
         break
       // The leader imported from the gateway into the log.
       case 'settled':
         this.#catchUp()
         break
       case 'visible':
-        this.#engine?.visibility('visible')
+        this.#leading.current?.visibility('visible')
         break
       case 'kick':
-        this.#engine?.localWrite()
+        this.#leading.current?.localWrite()
         break
       // Another tab began a sign-out: the session holds this tab's writes back.
       case 'sign-out':
         break
-      // Another tab needs new keys: the gateway renews them when the leader connects again.
+      // Another tab needs new keys: the leader asks the gateway for them over its channel.
       case 'renew':
-        this.#engine?.reconnect()
+        this.#leading.current?.renew()
         break
+      // Another tab reset a region: open it again from the database.
+      case 'reset':
+        void this.#reloads.reloadStale()
+        break
+    }
+  }
+
+  /** A region was reset under this tab (by another one, which may not have said so): open it again. */
+  #stale(error: DataError): void {
+    if (error.code === 'data:REGION_STALE' && !this.#closing) {
+      void this.#reloads.reloadStale()
     }
   }
 
@@ -444,7 +406,10 @@ class Space implements IdentitySpace {
     for (const space of this.#spaces()) {
       void space.catchUp().match(
         () => undefined,
-        (error) => this.#options.onError(error),
+        (error) => {
+          this.#options.onError(error)
+          this.#stale(error)
+        },
       )
     }
   }
@@ -454,10 +419,7 @@ class Space implements IdentitySpace {
       stop()
     }
 
-    const engine = this.#engine
-
-    this.#engine = undefined
-    engine?.stop()
+    this.#leading.stop()
     this.#options.leadership?.stop()
     this.#options.hints.close()
     // A change of memberships under way ends first: the databases it opens close with the others.
@@ -475,9 +437,10 @@ function abandon(options: IdentitySpaceOptions): void {
 
 /**
  * Opens the identity's database and its private region `identity:<id>`, and the database and
- * region `tenant:<key>` of each organisation it belongs to, projects each region into its
- * database and syncs them while this tab leads. The space owns the leadership and the hints it
- * is given: it stops them when it closes, or at once when it cannot open.
+ * region `tenant:<key>` of each organisation it belongs to (one that does not open is reported and
+ * left out), projects each region into its database and syncs them while this tab leads. The space
+ * owns the leadership and the hints it is given: it stops them when it closes, or at once when
+ * its own database cannot open.
  */
 export function openIdentitySpace(
   options: IdentitySpaceOptions,
@@ -508,12 +471,6 @@ export function openIdentitySpace(
         },
         options.memberships,
         options.tenant,
-      )
-        .map((tenants): IdentitySpace => new Space(own, tenants, options))
-        .orElse((error) => {
-          abandon(options)
-
-          return ResultAsync.fromSafePromise(own.close()).andThen(() => errAsync(error))
-        }),
+      ).map((tenants): IdentitySpace => new Space(own, tenants, options)),
     )
 }

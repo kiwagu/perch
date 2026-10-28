@@ -9,10 +9,13 @@ import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { COMMANDS } from '../platform/commands.port'
+import { DEVICES } from '../platform/devices.port'
 import { ORGANISATIONS } from '../platform/organisations.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
+import { devicesApi } from './devices-api'
+import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
 import { type MemoryStorage, memoryStorage, saveDevice } from './storage'
@@ -33,7 +36,7 @@ async function boot(
   storage: MemoryStorage,
   steps: BootStep[],
   failures: DataError[],
-  openLocal?: AppRootOptions['openLocal'],
+  overrides: Partial<AppRootOptions> = {},
 ) {
   const server = (await openTestDb())._unsafeUnwrap()
   const clock = manualClock()
@@ -46,18 +49,24 @@ async function boot(
   })
 
   const result = await createAppRoot({
-    openLocal:
-      openLocal ??
-      ((identity) => {
-        opened.push(identity)
+    openLocal: (identity) => {
+      opened.push(identity)
 
-        return openTestDb()
-      }),
+      return openTestDb()
+    },
+    deleteLocal: () => okAsync(undefined),
     openTenantLocal: () => openTestDb({ schema: readSchema('tenant'), database: 'tenant' }),
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
+    deviceLabel: 'Chrome on Linux',
+    online: () => false,
     organisationsApi: (deps) =>
       organisationsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
+    devicesApi: (deps) =>
+      devicesApi('/backend', {
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),
@@ -77,6 +86,7 @@ async function boot(
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),
     onSyncState: () => {},
+    ...overrides,
   })
 
   return { result, opened }
@@ -103,6 +113,7 @@ describe('createAppRoot', () => {
     expect(services.container.get(SESSION)).toBe(services.session)
     expect(services.container.get(COMMANDS)).toBe(services.commands)
     expect(services.container.get(ORGANISATIONS)).toBe(services.organisations)
+    expect(services.container.get(DEVICES)).toBe(services.devices)
     expect(services.session.current()).toBeUndefined()
     expect(failures).toEqual([])
   })
@@ -130,11 +141,79 @@ describe('createAppRoot', () => {
 
     saveDevice(storage, ann)
 
-    const { result } = await boot(storage, steps, [], () =>
-      errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
-    )
+    const { result } = await boot(storage, steps, [], {
+      openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
+    })
 
-    expect(result._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(result._unsafeUnwrapErr()).toMatchObject({
+      kind: 'open-failed',
+      error: { code: 'data:OPEN_FAILED' },
+    })
     expect(steps).toEqual(['restore-session', 'open-db'])
+  })
+
+  it('offers to sign out on this device when the saved identity does not open, which forgets it and deletes its database', async () => {
+    const storage = memoryStorage()
+    const deleted: IdentityId[] = []
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [], {
+      openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
+      deleteLocal: (identity) => {
+        deleted.push(identity)
+
+        return okAsync(undefined)
+      },
+    })
+    const failure = result._unsafeUnwrapErr()
+    const signOutHere =
+      failure.kind === 'open-failed' ? failure.signOutHere : expect.unreachable('open-failed')
+
+    expect((await (signOutHere ?? expect.unreachable('offered'))()).isOk()).toBe(true)
+    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(deleted).toEqual([ann.identity.id])
+  })
+
+  it('names this device to the gateway: at sign-up with the label it is given, and on the organisation and device routes', async () => {
+    const storage = memoryStorage()
+    const auth = fakeGatewayAuth()
+    let deps: BearerDeps | undefined
+    let devicesDeps: BearerDeps | undefined
+    const { result } = await boot(storage, [], [], {
+      gatewayAuth: auth,
+      deviceLabel: 'Safari on iPhone',
+      organisationsApi: (given) => {
+        deps = given
+
+        return organisationsApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+      devicesApi: (given) => {
+        devicesDeps = given
+
+        return devicesApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+    })
+
+    services = result._unsafeUnwrap()
+
+    const email = 'ann@example.test'
+
+    expect((await services.session.signUp({ email, password: 'pass-word-1' })).isOk()).toBe(true)
+
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+
+    expect(auth.requests).toEqual([
+      { kind: 'sign-up', email, device: { id, label: 'Safari on iPhone' } },
+    ])
+    expect(deps?.device()).toBe(id)
+    expect(devicesDeps?.device()).toBe(id)
+    expect(devicesDeps?.token()).toBe(deps?.token())
   })
 })

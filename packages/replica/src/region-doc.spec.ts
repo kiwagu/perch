@@ -18,7 +18,11 @@ import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import coversStatement from './__fixtures__/snapshot-covers.surql'
 import { RegionDoc, type RegionRef } from './region-doc'
+import { replaceRegionDoc } from './region-replacement'
+import { RegionStore } from './region-store'
 import appendStatement from './surql/replica-append.surql'
+import loadStatement from './surql/replica-load.surql'
+import saveSnapshotStatement from './surql/replica-save-snapshot.surql'
 import { LoroWritePath } from './write-path'
 
 const ref: RegionRef = { kind: 'private', id: `identity:${identityId}` }
@@ -200,6 +204,21 @@ describe('RegionDoc persistence', () => {
     expect(reopened.persistedSeq()).toBe(3)
     expect(await counts()).toEqual({ snapshots: 1, updates: 1, outbox: 3 })
   })
+
+  // The gateway binds a peer to the identity of its first batch: honest documents never share one.
+  it('writes as a Loro peer of its own at each opening', async () => {
+    const first = await open()
+    const firstPeer = first.doc.peerIdStr
+
+    first.close()
+
+    const second = await open()
+
+    expect(second.doc.peerIdStr).not.toBe(firstPeer)
+    expect(RegionDoc.inMemory('tenant').doc.peerIdStr).not.toBe(
+      RegionDoc.inMemory('tenant').doc.peerIdStr,
+    )
+  })
 })
 
 describe('RegionDoc sync state', () => {
@@ -375,6 +394,110 @@ describe('RegionDoc sync state', () => {
     expect(await counts()).toEqual({ snapshots: 1, updates: 0, outbox: 2 })
   })
 
+  it('hands a tab that read less than a compaction covers the snapshot first, then the rows after it', async () => {
+    const lagging = await open()
+    const first = await open()
+    const second = await open()
+    const thirdKey = 'profile/prf_0000000000000002.01m52pexcp'
+    const seen: string[] = []
+
+    writeName(first, 'Ann')
+    expect((await first.flush()).isOk()).toBe(true)
+    writeName(second, 'Beto', otherKey)
+    expect((await second.flush()).isOk()).toBe(true)
+    // The rows the lagging tab has not read yet go into the snapshot.
+    expect((await second.compact()).isOk()).toBe(true)
+    writeName(first, 'Cleo', thirdKey)
+    expect((await first.flush()).isOk()).toBe(true)
+    lagging.doc.subscribe((batch) => seen.push(batch.by))
+
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(lagging.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect(lagging.recordJson(thirdKey)).toMatchObject({ name: 'Cleo' })
+    // A projector follows imports only.
+    expect(new Set(seen)).toEqual(new Set(['import']))
+  })
+
+  it('keeps the newer snapshot when an older compaction saves after it', async () => {
+    let reached: () => void = () => {}
+    let release: () => void = () => {}
+    const saving = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // The tab that led the sync until now: its snapshot's save is held until another tab compacted further.
+    const late = interceptQueries(local, (text) => {
+      if (text === saveSnapshotStatement) {
+        reached()
+
+        return released
+      }
+    })
+    const lagging = await open()
+    const former = (await RegionDoc.open(late, ref))._unsafeUnwrap()
+    const leader = await open()
+
+    writeName(former, 'Ann')
+    expect((await former.flush()).isOk()).toBe(true)
+
+    const compacting = former.compact()
+
+    // The former leader's snapshot covers row 1; the leader's covers rows 1 and 2.
+    await saving
+    writeName(leader, 'Beto', otherKey)
+    expect((await leader.flush()).isOk()).toBe(true)
+    expect((await leader.compact()).isOk()).toBe(true)
+    release()
+    expect((await compacting).isOk()).toBe(true)
+
+    const reopened = await open()
+
+    expect(reopened.recordJson(key)).toMatchObject({ name: 'Ann' })
+    expect(reopened.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    expect((await lagging.catchUpLocal()).isOk()).toBe(true)
+    expect(lagging.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+    // Its own save skipped, the former leader still reads past its snapshot through the newer one.
+    expect((await former.catchUpLocal()).isOk()).toBe(true)
+    expect(former.recordJson(otherKey)).toMatchObject({ name: 'Beto' })
+  })
+
+  it('opens a compacted region at what its snapshot covers', async () => {
+    const first = await open()
+
+    writeName(first, 'Ann')
+    writeName(first, 'Ana')
+    expect((await first.flush()).isOk()).toBe(true)
+    expect((await first.compact()).isOk()).toBe(true)
+
+    expect((await open()).persistedSeq()).toBe(2)
+  })
+
+  it('compacts once more rows than the limit built up past its snapshot, and not before', async () => {
+    const region = await open()
+
+    for (const name of ['Ann', 'Ana', 'Anna']) {
+      writeName(region, name)
+    }
+
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
+
+    writeName(region, 'Annie')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(true)
+    expect(await counts()).toMatchObject({ snapshots: 1, updates: 0 })
+
+    // Counted from the new snapshot on.
+    writeName(region, 'Anny')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.compactIfLong(3))._unsafeUnwrap()).toBe(false)
+  })
+
   it('moves the cursor forward only, and keeps it across a reopen', async () => {
     const region = await open()
 
@@ -413,5 +536,120 @@ describe('RegionDoc sync state', () => {
     expect((await region.acknowledge(rows.slice(2))).isOk()).toBe(true)
 
     expect((await region.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([1, 2])
+  })
+})
+
+describe('a region reset on the device', () => {
+  const reset = async (region: RegionDoc) =>
+    (await replaceRegionDoc(local, region, 'reset'))._unsafeUnwrap()
+
+  it("drops the region's snapshot, log, outbox and cursor, and numbers new rows after the old ones", async () => {
+    const region = await open()
+
+    writeName(region, 'Ann')
+    writeName(region, 'Ana')
+    expect((await region.flush()).isOk()).toBe(true)
+    expect((await region.importRemote(updateWithMissingHistory().fill, 7)).isOk()).toBe(true)
+    expect((await region.compact()).isOk()).toBe(true)
+
+    const fresh = await reset(region)
+
+    expect(fresh.recordJson(key)).toBeUndefined()
+    expect(fresh.pulled()).toBe(0)
+    expect((await fresh.outbox(10))._unsafeUnwrap()).toEqual([])
+    expect(await counts()).toEqual({ snapshots: 0, updates: 0, outbox: 0 })
+
+    writeName(fresh, 'Bea')
+    expect((await fresh.flush()).isOk()).toBe(true)
+    expect((await fresh.outbox(10))._unsafeUnwrap().map((row) => row.seq)).toEqual([4])
+  })
+
+  it('refuses the writes of a document opened before the reset', async () => {
+    const old = await open()
+
+    await reset(await open())
+    writeName(old, 'Late')
+
+    expect((await old.flush())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await (await open()).outbox(10))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('opens a region reset while it loads as stale, never under the new generation', async () => {
+    const before = await open()
+
+    writeName(before, 'Ann')
+    expect((await before.flush()).isOk()).toBe(true)
+
+    // Another tab resets the region while this one reads it.
+    let reset: Promise<void> | undefined
+    const resetting = interceptQueries(local, (text) => {
+      if (text === loadStatement) {
+        reset ??= RegionStore.reset(local, ref.id).match(
+          () => undefined,
+          (error) => expect.unreachable(error.message),
+        )
+
+        return reset
+      }
+
+      return undefined
+    })
+    const opened = (await RegionDoc.open(resetting, ref))._unsafeUnwrap()
+
+    expect(reset).toBeDefined()
+    expect((await opened.stale())._unsafeUnwrap()).toBe(true)
+    writeName(opened, 'Late')
+    expect((await opened.flush())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+  })
+
+  it('refuses its catch-up and imports nothing', async () => {
+    const old = await open()
+    const fresh = await reset(await open())
+
+    writeName(fresh, 'New')
+    expect((await fresh.flush()).isOk()).toBe(true)
+
+    expect((await old.catchUpLocal())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect(old.recordJson(key)).toBeUndefined()
+  })
+
+  it('refuses its server imports, its cursor and its compaction', async () => {
+    const old = await open()
+
+    await reset(await open())
+
+    expect(
+      (await old.importRemote(updateWithMissingHistory().fill, 5))._unsafeUnwrapErr().code,
+    ).toBe('data:REGION_STALE')
+    expect((await old.advanceCursor(5))._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await old.compact())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
+    expect((await open()).pulled()).toBe(0)
+  })
+
+  it('tells a document of an earlier generation', async () => {
+    const old = await open()
+    const fresh = await reset(await open())
+
+    expect((await old.stale())._unsafeUnwrap()).toBe(true)
+    expect((await fresh.stale())._unsafeUnwrap()).toBe(false)
+    expect((await RegionDoc.inMemory('private', ref.id).stale())._unsafeUnwrap()).toBe(false)
+  })
+
+  it('leaves the other regions of the database alone', async () => {
+    const other: RegionRef = { kind: 'private', id: 'identity:idn_0000000000000001.01m52pexcp' }
+    const mine = await open()
+    const theirs = (await RegionDoc.open(local, other))._unsafeUnwrap()
+
+    writeName(mine, 'Ann')
+    writeName(theirs, 'Bob')
+    expect((await mine.flush()).isOk()).toBe(true)
+    expect((await theirs.flush()).isOk()).toBe(true)
+
+    await reset(mine)
+
+    const again = (await RegionDoc.open(local, other))._unsafeUnwrap()
+
+    expect(again.recordJson(key)).toMatchObject({ name: 'Bob' })
+    expect((await again.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 })

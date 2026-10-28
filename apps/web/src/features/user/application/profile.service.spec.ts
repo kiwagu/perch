@@ -7,7 +7,7 @@ import { openTestSession, type TestSession } from '../../../composition/__fixtur
 import type { SessionService } from '../../../composition/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
-import { localeChange, ProfileService } from './profile.service'
+import { ProfileService } from './profile.service'
 
 let opened: TestSession
 let session: SessionService
@@ -82,32 +82,13 @@ describe('ProfileService', () => {
     expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]?.bio).toBe('Hello')
   })
 
-  it('keeps the biography and the chosen language', async () => {
+  it('keeps the biography', async () => {
     expect((await service.updateBio({ id: profileId, bio: 'Hello' })).isOk()).toBe(true)
-    expect((await service.updateLocale({ id: profileId, locale: 'es' })).isOk()).toBe(true)
 
     expect((await session.flush()).isOk()).toBe(true)
 
     expect((await service.read({ identity: me.id }))._unsafeUnwrap()[0]).toMatchObject({
       bio: 'Hello',
-      locale: 'es',
     })
-  })
-})
-
-describe('localeChange', () => {
-  it('applies the stored language when the profile first arrives', () => {
-    expect(localeChange({ stored: 'es', current: 'en', first: true })).toEqual({ apply: 'es' })
-    expect(localeChange({ stored: 'en', current: 'en', first: true })).toBeUndefined()
-  })
-
-  it('stores the current language when the profile has none it can use', () => {
-    expect(localeChange({ stored: undefined, current: 'en', first: true })).toEqual({ save: 'en' })
-    expect(localeChange({ stored: 'fr', current: 'es', first: true })).toEqual({ save: 'es' })
-  })
-
-  it('stores a language the user chose later', () => {
-    expect(localeChange({ stored: 'es', current: 'en', first: false })).toEqual({ save: 'en' })
-    expect(localeChange({ stored: 'en', current: 'en', first: false })).toBeUndefined()
   })
 })

@@ -27,7 +27,13 @@ export interface SignInInput {
   readonly password: string
 }
 
-/** Accounts and the signed-in session. Sign-in calls are not SurrealQL statements, so no `.surql` declares them. */
+/**
+ * Accounts and the signed-in session. Sign-in calls are not SurrealQL statements, so no `.surql`
+ * declares them. Only a refusal by the database fails with an auth code
+ * (`data:INVALID_CREDENTIALS`, `data:SIGN_UP_REJECTED`, `data:AUTH_FAILED`); a call it could not
+ * judge (its session could not be opened, the database could not be reached, or the auth object
+ * is closed) fails with `data:QUERY_FAILED`, and the same keys may work once it answers again.
+ */
 export interface AuthPort {
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError>
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>

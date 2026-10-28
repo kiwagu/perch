@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 /**
  * The e2e launcher: builds what the tests depend on through turbo, the web app's
- * production build into apps/web/dist included (a run never meets a stale build),
+ * production build into apps/web/dist included (a run never meets a stale build), with the
+ * page helper `window.__perch.ui` in it (PERCH_UI_HOOKS=1) and the UI manifest beside it,
  * starts the mcproc `e2e` profile (the SurrealDB stand, the `gateway-e2e` gateway and
  * the `caddy-e2e` front, which serves that build to the tests) with `--reload`, so the
  * apps already online restart too (a run never meets a stale stand either: the database
@@ -25,8 +26,13 @@ const e2eDir = fileURLToPath(new URL('..', import.meta.url))
 const webIndex = fileURLToPath(new URL('../../../apps/web/dist/index.html', import.meta.url))
 const args = process.argv.slice(2)
 
-function run(command: string, commandArgs: readonly string[], cwd = root): number {
-  const result = spawnSync(command, [...commandArgs], { cwd, stdio: 'inherit' })
+function run(
+  command: string,
+  commandArgs: readonly string[],
+  cwd = root,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const result = spawnSync(command, [...commandArgs], { cwd, stdio: 'inherit', env })
 
   if (result.error) {
     console.error(`run-e2e: ${command} could not start: ${result.error.message}`)
@@ -40,15 +46,15 @@ function run(command: string, commandArgs: readonly string[], cwd = root): numbe
 function main(): number {
   const mcproc = (...rest: string[]) => run('mcproc', ['--project', root, ...rest])
 
-  // The tests' dependencies and, named on its own, the web app the front serves.
+  // The tests' dependencies and, named on its own, the web app the front serves, built with
+  // the page helper `window.__perch.ui` that the tests call (PERCH_UI_HOOKS=1).
   const built =
-    run('bunx', [
-      'turbo',
-      'run',
-      'build',
-      '--filter=@workspace/e2e^...',
-      '--filter=@workspace/web...',
-    ]) === 0
+    run(
+      'bunx',
+      ['turbo', 'run', 'build', '--filter=@workspace/e2e^...', '--filter=@workspace/web...'],
+      root,
+      { ...process.env, PERCH_UI_HOOKS: '1' },
+    ) === 0
 
   if (!built) {
     console.error('run-e2e: the build failed')

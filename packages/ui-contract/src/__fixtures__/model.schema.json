@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sample data model",
+  "$defs": {
+    "thing": {
+      "type": "object",
+      "description": "A thing every member of the organisation shares.",
+      "x-perch": {
+        "table": "thing",
+        "region": "tenant",
+        "id": "thg",
+        "owner": "author",
+        "can": { "member": { "create": "any", "update": "own" } },
+        "actions": {
+          "createThing": {
+            "description": "Adds a thing.",
+            "params": { "id": "$id", "title": "title" }
+          },
+          "updateThing": { "params": { "id": "$id", "title": "title" } }
+        },
+        "unique": [["title"]]
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The thing's id.",
+          "x-perch": { "readonly": true }
+        },
+        "author": { "type": "string", "x-perch": { "record": "member", "readonly": true } },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "x-perch": { "crdt": "text" }
+        },
+        "size": { "enum": ["small", "large"], "x-perch": { "crdt": "none" } },
+        "created_at": { "type": "string", "format": "date-time", "x-perch": { "readonly": true } }
+      },
+      "required": ["id", "author", "title", "created_at"],
+      "additionalProperties": false
+    }
+  }
+}

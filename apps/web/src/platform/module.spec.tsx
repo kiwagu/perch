@@ -41,10 +41,13 @@ function TwoReads() {
   return <p>{first === second ? 'same' : 'different'}</p>
 }
 
-function Profile(props: { readonly id: string | null }) {
+function Profile(props: { readonly id: string | null; readonly renders?: string[] }) {
   const { tree, status } = useShape(profileShape, props.id === null ? null : { id: props.id })
+  const shown = `${status}:${tree?.name ?? '-'}`
 
-  return <p>{`${status}:${tree?.name ?? '-'}`}</p>
+  props.renders?.push(`${props.id ?? 'none'} ${shown}`)
+
+  return <p>{shown}</p>
 }
 
 describe('ModuleScope', () => {
@@ -81,6 +84,41 @@ describe('useShape', () => {
 
     view.unmount()
 
+    expect(runner.watching(profileShape)).toBe(0)
+  })
+
+  it('gives out no tree read for other parameters, from the render they change in', () => {
+    const runner = new FakeShapeRunner()
+    const provided = services(runner)
+    const renders: string[] = []
+    const view = render(
+      <ServicesProvider services={provided}>
+        <Profile id="prf_1" renders={renders} />
+      </ServicesProvider>,
+    )
+
+    act(() => {
+      runner.set(profileShape, { name: 'Ann' })
+    })
+    view.rerender(
+      <ServicesProvider services={provided}>
+        <Profile id="prf_2" renders={renders} />
+      </ServicesProvider>,
+    )
+
+    // The fake runner pushes the tree it holds to any watcher, so prf_2 is shown Ann once read.
+    expect(renders.find((shown) => shown.startsWith('prf_2'))).toBe('prf_2 loading:-')
+    expect(runner.lastParams(profileShape)).toEqual({ id: 'prf_2' })
+
+    view.rerender(
+      <ServicesProvider services={provided}>
+        <Profile id={null} renders={renders} />
+      </ServicesProvider>,
+    )
+
+    expect(new Set(renders.filter((shown) => shown.startsWith('none')))).toEqual(
+      new Set(['none idle:-']),
+    )
     expect(runner.watching(profileShape)).toBe(0)
   })
 

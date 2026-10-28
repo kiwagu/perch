@@ -1,0 +1,176 @@
+# yaml-language-server: $schema=../schemas/platform.schema.json
+version: 1
+actions:
+  sign-up:
+    description: Creates an account with its profile and its settings, and signs this device in.
+    params:
+      email:
+        type: string
+        description: The email of the new account.
+      password:
+        type: string
+        description: The password of the new account.
+      name:
+        type: string
+        description: The name of the profile, 1 to 80 characters.
+      locale:
+        type: string
+        description: The language the new account's settings start with.
+    result: the account is created with its profile and its settings, the device is signed in, the app moves to /me with code welcome
+    codes:
+      - sign-up-rejected
+      - rate-limited
+      - other-account
+      - name-required
+      - name-too-long
+      - failed
+  sign-in:
+    description: Signs this device in to an account.
+    params:
+      email:
+        type: string
+        description: The email of the account.
+      password:
+        type: string
+        description: The password of the account.
+    result: the device is signed in, the app moves to /me with code welcome
+    codes:
+      - invalid-credentials
+      - rate-limited
+      - other-account
+      - failed
+  sign-out:
+    description: Signs this device out, after sending what it can.
+    params:
+      forgetUnsent:
+        type: boolean
+        description: "Optional: sign out even though this device holds changes the server has not received; they are lost."
+    result: this device signs out, its local data goes, the app moves to /sign-in; with unsent changes and no forgetUnsent the sign-out asks first (dialog unsent-changes) and changes nothing; it waits a few seconds for the sync channel first, except when the browser says it has no network, where it answers at once
+    codes:
+      - failed
+  sign-out-everywhere:
+    description: Signs every device of the account out, this one included.
+    params: {}
+    result: every device of the account signs out, this one included; /sign-in shows signed-out-elsewhere
+    codes:
+      - device-sign-out-failed
+  devices.list:
+    description: Reads the devices of the account.
+    params: {}
+    result: "the account's devices: for each its device session id, label, last seen, when it was revoked, and whether it is the current device"
+    codes:
+      - devices-read-failed
+  devices.revoke:
+    description: Signs another device of the account out.
+    params:
+      device:
+        type: string
+        description: The device session id of that device.
+    result: that device signs out; the list is read again
+    codes:
+      - device-sign-out-failed
+  organisations.create:
+    description: Creates an organisation.
+    params:
+      key:
+        type: string
+        description: The key of the organisation, ^[a-z][a-z0-9_]{1,31}$.
+      name:
+        type: string
+        description: The name of the organisation, 1 to 80 characters.
+    result: the organisation exists with the caller as admin and becomes current
+    codes:
+      - key-invalid
+      - name-required
+      - name-too-long
+      - key-taken
+      - rate-limited
+      - failed
+  organisations.select:
+    description: Makes one of the account's organisations current on this device.
+    params:
+      key:
+        type: string
+        description: The key of an organisation the account belongs to.
+    result: the organisation becomes current on this device (no server call); the choice is kept on this browser
+    codes: []
+  organisations.members:
+    description: Reads the members of the current organisation.
+    params: {}
+    result: its members with their identity id and email
+    codes:
+      - not-admin
+      - failed
+    roles:
+      - admin
+  organisations.invite:
+    description: Adds an existing account to the current organisation by its email.
+    params:
+      email:
+        type: string
+        description: The email of an existing account.
+    result: the account becomes a member; its own devices learn it without a reload
+    codes:
+      - no-such-identity
+      - already-member
+      - not-admin
+      - rate-limited
+      - failed
+    roles:
+      - admin
+  organisations.remove:
+    description: Removes a member from the current organisation.
+    params:
+      identity:
+        type: string
+        description: The identity id of the member.
+    result: the member is removed; its devices lose the organisation without a reload
+    codes:
+      - not-admin
+      - failed
+    roles:
+      - admin
+events:
+  opened: The local data is open, and the frame renders the screen.
+  open-failed: The data of the saved account could not be opened on this device.
+  storage-blocked: The browser keeps no site data, so the app stops.
+  signed-out: The account was signed out on this device, by its own sign-out or from another device.
+  change-rejected: The server refused a change, and this device undid it.
+  changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
+toasts:
+  organisations.create: organisation-created
+  organisations.remove: member-removed
+  devices.revoke: device-signed-out
+leaving:
+  - platform.sign-out
+  - platform.sign-out-everywhere
+  - platform.organisations.select
+  - settings.updateLocale
+unsavedInput:
+  question: app-shell.leave-dialog
+  screen: question
+  actions: question
+  unload: browser
+  state: never
+  flow: never
+  elsewhere: cannot
+reserved:
+  - app-shell.status
+  - app-shell.notice-message
+  - app-shell.nav
+  - app-shell.nav.sign-in-link
+  - app-shell.nav.profile-link
+  - app-shell.nav.organisation-link
+  - app-shell.nav.devices-link
+  - app-shell.locale-select
+  - app-shell.sign-out-here-button
+  - app-shell.leave-dialog
+  - app-shell.toast
+  - app-shell.confirmation
+status:
+  anchor: app-shell.status
+  states:
+    - opening
+    - ready
+    - failed
+    - storage-blocked

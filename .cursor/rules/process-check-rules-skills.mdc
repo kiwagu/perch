@@ -26,13 +26,16 @@ alwaysApply: true
 - Untyped values, casts, `any`-typed library results: `no-any.mdc`.
 - User-visible text: `ui-i18n-direct-keys.mdc`.
 - UI controls and styling: `ui-primitive-hygiene.mdc`, then the vendor skill `.agents/skills/shadcn/SKILL.md`.
+- Anchors (data-testid), UI codes, states and choice values, a field, action or screen of the modeling thread, the contract folder, an e2e scenario, a coverage-ignore marker or the UI manifest: `ui-contract.mdc`, then the skill `.agents/skills/adding-ui-anchors/SKILL.md`.
 - Imports that load code lazily: `static-imports-only.mdc`.
 - New environment variables: `monorepo-env-minimalism.mdc`.
 - Compatibility switches, legacy paths, migrations: `poc-no-fallbacks.mdc`, `reset-mode-default.mdc`.
-- File and folder names: `entity-first-module-naming.mdc`.
+- File and folder names, a file turning into a folder of parts, a new gateway module, an import-through-index lint error: `entity-first-module-naming.mdc`.
 - A new package or feature module, or a change to a package's role, exports or scripts, or to a module's routes, shapes, commands or providers: `package-readme.mdc`.
 - A source file at or past 300 lines, or a failing size gate: `file-size-tiers.mdc`.
+- A new class, a new domain or application function, or a one-unit lint error: `one-unit-per-file.mdc`.
 - Before any commit: `security-review-before-commit.mdc`.
+- Starting a branch, picking up an area again, putting a change on a branch (one context per branch), landing a branch on `main`: `branch-reuse-first.mdc`.
 - SurrealQL, schema and SurrealKit: vendor skills `.agents/skills/surrealql/`, `.agents/skills/surrealkit/`, `.agents/skills/surrealdb-js/`.
 
 ## Core rule

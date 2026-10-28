@@ -4,19 +4,24 @@ import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import {
+  addPendingRevoke,
   browserStorage,
   deviceIdFrom,
   forgetDevice,
+  forgetPendingRevoke,
   forgetSigningOut,
   memoryStorage,
+  pendingRevokes,
   saveDevice,
   savedIdentity,
   savedKeys,
   savedMemberships,
+  savedNotice,
   savedTenant,
   savedTenantDatabases,
   saveKeys,
   saveMemberships,
+  saveNotice,
   saveSigningOut,
   saveTenant,
   saveTenantDatabases,
@@ -43,6 +48,20 @@ describe('deviceIdFrom', () => {
     expect(first).toMatch(/^[0-9a-f-]{36}$/)
     expect(deviceIdFrom(storage)).toBe(first)
     expect(deviceIdFrom(memoryStorage())).not.toBe(first)
+  })
+
+  it('names the device again when the stored name is not a device id', () => {
+    for (const stored of ['d'.repeat(65), '']) {
+      const storage = memoryStorage()
+
+      storage.set('perch.device.id', stored)
+
+      const minted = deviceIdFrom(storage)
+
+      expect(minted).toMatch(/^[0-9a-f-]{36}$/)
+      expect(storage.get('perch.device.id')).toBe(minted)
+      expect(deviceIdFrom(storage)).toBe(minted)
+    }
   })
 })
 
@@ -74,6 +93,100 @@ describe('the signed-in device', () => {
 
       expect(savedIdentity(storage)).toBeUndefined()
     }
+  })
+})
+
+describe('the pairs left to revoke', () => {
+  const annPair = { ...ann.tokens, device: 'device-1' }
+  const bobPair = { access: 'access-b', refresh: 'refresh-b', device: 'device-1' }
+
+  it('keeps a pair per sign-out the gateway did not confirm, each forgotten on its own; forgetting the device leaves them', () => {
+    const storage = memoryStorage()
+
+    expect(pendingRevokes(storage)).toEqual([])
+
+    saveDevice(storage, ann)
+
+    expect(addPendingRevoke(storage, annPair)).toEqual([])
+    expect(addPendingRevoke(storage, bobPair)).toEqual([])
+    // A pair kept already is not kept twice.
+    expect(addPendingRevoke(storage, annPair)).toEqual([])
+
+    forgetDevice(storage)
+
+    expect(pendingRevokes(storage)).toEqual([annPair, bobPair])
+
+    forgetPendingRevoke(storage, annPair.refresh)
+
+    expect(pendingRevokes(storage)).toEqual([bobPair])
+
+    forgetPendingRevoke(storage, bobPair.refresh)
+
+    expect(pendingRevokes(storage)).toEqual([])
+    expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
+  })
+
+  it('keeps at most 8 pairs: one more drops the oldest, which it answers', () => {
+    const storage = memoryStorage()
+    const pairs = Array.from({ length: 9 }, (_, n) => ({
+      access: `access-${n}`,
+      refresh: `refresh-${n}`,
+      device: 'device-1',
+    }))
+    const dropped = pairs.map((pair) => addPendingRevoke(storage, pair))
+
+    expect(dropped.slice(0, 8).every((each) => each.length === 0)).toBe(true)
+    expect(dropped[8]).toEqual([pairs[0]])
+    expect(pendingRevokes(storage)).toEqual(pairs.slice(1))
+  })
+
+  it('reads a pair kept alone, as before the list, as a list of one from this device', () => {
+    const storage = memoryStorage()
+
+    storage.set('perch.session.pending-revoke', JSON.stringify(ann.tokens))
+
+    expect(pendingRevokes(storage)).toEqual([{ ...ann.tokens, device: deviceIdFrom(storage) }])
+  })
+
+  it('reads no pair from a value that does not describe one, and skips an entry that does not', () => {
+    const storage = memoryStorage()
+
+    for (const value of [
+      'not json',
+      '{"access":"a"}',
+      '{"access":"","refresh":"r"}',
+      '[]',
+      '[{"access":"a","refresh":"r"}]',
+    ]) {
+      storage.set('perch.session.pending-revoke', value)
+
+      expect(pendingRevokes(storage)).toEqual([])
+    }
+
+    storage.set(
+      'perch.session.pending-revoke',
+      JSON.stringify([{ access: 'a', refresh: 'r', device: '' }, annPair]),
+    )
+
+    expect(pendingRevokes(storage)).toEqual([annPair])
+  })
+})
+
+describe('the word for the sign-in page', () => {
+  it('keeps each notice it knows, and reads none from a value it does not', () => {
+    const storage = memoryStorage()
+
+    saveNotice(storage, 'signed-out-elsewhere')
+
+    expect(savedNotice(storage)).toBe('signed-out-elsewhere')
+
+    saveNotice(storage, 'resend-after-sign-in')
+
+    expect(savedNotice(storage)).toBe('resend-after-sign-in')
+
+    storage.set('perch.session.notice', 'something-else')
+
+    expect(savedNotice(storage)).toBeUndefined()
   })
 })
 

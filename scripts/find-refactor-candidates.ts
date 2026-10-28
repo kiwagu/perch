@@ -8,10 +8,11 @@
  *
  * The gate (`--ci`) is a ratchet over the baseline `refactor-baseline.json`, a machine-local,
  * gitignored file (like the e2e screenshot baselines) that records the size of every file at
- * or above the red threshold. On a checkout without one, the first `--ci` run writes it from
- * the current tree and passes: the ratchet starts from there. Afterwards a file at or above
- * the red threshold that the baseline does not know fails; a baselined file that grew past
- * its recorded size fails; shrinking is always allowed, and `--update-baseline` records it.
+ * or above the red threshold. On a checkout without one, the first `--ci` or `--update-baseline`
+ * run writes it from the sizes committed where HEAD left `main`, never from the working tree,
+ * so growth a branch made before its checkout's first run still fails. A file at or above the
+ * red threshold that the baseline does not know fails; a baselined file that grew past its
+ * recorded size fails; shrinking is always allowed, and `--update-baseline` records it.
  * Once a baseline exists it only shrinks: raising an entry or adding a file to it needs
  * `--allow-growth`, and a scoped run (with paths) never rewrites it.
  *
@@ -26,98 +27,25 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, linkSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { extname } from 'node:path'
+import { lstatSync, readFileSync } from 'node:fs'
+
+import {
+  BASELINE_PATH,
+  type Baseline,
+  baselineText,
+  publishBaseline,
+  readBaseline,
+} from './size-tiers/baseline-file.ts'
+import { mainBaseline } from './size-tiers/main-baseline.ts'
+import { countLines, isMeasured } from './size-tiers/measured-files.ts'
+import { type Options, parseOptions, type Thresholds } from './size-tiers/options.ts'
 
 type Tier = 'ok' | 'warn' | 'red' | 'refactor'
-
-interface Thresholds {
-  readonly warn: number
-  readonly red: number
-  readonly refactor: number
-}
-
-interface Options {
-  readonly scope: readonly string[]
-  readonly thresholds: Thresholds
-  readonly json: boolean
-  readonly ci: boolean
-  readonly top: number | undefined
-  readonly includeTests: boolean
-  readonly updateBaseline: boolean
-  readonly allowGrowth: boolean
-}
 
 interface FileReport {
   readonly path: string
   readonly lines: number
   readonly tier: Tier
-}
-
-type Baseline = Readonly<Record<string, number>>
-
-const BASELINE_PATH = 'refactor-baseline.json'
-
-const EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
-
-const SKIPPED = [
-  /^\.agents\//,
-  /\.d\.ts$/,
-  /\.gen\.ts$/,
-  /(^|\/)dist\//,
-  /(^|\/)coverage\//,
-  /(^|\/)__fixtures__\//,
-]
-
-const TEST_FILE = /\.(spec|test)\.[cm]?[jt]sx?$|(^|\/)tests\/e2e\//
-
-function readNumber(flag: string, raw: string | undefined): number {
-  const value = Number.parseInt(raw ?? '', 10)
-
-  if (!Number.isFinite(value) || value < 0) {
-    console.error(`${flag} expects a non-negative number`)
-    process.exit(2)
-  }
-
-  return value
-}
-
-function parseOptions(argv: readonly string[]): Options {
-  const scope: string[] = []
-  const thresholds = { warn: 300, red: 400, refactor: 500 }
-  let json = false
-  let ci = false
-  let top: number | undefined
-  let includeTests = false
-  let updateBaseline = false
-  let allowGrowth = false
-
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index] ?? ''
-
-    if (arg === '--json') {
-      json = true
-    } else if (arg === '--ci') {
-      ci = true
-    } else if (arg === '--include-tests') {
-      includeTests = true
-    } else if (arg === '--update-baseline') {
-      updateBaseline = true
-    } else if (arg === '--allow-growth') {
-      allowGrowth = true
-    } else if (arg === '--top') {
-      top = readNumber(arg, argv[++index])
-    } else if (arg === '--warn' || arg === '--red' || arg === '--refactor') {
-      thresholds[arg.slice(2) as keyof Thresholds] = readNumber(arg, argv[++index])
-    } else if (arg.startsWith('--')) {
-      console.error(`unknown flag ${arg}`)
-      process.exit(2)
-    } else {
-      scope.push(arg)
-    }
-  }
-
-  return { scope, thresholds, json, ci, top, includeTests, updateBaseline, allowGrowth }
 }
 
 function tierOf(lines: number, thresholds: Thresholds): Tier {
@@ -141,57 +69,16 @@ function trackedFiles(scope: readonly string[]): string[] {
   return output.split('\0').filter(Boolean)
 }
 
-function countLines(path: string): number {
-  const text = readFileSync(path, 'utf8')
-
-  if (text === '') {
-    return 0
-  }
-
-  return text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length
-}
-
 function scan(options: Options): FileReport[] {
   return trackedFiles(options.scope)
-    .filter((path) => EXTENSIONS.has(extname(path)))
-    .filter((path) => !SKIPPED.some((pattern) => pattern.test(path)))
-    .filter((path) => options.includeTests || !TEST_FILE.test(path))
+    .filter((path) => isMeasured(path, options.includeTests))
+    .filter((path) => !lstatSync(path).isSymbolicLink())
     .map((path) => {
-      const lines = countLines(path)
+      const lines = countLines(readFileSync(path, 'utf8'))
 
       return { path, lines, tier: tierOf(lines, options.thresholds) }
     })
     .sort((left, right) => right.lines - left.lines)
-}
-
-/** The baseline of this checkout, or undefined when none has been written yet. */
-function readBaseline(): Baseline | undefined {
-  if (!existsSync(BASELINE_PATH)) {
-    return undefined
-  }
-
-  const text = readFileSync(BASELINE_PATH, 'utf8').trim()
-
-  if (text === '') {
-    console.error(`${BASELINE_PATH}: empty; write \`{}\` or run --update-baseline`)
-    process.exit(2)
-  }
-
-  const parsed: unknown = JSON.parse(text)
-
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    console.error(`${BASELINE_PATH}: expected an object of path -> lines`)
-    process.exit(2)
-  }
-
-  for (const [path, lines] of Object.entries(parsed)) {
-    if (typeof lines !== 'number' || !Number.isInteger(lines) || lines < 0) {
-      console.error(`${BASELINE_PATH}: "${path}" must map to a non-negative integer`)
-      process.exit(2)
-    }
-  }
-
-  return parsed as Baseline
 }
 
 /** Why a file fails the ratchet, or undefined when it passes. */
@@ -220,18 +107,12 @@ function violationOf(
 }
 
 /** Rewrites the baseline from the whole tree; it only shrinks unless --allow-growth says otherwise. */
-function writeBaseline(
-  reports: readonly FileReport[],
-  baseline: Baseline | undefined,
-  options: Options,
-): void {
+function writeBaseline(reports: readonly FileReport[], baseline: Baseline, options: Options): void {
   if (options.scope.length > 0) {
     console.error('--update-baseline rewrites the whole baseline: run it without paths')
     process.exit(2)
   }
 
-  const adopting = baseline === undefined
-  const known: Baseline = baseline ?? {}
   const next: Record<string, number> = {}
   const widened: string[] = []
 
@@ -240,8 +121,8 @@ function writeBaseline(
       continue
     }
 
-    const recorded = known[report.path]
-    const widens = recorded === undefined ? !adopting : report.lines > recorded
+    const recorded = baseline[report.path]
+    const widens = recorded === undefined || report.lines > recorded
 
     if (widens && !options.allowGrowth) {
       widened.push(
@@ -267,70 +148,49 @@ function writeBaseline(
     process.exit(1)
   }
 
-  const sorted = Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)))
-  const published = publishBaseline(`${JSON.stringify(sorted, null, 2)}\n`, adopting)
-
-  if (!published) {
-    console.log(`${BASELINE_PATH} was written by a concurrent run; using that one`)
-
-    return
-  }
-
+  publishBaseline(baselineText(next), false)
   console.log(
-    adopting
-      ? `${BASELINE_PATH} did not exist on this checkout: ${Object.keys(sorted).length} file(s) at or above ${options.thresholds.red} lines recorded; the size ratchet starts here`
-      : `${BASELINE_PATH}: ${Object.keys(sorted).length} file(s) at or above ${options.thresholds.red} lines recorded`,
+    `${BASELINE_PATH}: ${Object.keys(next).length} file(s) at or above ${options.thresholds.red} lines recorded`,
   )
 }
 
 /**
- * Publishes a complete baseline under its final name in one step, so no reader ever sees a
- * partial file: the content goes to a temp file first; an update renames it over the old
- * baseline, an adoption hard-links it to the final name, which fails with EEXIST when a
- * concurrent adopter got there first (false: the file now holds that run's baseline). The
- * temp file is removed on every path.
+ * Writes this checkout's first baseline from main's sizes and returns the baseline the
+ * checkout now holds: this run's, or the one a concurrent first run published a moment before.
  */
-function publishBaseline(content: string, adopting: boolean): boolean {
-  const temp = `${BASELINE_PATH}.${process.pid}.tmp`
+function adoptBaseline(options: Options): Baseline {
+  const { base, baseline } = mainBaseline(options.thresholds.red, options.includeTests)
 
-  try {
-    writeFileSync(temp, content)
+  if (!publishBaseline(baselineText(baseline), true)) {
+    console.log(`${BASELINE_PATH} was written by a concurrent run; using that one`)
 
-    if (!adopting) {
-      renameSync(temp, BASELINE_PATH)
+    const theirs = readBaseline()
 
-      return true
+    if (theirs === undefined) {
+      throw new Error(`${BASELINE_PATH} vanished after a concurrent run published it`)
     }
 
-    try {
-      linkSync(temp, BASELINE_PATH)
-
-      return true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-        return false
-      }
-
-      throw error
-    }
-  } finally {
-    rmSync(temp, { force: true })
+    return theirs
   }
+
+  console.log(
+    `${BASELINE_PATH} did not exist on this checkout: ${Object.keys(baseline).length} file(s) at or above ${options.thresholds.red} lines recorded at ${base.slice(0, 9)}, where HEAD left main; the size ratchet starts there`,
+  )
+
+  return baseline
 }
 
 const options = parseOptions(process.argv.slice(2))
 const reports = scan(options)
-const stored = readBaseline()
+const adopts = options.scope.length === 0 && (options.ci || options.updateBaseline)
+const stored = readBaseline() ?? (adopts ? adoptBaseline(options) : undefined)
 
-if (options.updateBaseline || (options.ci && stored === undefined && options.scope.length === 0)) {
-  writeBaseline(reports, stored, options)
-
-  if (options.updateBaseline) {
-    process.exit(0)
-  }
+if (options.updateBaseline) {
+  writeBaseline(reports, stored ?? {}, options)
+  process.exit(0)
 }
 
-const baseline: Baseline = stored ?? readBaseline() ?? {}
+const baseline: Baseline = stored ?? {}
 
 const candidates = reports.filter((report) => report.tier !== 'ok')
 const shown = options.top === undefined ? candidates : candidates.slice(0, options.top)

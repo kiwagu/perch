@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CLOSE,
   clientMessage,
   decodeMessage,
   encodeMessage,
@@ -45,12 +46,60 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 3 only', () => {
-    const hello = (protocol: number) => JSON.stringify({ type: 'hello', protocol, access: 'a' })
+  it('takes a hello of protocol 6 only', () => {
+    const hello = (protocol: number) =>
+      JSON.stringify({ type: 'hello', protocol, access: 'a', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(3)
-    expect(decodeMessage(clientMessage, hello(3)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(2)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(6)
+    expect(decodeMessage(clientMessage, hello(6)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(5)).isErr()).toBe(true)
+  })
+
+  it('takes a renew that carries nothing: the gateway holds the pair it renews', () => {
+    expect(decodeMessage(clientMessage, JSON.stringify({ type: 'renew' }))._unsafeUnwrap()).toEqual(
+      { type: 'renew' },
+    )
+    expect(
+      decodeMessage(clientMessage, JSON.stringify({ type: 'renew', refresh: 'r' }))._unsafeUnwrap(),
+    ).toEqual({ type: 'renew' })
+  })
+
+  it("decodes a reject that names a batch under another identity's peer", () => {
+    const reject: ServerMessage = {
+      type: 'reject',
+      region: 'tenant:acme',
+      batch: 3,
+      reason: 'foreign-peer',
+      detail: 'peer: 42 writes as another identity in tenant:acme',
+    }
+
+    expect(
+      decodeMessage(serverMessage, encodeMessage(serverMessage, reject))._unsafeUnwrap(),
+    ).toEqual(reject)
+  })
+
+  it('takes a hello that names its device in 1 to 64 characters', () => {
+    const hello = (device: string) =>
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a', device })
+
+    expect(decodeMessage(clientMessage, hello('d'.repeat(64)))._unsafeUnwrap()).toEqual({
+      type: 'hello',
+      protocol: PROTOCOL_VERSION,
+      access: 'a',
+      device: 'd'.repeat(64),
+    })
+    expect(decodeMessage(clientMessage, hello('')).isErr()).toBe(true)
+    expect(decodeMessage(clientMessage, hello('d'.repeat(65))).isErr()).toBe(true)
+  })
+
+  it('refuses a hello that names no device', () => {
+    const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a' })
+
+    expect(decodeMessage(clientMessage, hello).isErr()).toBe(true)
+  })
+
+  it('closes a device signed out from another one with 4001', () => {
+    expect(CLOSE.revoked).toBe(4001)
   })
 
   it('refuses text that is not JSON', () => {
@@ -85,6 +134,7 @@ describe('sync protocol', () => {
       { type: 'heads', regions: [{ region: 'identity:idn_a', head: 4 }], time: 2 },
       { type: 'compaction', region: 'identity:idn_a', covers: 4, outcome: 'accepted' },
       { type: 'error', code: 'protocol', message: 'bad' },
+      { type: 'error', code: 'rate-limited', message: 'too many renewals' },
     ]
 
     for (const message of messages) {

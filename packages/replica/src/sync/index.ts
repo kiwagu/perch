@@ -8,12 +8,14 @@ export {
   writeLockName,
 } from './leader'
 export { createOutboxDrain, type DrainTarget, type OutboxDrainPort } from './outbox-drain'
+export { invert } from './region-rollback'
 export { RegionSync, type RegionSyncOptions } from './region-sync'
 export { createSyncEngine, type SyncEngine, type SyncEngineOptions } from './sync-engine'
 export {
   type ChannelState,
   type DeviceCredentials,
   type EndReason,
+  endingOf,
   RECONNECT_DELAYS_MS,
   type SocketLike,
   type SyncTransport,

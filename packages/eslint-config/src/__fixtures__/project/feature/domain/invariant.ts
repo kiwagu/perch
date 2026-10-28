@@ -1,4 +1,4 @@
-export class NegativeException extends Error {}
+import { NegativeException } from './negative.exception'
 
 export function check(value: number): number {
   if (value < 0) {
