@@ -19,10 +19,13 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
     await test.step('1. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
-      await createOrganisation(page, data)
       // Expected: After step 1 device A shows [app-shell.toast] carrying
       //   [code:organisation-created]
-      await expect(toast(page, 'organisation-created')).toBeVisible()
+      // Watched while the helper checks the page, so the toast's short life is not spent first.
+      await Promise.all([
+        createOrganisation(page, data),
+        expect(toast(page, 'organisation-created')).toBeVisible(),
+      ])
     })
 
     await test.step('2. On device A, enter the first note into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
