@@ -88,6 +88,16 @@ export const sourceSchema = z
   ])
   .describe('Where the entries of a list, a section or a table come from.')
 
+/** The question a control asks before its destructive action runs, derived by the loader. */
+export const asksSchema = z
+  .strictObject({
+    dialog: z.string().describe("The frame's confirmation that asks."),
+    code: codeSchema.describe('The code it asks with: what the action destroys.'),
+  })
+  .describe(
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+  )
+
 export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
@@ -125,13 +135,15 @@ export const anchorDefSchema = z
       .optional()
       .describe('The derived suffixes the element renders: `confirm-button`, `option`.'),
     source: sourceSchema.optional(),
+    asks: asksSchema.optional(),
   })
   .describe('One declared anchor.')
 
 /**
  * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
  * and the loader derives them from the actions its part binds; a field may leave `holdsInput`
- * out, and the loader derives it from its kind and its bindings.
+ * out, and the loader derives it from its kind and its bindings; a control never writes `asks`,
+ * which the loader derives from its action, and may ban it with `confirm: false`.
  */
 export const authoredAnchorDefSchema = anchorDefSchema
   .extend({
@@ -153,5 +165,12 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .describe(
         'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.',
       ),
+    confirm: z
+      .literal(false)
+      .optional()
+      .describe(
+        "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
+      ),
   })
+  .omit({ asks: true })
   .describe('One declared anchor, as a screen file writes it.')

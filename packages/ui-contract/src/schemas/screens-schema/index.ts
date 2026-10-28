@@ -2,6 +2,7 @@ export {
   actionNameSchema,
   anchorBindingSchema,
   anchorDefSchema,
+  asksSchema,
   bindingRefSchema,
   modelFieldPathSchema,
   sourceSchema,

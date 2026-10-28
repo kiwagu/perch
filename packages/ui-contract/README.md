@@ -30,7 +30,10 @@ for Bun.
     screen carry and the failures of the actions, the success of each mutation said on the
     frame's toast anchor (a model action by its name, a platform action by the platform's
     `toasts` map), which carries every code a flow shows on it
-    (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), then parsed through
+    (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), and the question before each
+    destructive action, on its control (`asks`) and on the frame's confirmation, which
+    carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
+    then parsed through
     `screenFileSchema`;
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is

@@ -8,7 +8,8 @@ import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../fil
 import { fixtureContract } from '../manifest/manifest.fixture'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
-import { contractAt, diffContracts, formatChanges } from './diff'
+import { contractAt, diffContracts } from './diff'
+import { formatChanges } from './format-changes'
 
 useRepositories()
 
@@ -129,6 +130,7 @@ describe('diffContracts', () => {
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
+      questions: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
       screens: { added: [], removed: [] },
@@ -389,5 +391,41 @@ describe('formatChanges', () => {
       'transitions added in thing: editing on sample.title-input -> saved, saved on sample.page -> editing',
       'transitions removed in thing: editing on sample.save-button -> saved',
     ])
+  })
+})
+
+describe('diffContracts and the questions before destructive actions', () => {
+  /** The fixture contract, `sample.save-button` asking with `code` when one is given. */
+  const asking = (code?: string): Contract => {
+    const contract = fixtureContract()
+    const anchor = contract.screens.screens[0]?.anchors['sample.save-button']
+
+    if (code !== undefined && anchor !== undefined) {
+      anchor.asks = { dialog: 'app-shell.confirmation', code }
+      contract.vocabulary.codes['<object>-<verb>'] = {
+        where: 'app-shell.confirmation',
+        meaning: 'the question before a destructive action',
+      }
+      contract.screens.questions = [
+        { anchor: 'app-shell.confirmation', code, action: 'thing.deleteThing' },
+      ]
+    }
+
+    return contract
+  }
+
+  it('lists a control that starts or stops asking, and the question codes, the rule row out', () => {
+    expect(diffContracts(asking(), asking('thing-delete')).questions).toEqual({
+      added: ['sample.save-button asks thing-delete'],
+      removed: [],
+    })
+    expect(diffContracts(asking('thing-delete'), asking()).questions).toEqual({
+      added: [],
+      removed: ['sample.save-button asks thing-delete'],
+    })
+    expect(diffContracts(asking(), asking('thing-delete')).codes).toEqual({
+      added: ['thing-delete'],
+      removed: [],
+    })
   })
 })

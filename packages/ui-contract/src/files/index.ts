@@ -4,7 +4,7 @@ export {
   type ActivityTransition,
   loadActivities,
 } from './activities'
-export { TOAST_RULE_ROW } from './derive'
+export { CONFIRM_RULE_ROW, type DerivedQuestion, TOAST_RULE_ROW } from './derive'
 export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'
 export {

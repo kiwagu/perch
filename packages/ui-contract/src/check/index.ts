@@ -1,5 +1,6 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
+export { confirmationsProblems } from './confirmations'
 export {
   bindingRefsOf,
   type Contract,
