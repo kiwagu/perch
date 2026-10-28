@@ -1,7 +1,7 @@
 /**
  * The one thing a new mutation asks a human to write is its words: every code the frame's
- * notice and toast carry in the contract has its entry in the frame's map, and the maps hold no
- * code the contract dropped. The i18n check holds the keys to both catalogs. On a branch the
+ * notice, toast and confirmation carry in the contract has its entry in the frame's map, and the
+ * maps hold no code the contract dropped. The i18n check holds the keys to both catalogs. On a branch the
  * pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may give the frame a code before
  * its implementation writes the words, so a map may lack a code the contract added but holds
  * none it does not say; `bun run check` and a commit on `main` want every code worded.
@@ -15,6 +15,7 @@ import { formatProblem, loadScreens } from '@workspace/ui-contract'
 
 import { englishCatalog, loadSpanishCatalog } from '../../../../platform/catalogs'
 
+import { CONFIRM_TEXTS } from './confirm-texts'
 import { NOTICE_TEXTS } from './notice-texts'
 import { TOAST_TEXTS } from './toast-texts'
 
@@ -41,9 +42,10 @@ describe('the words of the frame', () => {
     expect(codesOf('app-shell.toast').length).toBeGreaterThan(0)
   })
 
-  it('give every code of the notice and of the toast its words, and no other', () => {
+  it('give every code of the notice, the toast and the confirmation its words, and no other', () => {
     expect(gaps('app-shell.notice-message', NOTICE_TEXTS)).toEqual({ unworded: [], stale: [] })
     expect(gaps('app-shell.toast', TOAST_TEXTS)).toEqual({ unworded: [], stale: [] })
+    expect(gaps('app-shell.confirmation', CONFIRM_TEXTS)).toEqual({ unworded: [], stale: [] })
   })
 
   it('keep every notice, in either language, within the line the frame holds for it', async () => {

@@ -10,6 +10,7 @@ import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
 import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
@@ -48,9 +49,11 @@ function Layout() {
       <ToastProvider texts={TOAST_TEXTS}>
         <UnsavedInputScope>
           <LeaveGuard>
-            <ShellContainer>
-              <Outlet />
-            </ShellContainer>
+            <ConfirmGuard>
+              <ShellContainer>
+                <Outlet />
+              </ShellContainer>
+            </ConfirmGuard>
           </LeaveGuard>
         </UnsavedInputScope>
       </ToastProvider>

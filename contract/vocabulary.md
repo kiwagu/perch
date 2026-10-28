@@ -157,6 +157,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
 | `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
+| `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
@@ -236,4 +237,5 @@ included.
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
+| `app-shell.confirmation` | the frame's question before a destructive action, which carries `data-code` and renders `app-shell.confirmation.confirm-button` (go on) and `app-shell.confirmation.cancel-button` (stay) |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |

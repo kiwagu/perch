@@ -19,7 +19,7 @@ Where: [/org] on device A (user A, administrator) and [/org] on device B (user B
 1. On device B, sign up as user B and open [/org]
 2. On device A, sign up as user A, create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]
 3. On device A, invite user B with [organisation.invite.email-input] and [organisation.invite.submit-button]
-4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item]
+4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]
 
 ### Expected result
 - After step 1 device B shows [organisation.page.status] in [state:empty] (not a member of any organisation yet)
