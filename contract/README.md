@@ -439,7 +439,10 @@ out, and the loader derives it, the same way every time:
   (`organisations.create: organisation-created`), and an unlisted one never does. The toast
   says an operation's outcome once, where it ends: a branch that leads into another such
   action (one Save running `updateName`, then `updateBio`) toasts nothing, so one press gives
-  one toast; a screen that wants the operation's whole outcome in one message writes it. The
+  one toast; a branch leads on when a state it enters runs one, the states a parallel state's
+  regions start in included (each such area then says its own outcome), and not when it
+  targets its own state, which re-enters nothing. A screen that wants the operation's whole
+  outcome in one message writes it. The
   toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
   message on the toast keeps it (a written message wins on its anchor, branch by branch; the
   other branches still get the standard one), and the one ban is `toast: false` on

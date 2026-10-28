@@ -58,42 +58,63 @@ const codeOf = (src: string, expansion: Expansion): string | undefined =>
       : undefined
     : toastCodeOf(src)
 
-/** Where an invoke stands: the states beside it, and the states of the root. */
+/** Where an invoke stands: its own state, the states beside it, and the states of the root. */
 interface Place {
+  readonly self: unknown
   readonly siblings: Readonly<Record<string, unknown>>
   readonly root: Readonly<Record<string, unknown>>
 }
 
 /**
- * The state a transition's `target` names: a state beside it, a region's state of the root by
- * `<parallel>.<region>.<state>`, or a state of the root by `#<flow id>.<state>`.
+ * The states a transition enters at `node`, following `inside` (a region, then its state): a
+ * plain state itself; a parallel state, in each region the state `inside` names or else its
+ * initial one.
  */
-function stateAt(target: string, place: Place): unknown {
-  const path = target.startsWith('#') ? target.split('.').slice(1) : target.split('.')
-
-  if (!target.startsWith('#') && path.length === 1) {
-    return place.siblings[target]
+function enteredAt(node: unknown, inside: readonly string[]): unknown[] {
+  if (recordOf(node)['type'] !== 'parallel') {
+    return [node]
   }
 
-  return path
-    .slice(1)
-    .reduce<unknown>(
-      (node, name) => recordOf(recordOf(node)['states'])[name],
-      place.root[path[0] ?? ''],
-    )
+  const [regionName, stateName] = inside
+
+  return Object.entries(recordOf(recordOf(node)['states'])).flatMap(([name, region]) => {
+    const initial = recordOf(region)['initial']
+    const chosen = name === regionName && stateName !== undefined ? stateName : initial
+
+    return typeof chosen === 'string' ? [recordOf(recordOf(region)['states'])[chosen]] : []
+  })
 }
 
 /**
- * Whether `branch` leads into another mutation of the same operation: its target runs an action
- * whose success toasts. Such a step says nothing; the operation's toast comes where it ends.
+ * The states a transition's `target` enters: a state beside it, a state of the root or a region's
+ * state named from the root (`<parallel>.<region>.<state>`), or one by `#<flow id>.<path>`.
+ */
+function enteredBy(target: string, place: Place): unknown[] {
+  const byId = target.startsWith('#')
+  const path = byId ? target.split('.').slice(1) : target.split('.')
+  const [first = '', ...inside] = path
+
+  return !byId && path.length === 1
+    ? enteredAt(place.siblings[target], [])
+    : enteredAt(place.root[first], inside)
+}
+
+/**
+ * Whether `branch` leads into another mutation of the same operation: a state it enters, other
+ * than the invoking state itself (a target on itself re-enters nothing), runs an action whose
+ * success toasts. Such a step says nothing; the operation's toast comes where it ends.
  */
 function continues(branch: unknown, place: Place, expansion: Expansion): boolean {
   const { target } = recordOf(branch)
-  const src = recordOf(
-    recordOf(typeof target === 'string' ? stateAt(target, place) : undefined)['invoke'],
-  )['src']
 
-  return typeof src === 'string' && codeOf(src, expansion) !== undefined
+  return (
+    typeof target === 'string' &&
+    enteredBy(target, place).some((state) => {
+      const src = recordOf(recordOf(state)['invoke'])['src']
+
+      return state !== place.self && typeof src === 'string' && codeOf(src, expansion) !== undefined
+    })
+  )
 }
 
 /**
@@ -169,7 +190,7 @@ function walkedAll(
 ): Readonly<Record<string, unknown>> {
   const entries = Object.entries(nodes).map(([name, node]): [string, unknown] => [
     name,
-    walked(node, { siblings: nodes, root }, expansion),
+    walked(node, { self: node, siblings: nodes, root }, expansion),
   ])
 
   return entries.every(([name, node]) => node === nodes[name]) ? nodes : Object.fromEntries(entries)

@@ -210,50 +210,121 @@ describe('withDerivedToasts', () => {
     ).not.toHaveProperty('actions')
   })
 
-  it('follows a step into the next mutation through a region path or an id target too', () => {
-    const states = withDerivedToasts(
-      {
-        creating: {
-          invoke: {
-            src: 'thing.createThing',
-            onDone: [{ target: '#sample.publishing', guard: 'publish' }, { target: 'viewing' }],
-          },
-        },
-        publishing: { invoke: { src: 'thing.publishThing', onDone: { target: 'viewing' } } },
-        viewing: {
-          type: 'parallel',
-          states: {
-            editor: {
-              initial: 'idle',
-              states: {
-                idle: {},
-                saving: {
-                  invoke: {
-                    src: 'thing.updateThing',
-                    onDone: [{ target: 'creating' }, { target: 'idle' }],
-                  },
-                },
-              },
+  describe('a step into the next mutation, wherever the transition enters it', () => {
+    /** The toast-free branches of the invoke of `state`: those whose target leads on. */
+    const silentAt = (states: Readonly<Record<string, unknown>>, path: readonly string[]) => {
+      const node = path.reduce<unknown>(
+        (at, name) => (at as { states: Record<string, unknown> }).states[name],
+        { states },
+      ) as { invoke: { onDone: unknown } }
+      const branches = Array.isArray(node.invoke.onDone) ? node.invoke.onDone : [node.invoke.onDone]
+
+      return branches.flatMap((branch: { target: string; actions?: unknown }) =>
+        branch.actions === undefined ? [branch.target] : [],
+      )
+    }
+    const editor = (saving: Record<string, unknown>) => ({
+      initial: 'idle',
+      states: { idle: {}, saving },
+    })
+    const running = (src: string) => ({
+      initial: 'running',
+      states: { running: { invoke: { src, onDone: { target: 'done' } } }, done: {} },
+    })
+
+    it('keeps the toast on a target that is the invoking state itself, which re-enters nothing', () => {
+      const states = withDerivedToasts(
+        {
+          saving: { invoke: { src: 'note.createNote', onDone: { target: 'saving' } } },
+          viewing: {
+            type: 'parallel',
+            states: {
+              editor: editor({
+                invoke: { src: 'note.updateNote', onDone: { target: 'saving' } },
+              }),
             },
           },
         },
-      },
-      expansionWith(TOAST),
-    )
+        expansionWith(TOAST),
+      )
 
-    expect(states).toMatchObject({
-      creating: {
-        invoke: {
-          onDone: [
-            { target: '#sample.publishing', guard: 'publish' },
-            { target: 'viewing', actions: [shown('thing-created')] },
-          ],
-        },
-      },
+      expect(silentAt(states, ['saving'])).toEqual([])
+      expect(silentAt(states, ['viewing', 'editor', 'saving'])).toEqual([])
     })
-    expect(
-      (states['creating'] as { invoke: { onDone: unknown[] } }).invoke.onDone[0],
-    ).not.toHaveProperty('actions')
+
+    it("leads on from a region into a state of the root by the flow's id", () => {
+      const states = withDerivedToasts(
+        {
+          publishing: { invoke: { src: 'thing.publishThing', onDone: { target: 'viewing' } } },
+          viewing: {
+            type: 'parallel',
+            states: {
+              editor: editor({
+                invoke: {
+                  src: 'thing.updateThing',
+                  onDone: [{ target: '#sample.publishing', guard: 'publish' }, { target: 'idle' }],
+                },
+              }),
+            },
+          },
+        },
+        expansionWith(TOAST),
+      )
+
+      expect(silentAt(states, ['viewing', 'editor', 'saving'])).toEqual(['#sample.publishing'])
+    })
+
+    it("leads on into a parallel state whose region starts in a mutation, by name or into another region's state", () => {
+      const states = withDerivedToasts(
+        {
+          creating: {
+            invoke: {
+              src: 'thing.createThing',
+              onDone: [
+                { target: 'viewing', guard: 'plain' },
+                { target: 'viewing.editor.idle', guard: 'deep' },
+                { target: 'done' },
+              ],
+            },
+          },
+          viewing: {
+            type: 'parallel',
+            states: {
+              editor: editor({}),
+              publish: running('thing.publishThing'),
+            },
+          },
+          done: {},
+        },
+        expansionWith(TOAST),
+      )
+
+      expect(silentAt(states, ['creating'])).toEqual(['viewing', 'viewing.editor.idle'])
+    })
+
+    it("leads on into a region's state that runs a mutation, named from the root", () => {
+      const states = withDerivedToasts(
+        {
+          creating: {
+            invoke: {
+              src: 'thing.createThing',
+              onDone: [{ target: 'viewing.editor.saving' }],
+            },
+          },
+          viewing: {
+            type: 'parallel',
+            states: {
+              editor: editor({
+                invoke: { src: 'thing.updateThing', onDone: { target: 'idle' } },
+              }),
+            },
+          },
+        },
+        expansionWith(TOAST),
+      )
+
+      expect(silentAt(states, ['creating'])).toEqual(['viewing.editor.saving'])
+    })
   })
 
   it('reaches the invokes of the regions of a parallel state', () => {
