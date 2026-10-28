@@ -3,12 +3,13 @@
  * (`<entity>.<verb><Object>`) gets, on every branch of its `onDone`, `show: { <toast>: [<code>] }`:
  * `<object>-created`, `-updated` or `-deleted` by the verb, or `<action>-done` for another verb;
  * a platform action toasts only when the platform's `toasts` map names it, with the code the map
- * gives. An `onDone` that shows on the toast itself gets none (a written message wins on its
- * anchor; a notice or an error written there leaves the toast on), and an invoke that says
- * `toast: false`, the one ban, gets none and loses the key, which the canonical flow does not know. It runs on the flow as expanded, written and derived regions
- * alike; without a toast anchor on the frame it derives nothing. The codes the flow's own `show`s
- * put on the toast anchor are written codes, reported apart: each needs its own vocabulary row,
- * even where a derivation elsewhere gives the same code.
+ * gives. A branch that shows its own message on the toast keeps it (a written message wins on its
+ * anchor, branch by branch; a notice or an error written there leaves the toast on), and an
+ * invoke that says `toast: false`, the one ban, gets none and loses the key, which the canonical
+ * flow does not know. It runs on the flow as expanded, written and derived regions alike; without
+ * a toast anchor on the frame it derives nothing. The codes the flow's own `show`s put on the
+ * toast anchor are written codes, reported apart: each needs its own vocabulary row, even where a
+ * derivation elsewhere gives the same code.
  */
 
 import { isRecord, listOf, recordOf } from '../../records'
@@ -40,14 +41,12 @@ export function toastCodeOf(src: string): string | undefined {
   return past === undefined || object === '' ? `${kebab(action)}-done` : `${kebab(object)}-${past}`
 }
 
-/** Whether a branch of `onDone` shows something on `anchor`. */
-const showsOn = (onDone: unknown, anchor: string): boolean =>
-  listOf(onDone).some((branch) =>
-    listOf(recordOf(branch)['actions']).some(
-      (effect) =>
-        recordOf(effect)['type'] === 'show' &&
-        recordOf(recordOf(effect)['params'])['anchor'] === anchor,
-    ),
+/** Whether `branch`, one branch of an `onDone`, shows something on `anchor`. */
+const showsOn = (branch: unknown, anchor: string): boolean =>
+  listOf(recordOf(branch)['actions']).some(
+    (effect) =>
+      recordOf(effect)['type'] === 'show' &&
+      recordOf(recordOf(effect)['params'])['anchor'] === anchor,
   )
 
 /** The code the toast of `src`'s success says: the platform's map for a platform action. */
@@ -58,9 +57,12 @@ const codeOf = (src: string, expansion: Expansion): string | undefined =>
       : undefined
     : toastCodeOf(src)
 
-/** `branch` with `show` after its own effects; what is no transition is left as it is. */
-function withShow(branch: unknown, show: unknown): unknown {
-  if (!isRecord(branch)) {
+/**
+ * `branch` with the standard toast after its own effects, unless it shows its own message on the
+ * toast; what is no transition is left as it is.
+ */
+function withShow(branch: unknown, show: unknown, toast: string): unknown {
+  if (!isRecord(branch) || showsOn(branch, toast)) {
     return branch
   }
 
@@ -91,22 +93,23 @@ function invokeOf(invoke: Readonly<Record<string, unknown>>, expansion: Expansio
     toast === undefined ||
     src === undefined ||
     code === undefined ||
-    onDone === undefined ||
-    showsOn(onDone, toast)
+    onDone === undefined
   ) {
     return invoke
   }
 
   const show = { type: 'show', params: { anchor: toast, codes: [code] } }
+  const branches = listOf(onDone)
+  const shown = branches.map((branch) => withShow(branch, show, toast))
+
+  // Every branch says its own message on the toast: nothing is derived.
+  if (shown.every((branch, at) => branch === branches[at])) {
+    return invoke
+  }
 
   expansion.toasts.push({ anchor: toast, code, action: src })
 
-  return {
-    ...invoke,
-    onDone: Array.isArray(onDone)
-      ? onDone.map((branch: unknown) => withShow(branch, show))
-      : withShow(onDone, show),
-  }
+  return { ...invoke, onDone: Array.isArray(onDone) ? shown : shown[0] }
 }
 
 /** `nodes` by name, each walked; the same record when none of them changed. */

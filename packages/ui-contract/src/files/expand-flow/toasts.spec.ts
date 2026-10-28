@@ -90,7 +90,7 @@ describe('withDerivedToasts', () => {
     ])
   })
 
-  it('derives nothing where the onDone shows on the toast itself: a written message wins', () => {
+  it('keeps a message a branch writes on the toast, and gives the other branches the standard one', () => {
     const unique = shown('name-kept')
     const expansion = expansionWith(TOAST)
     const states = withDerivedToasts(
@@ -104,9 +104,27 @@ describe('withDerivedToasts', () => {
     )
 
     expect(invokeOf(states)['onDone']).toEqual([
-      { target: 'idle', guard: 'left' },
+      { target: 'idle', guard: 'left', actions: [shown('name-updated')] },
       { target: 'idle', actions: [unique] },
     ])
+    expect(expansion.toasts).toEqual([
+      { anchor: TOAST, code: 'name-updated', action: 'profile.updateName' },
+    ])
+  })
+
+  it('derives nothing where every branch writes its own message on the toast', () => {
+    const expansion = expansionWith(TOAST, { 'organisations.create': 'organisation-created' })
+    const states = withDerivedToasts(
+      saving('platform.organisations.create', {
+        onDone: { target: 'idle', actions: [shown('organisation-welcome')] },
+      }),
+      expansion,
+    )
+
+    expect(invokeOf(states)['onDone']).toEqual({
+      target: 'idle',
+      actions: [shown('organisation-welcome')],
+    })
     expect(expansion.toasts).toEqual([])
   })
 

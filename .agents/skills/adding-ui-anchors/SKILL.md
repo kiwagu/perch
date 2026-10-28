@@ -81,8 +81,9 @@ code and the tests follow; the checks hold them to the contract.
    contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
    those tables are business, like the screen file. The toast codes the contract derives for
-   model actions' successes are the exception: the rule row `<object>-<verb>ed` stands for them,
-   and only their words are written, in the frame's map. A field holds input by itself; only a
+   mutations' successes (an action of the model, or a platform action the platform's `toasts`
+   lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
+   words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
    `holdsInput={false}` in the JSX, and the contract derives which.
    A new screen follows the checklist in `references/checklists.md`.
