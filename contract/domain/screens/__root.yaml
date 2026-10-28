@@ -55,6 +55,10 @@ anchors:
     kind: button
     description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
+  app-shell.confirmation:
+    kind: confirmation
+    description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out. It carries data-code naming the action; its confirm-button lets the action run, its cancel-button stays with nothing changed. One for the whole app: the controls that ask and its codes are derived."
+    derived: [ confirm-button, cancel-button ]
   app-shell.leave-dialog:
     kind: dialog
     description: "Asks whether to leave and lose what was typed but not saved, before a leave the user starts while a field holds unsaved input: another screen, a sign-out, a switch of organisation, a change of language; its confirm-button leaves, its cancel-button stays with the input kept. A reload or a closed tab gets the browser's own prompt instead."
