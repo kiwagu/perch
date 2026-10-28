@@ -2,7 +2,7 @@
 import type { Page } from '@playwright/test'
 
 import { generate } from '../../support/data'
-import { appReady, expect, notice, test } from '../../support/fixtures'
+import { appReady, expect, test, toast } from '../../support/fixtures'
 
 /** Whether each tab leads the sync of its browser, as `<html data-sync-leader>` says. */
 const leading = (tabs: readonly Page[]): Promise<Array<string | null>> =>
@@ -65,7 +65,7 @@ test.describe('Sync from one tab per browser', { tag: '@full' }, () => {
     await test.step('4. In the tab of device A that does not lead the sync, enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
       await follower.getByTestId('user.profile.name-input').fill(data.newName)
       await follower.getByTestId('user.profile.save-button').click()
-      await expect(notice(follower, 'profile-saved')).toBeVisible()
+      await expect(toast(follower, 'profile-saved')).toBeVisible()
       // Expected: Within 5 seconds of step 4 device B shows the new name
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.newName, {
         timeout: 5_000,

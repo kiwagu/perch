@@ -4,7 +4,7 @@ import { expect, notice, signUp, test, toast } from '../../support/fixtures'
 import { createOrganisation, noteItem } from '../../support/organisation'
 
 test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
-  test('An administrator sees a toast for each note added, edited and deleted, and none for a saved profile', async ({
+  test('An administrator sees a toast for each note added, edited and deleted, and one for a profile saved in two writes', async ({
     page,
   }) => {
     const data = {
@@ -14,6 +14,7 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       secondNote: generate.noteText(),
       editedNote: generate.noteText(),
       newName: generate.newName(),
+      bio: generate.bio(),
     }
 
     await test.step('1. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
@@ -77,16 +78,20 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       await expect(toast(page, 'note-deleted')).toBeVisible()
     })
 
-    await test.step('8. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
+    await test.step('8. On device A, wait until no [app-shell.toast] shows, open [/me], enter the new name into [user.profile.name-input] and the bio into [user.profile.bio-textarea], and click [user.profile.save-button]', async () => {
       await expect(page.getByTestId('app-shell.toast')).toHaveCount(0, { timeout: 10_000 })
       await page.getByTestId('app-shell.nav.profile-link').click()
       await page.getByTestId('user.profile.name-input').fill(data.newName)
+      await page.getByTestId('user.profile.bio-textarea').fill(data.bio)
       await page.getByTestId('user.profile.save-button').click()
-      // Expected: After step 8 device A shows [app-shell.notice-message] carrying
-      //   [code:profile-saved] and no [app-shell.toast]; a toast would come with the notice,
-      //   from the same outcome, so its absence is read once the notice shows.
-      await expect(notice(page, 'profile-saved')).toBeVisible()
-      await expect(page.getByTestId('app-shell.toast')).toHaveCount(0)
+      // Expected: After step 8 device A shows one [app-shell.toast], carrying [code:profile-saved]:
+      //   the Save wrote the name and the bio and says it once; [app-shell.notice-message] still
+      //   carries [code:welcome]
+      // The toast comes where the Save ends, after both writes, and a toast of the name's write
+      // would still show then, so the count is read once it shows.
+      await expect(toast(page, 'profile-saved')).toBeVisible()
+      await expect(page.getByTestId('app-shell.toast')).toHaveCount(1)
+      await expect(notice(page, 'welcome')).toBeVisible()
     })
   })
 })

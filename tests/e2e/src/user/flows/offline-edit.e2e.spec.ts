@@ -1,6 +1,6 @@
 // scenario: user/flows/offline-edit
 import { generate } from '../../support/data'
-import { appReady, expect, notice, test } from '../../support/fixtures'
+import { appReady, expect, test, toast } from '../../support/fixtures'
 import { SyncNetwork } from '../../support/network'
 
 /**
@@ -52,9 +52,9 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     await test.step('4. On device B, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
       await deviceB.getByTestId('user.profile.bio-textarea').fill(data.bio)
       await deviceB.getByTestId('user.profile.save-button').click()
-      // Expected: After step 4 device B shows [app-shell.notice-message] carrying
+      // Expected: After step 4 device B shows [app-shell.toast] carrying
       //   [code:profile-saved] and the bio, and its sync channel is still down
-      await expect(notice(deviceB, 'profile-saved')).toBeVisible()
+      await expect(toast(deviceB, 'profile-saved')).toBeVisible()
       await expect(deviceB.getByTestId('user.profile.bio-textarea')).toHaveValue(data.bio)
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
     })
@@ -62,9 +62,9 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     await test.step('5. On device A, enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
       await page.getByTestId('user.profile.name-input').fill(data.newName)
       await page.getByTestId('user.profile.save-button').click()
-      // Expected: After step 5 device A shows [app-shell.notice-message] carrying
+      // Expected: After step 5 device A shows [app-shell.toast] carrying
       //   [code:profile-saved] and the new name
-      await expect(notice(page, 'profile-saved')).toBeVisible()
+      await expect(toast(page, 'profile-saved')).toBeVisible()
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.newName)
     })
 

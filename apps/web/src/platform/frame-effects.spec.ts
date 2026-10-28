@@ -9,11 +9,11 @@ describe('routeFrameEffect', () => {
     const into = channels()
 
     routeFrameEffect({ type: 'show', anchor: 'app-shell.toast', codes: ['note-created'] }, into)
-    routeFrameEffect({ type: 'show', anchor: 'app-shell.notice-message', codes: ['invited'] }, into)
+    routeFrameEffect({ type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] }, into)
     routeFrameEffect({ type: 'clear', anchor: 'app-shell.notice-message' }, into)
 
     expect(into.pushToast).toHaveBeenCalledWith('note-created')
-    expect(into.notify).toHaveBeenCalledWith('invited')
+    expect(into.notify).toHaveBeenCalledWith('welcome')
     expect(into.clear).toHaveBeenCalledTimes(1)
   })
 
@@ -39,9 +39,9 @@ describe('routeFrameEffect', () => {
   it('refuses a frame show of several codes: the machine narrows it first', () => {
     expect(() =>
       routeFrameEffect(
-        { type: 'show', anchor: 'app-shell.notice-message', codes: ['invited', 'welcome'] },
+        { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome', 'change-rejected'] },
         channels(),
       ),
-    ).toThrow('a show on app-shell.notice-message carries one code, not invited, welcome')
+    ).toThrow('a show on app-shell.notice-message carries one code, not welcome, change-rejected')
   })
 })

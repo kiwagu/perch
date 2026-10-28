@@ -1,6 +1,6 @@
 // scenario: user/flows/sign-out
 import { generate } from '../../support/data'
-import { appReady, expect, notice, signIn, test } from '../../support/fixtures'
+import { appReady, expect, notice, signIn, test, toast } from '../../support/fixtures'
 import { SyncNetwork } from '../../support/network'
 import { databases, identityDatabase } from '../../support/storage'
 
@@ -24,7 +24,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
         await appReady(page)
         await page.getByTestId('user.profile.bio-textarea').fill(data.bio)
         await page.getByTestId('user.profile.save-button').click()
-        await expect(notice(page, 'profile-saved')).toBeVisible()
+        await expect(toast(page, 'profile-saved')).toBeVisible()
 
         const name = await identityDatabase(page)
 
@@ -46,32 +46,31 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('3. On device A, click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('user.profile.sign-out-button').click()
-      // Expected: After step 3 device A is on [/sign-in], shows no [app-shell.notice-message] (the
-      //   notice of step 1 went with the account), and its browser keeps no local database of the
-      //   account
+      // Expected: After step 3 device A is on [/sign-in], and its browser keeps no local database of
+      //   the account
       await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
-      await expect(page.getByTestId('app-shell.notice-message')).toHaveCount(0)
       await expect.poll(() => databases(page), { timeout: 10_000 }).not.toContain(database)
     })
 
     await test.step('4. On device B, enter the new name into [user.profile.name-input] and click [user.profile.save-button]', async () => {
       await deviceB.getByTestId('user.profile.name-input').fill(data.newName)
       await deviceB.getByTestId('user.profile.save-button').click()
-      // Expected: After step 4 device B, still signed in, shows [app-shell.notice-message] carrying
+      // Expected: After step 4 device B, still signed in, shows [app-shell.toast] carrying
       //   [code:profile-saved]
       await expect(deviceB).toHaveURL(/\/me$/)
-      await expect(notice(deviceB, 'profile-saved')).toBeVisible()
+      await expect(toast(deviceB, 'profile-saved')).toBeVisible()
       await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.newName)
     })
 
     await test.step('5. On device A, sign in again with the same account and wait for [/me]', async () => {
       await signIn(page, signedIn)
       // Expected: After step 5 device A shows the profile the server holds: the new name from
-      //   device B and the bio from step 1
+      //   device B and the bio from step 1, and [app-shell.notice-message] carries [code:welcome]
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.newName, {
         timeout: 10_000,
       })
       await expect(page.getByTestId('user.profile.bio-textarea')).toHaveValue(data.bio)
+      await expect(notice(page, 'welcome')).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 10_000,
       })
@@ -82,7 +81,7 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'down')
       await page.getByTestId('user.profile.name-input').fill(data.unsentName)
       await page.getByTestId('user.profile.save-button').click()
-      await expect(notice(page, 'profile-saved')).toBeVisible()
+      await expect(toast(page, 'profile-saved')).toBeVisible()
     })
 
     await test.step('7. On device A, click [user.profile.sign-out-button]', async () => {
@@ -101,13 +100,21 @@ test.describe('Sign out of one device', { tag: '@full' }, () => {
 
     await test.step('8. Click [user.profile.sign-out-dialog.cancel-button]', async () => {
       await page.getByTestId('user.profile.sign-out-dialog.cancel-button').click()
+      // Expected: After step 8 device A stays on [/me] with the unsent name, and its local database
+      //   is kept
+      await expect(page.getByTestId('user.profile.sign-out-dialog.confirm-button')).toBeHidden()
+      await expect(page).toHaveURL(/\/me$/)
+      await expect(page.getByTestId('user.profile.heading')).toHaveText(data.unsentName)
+      expect(await databases(page)).toContain(database)
     })
 
-    // Expected:
-    // - After step 8 device A stays on [/me] with the unsent name, and its local database is kept
-    await expect(page.getByTestId('user.profile.sign-out-dialog.confirm-button')).toBeHidden()
-    await expect(page).toHaveURL(/\/me$/)
-    await expect(page.getByTestId('user.profile.heading')).toHaveText(data.unsentName)
-    expect(await databases(page)).toContain(database)
+    await test.step('9. On device A, click [user.profile.sign-out-button] and click [user.profile.sign-out-dialog.confirm-button]', async () => {
+      await page.getByTestId('user.profile.sign-out-button').click()
+      await page.getByTestId('user.profile.sign-out-dialog.confirm-button').click()
+      // Expected: After step 9 device A is on [/sign-in] and shows no [app-shell.notice-message]:
+      //   the notice of step 5 went with the account
+      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page.getByTestId('app-shell.notice-message')).toHaveCount(0)
+    })
   })
 })

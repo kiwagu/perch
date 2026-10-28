@@ -25,6 +25,8 @@
   "app.shell.toast.note-deleted": "Nota eliminada.",
   "app.shell.toast.organisation-created": "Organización creada.",
   "app.shell.toast.member-removed": "Miembro quitado.",
+  "app.shell.toast.invited": "Miembro invitado.",
+  "app.shell.toast.profile-saved": "Perfil guardado.",
   "app.shell.toast.device-signed-out": "Sesión cerrada en ese dispositivo.",
   "app.shell.confirm.cancel": "Cancelar",
   "app.shell.confirm.note-delete.title": "¿Eliminar esta nota?",
