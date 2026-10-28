@@ -447,9 +447,10 @@ out, and the loader derives it, the same way every time:
   segment for a control of the screen itself (`user.profile.save-button` gives
   `profile-saved`). An operation of several that no control starts (a platform event), or that
   controls with different codes start, is refused until the screen writes its own message on
-  the toast or bans it; so is one event that starts several such actions at once (the regions
-  of a parallel state it enters, or two regions handling one press), until the screen writes
-  `toast: false` on all but one. One press gives one toast. The
+  the toast or bans it; so is one event that starts several such operations at once (the
+  regions of a parallel state it enters, or two regions handling one press with transitions
+  that stay in them), until the screen writes `toast: false` on every action of all but one.
+  One press gives one toast. The
   toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
   message on the toast keeps it (a written message wins on its anchor, branch by branch; the
   other branches still get the standard one), and the one ban is `toast: false` on

@@ -127,27 +127,56 @@ export function operationsOf(
     entered.map((state) => srcOf(state) ?? '').join(', ')
 
   const linked = new Map<unknown, unknown[]>()
-  const starts: { state: unknown; event: string | undefined }[] = []
+  const steps = new Map<unknown, unknown[]>()
+  const starts: { state: unknown; event: string | undefined; by: string }[] = []
+  const add = (map: Map<unknown, unknown[]>, from: unknown, to: unknown): void => {
+    map.set(from, [...(map.get(from) ?? []), to])
+  }
 
   for (const each of branches) {
-    const entered = enteredOf(each)
-    const allowed = entered.filter((state) => !isBanned(state))
-
-    if (allowed.length > 1) {
-      expansion.issues.push({
-        at: each.at,
-        message: `starts ${allowed.length} toasting actions at once (${actionsOf(allowed)}): write toast: false on all but one`,
-      })
-    }
-
-    for (const state of entered) {
+    for (const state of enteredOf(each)) {
       if (each.done && toasting(each.from.node)) {
-        linked.set(each.from.node, [...(linked.get(each.from.node) ?? []), state])
-        linked.set(state, [...(linked.get(state) ?? []), each.from.node])
+        add(steps, each.from.node, state)
+        add(linked, each.from.node, state)
+        add(linked, state, each.from.node)
       } else {
-        starts.push({ state, event: each.event })
+        const by = each.event ?? `the outcome of ${srcOf(each.from.node) ?? 'an invoke'}`
+
+        starts.push({ state, event: each.event, by })
       }
     }
+  }
+
+  /** Whether what `state` starts may toast: it, or a step after it, is not banned. */
+  const mayToast = (state: unknown): boolean => {
+    const reached = new Set([state])
+
+    for (const each of reached) {
+      for (const next of steps.get(each) ?? []) {
+        reached.add(next)
+      }
+    }
+
+    return [...reached].some((each) => !isBanned(each))
+  }
+
+  for (const each of branches) {
+    const started = enteredOf(each).filter(mayToast)
+
+    if (started.length > 1) {
+      expansion.issues.push({
+        at: each.at,
+        message: `starts ${started.length} toasting operations at once (${actionsOf(started)}): write toast: false on every action of all but one`,
+      })
+    }
+  }
+
+  // A transition that leaves the parallel state conflicts with every other one in it, and XState
+  // takes it alone; only transitions that stay in their regions run side by side.
+  const staysInRegion = ({ branch }: Branch): boolean => {
+    const { target } = recordOf(branch)
+
+    return typeof target === 'string' && !target.startsWith('#')
   }
 
   for (const parallel of located.filter(({ node }) => recordOf(node)['type'] === 'parallel')) {
@@ -159,7 +188,8 @@ export function operationsOf(
         (each) =>
           each.event !== undefined &&
           isUnder(each.from.at, inside) &&
-          enteredOf(each).some((state) => !isBanned(state)),
+          staysInRegion(each) &&
+          enteredOf(each).some(mayToast),
       )
 
       for (const event of new Set(events.map((each) => each.event ?? ''))) {
@@ -171,7 +201,7 @@ export function operationsOf(
       if (regions.length > 1) {
         expansion.issues.push({
           at: parallel.at,
-          message: `${event} starts a toasting action in ${regions.length} regions at once (${regions.join(', ')}): write toast: false on all but one`,
+          message: `${event} starts a toasting operation in ${regions.length} regions at once (${regions.join(', ')}): write toast: false on every action of all but one`,
         })
       }
     }
@@ -199,26 +229,30 @@ export function operationsOf(
 
   /** The outcome of a chain, from the control that starts it; refused once, with its issue. */
   function chainOutcome(chain: Set<unknown>): Outcome | undefined {
-    const events = starts.filter(({ state }) => chain.has(state)).map(({ event }) => event)
-    const controls = events.filter(
-      (event): event is string => event !== undefined && expansion.codesOf(event) !== undefined,
-    )
+    const started = starts.filter(({ state }) => chain.has(state))
+    const isControl = (event: string | undefined): event is string =>
+      event !== undefined && expansion.codesOf(event) !== undefined
+    const others = [
+      ...new Set(started.filter(({ event }) => !isControl(event)).map(({ by }) => by)),
+    ]
+    const controls = started.map(({ event }) => event).filter(isControl)
     const codes = [...new Set(controls.map((event) => operationCodeOf(event, expansion.screen)))]
     const [code] = codes
     const members = located.filter(({ node }) => chain.has(node))
     const [first] = members
     const actions = actionsOf(members.map(({ node }) => node))
+    const settle = `show its own message on ${expansion.toast ?? 'the toast'} or write toast: false`
 
-    if (code !== undefined && codes.length === 1 && controls.length === events.length) {
+    if (code !== undefined && codes.length === 1 && others.length === 0) {
       return { code, action: controls[0] ?? '' }
     }
 
     expansion.issues.push({
       at: [...(first?.at ?? at), 'invoke'],
       message:
-        codes.length > 1
-          ? `the operation of ${actions} is started by controls whose codes differ (${codes.join(', ')}): show its own message on ${expansion.toast ?? 'the toast'} or write toast: false`
-          : `the operation of ${actions} is started by no control of the screen, so it has no code: show its own message on ${expansion.toast ?? 'the toast'} or write toast: false`,
+        others.length > 0 || code === undefined
+          ? `the operation of ${actions} is started by what is no control of the screen (${others.join(', ') || 'nothing starts it'}), so it has no code: ${settle}`
+          : `the operation of ${actions} is started by controls whose codes differ (${codes.join(', ')}): ${settle}`,
     })
 
     return undefined

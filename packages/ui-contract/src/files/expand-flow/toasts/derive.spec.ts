@@ -217,13 +217,33 @@ describe('withDerivedToasts', () => {
         {
           at: ['flow', 'states', 'saving-name', 'invoke'],
           message:
-            'the operation of profile.updateName, profile.updateBio is started by no control of the screen, so it has no code: show its own message on app-shell.toast or write toast: false',
+            'the operation of profile.updateName, profile.updateBio is started by what is no control of the screen (platform.change-rejected), so it has no code: show its own message on app-shell.toast or write toast: false',
         },
       ])
       expect(states['saving-bio']).toEqual({
         invoke: { src: 'profile.updateBio', onDone: { target: 'idle' } },
       })
       expect(expansion.toasts).toEqual([])
+    })
+
+    it('refuses one that a control and something else start, naming what is no control', () => {
+      const expansion = expansionWith(TOAST, { screen: 'user.profile' })
+
+      derived(
+        {
+          ...profile({ 'user.profile.save-button': save, 'platform.change-rejected': save }),
+          leaving: { invoke: { src: 'platform.sign-out', onError: { target: 'saving-name' } } },
+        },
+        expansion,
+      )
+
+      expect(expansion.issues).toEqual([
+        {
+          at: ['flow', 'states', 'saving-name', 'invoke'],
+          message:
+            'the operation of profile.updateName, profile.updateBio is started by what is no control of the screen (platform.change-rejected, the outcome of platform.sign-out), so it has no code: show its own message on app-shell.toast or write toast: false',
+        },
+      ])
     })
 
     it('refuses one that controls with different codes start', () => {
@@ -256,7 +276,8 @@ describe('withDerivedToasts', () => {
     })
   })
 
-  describe('one event that starts several toasting actions at once', () => {
+  describe('one event that starts several toasting operations at once', () => {
+    const SETTLE = 'write toast: false on every action of all but one'
     const region = (src: string, extra: Record<string, unknown> = {}) => ({
       initial: 'running',
       states: { running: { invoke: { src, onDone: { target: 'done' }, ...extra } }, done: {} },
@@ -266,6 +287,18 @@ describe('withDerivedToasts', () => {
       states: {
         idle: { on: { 'sample.save-button': { target: 'saving' } } },
         saving: { invoke: { src, onDone: { target: 'idle' }, ...extra } },
+      },
+    })
+    /**
+     * A region whose first action bans its toast and leads into a second, `ban` on the second;
+     * from `idle` Save starts it, or the region starts in it.
+     */
+    const chained = (initial: 'idle' | 'first', ban: Record<string, unknown>) => ({
+      initial,
+      states: {
+        idle: initial === 'idle' ? { on: { 'sample.save-button': { target: 'first' } } } : {},
+        first: { invoke: { src: 'thing.createThing', toast: false, onDone: { target: 'second' } } },
+        second: { invoke: { src: 'thing.updateThing', onDone: { target: 'idle' }, ...ban } },
       },
     })
 
@@ -286,8 +319,7 @@ describe('withDerivedToasts', () => {
       expect(refused.issues).toEqual([
         {
           at: ['flow', 'states', 'idle', 'on', 'sample.open-button'],
-          message:
-            'starts 2 toasting actions at once (note.createNote, tag.createTag): write toast: false on all but one',
+          message: `starts 2 toasting operations at once (note.createNote, tag.createTag): ${SETTLE}`,
         },
       ])
       expect(settled.issues).toEqual([])
@@ -312,11 +344,66 @@ describe('withDerivedToasts', () => {
       expect(refused.issues).toEqual([
         {
           at: ['flow', 'states', 'editing'],
-          message:
-            'sample.save-button starts a toasting action in 2 regions at once (name, bio): write toast: false on all but one',
+          message: `sample.save-button starts a toasting operation in 2 regions at once (name, bio): ${SETTLE}`,
         },
       ])
       expect(settled.issues).toEqual([])
+    })
+
+    it('follows a banned first action to the action after it, on a press and on the entry', () => {
+      const pressing = (ban: Record<string, unknown>) => ({
+        editing: {
+          type: 'parallel',
+          states: { things: chained('idle', ban), bio: pressed('profile.updateBio') },
+        },
+      })
+      const entering = (ban: Record<string, unknown>) => ({
+        idle: { on: { 'sample.open-button': { target: 'viewing' } } },
+        viewing: {
+          type: 'parallel',
+          states: { things: chained('first', ban), tags: region('tag.createTag') },
+        },
+      })
+      const refused = expansionWith(TOAST)
+      const settled = expansionWith(TOAST)
+
+      derived(pressing({}), refused)
+      derived(entering({}), refused)
+      derived(pressing({ toast: false }), settled)
+      derived(entering({ toast: false }), settled)
+
+      expect(refused.issues).toEqual([
+        {
+          at: ['flow', 'states', 'editing'],
+          message: `sample.save-button starts a toasting operation in 2 regions at once (things, bio): ${SETTLE}`,
+        },
+        {
+          at: ['flow', 'states', 'idle', 'on', 'sample.open-button'],
+          message: `starts 2 toasting operations at once (thing.createThing, tag.createTag): ${SETTLE}`,
+        },
+      ])
+      expect(settled.issues).toEqual([])
+    })
+
+    it('takes one press that leaves the parallel state from two regions as one transition', () => {
+      const leaving = {
+        initial: 'idle',
+        states: { idle: { on: { 'sample.save-button': { target: '#sample.saving' } } } },
+      }
+      const expansion = expansionWith(TOAST)
+
+      derived(
+        {
+          editing: { type: 'parallel', states: { name: leaving, bio: leaving } },
+          saving: { invoke: { src: 'note.createNote', onDone: { target: 'editing' } } },
+        },
+        expansion,
+      )
+
+      expect(expansion.issues).toEqual([])
+      expect(expansion.toasts).toEqual([
+        { anchor: TOAST, code: 'note-created', action: 'note.createNote' },
+      ])
     })
   })
 
