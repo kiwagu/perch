@@ -106,7 +106,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen may run (signing up, in and out, organisations, devices), the events it raises
   in a flow (the local data opened, or could not be), `leaving`, the actions whose run
   leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
-  first, the reserved anchors and the readiness line.
+  first, `toasts`, the platform actions whose success toasts with their codes, the reserved
+  anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -429,17 +430,21 @@ out, and the loader derives it, the same way every time:
   the part is a problem: the screen declares the error, or writes the region by its button
   with its `onError`.
 - **The toast of a success.** With a toast anchor on the frame (`app-shell.toast`), every
-  invoke of an action of the model, written or in a derived region, says its success there:
-  each branch of its `onDone` gets `show: { app-shell.toast: [<code>] }`, the code being the
-  action's object in kebab case and the past of its verb (`note.createNote` gives
-  `note-created`, `profile.updateBio` gives `bio-updated`), or `<action>-done` for a verb
-  other than create, update and delete. An `onDone` any branch of which shows something
-  already gets none (what the file writes wins); an invoke, or a region written `by` its
-  button, that says `toast: false` gets none (the language select's store: the change is
-  visible by itself). A platform action never toasts, and a failure never does: it shows on
-  the part's error. The toast anchor carries every code a flow shows on it; the vocabulary
-  documents the derived ones by one rule row, `<object>-<verb>ed`, the manifest lists each
-  with its action, and `contract:diff` reports a new one. A code a flow writes on the toast
+  mutation says its success there, with a standard message: each invoke of an action of the
+  model, written or in a derived region, gets on each branch of its `onDone`
+  `show: { app-shell.toast: [<code>] }`, the code being the action's object in kebab case and
+  the past of its verb (`note.createNote` gives `note-created`, `profile.updateBio` gives
+  `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a
+  platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed
+  (`organisations.create: organisation-created`), and an unlisted one never does. The toast
+  stays on unless the screen says otherwise: an `onDone` that shows its own message on the
+  toast keeps it (a written message wins on its anchor), and the one ban is `toast: false` on
+  the invoke, or on a region written `by` its button (the language select's store: the change
+  is visible by itself); a notice or an error written on the outcome says nothing about the
+  toast. A failure never toasts: it shows on the part's error. The toast anchor carries every
+  code a flow shows on it; the vocabulary documents the derived ones by one rule row,
+  `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a
+  new one. A code a flow writes on the toast
   itself (a warning of its own), or the frame lists on it, has its own row, even where a
   derivation gives the same code.
 
@@ -775,7 +780,8 @@ gap is fixed in the contract files first, never worked around in a test.
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
-  once, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a
+  once, every action of `toasts` is an action of the platform, and `leaving` comes with
+  `unsavedInput`, whose question is a reserved dialog with a
   code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names

@@ -69,8 +69,10 @@ code and the tests follow; the checks hold them to the contract.
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
    the region of a button bound to one action when it only runs the action, and the toast of a
-   model action's success (write `toast: false` on the invoke, or on a region `by` its button,
-   when the screen wants none). Add its
+   mutation's success (on by default for an action of the model, and for a platform action the
+   platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
+   `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
+   toast for a message of its own). Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms

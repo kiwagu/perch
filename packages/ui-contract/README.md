@@ -27,16 +27,17 @@ for Bun.
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
     failures of the actions, an error's codes and fields, the buttons whose regions the flow
     leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, the success of each model action said on the
-    frame's toast anchor, which carries every code a flow shows on it
+    screen carry and the failures of the actions, the success of each mutation said on the
+    frame's toast anchor (a model action by its name, a platform action by the platform's
+    `toasts` map), which carries every code a flow shows on it
     (`files/expand-flow/toasts.ts`, `files/derive/toasts.ts`), then parsed through
     `screenFileSchema`;
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/domain/platform.yaml`, the version and the platform section (its actions,
-    events, `leaving` actions, `unsavedInput` (how each leave that would lose unsaved input
-    asks first), reserved anchors and status line), through
+    events, `leaving` actions, `toasts` (the platform actions whose success toasts, with
+    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
     screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
@@ -118,6 +119,7 @@ for Bun.
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
     path parameter, and a value for each `$param`, else `needs an example` at its property),
     `leavingProblems` (each action of `platform.leaving` exists and is listed once),
+    `toastsProblems` (each action of `platform.toasts` is an action of the platform),
     `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
     reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
     its own, and actions that ask need an action under `leaving`)
