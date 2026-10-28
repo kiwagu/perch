@@ -1048,6 +1048,26 @@
                     }
                   ],
                   "description": "Where the entries of a list, a section or a table come from."
+                },
+                "asks": {
+                  "type": "object",
+                  "properties": {
+                    "dialog": {
+                      "type": "string",
+                      "description": "The frame's confirmation that asks."
+                    },
+                    "code": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "The code it asks with: what the action destroys."
+                    }
+                  },
+                  "required": [
+                    "dialog",
+                    "code"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
                 }
               },
               "required": [
@@ -4840,6 +4860,26 @@
           "own": {
             "description": "Shown to a member only on the entries it owns.",
             "type": "boolean"
+          },
+          "asks": {
+            "type": "object",
+            "properties": {
+              "dialog": {
+                "type": "string",
+                "description": "The frame's confirmation that asks."
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The code it asks with: what the action destroys."
+              }
+            },
+            "required": [
+              "dialog",
+              "code"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
           },
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",

@@ -73,7 +73,9 @@ code and the tests follow; the checks hold them to the contract.
    that starts it; one event starting several at once is refused; on by default for an action of the
    model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
-   toast for a message of its own). Add its
+   toast for a message of its own), and the question before a destructive action (a control
+   bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
+   its anchor to run it without asking). Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms

@@ -462,6 +462,21 @@ out, and the loader derives it, the same way every time:
   new one. A code a flow writes on the toast
   itself (a warning of its own), or the frame lists on it, has its own row, even where a
   derivation gives the same code.
+- **The question before a destructive action.** With a confirmation on the frame (an anchor of
+  kind `confirmation`, `app-shell.confirmation`), every control whose binding names a
+  destructive action asks it before the action runs: an action of the model whose verb is
+  `delete`, an action of the platform whose verb (the first word of its last segment) is
+  `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
+  code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
+  the platform action's name with `.` as `-` (`organisations.remove` gives
+  `organisations-remove`); the confirmation carries every code asked with, which the
+  vocabulary documents by one rule row, `<object>-<verb>`. Both are derived only: a screen file
+  never writes `asks`, nor the frame the confirmation's codes. The flow says nothing of it: the
+  press still leads to the state that runs the action, and the app's gate asks in front of the
+  event, its confirm-button letting the event through and its cancel-button dropping it. The
+  one line a screen writes is `confirm: false` on the control, which runs the action without
+  asking; on a control that runs no destructive action it bans nothing and is refused. Without
+  a confirmation on the frame nothing asks.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived
@@ -795,7 +810,9 @@ gap is fixed in the contract files first, never worked around in a test.
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
-  once, every action of `toasts` is an action of the platform, and `leaving` comes with
+  once, every action of `toasts` is an action of the platform, the frame's confirmation is
+  declared by the frame alone, once, reserved, with both answers and no action of its own,
+  and `leaving` comes with
   `unsavedInput`, whose question is a reserved dialog with a
   code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see

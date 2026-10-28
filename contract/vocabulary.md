@@ -71,6 +71,7 @@ another is a code or a state of one anchor, never a second anchor.
 | `list` | the container of a list, with `data-state` when its data arrives after the page | `getByRole('list')` |
 | `form` | the container of a form | |
 | `dialog` | a modal window or a confirmation, with `data-code` for what it asks | `getByRole('alertdialog')` or `getByRole('dialog')` |
+| `confirmation` | the frame's question before a destructive action, one for the whole app: an alert dialog with `data-code` for the action it asks about, rendering `confirm-button` (go on) and `cancel-button` (stay) | `getByRole('alertdialog')` |
 | `panel` | a side or inline panel that is not modal | |
 | `section` | a region inside a page, with `data-state` when its data arrives after the page | |
 | `page` | the root element of a screen | |
