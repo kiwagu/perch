@@ -23,7 +23,6 @@
   "user.profile.name": "Name",
   "user.profile.bio": "Bio",
   "user.profile.save": "Save",
-  "user.profile.saved": "Saved",
   "user.profile.sign-out": "Sign out",
   "user.profile.sign-out-offline.title": "Sign out and lose unsent changes?",
   "user.profile.sign-out-offline.body": "Some changes made on this device have not reached the server yet. Signing out now deletes them from this device for good.",

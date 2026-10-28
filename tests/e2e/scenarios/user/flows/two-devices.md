@@ -26,7 +26,7 @@ Where: [/me] on device A, and [/me] on device B, another browser
 7. On device A, click [user.profile.save-button]
 
 ### Expected result
-- After step 2 device A shows [app-shell.notice-message] carrying [code:profile-saved]
+- After step 2 device A shows [app-shell.toast] carrying [code:profile-saved]
 - After step 3 device B shows the bio entered on device A in [user.profile.bio-textarea]
 - Within 5 seconds of step 4 device A shows the new name in [user.profile.heading], without a reload
 - The time from the click on device B to the new name on device A is reported as "sync-latency-ms"

@@ -168,16 +168,14 @@ describe('organisation machine', () => {
     expect(emitted).toEqual([toast('note-created')])
   })
 
-  it('shows the invited notice, and a removal its toast, reading the members again after each', async () => {
+  it('toasts an invitation and a removal, reading the members again after each', async () => {
     const { actor, deps, snapshot, emitted, region } = page()
 
     actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
     await region('invite', 'idle')
 
     expect(deps.invite).toHaveBeenCalledWith('bea@example.test')
-    expect(emitted).toEqual([
-      { type: 'show', anchor: 'app-shell.notice-message', codes: ['invited'] },
-    ])
+    expect(emitted).toEqual([toast('invited')])
     expect(snapshot().context.membersChanged).toBe(1)
 
     actor.send({ type: 'organisation.members.remove-button', identity: bea })

@@ -23,7 +23,6 @@
   "user.profile.name": "Nombre",
   "user.profile.bio": "Biografía",
   "user.profile.save": "Guardar",
-  "user.profile.saved": "Guardado",
   "user.profile.sign-out": "Cerrar sesión",
   "user.profile.sign-out-offline.title": "¿Cerrar sesión y perder los cambios sin enviar?",
   "user.profile.sign-out-offline.body": "Algunos cambios hechos en este dispositivo aún no han llegado al servidor. Si cierras sesión ahora, se borrarán de este dispositivo para siempre.",

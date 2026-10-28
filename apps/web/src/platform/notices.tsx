@@ -21,7 +21,7 @@ import type { Translate } from '@workspace/i18n'
 import { entryOf, type Texts } from './texts'
 
 export interface Notice {
-  /** The contract code of what it says (`welcome`, `profile-saved`), shown as `data-code`. */
+  /** The contract code of what it says (`welcome`, `change-rejected`), shown as `data-code`. */
   readonly code: string
   /**
    * Its words, from the frame's map, said in the language the app speaks while it is shown: a
