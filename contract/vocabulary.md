@@ -149,7 +149,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | Code | Where | Meaning |
 |---|---|---|
 | `welcome` | `app-shell.notice-message` | the account signed up or signed in |
-| `profile-saved` | `app-shell.notice-message` | the profile was saved |
+| `profile-saved` | `app-shell.notice-message`, `app-shell.toast` | the profile was saved |
 | `invited` | `app-shell.notice-message` | an account was invited into the organisation |
 | `devices-read-failed` | `app-shell.notice-message` | the devices of the account could not be read |
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |

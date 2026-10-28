@@ -28,7 +28,7 @@ Where: [/org] on device A (user A) and [/org] on device B (user B, another brows
 
 ### Expected result
 - After step 2 device A shows the organisation name in [organisation.page.heading] and [organisation.page.role-badge] with [value:admin]
-- After step 3 device A shows [app-shell.notice-message] carrying [code:invited] and user B in [organisation.members.list]
+- After step 3 device A shows [app-shell.toast] carrying [code:invited] and user B in [organisation.members.list]
 - After step 6 device B shows the organisation name in [organisation.page.heading], [organisation.page.role-badge] with [value:member] and the note by A in [organisation.notes.list], without an invitation page or a reload
 - Within 5 seconds of step 7 device A shows the note by B in [organisation.notes.list], without a reload; the delay is reported as "note-sync-latency-ms"
 - Device B shows no [organisation.members.list] and no [organisation.invite.form]
