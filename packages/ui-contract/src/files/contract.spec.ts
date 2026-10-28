@@ -33,6 +33,7 @@ const KINDS = [
   'list',
   'form',
   'dialog',
+  'confirmation',
   'panel',
   'section',
   'page',

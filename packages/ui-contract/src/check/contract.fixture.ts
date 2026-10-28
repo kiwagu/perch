@@ -195,6 +195,7 @@ export function sampleContract(): Contract {
         status: { anchor: 'app-shell.status', states: ['opening', 'ready'] },
       },
       toasts: [],
+      questions: [],
     },
     activities: [THING],
     activityLines: new Map(),

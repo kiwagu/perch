@@ -10,6 +10,7 @@
 
 import { screenOf } from '../anchors'
 import {
+  CONFIRM_RULE_ROW,
   jsonPath,
   MODEL_FILE,
   type Problem,
@@ -53,9 +54,12 @@ function screenProblems(contract: Contract): Problem[] {
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
   const anchors = declaredAnchors(screens)
-  // A code the loader derived on the toast anchor is vouched for by the rule row, not a row of its own.
+  // A code the loader derived on the toast anchor or the confirmation is vouched for by its rule
+  // row, not a row of its own.
   const codesFor = (anchor: string): Readonly<Record<string, unknown>> => {
-    const derived = screens.toasts.filter((toast) => toast.anchor === anchor)
+    const derived = [...screens.toasts, ...screens.questions].filter(
+      (each) => each.anchor === anchor,
+    )
 
     return derived.length === 0
       ? vocabulary.codes
@@ -200,21 +204,27 @@ const usedCodes = (screens: ScreensFile): Set<string> =>
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
     ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
     ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
+    ...(screens.questions.length > 0 ? [CONFIRM_RULE_ROW] : []),
   ])
 
-/** The derived toasts want the vocabulary's rule row. */
-function toastRuleProblems({ vocabulary, screens }: Contract): Problem[] {
-  const [first] = screens.toasts
+/** Derived codes, the toasts' or the questions', want the vocabulary's rule row `row`. */
+function ruleRowProblems(
+  { vocabulary }: Contract,
+  noun: string,
+  derived: ReadonlyArray<{ readonly anchor: string; readonly code: string }>,
+  row: string,
+): Problem[] {
+  const [first] = derived
 
-  if (first === undefined || has(vocabulary.codes, TOAST_RULE_ROW)) {
+  if (first === undefined || has(vocabulary.codes, row)) {
     return []
   }
 
-  const codes = screens.toasts.map(({ code }) => code).join(', ')
+  const codes = derived.map(({ code }) => code).join(', ')
 
   return [
     inVocabulary(
-      `section "Codes": the toasts derived on ${first.anchor} (${codes}) want the rule row \`${TOAST_RULE_ROW}\``,
+      `section "Codes": the ${noun} derived on ${first.anchor} (${codes}) want the rule row \`${row}\``,
     ),
   ]
 }
@@ -233,5 +243,6 @@ export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
-  ...toastRuleProblems(contract),
+  ...ruleRowProblems(contract, 'toasts', contract.screens.toasts, TOAST_RULE_ROW),
+  ...ruleRowProblems(contract, 'questions', contract.screens.questions, CONFIRM_RULE_ROW),
 ]

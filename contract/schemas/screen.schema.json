@@ -723,6 +723,11 @@
               }
             ],
             "description": "Where the entries of a list, a section or a table come from."
+          },
+          "confirm": {
+            "description": "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
+            "type": "boolean",
+            "const": false
           }
         },
         "required": [

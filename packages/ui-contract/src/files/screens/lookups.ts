@@ -1,6 +1,7 @@
 /**
  * What the expansion of each flow reads of every screen file as read: the codes each anchor
- * carries, the frame's toast anchor, and whether the frame writes that anchor's codes itself.
+ * carries, the frame's toast anchor, and whether the frame writes that anchor's codes itself;
+ * and the frame's confirmation, which the questions before destructive actions name.
  */
 
 import { isRecord, recordOf } from '../../records'
@@ -37,12 +38,12 @@ export function codesOfRead(read: readonly unknown[]): CodesOf {
   return (anchor) => codes.get(anchor)
 }
 
-/** The frame's toast anchor as read: the anchor of kind `toast` of the screen marked `frame`. */
-export function toastOfRead(read: readonly unknown[]): string | undefined {
+/** The frame's anchor of kind `kind` as read, in the screen marked `frame`. */
+function frameAnchorOfRead(read: readonly unknown[], kind: string): string | undefined {
   for (const screen of read) {
     if (isRecord(screen) && screen['frame'] === true && isRecord(screen['anchors'])) {
       const found = Object.entries(screen['anchors']).find(
-        ([, def]) => isRecord(def) && def['kind'] === 'toast',
+        ([, def]) => isRecord(def) && def['kind'] === kind,
       )
 
       if (found !== undefined) {
@@ -54,11 +55,22 @@ export function toastOfRead(read: readonly unknown[]): string | undefined {
   return undefined
 }
 
-/** Whether the frame as read writes the codes of its toast anchor itself. */
-export const writesToastCodes = (read: readonly unknown[], toast: string): boolean =>
+/** The frame's toast anchor as read: the anchor of kind `toast` of the screen marked `frame`. */
+export const toastOfRead = (read: readonly unknown[]): string | undefined =>
+  frameAnchorOfRead(read, 'toast')
+
+/**
+ * The frame's confirmation as read: the anchor of kind `confirmation` of the screen marked
+ * `frame`, which asks before every destructive action.
+ */
+export const confirmationOfRead = (read: readonly unknown[]): string | undefined =>
+  frameAnchorOfRead(read, 'confirmation')
+
+/** Whether the frame as read writes the codes of its anchor `anchor` itself. */
+export const frameWritesCodes = (read: readonly unknown[], anchor: string): boolean =>
   read.some(
     (screen) =>
       isRecord(screen) &&
       screen['frame'] === true &&
-      recordOf(recordOf(screen['anchors'])[toast])['codes'] !== undefined,
+      recordOf(recordOf(screen['anchors'])[anchor])['codes'] !== undefined,
   )

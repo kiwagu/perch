@@ -160,3 +160,38 @@ describe('vocabularyProblems', () => {
     ])
   })
 })
+
+describe('the questions before destructive actions', () => {
+  const RULE = {
+    where: 'app-shell.confirmation',
+    meaning: 'the question before a destructive action',
+  }
+
+  it('asks no row of a derived question code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const dialog = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(dialog, { codes: [...(dialog.codes ?? []), 'thing-delete'] })
+    contract.screens.questions = [
+      { anchor: 'sample.save-button', code: 'thing-delete', action: 'thing.deleteThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the questions derived on sample.save-button (thing-delete) want the rule row `<object>-<verb>`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([])
+  })
+
+  it('calls the rule row unused when no question is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>" is documented but unused',
+    ])
+  })
+})

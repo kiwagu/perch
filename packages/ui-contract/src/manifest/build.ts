@@ -10,6 +10,7 @@
 import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'
 import {
   type Activity,
+  CONFIRM_RULE_ROW,
   type Model,
   type Screen,
   type ScreensFile,
@@ -63,6 +64,7 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             roles,
             own,
             holdsInput,
+            asks,
           },
         ]) => [
           anchor,
@@ -79,6 +81,7 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
             ...(holdsInput === undefined ? {} : { holdsInput }),
+            ...(asks === undefined ? {} : { asks }),
           },
         ],
       ),
@@ -115,11 +118,13 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     readyValue: READY,
     containerStates: vocabulary.containerStates,
     rowStates: mapValues(vocabulary.rowStates, located),
-    // The rule row is no code: each code it stands for is listed with its action instead.
+    // The rule rows are no codes: each code they stand for is listed with its action instead.
     codes: {
       ...mapValues(
         Object.fromEntries(
-          Object.entries(vocabulary.codes).filter(([code]) => code !== TOAST_RULE_ROW),
+          Object.entries(vocabulary.codes).filter(
+            ([code]) => code !== TOAST_RULE_ROW && code !== CONFIRM_RULE_ROW,
+          ),
         ),
         located,
       ),
@@ -127,6 +132,12 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
         screens.toasts.map(({ anchor, code, action }) => [
           code,
           `\`${anchor}\`: the success of \`${action}\``,
+        ]),
+      ),
+      ...Object.fromEntries(
+        screens.questions.map(({ anchor, code, action }) => [
+          code,
+          `\`${anchor}\`: the question before \`${action}\``,
         ]),
       ),
     },
