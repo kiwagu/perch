@@ -851,8 +851,9 @@ gap is fixed in the contract files first, never worked around in a test.
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
 
-Beside them, `bun run e2e:coverage` (in `bun run check`) pairs every scenario with its test,
-and the web app's tests hold the module routes and the real router to the bindings, and
+Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
+`bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
+leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
 
 ## The manifest
