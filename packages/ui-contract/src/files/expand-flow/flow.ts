@@ -4,7 +4,7 @@
  * button into the region it stands for), the states of each region, and in every state its
  * `entry`, `exit`, `on` and the outcomes of its `invoke`; then a region for each button bound
  * to one action that the flow handles nowhere; then, on every invoke of a model action, the
- * toast that says its success (`toasts.ts`). It works on the data as read, before any
+ * toast that says its success (`toasts/`). It works on the data as read, before any
  * schema: what it does not recognise it leaves as it is, so the canonical schema judges it
  * with its own messages.
  */
@@ -117,7 +117,10 @@ export function expandFlow(
   )
 
   return {
-    flow: { ...flow, states: withDerivedToasts(withDerivedRegions(states, expansion), expansion) },
+    flow: {
+      ...flow,
+      states: withDerivedToasts(withDerivedRegions(states, expansion), expansion, at),
+    },
     issues: expansion.issues,
     toasts: expansion.toasts,
     writtenToasts: expansion.writtenToasts,

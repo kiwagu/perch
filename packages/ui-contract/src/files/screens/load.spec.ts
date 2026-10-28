@@ -481,6 +481,31 @@ describe('loadScreens', () => {
       expect(screens?.toasts).toEqual([])
     })
 
+    it("is derived for a platform action the platform's toasts map names, with its code", () => {
+      writeToastScreens({})
+      write(
+        PLATFORM_FILE,
+        `${readFileSync(join(root, PLATFORM_FILE), 'utf8')}toasts:\n  sign-out: signed-out-here\n`,
+      )
+      writeSample((screen) => {
+        screen['anchors'] = {
+          'sample.page': { kind: 'page' },
+          'sample.sign-out-button': { kind: 'button', binding: { action: 'platform.sign-out' } },
+          'sample.error': { kind: 'error' },
+        }
+        screen['entry'] = ['sample.page']
+      })
+
+      const { screens, problems: found } = loadScreens(root)
+      const frame = screens?.screens.find((screen) => screen.id === 'app-shell')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(frame?.anchors['app-shell.toast']?.codes).toEqual(['signed-out-here'])
+      expect(screens?.toasts).toEqual([
+        { anchor: 'app-shell.toast', code: 'signed-out-here', action: 'platform.sign-out' },
+      ])
+    })
+
     it('is not derived for a region by its button that says toast: false', () => {
       writeToastScreens({ add: { by: 'sample.form.add-button', toast: false } })
 

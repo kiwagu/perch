@@ -11,7 +11,7 @@
  * by its name, a region by its pattern or its button, the region of a button left out): each
  * flow is expanded with the codes the anchors of all screens carry, the failures of the
  * actions, the screen's buttons and the frame's toast anchor, which says the success of each
- * model action a flow invokes (`expand-flow/toasts.ts`); that anchor then carries every code a
+ * model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
  * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
  * screen with its file, with the toasts the loader derived.
@@ -46,6 +46,7 @@ const SUFFIX = '.yaml'
 function readScreenFiles(
   root: string,
   failureOf: FailureOf,
+  platformToasts: Readonly<Record<string, string>>,
 ): {
   screens: Screen[]
   files: string[]
@@ -85,7 +86,12 @@ function readScreenFiles(
   }
 
   const values = read.map(({ value }) => value)
-  const lookups: Lookups = { codesOf: codesOfRead(values), failureOf, toast: toastOfRead(values) }
+  const lookups: Lookups = {
+    codesOf: codesOfRead(values),
+    failureOf,
+    toast: toastOfRead(values),
+    platformToasts,
+  }
   const expanded = read.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
   const { toast } = lookups
   const codes =
@@ -158,7 +164,12 @@ export function loadScreensWith(
 ): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
   const failureOf = failuresOf(model, platform?.actions)
-  const { screens, files, problems: screenProblems, toasts } = readScreenFiles(root, failureOf)
+  const {
+    screens,
+    files,
+    problems: screenProblems,
+    toasts,
+  } = readScreenFiles(root, failureOf, platform?.toasts ?? {})
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {
