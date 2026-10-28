@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseShape } from './shape-dialect'
+import { parseShape } from './parse'
 
 describe('parseShape', () => {
   it('parses fields, destructuring, aliases and graph edges', () => {
