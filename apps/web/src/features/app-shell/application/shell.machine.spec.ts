@@ -220,6 +220,38 @@ describe('shell machine', () => {
     },
   )
 
+  it('says on the notice that a change was refused, and refused again, while a store runs too', () => {
+    const stored = Promise.withResolvers<void>()
+    const shell = frame({ storeLocale: () => ResultAsync.fromSafePromise(stored.promise) })
+    const REJECTED = {
+      type: 'show',
+      anchor: 'app-shell.notice-message',
+      codes: ['change-rejected'],
+    }
+    const RELOADED = {
+      type: 'show',
+      anchor: 'app-shell.notice-message',
+      codes: ['changes-reloaded'],
+    }
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.change-rejected' })
+    shell.actor.send({ type: 'platform.changes-reloaded' })
+
+    expect(shell.emitted).toEqual([REJECTED, RELOADED])
+
+    shell.signIn()
+    shell.store('en')
+    shell.choose('es')
+
+    expect(shell.is('storing-locale')).toBe(true)
+
+    shell.actor.send({ type: 'platform.change-rejected' })
+
+    expect(shell.emitted.at(-1)).toEqual(REJECTED)
+    expect(shell.is('storing-locale')).toBe(true)
+  })
+
   it("speaks a language another device stored, and not this device's own coming back", async () => {
     const stored = Promise.withResolvers<void>()
     const shell = frame({ storeLocale: () => ResultAsync.fromSafePromise(stored.promise) })

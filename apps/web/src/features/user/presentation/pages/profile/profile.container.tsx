@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 import { useService, useShape } from '../../../../../platform/module'
-import { useNotify } from '../../../../../platform/notices'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import {
@@ -42,8 +41,7 @@ export function ProfileContainer() {
       }),
     [profiles, session],
   )
-  const { state, send, submit, actor } = useScreenMachine(machine)
-  const notify = useNotify()
+  const { state, send, submit } = useScreenMachine(machine)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -56,17 +54,6 @@ export function ProfileContainer() {
       send({ type: 'model.profile.bio' })
     }
   }, [row?.bio, send])
-
-  // The effects of the flow outside the form: the shell's notice (the hook runs the moves).
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('profile-saved')) {
-        notify({ code: 'profile-saved', text: (t) => t('user.profile.saved') })
-      }
-    })
-
-    return () => shown.unsubscribe()
-  }, [actor, notify])
 
   const type = (field: keyof ProfileFields, value: string) => {
     const next = { ...values.current.drafts, [field]: value }

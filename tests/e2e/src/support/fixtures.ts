@@ -57,6 +57,10 @@ export async function appReady(page: Page): Promise<void> {
 export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
 
+/** One toast of the frame, located by its anchor and its contract code together. */
+export const toast = (page: Page, code: string) =>
+  page.locator(`[data-testid="app-shell.toast"][data-code="${code}"]`)
+
 /** The sign-in page's word on how the last session ended, by its anchor and its code. */
 export const signInNotice = (page: Page, code: string) =>
   page.locator(`[data-testid="user.sign-in.notice-message"][data-code="${code}"]`)

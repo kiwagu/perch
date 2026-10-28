@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the navigation between the screens, the language choice, and a way out of a device whose data will not open."
+description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the language choice, and a way out of a device whose data will not open."
 frame: true
 flag: null
 bindings: []
@@ -15,6 +15,9 @@ anchors:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
     codes: [ welcome, profile-saved, invited, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
+  app-shell.toast:
+    kind: toast
+    description: "The outcome of a mutation, shown for a short while in the tab that acted: several may show at once, stacked with the newest at the top and the earlier ones moving down; a click dismisses one. It renders once per toast shown, each carrying data-code; its codes are derived, one per operation a flow runs: an action of the model, or a platform action the platform's toasts map lists."
   app-shell.nav:
     kind: nav
     description: "The main navigation: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current."
@@ -97,6 +100,14 @@ flow:
           description: The notice goes with the account.
           actions:
             - clear: app-shell.notice-message
+        platform.change-rejected:
+          description: The notice says the server refused a change and this device undid it.
+          actions:
+            - show: { app-shell.notice-message: [ change-rejected ] }
+        platform.changes-reloaded:
+          description: The notice says the server refused the undo too, and the later unsent changes were undone.
+          actions:
+            - show: { app-shell.notice-message: [ changes-reloaded ] }
     storing-locale:
       description: The settings store the chosen language; the language select takes no other choice meanwhile.
       on:
@@ -107,9 +118,18 @@ flow:
           description: The notice goes with the account; the store runs on.
           actions:
             - clear: app-shell.notice-message
+        platform.change-rejected:
+          description: The notice says the server refused a change and this device undid it.
+          actions:
+            - show: { app-shell.notice-message: [ change-rejected ] }
+        platform.changes-reloaded:
+          description: The notice says the server refused the undo too, and the later unsent changes were undone.
+          actions:
+            - show: { app-shell.notice-message: [ changes-reloaded ] }
       invoke:
         src: settings.updateLocale
         input: { locale: app-shell.locale-select }
+        toast: false
         onDone:
           target: ready
           description: The settings hold the chosen language.

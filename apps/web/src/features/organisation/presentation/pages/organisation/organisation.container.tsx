@@ -1,11 +1,10 @@
 import { errAsync } from 'neverthrow'
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
 import { ownerKeyOf } from '@workspace/kernel'
 
 import { useService, useShape } from '../../../../../platform/module'
-import { useNotify } from '../../../../../platform/notices'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import { NOTES_SERVICE } from '../../../application/notes.service'
@@ -89,8 +88,7 @@ export function OrganisationContainer() {
       current: at,
     })
   }, [organisations, notes, session])
-  const { state, send, submit, actor } = useScreenMachine(machine)
-  const notify = useNotify()
+  const { state, send, submit } = useScreenMachine(machine)
   // An administrator sees the members: read when the page opens and after each change made here.
   const members = useMembers(
     organisations,
@@ -102,17 +100,6 @@ export function OrganisationContainer() {
   const editing =
     state.matches({ viewing: { 'note-items': 'editing' } }) ||
     state.matches({ viewing: { 'note-items': 'saving' } })
-
-  // The effects of the flow outside the page's own errors: the shell's notice.
-  useEffect(() => {
-    const said = actor.on('show', ({ codes }) => {
-      if (codes.includes('invited')) {
-        notify({ code: 'invited', text: (t) => t('organisation.invite.invited') })
-      }
-    })
-
-    return () => said.unsubscribe()
-  }, [actor, notify])
 
   return (
     <OrganisationView

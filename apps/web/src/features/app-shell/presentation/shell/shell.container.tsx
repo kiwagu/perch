@@ -4,13 +4,17 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { useT } from '@workspace/i18n'
 
+import { EVENTS } from '../../../../platform/events.port'
+import { useFrameEffects } from '../../../../platform/frame-effects'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
-import { useClearNotice, useNotice, useNotify } from '../../../../platform/notices'
+import { useNotice } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
+import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
 import { LocaleWrites } from '../../application/locale-writes'
+import { shellEvents } from '../../application/shell.events'
 
 import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
@@ -19,6 +23,7 @@ const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props
 
 export function ShellContainer(props: { readonly children?: ReactNode }) {
   const session = useService(SESSION)
+  const events = useService(EVENTS)
   const settings = useService(SETTINGS_SERVICE)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
@@ -30,8 +35,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const notice = useNotice()
-  const notify = useNotify()
-  const clearNotice = useClearNotice()
+  const toasts = useToasts()
+  const dismissToast = useDismissToast()
   const t = useT()
   const guard = useLeaveGuard()
 
@@ -75,35 +80,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     }
   }, [user?.id, actor])
 
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('locale-not-stored')) {
-        notify({ code: 'locale-not-stored', text: (t) => t('app.shell.locale-not-stored') })
-      }
-    })
-    const cleared = actor.on('clear', ({ anchor }) => {
-      if (anchor === 'app-shell.notice-message') {
-        clearNotice()
-      }
-    })
+  // The frame's flow says its notice and clears it, as every screen's flow does.
+  useFrameEffects(actor)
 
-    return () => {
-      shown.unsubscribe()
-      cleared.unsubscribe()
-    }
-  }, [actor, notify, clearNotice])
-
-  useEffect(
-    () =>
-      session.subscribeRejections((rejection) =>
-        notify(
-          rejection.reloaded
-            ? { code: 'changes-reloaded', text: (t) => t('app.shell.reloaded') }
-            : { code: 'change-rejected', text: (t) => t('app.shell.rejected') },
-        ),
-      ),
-    [session, notify],
-  )
+  // The bus's refusals reach the frame's flow, which says them on the notice.
+  useEffect(() => shellEvents(events, actor), [events, actor])
 
   return (
     <ShellView
@@ -121,6 +102,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       }}
       link={RouterLink}
       notice={notice && { code: notice.code, text: notice.text(t) }}
+      toasts={toasts.map(({ id, code, tone, text }) => ({ id, code, tone, text: text(t) }))}
+      onDismissToast={dismissToast}
     >
       {props.children}
     </ShellView>

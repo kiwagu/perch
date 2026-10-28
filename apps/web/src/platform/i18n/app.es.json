@@ -19,5 +19,11 @@
   "app.shell.locale.es": "Español",
   "app.shell.rejected": "El servidor rechazó un cambio y lo deshizo en este dispositivo.",
   "app.shell.reloaded": "El servidor volvió a rechazar un cambio, así que ese cambio y los posteriores aún no enviados se deshicieron en este dispositivo.",
-  "app.shell.sync.local": "Guardado en este dispositivo"
+  "app.shell.sync.local": "Guardado en este dispositivo",
+  "app.shell.toast.note-created": "Nota añadida.",
+  "app.shell.toast.note-updated": "Nota guardada.",
+  "app.shell.toast.note-deleted": "Nota eliminada.",
+  "app.shell.toast.organisation-created": "Organización creada.",
+  "app.shell.toast.member-removed": "Miembro quitado.",
+  "app.shell.toast.device-signed-out": "Sesión cerrada en ese dispositivo."
 }

@@ -17,6 +17,7 @@ import type { SessionPort } from '../../../../platform/session.port'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 
 import { openedFrame } from './__fixtures__/frame'
+import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
 
@@ -28,12 +29,14 @@ const HomeModule = defineModule({
 
 describe('ShellContainer', () => {
   it('tells the user of a change the gateway refused and this device undid', async () => {
-    const { session, reject } = fakeSession()
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    const { reject } = services
     const router = createAppRouter({
       modules: [HomeModule],
       session,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -45,7 +48,7 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={fakeServices(session)}>
+          <ServicesProvider services={services}>
             <RouterProvider router={router} />
           </ServicesProvider>
         </ShellFrameContext.Provider>
@@ -55,7 +58,7 @@ describe('ShellContainer', () => {
 
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
 
-    act(() =>
+    await act(() =>
       reject({
         region: 'tenant:acme',
         batch: 1,
@@ -71,7 +74,7 @@ describe('ShellContainer', () => {
     expect(rejected.textContent).toBe('The server refused a change and undid it on this device.')
 
     // The undo was refused too: the region came back from the server without the later changes.
-    act(() =>
+    await act(() =>
       reject({
         region: 'tenant:acme',
         batch: 1,
@@ -92,14 +95,15 @@ describe('ShellContainer', () => {
   })
 
   it('says a notice in the language the app speaks now, not the one it spoke when raised', async () => {
-    const { session, reject } = fakeSession()
+    const { session } = fakeSession()
     const services = fakeServices(session)
+    const { reject } = services
     const frame = openedFrame()
     const router = createAppRouter({
       modules: [HomeModule],
       session,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -119,7 +123,7 @@ describe('ShellContainer', () => {
     const view = render(app('es'))
 
     await screen.findByText('home')
-    act(() =>
+    await act(() =>
       reject({
         region: 'tenant:acme',
         batch: 1,
@@ -151,7 +155,7 @@ describe('ShellContainer', () => {
       modules: [HomeModule],
       session: signedIn,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -186,7 +190,7 @@ describe('ShellContainer', () => {
   })
 
   it("speaks no signed-out account's stored language, and its notice goes with it", async () => {
-    const { session, reject } = fakeSession()
+    const { session } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const changes = new Set<Parameters<SessionPort['subscribe']>[0]>()
     let who: typeof ann | undefined = ann
@@ -200,13 +204,14 @@ describe('ShellContainer', () => {
       },
     }
     const services = fakeServices(switching)
+    const { reject } = services
     const frame = openedFrame()
     const spoken: string[] = []
     const router = createAppRouter({
       modules: [HomeModule],
       session: switching,
       layout: () => (
-        <NoticeProvider>
+        <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
             <Outlet />
           </ShellContainer>
@@ -233,7 +238,7 @@ describe('ShellContainer', () => {
 
     await waitFor(() => expect(spoken).toEqual(['es']))
 
-    act(() =>
+    await act(() =>
       reject({
         region: 'tenant:acme',
         batch: 1,

@@ -13,6 +13,7 @@ import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
 import type { SessionPort } from '../../../../../platform/session.port'
+import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { SIGN_IN_SERVICE, SignInService } from '../../../application/sign-in.service'
 
 import { SignInContainer } from './sign-in.container'
@@ -89,7 +90,7 @@ function renderSignIn(session: SessionPort) {
     modules: [TestModule],
     session,
     layout: () => (
-      <NoticeProvider>
+      <NoticeProvider texts={NOTICE_TEXTS}>
         <Outlet />
       </NoticeProvider>
     ),
