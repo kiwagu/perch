@@ -44,6 +44,7 @@ const lookups = (controls: readonly Control[]): FlowLookups => ({
   controls,
   screen: 'sample',
   toast: undefined,
+  platformToasts: {},
 })
 
 /** A flow whose root is one parallel state `viewing` with the regions `regions`. */

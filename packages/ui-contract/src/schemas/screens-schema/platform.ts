@@ -88,6 +88,12 @@ export const platformSchema = z
       .describe(
         'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
       ),
+    toasts: z
+      .record(platformActionNameSchema, codeSchema)
+      .optional()
+      .describe(
+        'The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.',
+      ),
     unsavedInput: unsavedInputSchema.optional(),
     reserved: z
       .array(baseAnchorSchema)
