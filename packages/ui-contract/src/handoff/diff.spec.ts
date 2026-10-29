@@ -8,14 +8,15 @@ import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../fil
 import { fixtureContract } from '../manifest/manifest.fixture'
 import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
-import { contractAt, diffContracts, formatChanges } from './diff'
+import { contractAt, diffContracts } from './diff'
+import { formatChanges } from './format-changes'
 
 useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/activities/thing.yaml'
+const SCREEN = 'contract/domain/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/domain/activities/thing.yaml'
 
 const fixtureFiles = (): Record<string, string> => ({
   [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
@@ -128,6 +129,10 @@ describe('diffContracts', () => {
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
+      inputs: { added: [], removed: [] },
+      questions: { added: [], removed: [] },
+      leaving: { added: [], removed: [] },
+      unsavedInput: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -168,7 +173,108 @@ describe('diffContracts', () => {
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
     })
+    screen.anchors['sample.title-input'] = {
+      ...screen.anchors['sample.title-input'],
+      kind: 'input',
+      holdsInput: false,
+    }
+
+    expect(diffContracts(before, more).inputs).toEqual({
+      added: [],
+      removed: ['sample.title-input holds input'],
+    })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists a toast code a new model action derives as an anchor code added', () => {
+    const withToast = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+      const screen = contract.screens.screens[0]
+
+      if (screen === undefined) {
+        throw new Error('the fixture has no screen')
+      }
+
+      screen.anchors['sample.toast'] = {
+        kind: 'toast',
+        ...(codes.length > 0 ? { codes: [...codes] } : {}),
+      }
+
+      return contract
+    }
+
+    expect(diffContracts(withToast([]), withToast(['note-created'])).anchorCodes).toEqual({
+      added: ['sample.toast note-created'],
+      removed: [],
+    })
+  })
+  it('lists the codes of the contract, the derived toast codes in and the rule row out', () => {
+    const toasts = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      if (codes.length > 0) {
+        contract.vocabulary.codes['<object>-<verb>ed'] = {
+          where: 'app-shell.toast',
+          meaning: 'the success of an action of the model',
+        }
+      }
+
+      contract.screens.toasts = codes.map((code) => ({
+        anchor: 'app-shell.toast',
+        code,
+        action: `note.${code}`,
+      }))
+
+      return contract
+    }
+
+    expect(diffContracts(toasts([]), toasts(['note-created', 'note-deleted'])).codes).toEqual({
+      added: ['note-created', 'note-deleted'],
+      removed: [],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts([])).codes).toEqual({
+      added: [],
+      removed: ['note-created'],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts(['note-updated'])).codes).toEqual({
+      added: ['note-updated'],
+      removed: ['note-created'],
+    })
+  })
+  it('lists how each leave that would lose unsaved input asks, as it changes', () => {
+    const asking = structuredClone(before)
+
+    asking.screens.platform.unsavedInput = {
+      question: 'sample.leave-dialog',
+      screen: 'question',
+      actions: 'question',
+      unload: 'browser',
+      state: 'never',
+      flow: 'never',
+      elsewhere: 'cannot',
+    }
+
+    const quieter = structuredClone(asking)
+
+    if (quieter.screens.platform.unsavedInput !== undefined) {
+      quieter.screens.platform.unsavedInput.unload = 'never'
+    }
+
+    expect(diffContracts(before, asking).unsavedInput.added).toEqual([
+      'actions: question',
+      'elsewhere: cannot',
+      'flow: never',
+      'question: sample.leave-dialog',
+      'screen: question',
+      'state: never',
+      'unload: browser',
+    ])
+    expect(diffContracts(asking, quieter).unsavedInput).toEqual({
+      added: ['unload: never'],
+      removed: ['unload: browser'],
+    })
+    expect(formatChanges(diffContracts(asking, quieter))).toContain(
+      'unsaved-input entries added: unload: never',
+    )
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(
@@ -245,7 +351,7 @@ describe('contractAt', () => {
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/platform.yaml:1: version:',
+      'the contract at HEAD does not load: contract/domain/platform.yaml:1: version:',
     )
   })
 })
@@ -285,5 +391,41 @@ describe('formatChanges', () => {
       'transitions added in thing: editing on sample.title-input -> saved, saved on sample.page -> editing',
       'transitions removed in thing: editing on sample.save-button -> saved',
     ])
+  })
+})
+
+describe('diffContracts and the questions before destructive actions', () => {
+  /** The fixture contract, `sample.save-button` asking with `code` when one is given. */
+  const asking = (code?: string): Contract => {
+    const contract = fixtureContract()
+    const anchor = contract.screens.screens[0]?.anchors['sample.save-button']
+
+    if (code !== undefined && anchor !== undefined) {
+      anchor.asks = { dialog: 'app-shell.confirmation', code }
+      contract.vocabulary.codes['<object>-<verb>'] = {
+        where: 'app-shell.confirmation',
+        meaning: 'the question before a destructive action',
+      }
+      contract.screens.questions = [
+        { anchor: 'app-shell.confirmation', code, action: 'thing.deleteThing' },
+      ]
+    }
+
+    return contract
+  }
+
+  it('lists a control that starts or stops asking, and the question codes, the rule row out', () => {
+    expect(diffContracts(asking(), asking('thing-delete')).questions).toEqual({
+      added: ['sample.save-button asks thing-delete'],
+      removed: [],
+    })
+    expect(diffContracts(asking('thing-delete'), asking()).questions).toEqual({
+      added: [],
+      removed: ['sample.save-button asks thing-delete'],
+    })
+    expect(diffContracts(asking(), asking('thing-delete')).codes).toEqual({
+      added: ['thing-delete'],
+      removed: [],
+    })
   })
 })

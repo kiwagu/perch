@@ -3,18 +3,19 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
 import { repository, useRepositories } from '../repository.fixture'
 import { IGNORE_WITHOUT_REASON } from '../sources'
 
-import { measureCoverage } from './coverage'
+import { measureCoverage, totalsOf } from './coverage'
 
 useRepositories()
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__')
 const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/activities/thing.yaml'
+const SCREEN = 'contract/domain/screens/sample/$key.yaml'
+const ACTIVITY = 'contract/domain/activities/thing.yaml'
 const ALPHA = 'apps/web/src/features/alpha/presentation/alpha.view.tsx'
 const KIT = 'packages/ui/src/components/ui/button.tsx'
 
@@ -114,5 +115,23 @@ describe('measureCoverage', () => {
   })
   it('counts the anchors of each screen and the scenarios that reach it', () => {
     expect(measureCoverage(sample()).screens).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
+  })
+})
+
+describe('totalsOf', () => {
+  it('counts each derived toast code among the codes, and the rule row as none', () => {
+    const contract = sampleContract()
+    const listed = Object.keys(contract.vocabulary.codes).length
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'sample.save-button',
+      meaning: 'the success of an action of the model',
+    }
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+      { anchor: 'sample.save-button', code: 'thing-deleted', action: 'thing.deleteThing' },
+    ]
+
+    expect(totalsOf(contract).codes).toBe(listed + 2)
   })
 })

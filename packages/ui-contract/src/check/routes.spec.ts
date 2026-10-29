@@ -82,8 +82,8 @@ describe('routesProblems', () => {
     Object.assign(binding ?? {}, { path: '/sample/:key' })
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: bindings[0].path: ":key" is not a segment of the router (static, $param, {-$param} or $)',
-      'contract/screens/sample/$key.yaml:1: bindings[0].params.properties.key: "key" is not a parameter of the path "/sample/:key"',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].path: ":key" is not a segment of the router (static, $param, {-$param} or $)',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].params.properties.key: "key" is not a parameter of the path "/sample/:key"',
     ])
   })
   it('wants every path parameter in params and every params property in the path', () => {
@@ -93,8 +93,8 @@ describe('routesProblems', () => {
     Object.assign(binding ?? {}, { path: '/sample/{-$tab}' })
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: bindings[0].params: the path parameter "tab" is not a property of params',
-      'contract/screens/sample/$key.yaml:1: bindings[0].params.properties.key: "key" is not a parameter of the path "/sample/{-$tab}"',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].params: the path parameter "tab" is not a property of params',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].params.properties.key: "key" is not a parameter of the path "/sample/{-$tab}"',
     ])
   })
   it('wants params when the path has parameters', () => {
@@ -106,7 +106,7 @@ describe('routesProblems', () => {
     }
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: bindings[0].params: the path parameter "key" is not a property of params',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].params: the path parameter "key" is not a property of params',
     ])
   })
   it('wants every path bound once', () => {
@@ -119,7 +119,7 @@ describe('routesProblems', () => {
     }
 
     expect(printed(contract)).toEqual([
-      'contract/screens/sample/$key.yaml:1: bindings[0].path: "/sample/$key" is also bound on screen "app-shell"',
+      'contract/domain/screens/sample/$key.yaml:1: bindings[0].path: "/sample/$key" is also bound on screen "app-shell"',
     ])
   })
 })

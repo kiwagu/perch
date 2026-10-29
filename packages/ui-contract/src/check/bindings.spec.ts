@@ -8,7 +8,7 @@ import { anchorIn, sampleContract } from './contract.fixture'
 const printed = (contract = sampleContract()): string[] =>
   bindingsProblems(contract).map(formatProblem)
 
-const AT = 'contract/screens/sample/$key.yaml:1: anchors'
+const AT = 'contract/domain/screens/sample/$key.yaml:1: anchors'
 
 describe('bindingsProblems', () => {
   it('finds nothing in a consistent contract', () => {

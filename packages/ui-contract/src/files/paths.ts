@@ -3,13 +3,13 @@
 export const CONTRACT_DIR = 'contract'
 
 export const VOCABULARY_FILE = 'contract/vocabulary.md'
-export const MODEL_FILE = 'contract/model.schema.json'
+export const MODEL_FILE = 'contract/domain/model.schema.json'
 
 /** The screens, one YAML file each, named by the screen's pathname (`screenFile`). */
-export const SCREENS_DIR = 'contract/screens'
+export const SCREENS_DIR = 'contract/domain/screens'
 
 /** The contract version and the platform section every screen shares. */
-export const PLATFORM_FILE = 'contract/platform.yaml'
+export const PLATFORM_FILE = 'contract/domain/platform.yaml'
 
 /**
  * The file of a screen, named by the path of its first binding without the leading `/`
@@ -25,7 +25,7 @@ export function screenFile(firstPath: string | undefined): string {
 }
 
 /** The activities across screens, one YAML file each, named by its id; the folder is optional. */
-export const ACTIVITIES_DIR = 'contract/activities'
+export const ACTIVITIES_DIR = 'contract/domain/activities'
 
 /** The file of the activity `id`. */
 export const activityFile = (id: string): string => `${ACTIVITIES_DIR}/${id}.yaml`
@@ -36,11 +36,11 @@ export const SCENARIOS_DIR = 'tests/e2e/scenarios'
 /** The file of the scenario `id`. */
 export const scenarioFile = (id: string): string => `${SCENARIOS_DIR}/${id}.md`
 
-export const SCREEN_SCHEMA_FILE = 'contract/screen.schema.json'
-export const PLATFORM_SCHEMA_FILE = 'contract/platform.schema.json'
-export const ACTIVITY_SCHEMA_FILE = 'contract/activity.schema.json'
-export const ENTITY_SCHEMA_FILE = 'contract/x-perch.schema.json'
-export const MANIFEST_SCHEMA_FILE = 'contract/manifest.schema.json'
+export const SCREEN_SCHEMA_FILE = 'contract/schemas/screen.schema.json'
+export const PLATFORM_SCHEMA_FILE = 'contract/schemas/platform.schema.json'
+export const ACTIVITY_SCHEMA_FILE = 'contract/schemas/activity.schema.json'
+export const ENTITY_SCHEMA_FILE = 'contract/schemas/x-perch.schema.json'
+export const MANIFEST_SCHEMA_FILE = 'contract/schemas/manifest.schema.json'
 
 /** The coverage note: prose around a block `ui-contract coverage --write` fills. */
 export const COVERAGE_FILE = 'contract/COVERAGE.md'

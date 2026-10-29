@@ -6,7 +6,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -18,11 +18,12 @@ export function isGate(value: string): value is Gate {
   return (GATES as readonly string[]).includes(value)
 }
 
-function git(args: readonly string[], env?: NodeJS.ProcessEnv): string {
+function git(args: readonly string[], env?: NodeJS.ProcessEnv, cwd?: string): string {
   return execFileSync('git', [...args], {
     encoding: 'utf8',
     env: env ?? process.env,
     stdio: ['ignore', 'pipe', 'inherit'],
+    ...(cwd === undefined ? {} : { cwd }),
   }).trim()
 }
 
@@ -60,6 +61,44 @@ export function workingTreeId(): string {
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+/**
+ * When each file of the working tree was last written, and its size, by path: tracked and
+ * untracked files alike, ignored ones excluded, a file gone from disk stamped `missing`. A file
+ * edited and put back to the same bytes keeps the tree id but not its stamp.
+ */
+export function fileStamps(): ReadonlyMap<string, string> {
+  const root = topLevel()
+  const paths = git(
+    ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+    undefined,
+    root,
+  )
+    .split('\0')
+    .filter((path) => path !== '')
+
+  return new Map(
+    paths.map((path) => {
+      try {
+        const { size, mtimeMs } = statSync(join(root, path))
+
+        return [path, `${size}:${mtimeMs}`] as const
+      } catch {
+        return [path, 'missing'] as const
+      }
+    }),
+  )
+}
+
+/** The paths whose stamp differs between two readings, or that only one of them has. */
+export function changedFiles(
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): string[] {
+  const paths = new Set([...before.keys(), ...after.keys()])
+
+  return [...paths].filter((path) => before.get(path) !== after.get(path)).sort()
 }
 
 export function receiptPath(gate: Gate, treeId: string): string {

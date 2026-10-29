@@ -44,6 +44,21 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
+  it('resolves a toast code the loader derived, which the vocabulary lists by its rule row', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = ['It shows [code:thing-created]']
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:thing-created] is not a code of the vocabulary',
+    ])
+
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
   it('wants every device to act as a role of the vocabulary', () => {
     const contract = sampleContract()
 
@@ -53,13 +68,13 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: devices.B: "visitor" is not a role of the vocabulary',
     ])
   })
-  it('wants the activity a scenario names to be one of contract/activities', () => {
+  it('wants the activity a scenario names to be one of contract/domain/activities', () => {
     const contract = sampleContract()
 
     firstScenario(contract).activity = 'gone'
 
     expect(printed(contract)).toEqual([
-      'tests/e2e/scenarios/sample/base/thing.md:1: activity: "gone" is not an activity of contract/activities',
+      'tests/e2e/scenarios/sample/base/thing.md:1: activity: "gone" is not an activity of contract/domain/activities',
     ])
   })
   it('reports each problem at the line of its field in the file, the deepest the file holds', () => {
@@ -71,7 +86,7 @@ describe('scenariosProblems', () => {
     scenario.expected = ['[sample.save-button] saves with [code:saved]', 'It shows [code:lost]']
 
     expect(printed(contract)).toEqual([
-      'tests/e2e/scenarios/sample/base/thing.md:4: activity: "gone" is not an activity of contract/activities',
+      'tests/e2e/scenarios/sample/base/thing.md:4: activity: "gone" is not an activity of contract/domain/activities',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.B: "visitor" is not a role of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:12: where: [/sample] is the path of no binding',
       'tests/e2e/scenarios/sample/base/thing.md:17: steps[0]: [/sample] is the path of no binding',

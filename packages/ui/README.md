@@ -18,9 +18,17 @@ than its portal or overlay. A control that is not a test target carries a
 ## Key exports
 
 - `./components/ui/*`: shadcn primitives (button, card, input, textarea, label, field, alert,
-  alert-dialog, separator, dropdown-menu, select, sheet). Add more with `bunx shadcn add <name>`
+  alert-dialog, separator, dropdown-menu, select, sheet), and `Form`: a form whose `onSubmit`
+  returns whether it saved; on `true` each of its own fields takes the value it held when the
+  submit started as saved (what was typed during the save stays unsaved), and the default
+  submit is always prevented. Add more with `bunx shadcn add <name>`
   in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
-  alias; the file then belongs to us and is edited in place.
+  alias; the file then belongs to us and is edited in place. `toast` is the kit's own:
+  `Toaster`, the polite live region (`role="status"`, each addition announced alone) around the
+  list the app's toasts stack in, centred at the top, in the order given, and `Toast`, one toast
+  carrying its `data-code` and its `tone` (`success`, `warning` or `error`: the theme's
+  `success`, `warning` and `destructive`, with an icon each), dismissed by a click on it or its
+  cross; the app owns the list and how long each stays.
 - `./components/platform/*`: props-driven building blocks of the application shell.
   - `AppShell`: the page frame (brand, actions, status, the navigation as a bottom bar on
     small screens and a side rail from `lg`); `navigationTestId` is the anchor of its
@@ -32,9 +40,21 @@ than its portal or overlay. A control that is not a test target carries a
     `testId` marks the dialog, with `code` as its `data-code`, and its buttons carry
     `<testId>.confirm-button` and `<testId>.cancel-button`.
   - `navItemVariants`: the classes of a navigation item, active or not.
+- `./unsaved-input`: whether the fields of a page hold input the user typed and no action
+  took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`
+  says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
+  scope), and `useTracksInput` is what a field component uses to track itself against the
+  last value the app gave it. `FormScopeContext` lets a form capture what its fields hold when
+  a submit starts and mark those values saved when it saved. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
+  while its value differs from the last value the app gave it (the `value` prop whenever it
+  did not come from the field's own last change, or the `defaultValue` at mount; a select
+  compares its choices, one or several, as it compares an item, `isItemEqualToValue` or
+  `Object.is`), and takes `holdsInput={false}` for a choice that applies at once.
 - `./lib/utils`: `cn` for class names.
-- `./styles/global.css`: Tailwind, the theme tokens and the base layer; import it once in the
-  app. It points Tailwind at the kit's components, so their classes are generated in apps.
+- `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus `success` and `warning`:
+  Tailwind's green and orange, 600 in light and 400 in dark, as `destructive` is red) and the
+  base layer; import it once in the app. It points Tailwind at the kit's components, so their
+  classes are generated in apps.
 
 ## Commands
 

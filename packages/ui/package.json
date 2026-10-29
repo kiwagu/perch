@@ -12,6 +12,10 @@
       "types": "./src/lib/*.ts",
       "import": "./src/lib/*.ts"
     },
+    "./unsaved-input": {
+      "types": "./src/unsaved-input/index.ts",
+      "import": "./src/unsaved-input/index.ts"
+    },
     "./styles/global.css": "./src/styles/global.css"
   },
   "scripts": {

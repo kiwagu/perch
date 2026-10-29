@@ -4,11 +4,13 @@
  * them (the contract runs ahead of the app on a branch: a declared anchor not rendered yet is
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every suffix of
- * `testIdFor()` and every code is in the vocabulary. The problems carry `file:line`.
+ * `testIdFor()` and every code is in the vocabulary; a `holdsInput` written in the sources is
+ * `{false}`, on a field the contract says holds no input, never on an anchor that is not a
+ * field, and every such field rendered carries it. The problems carry `file:line`.
  */
 
-import { baseOf } from '../anchors'
-import { declaredAnchors, locate } from '../check'
+import { baseOf, FIELD_KINDS } from '../anchors'
+import { codesOf, declaredAnchors, locate } from '../check'
 import {
   type Problem,
   SCREENS_DIR,
@@ -65,7 +67,7 @@ export function compareWithContract(
   const contract = declaredAnchors(screens)
   const declared = new Set(contract.map(({ anchor }) => anchor))
   const suffixes = Object.keys(vocabulary.suffixes)
-  const codes = new Set(Object.keys(vocabulary.codes))
+  const codes = codesOf(vocabulary, screens)
 
   const literalProblems = [...first].flatMap(([anchor, place]) => {
     const base = baseOf(anchor, suffixes)
@@ -105,11 +107,58 @@ export function compareWithContract(
       .map(({ code, line }) => at({ file, line }, `"${code}" is not a code of ${VOCABULARY_FILE}`)),
   ])
 
+  const fields = new Map(
+    contract
+      .filter(({ def }) => FIELD_KINDS.has(def.kind))
+      .map(({ anchor, def, at: path }) => [anchor, { holds: def.holdsInput !== false, path }]),
+  )
+  const kinds = new Map(contract.map(({ anchor, def }) => [anchor, def.kind]))
+  const inputProblems = collected.flatMap(({ file, inputs }) =>
+    inputs.flatMap(({ anchor, holdsInput, line }) => {
+      const kind = kinds.get(anchor)
+
+      if (kind !== undefined && !FIELD_KINDS.has(kind)) {
+        return [
+          at({ file, line }, `"${anchor}" is a ${kind}, not a field; only a field holds input`),
+        ]
+      }
+
+      if (holdsInput) {
+        return [at({ file, line }, `"${anchor}": holdsInput={true} is the default; leave it out`)]
+      }
+
+      return fields.get(anchor)?.holds === true
+        ? [at({ file, line }, `"${anchor}" holds input by the contract; drop holdsInput={false}`)]
+        : []
+    }),
+  )
+
+  // A field that holds no input (a choice that applies at once) says so on its element, once
+  // rendered; on a branch the contract may run ahead of that element, as of an anchor not rendered.
+  const optedOut = new Set(
+    collected.flatMap(({ inputs }) =>
+      inputs.filter(({ holdsInput }) => !holdsInput).map(({ anchor }) => anchor),
+    ),
+  )
+  const missingOptOuts = [...fields]
+    .filter(
+      ([anchor, { holds }]) =>
+        !options.ahead && !holds && first.has(anchor) && !optedOut.has(anchor),
+    )
+    .map(([, { path }]) =>
+      inScreens(
+        path,
+        'does not hold input by the contract; its element carries holdsInput={false}',
+      ),
+    )
+
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
     ...duplicates,
     ...literalProblems,
     ...unrendered,
     ...vocabularyProblems,
+    ...inputProblems,
+    ...missingOptOuts,
   ])
 }

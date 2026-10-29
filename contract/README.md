@@ -75,6 +75,15 @@ developer approved; the code takes no architectural decision of its own.
 
 ## The folder
 
+```text
+contract/
+  README.md          this guide
+  COVERAGE.md        the coverage note
+  vocabulary.md      the closed lists
+  domain/            what a feature describes: the model, the platform, the screens, the activities
+  schemas/           the JSON Schemas generated from the tooling, never edited by hand
+```
+
 The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
@@ -84,36 +93,39 @@ The authored files, edited by hand or by a model in the modeling thread:
   heading. The grammar, the kinds, the suffixes, the attributes and the contract version are
   the engine's (meta); every other table is content a feature adds with the screen file that
   first uses it (business).
-- `screens/<pathname>.yaml`: one screen per file, named by the path of the screen's first
-  binding without the leading `/`. `/sign-in` is `screens/sign-in.yaml` and `/me` is
-  `screens/me.yaml`; a nested path is a folder (`/org/$org` would be `screens/org/$org.yaml`)
-  and `/` would be `screens/index.yaml`. The frame, the one screen without a binding, is
-  `screens/__root.yaml`, as in file-based routers. The screen's `id` (`user.profile`) is the
+- `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
+  first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
+  is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
+  `domain/screens/org/$org.yaml`) and `/` would be `domain/screens/index.yaml`. The frame, the
+  one screen without a binding, is `domain/screens/__root.yaml`, as in file-based routers. The screen's `id` (`user.profile`) is the
   prefix of its anchors, not its file name. The loader reads the folder sorted by path; a
   file that is not `.yaml`, or one named otherwise than its first binding says, is a problem
   of that file.
-- `platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
+- `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
   line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
-  in a flow (the local data opened, or could not be), the reserved anchors and the
-  readiness line.
-- `model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
+  in a flow (the local data opened, or could not be), `leaving`, the actions whose run
+  leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
+  first, `toasts`, the platform actions whose success toasts with their codes, the reserved
+  anchors and the readiness line.
+- `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
-- `activities/<id>.yaml`: one activity across screens per file, named by its `id`
-  (`activities/session.yaml`); the folder is optional (see "Activities").
+- `domain/activities/<id>.yaml`: one activity across screens per file, named by its `id`
+  (`domain/activities/session.yaml`); the folder is optional (see "Activities").
 
 Each YAML file opens with a comment that points an editor at its schema, so the editor
 validates and completes it; the loader does not read the comment:
 
 ```yaml
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 ```
 
-`platform.yaml` points at `./platform.schema.json`, an activity at `../activity.schema.json`,
-and a screen file one folder deeper points one folder further up.
+`domain/platform.yaml` points at `../schemas/platform.schema.json`, an activity at
+`../../schemas/activity.schema.json`, and a screen file one folder deeper points one folder
+further up.
 
-Generated beside them, never edited by hand: `screen.schema.json` (one screen file),
+Generated into `schemas/`, never edited by hand: `screen.schema.json` (one screen file),
 `platform.schema.json` (the platform file), `activity.schema.json` (one activity file),
 `x-perch.schema.json` (the `x-perch` keyword of the model) and `manifest.schema.json` (the
 manifest). `bun run contract:schemas` writes them
@@ -132,7 +144,7 @@ alike:
 - keys in the order `id`, `title`, `description`, `frame` or `flag`, `bindings`, `entry`, then the rest;
 - flow style, on one line, for `bindings` and each binding with everything it holds: its
   `roles`, `params`, `search`, `history` and `retain`, nested maps included (the test
-  fixture `packages/ui-contract/src/__fixtures__/contract/screens/sample/$key.yaml` has a
+  fixture `packages/ui-contract/src/__fixtures__/contract/domain/screens/sample/$key.yaml` has a
   binding whose `params` is a nested JSON Schema, still on one line);
 - flow style for `entry`, and inside an anchor for its `roles`, `codes`, `states` and
   `derived` lists and for a `binding` that is one map with no map inside
@@ -146,10 +158,10 @@ alike:
   that is a list or holds a map (its action's `params` included), the screen's `states`, the
   rest of its `flow`, a `source`, and the `wireframe` as a block scalar.
 
-An excerpt of `screens/me.yaml`:
+An excerpt of `domain/screens/me.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=../screen.schema.json
+# yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.profile
 title: Profile
 description: "The signed-in account's own profile: its name and bio, saved together and kept in step across the account's devices; signing this device out, with a warning when changes are unsent."
@@ -255,8 +267,9 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `source` (where a list's entries
-come from).
+screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
+from).
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -380,6 +393,27 @@ out, and the loader derives it, the same way every time:
   code of a field to the control its binding passes for that field (`name-too-long` to
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
+- **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
+  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
+  bindings runs an action that takes the field itself as a parameter, an action no other
+  anchor of its screen runs with it (the language select, the organisation select), applies
+  at once and holds none; a field whose action a submit button also runs with it (the
+  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
+  wins. The manifest carries it, and `contract:diff` lists the
+  fields that start or stop holding input.
+- **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
+  would lose what was typed, and how the app asks first. `question` names the frame's dialog:
+  a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
+  its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and
+  `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask
+  through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by
+  hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code
+  marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or
+  `question`; `flow` (a navigation a flow makes after its action completed: the action took
+  the input) is always `never`, and `elsewhere` (another tab or device, a database that will
+  not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
+  it.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows.
 - **The region of a button.** A button bound to one action that no state of the flow
@@ -395,6 +429,54 @@ out, and the loader derives it, the same way every time:
   codes and no error in
   the part is a problem: the screen declares the error, or writes the region by its button
   with its `onError`.
+- **The toast of a success.** With a toast anchor on the frame (`app-shell.toast`), every
+  mutation says its success there, with a standard message: each invoke of an action of the
+  model, written or in a derived region, gets on each branch of its `onDone`
+  `show: { app-shell.toast: [<code>] }`, the code being the action's object in kebab case and
+  the past of its verb (`note.createNote` gives `note-created`, `profile.updateBio` gives
+  `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a
+  platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed
+  (`organisations.create: organisation-created`), and an unlisted one never does. The toast
+  says an operation's outcome once, where it ends: an operation starts with an event that
+  enters a state running such an action and goes on along the branches of its `onDone` that
+  enter another (one Save running `updateName`, then `updateBio`); such a step toasts nothing,
+  and a branch that targets its own state re-enters nothing. An operation of one action says
+  that action's code; one of several says the operation, `<object>-<verb>ed` from the control
+  whose event starts it: the verb is the control's name without its kind, in the past
+  (`save-button` gives `saved`), the object the part the control sits in, or the screen's last
+  segment for a control of the screen itself (`user.profile.save-button` gives
+  `profile-saved`). An operation of several that no control starts (a platform event), or that
+  controls with different codes start, is refused until the screen writes its own message on
+  the toast or bans it; so is one event that starts several such operations at once (the
+  regions of a parallel state it enters, or two regions handling one press with transitions
+  that stay in them), until the screen writes `toast: false` on every action of all but one.
+  One press gives one toast. The
+  toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
+  message on the toast keeps it (a written message wins on its anchor, branch by branch; the
+  other branches still get the standard one), and the one ban is `toast: false` on
+  the invoke, or on a region written `by` its button (the language select's store: the change
+  is visible by itself); a notice or an error written on the outcome says nothing about the
+  toast. A failure never toasts: it shows on the part's error. The toast anchor carries every
+  code a flow shows on it; the vocabulary documents the derived ones by one rule row,
+  `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a
+  new one. A code a flow writes on the toast
+  itself (a warning of its own), or the frame lists on it, has its own row, even where a
+  derivation gives the same code.
+- **The question before a destructive action.** With a confirmation on the frame (an anchor of
+  kind `confirmation`, `app-shell.confirmation`), every control whose binding names a
+  destructive action asks it before the action runs: an action of the model whose verb is
+  `delete`, an action of the platform whose verb (the first word of its last segment) is
+  `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
+  code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
+  the platform action's name with `.` as `-` (`organisations.remove` gives
+  `organisations-remove`); the confirmation carries every code asked with, which the
+  vocabulary documents by one rule row, `<object>-<verb>`. Both are derived only: a screen file
+  never writes `asks`, nor the frame the confirmation's codes. The flow says nothing of it: the
+  press still leads to the state that runs the action, and the app's gate asks in front of the
+  event, its confirm-button letting the event through and its cancel-button dropping it. The
+  one line a screen writes is `confirm: false` on the control, which runs the action without
+  asking; on a control that runs no destructive action it bans nothing and is refused. Without
+  a confirmation on the frame nothing asks.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived
@@ -407,7 +489,7 @@ derived, so a constraint added to the model shows on review as the codes it adds
 A screen file describes one screen, and a scenario one path through the app with its data
 ready; an activity is the composition between them: which screens form one task, in which
 order, and what the task carries from one screen to the next. Each one is a file,
-`activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
+`domain/activities/<id>.yaml`, named by its `id`. The folder is optional, and a file that is not
 `.yaml`, or one named otherwise than its id, is a problem of that file.
 
 An activity has an `id` (kebab-case), a `title`, a `description` (what it is for), the
@@ -430,12 +512,12 @@ An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the
 and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
 written, as the flows do. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
-state's `meta` on one line. An excerpt of `activities/session.yaml`, the session of an
+state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
 page:
 
 ```yaml
-# yaml-language-server: $schema=../activity.schema.json
+# yaml-language-server: $schema=../../schemas/activity.schema.json
 id: session
 title: The session of an account
 description: An account's session on this device, from the sign-in page to the profile and the devices page, and back to the sign-in page once the device signs out.
@@ -661,7 +743,7 @@ problem of its file.
 The file opens with a YAML front matter that holds only the structured header:
 
 - `tags`: a list holding `smoke` or `full`;
-- `activity`, when the scenario walks one: the id of an activity of `contract/activities/`
+- `activity`, when the scenario walks one: the id of an activity of `contract/domain/activities/`
   (see "Activities");
 - `devices`: a letter per browser with the role it acts as by the end of the scenario; every
   device starts as `guest` until a step signs it in;
@@ -727,17 +809,30 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
-  and leaves each one that is not final; the versions agree; the generated schemas
+  and leaves each one that is not final; every action of `leaving` exists and is listed
+  once, every action of `toasts` is an action of the platform, the frame's confirmation is
+  declared by the frame alone, once, reserved, with both answers and no action of its own,
+  and `leaving` comes with
+  `unsavedInput`, whose question is a reserved dialog with a
+  code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
-  problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. On a
+  problem too), no literal equal to another plus a derived suffix, every `testIdFor()`
+  suffix in the vocabulary, and every code a code of the contract: a row of the vocabulary, or
+  a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself). An
+  anchor built at runtime is a problem. A field
+  the contract says holds no input (a choice that applies at once) carries
+  `holdsInput={false}` on the element with its anchor; a field that holds input carries
+  nothing (`holdsInput={true}` is the default and is reported, and so is a
+  `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and a
+  rendered field that holds no input without its opt-out is reported at its anchor. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
-  contract run ahead of the app (an anchor declared, not rendered yet, passes); a commit on
+  contract run ahead of the app (an anchor declared, not rendered yet, passes, and so does a
+  field's opt-out not written yet); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
@@ -749,14 +844,16 @@ gap is fixed in the contract files first, never worked around in a test.
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or
   template, and `expect(...).toHaveAttribute(...)` on `data-testid`, `data-code`,
   `data-state` or `data-value`, `.not` included. Every anchor must be declared, or derived
-  from a declared base with a suffix it lists; every code, state and value must be in the
+  from a declared base with a suffix it lists; every code must be a code of the contract (a
+  row of the vocabulary or a derived toast code), and every state and value in the
   vocabulary. A plain string or a template without `${}` is a literal; an anchor built with
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
 
-Beside them, `bun run e2e:coverage` (in `bun run check`) pairs every scenario with its test,
-and the web app's tests hold the module routes and the real router to the bindings, and
+Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
+`bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
+leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
 
 ## The manifest

@@ -1,23 +1,19 @@
-import type { ResultAsync } from 'neverthrow'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { errAsync } from 'neverthrow'
+import { useMemo, useSyncExternalStore } from 'react'
 
 import type { BusError } from '@workspace/cqrs'
-import type { IdentityId, NoteId } from '@workspace/ids'
 import { ownerKeyOf } from '@workspace/kernel'
 
 import { useService, useShape } from '../../../../../platform/module'
-import { useNotify } from '../../../../../platform/notices'
-import type { MemberView } from '../../../../../platform/organisations.port'
+import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import { NOTES_SERVICE } from '../../../application/notes.service'
+import { createOrganisationMachine } from '../../../application/organisation.machine'
 import { ORGANISATION_SERVICE } from '../../../application/organisation.service'
 
 import { organisationShape } from './organisation.model.gen'
-import {
-  type OrganisationChoice,
-  type OrganisationErrors,
-  OrganisationView,
-} from './organisation.view'
+import { type OrganisationChoice, OrganisationView } from './organisation.view'
+import { useMembers } from './use-members'
 
 const choice = (membership: {
   readonly tenant: { readonly key: string; readonly name: string }
@@ -28,17 +24,11 @@ const choice = (membership: {
   role: membership.role,
 })
 
-/** The codes of the refused changes, and the organisation they were refused for. */
-interface PageErrors {
-  readonly key: string | undefined
-  readonly codes: OrganisationErrors
+/** A write the page asks for while no organisation is current, or no one is signed in. */
+const NOT_NOW: BusError = {
+  code: 'organisation:UNAVAILABLE',
+  message: 'no organisation is current, or no one is signed in',
 }
-
-/** The page's errors with `code` for `part`, while they are still those of organisation `of`. */
-const withError =
-  (part: keyof OrganisationErrors, code: string | undefined, of: string | undefined) =>
-  (now: PageErrors): PageErrors =>
-    now.key === of ? { key: of, codes: { ...now.codes, [part]: code } } : now
 
 export function OrganisationContainer() {
   const session = useService(SESSION)
@@ -67,139 +57,77 @@ export function OrganisationContainer() {
     deletable: ability.can('delete', 'note', note),
   }))
   const key = current?.tenant.key
-  const admin = current?.role === 'admin'
-  // What the page shows of one organisation starts afresh when another becomes current.
-  const [errors, setErrors] = useState<PageErrors>({ key, codes: {} })
-  const [members, setMembers] = useState<
-    { readonly key: string; readonly list: readonly MemberView[] } | undefined
-  >(undefined)
-  const [membersRead, setMembersRead] = useState(0)
-  const notify = useNotify()
+  // Each write reads the organisation current, and the account signed in, when it runs.
+  const machine = useMemo(() => {
+    const at = () => organisations.current()?.tenant.key
 
-  // Adjusting state while rendering: React renders again at once, before anything is shown.
-  if (errors.key !== key) {
-    setErrors({ key, codes: {} })
-  }
+    return createOrganisationMachine({
+      select: (next) => organisations.select(next),
+      create: (input) => organisations.create(input),
+      addNote: (text) => {
+        const author = session.current()?.id
 
-  const report = (part: keyof OrganisationErrors, code: string | undefined, of = key) =>
-    setErrors(withError(part, code, of))
-
-  // An administrator sees the members: read when the page opens and after each invite or removal.
-  useEffect(() => {
-    if (key === undefined || !admin) {
-      return undefined
-    }
-
-    let live = true
-
-    void organisations.members(key).match(
-      (list) => {
-        if (live) {
-          setMembers({ key, list })
-        }
+        return author === undefined ? errAsync(NOT_NOW) : notes.add({ author, text })
       },
-      (failure) => {
-        if (live) {
-          setErrors(withError('members', failure.code, key))
-        }
+      editNote: (input) => notes.edit(input),
+      deleteNote: (id) => notes.remove({ id }),
+      invite: (email) => {
+        const organisation = at()
+
+        return organisation === undefined
+          ? errAsync(NOT_NOW)
+          : organisations.invite(organisation, email)
       },
-    )
+      remove: (identity) => {
+        const organisation = at()
 
-    return () => {
-      live = false
-    }
-  }, [organisations, key, admin, membersRead])
-
-  const create = (input: { readonly key: string; readonly name: string }) =>
-    organisations.create(input).match(
-      () => {
-        report('create', undefined)
-
-        return true
+        return organisation === undefined
+          ? errAsync(NOT_NOW)
+          : organisations.remove(organisation, identity)
       },
-      (failure) => {
-        report('create', failure.code)
-
-        return false
-      },
-    )
-
-  const noteDone = (write: ResultAsync<void, BusError>) =>
-    write.match(
-      () => {
-        report('notes', undefined)
-
-        return true
-      },
-      (failure) => {
-        report('notes', failure.code)
-
-        return false
-      },
-    )
-
-  const addNote = (text: string) =>
-    user ? noteDone(notes.add({ author: user.id, text })) : Promise.resolve(false)
-
-  const editNote = (input: { readonly id: NoteId; readonly text: string }) =>
-    noteDone(notes.edit(input))
-
-  const deleteNote = (id: NoteId) => noteDone(notes.remove({ id }))
-
-  const invite = (email: string) =>
-    key === undefined
-      ? Promise.resolve(false)
-      : organisations.invite(key, email).match(
-          () => {
-            report('members', undefined, key)
-            notify({ code: 'invited', text: (t) => t('organisation.invite.invited') })
-            setMembersRead((count) => count + 1)
-
-            return true
-          },
-          (failure) => {
-            report('members', failure.code, key)
-
-            return false
-          },
-        )
-
-  const removeMember = (identity: IdentityId) => {
-    if (key === undefined) {
-      return
-    }
-
-    void organisations.remove(key, identity).match(
-      () => {
-        report('members', undefined, key)
-        setMembersRead((count) => count + 1)
-      },
-      (failure) => report('members', failure.code, key),
-    )
-  }
+      current: at,
+    })
+  }, [organisations, notes, session])
+  const { state, send, submit } = useScreenMachine(machine)
+  // An administrator sees the members: read when the page opens and after each change made here.
+  const members = useMembers(
+    organisations,
+    current?.role === 'admin' ? key : undefined,
+    state.context.membersChanged,
+  )
+  const { errors } = state.context
+  const shown = errors.of === key ? errors.codes : {}
+  const editing =
+    state.matches({ viewing: { 'note-items': 'editing' } }) ||
+    state.matches({ viewing: { 'note-items': 'saving' } })
 
   return (
     <OrganisationView
       organisations={memberships.map(choice)}
       current={current ? choice(current) : undefined}
       notes={items}
-      members={
-        members && members.key === key
-          ? members.list.map((member) => ({
-              id: member.identity.id,
-              email: member.identity.email,
-              removable: member.identity.id !== user?.id,
-            }))
-          : undefined
+      members={members.list?.map((member) => ({
+        id: member.identity.id,
+        email: member.identity.email,
+        removable: member.identity.id !== user?.id,
+      }))}
+      errors={{ ...shown, members: shown.members ?? members.failure }}
+      can={(event) => state.can(event)}
+      creating={
+        state.matches({ viewing: { 'create-form': 'open' } }) ||
+        state.matches({ viewing: { 'create-form': 'submitting' } })
       }
-      errors={errors.key === key ? errors.codes : {}}
-      onCreate={create}
-      onSelect={(next) => organisations.select(next)}
-      onAddNote={addNote}
-      onEditNote={editNote}
-      onDeleteNote={deleteNote}
-      onInvite={invite}
-      onRemoveMember={removeMember}
+      editing={editing ? state.context.editing : undefined}
+      onToggleCreate={() => send({ type: 'organisation.create.toggle-button' })}
+      onCreate={(input) => submit({ type: 'organisation.create.submit-button', ...input })}
+      // A switch of organisation leaves what was typed for this one: the hook asks the frame first.
+      onSelect={(next) => send({ type: 'organisation.page.current-select', key: next })}
+      onAddNote={(text) => submit({ type: 'organisation.notes.add-button', text })}
+      onOpenEdit={(id) => send({ type: 'organisation.notes.edit-button', id })}
+      onEditNote={(input) => submit({ type: 'organisation.notes.save-button', ...input })}
+      onDeleteNote={(id) => send({ type: 'organisation.notes.delete-button', id })}
+      onInvite={(email) => submit({ type: 'organisation.invite.submit-button', email })}
+      onRemoveMember={(identity) => send({ type: 'organisation.members.remove-button', identity })}
     />
   )
 }

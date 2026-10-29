@@ -6,9 +6,13 @@ import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
+import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
+import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
@@ -16,12 +20,14 @@ import {
   type ShellLive,
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
+import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
 type Boot =
@@ -39,10 +45,18 @@ type Boot =
 
 function Layout() {
   return (
-    <NoticeProvider>
-      <ShellContainer>
-        <Outlet />
-      </ShellContainer>
+    <NoticeProvider texts={NOTICE_TEXTS}>
+      <ToastProvider texts={TOAST_TEXTS}>
+        <UnsavedInputScope>
+          <LeaveGuard>
+            <ConfirmGuard>
+              <ShellContainer>
+                <Outlet />
+              </ShellContainer>
+            </ConfirmGuard>
+          </LeaveGuard>
+        </UnsavedInputScope>
+      </ToastProvider>
     </NoticeProvider>
   )
 }

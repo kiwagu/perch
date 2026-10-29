@@ -9,7 +9,7 @@ import es from '../../i18n/user.es.json'
 import { SignInView, type SignInViewProps } from './sign-in.view'
 
 function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSubmit: vi.fn(), onToggleMode: vi.fn() }
+  const handlers = { onSubmit: vi.fn(() => Promise.resolve(true)), onToggleMode: vi.fn() }
 
   renderWithProviders(<SignInView mode="sign-in" submitting={false} {...handlers} {...props} />, {
     locale,

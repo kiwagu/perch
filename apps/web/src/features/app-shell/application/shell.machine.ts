@@ -27,6 +27,8 @@ export type ShellEvent =
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'app-shell.sign-out-here-button' }
   | { readonly type: 'platform.signed-out' }
+  | { readonly type: 'platform.change-rejected' }
+  | { readonly type: 'platform.changes-reloaded' }
 
 /**
  * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
@@ -74,8 +76,17 @@ const NOT_STORED = {
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 /** The notice goes with the account that was signed in when it was raised. */
 const CLEAR_NOTICE = { type: 'clear', params: { anchor: 'app-shell.notice-message' } } as const
+/** The gateway refused a change this device then undid, or refused the undo too. */
+const REJECTED = {
+  type: 'show',
+  params: { anchor: 'app-shell.notice-message', codes: ['change-rejected'] },
+} as const
+const RELOADED = {
+  type: 'show',
+  params: { anchor: 'app-shell.notice-message', codes: ['changes-reloaded'] },
+} as const
 
-/** The frame's flow (`contract/screens/__root.yaml`) as the app runs it. */
+/** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
   /** The stored language, when another device stored it and this one has not seen it yet. */
   const storedElsewhere = (): Locale | undefined => {
@@ -142,12 +153,16 @@ export function createShellMachine(deps: ShellMachineDeps) {
           ],
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
           'platform.signed-out': { actions: CLEAR_NOTICE },
+          'platform.change-rejected': { actions: REJECTED },
+          'platform.changes-reloaded': { actions: RELOADED },
         },
       },
       'storing-locale': {
         on: {
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
           'platform.signed-out': { actions: CLEAR_NOTICE },
+          'platform.change-rejected': { actions: REJECTED },
+          'platform.changes-reloaded': { actions: RELOADED },
         },
         invoke: {
           src: 'settings.updateLocale',

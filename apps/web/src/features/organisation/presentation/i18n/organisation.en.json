@@ -21,7 +21,6 @@
   "organisation.members.title": "Members",
   "organisation.invite.email": "Email of an existing account",
   "organisation.invite.submit": "Invite",
-  "organisation.invite.invited": "Invited",
   "organisation.members.remove": "Remove",
   "organisation.error.key-invalid": "Use 2 to 32 lowercase letters, digits and underscores, starting with a letter.",
   "organisation.error.name-required": "Enter a name.",

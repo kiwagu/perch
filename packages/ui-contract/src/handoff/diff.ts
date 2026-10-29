@@ -2,8 +2,10 @@
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
  * it renames, the codes and the error fields it adds or removes on the anchors both hold
- * (written or derived, so a constraint added to the model shows as the code it gives), and the
- * transitions it adds or removes in each activity both contracts hold.
+ * (written or derived, so a constraint added to the model shows as the code it gives), the
+ * fields that start or stop holding input, the actions that leave what the user typed behind
+ * and how each leave that would lose it asks, and the transitions it adds or removes in each
+ * activity both contracts hold.
  * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
  */
 
@@ -12,7 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { type Contract, declaredAnchors, loadContract } from '../check'
+import { type Contract, codesOf, declaredAnchors, loadContract } from '../check'
 import {
   ACTIVITIES_DIR,
   type Activity,
@@ -28,7 +30,7 @@ import {
 
 import { branchesOf } from './activities'
 
-interface Change {
+export interface Change {
   added: string[]
   removed: string[]
 }
@@ -40,6 +42,14 @@ export interface ContractChanges {
   anchorCodes: Change
   /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
   errorFields: Change
+  /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
+  inputs: Change
+  /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
+  questions: Change
+  /** As the action's name, the actions that leave what the user typed behind. */
+  leaving: Change
+  /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
+  unsavedInput: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
@@ -118,6 +128,12 @@ export function contractAt(ref: string, root: string): Contract | { missing: tru
 }
 
 const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
+
+/** How each leave that would lose unsaved input asks, as `<leave>: <how>`; none when undeclared. */
+const unsavedInputOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.unsavedInput ?? {}).map(
+    ([leave, how]) => `${leave}: ${how}`,
+  )
 
 function changeOf(before: readonly string[], after: readonly string[]): Change {
   const was = new Set(before)
@@ -251,13 +267,24 @@ export function diffContracts(
   return {
     anchors,
     codes: changeOf(
-      Object.keys(before?.vocabulary.codes ?? {}),
-      Object.keys(after?.vocabulary.codes ?? {}),
+      before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
+      after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
       Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
     ),
+    inputs: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.holdsInput === true ? ['holds input'] : [],
+    ),
+    questions: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.asks === undefined ? [] : [`asks ${def.asks.code}`],
+    ),
+    leaving: changeOf(
+      before?.screens.platform.leaving ?? [],
+      after?.screens.platform.leaving ?? [],
+    ),
+    unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),
@@ -269,61 +296,4 @@ export function diffContracts(
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
   }
-}
-
-/** The lists in the order of the block, each with its singular and plural noun. */
-const LISTS = [
-  ['screens', 'screen', 'screens'],
-  ['anchors', 'anchor', 'anchors'],
-  ['codes', 'code', 'codes'],
-  ['anchorCodes', 'anchor code', 'anchor codes'],
-  ['errorFields', 'error field', 'error fields'],
-  ['entities', 'entity', 'entities'],
-  ['fields', 'field', 'fields'],
-  ['activities', 'activity', 'activities'],
-] as const
-
-/** The non-empty lists of one change: its count and its entries, after `where` when given. */
-function linesOf(
-  change: Change | ContractChanges['anchors'],
-  one: string,
-  many: string,
-  where = '',
-) {
-  const lists: Array<{ verb: string; entries: string[] }> = [
-    { verb: 'added', entries: change.added },
-    { verb: 'removed', entries: change.removed },
-    ...('renamed' in change
-      ? [{ verb: 'renamed', entries: change.renamed.map(({ from, to }) => `${from} -> ${to}`) }]
-      : []),
-  ]
-
-  return lists
-    .filter(({ entries }) => entries.length > 0)
-    .map(({ verb, entries }) => ({
-      summary: `${entries.length} ${entries.length === 1 ? one : many} ${verb}${where}`,
-      line: `${many} ${verb}${where}: ${entries.join(', ')}`,
-    }))
-}
-
-/** Each non-empty list (`anchors renamed`), then the transitions changed in each activity. */
-const listsOf = (changes: ContractChanges) => [
-  ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
-  ...Object.entries(changes.activities.transitions).flatMap(([id, change]) =>
-    linesOf(change, 'transition', 'transitions', ` in ${id}`),
-  ),
-]
-
-/** The hand-over block: a summary line, then one line per list that is not empty. */
-export function formatChanges(changes: ContractChanges): string {
-  const lists = listsOf(changes)
-
-  if (lists.length === 0) {
-    return 'contract changes: none'
-  }
-
-  return [
-    `contract changes: ${lists.map(({ summary }) => summary).join(', ')}`,
-    ...lists.map(({ line }) => line),
-  ].join('\n')
 }

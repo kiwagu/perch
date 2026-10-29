@@ -14,6 +14,8 @@
  *   screen decides.
  * - In the `onError` of an invoke, `show: <anchor>` shows one of the codes the failure of its
  *   action shows.
+ * - An invoke, or a region written `by` its button, may say `toast: false`: the success of its
+ *   action shows no derived toast.
  */
 
 import { z } from '@workspace/zod'
@@ -21,7 +23,7 @@ import { z } from '@workspace/zod'
 import { anchorSchema, codeSchema } from '../../../names.schema'
 import { routePathSchema } from '../binding'
 
-import { flowSchemaOf } from './build'
+import { flowSchemaOf, toastOptOutSchema } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
 import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
@@ -89,6 +91,7 @@ export const controlRegionSchema = z
       .describe(
         'What follows when the action fails; absent, back to `idle` with the error of the part (`<part>.error`) showing the codes of the failure; a transition without a target goes back to `idle` too.',
       ),
+    toast: toastOptOutSchema.exactOptional(),
   })
   .describe(
     'The region of a button bound to one action, with the outcomes the screen decides: the rest comes from its binding.',
@@ -113,6 +116,7 @@ export const draftPatternSchema = z
 export const authoredFlowSchema = flowSchemaOf({
   transition: authoredTransitionSchema,
   effect: authoredEffectSchema,
+  toastOptOut: true,
   region: (parts) =>
     z
       .union([draftPatternSchema, controlRegionSchema, parts.region])

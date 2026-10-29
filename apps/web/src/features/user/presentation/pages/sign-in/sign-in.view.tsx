@@ -1,10 +1,11 @@
-import { type SubmitEvent, useId, useState } from 'react'
+import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
+import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
 export interface SignInValues {
@@ -24,7 +25,8 @@ export interface SignInViewProps {
    * another device signed it out.
    */
   readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
-  readonly onSubmit: (values: SignInValues) => void
+  /** Signs in or up with the values: resolves whether it did. */
+  readonly onSubmit: (values: SignInValues) => Promise<boolean>
   readonly onToggleMode: () => void
 }
 
@@ -75,10 +77,6 @@ export function SignInView(props: SignInViewProps) {
     onChange: (event: { readonly target: { readonly value: string } }) =>
       setValues((current) => ({ ...current, [name]: event.target.value })),
   })
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    props.onSubmit(values)
-  }
   const error = props.error ? errorOf(t, props.error) : undefined
 
   return (
@@ -89,7 +87,7 @@ export function SignInView(props: SignInViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} data-testid="user.sign-in.form">
+        <Form onSubmit={() => props.onSubmit(values)} data-testid="user.sign-in.form">
           <FieldGroup>
             {props.notice ? (
               <Alert>
@@ -156,7 +154,7 @@ export function SignInView(props: SignInViewProps) {
               {signingUp ? t('user.sign-in.have-account') : t('user.sign-in.create-account')}
             </Button>
           </FieldGroup>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   )

@@ -134,13 +134,21 @@ modeling stage.
   another tab saved one meanwhile, whose new pair is then left to revoke. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  and correlation ids). The root makes the app's domain event bus (`EventBus` of
+  `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
+  publishes `<command id>.done` or `.failed` once the write path resolved (a failing
+  subscriber is logged, never the command's failure), the session publishes
+  `sync.change-rejected` and `sync.changes-reloaded`, and a development build logs every
+  event's name. `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
-  and the current organisation), for commands, for organisations and for devices,
-  notices the shell shows, the language state and the app-wide catalogs. `ui-contract.ts` is
+  and the current organisation), for commands, for the app's events (`events.port.ts`:
+  subscribe, once, onAny), for organisations and for devices,
+  the notice and the toasts the shell shows (each raised by its contract code, the frame
+  giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
+  app-wide catalogs. `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
@@ -149,7 +157,7 @@ modeling stage.
   (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
   Zod object) validates the URL's search, drops a parameter equal to its default and carries
   the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
-  route equals its binding in the screen files of `contract/screens/` (path, guard, history,
+  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
   `routes-router.spec.ts` builds every binding on the real router (the contract's sample of
@@ -163,6 +171,24 @@ modeling stage.
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
   (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added); running every flow and
   activity in XState is the contract check's, not the app's.
+  The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
+  lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the
+  anchors bound to an action of `leaving`, both held to the contract by
+  `leaving-contract.spec.ts`; `leave-guard.port.ts` is how a screen asks the frame before such
+  a leave (`useLeaveGuard()`: `confirm()`, `before(control)`; every leave goes ahead without
+  a provider). The question before a destructive action: `confirmations.ts` holds
+  `ASKING_CONTROLS`, the anchors that carry `asks` with their codes, held to the contract by
+  `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
+  confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
+  ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
+  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a destructive
+  control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
+  the event started, and of the ones they started in turn, judged apart from any other submit
+  or actor; `false` when the state does not take the event; and the flow's effects on the
+  frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
+  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
+  a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
+  for a leave nobody started here (`useLeaveNow()`).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
