@@ -14,7 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { type Contract, declaredAnchors, loadContract } from '../check'
+import { type Contract, codesOf, declaredAnchors, loadContract } from '../check'
 import {
   ACTIVITIES_DIR,
   type Activity,
@@ -30,7 +30,7 @@ import {
 
 import { branchesOf } from './activities'
 
-interface Change {
+export interface Change {
   added: string[]
   removed: string[]
 }
@@ -44,6 +44,8 @@ export interface ContractChanges {
   errorFields: Change
   /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
   inputs: Change
+  /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
+  questions: Change
   /** As the action's name, the actions that leave what the user typed behind. */
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
@@ -265,8 +267,8 @@ export function diffContracts(
   return {
     anchors,
     codes: changeOf(
-      Object.keys(before?.vocabulary.codes ?? {}),
-      Object.keys(after?.vocabulary.codes ?? {}),
+      before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
+      after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
@@ -274,6 +276,9 @@ export function diffContracts(
     ),
     inputs: carriedChanges(before, after, anchors.renamed, (def) =>
       def.holdsInput === true ? ['holds input'] : [],
+    ),
+    questions: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.asks === undefined ? [] : [`asks ${def.asks.code}`],
     ),
     leaving: changeOf(
       before?.screens.platform.leaving ?? [],
@@ -291,64 +296,4 @@ export function diffContracts(
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
   }
-}
-
-/** The lists in the order of the block, each with its singular and plural noun. */
-const LISTS = [
-  ['screens', 'screen', 'screens'],
-  ['anchors', 'anchor', 'anchors'],
-  ['codes', 'code', 'codes'],
-  ['anchorCodes', 'anchor code', 'anchor codes'],
-  ['errorFields', 'error field', 'error fields'],
-  ['inputs', 'field holding input', 'fields holding input'],
-  ['leaving', 'leaving action', 'leaving actions'],
-  ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
-  ['entities', 'entity', 'entities'],
-  ['fields', 'field', 'fields'],
-  ['activities', 'activity', 'activities'],
-] as const
-
-/** The non-empty lists of one change: its count and its entries, after `where` when given. */
-function linesOf(
-  change: Change | ContractChanges['anchors'],
-  one: string,
-  many: string,
-  where = '',
-) {
-  const lists: Array<{ verb: string; entries: string[] }> = [
-    { verb: 'added', entries: change.added },
-    { verb: 'removed', entries: change.removed },
-    ...('renamed' in change
-      ? [{ verb: 'renamed', entries: change.renamed.map(({ from, to }) => `${from} -> ${to}`) }]
-      : []),
-  ]
-
-  return lists
-    .filter(({ entries }) => entries.length > 0)
-    .map(({ verb, entries }) => ({
-      summary: `${entries.length} ${entries.length === 1 ? one : many} ${verb}${where}`,
-      line: `${many} ${verb}${where}: ${entries.join(', ')}`,
-    }))
-}
-
-/** Each non-empty list (`anchors renamed`), then the transitions changed in each activity. */
-const listsOf = (changes: ContractChanges) => [
-  ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
-  ...Object.entries(changes.activities.transitions).flatMap(([id, change]) =>
-    linesOf(change, 'transition', 'transitions', ` in ${id}`),
-  ),
-]
-
-/** The hand-over block: a summary line, then one line per list that is not empty. */
-export function formatChanges(changes: ContractChanges): string {
-  const lists = listsOf(changes)
-
-  if (lists.length === 0) {
-    return 'contract changes: none'
-  }
-
-  return [
-    `contract changes: ${lists.map(({ summary }) => summary).join(', ')}`,
-    ...lists.map(({ line }) => line),
-  ].join('\n')
 }

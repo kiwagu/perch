@@ -27,8 +27,8 @@ Where: [/org] on device A (user A, administrator) and [/org] on device B (user B
 6. On device B, enter the note by B into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 7. On device B, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by B into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]
 8. On device A, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by A into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]
-9. On device B, click [organisation.notes.delete-button] on the note by B
-10. On device A, click [organisation.notes.delete-button] on the note by A
+9. On device B, click [organisation.notes.delete-button] on the note by B and confirm with [app-shell.confirmation.confirm-button]
+10. On device A, click [organisation.notes.delete-button] on the note by A and confirm with [app-shell.confirmation.confirm-button]
 
 ### Expected result
 - After step 5 device B shows the note by A without [organisation.notes.mine-badge], [organisation.notes.edit-button] or [organisation.notes.delete-button]

@@ -1,5 +1,6 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
+import { EventBus } from '@workspace/cqrs'
 import { type DataError, dataError, type LocalDb, type ShapeRunnerPort } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
@@ -17,11 +18,12 @@ import {
 } from '@workspace/replica/testing'
 
 import type { CommandsPort } from '../../platform/commands.port'
+import type { AppEvent } from '../../platform/events.port'
 import { type CommandLogger, createCommandBus } from '../commands'
 import type { GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
+import type { TransportContext } from '../session'
 import { SessionService } from '../session'
-import type { TransportContext } from '../session-options'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
 import { fakeGatewayAuth } from './gateway-auth'
@@ -135,6 +137,8 @@ export interface TestWorld {
   readonly gateway: TestGateway
   /** What the session reported through `onError`. */
   readonly failures: DataError[]
+  /** What the session published, in order: the changes the gateway refused. */
+  readonly published: AppEvent[]
   /** The sync states the session reported, oldest first. */
   readonly states: SyncState[]
   /** The identities whose databases were opened, in order. */
@@ -192,6 +196,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const storage = options.storage ?? memoryStorage()
   const auth = options.auth ?? fakeGatewayAuth(memberships)
   const failures: DataError[] = []
+  const published: AppEvent[] = []
   const states: SyncState[] = []
   const opened: IdentityId[] = []
   const destroyed: IdentityId[] = []
@@ -296,12 +301,14 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     },
     onSyncState: (state) => states.push(state),
     onError: (error) => failures.push(error),
+    publish: (event) => published.push(event),
   })
   const commands = createCommandBus({
     writePath: session.writePath,
     session,
     deviceId: 'dev-test',
     logger: options.logger ?? silent,
+    events: new EventBus<AppEvent>(),
   })
 
   return {
@@ -313,6 +320,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     clock,
     gateway,
     failures,
+    published,
     states,
     opened: () => [...opened],
     destroyed: () => [...destroyed],

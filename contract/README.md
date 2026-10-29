@@ -106,7 +106,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen may run (signing up, in and out, organisations, devices), the events it raises
   in a flow (the local data opened, or could not be), `leaving`, the actions whose run
   leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
-  first, the reserved anchors and the readiness line.
+  first, `toasts`, the platform actions whose success toasts with their codes, the reserved
+  anchors and the readiness line.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -428,6 +429,54 @@ out, and the loader derives it, the same way every time:
   codes and no error in
   the part is a problem: the screen declares the error, or writes the region by its button
   with its `onError`.
+- **The toast of a success.** With a toast anchor on the frame (`app-shell.toast`), every
+  mutation says its success there, with a standard message: each invoke of an action of the
+  model, written or in a derived region, gets on each branch of its `onDone`
+  `show: { app-shell.toast: [<code>] }`, the code being the action's object in kebab case and
+  the past of its verb (`note.createNote` gives `note-created`, `profile.updateBio` gives
+  `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a
+  platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed
+  (`organisations.create: organisation-created`), and an unlisted one never does. The toast
+  says an operation's outcome once, where it ends: an operation starts with an event that
+  enters a state running such an action and goes on along the branches of its `onDone` that
+  enter another (one Save running `updateName`, then `updateBio`); such a step toasts nothing,
+  and a branch that targets its own state re-enters nothing. An operation of one action says
+  that action's code; one of several says the operation, `<object>-<verb>ed` from the control
+  whose event starts it: the verb is the control's name without its kind, in the past
+  (`save-button` gives `saved`), the object the part the control sits in, or the screen's last
+  segment for a control of the screen itself (`user.profile.save-button` gives
+  `profile-saved`). An operation of several that no control starts (a platform event), or that
+  controls with different codes start, is refused until the screen writes its own message on
+  the toast or bans it; so is one event that starts several such operations at once (the
+  regions of a parallel state it enters, or two regions handling one press with transitions
+  that stay in them), until the screen writes `toast: false` on every action of all but one.
+  One press gives one toast. The
+  toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own
+  message on the toast keeps it (a written message wins on its anchor, branch by branch; the
+  other branches still get the standard one), and the one ban is `toast: false` on
+  the invoke, or on a region written `by` its button (the language select's store: the change
+  is visible by itself); a notice or an error written on the outcome says nothing about the
+  toast. A failure never toasts: it shows on the part's error. The toast anchor carries every
+  code a flow shows on it; the vocabulary documents the derived ones by one rule row,
+  `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a
+  new one. A code a flow writes on the toast
+  itself (a warning of its own), or the frame lists on it, has its own row, even where a
+  derivation gives the same code.
+- **The question before a destructive action.** With a confirmation on the frame (an anchor of
+  kind `confirmation`, `app-shell.confirmation`), every control whose binding names a
+  destructive action asks it before the action runs: an action of the model whose verb is
+  `delete`, an action of the platform whose verb (the first word of its last segment) is
+  `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
+  code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
+  the platform action's name with `.` as `-` (`organisations.remove` gives
+  `organisations-remove`); the confirmation carries every code asked with, which the
+  vocabulary documents by one rule row, `<object>-<verb>`. Both are derived only: a screen file
+  never writes `asks`, nor the frame the confirmation's codes. The flow says nothing of it: the
+  press still leads to the state that runs the action, and the app's gate asks in front of the
+  event, its confirm-button letting the event through and its cancel-button dropping it. The
+  one line a screen writes is `confirm: false` on the control, which runs the action without
+  asking; on a control that runs no destructive action it bans nothing and is refused. Without
+  a confirmation on the frame nothing asks.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived
@@ -761,7 +810,10 @@ gap is fixed in the contract files first, never worked around in a test.
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
-  once, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a
+  once, every action of `toasts` is an action of the platform, the frame's confirmation is
+  declared by the frame alone, once, reserved, with both answers and no action of its own,
+  and `leaving` comes with
+  `unsavedInput`, whose question is a reserved dialog with a
   code and both answers that runs no action of its own; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
@@ -769,8 +821,10 @@ gap is fixed in the contract files first, never worked around in a test.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
-  problem too), no literal equal to another plus a derived suffix, and every `testIdFor()`
-  suffix and every code in the vocabulary. An anchor built at runtime is a problem. A field
+  problem too), no literal equal to another plus a derived suffix, every `testIdFor()`
+  suffix in the vocabulary, and every code a code of the contract: a row of the vocabulary, or
+  a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself). An
+  anchor built at runtime is a problem. A field
   the contract says holds no input (a choice that applies at once) carries
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
@@ -790,14 +844,16 @@ gap is fixed in the contract files first, never worked around in a test.
   `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` in any string or
   template, and `expect(...).toHaveAttribute(...)` on `data-testid`, `data-code`,
   `data-state` or `data-value`, `.not` included. Every anchor must be declared, or derived
-  from a declared base with a suffix it lists; every code, state and value must be in the
+  from a declared base with a suffix it lists; every code must be a code of the contract (a
+  row of the vocabulary or a derived toast code), and every state and value in the
   vocabulary. A plain string or a template without `${}` is a literal; an anchor built with
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
 
-Beside them, `bun run e2e:coverage` (in `bun run check`) pairs every scenario with its test,
-and the web app's tests hold the module routes and the real router to the bindings, and
+Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
+`bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
+leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
 
 ## The manifest

@@ -40,8 +40,8 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   URL with `app-shell.status` in `ready`.
 - `user/base/sign-up`: a new user signs up, lands on `/me` with the notice `welcome`, the
   entered name and email, and stays signed in after a reload.
-- `user/base/edit-profile-name`: a signed-in user changes the name, sees `profile-saved`, and
-  keeps the new name after a reload.
+- `user/base/edit-profile-name`: a signed-in user changes the name, sees the toast
+  `profile-saved`, and keeps the new name after a reload.
 - `user/base/blocked-storage`: a browser that refuses the page its localStorage is told that
   it keeps no data for Perch, and gets no sign-in form.
 - `user/base/unopenable-database`: once the account's local database is broken, the page says
@@ -56,7 +56,7 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   other tab's edit reaches B, and it takes over within 2 seconds when the leader closes.
 - `user/flows/sign-out`: signing out deletes the device's database and leaves B signed in;
   signing in again restores the profile from the server; an offline sign-out with an
-  unsent change asks first.
+  unsent change asks first, and the sign-out takes the notice with the account.
 - `user/flows/idle-traffic`: an idle visible tab, its clock driven by the test through 10
   minutes, sends at most 2 sync frames a minute.
 - `user/flows/blocked-delete`: a sign-out ends within 15 seconds although a second tab holds
@@ -116,7 +116,7 @@ its localStorage (`keysKept`, and `keepAccessToken`, which replaces the access t
 edit would).
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
-and `expectInvited` (the notice `invited` and the account in the members list).
+and `expectInvited` (the toast `invited` and the account in the members list).
 `src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
 note texts).
 

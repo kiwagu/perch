@@ -79,6 +79,38 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('asks no row of a derived toast code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const toast = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(toast, { codes: [...(toast.codes ?? []), 'thing-created'] })
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the toasts derived on sample.save-button (thing-created) want the rule row `<object>-<verb>ed`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'sample.save-button',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('calls the rule row unused when no toast is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'app-shell.toast',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>ed" is documented but unused',
+    ])
+  })
   it('wants the platform status states to equal the app states', () => {
     const contract = sampleContract()
 
@@ -125,6 +157,41 @@ describe('vocabularyProblems', () => {
 
     expect(printed(contract)).toEqual([
       'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+    ])
+  })
+})
+
+describe('the questions before destructive actions', () => {
+  const RULE = {
+    where: 'app-shell.confirmation',
+    meaning: 'the question before a destructive action',
+  }
+
+  it('asks no row of a derived question code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const dialog = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(dialog, { codes: [...(dialog.codes ?? []), 'thing-delete'] })
+    contract.screens.questions = [
+      { anchor: 'sample.save-button', code: 'thing-delete', action: 'thing.deleteThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the questions derived on sample.save-button (thing-delete) want the rule row `<object>-<verb>`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([])
+  })
+
+  it('calls the rule row unused when no question is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>" is documented but unused',
     ])
   })
 })

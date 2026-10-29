@@ -1,8 +1,10 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
+export { confirmationsProblems } from './confirmations'
 export {
   bindingRefsOf,
   type Contract,
+  codesOf,
   declaredAnchors,
   locate,
   modelTargetOf,
@@ -33,6 +35,7 @@ export { runsProblems } from './runs'
 export { referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
+export { toastsProblems } from './toasts'
 export { unsavedInputProblems } from './unsaved-input'
 export { versionProblems } from './version'
 export { vocabularyProblems } from './vocabulary'

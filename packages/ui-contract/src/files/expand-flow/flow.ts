@@ -3,7 +3,8 @@
  * states of the root, the regions of a parallel state (a pattern or a region written `by` a
  * button into the region it stands for), the states of each region, and in every state its
  * `entry`, `exit`, `on` and the outcomes of its `invoke`; then a region for each button bound
- * to one action that the flow handles nowhere. It works on the data as read, before any
+ * to one action that the flow handles nowhere; then, on every invoke of a model action, the
+ * toast that says its success (`toasts/`). It works on the data as read, before any
  * schema: what it does not recognise it leaves as it is, so the canonical schema judges it
  * with its own messages.
  */
@@ -12,8 +13,9 @@ import { isRecord } from '../../records'
 
 import { controlRegionOf, withDerivedRegions } from './controls'
 import { effectsOf, transitionsOf } from './effects'
-import type { Expansion, ExpansionIssue, FlowLookups } from './expansion'
+import type { DerivedToast, Expansion, ExpansionIssue, FlowLookups } from './expansion'
 import { patternOf } from './patterns'
+import { withDerivedToasts } from './toasts'
 
 function stateOf(state: unknown, expansion: Expansion, at: readonly PropertyKey[]): unknown {
   if (!isRecord(state)) {
@@ -87,19 +89,24 @@ function regionOf(region: unknown, expansion: Expansion, at: readonly PropertyKe
 
 /**
  * `flow` expanded, with the issues that kept a part of it from expanding (that part is left as
- * written). `lookups` give the codes an anchor carries and an action's failure shows, for
- * `show: <anchor>`, and the screen's buttons bound to one action; `at` is where the flow sits
- * in its file.
+ * written), the toasts it derived and the codes it writes on the toast anchor itself. `lookups` give the codes an anchor carries and an action's
+ * failure shows, for `show: <anchor>`, the screen's buttons bound to one action and the frame's
+ * toast anchor; `at` is where the flow sits in its file.
  */
 export function expandFlow(
   flow: unknown,
   lookups: FlowLookups,
   at: readonly PropertyKey[] = ['flow'],
-): { flow: unknown; issues: ExpansionIssue[] } {
-  const expansion: Expansion = { ...lookups, issues: [] }
+): {
+  flow: unknown
+  issues: ExpansionIssue[]
+  toasts: DerivedToast[]
+  writtenToasts: string[]
+} {
+  const expansion: Expansion = { ...lookups, issues: [], toasts: [], writtenToasts: [] }
 
   if (!isRecord(flow) || !isRecord(flow['states'])) {
-    return { flow, issues: [] }
+    return { flow, issues: [], toasts: [], writtenToasts: [] }
   }
 
   const states = Object.fromEntries(
@@ -110,7 +117,12 @@ export function expandFlow(
   )
 
   return {
-    flow: { ...flow, states: withDerivedRegions(states, expansion) },
+    flow: {
+      ...flow,
+      states: withDerivedToasts(withDerivedRegions(states, expansion), expansion, at),
+    },
     issues: expansion.issues,
+    toasts: expansion.toasts,
+    writtenToasts: expansion.writtenToasts,
   }
 }

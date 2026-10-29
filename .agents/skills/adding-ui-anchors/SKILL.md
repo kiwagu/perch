@@ -68,7 +68,14 @@ code and the tests follow; the checks hold them to the contract.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
-   and the region of a button bound to one action when it only runs the action. Add its
+   the region of a button bound to one action when it only runs the action, and the toast of a
+   mutation's success (one per operation, where it ends, a chain of actions named by the control
+   that starts it; one event starting several at once is refused; on by default for an action of the
+   model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
+   `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
+   toast for a message of its own), and the question before a destructive action (a control
+   bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
+   its anchor to run it without asking). Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms
@@ -76,7 +83,10 @@ code and the tests follow; the checks hold them to the contract.
    name, a region by its pattern or by its button, and read the expansion with `bun run
    contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
-   those tables are business, like the screen file. A field holds input by itself; only a
+   those tables are business, like the screen file. The toast codes the contract derives for
+   mutations' successes (an action of the model, or a platform action the platform's `toasts`
+   lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
+   words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
    `holdsInput={false}` in the JSX, and the contract derives which.
    A new screen follows the checklist in `references/checklists.md`.
@@ -97,7 +107,8 @@ code and the tests follow; the checks hold them to the contract.
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes; an app's machine may lack what its flow added, and does
-   nothing the flow does not say). A rename or a removal keeps the old name declared in
+   nothing the flow does not say; a scenario may wait for its test, which the landing on
+   `main` requires). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer
    the output of `bun run contract:diff main`, the contract commits by hash with their diff
@@ -147,7 +158,7 @@ code and the tests follow; the checks hold them to the contract.
 - Emulate a facet the contract lacks in a component, a hook, a store or a test; signal the gap
   as `contract-gap-no-emulation.mdc` says.
 - Invent a kind, a suffix, a state, a code or a value outside the vocabulary; add it to its
-  table in the same change.
+  table in the same change (a derived toast code has the rule row already).
 - Build an anchor at runtime, join a derived name by hand instead of `testIdFor`, or write
   one literal twice; pass it as a prop or share a `<NAME>_TEST_ID` constant.
 - Put an anchor on a wrapper, a fragment, a portal or a backdrop, or use an `id` attribute in

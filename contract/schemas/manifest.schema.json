@@ -1048,6 +1048,26 @@
                     }
                   ],
                   "description": "Where the entries of a list, a section or a table come from."
+                },
+                "asks": {
+                  "type": "object",
+                  "properties": {
+                    "dialog": {
+                      "type": "string",
+                      "description": "The frame's confirmation that asks."
+                    },
+                    "code": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "The code it asks with: what the action destroys."
+                    }
+                  },
+                  "required": [
+                    "dialog",
+                    "code"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
                 }
               },
               "required": [
@@ -4841,6 +4861,26 @@
             "description": "Shown to a member only on the entries it owns.",
             "type": "boolean"
           },
+          "asks": {
+            "type": "object",
+            "properties": {
+              "dialog": {
+                "type": "string",
+                "description": "The frame's confirmation that asks."
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The code it asks with: what the action destroys."
+              }
+            },
+            "required": [
+              "dialog",
+              "code"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+          },
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
@@ -4951,6 +4991,20 @@
             "type": "string",
             "pattern": "^(platform\\.[a-z.-]+|[a-z_]+\\.[a-zA-Z]+)$",
             "description": "`entity.action` (an action of the entity x-perch) or `platform.<name>` (an action of platform.actions)."
+          }
+        },
+        "toasts": {
+          "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+            "description": "A platform action: `sign-in`, `organisations.create`."
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "A code of the vocabulary (data-code)."
           }
         },
         "unsavedInput": {

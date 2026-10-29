@@ -1,9 +1,12 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
- * frame's guard (the action that used the input completed), asks the guard before a leaving
- * control's event, and lets a form await the outcome of what an event started: `submit`
+ * frame's guard (the action that used the input completed), asks the frame's confirmation before
+ * a destructive control's event and the guard before a leaving control's, in that order, and
+ * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
+ * It also runs the flow's effects on the frame (`frame-effects.ts`): a toast, the notice and its
+ * clearing, so no container subscribes to them by hand.
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -17,8 +20,18 @@ import type {
   InspectionEvent,
 } from 'xstate'
 
+import { useConfirmGuard } from './confirm-guard.port'
+import { questionOf } from './confirmations'
+import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
+
+/**
+ * Whether `control` asks before its event: the confirmation when its action destroys, the guard
+ * when it leaves; one that does neither sends at once.
+ */
+const asks = (control: string): boolean =>
+  questionOf(control) !== undefined || isLeavingControl(control)
 
 /**
  * A submit under way: whether the machine took its event yet and whether that event selected a
@@ -74,6 +87,14 @@ const controlOf = (event: { readonly type: unknown }): string =>
 export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
   const navigate = useNavigate()
   const guard = useLeaveGuard()
+  const confirmation = useConfirmGuard()
+  const ask = useCallback(
+    (control: string): Promise<boolean> =>
+      confirmation
+        .before(control)
+        .then((go) => go && (!isLeavingControl(control) || guard.before(control))),
+    [confirmation, guard],
+  )
   // Each step of the root carries the event that made it: a submit's own event object, or the end
   // of an actor instance a submit owns. Its first microstep says whether that event selected a
   // transition; the actor instances its snapshot adds belong to that submit, and an owned instance
@@ -149,6 +170,8 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
   const actor = useActorRef(machine, { inspect })
   const state = useSelector(actor, (snapshot) => snapshot)
 
+  useFrameEffects(actor)
+
   useEffect(() => {
     const emitter: Pick<AnyActorRef, 'on'> = actor
     const moved = emitter.on('navigate', (event: unknown) => {
@@ -197,29 +220,27 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
     (event: EventFromLogic<TMachine>) => {
       const control = controlOf(event)
 
-      if (!isLeavingControl(control)) {
+      if (!asks(control)) {
         actor.send(event)
 
         return
       }
 
-      void guard.before(control).then((leave) => {
-        if (leave) {
+      void ask(control).then((go) => {
+        if (go) {
           actor.send(event)
         }
       })
     },
-    [actor, guard],
+    [actor, ask],
   )
   const submit = useCallback(
     (event: EventFromLogic<TMachine>): Promise<boolean> => {
       const control = controlOf(event)
 
-      return isLeavingControl(control)
-        ? guard.before(control).then((leave) => leave && start(event))
-        : start(event)
+      return asks(control) ? ask(control).then((go) => go && start(event)) : start(event)
     },
-    [guard, start],
+    [ask, start],
   )
 
   return { state, send, submit, actor }

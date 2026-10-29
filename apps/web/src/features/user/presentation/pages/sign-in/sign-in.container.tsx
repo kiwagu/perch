@@ -4,7 +4,6 @@ import { useLocale } from '@workspace/i18n'
 
 import { useLeaveNow } from '../../../../../platform/leave-now'
 import { useService } from '../../../../../platform/module'
-import { useNotify } from '../../../../../platform/notices'
 import { HOME_PATH } from '../../../../../platform/router'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
@@ -19,9 +18,8 @@ export function SignInContainer() {
   // The word the last session left stays on the page while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
-  const { state, send, submit, actor } = useScreenMachine(machine)
+  const { state, send, submit } = useScreenMachine(machine)
   const leaveNow = useLeaveNow()
-  const notify = useNotify()
   const locale = useLocale()
   const submitting = state.matches('signing-in') || state.matches('signing-up')
   const done = state.matches('done')
@@ -52,18 +50,6 @@ export function SignInContainer() {
       }),
     [session, busy, leaveNow],
   )
-
-  // The effects of the flow outside the form: the welcome on the shell's notice (the hook runs
-  // the move).
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('welcome')) {
-        notify({ code: 'welcome', text: (t) => t('user.sign-in.welcome') })
-      }
-    })
-
-    return () => shown.unsubscribe()
-  }, [actor, notify])
 
   return (
     <SignInView

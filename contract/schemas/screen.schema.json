@@ -723,6 +723,11 @@
               }
             ],
             "description": "Where the entries of a list, a section or a table come from."
+          },
+          "confirm": {
+            "description": "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
+            "type": "boolean",
+            "const": false
           }
         },
         "required": [
@@ -963,6 +968,11 @@
                             "description": "Guarded transitions in order: the first whose guard holds is taken."
                           }
                         ]
+                      },
+                      "toast": {
+                        "type": "boolean",
+                        "const": false,
+                        "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                       }
                     },
                     "required": [
@@ -1166,6 +1176,11 @@
                                   "description": "Guarded transitions in order: the first whose guard holds is taken."
                                 }
                               ]
+                            },
+                            "toast": {
+                              "type": "boolean",
+                              "const": false,
+                              "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                             }
                           },
                           "required": [
@@ -1329,6 +1344,11 @@
                                             "description": "Guarded transitions in order: the first whose guard holds is taken."
                                           }
                                         ]
+                                      },
+                                      "toast": {
+                                        "type": "boolean",
+                                        "const": false,
+                                        "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
                                       }
                                     },
                                     "required": [

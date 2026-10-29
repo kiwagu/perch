@@ -55,6 +55,7 @@ const BINDINGS = [
   '`{ "action": "<entity>.<action>" }` runs an action of `model.$defs.<entity>.x-perch.actions`; `{ "action": "platform.<name>" }` runs `platform.actions.<name>`. Its `params` name, per parameter, the anchor whose value it takes, or a constant `{ "value": ... }`.',
   '`{ "route": "/path" }` navigates to the path of a binding of some screen.',
   'A list of bindings runs in its order, or one of them by the mode of the screen; the `flow` says which.',
+  "An anchor with `asks` asks the frame's confirmation (`asks.dialog`, with `asks.code`) before its action runs: the app's platform gate opens it, confirm runs the action and cancel does not; a screen builds no dialog of its own for it.",
 ].join(' ')
 
 const MODEL = [

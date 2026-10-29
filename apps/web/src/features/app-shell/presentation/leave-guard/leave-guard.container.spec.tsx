@@ -25,6 +25,7 @@ import { defineModule } from '../../../../platform/module'
 import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
+import { NOTICE_TEXTS } from '../shell/notice-texts'
 
 import { LeaveGuard } from './leave-guard.container'
 
@@ -70,7 +71,7 @@ const Pages = defineModule({
 
 function Layout() {
   return (
-    <NoticeProvider>
+    <NoticeProvider texts={NOTICE_TEXTS}>
       <UnsavedInputScope>
         <LeaveGuard>
           <Outlet />

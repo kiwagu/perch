@@ -71,13 +71,14 @@ another is a code or a state of one anchor, never a second anchor.
 | `list` | the container of a list, with `data-state` when its data arrives after the page | `getByRole('list')` |
 | `form` | the container of a form | |
 | `dialog` | a modal window or a confirmation, with `data-code` for what it asks | `getByRole('alertdialog')` or `getByRole('dialog')` |
+| `confirmation` | the frame's question before a destructive action, one for the whole app: an alert dialog with `data-code` for the action it asks about, rendering `confirm-button` (go on) and `cancel-button` (stay) | `getByRole('alertdialog')` |
 | `panel` | a side or inline panel that is not modal | |
 | `section` | a region inside a page, with `data-state` when its data arrives after the page | |
 | `page` | the root element of a screen | |
 | `heading` | the title of a page or a card that a test reads | `getByRole('heading')` |
 | `message` | an informational text such as a notice, a hint or an empty state, with `data-code` | |
 | `error` | a validation or failure text next to a field or a form, with `data-code`; its `fields` name the field each code concerns | |
-| `toast` | one notification that shows for a short while | |
+| `toast` | one notification that shows for a short while; several may show at once, the newest at the top, each carrying `data-code` | |
 | `badge` | a marker such as a counter, a role or "this device", with `data-value` when it names a choice | |
 | `status` | the readiness line of the app or of a page, with `data-state` | `getByRole('status')` |
 
@@ -148,13 +149,14 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | Code | Where | Meaning |
 |---|---|---|
 | `welcome` | `app-shell.notice-message` | the account signed up or signed in |
-| `profile-saved` | `app-shell.notice-message` | the profile was saved |
-| `invited` | `app-shell.notice-message` | an account was invited into the organisation |
 | `devices-read-failed` | `app-shell.notice-message` | the devices of the account could not be read |
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
+| `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
+| `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
@@ -234,3 +236,5 @@ included.
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
+| `app-shell.confirmation` | the frame's question before a destructive action, which carries `data-code` and renders `app-shell.confirmation.confirm-button` (go on) and `app-shell.confirmation.cancel-button` (stay) |
+| `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |

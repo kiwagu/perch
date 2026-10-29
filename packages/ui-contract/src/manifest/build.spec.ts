@@ -34,6 +34,34 @@ describe('buildManifest', () => {
     expect(manifest.contract.readyValue).toBe('ready')
     expect(manifest.contract.pageHelper).toBe('__perch.ui')
   })
+  it('lists each derived toast code with its action, and leaves the rule row out', () => {
+    const base = fixtureContract()
+    const derived = buildManifest({
+      ...base,
+      vocabulary: {
+        ...base.vocabulary,
+        codes: {
+          ...base.vocabulary.codes,
+          '<object>-<verb>ed': {
+            where: 'app-shell.toast',
+            meaning: 'the success of an action of the model',
+          },
+        },
+      },
+      screens: {
+        ...base.screens,
+        toasts: [{ anchor: 'app-shell.toast', code: 'note-created', action: 'note.createNote' }],
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(derived.contract.codes['note-created']).toBe(
+      '`app-shell.toast`: the success of `note.createNote`',
+    )
+    expect(derived.contract.codes).not.toHaveProperty('<object>-<verb>ed')
+    expect(manifestSchema.safeParse(derived).success).toBe(true)
+  })
   it('lists every declared anchor once, with its kind, its screen and its attributes', () => {
     const declared = contract.screens.screens.flatMap((screen) => Object.keys(screen.anchors))
 
@@ -116,5 +144,46 @@ describe('buildManifest', () => {
     )
     expect(Object.keys(real.ids).sort()).toEqual([...declared].sort())
     expect(manifestSchema.safeParse(real).error?.issues).toBeUndefined()
+  })
+})
+
+describe('the questions before destructive actions', () => {
+  it('lists each derived question code with its action, the rule row out, and the question on its control', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+    const asks = { dialog: 'app-shell.confirmation', code: 'note-delete' }
+
+    if (sample?.anchors['sample.save-button'] !== undefined) {
+      sample.anchors['sample.save-button'].asks = asks
+    }
+
+    const derived = buildManifest({
+      ...base,
+      vocabulary: {
+        ...base.vocabulary,
+        codes: {
+          ...base.vocabulary.codes,
+          '<object>-<verb>': {
+            where: 'app-shell.confirmation',
+            meaning: 'the question before a destructive action',
+          },
+        },
+      },
+      screens: {
+        ...base.screens,
+        questions: [
+          { anchor: 'app-shell.confirmation', code: 'note-delete', action: 'note.deleteNote' },
+        ],
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(derived.contract.codes['note-delete']).toBe(
+      '`app-shell.confirmation`: the question before `note.deleteNote`',
+    )
+    expect(derived.contract.codes).not.toHaveProperty('<object>-<verb>')
+    expect(derived.ids['sample.save-button']?.asks).toEqual(asks)
+    expect(manifestSchema.safeParse(derived).success).toBe(true)
   })
 })

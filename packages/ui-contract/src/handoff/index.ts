@@ -9,7 +9,8 @@ export {
   UI_KIT_DIR,
   UI_KIT_MODULE,
 } from './coverage'
-export { type ContractChanges, contractAt, diffContracts, formatChanges } from './diff'
+export { type ContractChanges, contractAt, diffContracts } from './diff'
+export { formatChanges } from './format-changes'
 export { type BoundMember, type ModelCoverage, modelCoverage } from './model'
 export { COVERAGE_END, COVERAGE_START, replaceCoverageBlock } from './note'
 export { listControls, renderCoverage } from './render'

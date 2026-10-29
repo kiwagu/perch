@@ -271,8 +271,6 @@ flow:
           by: organisation.invite.submit-button
           onDone:
             description: The account is a member; the members are read again, and the account's own devices learn the membership without a reload.
-            actions:
-              - show: { app-shell.notice-message: [ invited ] }
         members:
           by: organisation.members.remove-button
           onDone:
