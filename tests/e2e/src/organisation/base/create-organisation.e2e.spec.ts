@@ -12,26 +12,30 @@ test.describe('Create the first organisation', { tag: '@smoke' }, () => {
       name: generate.organisationName(),
     }
 
-    await test.step('1. Sign up, open [/org] and wait for [organisation.page.status] to reach [state:empty]', async () => {
-      await signUp(page)
-      await page.getByTestId('app-shell.nav.organisation-link').click()
-      // The gateway's welcome, with the account's memberships (none), has arrived once the sync
-      // channel is up.
-      await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
-        timeout: 10_000,
+    const account =
+      await test.step('1. Sign up, open [/org] and wait for [organisation.page.status] to reach [state:empty]', async () => {
+        const signedUp = await signUp(page)
+
+        await page.getByTestId('app-shell.nav.organisation-link').click()
+        // The gateway's welcome, with the account's memberships (none), has arrived once the sync
+        // channel is up.
+        await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
+          timeout: 10_000,
+        })
+        await expect(page.getByTestId('organisation.page.status')).toHaveAttribute(
+          'data-state',
+          'empty',
+        )
+        // Expected: After step 1 [organisation.create.form] shows, with no
+        //   [organisation.create.toggle-button], no [organisation.page.heading] and no
+        //   [organisation.notes.section]
+        await expect(page.getByTestId('organisation.create.form')).toBeVisible()
+        await expect(page.getByTestId('organisation.create.toggle-button')).toHaveCount(0)
+        await expect(page.getByTestId('organisation.page.heading')).toHaveCount(0)
+        await expect(page.getByTestId('organisation.notes.section')).toHaveCount(0)
+
+        return signedUp
       })
-      await expect(page.getByTestId('organisation.page.status')).toHaveAttribute(
-        'data-state',
-        'empty',
-      )
-      // Expected: After step 1 [organisation.create.form] shows, with no
-      //   [organisation.create.toggle-button], no [organisation.page.heading] and no
-      //   [organisation.notes.section]
-      await expect(page.getByTestId('organisation.create.form')).toBeVisible()
-      await expect(page.getByTestId('organisation.create.toggle-button')).toHaveCount(0)
-      await expect(page.getByTestId('organisation.page.heading')).toHaveCount(0)
-      await expect(page.getByTestId('organisation.notes.section')).toHaveCount(0)
-    })
 
     await test.step('2. Enter the invalid key and the organisation name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await page.getByTestId('organisation.create.key-input').fill(data.invalidKey)
@@ -84,7 +88,7 @@ test.describe('Create the first organisation', { tag: '@smoke' }, () => {
       .getByTestId('organisation.members.list')
       .getByTestId('organisation.members.item')
 
-    await expect(members).toHaveCount(1)
+    await expect(members).toHaveText([account.email])
     await expect(members.getByTestId('organisation.members.remove-button')).toHaveCount(0)
     await expect(page.getByTestId('organisation.invite.form')).toBeVisible()
     // - After step 3 [organisation.create.form] is closed behind
