@@ -1,7 +1,10 @@
 /**
  * The routes of the modules are the bindings of the UI contract, one to one: the
  * same path, guard, history and retained parameters, and the same search schema
- * once both sides are reduced to what the router enforces.
+ * once both sides are reduced to what the router enforces. On a branch the pre-commit hook sets
+ * `CONTRACT_AHEAD=1`: a business commit may add a binding before its route, so a binding may
+ * wait for its route, while a route never lacks its binding; `bun run check` and `main` want
+ * every binding routed.
  */
 
 import { join } from 'node:path'
@@ -17,6 +20,7 @@ import type { RouteDef } from './module'
 import { allModules } from './router'
 
 const ROOT = join(import.meta.dirname, '../../../..')
+const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
 /**
  * Schema keywords the comparison leaves out: prose for the contract's readers
@@ -172,11 +176,10 @@ describe('the routes of the modules', () => {
 
   it('cover every binding of the contract', () => {
     const paths = new Set(routes.map((route) => route.path))
+    const unrouted = bindings
+      .filter(({ binding }) => !paths.has(binding.path))
+      .map(({ screen, binding }) => `${screen}: ${binding.path}`)
 
-    expect(
-      bindings
-        .filter(({ binding }) => !paths.has(binding.path))
-        .map(({ screen, binding }) => `${screen}: ${binding.path}`),
-    ).toEqual([])
+    expect(AHEAD ? [] : unrouted).toEqual([])
   })
 })

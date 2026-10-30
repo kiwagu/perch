@@ -30,6 +30,7 @@ import { modules } from '../modules'
 
 import { type AppRouter, matchAt, routerOf, SPLAT } from './__fixtures__/router'
 import { defineModule } from './module'
+import { allModules } from './router'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 
@@ -168,9 +169,15 @@ describe('the example link on the router', () => {
 })
 
 const { screens, problems } = loadScreens(ROOT)
-const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? []).flatMap(
-  (screen) => screen.bindings.map((binding) => [binding.path, binding] as const),
+// On a branch (`CONTRACT_AHEAD=1`) a binding may wait for its route: only the routed ones are
+// held to their example and the tree; `bun run check` and `main` hold every binding.
+const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
+const routed = new Set(
+  allModules(modules).flatMap((module) => module.routes.map(({ path }) => path)),
 )
+const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? [])
+  .flatMap((screen) => screen.bindings.map((binding) => [binding.path, binding] as const))
+  .filter(([path]) => !AHEAD || routed.has(path))
 const router = routerOf(modules)
 
 describe('the example links of the contract on the router', () => {
@@ -210,9 +217,10 @@ describe('the route tree', () => {
             ? ROOT_ROUTE
             : trimPathRight(parentRoute.fullPath),
       }))
-    const fromFolder = routeTree(screens?.screens ?? []).flatMap(({ path, parent }) =>
-      parent === null ? [] : [{ path, parent }],
-    )
+    const present = new Set(fromRouter.map(({ path }) => path))
+    const fromFolder = routeTree(screens?.screens ?? [])
+      .flatMap(({ path, parent }) => (parent === null ? [] : [{ path, parent }]))
+      .filter(({ path }) => !AHEAD || present.has(path))
 
     expect(byPath(fromRouter)).toEqual(byPath(fromFolder))
   })
