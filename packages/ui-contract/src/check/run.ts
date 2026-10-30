@@ -11,7 +11,7 @@ import {
   loadActivities,
   loadModel,
   loadScenarios,
-  loadScreens,
+  loadScreensWith,
   type Problem,
   parseVocabulary,
   schemaDrift,
@@ -21,12 +21,17 @@ import {
 
 import { activitiesProblems } from './activities'
 import { bindingsProblems } from './bindings'
+import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { flowProblems } from './flow'
+import { leavingProblems } from './leaving'
 import { routesProblems } from './routes'
+import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { toastsProblems } from './toasts'
+import { unsavedInputProblems } from './unsaved-input'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
 
@@ -48,8 +53,8 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
 /** The contract files, the activities and the scenarios, or what keeps them from loading. */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
-  const { screens, problems: screensLoad } = loadScreens(root)
   const { model, problems: modelLoad } = loadModel(root)
+  const { screens, problems: screensLoad } = loadScreensWith(root, model)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
   const problems = [
@@ -83,7 +88,12 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   bindingsProblems,
   flowProblems,
   activitiesProblems,
+  runsProblems,
   routesProblems,
+  leavingProblems,
+  toastsProblems,
+  confirmationsProblems,
+  unsavedInputProblems,
   searchProblems,
   scenariosProblems,
 ]

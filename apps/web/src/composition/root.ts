@@ -4,8 +4,9 @@
  * its token; everything below receives ports only. Nothing is opened while nobody is signed in.
  */
 
-import type { ResultAsync } from 'neverthrow'
+import { okAsync, type ResultAsync } from 'neverthrow'
 
+import { EventBus } from '@workspace/cqrs'
 import {
   type DataError,
   type LocalDb,
@@ -20,8 +21,17 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
+import {
+  settingsCommands,
+  settingsShape,
+} from '../features/user/application/settings/settings.model.gen'
+import {
+  SETTINGS_SERVICE,
+  SettingsService,
+} from '../features/user/application/settings/settings.service'
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
+import { type AppEvent, EVENTS } from '../platform/events.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 
@@ -31,8 +41,7 @@ import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
-import { SessionService } from './session'
-import type { TransportContext, VisibilitySource } from './session-options'
+import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys } from './storage'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -68,6 +77,8 @@ export interface AppRootOptions {
   readonly storage: KeyValueStorage
   readonly visibility: VisibilitySource
   readonly logger: CommandLogger
+  /** Logs the name of every event the bus carries: development builds only; off when left out. */
+  readonly logEvents?: boolean
   readonly onStep?: (step: BootStep) => void
   readonly onError: (error: DataError) => void
   readonly onSyncState: (state: SyncState) => void
@@ -109,6 +120,18 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
       options.onStep?.(name)
     }
   }
+  // The facts of the app, after they happened: the commands' outcomes, the changes the gateway
+  // refused. Only the root publishes; the features hear them through `EVENTS`.
+  const events = new EventBus<AppEvent>()
+
+  if (options.logEvents === true) {
+    events.onAny((event) => {
+      options.logger.info({ event: event.name })
+
+      return okAsync(undefined)
+    })
+  }
+
   const session = new SessionService({
     auth: options.gatewayAuth,
     deviceLabel: options.deviceLabel,
@@ -127,12 +150,20 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     onStep: step,
     onSyncState: options.onSyncState,
     onError: options.onError,
+    publish: (event) => {
+      void events.publish([event]).match(
+        () => undefined,
+        (failure) =>
+          options.logger.warn({ event: event.name, outcome: failure.code, causes: failure.causes }),
+      )
+    },
   })
   const commands = createCommandBus({
     writePath: session.writePath,
     session,
     deviceId: deviceIdFrom(options.storage),
     logger: options.logger,
+    events,
   })
   // A route that refuses the access token has the sync leader renew the keys, once.
   const bearer: BearerDeps = {
@@ -148,6 +179,16 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     .singleton(WRITE_PATH, () => session.writePath)
     .singleton(SESSION, () => session)
     .singleton(COMMANDS, () => commands)
+    .singleton(EVENTS, () => events)
+    // The account's settings, which the frame reads and stores as well as the account's pages.
+    .singleton(
+      SETTINGS_SERVICE,
+      () =>
+        new SettingsService(session.runner, commands, {
+          shape: settingsShape,
+          commands: settingsCommands,
+        }),
+    )
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
 

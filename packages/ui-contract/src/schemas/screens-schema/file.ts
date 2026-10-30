@@ -1,16 +1,19 @@
 /**
- * The authored screen files: `contract/screens/<pathname>.yaml`, one screen each, and
- * `contract/platform.yaml`, the contract version with the platform section. An editor
+ * The authored screen files: `contract/domain/screens/<pathname>.yaml`, one screen each, and
+ * `contract/domain/platform.yaml`, the contract version with the platform section. An editor
  * finds their JSON Schemas through the hint comment on the first line, never a key.
  */
 
 import { z } from '@workspace/zod'
 
 import { platformSchema } from './platform'
-import { screenSchema } from './screen'
+import { authoredScreenSchema, screenSchema } from './screen'
 
-/** One file of `contract/screens/`: one screen, as written. */
+/** One screen as every reader takes it, its flow expanded. */
 export const screenFileSchema = screenSchema
+
+/** One file of `contract/domain/screens/`: one screen, as written, its flow possibly in the authored forms. */
+export const authoredScreenFileSchema = authoredScreenSchema
 
 export const platformFileSchema = z
   .strictObject({

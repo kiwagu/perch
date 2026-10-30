@@ -3,10 +3,10 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen.
+ * fields of its own screen; only a field says whether it holds input.
  */
 
-import { kindOf, screenOf } from '../anchors'
+import { FIELD_KINDS, kindOf, screenOf } from '../anchors'
 import type { Problem } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
@@ -128,16 +128,6 @@ function nameProblems({ screens }: Contract): Problem[] {
   ])
 }
 
-/** The kinds a person types into or picks with: what an error's code can concern. */
-const FIELD_KINDS: ReadonlySet<string> = new Set([
-  'input',
-  'textarea',
-  'select',
-  'checkbox',
-  'radio',
-  'switch',
-])
-
 function fieldsProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)
 
@@ -168,6 +158,14 @@ function fieldsProblems({ screens }: Contract): Problem[] {
   })
 }
 
+/** `holdsInput` says whether a field keeps what is typed; only a field has it. */
+const holdsInputProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.holdsInput !== undefined && !FIELD_KINDS.has(def.kind)
+      ? [locate(screens)([...at, 'holdsInput'], 'only a field holds input')]
+      : [],
+  )
+
 export const screensProblems = (contract: Contract): Problem[] => [
   ...screenIdProblems(contract),
   ...duplicateProblems(contract),
@@ -176,4 +174,5 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...bindingProblems(contract),
   ...nameProblems(contract),
   ...fieldsProblems(contract),
+  ...holdsInputProblems(contract),
 ]

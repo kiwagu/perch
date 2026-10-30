@@ -1,5 +1,5 @@
 /**
- * Reads `contract/model.schema.json`: a JSON Schema 2020-12 document (checked against the
+ * Reads `contract/domain/model.schema.json`: a JSON Schema 2020-12 document (checked against the
  * meta-schema) whose `$defs` are the entities, each through the entity schema.
  */
 
@@ -16,6 +16,11 @@ import { jsonSchemaProblems } from './validator'
 export interface ModelField {
   type?: string
   enum?: readonly unknown[]
+  /** The JSON Schema constraints a value typed into the field must meet. */
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  format?: string
   readonly: boolean
   crdt?: 'text' | 'list' | 'counter' | 'none'
   record?: string
@@ -44,12 +49,25 @@ const documentSchema = z.looseObject({
   $defs: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.unknown()),
 })
 
+/** The constraints of a field's JSON Schema, which the meta-schema has checked already. */
+function constraintsOf(field: Readonly<Record<string, unknown>>) {
+  const { minLength, maxLength, pattern, format } = field
+
+  return {
+    ...(typeof minLength === 'number' ? { minLength } : {}),
+    ...(typeof maxLength === 'number' ? { maxLength } : {}),
+    ...(typeof pattern === 'string' ? { pattern } : {}),
+    ...(typeof format === 'string' ? { format } : {}),
+  }
+}
+
 function fieldOf(field: z.output<typeof entityFieldSchema>): ModelField {
   const perch = field['x-perch']
 
   return {
     ...(field.type === undefined ? {} : { type: field.type }),
     ...(field.enum === undefined ? {} : { enum: field.enum }),
+    ...constraintsOf(field),
     readonly: perch?.readonly === true,
     ...(perch?.crdt === undefined ? {} : { crdt: perch.crdt }),
     ...(perch?.record === undefined ? {} : { record: perch.record }),

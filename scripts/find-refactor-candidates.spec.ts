@@ -127,6 +127,17 @@ describe('the size ratchet on a checkout without a baseline', () => {
     expect(baselineOf(root)).toEqual({ 'src/big.ts': 450 })
   })
 
+  it('measures the working tree when a tracked file was deleted from it, not yet staged', () => {
+    const root = checkout({ 'src/big.ts': 450, 'src/gone.ts': 420 })
+
+    rmSync(join(root, 'src/gone.ts'))
+
+    const run = sizes(root, '--ci')
+
+    expect(run.status, run.stderr).toBe(0)
+    expect(run.stdout).toContain('size ratchet green')
+  })
+
   it('refuses to record growth since main when the baseline is updated', () => {
     const root = checkout({ 'src/big.ts': 400 })
 

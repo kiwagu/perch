@@ -99,9 +99,10 @@ async function settled<T>(result: ResultAsync<T, BusError | DataError> | undefin
   return outcome.isOk() ? outcome.value : Promise.reject(outcome.error)
 }
 
+/** The toast of a Save, said once where it ends, however many writes it ran. */
 const SAVED = {
   type: 'show',
-  params: { anchor: 'app-shell.notice-message', codes: ['profile-saved'] },
+  params: { anchor: 'app-shell.toast', codes: ['profile-saved'] },
 } as const
 const REFUSED = {
   type: 'show',
@@ -117,7 +118,7 @@ const ASKED = {
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 
 /**
- * The profile page as the screen's flow says (`contract/screens/me.yaml`): the name and the
+ * The profile page as the screen's flow says (`contract/domain/screens/me.yaml`): the name and the
  * bio each follow the stored value or hold what was typed, Save writes what changed, and the
  * sign-out runs on its own, each area a region. A button is enabled while a state handles its
  * event (`snapshot.can`). Its `show` keeps the code of the form's own error for the view and

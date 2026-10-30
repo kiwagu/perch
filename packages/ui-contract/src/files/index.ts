@@ -4,7 +4,25 @@ export {
   type ActivityTransition,
   loadActivities,
 } from './activities'
+export { CONFIRM_RULE_ROW, type DerivedQuestion, TOAST_RULE_ROW } from './derive'
+export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'
+export {
+  type DeepTarget,
+  deepEnteredOf,
+  deepTargetOf,
+  type FlowNode,
+  flowNodes,
+  type IdTarget,
+  idTargetOf,
+  type ParallelNode,
+  type RegionNode,
+  type RegionStateNode,
+  type RootNode,
+  regionStartsOf,
+  rootOf,
+  transitionsOf,
+} from './flow-nodes'
 export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
 export { englishErrors } from './parse-file'
 export {
@@ -49,6 +67,7 @@ export {
   type FlowState,
   type FlowTransition,
   loadScreens,
+  loadScreensWith,
   type ParamValue,
   type Platform,
   type Screen,

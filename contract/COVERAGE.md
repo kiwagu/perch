@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 5 screens, 67 anchors and 29 codes.
+The contract declares 6 screens, 75 anchors and 41 codes.
 
-Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 35/36, ignored 2.
 
 ## Model
 
@@ -38,7 +38,7 @@ Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4
 | --- | --- | --- |
 | id | field | unbound |
 | identity | field | unbound |
-| locale | field | unbound |
+| locale | field | `app-shell.locale-select` |
 | createSettings | action | unbound |
 | updateLocale | action | `app-shell.locale-select` |
 
@@ -58,22 +58,24 @@ Totals: fields bound 4/13, actions bound 6/8; activities 1, transitions walked 4
 
 | Activity | Scenarios | Transitions | Walked |
 | --- | ---: | ---: | ---: |
-| session | 4 | 8 | 4 |
+| session | 4 | 8 | 5 |
 
 ## Controls
 
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
-| app-shell | 3 | 3 | 0 | 100% |
+| app-shell | 5 | 5 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
 | user | 11 | 11 | 0 | 100% |
-| ui kit | 2 | 2 | 2 | 100% |
-| all | 33 | 33 | 2 | 100% |
+| ui kit | 3 | 2 | 2 | 67% |
+| all | 36 | 35 | 2 | 97% |
 
 ### Unmarked
 
-None.
+```text
+packages/ui/src/components/ui/toast.tsx:81: button
+```
 
 ### Ignored
 
@@ -86,11 +88,12 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 14 |
+| not-found | 3 | 1 |
+| app-shell | 14 | 25 |
 | device | 10 | 2 |
-| user.profile | 10 | 15 |
-| organisation | 30 | 4 |
-| user.sign-in | 8 | 9 |
+| user.profile | 10 | 20 |
+| organisation | 30 | 10 |
+| user.sign-in | 8 | 11 |
 
 <!-- coverage:end -->
 
@@ -108,7 +111,7 @@ code, `bun run contract:check:consumers` for those of the e2e tests).
   binds is `unbound`. That is a report, not a rule: a field may be internal, such as an id
   or a creation time, and an action may run outside the screens (`createProfile` runs at
   sign-up, through the platform). The totals line counts the fields and the actions bound.
-- **Activities.** Each activity of `contract/activities/`, the scenarios whose front matter
+- **Activities.** Each activity of `contract/domain/activities/`, the scenarios whose front matter
   names it in `activity`, its transitions (one per transition of each `on`, a guarded list
   counting each of its branches), and how many of them are walked: a transition from a
   state on an anchor is walked when one of those scenarios names the anchor in a step while

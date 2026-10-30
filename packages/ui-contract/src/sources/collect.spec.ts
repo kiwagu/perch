@@ -5,7 +5,13 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
 
-import { collectFromSource, RUNTIME_ANCHOR, RUNTIME_SUFFIX } from './collect'
+import {
+  collectFromSource,
+  HOLDS_INPUT_ANCHOR,
+  HOLDS_INPUT_VALUE,
+  RUNTIME_ANCHOR,
+  RUNTIME_SUFFIX,
+} from './collect'
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__/sources')
 
@@ -110,8 +116,40 @@ describe('collectFromSource', () => {
       literals: [],
       derived: [],
       codes: [],
+      inputs: [],
       problems: [],
     })
+  })
+  it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid="x.form.name-input" holdsInput={false} />',
+        'const b = <OptionSelect testId="x.page.kind-select" holdsInput={true} />',
+        'const c = <Select holdsInput={props.holdsInput} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.inputs).toEqual([
+      { anchor: 'x.form.name-input', holdsInput: false, line: 1 },
+      { anchor: 'x.page.kind-select', holdsInput: true, line: 2 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it('reports holdsInput that is neither a boolean literal nor passed, or sits on no anchor', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input holdsInput={false} />',
+        'const b = <Input data-testid="x.form.name-input" holdsInput={1 > 0} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.inputs).toEqual([])
+    expect(found.problems.map(({ line, message }) => [line, message])).toEqual([
+      [1, HOLDS_INPUT_ANCHOR],
+      [2, HOLDS_INPUT_VALUE],
+    ])
   })
   it('reports a file it cannot parse', () => {
     const { problems } = collectFromSource('const X_TEST_ID = {', 'sources/broken.ts')

@@ -1,8 +1,10 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
+export { confirmationsProblems } from './confirmations'
 export {
   bindingRefsOf,
   type Contract,
+  codesOf,
   declaredAnchors,
   locate,
   modelTargetOf,
@@ -25,11 +27,15 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { leavingProblems } from './leaving'
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'
+export { runsProblems } from './runs'
 export { referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
+export { toastsProblems } from './toasts'
+export { unsavedInputProblems } from './unsaved-input'
 export { versionProblems } from './version'
 export { vocabularyProblems } from './vocabulary'

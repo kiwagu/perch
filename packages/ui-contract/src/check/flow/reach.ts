@@ -9,10 +9,17 @@
  */
 
 import type { FlowTransition, Problem } from '../../files'
+import {
+  deepEnteredOf,
+  type FlowNode,
+  flowNodes,
+  idTargetOf,
+  rootOf,
+  transitionsOf,
+} from '../../files'
 import { has } from '../contract'
 
 import type { InFlow } from './in-flow'
-import { deepEnteredOf, type FlowNode, flowNodes, idTargetOf, rootOf, transitionsOf } from './nodes'
 
 /** The names reached from `seeds`, each state's transitions read once. */
 function reachedFrom(

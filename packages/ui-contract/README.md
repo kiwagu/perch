@@ -23,16 +23,30 @@ for Bun.
   - Loaders of the contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
-    `loadScreens(root)` (every `.yaml` file under `contract/screens`, sorted by path, one screen
-    each through `screenFileSchema`, named by the path of its first binding: `/me` is
+    `loadScreens(root)` (every `.yaml` file under `contract/domain/screens`, sorted by path, one screen
+    each: what it leaves out derived from the model and the platform (`files/derive/`: the
+    failures of the actions, an error's codes and fields, the buttons whose regions the flow
+    leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
+    screen carry and the failures of the actions, the success of each mutation said on the
+    frame's toast anchor (a model action by its name, a platform action by the platform's
+    `toasts` map), which carries every code a flow shows on it
+    (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), and the question before each
+    destructive action, on its control (`asks`) and on the frame's confirmation, which
+    carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
+    then parsed through
+    `screenFileSchema`;
+    `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
+    check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
-    and `contract/platform.yaml`, the version and the platform section, through
+    and `contract/domain/platform.yaml`, the version and the platform section (its actions,
+    events, `leaving` actions, `toasts` (the platform actions whose success toasts, with
+    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
-    screen, problems named by the file and the path inside it, a YAML error by its line),
-    `loadModel(root)` (`contract/model.schema.json`, checked against the
+    screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
+    `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
     `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
-    `contract/activities`, sorted by path, one activity each through `activitySchema`, its
+    `contract/domain/activities`, sorted by path, one activity each through `activitySchema`, its
     file named by its id; the folder is optional, so none is no problem) and
     `loadScenarios(root)` (every `.md` file under
     `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
@@ -49,7 +63,12 @@ for Bun.
     key of the front matter (`devices.A`), each section (`where`) and each list item
     (`steps[0]`), or returns its problems with their lines (`ScenarioProblem`);
     `formatScenario(scenario)` writes one, its inverse.
-  - The Zod sources of the files: `screenFileSchema`, `platformFileSchema` and their parts,
+  - The Zod sources of the files: `screenFileSchema` (a screen as every reader takes it, its
+    flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
+    shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
+    the region of a button `controlRegionSchema`, its anchors
+    those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
+    and their parts,
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
     leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
@@ -63,7 +82,7 @@ for Bun.
     `minLength`, `maxLength`, `pattern`; and `examples`, fake values of a parameter for the
     route's example link), `scenarioSchema` (the parsed scenario),
     `entityDefinitionSchema`, `manifestSchema`. `SCHEMA_OUTPUTS`, `writeSchemas(root)` and
-    `schemaDrift(root)` turn them into the committed `contract/screen.schema.json`,
+    `schemaDrift(root)` turn them into the committed `contract/schemas/screen.schema.json`,
     `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
     authored).
@@ -95,10 +114,18 @@ for Bun.
     at bindings of theirs, its events are anchors of that screen or of the frame, and each
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),
+    `runsProblems` (every flow and every activity runs in XState as written: the walk of
+    `./machines` reaches every state and takes every transition and guarded branch to its
+    target with its effects; a machine XState will not build is a problem, never a crash),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
     (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
-    path parameter, and a value for each `$param`, else `needs an example` at its property)
+    path parameter, and a value for each `$param`, else `needs an example` at its property),
+    `leavingProblems` (each action of `platform.leaving` exists and is listed once),
+    `toastsProblems` (each action of `platform.toasts` is an action of the platform),
+    `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
+    reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
+    its own, and actions that ask need an action under `leaving`)
     and `scenariosProblems` (bracket references, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
@@ -107,13 +134,19 @@ for Bun.
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
-    grammar is a problem) and an anchor built at runtime as a problem (`RUNTIME_ANCHOR`,
-    `RUNTIME_SUFFIX`); `scanSources(root)` collects
+    grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
+    element that carries a field's anchor as a literal; a prop passed through is let by, any
+    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`) and an anchor built
+    at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, and every suffix and code in the vocabulary.
+    a suffix, every suffix in the vocabulary and every code a code of the contract
+    (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
+    codes the loader derived), and a `holdsInput` written only as
+    `{false}` on a field the contract says holds no input, never on another kind, and on every
+    such field rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
@@ -148,10 +181,10 @@ for Bun.
     states taken from the vocabulary and the platform section), the screens verbatim with
     each binding's `example` link (`exampleOf`), the platform section and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes), `routeParams` and the model document.
+    with its kind, its screen and its attributes, `holdsInput` of a field among them), `routeParams` and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
-    `contract/manifest.schema.json` with Ajv and returns the problems without writing
+    `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing
     anything, or empties `outDir` (its last segment must be `ui-manifest`, `MANIFEST_DIR`) and
     writes `manifest.json` (two spaces deep, each entry of `ids` on one line, so a search for
     an anchor shows its facts), `manifest.schema.json` and `model.schema.json`.
@@ -162,8 +195,13 @@ for Bun.
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
     after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
     `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
-    added are a rename when they are the only ones of their screen and kind; per activity
-    both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`);
+    added are a rename when they are the only ones of their screen and kind; on the anchors
+    both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
+    -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
+    the actions of `platform.leaving` added and removed, and the entries of
+    `platform.unsavedInput` as `<leave>: <how it asks>`;
+    per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
+    <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
@@ -218,13 +256,25 @@ for Bun.
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
   `Window` for any code that imports them.
+- `./machines`: a flow in XState, for the check and for an app's own machines.
+  `walk(flow)` builds the flow with `setup({ guards, actions, actors }).createMachine` (a stub
+  per guard, per effect and per `invoke.src`), reaches every state, a parallel state's regions
+  each on its own with the others at their initial, and gives the `visited` states and each
+  case with its `expected` and `actual` outcome (handled, state, effects); `casesOfFlow(flow)`
+  the cases the flow says. An app holds a machine of its own to its flow with
+  `projected(config)` (initial state, states, final states, regions, events with their
+  targets and guards, invoke sources, the contract's effects; the app's own actions left
+  out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  counterpart for) and `aheadOf(app, flow)` (the flow as far as a machine that lags it has
+  come: equal to the machine's projection exactly when it does nothing the flow does not
+  say), which a branch uses while a business commit runs ahead of the implementation.
 
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
   schema writer, the references, the contract check, the sources check, the consumers check,
-  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note and the
-  routes view.
+  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note, the
+  routes view, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
@@ -255,7 +305,9 @@ for Bun.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`, the activities and the
+  `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
+  fields the anchors both hold gain or lose (derived ones included), the fields that start or
+  stop holding input, the leaving actions, how each leave asks, the activities and the
   transitions changed in each included; prints the hand-over block, or the changes as JSON
   with `--json`). A change to the contract carries the output of
   `bun run contract:diff main` in its description.
@@ -269,6 +321,10 @@ for Bun.
   with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
   writing nothing). Not part of `bun run check`: the note is a report.
+- From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
+  flow of a screen, named by its id or its file, as every reader takes it, expanded from
+  the shorter forms its file may write it in, the regions it leaves out derived). Not part
+  of `bun run check`: it is a view.
 - From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
   screen files in four sections, the table (path, screen, guard, roles, history, params,
   search, file), one example link per binding, where each route is reached from and the

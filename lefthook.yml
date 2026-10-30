@@ -44,22 +44,39 @@ pre-commit:
       run: . scripts/ensure-path.sh && bun run readme:check
 
     # On a branch the contract may run ahead of the app (a business commit before its
-    # implementation): the sources must use only what it declares. A commit on main, the
-    # landing, takes the full check: every declared anchor rendered.
+    # implementation): the sources must use only what it declares, and a scenario may wait
+    # for its test. A commit on main, the landing, takes the full check: every declared
+    # anchor rendered, every scenario paired with its test, step for step.
     - name: contract
       run: >-
         . scripts/ensure-path.sh && bun run contract:check &&
-        if [ "$(git branch --show-current)" = main ]; then bun run contract:check:sources;
+        if [ "$(git branch --show-current)" = main ];
+        then bun run contract:check:sources && bun run e2e:coverage;
         else bun run contract:check:sources:ahead; fi &&
         bun run contract:check:consumers
 
     - name: source file sizes
       run: . scripts/ensure-path.sh && bun run refactor:ci
 
+    # On a branch an app's machine may lag its flow (a business commit before its
+    # implementation): it lacks what the flow added and does nothing the flow does not say.
+    # A commit on main, the landing, holds every machine to its whole flow.
     - name: unit tests
-      run: . scripts/ensure-path.sh && bun run test
+      run: >-
+        . scripts/ensure-path.sh &&
+        if [ "$(git branch --show-current)" = main ]; then bun run test;
+        else CONTRACT_AHEAD=1 bun run test; fi
 
     # A commit on main is a landing: the database and e2e suites must have
     # passed on exactly this tree (receipts under .gates/, see scripts/gates).
     - name: suites recorded before landing on main
       run: . scripts/ensure-path.sh && bun run scripts/gates/check-main-gates.ts
+
+# A merge git commits itself (`git merge` without a conflict to resolve) runs this hook,
+# not pre-commit. It runs pre-commit as a whole, the machine-local jobs included, so an
+# automatic merge, into main too, is checked as a commit is, and what a formatter fixes is
+# staged into it (lefthook stages fixed files only for a hook named pre-commit).
+pre-merge-commit:
+  jobs:
+    - name: the pre-commit checks
+      run: . scripts/ensure-path.sh && lefthook run pre-commit

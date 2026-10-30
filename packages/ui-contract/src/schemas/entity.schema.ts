@@ -1,5 +1,5 @@
 /**
- * One entity of `contract/model.schema.json` (an entry of `$defs`): a JSON Schema object
+ * One entity of `contract/domain/model.schema.json` (an entry of `$defs`): a JSON Schema object
  * with the contract's `x-perch` keyword, which says where the entity lives, who may change
  * it, the actions on it and how each field merges. Other JSON Schema keywords pass through.
  */

@@ -1,20 +1,34 @@
 import '@workspace/ui/styles/global.css'
 
 import { Outlet, RouterProvider } from '@tanstack/react-router'
-import { StrictMode, useEffect, useState } from 'react'
+import { useMachine } from '@xstate/react'
+import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
+import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
+import { CrashSignal } from './features/app-shell/presentation/crash/crash-signal'
+import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
+import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
+import {
+  ShellFrameContext,
+  type ShellLive,
+  shellFrameMachine,
+} from './features/app-shell/presentation/shell/shell-frame'
+import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { NoticeProvider } from './platform/notices'
-import { createAppRouter, SIGN_IN_PATH } from './platform/router'
+import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
 type Boot =
@@ -32,10 +46,18 @@ type Boot =
 
 function Layout() {
   return (
-    <NoticeProvider>
-      <ShellContainer>
-        <Outlet />
-      </ShellContainer>
+    <NoticeProvider texts={NOTICE_TEXTS}>
+      <ToastProvider texts={TOAST_TEXTS}>
+        <UnsavedInputScope>
+          <LeaveGuard>
+            <ConfirmGuard>
+              <ShellContainer>
+                <Outlet />
+              </ShellContainer>
+            </ConfirmGuard>
+          </LeaveGuard>
+        </UnsavedInputScope>
+      </ToastProvider>
     </NoticeProvider>
   )
 }
@@ -55,7 +77,12 @@ function bootOnce(): Promise<Boot> {
         (services) => ({
           status: 'ready',
           services,
-          router: createAppRouter({ modules, session: services.session, layout: Layout }),
+          router: createAppRouter({
+            modules,
+            session: services.session,
+            layout: Layout,
+            crash: CrashSignal,
+          }),
         }),
         (failure) =>
           failure.kind === 'storage-blocked'
@@ -69,53 +96,98 @@ function bootOnce(): Promise<Boot> {
   return booting
 }
 
+/** The frame's state before the router renders it: where the start is. */
+const STATUS = {
+  opening: 'opening',
+  failed: 'failed',
+  'signing-out': 'failed',
+  'signed-out': 'failed',
+  'storage-blocked': 'storage-blocked',
+} as const
+
 function App() {
   const [boot, setBoot] = useState<Boot>({ status: 'opening' })
-  const [signingOutHere, setSigningOutHere] = useState(false)
   const setLocale = useSetLocale()
+  // The frame's flow runs from the start: what it reads is filled in as the start and the shell learn it.
+  const [made] = useState(() => {
+    const live: ShellLive = {
+      account: undefined,
+      session: 0,
+      storingIn: undefined,
+      stored: undefined,
+      writes: LocaleWrites.none,
+      store: undefined,
+      signOutHere: undefined,
+      renderAgain: undefined,
+    }
+
+    return { live, machine: shellFrameMachine(live) }
+  })
+  const [state, send, actor] = useMachine(made.machine)
+  const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+
+  useEffect(() => {
+    const spoken = actor.on('speak', ({ locale }) => setLocale(locale))
+    // Done or not, a sign-out here leaves the account signed out on this device: the page starts
+    // again on sign-in, and what could not be deleted yet goes at that start.
+    const moved = actor.on('navigate', ({ to }) => window.location.assign(to))
+
+    return () => {
+      spoken.unsubscribe()
+      moved.unsubscribe()
+    }
+  }, [actor, setLocale])
 
   useEffect(() => {
     let mounted = true
 
     void bootOnce().then((next) => {
       if (mounted) {
+        made.live.signOutHere = next.status === 'failed' ? next.signOutHere : undefined
         setBoot(next)
+        send({
+          type:
+            next.status === 'ready'
+              ? 'platform.opened'
+              : next.status === 'failed'
+                ? 'platform.open-failed'
+                : 'platform.storage-blocked',
+        })
       }
     })
 
     return () => {
       mounted = false
     }
-  }, [])
+  }, [made, send])
 
   if (boot.status !== 'ready') {
-    const signOutHere = boot.status === 'failed' ? boot.signOutHere : undefined
-    // Done or not, the account is signed out on this device: the page starts again on sign-in,
-    // and what could not be deleted yet goes at that start.
-    const leave = () => {
-      setSigningOutHere(true)
-      void signOutHere?.().match(
-        () => window.location.assign(SIGN_IN_PATH),
-        () => window.location.assign(SIGN_IN_PATH),
-      )
-    }
+    // Until the start is ready the machine has not opened the frame: it is in one of these states.
+    const status = STATUS[state.value as keyof typeof STATUS]
 
     return (
       <ShellView
-        status={boot.status}
+        status={status}
         signedIn={false}
         activePath={window.location.pathname}
-        onLocaleChange={setLocale}
-        onSignOutHere={signOutHere ? leave : undefined}
-        signingOutHere={signingOutHere}
+        canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
+        onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}
+        onSignOutHere={
+          boot.status === 'failed' && boot.signOutHere
+            ? () => send({ type: 'app-shell.sign-out-here-button' })
+            : undefined
+        }
+        signingOutHere={!state.can({ type: 'app-shell.sign-out-here-button' })}
       />
     )
   }
 
   return (
-    <ServicesProvider services={boot.services}>
-      <RouterProvider router={boot.router} />
-    </ServicesProvider>
+    <ShellFrameContext.Provider value={frame}>
+      <ServicesProvider services={boot.services}>
+        <RouterProvider router={boot.router} />
+      </ServicesProvider>
+    </ShellFrameContext.Provider>
   )
 }
 

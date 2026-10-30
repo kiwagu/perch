@@ -30,6 +30,7 @@ import { modules } from '../modules'
 
 import { type AppRouter, type Matched, matchAt, routerOf, SPLAT } from './__fixtures__/router'
 import { defineModule } from './module'
+import { allModules } from './router'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 
@@ -247,9 +248,16 @@ function searchCase(router: AppRouter, binding: Binding, skip: (note: string) =>
 }
 
 const { screens, problems } = loadScreens(ROOT)
+// On a branch (`CONTRACT_AHEAD=1`) a binding may wait for its route: only the routed ones are
+// walked; `bun run check` and `main` walk every binding.
+const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
+const routed = new Set(
+  allModules(modules).flatMap((module) => module.routes.map(({ path }) => path)),
+)
 const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? [])
   .filter((screen) => screen.frame !== true)
   .flatMap((screen) => screen.bindings.map((binding) => [binding.path, binding] as const))
+  .filter(([path]) => !AHEAD || routed.has(path))
 const router = routerOf(modules)
 
 const Page = () => null

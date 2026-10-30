@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: app-shell
+title: The frame
+description: The frame around the sample's screen, with its readiness line.
+frame: true
+flag: null
+bindings: []
+entry: [ app-shell.status ]
+anchors:
+  app-shell.status:
+    kind: status
+    description: The readiness line of the sample.
+    states: [ opening, ready ]
+  app-shell.notice-message:
+    kind: message
+    description: The latest notice of the sample.
+    codes: [ saved ]

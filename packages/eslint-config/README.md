@@ -7,8 +7,10 @@ lint; this config adds only what Biome cannot check: blank lines between stateme
 hexagonal layer boundaries, type-aware promise rules, the type-aware rules that stop
 an untyped (`any`) value from spreading or a deprecated API from being used, the must-use-Result rule, immutability
 rules for domain and application code, one class per file everywhere, one exported
-function or class per file in domain and application code, and imports that enter a folder
-with an `index.ts`, or a module, only through its index. It never formats tokens. Tests
+function or class per file in domain and application code, imports that enter a folder
+with an `index.ts`, or a module, only through its index, and no raw `<input>`, `<textarea>`
+or `<select>` in views (`react/forbid-elements` under `presentation/`): the kit's `Input`,
+`Textarea` and `Select` track unsaved input, a raw field would not. It never formats tokens. Tests
 (`*.spec.*`) may cross layers: like the composition root, they wire real adapters and
 generated models.
 

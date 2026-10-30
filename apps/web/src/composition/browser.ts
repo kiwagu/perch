@@ -21,7 +21,7 @@ import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, type BootFailure, createAppRoot } from './root'
-import type { VisibilitySource } from './session-options'
+import type { VisibilitySource } from './session'
 import { siteStorage } from './site-storage'
 import { browserStorage } from './storage'
 
@@ -142,6 +142,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
       info: (fields) => logger.info(fields, 'command'),
       warn: (fields) => logger.warn(fields, 'command'),
     },
+    logEvents: import.meta.env.DEV,
     onStep: (step) => {
       html.dataset['bootStep'] = step
     },

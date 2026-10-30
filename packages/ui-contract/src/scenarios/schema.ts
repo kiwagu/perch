@@ -32,7 +32,7 @@ export const scenarioSchema = z
     tags: z.array(z.enum(['smoke', 'full'])).describe('The test tags: `smoke` or `full`.'),
     activity: kebabNameSchema
       .exactOptional()
-      .describe('The activity of `contract/activities/` the scenario walks, by its id.'),
+      .describe('The activity of `contract/domain/activities/` the scenario walks, by its id.'),
     devices: z
       .record(z.string().regex(/^[A-Z]$/), roleSchema)
       .describe('A letter per browser, each with the role it acts as.'),

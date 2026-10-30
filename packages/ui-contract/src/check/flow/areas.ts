@@ -6,9 +6,9 @@
  */
 
 import type { Problem } from '../../files'
+import { flowNodes, type ParallelNode } from '../../files'
 
 import type { InFlow } from './in-flow'
-import { flowNodes, type ParallelNode } from './nodes'
 
 /** The area that first handles an event: a region by name, or the parallel state itself. */
 type Handler = { readonly region: string } | { readonly region?: undefined }

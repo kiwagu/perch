@@ -9,7 +9,8 @@
  *   - one class per file everywhere, and one exported function or class per file in
  *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file),
  *   - a folder with an index.ts, or a module, entered only through its index
- *     (workspace/import-through-index).
+ *     (workspace/import-through-index),
+ *   - raw fields out of views, so every field tracks unsaved input (react/forbid-elements).
  * No rule here may format tokens.
  */
 
@@ -22,6 +23,9 @@ import tseslint from 'typescript-eslint'
 import { importThroughIndex } from './rules/import-through-index.js'
 import { mustUseResult } from './rules/must-use-result.js'
 import { oneUnitPerFile } from './rules/one-unit-per-file.js'
+
+/** The raw fields a view renders through the kit's component instead. */
+const KIT_FIELDS = { input: 'Input', textarea: 'Textarea', select: 'Select' }
 
 const workspace = {
   rules: {
@@ -234,6 +238,15 @@ export const base = [
     rules: {
       'react/jsx-no-literals': 'error',
       'no-restricted-syntax': ['error', literalTranslationKeys],
+      'react/forbid-elements': [
+        'error',
+        {
+          forbid: Object.entries(KIT_FIELDS).map(([element, component]) => ({
+            element,
+            message: `Use the kit's ${component} from @workspace/ui: it tracks unsaved input.`,
+          })),
+        },
+      ],
     },
   },
   {

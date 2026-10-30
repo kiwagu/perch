@@ -43,10 +43,10 @@ const SCREEN_MAP = [
   '`entry` lists the anchors present once the screen is open; some are alternatives by state, so wait for the one the state shows.',
   `\`anchors\` maps each declared anchor to its \`kind\`, \`binding\`, \`codes\` (its \`${CODE}\` values), \`fields\` (an error's codes, each with the field it concerns, which the error shows under and marks invalid), \`dataId\` (what its \`${DATA_ID}\` holds), \`dataValue\` (it or its options carry a \`${VALUE}\` of \`contract.choiceValues\`), \`states\` (its \`${STATE}\` values), \`derived\` (the suffixes it renders as \`<anchor>.<suffix>\`), \`roles\` (who sees it; absent: every role of the screen), \`own\` (shown only on the entries the member owns) and \`source\` (where a list's entries come from).`,
   "A screen's `states` say what each container state shows, and its `wireframe` is the default state as a Playwright aria snapshot.",
-  "A screen's `flow` is an XState v5 machine config: `initial`, `states` with `on` (an event is the user acting on that anchor, typing included for a field, a platform event of `platform.events`, or a data event `model.<entity>.<field>`: the stored value of a field the screen shows changed, here or on another device), `target`, `guard` (a name of `meta.guards`), `actions` (effects `show` and `navigate`), `invoke` (a model or platform action with its `input`, `onDone`, `onError`), `type: final`, and `meta.address` on a state a route reaches.",
+  "A screen's `flow` is an XState v5 machine config: `initial`, `states` with `on` (an event is the user acting on that anchor, typing included for a field, a platform event of `platform.events`, or a data event `model.<entity>.<field>`: the stored value of a field the screen shows changed, here or on another device), `target`, `guard` (a name of `meta.guards`), `actions` (effects `show`, `clear` and `navigate`), `invoke` (a model or platform action with its `input`, `onDone`, `onError`), `type: final`, and `meta.address` on a state a route reaches.",
   "A state of the root may be `type: parallel`: its `states` are regions, the screen's independent areas, all active at once, each with its `initial` and its plain states; a target of the root may name a region's state as `<parallel>.<region>.<state>` (the other regions start at their `initial`), a target in a region names a state of that region or, by the flow's `id` (a one-segment name the flow declares, which the app gives its machine), a state of the root as `#<flow id>.<state>`, which leaves the parallel state and enters that state afresh, and within a parallel state an event is handled by one region or by the state's own `on`, never by two.",
-  'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged, implementing the guards it names, the two effects and an actor per `invoke.src`.',
-  'A button whose anchor is an event of the flow is enabled exactly while a state the machine is in handles that event (`snapshot.can`), and disabled otherwise: a Save disabled while it saves is the flow saying so, never a flag of its own.',
+  'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged, implementing the guards it names, the three effects and an actor per `invoke.src`.',
+  'A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event (`snapshot.can`), and disabled otherwise: a Save disabled while it saves is the flow saying so, never a flag of its own.',
   `\`ids\` holds the same anchors flat, each with its screen. On a development or e2e build, \`window.${PAGE_HELPER}.anchors()\` lists the anchors the page renders now, with their attributes and visibility.`,
 ].join(' ')
 
@@ -55,6 +55,7 @@ const BINDINGS = [
   '`{ "action": "<entity>.<action>" }` runs an action of `model.$defs.<entity>.x-perch.actions`; `{ "action": "platform.<name>" }` runs `platform.actions.<name>`. Its `params` name, per parameter, the anchor whose value it takes, or a constant `{ "value": ... }`.',
   '`{ "route": "/path" }` navigates to the path of a binding of some screen.',
   'A list of bindings runs in its order, or one of them by the mode of the screen; the `flow` says which.',
+  "An anchor with `asks` asks the frame's confirmation (`asks.dialog`, with `asks.code`) before its action runs: the app's platform gate opens it, confirm runs the action and cancel does not; a screen builds no dialog of its own for it.",
 ].join(' ')
 
 const MODEL = [
@@ -73,7 +74,7 @@ function notices(platform: Platform): string {
 }
 
 const ACTIVITIES = [
-  '`activities` are the activities across screens, one file each in `contract/activities/<id>.yaml`, carried here verbatim: which screens form one task, in which order, and what the task carries from one screen to the next.',
+  '`activities` are the activities across screens, one file each in `contract/domain/activities/<id>.yaml`, carried here verbatim: which screens form one task, in which order, and what the task carries from one screen to the next.',
   'An activity has an `id`, a `title`, a `description` (what it is for), the `roles` that take part and `data` (what it carries, by name, each with a `description` and, when it is a field of the model, its `model` as `<entity>.<field>`).',
   'The rest is an XState v5 machine config in the subset of the flows, without effects or `invoke`: `initial`, `meta.guards` and `states`, where a state is a visit to a screen: `meta.screen` names the screen (one screen may be visited by several states), `meta.address` the `path` of a binding of that screen (the activity is where its address is), and `type: final` ends the activity.',
   "A state's `on` maps an anchor of its screen or of the frame to where acting on it leads: `target` (the next visit), `guard` and `description`. The activity says where a task leads and the screens do the work: after that anchor, the flow of its screen navigates to the target's address, or the anchor is a link to it (`binding.route`).",

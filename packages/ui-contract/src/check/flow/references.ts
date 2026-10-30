@@ -2,7 +2,8 @@
  * What a state of a flow names of the contract: each event is a declared anchor (a derived
  * one through its base's `derived`), a platform event of `platform.events`, or a data event
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
- * a declared anchor and codes it carries, a `navigate` the path of a binding and search
+ * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, a
+ * `navigate` the path of a binding and search
  * parameters of that binding; an address is a binding of the flow's own screen (its first
  * one when the path is left out) with search parameters of that binding.
  */
@@ -56,14 +57,20 @@ export function effectProblems(
         : searchProblems(inFlow, binding, search, [...params, 'search'])
     }
 
-    const { anchor, codes } = effect.params
+    const { anchor } = effect.params
     const def = inFlow.defs.get(anchor)
 
     if (def === undefined) {
       return [inScreens([...params, 'anchor'], `"${anchor}" is not a declared anchor`)]
     }
 
-    return codes.flatMap((code, number) =>
+    if (effect.type === 'clear') {
+      return (def.codes ?? []).length > 0
+        ? []
+        : [inScreens([...params, 'anchor'], `"${anchor}" carries no code to clear`)]
+    }
+
+    return effect.params.codes.flatMap((code, number) =>
       (def.codes ?? []).includes(code)
         ? []
         : [inScreens([...params, 'codes', number], `"${anchor}" carries no code "${code}"`)],

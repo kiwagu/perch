@@ -18,6 +18,7 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
         status="ready"
         signedIn={false}
         activePath="/sign-in"
+        canChooseLocale={true}
         onLocaleChange={() => {}}
         {...rest}
       >
@@ -135,12 +136,12 @@ describe('ShellView', () => {
   })
 
   it('announces the current notice with its code', () => {
-    renderShell({ notice: { code: 'profile-saved', text: 'Saved' } })
+    renderShell({ notice: { code: 'welcome', text: 'Welcome' } })
 
     const notice = screen.getByTestId('app-shell.notice-message')
 
-    expect(notice.getAttribute('data-code')).toBe('profile-saved')
-    expect(notice.textContent).toBe('Saved')
+    expect(notice.getAttribute('data-code')).toBe('welcome')
+    expect(notice.textContent).toBe('Welcome')
     expect(notice.getAttribute('role')).toBe('status')
   })
 
@@ -154,6 +155,29 @@ describe('ShellView', () => {
     expect(screen.getByTestId('app-shell.locale-select').getAttribute('role')).toBe('combobox')
   })
 
+  it('takes a language choice only while the frame takes one', () => {
+    const { rerender } = renderShell({ canChooseLocale: false })
+    const select = screen.getByTestId('app-shell.locale-select')
+
+    expect(select.hasAttribute('data-disabled')).toBe(true)
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale
+          onLocaleChange={() => {}}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
+  })
+
   it('speaks Spanish when the Spanish catalog is chosen', () => {
     renderShell({ locale: 'es' })
 
@@ -161,5 +185,102 @@ describe('ShellView', () => {
 
     expect(within(navigation).getByText(es['app.shell.nav.sign-in'])).toBeTruthy()
     expect(screen.getByText(es['app.shell.title'])).toBeTruthy()
+  })
+
+  it('renders the toasts, newest first, each dismissed by a click', () => {
+    const onDismissToast = vi.fn()
+
+    renderShell({
+      toasts: [
+        { id: 2, code: 'note-updated', tone: 'success', text: 'Note saved.' },
+        { id: 1, code: 'note-created', tone: 'success', text: 'Note added.' },
+      ],
+      onDismissToast,
+    })
+
+    const toasts = screen.getAllByTestId('app-shell.toast')
+
+    expect(toasts.map((toast) => toast.getAttribute('data-code'))).toEqual([
+      'note-updated',
+      'note-created',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note saved.' }))
+
+    expect(onDismissToast).toHaveBeenCalledWith(2)
+  })
+
+  it('draws each toast in its tone', () => {
+    renderShell({ toasts: [{ id: 1, code: 'note-lost', tone: 'error', text: 'Note lost.' }] })
+
+    const icon = screen.getByRole('button', { name: 'Note lost.' }).querySelector('svg')
+
+    expect(icon?.getAttribute('class')).toContain('lucide-circle-x')
+  })
+
+  it("keeps the notice's line while there is no notice, so the page does not move", () => {
+    const { container, rerender } = renderShell()
+    const slot = container.querySelector('[data-slot="notice"]')
+
+    expect(slot).not.toBeNull()
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale={true}
+          onLocaleChange={() => {}}
+          notice={{ code: 'welcome', text: 'Welcome' }}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(container.querySelector('[data-slot="notice"]')).toBe(slot)
+    expect(slot?.contains(screen.getByTestId('app-shell.notice-message'))).toBe(true)
+  })
+
+  it('says a screen failed to render, in its place, with a reload while the flow takes one', () => {
+    const onReload = vi.fn()
+    const { rerender } = renderShell({ crash: 'screen-crashed', canReload: true, onReload })
+    const message = screen.getByTestId('app-shell.crash-message')
+
+    expect(message.getAttribute('data-code')).toBe('screen-crashed')
+    expect(message.textContent).toBe(en['app.shell.crash.screen-crashed'])
+    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('app-shell.reload-button'))
+
+    expect(onReload).toHaveBeenCalledOnce()
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale={true}
+          onLocaleChange={() => {}}
+          crash="screen-crashed"
+          canReload={false}
+          onReload={onReload}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows no crash message or reload while the screen renders', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.crash-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.reload-button')).toBeNull()
   })
 })

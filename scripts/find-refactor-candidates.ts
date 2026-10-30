@@ -16,9 +16,10 @@
  * Once a baseline exists it only shrinks: raising an entry or adding a file to it needs
  * `--allow-growth`, and a scoped run (with paths) never rewrites it.
  *
- * Only files tracked by git are scanned, so ignored and generated output never shows up.
- * Declaration files, generated modules, fixtures and (without --include-tests) tests are
- * skipped as well.
+ * Only files tracked by git are scanned, so ignored and generated output never shows up, and
+ * each is measured as the working tree holds it: a tracked path deleted from it (not yet
+ * staged) or standing there as a symlink is not measured. Declaration files, generated
+ * modules, fixtures and (without --include-tests) tests are skipped as well.
  *
  * Usage:
  *   bun run scripts/find-refactor-candidates.ts [paths...] [--json] [--ci] [--top N]
@@ -72,7 +73,7 @@ function trackedFiles(scope: readonly string[]): string[] {
 function scan(options: Options): FileReport[] {
   return trackedFiles(options.scope)
     .filter((path) => isMeasured(path, options.includeTests))
-    .filter((path) => !lstatSync(path).isSymbolicLink())
+    .filter((path) => lstatSync(path, { throwIfNoEntry: false })?.isFile() === true)
     .map((path) => {
       const lines = countLines(readFileSync(path, 'utf8'))
 

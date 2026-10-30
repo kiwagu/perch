@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
+import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 const options = [
   { value: 'en', label: 'English' },
@@ -81,6 +82,37 @@ describe('OptionSelect', () => {
     await userEvent.click(spanish)
 
     expect(onChange).toHaveBeenCalledWith('es')
+  })
+
+  it('passes holdsInput to its select: a choice that applies at once holds no input', async () => {
+    function Probe() {
+      return <output data-testid="probe">{String(useUnsavedInput())}</output>
+    }
+
+    render(
+      <UnsavedInputScope>
+        <OptionSelect
+          label="Language"
+          value="en"
+          options={options}
+          onChange={() => {}}
+          testId="x.y.locale-select"
+          holdsInput={false}
+        />
+        <Probe />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.click(screen.getByTestId('x.y.locale-select'))
+
+    const spanish = (await screen.findAllByTestId('x.y.locale-select.option')).find(
+      (item) => item.getAttribute('data-value') === 'es',
+    ) as HTMLElement
+
+    await vi.waitFor(() => expect(getComputedStyle(spanish).pointerEvents).not.toBe('none'))
+    await userEvent.click(spanish)
+
+    expect(screen.getByTestId('probe').textContent).toBe('false')
   })
 
   it('carries no anchor without a testId', async () => {

@@ -7,7 +7,7 @@ import { flowProblems } from './problems'
 
 const printed = (contract = sampleContract()): string[] => flowProblems(contract).map(formatProblem)
 
-const AT = 'contract/screens/sample/$key.yaml:1: flow'
+const AT = 'contract/domain/screens/sample/$key.yaml:1: flow'
 
 const show = (anchor: string, codes: string[]) =>
   ({ type: 'show', params: { anchor, codes } }) as const
@@ -115,6 +115,21 @@ describe('flowProblems', () => {
       `${AT}.states.editing.entry[1].params.codes[0]: "sample.save-button" carries no code "gone"`,
       `${AT}.states.editing.exit[0].params.to: "/nowhere" is the path of no binding`,
       `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+    ])
+  })
+  it('holds a clear to a declared anchor that carries codes', () => {
+    const contract = sampleContract()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.entry = [
+      { type: 'clear', params: { anchor: 'sample.gone-message' } },
+      { type: 'clear', params: { anchor: 'sample.page' } },
+      { type: 'clear', params: { anchor: 'sample.save-button' } },
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.entry[0].params.anchor: "sample.gone-message" is not a declared anchor`,
+      `${AT}.states.editing.entry[1].params.anchor: "sample.page" carries no code to clear`,
     ])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {
