@@ -48,8 +48,8 @@ test.describe('Sign up and see the profile', { tag: '@smoke' }, () => {
     await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.email)
 
     if (onPhone) {
-      // Settled once the account's settings are on the device: the frame takes a language again.
-      await expect(page.getByTestId('app-shell.locale-select')).toBeEnabled()
+      // Settled once the frame shows a signed-in account's navigation, its settings link last.
+      await expect(page.getByTestId('app-shell.nav.settings-link')).toBeVisible()
       await expect(page).toHaveScreenshot('profile.png', {
         mask: [
           page.getByTestId('user.profile.heading'),
