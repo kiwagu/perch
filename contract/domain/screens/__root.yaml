@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol."
+description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol, and the state of this device's sync for a signed-in account."
 frame: true
 flag: null
 bindings: []
@@ -86,6 +86,10 @@ anchors:
     kind: button
     description: Loads the page again on the version the server serves, shown with app-shell.update-message.
     binding: { action: platform.reload }
+  app-shell.sync-message:
+    kind: message
+    description: "The state of this device's sync for a signed-in account, the same in every tab of the browser: synced, sending, connecting, offline or stopped; it goes when the account signs out, and a guest, whose data syncs nowhere, never sees it."
+    codes: [ synced, sending, connecting, offline, sync-stopped ]
   app-shell.confirmation:
     kind: confirmation
     description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out. It carries data-code naming the action; its confirm-button lets the action run, its cancel-button stays with nothing changed. One for the whole app: the controls that ask and its codes are derived."
@@ -97,7 +101,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the data is being opened; no screen is rendered.
-  ready: The navigation, the theme select, the language select and the open screen, with app-shell.update-message when the page should load again; app-shell.status is a visually hidden text.
+  ready: The navigation, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
 flow:
@@ -133,9 +137,10 @@ flow:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
         platform.signed-out:
-          description: The notice goes with the account.
+          description: The notice and the state of the sync go with the account.
           actions:
             - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
         platform.change-rejected:
           description: The notice says the server refused a change and this device undid it.
           actions:
@@ -161,6 +166,26 @@ flow:
           target: updating
           guard: quietReload
           description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
+        platform.synced:
+          description: The state of the sync says it is connected and nothing waits to be sent.
+          actions:
+            - show: { app-shell.sync-message: [ synced ] }
+        platform.sending:
+          description: The state of the sync says changes made here are on their way.
+          actions:
+            - show: { app-shell.sync-message: [ sending ] }
+        platform.connecting:
+          description: The state of the sync says it connects, or connects again.
+          actions:
+            - show: { app-shell.sync-message: [ connecting ] }
+        platform.offline:
+          description: The state of the sync says the browser has no network and changes wait here.
+          actions:
+            - show: { app-shell.sync-message: [ offline ] }
+        platform.sync-stopped:
+          description: The state of the sync says it stopped and does not resume in this page.
+          actions:
+            - show: { app-shell.sync-message: [ sync-stopped ] }
     crashed:
       description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
       entry:
@@ -182,9 +207,10 @@ flow:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
         platform.signed-out:
-          description: The notice goes with the account.
+          description: The notice and the state of the sync go with the account.
           actions:
             - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
         platform.change-rejected:
           description: The notice says the server refused a change and this device undid it.
           actions:
@@ -207,6 +233,26 @@ flow:
           target: reloading
           guard: quietReload
           description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
+        platform.synced:
+          description: The state of the sync says it is connected and nothing waits to be sent, the crash message staying.
+          actions:
+            - show: { app-shell.sync-message: [ synced ] }
+        platform.sending:
+          description: The state of the sync says changes made here are on their way, the crash message staying.
+          actions:
+            - show: { app-shell.sync-message: [ sending ] }
+        platform.connecting:
+          description: The state of the sync says it connects, or connects again, the crash message staying.
+          actions:
+            - show: { app-shell.sync-message: [ connecting ] }
+        platform.offline:
+          description: The state of the sync says the browser has no network and changes wait here, the crash message staying.
+          actions:
+            - show: { app-shell.sync-message: [ offline ] }
+        platform.sync-stopped:
+          description: The state of the sync says it stopped and does not resume in this page, the crash message staying.
+          actions:
+            - show: { app-shell.sync-message: [ sync-stopped ] }
     reloading:
       description: The page loads again from the server.
       invoke:
@@ -253,6 +299,7 @@ wireframe: |-
   - banner:
     - text: Perch
     - combobox "Theme": As the device
+    - status: Synced
     - combobox "Language": English
   - main:
     - text: Saved on this device

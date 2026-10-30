@@ -155,6 +155,11 @@ events:
   new-version: The server serves a newer version of the app than the one this tab runs.
   protocol-refused: The server no longer takes the sync protocol of the version this tab runs, so this device's changes stop syncing until the page loads again.
   tab-hidden: "The tab went to the background: another tab, another window or a minimised browser."
+  synced: The sync of the signed-in account is connected, and no change made on this device waits to be sent.
+  sending: The sync of the signed-in account is connected, and changes made on this device are on their way to the server.
+  connecting: The browser has a network, but the sync of the signed-in account is not connected yet, or connects again.
+  offline: The browser has no network, so changes made on this device wait here until it is back.
+  sync-stopped: "The sync of the signed-in account stopped and does not resume in this page: the server no longer takes its protocol, or the browser cannot lead a sync."
 toasts:
   organisations.create: organisation-created
   organisations.invite: invited
@@ -193,6 +198,7 @@ reserved:
   - app-shell.reload-button
   - app-shell.update-message
   - app-shell.update-button
+  - app-shell.sync-message
 status:
   anchor: app-shell.status
   states:
