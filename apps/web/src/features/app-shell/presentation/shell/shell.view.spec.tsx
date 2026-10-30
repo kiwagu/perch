@@ -322,4 +322,37 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.crash-message')).toBeNull()
     expect(screen.queryByTestId('app-shell.reload-button')).toBeNull()
   })
+
+  it('says a newer build is served, above the page, with a reload while the flow takes one', () => {
+    const onUpdate = vi.fn()
+
+    renderShell({ update: 'new-version', canUpdate: true, onUpdate })
+
+    const message = screen.getByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('new-version')
+    expect(message.textContent).toBe(en['app.shell.update.new-version'])
+    expect(screen.getByText('page')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('app-shell.update-button'))
+
+    expect(onUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('says a protocol the server no longer takes, its reload held while the flow takes none', () => {
+    renderShell({ update: 'protocol-outdated', canUpdate: false, onUpdate: () => {}, locale: 'es' })
+
+    const message = screen.getByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('protocol-outdated')
+    expect(message.textContent).toBe(es['app.shell.update.protocol-outdated'])
+    expect(screen.getByTestId('app-shell.update-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows no update message or its reload before an update', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.update-button')).toBeNull()
+  })
 })

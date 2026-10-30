@@ -9,14 +9,26 @@ import type { Theme } from '../../../platform/theme'
 import { LocaleWrites } from './locale-writes'
 import { createShellMachine, type ShellValues } from './shell.machine'
 
-/** A frame over its machine: what the guards read and what the machine emitted. */
-function frame() {
-  let values: ShellValues = { account: undefined, stored: undefined, writes: LocaleWrites.none }
+/**
+ * A frame over its machine: what the guards read and what the machine emitted; `reloadedFor`
+ * holds the updates this tab already loaded the page again for by itself.
+ */
+function frame(reloadedFor: string[] = []) {
+  let values: ShellValues = {
+    account: undefined,
+    stored: undefined,
+    writes: LocaleWrites.none,
+    unsaved: false,
+  }
   const signOutHere = vi.fn(() => okAsync(undefined))
   const reload = vi.fn()
   const setTheme = vi.fn<(theme: Theme) => void>()
+  const selfReloads = {
+    done: (update: string) => reloadedFor.includes(update),
+    mark: (update: string) => void reloadedFor.push(update),
+  }
   const actor = createActor(
-    createShellMachine({ values: () => values, signOutHere, reload, setTheme }),
+    createShellMachine({ values: () => values, signOutHere, reload, setTheme, selfReloads }),
   ).start()
   const spoken: Locale[] = []
   const emitted: unknown[] = []
@@ -49,18 +61,31 @@ function frame() {
     write: (step: (writes: LocaleWrites) => LocaleWrites) => {
       values = { ...values, writes: step(values.writes) }
     },
+    /** A field starts holding unsaved input, or stops. */
+    type: (unsaved: boolean) => {
+      values = { ...values, unsaved }
+    },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
     chooseTheme: (theme: Theme) => actor.send({ type: 'app-shell.theme-select', theme }),
     canChooseTheme: () =>
       actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'dark' }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
-    is: (state: 'ready' | 'failed' | 'crashed') => actor.getSnapshot().matches(state),
+    canUpdate: () => actor.getSnapshot().can({ type: 'app-shell.update-button' }),
+    is: (state: 'ready' | 'failed' | 'crashed' | 'updating' | 'reloading') =>
+      actor.getSnapshot().matches(state),
   }
 }
 
 const CLEARED = { type: 'clear', anchor: 'app-shell.notice-message' }
 const CRASHED = { type: 'show', anchor: 'app-shell.crash-message', codes: ['screen-crashed'] }
 const CRASH_CLEARED = { type: 'clear', anchor: 'app-shell.crash-message' }
+const NEW_VERSION = { type: 'show', anchor: 'app-shell.update-message', codes: ['new-version'] }
+const PROTOCOL_OUTDATED = {
+  type: 'show',
+  anchor: 'app-shell.update-message',
+  codes: ['protocol-outdated'],
+}
+const SERVED = '0.2.0+2b9a0c1d'
 
 const sameAs = (event: unknown, expected: object): boolean =>
   JSON.stringify(event) === JSON.stringify(expected)
@@ -276,5 +301,129 @@ describe('shell machine', () => {
     shell.actor.send({ type: 'app-shell.reload-button' })
 
     expect(shell.reload).toHaveBeenCalledOnce()
+  })
+
+  it('offers to load a newer build the server serves, and loads it from the button', async () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.new-version', served: SERVED })
+
+    expect(shell.emitted.at(-1)).toEqual(NEW_VERSION)
+    expect(shell.canUpdate()).toBe(true)
+
+    shell.actor.send({ type: 'app-shell.update-button' })
+
+    expect(shell.is('updating')).toBe(true)
+    expect(shell.reload).toHaveBeenCalledOnce()
+
+    // Only while the page has not loaded again; the message stays.
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.emitted.at(-1)).toEqual(NEW_VERSION)
+  })
+
+  it('says a protocol the server no longer takes, which a newer build heard later does not replace', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.new-version', served: SERVED })
+    shell.actor.send({ type: 'platform.protocol-refused' })
+
+    expect(shell.emitted.at(-1)).toEqual(PROTOCOL_OUTDATED)
+
+    shell.actor.send({ type: 'platform.new-version', served: '0.3.0+9f8e7d6c' })
+
+    expect(shell.emitted.at(-1)).toEqual(PROTOCOL_OUTDATED)
+    expect(shell.canUpdate()).toBe(true)
+  })
+
+  it('loads the page again by itself when the tab goes to the background with an update waiting and nothing unsaved', () => {
+    const reloadedFor: string[] = []
+    const shell = frame(reloadedFor)
+
+    shell.actor.send({ type: 'platform.opened' })
+    // No update waits yet.
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('ready')).toBe(true)
+
+    shell.actor.send({ type: 'platform.new-version', served: SERVED })
+    // A field holds unsaved input: the page stays.
+    shell.type(true)
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('ready')).toBe(true)
+    expect(shell.reload).not.toHaveBeenCalled()
+
+    shell.type(false)
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('updating')).toBe(true)
+    expect(shell.reload).toHaveBeenCalledOnce()
+    expect(reloadedFor).toEqual([SERVED])
+  })
+
+  it('loads the page again by itself once per update: a server still serving it afterwards starts no loop', () => {
+    const shell = frame([SERVED, 'protocol'])
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.new-version', served: SERVED })
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('ready')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(NEW_VERSION)
+
+    shell.actor.send({ type: 'platform.protocol-refused' })
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('ready')).toBe(true)
+    expect(shell.reload).not.toHaveBeenCalled()
+    // The button still loads it.
+    expect(shell.canUpdate()).toBe(true)
+  })
+
+  it('says an update around a crash, the crash message staying, and loads the page again', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.actor.send({ type: 'platform.protocol-refused' })
+
+    expect(shell.is('crashed')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(PROTOCOL_OUTDATED)
+
+    shell.actor.send({ type: 'app-shell.update-button' })
+
+    expect(shell.is('reloading')).toBe(true)
+    expect(shell.reload).toHaveBeenCalledOnce()
+  })
+
+  it('loads the page again by itself around a crash too, when the tab goes to the background', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.actor.send({ type: 'platform.new-version', served: SERVED })
+    shell.actor.send({ type: 'platform.tab-hidden' })
+
+    expect(shell.is('reloading')).toBe(true)
+    expect(shell.reload).toHaveBeenCalledOnce()
+  })
+
+  it('takes no update while the data opens or once it failed to', () => {
+    const opening = frame()
+
+    expect(opening.actor.getSnapshot().can({ type: 'platform.new-version', served: SERVED })).toBe(
+      false,
+    )
+    expect(opening.canUpdate()).toBe(false)
+
+    const failed = frame()
+
+    failed.actor.send({ type: 'platform.open-failed' })
+
+    expect(failed.actor.getSnapshot().can({ type: 'platform.protocol-refused' })).toBe(false)
+    expect(failed.canUpdate()).toBe(false)
   })
 })

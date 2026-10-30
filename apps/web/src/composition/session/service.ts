@@ -198,6 +198,10 @@ export class SessionService implements SessionPort {
     forgetNotice(this.#options.storage)
   }
 
+  protocolRefused(): boolean {
+    return this.#elsewhere.protocolRefused()
+  }
+
   memberships(): readonly Membership[] {
     return this.#organisations.memberships()
   }

@@ -21,9 +21,11 @@ import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, type BootFailure, createAppRoot } from './root'
+import { servedBuild } from './served-build'
 import type { VisibilitySource } from './session'
 import { siteStorage } from './site-storage'
 import { browserStorage } from './storage'
+import build from 'virtual:perch-build'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
   eager: true,
@@ -90,6 +92,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
   const origin = window.location.origin
   // Undefined in a page that is not a secure context: such a page does not sync, and says so.
   const locks: LockManager | undefined = navigator.locks
+  const visibility = documentVisibility(document)
 
   showSync({ leader: false, channel: 'down' })
 
@@ -137,7 +140,13 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
     clock: systemClock,
     storage: browserStorage(store.value, window),
-    visibility: documentVisibility(document),
+    visibility,
+    servedBuild: servedBuild({
+      running: build,
+      fetcher: (url, init) => fetch(url, init),
+      visibility,
+      clock: systemClock,
+    }),
     logger: {
       info: (fields) => logger.info(fields, 'command'),
       warn: (fields) => logger.warn(fields, 'command'),

@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
+import { Input } from '@workspace/ui/components/ui/input'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
 import { memoryTheme } from '../../../../platform/__fixtures__/theme'
@@ -19,6 +21,7 @@ import type { SessionPort } from '../../../../platform/session.port'
 import { ThemeContext } from '../../../../platform/theme'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { CrashSignal } from '../crash/crash-signal'
+import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
 import { openedFrame } from './__fixtures__/frame'
 import { NOTICE_TEXTS } from './notice-texts'
@@ -29,6 +32,12 @@ const HomeModule = defineModule({
   id: 'home',
   declarations: { Home: () => <p>home</p> },
   routes: [{ path: '/home', page: 'Home' }],
+})
+
+const FormModule = defineModule({
+  id: 'form',
+  declarations: { Form: () => <Input aria-label="name" defaultValue="" /> },
+  routes: [{ path: '/form', page: 'Form' }],
 })
 
 const BrokenModule = defineModule({
@@ -262,7 +271,7 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={theme}>
-          <ShellFrameContext.Provider value={openedFrame(theme.set)}>
+          <ShellFrameContext.Provider value={openedFrame({ setTheme: theme.set })}>
             <ServicesProvider services={services}>
               <RouterProvider router={router} />
             </ServicesProvider>
@@ -372,5 +381,145 @@ describe('ShellContainer', () => {
     )
     expect(spoken).toEqual(['es'])
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+  })
+
+  /**
+   * The shell for a guest, in a frame that loads the page again through `reload`: on /home, or
+   * `guarded` on /form with a field, inside the kit's unsaved-input scope and the frame's leave
+   * guard as the start mounts them; `refusedBefore` when the session heard the gateway refuse
+   * the protocol before the shell mounted.
+   */
+  async function homeShell(
+    options: { readonly guarded?: boolean; readonly refusedBefore?: boolean } = {},
+  ) {
+    const reload = vi.fn()
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, protocolRefused: () => options.refusedBefore === true }
+    const services = fakeServices(session)
+    const frame = openedFrame({ reload })
+    const shell = (
+      <ShellContainer>
+        <Outlet />
+      </ShellContainer>
+    )
+    const router = createAppRouter({
+      modules: [HomeModule, FormModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          {options.guarded ? (
+            <UnsavedInputScope>
+              <LeaveGuard>{shell}</LeaveGuard>
+            </UnsavedInputScope>
+          ) : (
+            shell
+          )}
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: [options.guarded ? '/form' : '/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={frame}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByTestId('app-shell.nav')
+
+    return { services, frame, reload }
+  }
+
+  /** The browser sends the tab to the background, or back to the front. */
+  function showTab(state: 'hidden' | 'visible') {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+
+  it('says a newer build the server serves, and its button loads the page again', async () => {
+    const { services, reload } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+
+    act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+
+    const message = await screen.findByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('new-version')
+
+    await userEvent.click(screen.getByTestId('app-shell.update-button'))
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+  })
+
+  it('says a protocol the server no longer takes', async () => {
+    const { services } = await homeShell()
+
+    await act(() => services.refuseProtocol())
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'protocol-outdated',
+    )
+    expect(screen.getByTestId('app-shell.update-button').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('loads the page again by itself when the tab goes to the background with an update waiting', async () => {
+    const { services, reload } = await homeShell()
+
+    try {
+      // Nothing waits: the tab goes and comes back as it is.
+      showTab('hidden')
+      showTab('visible')
+
+      expect(reload).not.toHaveBeenCalled()
+
+      act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+      await screen.findByTestId('app-shell.update-message')
+      showTab('hidden')
+
+      await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    } finally {
+      showTab('visible')
+    }
+  })
+
+  it('says a protocol the gateway refused before the shell listened', async () => {
+    await homeShell({ refusedBefore: true })
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'protocol-outdated',
+    )
+  })
+
+  it('never loads the page again by itself while a field holds unsaved input, and its button asks first', async () => {
+    const { services, reload } = await homeShell({ guarded: true })
+
+    try {
+      await userEvent.type(screen.getByLabelText('name'), 'Ann')
+      act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+      await screen.findByTestId('app-shell.update-message')
+      showTab('hidden')
+      showTab('visible')
+
+      expect(reload).not.toHaveBeenCalled()
+
+      // The button asks before the reload loses what was typed: staying keeps the page.
+      await userEvent.click(screen.getByTestId('app-shell.update-button'))
+      await userEvent.click(await screen.findByTestId('app-shell.leave-dialog.cancel-button'))
+
+      expect(reload).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByTestId('app-shell.update-button'))
+      await userEvent.click(await screen.findByTestId('app-shell.leave-dialog.confirm-button'))
+
+      await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    } finally {
+      showTab('visible')
+    }
   })
 })

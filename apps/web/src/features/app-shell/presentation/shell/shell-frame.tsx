@@ -5,7 +5,7 @@ import type { ActorRefFrom } from 'xstate'
 import type { LanguageWrites } from '../../../../platform/language-writes'
 import type { Theme } from '../../../../platform/theme'
 import type { LocaleWrites } from '../../application/locale-writes'
-import { createShellMachine } from '../../application/shell.machine'
+import { createShellMachine, type SelfReloads } from '../../application/shell.machine'
 
 /** What the frame's machine reads when it asks, kept by whoever knows it: the start, then the shell. */
 export interface ShellLive {
@@ -21,6 +21,24 @@ export interface ShellLive {
   signOutHere: (() => ResultAsync<unknown, unknown>) | undefined
   /** Renders the screen that failed again, kept by the crash put in its place; none before one. */
   renderAgain: (() => void) | undefined
+  /** Whether a field holds unsaved input now, kept by the shell. */
+  unsaved: boolean
+}
+
+const SELF_RELOADED = 'perch.update.reloaded'
+
+/**
+ * The updates this tab loaded the page again for by itself, one per line in the tab's own
+ * storage, which outlives its reloads: a server still serving one of them afterwards starts no
+ * loop. Read only once the frame is open, so a browser that keeps no site data never reaches it.
+ */
+export function tabSelfReloads(storage: () => Pick<Storage, 'getItem' | 'setItem'>): SelfReloads {
+  const reloaded = (): string[] => storage().getItem(SELF_RELOADED)?.split('\n') ?? []
+
+  return {
+    done: (update) => reloaded().includes(update),
+    mark: (update) => storage().setItem(SELF_RELOADED, [...reloaded(), update].join('\n')),
+  }
 }
 
 /**
@@ -31,6 +49,7 @@ export function shellFrameMachine(
   live: ShellLive,
   setTheme: (theme: Theme) => void,
   reload: () => void = () => window.location.reload(),
+  selfReloads: SelfReloads = tabSelfReloads(() => window.sessionStorage),
 ) {
   return createShellMachine({
     values: () => live,
@@ -38,6 +57,7 @@ export function shellFrameMachine(
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
     reload,
     setTheme,
+    selfReloads,
   })
 }
 

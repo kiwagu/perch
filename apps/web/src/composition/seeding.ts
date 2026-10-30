@@ -381,6 +381,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     clock: systemClock,
     storage: memoryStorage(),
     visibility: { current: () => 'visible', onChange: () => () => {} },
+    // A seed client shows no frame to offer a newer build in.
+    servedBuild: { watch: () => () => {} },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},

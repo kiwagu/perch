@@ -121,6 +121,7 @@ function App() {
       generation: 0,
       signOutHere: undefined,
       renderAgain: undefined,
+      unsaved: false,
     }
 
     return { live, machine: shellFrameMachine(live, device.set) }

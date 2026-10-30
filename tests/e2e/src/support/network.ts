@@ -3,7 +3,8 @@
  * Playwright's offline mode (`context.setOffline`) fails new requests but keeps a WebSocket
  * that is already open alive, so a page would stay in sync while "offline". The page's sync
  * sockets are therefore routed through the test: going offline also drops the socket the page
- * holds and refuses new ones until the network is back.
+ * holds and refuses new ones until the network is back. The test can also stand for a gateway
+ * that no longer takes the page's sync protocol.
  */
 
 import type { Page, WebSocketRoute } from '@playwright/test'
@@ -17,6 +18,9 @@ const SYNC_SOCKET = /\/backend\/sync$/
  */
 const DROPPED = { code: 1006, reason: 'offline' } as const
 
+/** What the page hears from a gateway that no longer takes its sync protocol: its close 4400. */
+const PROTOCOL_REFUSED = { code: 4400, reason: 'protocol' } as const
+
 /** A close code a browser may send itself (RFC 6455); a WebSocket refuses any other. */
 const sendable = (code: number | undefined): code is number =>
   code === 1000 || (code !== undefined && code >= 3000 && code <= 4999)
@@ -24,6 +28,7 @@ const sendable = (code: number | undefined): code is number =>
 export class SyncNetwork {
   readonly #page: Page
   #online = true
+  #refusing = false
   /** The page side of the socket the page holds now. */
   #socket: WebSocketRoute | undefined
 
@@ -54,9 +59,30 @@ export class SyncNetwork {
     await this.#page.context().setOffline(false)
   }
 
+  /**
+   * The gateway no longer takes the page's sync protocol: the socket the page holds ends with
+   * the gateway's close for it, and so does every new one until `acceptProtocol`.
+   */
+  async refuseProtocol(): Promise<void> {
+    this.#refusing = true
+    await this.#socket?.close(PROTOCOL_REFUSED)
+    this.#socket = undefined
+  }
+
+  /** The gateway takes the page's protocol again, as one serving the build the page now runs. */
+  acceptProtocol(): void {
+    this.#refusing = false
+  }
+
   async #connect(socket: WebSocketRoute): Promise<void> {
     if (!this.#online) {
       await socket.close(DROPPED)
+
+      return
+    }
+
+    if (this.#refusing) {
+      await socket.close(PROTOCOL_REFUSED)
 
       return
     }

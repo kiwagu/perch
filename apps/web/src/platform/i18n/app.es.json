@@ -44,6 +44,8 @@
   "app.shell.confirm.devices-revoke.confirm": "Cerrar sesión",
   "app.shell.crash.screen-crashed": "No se ha podido mostrar esta página.",
   "app.shell.reload": "Recargar la página",
+  "app.shell.update.new-version": "Hay una versión más reciente de Perch.",
+  "app.shell.update.protocol-outdated": "Esta versión de Perch está desactualizada: los cambios de este dispositivo no se sincronizan hasta que la página se cargue de nuevo.",
   "app.title.page": "{title} · Perch",
   "app.title.user.sign-in": "Iniciar sesión",
   "app.title.user.profile": "Perfil",

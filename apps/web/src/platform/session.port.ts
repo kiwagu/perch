@@ -61,6 +61,11 @@ export interface SessionPort {
   /** The word the last session left for the sign-in page, until `clearNotice`. */
   notice(): SessionNotice | undefined
   clearNotice(): void
+  /**
+   * Whether the gateway refused the sync protocol of the build this page runs since the page
+   * loaded: the sync stopped, and stays stopped until the page loads again.
+   */
+  protocolRefused(): boolean
   /** The organisations the signed-in identity belongs to, as the gateway last said; none while nobody is signed in. */
   memberships(): readonly Membership[]
   /** Hears the memberships or the current organisation change, a sign-in or sign-out included. */

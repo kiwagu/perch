@@ -12,7 +12,7 @@ import type {
   SyncTransport,
 } from '@workspace/replica/sync'
 
-import type { ChangeRejected, ChangesReloaded } from '../../platform/events.port'
+import type { ChangeRejected, ChangesReloaded, ProtocolRefused } from '../../platform/events.port'
 import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
 import type { KeyValueStorage } from '../storage'
@@ -68,6 +68,9 @@ export interface SessionOptions {
   readonly onStep?: (step: 'open-db' | 'ready') => void
   readonly onSyncState: (state: SyncState) => void
   readonly onError: (error: DataError) => void
-  /** Tells the app a change the gateway refused, or refused again; the root publishes it on the bus. */
-  readonly publish: (event: ChangeRejected | ChangesReloaded) => void
+  /**
+   * Tells the app a change the gateway refused, or refused again, and a sync protocol it no longer
+   * takes; the root publishes it on the bus.
+   */
+  readonly publish: (event: ChangeRejected | ChangesReloaded | ProtocolRefused) => void
 }

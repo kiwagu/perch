@@ -33,6 +33,7 @@ import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { type AppEvent, EVENTS } from '../platform/events.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
+import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 
 import { type CommandLogger, createCommandBus } from './commands'
@@ -76,6 +77,8 @@ export interface AppRootOptions {
   readonly clock: Clock
   readonly storage: KeyValueStorage
   readonly visibility: VisibilitySource
+  /** Hears a newer build of the app the server serves, which the frame offers to load. */
+  readonly servedBuild: ServedBuildPort
   readonly logger: CommandLogger
   /** Logs the name of every event the bus carries: development builds only; off when left out. */
   readonly logEvents?: boolean
@@ -191,6 +194,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     )
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
+    .singleton(SERVED_BUILD, () => options.servedBuild)
 
   step('restore-session')
 
