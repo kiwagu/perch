@@ -10,12 +10,14 @@ import {
 } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 import { EVENTS } from '../../../../platform/events.port'
 import { useFrameEffects } from '../../../../platform/frame-effects'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
+import { SERVED_BUILD } from '../../../../platform/served-build.port'
 import { SESSION } from '../../../../platform/session.port'
 import { useDeviceTheme } from '../../../../platform/theme'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
@@ -30,10 +32,21 @@ import { useShellFrame } from './shell-frame'
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
 
 const CRASH_MESSAGE = 'app-shell.crash-message'
+const UPDATE_MESSAGE = 'app-shell.update-message'
+
+type UpdateCode = 'new-version' | 'protocol-outdated'
+
+const updateCode = (codes: readonly string[]): UpdateCode | undefined =>
+  codes.includes('protocol-outdated')
+    ? 'protocol-outdated'
+    : codes.includes('new-version')
+      ? 'new-version'
+      : undefined
 
 export function ShellContainer(props: { readonly children?: ReactNode }) {
   const session = useService(SESSION)
   const events = useService(EVENTS)
+  const servedBuild = useService(SERVED_BUILD)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
@@ -58,7 +71,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const guard = useLeaveGuard()
   const router = useRouter()
   const [crash, setCrash] = useState<'screen-crashed' | undefined>(undefined)
+  const [update, setUpdate] = useState<UpdateCode | undefined>(undefined)
   const device = useDeviceTheme()
+  const unsaved = useUnsavedInput()
 
   // What the frame's machine reads, current before it is asked anything below: the account signed
   // in and the language its settings hold here; another account, or none, starts knowing nothing
@@ -71,12 +86,14 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   live.account = user?.id
   live.stored = row?.locale
+  live.unsaved = unsaved
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
   useSelector(actor, (state) => state)
   const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
   const canReload = actor.getSnapshot().can({ type: 'app-shell.reload-button' })
   const canChooseTheme = actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'light' })
+  const canUpdate = actor.getSnapshot().can({ type: 'app-shell.update-button' })
 
   // The stored language arriving or changing, here or from another device: the frame's data event.
   const stored = row?.locale
@@ -104,8 +121,28 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // The frame's flow says its notice and clears it, as every screen's flow does.
   useFrameEffects(actor)
 
-  // The bus's refusals reach the frame's flow, which says them on the notice.
+  // The bus's refusals reach the frame's flow, which says them on the notice or offers a reload.
   useEffect(() => shellEvents(events, actor), [events, actor])
+
+  // A newer build the server serves: the frame's platform event.
+  useEffect(
+    () => servedBuild.watch((served) => actor.send({ type: 'platform.new-version', served })),
+    [servedBuild, actor],
+  )
+
+  // The tab going to the background: the frame's platform event, which loads the page again by
+  // itself when an update waits and no field holds unsaved input.
+  useEffect(() => {
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') {
+        actor.send({ type: 'platform.tab-hidden' })
+      }
+    }
+
+    document.addEventListener('visibilitychange', hidden)
+
+    return () => document.removeEventListener('visibilitychange', hidden)
+  }, [actor])
 
   // The crash message shows what the frame's flow shows on it, and goes when the flow clears it.
   // A layout effect: every one runs before any passive effect, so this listens before the crash
@@ -121,10 +158,17 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
         setCrash(undefined)
       }
     })
+    // The update message stays until the page loads again: the flow never clears it.
+    const updated = actor.on('show', (event) => {
+      if (event.anchor === UPDATE_MESSAGE) {
+        setUpdate(updateCode(event.codes))
+      }
+    })
 
     return () => {
       shown.unsubscribe()
       cleared.unsubscribe()
+      updated.unsubscribe()
     }
   }, [actor])
 
@@ -172,6 +216,16 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
         void guard.before('app-shell.reload-button').then((leave) => {
           if (leave) {
             actor.send({ type: 'app-shell.reload-button' })
+          }
+        })
+      }}
+      update={update}
+      canUpdate={canUpdate}
+      onUpdate={() => {
+        // A reload is a leave the frame asks about while a field holds unsaved input.
+        void guard.before('app-shell.update-button').then((leave) => {
+          if (leave) {
+            actor.send({ type: 'app-shell.update-button' })
           }
         })
       }}

@@ -11,7 +11,9 @@ notices of a change the gateway refused and this device undid, so the change doe
 vanish, and, when the gateway refused the undo too, that the later changes not sent yet went
 with it (the bus's `sync.change-rejected` and `sync.changes-reloaded` reach the frame's flow as
 its platform events through `application/shell.events.ts`); a notice goes when the account it
-was raised for signs out, here or from another device. The folder has no
+was raised for signs out, here or from another device. It offers to load the page again when
+the server serves a newer build than the tab runs, or no longer takes this build's sync
+protocol. The folder has no
 module manifest: the composition root mounts the shell around the router built from the
 modules' routes.
 
@@ -40,6 +42,18 @@ modules' routes.
   navigation) takes the message away; a language chosen renders the page again; the reload
   button asks the leave guard first (a leaving control) and loads the page again
   (`platform.reload`, `window.location.reload()`).
+- An update: the shell container watches the build the server serves (`SERVED_BUILD`, the
+  frame's platform event `platform.new-version`, with the build named), and the bus's
+  `sync.protocol-refused` reaches the flow as `platform.protocol-refused`. The flow shows
+  `app-shell.update-message` (`new-version`, or `protocol-outdated`, which a newer build heard
+  later does not replace) with `app-shell.update-button` above the page, in `ready` and around a
+  crash, until the page loads again. The button asks the leave guard first (a leaving control)
+  and loads the page again. The tab going to the background (`platform.tab-hidden`, sent on
+  `visibilitychange`) loads it again by itself when an update waits, no field holds unsaved
+  input (`live.unsaved`, from the kit's `useUnsavedInput`) and this tab has not done so for the
+  same update before (`tabSelfReloads`, in the tab's `sessionStorage` under
+  `perch.update.reloaded`), so a server still serving an update after the reload starts no loop.
+  Only the tab that leads the sync hears a refused protocol; the others see the newer build.
 - Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
   key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no
@@ -78,6 +92,6 @@ modules' routes.
 
 ## Commands
 
-- `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `locale-writes.spec.ts`,
-  `shell.container.spec.tsx`, `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`,
-  `confirm-guard.container.spec.tsx`).
+- `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `shell.events.spec.ts`,
+  `locale-writes.spec.ts`, `shell-frame.spec.ts`, `shell.container.spec.tsx`,
+  `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).

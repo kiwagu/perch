@@ -1,5 +1,5 @@
 import type { ResultAsync } from 'neverthrow'
-import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
+import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
@@ -15,6 +15,28 @@ export interface ShellValues {
   readonly stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
   readonly writes: LocaleWrites
+  /** Whether a field holds unsaved input now. */
+  readonly unsaved: boolean
+}
+
+/**
+ * An update the frame heard since the page loaded: the code its message says, and the update
+ * itself (the build the server serves, or the protocol it refused), which a reload by itself
+ * happens once for.
+ */
+export interface PendingUpdate {
+  readonly code: 'new-version' | 'protocol-outdated'
+  readonly update: string
+}
+
+/** The updates this tab loaded the page again for by itself, kept for the tab's life. */
+export interface SelfReloads {
+  readonly done: (update: string) => boolean
+  readonly mark: (update: string) => void
+}
+
+interface ShellContext {
+  readonly pending: PendingUpdate | undefined
 }
 
 export type ShellEvent =
@@ -31,6 +53,10 @@ export type ShellEvent =
   | { readonly type: 'platform.crashed' }
   | { readonly type: 'platform.navigated' }
   | { readonly type: 'app-shell.reload-button' }
+  | { readonly type: 'platform.new-version'; readonly served: string }
+  | { readonly type: 'platform.protocol-refused' }
+  | { readonly type: 'platform.tab-hidden' }
+  | { readonly type: 'app-shell.update-button' }
 
 /**
  * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
@@ -64,6 +90,7 @@ export interface ShellMachineDeps {
   readonly reload: () => void
   /** Shows a theme on this device and keeps it there. */
   readonly setTheme: (theme: Theme) => void
+  readonly selfReloads: SelfReloads
 }
 
 /** A result that resolves once done, or rejects with its failure. */
@@ -93,6 +120,23 @@ const CRASHED = {
 const CRASH_GONE = { type: 'clear', params: { anchor: 'app-shell.crash-message' } } as const
 /** A theme chosen applies at once, whatever the frame is doing. */
 const THEME_CHOSEN = { actions: 'applyTheme' } as const
+/**
+ * The server serves a newer build, or no longer takes this build's protocol: the frame offers to
+ * load the page again, and a refused protocol, which says more, keeps its message.
+ */
+const NEW_VERSION = {
+  guard: 'protocolTaken',
+  actions: [
+    'noteVersion',
+    { type: 'show', params: { anchor: 'app-shell.update-message', codes: ['new-version'] } },
+  ],
+} as const
+const PROTOCOL_OUTDATED = {
+  actions: [
+    'noteProtocol',
+    { type: 'show', params: { anchor: 'app-shell.update-message', codes: ['protocol-outdated'] } },
+  ],
+} as const
 
 /** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
@@ -105,6 +149,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
 
   return setup({
     types: {
+      context: {} as ShellContext,
       events: {} as ShellEvent,
       emitted: {} as ShellEmitted,
     },
@@ -116,6 +161,11 @@ export function createShellMachine(deps: ShellMachineDeps) {
     guards: {
       signedOut: () => deps.values().account === undefined,
       storedElsewhere: () => storedElsewhere() !== undefined,
+      protocolTaken: ({ context }) => context.pending?.code !== 'protocol-outdated',
+      quietReload: ({ context }) =>
+        context.pending !== undefined &&
+        !deps.values().unsaved &&
+        !deps.selfReloads.done(context.pending.update),
     },
     actions: {
       show: emit((_, params: ShowParams) => ({ type: 'show' as const, ...params })),
@@ -130,6 +180,22 @@ export function createShellMachine(deps: ShellMachineDeps) {
         assertEvent(event, 'app-shell.theme-select')
         deps.setTheme(event.theme)
       },
+      noteVersion: assign({
+        pending: ({ event }) => {
+          assertEvent(event, 'platform.new-version')
+
+          return { code: 'new-version', update: event.served } as const
+        },
+      }),
+      noteProtocol: assign({
+        pending: () => ({ code: 'protocol-outdated', update: 'protocol' }) as const,
+      }),
+      // Taken under the guard quietReload, so an update waits.
+      markSelfReload: ({ context }) => {
+        if (context.pending !== undefined) {
+          deps.selfReloads.mark(context.pending.update)
+        }
+      },
       // Taken under the guard storedElsewhere, so the language is there to speak.
       speakStored: enqueueActions(({ enqueue }) => {
         const locale = storedElsewhere()
@@ -140,6 +206,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
       }),
     },
   }).createMachine({
+    context: { pending: undefined },
     initial: 'opening',
     states: {
       opening: {
@@ -162,6 +229,14 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
           'platform.crashed': { target: 'crashed' },
+          'platform.new-version': NEW_VERSION,
+          'platform.protocol-refused': PROTOCOL_OUTDATED,
+          'app-shell.update-button': { target: 'updating' },
+          'platform.tab-hidden': {
+            target: 'updating',
+            guard: 'quietReload',
+            actions: 'markSelfReload',
+          },
         },
       },
       crashed: {
@@ -178,10 +253,21 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.signed-out': { actions: CLEAR_NOTICE },
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
+          'platform.new-version': NEW_VERSION,
+          'platform.protocol-refused': PROTOCOL_OUTDATED,
+          'app-shell.update-button': { target: 'reloading' },
+          'platform.tab-hidden': {
+            target: 'reloading',
+            guard: 'quietReload',
+            actions: 'markSelfReload',
+          },
         },
       },
       reloading: {
         invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
+      },
+      updating: {
+        invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
       },
       failed: {
         on: {

@@ -262,7 +262,7 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={theme}>
-          <ShellFrameContext.Provider value={openedFrame(theme.set)}>
+          <ShellFrameContext.Provider value={openedFrame({ setTheme: theme.set })}>
             <ServicesProvider services={services}>
               <RouterProvider router={router} />
             </ServicesProvider>
@@ -372,5 +372,92 @@ describe('ShellContainer', () => {
     )
     expect(spoken).toEqual(['es'])
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+  })
+
+  /** The shell on /home for a guest, in a frame that loads the page again through `reload`. */
+  async function homeShell(reload = vi.fn()) {
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    const frame = openedFrame({ reload })
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={frame}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    return { services, frame, reload }
+  }
+
+  /** The browser sends the tab to the background, or back to the front. */
+  function showTab(state: 'hidden' | 'visible') {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+
+  it('says a newer build the server serves, and its button loads the page again', async () => {
+    const { services, reload } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+
+    act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+
+    const message = await screen.findByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('new-version')
+
+    await userEvent.click(screen.getByTestId('app-shell.update-button'))
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+  })
+
+  it('says a protocol the server no longer takes', async () => {
+    const { services } = await homeShell()
+
+    await act(() => services.refuseProtocol())
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'protocol-outdated',
+    )
+    expect(screen.getByTestId('app-shell.update-button').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('loads the page again by itself when the tab goes to the background with an update waiting', async () => {
+    const { services, reload } = await homeShell()
+
+    try {
+      // Nothing waits: the tab goes and comes back as it is.
+      showTab('hidden')
+      showTab('visible')
+
+      expect(reload).not.toHaveBeenCalled()
+
+      act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+      await screen.findByTestId('app-shell.update-message')
+      showTab('hidden')
+
+      await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    } finally {
+      showTab('visible')
+    }
   })
 })

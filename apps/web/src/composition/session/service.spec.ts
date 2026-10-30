@@ -552,6 +552,26 @@ describe('SessionService', () => {
     failures.splice(0)
   })
 
+  it('publishes a sync protocol the gateway no longer takes, and stays signed in', async () => {
+    const { session, gateway, failures, published } = await bootSession({
+      saved: ann,
+      online: true,
+    })
+
+    gateway.endWith('protocol')
+
+    await vi.waitFor(() =>
+      expect(published).toMatchObject([
+        { name: 'sync.protocol-refused', payload: null, actorId: ann.identity.id },
+      ]),
+    )
+    // The sync engine stopped and said so; nothing else changes on the device.
+    expect(failures.map((failure) => failure.code)).toEqual(['data:SYNC_STOPPED'])
+    expect(session.current()?.id).toBe(ann.identity.id)
+
+    failures.splice(0)
+  })
+
   it('asks before signing out when the region stops syncing during the sign-out', async () => {
     const booted = await bootSession({ saved: ann, online: true, wrap: refuseResets })
     const { session, gateway, destroyed, failures, writeOffline } = booted

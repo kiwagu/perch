@@ -5,6 +5,7 @@ import { type Locale, SUPPORTED_LOCALES, useLocale, useT } from '@workspace/i18n
 import { AppShell } from '@workspace/ui/components/platform/app-shell'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
+import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
 
@@ -54,6 +55,11 @@ export interface ShellViewProps {
   /** Whether the frame's flow takes a reload now: the button is enabled while it does. */
   readonly canReload?: boolean | undefined
   readonly onReload?: (() => void) | undefined
+  /** The code the update message shows once the page should load again; none before. */
+  readonly update?: 'new-version' | 'protocol-outdated' | undefined
+  /** Whether the frame's flow takes the update's reload now: the button is enabled while it does. */
+  readonly canUpdate?: boolean | undefined
+  readonly onUpdate?: (() => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -166,6 +172,27 @@ export function ShellView(props: ShellViewProps) {
       {/* The notice's line is held, as tall as the longest notice (three lines on a phone, two
           wider up; `texts-contract.spec.ts` keeps every notice within it), so the page below does
           not move when a notice comes, changes or goes. */}
+      {props.status === 'ready' && props.update ? (
+        <Alert variant={props.update === 'protocol-outdated' ? 'destructive' : 'default'}>
+          <AlertDescription data-testid="app-shell.update-message" data-code={props.update}>
+            {match(props.update)
+              .with('new-version', () => t('app.shell.update.new-version'))
+              .with('protocol-outdated', () => t('app.shell.update.protocol-outdated'))
+              .exhaustive()}
+          </AlertDescription>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 justify-self-start"
+            disabled={!props.canUpdate}
+            onClick={props.onUpdate}
+            data-testid="app-shell.update-button"
+          >
+            {t('app.shell.reload')}
+          </Button>
+        </Alert>
+      ) : null}
       <div data-slot="notice" className="min-h-15 sm:min-h-10">
         {props.notice ? (
           <p

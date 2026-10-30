@@ -44,10 +44,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
         account: undefined,
         stored: undefined,
         writes: LocaleWrites.none,
+        unsaved: false,
       }),
       signOutHere: () => okAsync(undefined),
       reload: () => {},
       setTheme: () => {},
+      selfReloads: { done: () => false, mark: () => {} },
     }),
   device: () =>
     createDevicesMachine({

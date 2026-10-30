@@ -126,7 +126,8 @@ modeling stage.
   left to do, and an answer that comes once the asking session has ended (another account, or
   the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
-  protocol the gateway refuses stops the sync and keeps everything. One account per browser: a
+  protocol the gateway refuses (4400) stops the sync and keeps everything, and the session
+  publishes it so that the frame offers to load the page again. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); a sign-up or sign-in that finds another account saved is refused with
@@ -138,14 +139,20 @@ modeling stage.
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
-  `sync.change-rejected` and `sync.changes-reloaded`, and a development build logs every
-  event's name. `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  `sync.change-rejected`, `sync.changes-reloaded` and `sync.protocol-refused`, and a
+  development build logs every event's name. The root also provides `SERVED_BUILD`
+  (`served-build.ts`): the build the server serves, read from the UI manifest it serves
+  (`/ui-manifest/manifest.json`, never cached) when the frame starts watching, each time the tab
+  comes back to the foreground and every ten minutes while it is there, against the build this
+  tab runs (`virtual:perch-build`, below); a manifest the server does not serve, or a failed
+  read, says nothing. `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for the app's events (`events.port.ts`:
-  subscribe, once, onAny), for organisations and for devices,
+  subscribe, once, onAny), for organisations, for devices and for the build the server serves
+  (`served-build.port.ts`),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
@@ -230,7 +237,10 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
   rewrites `dist-dev/` (source maps, no minifying) on every change, then the UI manifest into
   `dist-dev/ui-manifest/`
   (`ui-contract manifest`; a change of a file under `contract/` or `tests/e2e/scenarios/`
-  rebuilds too). There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  rebuilds too). Every build carries the build it is, `import build from 'virtual:perch-build'`
+  (`vite.config.ts`): the root package's version and the commit checked out, the product the
+  manifest names; a commit or a new version rebuilds, so the bundle and the manifest stay one
+  build. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
   reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the

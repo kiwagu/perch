@@ -44,6 +44,8 @@
   "app.shell.confirm.devices-revoke.confirm": "Sign out",
   "app.shell.crash.screen-crashed": "This page could not be shown.",
   "app.shell.reload": "Reload the page",
+  "app.shell.update.new-version": "A newer version of Perch is available.",
+  "app.shell.update.protocol-outdated": "This version of Perch is out of date: changes on this device do not sync until the page loads again.",
   "app.title.page": "{title} · Perch",
   "app.title.user.sign-in": "Sign in",
   "app.title.user.profile": "Profile",

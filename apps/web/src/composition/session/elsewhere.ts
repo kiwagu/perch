@@ -62,6 +62,16 @@ export class SessionElsewhere {
         void this.#forced(() => this.#signingOut.refused(identity))
       },
       revoked: () => void this.#outElsewhere(identity),
+      protocolRefused: () => {
+        if (this.#host.open()?.space.identity.id === identity) {
+          this.#host.options.publish({
+            name: 'sync.protocol-refused',
+            payload: null,
+            actorId: identity,
+            occurredAt: new Date(),
+          })
+        }
+      },
     })
   }
 
