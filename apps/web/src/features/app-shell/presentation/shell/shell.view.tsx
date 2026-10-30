@@ -110,15 +110,18 @@ export function ShellView(props: ShellViewProps) {
       navigationLabel={t('app.shell.navigation')}
       navigationTestId="app-shell.nav"
       actions={
-        <OptionSelect
-          label={t('app.shell.locale')}
-          value={locale}
-          options={locales}
-          onChange={props.onLocaleChange}
-          disabled={!props.canChooseLocale}
-          testId="app-shell.locale-select"
-          holdsInput={false}
-        />
+        // A guest chooses the language here; a signed-in account does on its settings screen.
+        props.signedIn ? null : (
+          <OptionSelect
+            label={t('app.shell.locale')}
+            value={locale}
+            options={locales}
+            onChange={props.onLocaleChange}
+            disabled={!props.canChooseLocale}
+            testId="app-shell.locale-select"
+            holdsInput={false}
+          />
+        )
       }
       navigation={items.map((item) => (
         <Link

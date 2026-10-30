@@ -42,12 +42,9 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
     createShellMachine({
       values: () => ({
         account: undefined,
-        session: 0,
-        storingIn: undefined,
         stored: undefined,
         writes: LocaleWrites.none,
       }),
-      storeLocale: () => okAsync(undefined),
       signOutHere: () => okAsync(undefined),
       reload: () => {},
     }),

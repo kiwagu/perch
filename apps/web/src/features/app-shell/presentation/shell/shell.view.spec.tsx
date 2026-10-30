@@ -145,13 +145,21 @@ describe('ShellView', () => {
     expect(notice.getAttribute('role')).toBe('status')
   })
 
-  it('marks the navigation and the language select', () => {
+  it("marks a signed-in account's navigation, settings included, with no language select", () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
     expect(navigation.tagName).toBe('NAV')
     expect(within(navigation).getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    expect(within(navigation).getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+    // The settings screen takes a signed-in account's language.
+    expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+  })
+
+  it("marks a guest's language select", () => {
+    renderShell({ signedIn: false })
+
     expect(screen.getByTestId('app-shell.locale-select').getAttribute('role')).toBe('combobox')
   })
 

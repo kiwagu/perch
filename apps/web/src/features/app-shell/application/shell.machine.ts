@@ -9,10 +9,6 @@ import type { LocaleWrites } from './locale-writes'
 export interface ShellValues {
   /** The account signed in on this device; none for a guest. */
   readonly account: string | undefined
-  /** Moves on each time the account changes, a sign-out included: the same account back is not. */
-  readonly session: number
-  /** The session the store under way began in. */
-  readonly storingIn: number | undefined
   /** The language the account's settings hold on this device; none before they arrive. */
   readonly stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
@@ -59,8 +55,6 @@ export type ShellEmitted =
 
 export interface ShellMachineDeps {
   readonly values: () => ShellValues
-  /** Stores the language in the account's settings on this device. */
-  readonly storeLocale: (locale: Locale) => ResultAsync<void, unknown>
   /** Signs the saved account out on this device, when its data did not open. */
   readonly signOutHere: () => ResultAsync<unknown, unknown>
   /** Loads the page again from the server. */
@@ -74,10 +68,6 @@ async function settled<T>(result: ResultAsync<T, unknown>): Promise<T> {
   return outcome.isOk() ? outcome.value : Promise.reject(outcome.error)
 }
 
-const NOT_STORED = {
-  type: 'show',
-  params: { anchor: 'app-shell.notice-message', codes: ['locale-not-stored'] },
-} as const
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 /** The notice goes with the account that was signed in when it was raised. */
 const CLEAR_NOTICE = { type: 'clear', params: { anchor: 'app-shell.notice-message' } } as const
@@ -112,21 +102,12 @@ export function createShellMachine(deps: ShellMachineDeps) {
       emitted: {} as ShellEmitted,
     },
     actors: {
-      'settings.updateLocale': fromPromise<void, { readonly locale: Locale }>(({ input }) =>
-        settled(deps.storeLocale(input.locale)),
-      ),
       'platform.sign-out': fromPromise<unknown>(() => settled(deps.signOutHere())),
       // The page unloads as it loads again; the outcome is seen only if it did not.
       'platform.reload': fromPromise<void>(async () => deps.reload()),
     },
     guards: {
-      settingsHeld: () => deps.values().stored !== undefined,
       signedOut: () => deps.values().account === undefined,
-      accountLeft: () => {
-        const { session, storingIn } = deps.values()
-
-        return storingIn !== session
-      },
       storedElsewhere: () => storedElsewhere() !== undefined,
     },
     actions: {
@@ -161,7 +142,6 @@ export function createShellMachine(deps: ShellMachineDeps) {
       ready: {
         on: {
           'app-shell.locale-select': [
-            { target: 'storing-locale', guard: 'settingsHeld', actions: 'speakChoice' },
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
@@ -171,28 +151,6 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.crashed': { target: 'crashed' },
         },
       },
-      'storing-locale': {
-        on: {
-          'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
-          'platform.signed-out': { actions: CLEAR_NOTICE },
-          'platform.change-rejected': { actions: REJECTED },
-          'platform.changes-reloaded': { actions: RELOADED },
-          'platform.crashed': { target: 'crashed' },
-        },
-        invoke: {
-          src: 'settings.updateLocale',
-          input: ({ event }) => {
-            assertEvent(event, 'app-shell.locale-select')
-
-            return { locale: event.locale }
-          },
-          onDone: { target: 'ready' },
-          onError: [
-            { target: 'ready', guard: 'accountLeft' },
-            { target: 'ready', actions: NOT_STORED },
-          ],
-        },
-      },
       crashed: {
         entry: CRASHED,
         exit: CRASH_GONE,
@@ -200,7 +158,6 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'app-shell.reload-button': { target: 'reloading' },
           'platform.navigated': { target: 'ready' },
           'app-shell.locale-select': [
-            { target: 'storing-locale', guard: 'settingsHeld', actions: 'speakChoice' },
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },

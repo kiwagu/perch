@@ -193,7 +193,7 @@ describe('ShellContainer', () => {
     )
   })
 
-  it("takes a language choice once the signed-in account's settings are on the device", async () => {
+  it('shows a signed-in account no language select: its settings screen takes the choice', async () => {
     const { session } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const signedIn: SessionPort = { ...session, current: () => ann }
@@ -221,19 +221,12 @@ describe('ShellContainer', () => {
       </I18nProvider>,
     )
     await screen.findByText('home')
-
-    // Signed in, the settings not here yet: the frame takes no choice.
-    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(true)
-
     act(() => {
       services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'en' }])
     })
 
-    await waitFor(() =>
-      expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(
-        false,
-      ),
-    )
+    expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+    expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
   })
 
   it("speaks no signed-out account's stored language, and its notice goes with it", async () => {

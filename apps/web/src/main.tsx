@@ -113,11 +113,8 @@ function App() {
   const [made] = useState(() => {
     const live: ShellLive = {
       account: undefined,
-      session: 0,
-      storingIn: undefined,
       stored: undefined,
       writes: LocaleWrites.none,
-      store: undefined,
       signOutHere: undefined,
       renderAgain: undefined,
     }
