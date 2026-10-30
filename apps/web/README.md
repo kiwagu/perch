@@ -249,7 +249,9 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
   rebuilds too). Every build carries the build it is, `import build from 'virtual:perch-build'`
   (`vite.config.ts`): the root package's version and the commit checked out, the product the
   manifest names; a commit or a new version rebuilds, so the bundle and the manifest stay one
-  build. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  build. Every build also strips the `sourceMappingURL` custom section from the WASM it emits
+  (`build/wasm-source-maps.ts`, in the main and the worker bundles): loro-crdt ships its module
+  naming a source map on a CDN, which DevTools would ask for and the front's policy block. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
   reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the

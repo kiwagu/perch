@@ -10,6 +10,8 @@ import wasm from 'vite-plugin-wasm'
 
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
 
+import { stripWasmSourceMaps } from './build/wasm-source-maps'
+
 const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
   fileURLToPath(new URL(`../../${path}`, import.meta.url)),
 )
@@ -116,7 +118,15 @@ function buildIdentity(): Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [surqlPlugin(), wasm(), react(), tailwindcss(), uiManifestOnWatch(), buildIdentity()],
+  plugins: [
+    surqlPlugin(),
+    wasm(),
+    react(),
+    tailwindcss(),
+    uiManifestOnWatch(),
+    buildIdentity(),
+    stripWasmSourceMaps(),
+  ],
   // The page helper `window.__perch.ui` (src/platform/ui-contract.ts): in development builds,
   // and in a production build made with PERCH_UI_HOOKS=1 (the e2e launcher's).
   define: {
@@ -140,5 +150,6 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     minify: mode !== 'development',
   },
-  worker: { format: 'es' },
+  // A worker's bundle runs its own plugins: its WASM loses the source-map section too.
+  worker: { format: 'es', plugins: () => [stripWasmSourceMaps()] },
 }))
