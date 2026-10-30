@@ -17,6 +17,10 @@
   "app.shell.locale-not-stored": "El idioma se aplica en este dispositivo, pero no se pudo guardar en tu cuenta.",
   "app.shell.locale.en": "English",
   "app.shell.locale.es": "Español",
+  "app.shell.theme": "Tema",
+  "app.shell.theme.light": "Claro",
+  "app.shell.theme.dark": "Oscuro",
+  "app.shell.theme.system": "Como el dispositivo",
   "app.shell.rejected": "El servidor rechazó un cambio y lo deshizo en este dispositivo.",
   "app.shell.reloaded": "El servidor volvió a rechazar un cambio, así que ese cambio y los posteriores aún no enviados se deshicieron en este dispositivo.",
   "app.shell.sync.local": "Guardado en este dispositivo",
@@ -45,5 +49,7 @@
   "app.title.user.profile": "Perfil",
   "app.title.organisation": "Organización",
   "app.title.device": "Mis dispositivos",
-  "app.title.not-found": "Página no encontrada"
+  "app.title.not-found": "Página no encontrada",
+  "app.shell.nav.settings": "Ajustes",
+  "app.title.user.settings": "Ajustes"
 }

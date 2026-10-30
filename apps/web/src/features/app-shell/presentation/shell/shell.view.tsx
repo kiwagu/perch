@@ -8,6 +8,7 @@ import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
 
+import { THEMES, type Theme } from '../../../../platform/theme'
 import type { ToastTone } from '../../../../platform/toasts'
 
 export interface ShellLinkProps {
@@ -26,6 +27,11 @@ export interface ShellViewProps {
   /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
   readonly canChooseLocale: boolean
   readonly onLocaleChange: (locale: Locale) => void
+  /** The theme this device shows. */
+  readonly theme: Theme
+  /** Whether the frame's flow takes a theme choice now: the select is enabled while it does. */
+  readonly canChooseTheme: boolean
+  readonly onThemeChange: (theme: Theme) => void
   readonly link?: ComponentType<ShellLinkProps>
   /** Signs the saved account out on this device when its data could not be opened; offered while `failed`. */
   readonly onSignOutHere?: (() => void) | undefined
@@ -70,6 +76,11 @@ export function ShellView(props: ShellViewProps) {
           label: t('app.shell.nav.devices'),
           testId: 'app-shell.nav.devices-link',
         },
+        {
+          to: '/settings',
+          label: t('app.shell.nav.settings'),
+          testId: 'app-shell.nav.settings-link',
+        },
       ]
     : [
         {
@@ -78,6 +89,15 @@ export function ShellView(props: ShellViewProps) {
           testId: 'app-shell.nav.sign-in-link',
         },
       ]
+  const themes = THEMES.map((theme) => ({
+    value: theme,
+    label:
+      theme === 'light'
+        ? t('app.shell.theme.light')
+        : theme === 'dark'
+          ? t('app.shell.theme.dark')
+          : t('app.shell.theme.system'),
+  }))
   const locales = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,
     label: locale === 'en' ? t('app.shell.locale.en') : t('app.shell.locale.es'),
@@ -105,15 +125,30 @@ export function ShellView(props: ShellViewProps) {
       navigationLabel={t('app.shell.navigation')}
       navigationTestId="app-shell.nav"
       actions={
-        <OptionSelect
-          label={t('app.shell.locale')}
-          value={locale}
-          options={locales}
-          onChange={props.onLocaleChange}
-          disabled={!props.canChooseLocale}
-          testId="app-shell.locale-select"
-          holdsInput={false}
-        />
+        <>
+          {/* Anyone chooses the theme of this device here, as on the settings screen. */}
+          <OptionSelect
+            label={t('app.shell.theme')}
+            value={props.theme}
+            options={themes}
+            onChange={props.onThemeChange}
+            disabled={!props.canChooseTheme}
+            testId="app-shell.theme-select"
+            holdsInput={false}
+          />
+          {/* A guest chooses the language here; a signed-in account does on its settings screen. */}
+          {props.signedIn ? null : (
+            <OptionSelect
+              label={t('app.shell.locale')}
+              value={locale}
+              options={locales}
+              onChange={props.onLocaleChange}
+              disabled={!props.canChooseLocale}
+              testId="app-shell.locale-select"
+              holdsInput={false}
+            />
+          )}
+        </>
       }
       navigation={items.map((item) => (
         <Link

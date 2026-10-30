@@ -17,9 +17,9 @@ import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
 import { SESSION } from '../../../../platform/session.port'
+import { useDeviceTheme } from '../../../../platform/theme'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
-import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.service'
 import { LocaleWrites } from '../../application/locale-writes'
 import { shellEvents } from '../../application/shell.events'
 
@@ -34,7 +34,6 @@ const CRASH_MESSAGE = 'app-shell.crash-message'
 export function ShellContainer(props: { readonly children?: ReactNode }) {
   const session = useService(SESSION)
   const events = useService(EVENTS)
-  const settings = useService(SETTINGS_SERVICE)
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
@@ -59,24 +58,25 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const guard = useLeaveGuard()
   const router = useRouter()
   const [crash, setCrash] = useState<'screen-crashed' | undefined>(undefined)
+  const device = useDeviceTheme()
 
   // What the frame's machine reads, current before it is asked anything below: the account signed
-  // in, the language its settings hold here, how to store one; another account, or none, starts
-  // knowing nothing of its stored language.
+  // in and the language its settings hold here; another account, or none, starts knowing nothing
+  // of its stored language.
   if (account.current !== user?.id) {
     account.current = user?.id
-    live.session += 1
+    live.generation += 1
     live.writes = LocaleWrites.none
   }
 
   live.account = user?.id
   live.stored = row?.locale
-  live.store = row ? (locale) => settings.updateLocale({ id: row.id, locale }) : undefined
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
   useSelector(actor, (state) => state)
   const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
   const canReload = actor.getSnapshot().can({ type: 'app-shell.reload-button' })
+  const canChooseTheme = actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'light' })
 
   // The stored language arriving or changing, here or from another device: the frame's data event.
   const stored = row?.locale
@@ -162,6 +162,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
           }
         })
       }}
+      theme={device.theme}
+      canChooseTheme={canChooseTheme}
+      onThemeChange={(theme) => actor.send({ type: 'app-shell.theme-select', theme })}
       crash={crash}
       canReload={canReload}
       onReload={() => {
