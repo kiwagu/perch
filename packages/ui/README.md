@@ -4,7 +4,8 @@
 
 The visual primitives every view is built from: shadcn components on Base UI with
 Tailwind CSS v4, mobile first. The package holds no text, no translations and no domain
-knowledge; copy and data arrive through props. Dark colors follow the system setting.
+knowledge; copy and data arrive through props. The dark colors apply while `<html>` carries
+the class `dark` (the `dark:` variant follows it), which the app sets for its theme.
 Every primitive spreads its props onto its element, so a call site passes `data-testid` and
 the other contract attributes directly. A composite takes its anchor (`data-testid`) as a
 `testId` prop and builds the anchors of the parts it renders itself with
