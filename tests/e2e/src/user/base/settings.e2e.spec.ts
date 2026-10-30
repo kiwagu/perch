@@ -40,6 +40,8 @@ test.describe('Choose the theme of this device and the language of the account',
         .click()
       // Expected: After step 3 [user.settings.locale-select] shows [value:es] at once
       await expect(language).toHaveAttribute('data-value', 'es')
+      // The store has ended once the select takes a choice again: the reload below cannot race it.
+      await expect(language).toBeEnabled()
     })
 
     await test.step('4. Reload the page and wait for [app-shell.status] to reach [state:ready]', async () => {
