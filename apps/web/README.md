@@ -11,9 +11,10 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. The app starts only once the page's localStorage kept a
-  value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
-  says so, instead of forgetting who signed in and the device's id. A saved identity whose
+  is opened while nobody is signed in. The app starts only once the page's localStorage and
+  the tab's sessionStorage each kept a value and gave it back (`siteStorage`): a browser that
+  blocks site data stops at a message that says so, instead of forgetting who signed in, the
+  device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
   (`SessionService.signOutUnopened()`): its keys are left to revoke and its databases deleted,
   so a database that will never open is no dead end. Signing up or in goes through the gateway
