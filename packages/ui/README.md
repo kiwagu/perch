@@ -54,7 +54,10 @@ than its portal or overlay. A control that is not a test target carries a
 - `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus `success` and `warning`:
   Tailwind's green and orange, 600 in light and 400 in dark, as `destructive` is red) and the
   base layer; import it once in the app. It points Tailwind at the kit's components, so their
-  classes are generated in apps.
+  classes are generated in apps. The base layer also hides the native scrollbar of a Base UI
+  list (`.base-ui-disable-scrollbar`): the kit's components render no inline `<style>`, which a
+  strict style policy refuses (`Select` keeps its popup under Base UI's `CSPProvider` with
+  `disableStyleElements`).
 
 ## Commands
 

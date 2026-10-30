@@ -100,11 +100,7 @@ const DELETE_REFUSED = {
   type: 'show',
   params: { anchor: 'organisation.notes.error', codes: ['forbidden', 'failed'] },
 } as const
-const INVITED = {
-  type: 'show',
-  params: { anchor: 'app-shell.notice-message', codes: ['invited'] },
-} as const
-/** The toasts the contract derives for the changes of the notes and of the organisations. */
+/** The toasts the contract derives for the changes of the notes, the organisations and their members. */
 const toast = <Code extends string>(code: Code) =>
   ({ type: 'show', params: { anchor: 'app-shell.toast', codes: [code] } }) as const
 const NOTE_CREATED = toast('note-created')
@@ -112,6 +108,7 @@ const NOTE_UPDATED = toast('note-updated')
 const NOTE_DELETED = toast('note-deleted')
 const ORGANISATION_CREATED = toast('organisation-created')
 const MEMBER_REMOVED = toast('member-removed')
+const INVITED = toast('invited')
 const INVITE_REFUSED = {
   type: 'show',
   params: {

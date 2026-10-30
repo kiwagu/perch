@@ -1,6 +1,6 @@
 // scenario: user/flows/two-devices
 import { generate } from '../../support/data'
-import { appReady, expect, notice, test } from '../../support/fixtures'
+import { appReady, expect, test, toast } from '../../support/fixtures'
 
 test.describe('Keep one account in step on two devices', { tag: '@full' }, () => {
   test('A bio written on one device and a name changed on another reach both devices, and a name being typed is not overwritten', async ({
@@ -23,9 +23,9 @@ test.describe('Keep one account in step on two devices', { tag: '@full' }, () =>
     await test.step('2. On device A, enter the bio into [user.profile.bio-textarea] and click [user.profile.save-button]', async () => {
       await page.getByTestId('user.profile.bio-textarea').fill(data.bio)
       await page.getByTestId('user.profile.save-button').click()
-      // Expected: After step 2 device A shows [app-shell.notice-message] carrying
+      // Expected: After step 2 device A shows [app-shell.toast] carrying
       //   [code:profile-saved]
-      await expect(notice(page, 'profile-saved')).toBeVisible()
+      await expect(toast(page, 'profile-saved')).toBeVisible()
     })
 
     const deviceB =

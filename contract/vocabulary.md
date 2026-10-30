@@ -149,13 +149,12 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | Code | Where | Meaning |
 |---|---|---|
 | `welcome` | `app-shell.notice-message` | the account signed up or signed in |
-| `profile-saved` | `app-shell.notice-message` | the profile was saved |
-| `invited` | `app-shell.notice-message` | an account was invited into the organisation |
 | `devices-read-failed` | `app-shell.notice-message` | the devices of the account could not be read |
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
 | `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |

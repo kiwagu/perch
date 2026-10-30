@@ -9,9 +9,9 @@ import { NoticeProvider, useClearNotice, useNotice, useNotify } from './notices'
 
 /** The words of the codes these tests raise. */
 const TEXTS = {
-  'profile-saved': () => 'Saved',
+  'change-rejected': () => 'Undone',
   welcome: () => 'Welcome',
-  invited: () => 'Invited',
+  'changes-reloaded': () => 'Reloaded',
 }
 
 function Trigger(props: { readonly code: string; readonly text: string }) {
@@ -36,7 +36,7 @@ describe('notices', () => {
   it('shows the latest notice wherever the application renders it', () => {
     render(
       <NoticeProvider texts={TEXTS}>
-        <Trigger code="profile-saved" text="Saved" />
+        <Trigger code="change-rejected" text="Undone" />
         <Trigger code="welcome" text="Welcome" />
         <Current />
       </NoticeProvider>,
@@ -44,10 +44,10 @@ describe('notices', () => {
 
     expect(document.querySelector('[data-code]')).toBeNull()
 
-    fireEvent.click(screen.getByText('Saved'))
+    fireEvent.click(screen.getByText('Undone'))
 
-    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('profile-saved')
-    expect(document.querySelector('[data-code]')?.textContent).toBe('Saved')
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('change-rejected')
+    expect(document.querySelector('[data-code]')?.textContent).toBe('Undone')
 
     fireEvent.click(screen.getByRole('button', { name: 'Welcome' }))
 
@@ -68,20 +68,20 @@ describe('notices', () => {
 
     render(
       <NoticeProvider texts={TEXTS}>
-        <Trigger code="profile-saved" text="Saved" />
+        <Trigger code="change-rejected" text="Undone" />
         <Clear />
         <Current />
       </NoticeProvider>,
     )
 
-    fireEvent.click(screen.getByText('Saved'))
+    fireEvent.click(screen.getByText('Undone'))
     fireEvent.click(screen.getByText('clear'))
 
     expect(document.querySelector('[data-code]')).toBeNull()
 
-    fireEvent.click(screen.getByText('Saved'))
+    fireEvent.click(screen.getByText('Undone'))
 
-    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('profile-saved')
+    expect(document.querySelector('[data-code]')?.getAttribute('data-code')).toBe('change-rejected')
   })
 
   it('drops a notice raised for what came before the clear, such as a reply that came late', () => {
@@ -91,7 +91,7 @@ describe('notices', () => {
       const first = useRef(notify)
 
       return (
-        <button type="button" onClick={() => first.current('invited')}>
+        <button type="button" onClick={() => first.current('changes-reloaded')}>
           late
         </button>
       )

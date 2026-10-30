@@ -64,7 +64,7 @@ function page(
   }
 }
 
-const NOTICE = { type: 'show', anchor: 'app-shell.notice-message', codes: ['profile-saved'] }
+const SAVED = { type: 'show', anchor: 'app-shell.toast', codes: ['profile-saved'] }
 
 describe('profile machine', () => {
   it('follows the stored name until it is typed into, and again once typed back', () => {
@@ -90,7 +90,7 @@ describe('profile machine', () => {
     await idle()
 
     expect(updateName).toHaveBeenCalledWith({ id, name: ' Bea ' })
-    expect(emitted).toContainEqual(NOTICE)
+    expect(emitted).toContainEqual(SAVED)
     expect(is('name')).toBe('edited')
 
     store('name', 'Bea')
@@ -102,7 +102,7 @@ describe('profile machine', () => {
     expect(is('name')).toBe('following')
   })
 
-  it('saves the name, then the bio, each only when it changed', async () => {
+  it('saves the name, then the bio, each only when it changed, and toasts each Save once', async () => {
     const { type, save, idle, updateName, updateBio, emitted } = page()
 
     type('bio', 'About me')
@@ -118,14 +118,14 @@ describe('profile machine', () => {
 
     expect(updateName).toHaveBeenCalledWith({ id, name: 'Bea' })
     expect(updateBio).toHaveBeenLastCalledWith({ id, bio: 'About me' })
+    expect(emitted).toEqual([SAVED, SAVED])
 
     const { save: saveNothing, idle: idleAgain, emitted: told } = page()
 
     saveNothing()
     await idleAgain()
 
-    expect(told).toEqual([NOTICE])
-    expect(emitted).toContainEqual(NOTICE)
+    expect(told).toEqual([SAVED])
   })
 
   it('keeps the code of a refused save until a save succeeds, and the draft with it', async () => {
@@ -166,6 +166,25 @@ describe('profile machine', () => {
 
     expect(updateName).toHaveBeenCalledOnce()
     expect(actor.getSnapshot().can({ type: 'user.profile.save-button' })).toBe(true)
+  })
+
+  it('says a Save that writes the name and the bio once, when the bio is written', async () => {
+    const bios = Promise.withResolvers<void>()
+    const { actor, type, save, idle, emitted } = page({
+      updateBio: () => ResultAsync.fromSafePromise(bios.promise),
+    })
+
+    type('name', 'Bea')
+    type('bio', 'About me')
+    save()
+    await waitFor(actor, (state) => state.matches({ editing: { save: 'saving-bio' } }))
+
+    expect(emitted).toEqual([])
+
+    bios.resolve()
+    await idle()
+
+    expect(emitted).toEqual([SAVED])
   })
 
   it('keeps what is typed while a save runs: the value it stores takes neither field back', async () => {

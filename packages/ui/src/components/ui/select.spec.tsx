@@ -290,4 +290,15 @@ describe('Select', () => {
     await chooseBeta()
     expect(probe()).toBe('false')
   })
+
+  it('opens without an inline style, its scrollbar hidden by the kit stylesheet', async () => {
+    render(<Controlled />)
+
+    await userEvent.click(screen.getByLabelText('kind'))
+    await screen.findByRole('option', { name: 'Beta' })
+
+    // A strict style policy refuses an inline <style>; the class it would define is the kit's.
+    expect(document.querySelectorAll('style')).toHaveLength(0)
+    expect(document.querySelector('.base-ui-disable-scrollbar')).not.toBeNull()
+  })
 })

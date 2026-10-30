@@ -15,5 +15,7 @@ export const TOAST_TEXTS: ToastWords = {
     text: (t) => t('app.shell.toast.organisation-created'),
   },
   'member-removed': { tone: 'success', text: (t) => t('app.shell.toast.member-removed') },
+  invited: { tone: 'success', text: (t) => t('app.shell.toast.invited') },
+  'profile-saved': { tone: 'success', text: (t) => t('app.shell.toast.profile-saved') },
   'device-signed-out': { tone: 'success', text: (t) => t('app.shell.toast.device-signed-out') },
 }

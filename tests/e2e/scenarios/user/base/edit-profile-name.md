@@ -19,6 +19,6 @@ Where: [/me] then [user.profile.save-button]
 4. Click [user.profile.save-button]
 
 ### Expected result
-- After step 4 [app-shell.notice-message] carries [code:profile-saved]
+- After step 4 [app-shell.toast] carries [code:profile-saved]
 - [user.profile.heading] shows the new name
 - Reloading the page keeps the new name

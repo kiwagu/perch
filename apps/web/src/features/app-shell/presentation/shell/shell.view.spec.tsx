@@ -136,12 +136,12 @@ describe('ShellView', () => {
   })
 
   it('announces the current notice with its code', () => {
-    renderShell({ notice: { code: 'profile-saved', text: 'Saved' } })
+    renderShell({ notice: { code: 'welcome', text: 'Welcome' } })
 
     const notice = screen.getByTestId('app-shell.notice-message')
 
-    expect(notice.getAttribute('data-code')).toBe('profile-saved')
-    expect(notice.textContent).toBe('Saved')
+    expect(notice.getAttribute('data-code')).toBe('welcome')
+    expect(notice.textContent).toBe('Welcome')
     expect(notice.getAttribute('role')).toBe('status')
   })
 

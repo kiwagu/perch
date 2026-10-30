@@ -24,7 +24,7 @@ Where: [/me] on device A, and [/me] on device B, another browser
 
 ### Expected result
 - After step 3 the sync channel of device B is down
-- After step 4 device B shows [app-shell.notice-message] carrying [code:profile-saved] and the bio, and its sync channel is still down
-- After step 5 device A shows [app-shell.notice-message] carrying [code:profile-saved] and the new name
+- After step 4 device B shows [app-shell.toast] carrying [code:profile-saved] and the bio, and its sync channel is still down
+- After step 5 device A shows [app-shell.toast] carrying [code:profile-saved] and the new name
 - After step 6 the sync channel of device B comes up again
 - Then both devices show the new name from device A and the bio from device B

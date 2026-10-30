@@ -15,7 +15,9 @@ contract's feedback loop: one that cannot be written from the contract alone nam
 the contract, fixed there and never worked around in a test. `bun run e2e:coverage` checks
 the pairs, and `bun run contract:check:consumers` checks every anchor, code, state and value
 a test names as a literal against the contract. After every step a check fails the test when
-any open page scrolls sideways. Each test signs up fresh accounts in fresh browser contexts,
+any open page scrolls sideways. At the end of every test a check fails it when a document or a
+script of the front came without the front's security headers, or when a page or one of its
+workers reported a Content-Security-Policy violation on the console. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
@@ -40,8 +42,8 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   URL with `app-shell.status` in `ready`.
 - `user/base/sign-up`: a new user signs up, lands on `/me` with the notice `welcome`, the
   entered name and email, and stays signed in after a reload.
-- `user/base/edit-profile-name`: a signed-in user changes the name, sees `profile-saved`, and
-  keeps the new name after a reload.
+- `user/base/edit-profile-name`: a signed-in user changes the name, sees the toast
+  `profile-saved`, and keeps the new name after a reload.
 - `user/base/blocked-storage`: a browser that refuses the page its localStorage is told that
   it keeps no data for Perch, and gets no sign-in form.
 - `user/base/unopenable-database`: once the account's local database is broken, the page says
@@ -56,7 +58,7 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   other tab's edit reaches B, and it takes over within 2 seconds when the leader closes.
 - `user/flows/sign-out`: signing out deletes the device's database and leaves B signed in;
   signing in again restores the profile from the server; an offline sign-out with an
-  unsent change asks first.
+  unsent change asks first, and the sign-out takes the notice with the account.
 - `user/flows/idle-traffic`: an idle visible tab, its clock driven by the test through 10
   minutes, sends at most 2 sync frames a minute.
 - `user/flows/blocked-delete`: a sign-out ends within 15 seconds although a second tab holds
@@ -114,9 +116,13 @@ it can go offline and back (Playwright's offline mode leaves an open WebSocket u
 gives them (`databases`, `identityDatabase`, `organisationDatabase`), and the device's keys in
 its localStorage (`keysKept`, and `keepAccessToken`, which replaces the access token as a hand
 edit would).
+`src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
+response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
+context for a test (its documents' and scripts' headers, the CSP violations its pages and
+their workers report); the fixtures watch every browser a test opens.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
-and `expectInvited` (the notice `invited` and the account in the members list).
+and `expectInvited` (the toast `invited` and the account in the members list).
 `src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
 note texts).
 

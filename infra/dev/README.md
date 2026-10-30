@@ -28,7 +28,15 @@ the gateway's `/sync`). No dev server runs behind it.
   `index.html`; with `PERCH_UI_MANIFEST=0` (default `1`) it answers 404 instead. The mcproc
   manifest passes the switch to both fronts from its var `ui_manifest` (`'1'`); a checkout turns
   it off with `ui_manifest: '0'` under `vars` in `.mcproc/mcproc.local.yaml`, then
-  `mcproc restart caddy-dev` (or `caddy-e2e`).
+  `mcproc restart caddy-dev` (or `caddy-e2e`). Every response carries the browser security
+  headers of the snippet `security-headers`, each with its reason beside it: a
+  Content-Security-Policy that allows only this origin's scripts, styles, fonts, worker,
+  fetches and WebSocket, plus WASM compilation (`'wasm-unsafe-eval'`, never `'unsafe-eval'`),
+  and no framing; `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, a
+  `Permissions-Policy` that turns off what the app does not use, and
+  `X-Content-Type-Options: nosniff`. No `Strict-Transport-Security`: it binds the whole host,
+  so from `https://localhost` it would force https on every local port; a deployed front sends
+  it for its own domain. The e2e fixtures hold every document and script to these values.
 - `make-certs.sh`: writes `certs/localhost.pem` and `certs/localhost-key.pem` (gitignored) once.
   With mkcert installed the certificate is mkcert's, which browsers trust after `mkcert -install`;
   otherwise openssl makes a self-signed one. Delete `certs/` to make new ones.
