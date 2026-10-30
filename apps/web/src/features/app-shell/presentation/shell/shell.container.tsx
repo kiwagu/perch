@@ -16,6 +16,7 @@ import { SETTINGS_SERVICE } from '../../../user/application/settings/settings.se
 import { LocaleWrites } from '../../application/locale-writes'
 import { shellEvents } from '../../application/shell.events'
 
+import { pageTitle } from './page-title'
 import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
 
@@ -36,6 +37,14 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const account = useRef<string | undefined>(undefined)
   const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  // The path of the route matched, as it is declared (`/$` for an unknown address).
+  const route = useRouterState({
+    select: (state): string | undefined => {
+      const declared: unknown = state.matches.at(-1)?.fullPath
+
+      return typeof declared === 'string' ? declared : undefined
+    },
+  })
   const notice = useNotice()
   const toasts = useToasts()
   const dismissToast = useDismissToast()
@@ -109,6 +118,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       cleared.unsubscribe()
     }
   }, [actor])
+
+  // The browser tab names the open screen in the language the app speaks.
+  useEffect(() => {
+    document.title = pageTitle(route, t)
+  }, [route, t])
 
   // Another screen opening, by a link, Back, Forward or an address typed: the frame's platform event.
   useEffect(

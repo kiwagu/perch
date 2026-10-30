@@ -38,6 +38,10 @@ modules' routes.
   navigation) takes the message away; a language chosen renders the page again; the reload
   button asks the leave guard first (a leaving control) and loads the page again
   (`platform.reload`, `window.location.reload()`).
+- Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
+  in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
+  key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no
+  screen is open), held to every binding of the contract by `page-titles-contract.spec.ts`.
 - `presentation/shell/notice-texts.ts` and `toast-texts.ts`: the words of each code of
   `app-shell.notice-message` and of `app-shell.toast` (a toast's tone too: a derived code says a
   success), one literal key each; the start hands
