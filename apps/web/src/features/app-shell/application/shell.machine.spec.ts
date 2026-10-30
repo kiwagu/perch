@@ -20,6 +20,7 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
   }
   const storeLocale = vi.fn(options.storeLocale ?? (() => okAsync(undefined)))
   const signOutHere = vi.fn(() => okAsync(undefined))
+  const reload = vi.fn()
   const actor = createActor(
     createShellMachine({
       values: () => values,
@@ -29,6 +30,7 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
         return storeLocale(locale)
       },
       signOutHere,
+      reload,
     }),
   ).start()
   const spoken: Locale[] = []
@@ -41,6 +43,7 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
     actor,
     storeLocale,
     signOutHere,
+    reload,
     spoken,
     emitted,
     signIn: (account = 'idn_ann') => {
@@ -65,7 +68,8 @@ function frame(options: { readonly storeLocale?: (locale: Locale) => Stored } = 
     },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
-    is: (state: 'ready' | 'storing-locale' | 'failed') => actor.getSnapshot().matches(state),
+    is: (state: 'ready' | 'storing-locale' | 'failed' | 'crashed') =>
+      actor.getSnapshot().matches(state),
   }
 }
 
@@ -76,6 +80,9 @@ const NOT_STORED = {
 }
 
 const CLEARED = { type: 'clear', anchor: 'app-shell.notice-message' }
+
+const CRASHED = { type: 'show', anchor: 'app-shell.crash-message', codes: ['screen-crashed'] }
+const CRASH_CLEARED = { type: 'clear', anchor: 'app-shell.crash-message' }
 
 const sameAs = (event: unknown, expected: object): boolean =>
   JSON.stringify(event) === JSON.stringify(expected)
@@ -285,5 +292,58 @@ describe('shell machine', () => {
 
     expect(shell.signOutHere).toHaveBeenCalledOnce()
     expect(shell.emitted).toContainEqual({ type: 'navigate', to: '/sign-in' })
+  })
+
+  it('says a screen that failed to render, and takes it away when another screen opens', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+
+    expect(shell.is('crashed')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(CRASHED)
+    expect(shell.actor.getSnapshot().can({ type: 'app-shell.reload-button' })).toBe(true)
+    // The language select stays usable around the message.
+    expect(shell.canChoose()).toBe(true)
+
+    shell.actor.send({ type: 'platform.navigated' })
+
+    expect(shell.is('ready')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(CRASH_CLEARED)
+    expect(shell.actor.getSnapshot().can({ type: 'app-shell.reload-button' })).toBe(false)
+  })
+
+  it('renders the screen again in a language chosen after a crash', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.choose('es')
+
+    expect(shell.is('ready')).toBe(true)
+    expect(shell.spoken).toEqual(['es'])
+    expect(shell.emitted.some((event) => sameAs(event, CRASH_CLEARED))).toBe(true)
+  })
+
+  it('says a crash while a language is being stored, too', () => {
+    const shell = frame({ storeLocale: () => new ResultAsync(new Promise(() => {})) })
+
+    shell.signIn()
+    shell.actor.send({ type: 'platform.opened' })
+    shell.store('en')
+    shell.choose('es')
+    shell.actor.send({ type: 'platform.crashed' })
+
+    expect(shell.is('crashed')).toBe(true)
+  })
+
+  it('loads the page again from the crash message', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.actor.send({ type: 'app-shell.reload-button' })
+
+    expect(shell.reload).toHaveBeenCalledOnce()
   })
 })

@@ -43,6 +43,11 @@ export interface ShellViewProps {
       }[]
     | undefined
   readonly onDismissToast?: ((id: number) => void) | undefined
+  /** The code the crash message shows while the open screen failed to render; none otherwise. */
+  readonly crash?: 'screen-crashed' | undefined
+  /** Whether the frame's flow takes a reload now: the button is enabled while it does. */
+  readonly canReload?: boolean | undefined
+  readonly onReload?: (() => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -162,6 +167,23 @@ export function ShellView(props: ShellViewProps) {
         >
           {t('app.shell.sign-out-here')}
         </Button>
+      ) : null}
+      {props.status === 'ready' && props.crash ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm" data-testid="app-shell.crash-message" data-code={props.crash}>
+            {t('app.shell.crash.screen-crashed')}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            disabled={!props.canReload}
+            onClick={props.onReload}
+            data-testid="app-shell.reload-button"
+          >
+            {t('app.shell.reload')}
+          </Button>
+        </div>
       ) : null}
       {props.status === 'ready' ? props.children : null}
     </AppShell>

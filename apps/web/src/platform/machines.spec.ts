@@ -48,6 +48,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       }),
       storeLocale: () => okAsync(undefined),
       signOutHere: () => okAsync(undefined),
+      reload: () => {},
     }),
   device: () =>
     createDevicesMachine({

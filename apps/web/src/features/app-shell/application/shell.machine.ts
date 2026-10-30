@@ -29,6 +29,9 @@ export type ShellEvent =
   | { readonly type: 'platform.signed-out' }
   | { readonly type: 'platform.change-rejected' }
   | { readonly type: 'platform.changes-reloaded' }
+  | { readonly type: 'platform.crashed' }
+  | { readonly type: 'platform.navigated' }
+  | { readonly type: 'app-shell.reload-button' }
 
 /**
  * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
@@ -60,6 +63,8 @@ export interface ShellMachineDeps {
   readonly storeLocale: (locale: Locale) => ResultAsync<void, unknown>
   /** Signs the saved account out on this device, when its data did not open. */
   readonly signOutHere: () => ResultAsync<unknown, unknown>
+  /** Loads the page again from the server. */
+  readonly reload: () => void
 }
 
 /** A result that resolves once done, or rejects with its failure. */
@@ -85,6 +90,12 @@ const RELOADED = {
   type: 'show',
   params: { anchor: 'app-shell.notice-message', codes: ['changes-reloaded'] },
 } as const
+/** The open screen failed to render: the frame says so in its place, until it goes. */
+const CRASHED = {
+  type: 'show',
+  params: { anchor: 'app-shell.crash-message', codes: ['screen-crashed'] },
+} as const
+const CRASH_GONE = { type: 'clear', params: { anchor: 'app-shell.crash-message' } } as const
 
 /** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
@@ -105,6 +116,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
         settled(deps.storeLocale(input.locale)),
       ),
       'platform.sign-out': fromPromise<unknown>(() => settled(deps.signOutHere())),
+      // The page unloads as it loads again; the outcome is seen only if it did not.
+      'platform.reload': fromPromise<void>(async () => deps.reload()),
     },
     guards: {
       settingsHeld: () => deps.values().stored !== undefined,
@@ -155,6 +168,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.signed-out': { actions: CLEAR_NOTICE },
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
+          'platform.crashed': { target: 'crashed' },
         },
       },
       'storing-locale': {
@@ -163,6 +177,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.signed-out': { actions: CLEAR_NOTICE },
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
+          'platform.crashed': { target: 'crashed' },
         },
         invoke: {
           src: 'settings.updateLocale',
@@ -177,6 +192,25 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', actions: NOT_STORED },
           ],
         },
+      },
+      crashed: {
+        entry: CRASHED,
+        exit: CRASH_GONE,
+        on: {
+          'app-shell.reload-button': { target: 'reloading' },
+          'platform.navigated': { target: 'ready' },
+          'app-shell.locale-select': [
+            { target: 'storing-locale', guard: 'settingsHeld', actions: 'speakChoice' },
+            { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
+          ],
+          'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
+          'platform.signed-out': { actions: CLEAR_NOTICE },
+          'platform.change-rejected': { actions: REJECTED },
+          'platform.changes-reloaded': { actions: RELOADED },
+        },
+      },
+      reloading: {
+        invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
       },
       failed: {
         on: {

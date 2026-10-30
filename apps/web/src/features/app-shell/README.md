@@ -29,6 +29,19 @@ modules' routes.
   machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the
   data, a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved.
+- A screen that fails to render: the router puts `presentation/crash/crash-signal.tsx`
+  (`CrashSignal`, handed to `createAppRouter` as `crash` by the start) in the page's place; it
+  raises the frame's platform event `platform.crashed` and keeps the page's `reset` in the
+  frame (`renderAgain`). The frame's flow then shows `app-shell.crash-message` (`screen-crashed`)
+  with `app-shell.reload-button` in the screen's place, the navigation and the language select
+  still around it. Another screen opening (`platform.navigated`, sent when the router starts a
+  navigation) takes the message away; a language chosen renders the page again; the reload
+  button asks the leave guard first (a leaving control) and loads the page again
+  (`platform.reload`, `window.location.reload()`).
+- Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
+  in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
+  key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no
+  screen is open), held to every binding of the contract by `page-titles-contract.spec.ts`.
 - `presentation/shell/notice-texts.ts` and `toast-texts.ts`: the words of each code of
   `app-shell.notice-message` and of `app-shell.toast` (a toast's tone too: a derived code says a
   success), one literal key each; the start hands

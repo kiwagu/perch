@@ -21,6 +21,7 @@ export const LEAVE_POLICY: LeavePolicy = {
 
 export const LEAVING_CONTROLS: ReadonlySet<string> = new Set([
   'app-shell.locale-select',
+  'app-shell.reload-button',
   'app-shell.sign-out-here-button',
   'organisation.page.current-select',
   'user.profile.sign-out-button',

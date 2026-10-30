@@ -69,6 +69,11 @@ actions:
     result: that device signs out; the list is read again
     codes:
       - device-sign-out-failed
+  reload:
+    description: Loads the page again from the server.
+    params: {}
+    result: the page loads again; what this tab held and had not stored is gone
+    codes: []
   organisations.create:
     description: Creates an organisation.
     params:
@@ -137,6 +142,8 @@ events:
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
   change-rejected: The server refused a change, and this device undid it.
   changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
+  crashed: The open screen failed to render.
+  navigated: Another screen opened in the frame, by a link, Back, Forward or an address typed.
 toasts:
   organisations.create: organisation-created
   organisations.invite: invited
@@ -147,6 +154,7 @@ leaving:
   - platform.sign-out-everywhere
   - platform.organisations.select
   - settings.updateLocale
+  - platform.reload
 unsavedInput:
   question: app-shell.leave-dialog
   screen: question
@@ -168,6 +176,8 @@ reserved:
   - app-shell.leave-dialog
   - app-shell.toast
   - app-shell.confirmation
+  - app-shell.crash-message
+  - app-shell.reload-button
 status:
   anchor: app-shell.status
   states:

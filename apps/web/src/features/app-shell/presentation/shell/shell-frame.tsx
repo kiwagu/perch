@@ -23,10 +23,15 @@ export interface ShellLive {
   store: ((locale: Locale) => ResultAsync<void, unknown>) | undefined
   /** Signs the saved account out on this device, when its data did not open. */
   signOutHere: (() => ResultAsync<unknown, unknown>) | undefined
+  /** Renders the screen that failed again, kept by the crash put in its place; none before one. */
+  renderAgain: (() => void) | undefined
 }
 
 /** The frame's machine over what it reads, made at the start, before the services exist. */
-export function shellFrameMachine(live: ShellLive) {
+export function shellFrameMachine(
+  live: ShellLive,
+  reload: () => void = () => window.location.reload(),
+) {
   return createShellMachine({
     values: () => live,
     storeLocale: (locale) => {
@@ -41,6 +46,7 @@ export function shellFrameMachine(live: ShellLive) {
     },
     signOutHere: () =>
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
+    reload,
   })
 }
 
