@@ -31,5 +31,8 @@
   "user.profile.error.name-required": "Enter a name.",
   "user.profile.error.name-too-long": "Use at most 80 characters.",
   "user.profile.error.bio-too-long": "Use at most 2000 characters for the bio.",
-  "user.profile.error.failed": "The change was not saved. Try again."
+  "user.profile.error.failed": "The change was not saved. Try again.",
+  "user.settings.title": "Settings",
+  "user.settings.theme": "Theme",
+  "user.settings.locale": "Language"
 }

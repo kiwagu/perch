@@ -33,7 +33,9 @@ import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { type AppEvent, EVENTS } from '../platform/events.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
+import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
+import { SYNC_STATUS } from '../platform/sync-status.port'
 
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
@@ -43,6 +45,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys } from './storage'
+import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
 export type BootStep = 'restore-session' | 'open-db' | 'ready'
@@ -61,6 +64,8 @@ export interface AppRootOptions {
   readonly deviceLabel: string
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean
+  /** Hears the browser's network come or go (its `online` and `offline` events). */
+  readonly onOnlineChange: (listener: () => void) => () => void
   /** The gateway's organisation routes, called with the device's access token and id. */
   readonly organisationsApi: (deps: BearerDeps) => OrganisationsApi
   /** The gateway's device routes, called the same way. */
@@ -76,6 +81,8 @@ export interface AppRootOptions {
   readonly clock: Clock
   readonly storage: KeyValueStorage
   readonly visibility: VisibilitySource
+  /** Hears a newer build of the app the server serves, which the frame offers to load. */
+  readonly servedBuild: ServedBuildPort
   readonly logger: CommandLogger
   /** Logs the name of every event the bus carries: development builds only; off when left out. */
   readonly logEvents?: boolean
@@ -148,7 +155,10 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     storage: options.storage,
     visibility: options.visibility,
     onStep: step,
-    onSyncState: options.onSyncState,
+    onSyncState: (state) => {
+      options.onSyncState(state)
+      sync.syncState(state)
+    },
     onError: options.onError,
     publish: (event) => {
       void events.publish([event]).match(
@@ -157,6 +167,17 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
           options.logger.warn({ event: event.name, outcome: failure.code, causes: failure.causes }),
       )
     },
+  })
+  // The state of this device's sync, the same in every tab: the leading tab shares its part.
+  const sync = syncStatus({
+    storage: options.storage,
+    clock: options.clock,
+    online: options.online,
+    onOnlineChange: options.onOnlineChange,
+    signedIn: () => session.current() !== undefined,
+    unsent: () => session.space()?.unsent(),
+    protocolRefused: () => session.protocolRefused(),
+    canSync: options.locks !== undefined,
   })
   const commands = createCommandBus({
     writePath: session.writePath,
@@ -191,17 +212,21 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     )
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
+    .singleton(SERVED_BUILD, () => options.servedBuild)
+    .singleton(SYNC_STATUS, () => sync)
 
   step('restore-session')
 
   return session
     .restore()
-    .mapErr(
-      (error): BootFailure =>
-        savedIdentity(options.storage)
-          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
-          : { kind: 'open-failed', error },
-    )
+    .mapErr((error): BootFailure => {
+      // No frame reads the state of the sync of a start that failed.
+      sync.stop()
+
+      return savedIdentity(options.storage)
+        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
+        : { kind: 'open-failed', error }
+    })
     .map(() => {
       step('ready')
 
@@ -214,7 +239,11 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
         organisations,
         devices,
         space: () => session.space(),
-        close: () => session.close(),
+        close: () => {
+          sync.stop()
+
+          return session.close()
+        },
       }
     })
 }

@@ -1,4 +1,4 @@
-import { match, P } from 'ts-pattern'
+import { match } from 'ts-pattern'
 
 import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
@@ -16,6 +16,8 @@ export interface SessionChannelEvents {
   readonly refused: () => void
   /** The device was signed out from another device (4001). */
   readonly revoked: () => void
+  /** The gateway no longer takes the protocol of this build (4400): the channel ended for good. */
+  readonly protocolRefused: () => void
 }
 
 /**
@@ -46,9 +48,10 @@ export function sessionTransportContext(
       match(reason)
         .with('unauthorized', events.refused)
         .with('revoked', events.revoked)
-        // A sign-out this device asked for is heard by `signOut`, through the sync engine; a
-        // refused protocol stops the sync engine, which reports it, and changes nothing here.
-        .with(P.union('signed-out', 'protocol'), () => {})
+        // The sync engine stops and reports it; the app is told so that the page loads again.
+        .with('protocol', events.protocolRefused)
+        // A sign-out this device asked for is heard by `signOut`, through the sync engine.
+        .with('signed-out', () => {})
         .exhaustive(),
   }
 }

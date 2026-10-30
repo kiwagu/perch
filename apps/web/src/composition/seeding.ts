@@ -363,6 +363,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
     online: () => true,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
@@ -381,6 +382,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     clock: systemClock,
     storage: memoryStorage(),
     visibility: { current: () => 'visible', onChange: () => () => {} },
+    // A seed client shows no frame to offer a newer build in.
+    servedBuild: { watch: () => () => {} },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},

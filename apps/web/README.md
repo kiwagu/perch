@@ -11,9 +11,10 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. The app starts only once the page's localStorage kept a
-  value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
-  says so, instead of forgetting who signed in and the device's id. A saved identity whose
+  is opened while nobody is signed in. The app starts only once the page's localStorage and
+  the tab's sessionStorage each kept a value and gave it back (`siteStorage`): a browser that
+  blocks site data stops at a message that says so, instead of forgetting who signed in, the
+  device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
   (`SessionService.signOutUnopened()`): its keys are left to revoke and its databases deleted,
   so a database that will never open is no dead end. Signing up or in goes through the gateway
@@ -126,7 +127,9 @@ modeling stage.
   left to do, and an answer that comes once the asking session has ended (another account, or
   the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
-  protocol the gateway refuses stops the sync and keeps everything. One account per browser: a
+  protocol the gateway refuses (4400) stops the sync and keeps everything; the session publishes
+  it and keeps it until the page loads again (`protocolRefused()`), so that the frame offers to
+  load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); a sign-up or sign-in that finds another account saved is refused with
@@ -138,17 +141,36 @@ modeling stage.
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
-  `sync.change-rejected` and `sync.changes-reloaded`, and a development build logs every
-  event's name. `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  `sync.change-rejected`, `sync.changes-reloaded` and `sync.protocol-refused`, and a
+  development build logs every event's name. The root also provides `SERVED_BUILD`
+  (`served-build.ts`): the build the server serves, read from the UI manifest it serves
+  (`/ui-manifest/manifest.json`, never cached) when the frame starts watching, each time the tab
+  comes back to the foreground and every ten minutes while it is there, against the build this
+  tab runs (`virtual:perch-build`, below); a manifest the server does not serve, or a failed
+  read, says nothing. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
+  signed-in account, the same in every tab: the leading tab shares its channel, whether its
+  space holds unsent changes and a sync stopped for good as the record `perch.sync.leader` in
+  the browser's storage, written on each change of its channel and every two seconds while it
+  leads (it says synced only once a read of the outbox, asked in its current leading period and
+  not overtaken by a later one, found nothing waiting); every tab reads it with its own network
+  (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
+  away. `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for the app's events (`events.port.ts`:
-  subscribe, once, onAny), for organisations and for devices,
+  subscribe, once, onAny), for organisations, for devices, for the build the server serves
+  (`served-build.port.ts`) and for the state of the sync (`sync-status.port.ts`),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
-  app-wide catalogs. `ui-contract.ts` is
+  app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
+  kept in this browser under `perch.theme`, shown as the class `dark` on `<html>` and following
+  the device's setting under the system's; the start makes it before the first frame and gives it
+  to views through `ThemeContext`, read with `useDeviceTheme()`), and this device's own writes of
+  the account's language (`language-writes.ts`: the settings screen's store tells the frame of
+  each write before it starts and when it failed, `trackedStore`, so a late echo of an earlier
+  write is not taken for another device's language; the start provides it over the frame's record). `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
@@ -224,7 +246,10 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
   rewrites `dist-dev/` (source maps, no minifying) on every change, then the UI manifest into
   `dist-dev/ui-manifest/`
   (`ui-contract manifest`; a change of a file under `contract/` or `tests/e2e/scenarios/`
-  rebuilds too). There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  rebuilds too). Every build carries the build it is, `import build from 'virtual:perch-build'`
+  (`vite.config.ts`): the root package's version and the commit checked out, the product the
+  manifest names; a commit or a new version rebuilds, so the bundle and the manifest stay one
+  build. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
   reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the

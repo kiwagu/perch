@@ -60,6 +60,7 @@ async function boot(
     gatewayAuth: fakeGatewayAuth(),
     deviceLabel: 'Chrome on Linux',
     online: () => false,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) =>
       organisationsApi('/backend', {
         ...deps,
@@ -82,6 +83,7 @@ async function boot(
     clock,
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
+    servedBuild: { watch: () => () => {} },
     logger: { info: () => {}, warn: () => {} },
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),

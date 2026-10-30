@@ -5,9 +5,12 @@ import { type Locale, SUPPORTED_LOCALES, useLocale, useT } from '@workspace/i18n
 import { AppShell } from '@workspace/ui/components/platform/app-shell'
 import { navItemVariants } from '@workspace/ui/components/platform/nav-item'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
+import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
 
+import type { SyncStatus } from '../../../../platform/sync-status.port'
+import { THEMES, type Theme } from '../../../../platform/theme'
 import type { ToastTone } from '../../../../platform/toasts'
 
 export interface ShellLinkProps {
@@ -26,6 +29,11 @@ export interface ShellViewProps {
   /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
   readonly canChooseLocale: boolean
   readonly onLocaleChange: (locale: Locale) => void
+  /** The theme this device shows. */
+  readonly theme: Theme
+  /** Whether the frame's flow takes a theme choice now: the select is enabled while it does. */
+  readonly canChooseTheme: boolean
+  readonly onThemeChange: (theme: Theme) => void
   readonly link?: ComponentType<ShellLinkProps>
   /** Signs the saved account out on this device when its data could not be opened; offered while `failed`. */
   readonly onSignOutHere?: (() => void) | undefined
@@ -43,6 +51,18 @@ export interface ShellViewProps {
       }[]
     | undefined
   readonly onDismissToast?: ((id: number) => void) | undefined
+  /** The code the crash message shows while the open screen failed to render; none otherwise. */
+  readonly crash?: 'screen-crashed' | undefined
+  /** Whether the frame's flow takes a reload now: the button is enabled while it does. */
+  readonly canReload?: boolean | undefined
+  readonly onReload?: (() => void) | undefined
+  /** The code the update message shows once the page should load again; none before. */
+  readonly update?: 'new-version' | 'protocol-outdated' | undefined
+  /** Whether the frame's flow takes the update's reload now: the button is enabled while it does. */
+  readonly canUpdate?: boolean | undefined
+  readonly onUpdate?: (() => void) | undefined
+  /** The code the state of the sync shows for a signed-in account; none for a guest. */
+  readonly sync?: SyncStatus | undefined
   readonly children?: ReactNode
 }
 
@@ -65,6 +85,11 @@ export function ShellView(props: ShellViewProps) {
           label: t('app.shell.nav.devices'),
           testId: 'app-shell.nav.devices-link',
         },
+        {
+          to: '/settings',
+          label: t('app.shell.nav.settings'),
+          testId: 'app-shell.nav.settings-link',
+        },
       ]
     : [
         {
@@ -73,6 +98,15 @@ export function ShellView(props: ShellViewProps) {
           testId: 'app-shell.nav.sign-in-link',
         },
       ]
+  const themes = THEMES.map((theme) => ({
+    value: theme,
+    label:
+      theme === 'light'
+        ? t('app.shell.theme.light')
+        : theme === 'dark'
+          ? t('app.shell.theme.dark')
+          : t('app.shell.theme.system'),
+  }))
   const locales = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,
     label: locale === 'en' ? t('app.shell.locale.en') : t('app.shell.locale.es'),
@@ -100,15 +134,48 @@ export function ShellView(props: ShellViewProps) {
       navigationLabel={t('app.shell.navigation')}
       navigationTestId="app-shell.nav"
       actions={
-        <OptionSelect
-          label={t('app.shell.locale')}
-          value={locale}
-          options={locales}
-          onChange={props.onLocaleChange}
-          disabled={!props.canChooseLocale}
-          testId="app-shell.locale-select"
-          holdsInput={false}
-        />
+        <>
+          {/* A signed-in account sees the state of this device's sync; on a phone it takes two
+              short lines at most, so the header never scrolls sideways. */}
+          {props.status === 'ready' && props.sync ? (
+            <p
+              className="max-w-24 text-right text-xs leading-tight text-muted-foreground sm:max-w-none"
+              role="status"
+              data-testid="app-shell.sync-message"
+              data-code={props.sync}
+            >
+              {match(props.sync)
+                .with('synced', () => t('app.shell.sync.synced'))
+                .with('sending', () => t('app.shell.sync.sending'))
+                .with('connecting', () => t('app.shell.sync.connecting'))
+                .with('offline', () => t('app.shell.sync.offline'))
+                .with('sync-stopped', () => t('app.shell.sync.sync-stopped'))
+                .exhaustive()}
+            </p>
+          ) : null}
+          {/* Anyone chooses the theme of this device here, as on the settings screen. */}
+          <OptionSelect
+            label={t('app.shell.theme')}
+            value={props.theme}
+            options={themes}
+            onChange={props.onThemeChange}
+            disabled={!props.canChooseTheme}
+            testId="app-shell.theme-select"
+            holdsInput={false}
+          />
+          {/* A guest chooses the language here; a signed-in account does on its settings screen. */}
+          {props.signedIn ? null : (
+            <OptionSelect
+              label={t('app.shell.locale')}
+              value={locale}
+              options={locales}
+              onChange={props.onLocaleChange}
+              disabled={!props.canChooseLocale}
+              testId="app-shell.locale-select"
+              holdsInput={false}
+            />
+          )}
+        </>
       }
       navigation={items.map((item) => (
         <Link
@@ -126,6 +193,27 @@ export function ShellView(props: ShellViewProps) {
       {/* The notice's line is held, as tall as the longest notice (three lines on a phone, two
           wider up; `texts-contract.spec.ts` keeps every notice within it), so the page below does
           not move when a notice comes, changes or goes. */}
+      {props.status === 'ready' && props.update ? (
+        <Alert variant={props.update === 'protocol-outdated' ? 'destructive' : 'default'}>
+          <AlertDescription data-testid="app-shell.update-message" data-code={props.update}>
+            {match(props.update)
+              .with('new-version', () => t('app.shell.update.new-version'))
+              .with('protocol-outdated', () => t('app.shell.update.protocol-outdated'))
+              .exhaustive()}
+          </AlertDescription>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 justify-self-start"
+            disabled={!props.canUpdate}
+            onClick={props.onUpdate}
+            data-testid="app-shell.update-button"
+          >
+            {t('app.shell.reload')}
+          </Button>
+        </Alert>
+      ) : null}
       <div data-slot="notice" className="min-h-15 sm:min-h-10">
         {props.notice ? (
           <p
@@ -162,6 +250,23 @@ export function ShellView(props: ShellViewProps) {
         >
           {t('app.shell.sign-out-here')}
         </Button>
+      ) : null}
+      {props.status === 'ready' && props.crash ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm" data-testid="app-shell.crash-message" data-code={props.crash}>
+            {t('app.shell.crash.screen-crashed')}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            disabled={!props.canReload}
+            onClick={props.onReload}
+            data-testid="app-shell.reload-button"
+          >
+            {t('app.shell.reload')}
+          </Button>
+        </div>
       ) : null}
       {props.status === 'ready' ? props.children : null}
     </AppShell>
