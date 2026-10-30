@@ -8,13 +8,10 @@ import { withoutSourceMaps } from './wasm-source-maps'
 
 const HEADER = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]
 
-/** A custom section named `name` holding `data`. */
+/** A custom section named `name` holding `data`: the name's length counts its UTF-8 bytes. */
 function custom(name: string, data: string): number[] {
-  const contents = [
-    name.length,
-    ...new TextEncoder().encode(name),
-    ...new TextEncoder().encode(data),
-  ]
+  const encoded = new TextEncoder().encode(name)
+  const contents = [encoded.length, ...encoded, ...new TextEncoder().encode(data)]
 
   return [0x00, contents.length, ...contents]
 }
@@ -63,8 +60,11 @@ describe('withoutSourceMaps', () => {
   })
 
   it('keeps a section whose name only looks like the source map, a byte-order mark before it', () => {
+    // A decoder that drops a leading byte-order mark would read this name as the source map's.
     const lookalike = custom('\uFEFFsourceMappingURL', 'https://cdn.example.test/kept.map')
     const module = new Uint8Array([...HEADER, ...lookalike])
+
+    expect(lookalike[2]).toBe(19)
 
     expect([...withoutSourceMaps(module)]).toEqual([...HEADER, ...lookalike])
   })
