@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the language choice, and a way out of a device whose data will not open."
+description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the language choice, a way out of a device whose data will not open, and a message with a reload in the place of a screen that failed to render."
 frame: true
 flag: null
 bindings: []
@@ -55,6 +55,14 @@ anchors:
     kind: button
     description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
+  app-shell.crash-message:
+    kind: message
+    description: Shown in the place of the open screen when it failed to render, the navigation and the language select still around it; another screen, a language chosen or a reload takes it away.
+    codes: [ screen-crashed ]
+  app-shell.reload-button:
+    kind: button
+    description: Loads the page again, shown with app-shell.crash-message.
+    binding: { action: platform.reload }
   app-shell.confirmation:
     kind: confirmation
     description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out. It carries data-code naming the action; its confirm-button lets the action run, its cancel-button stays with nothing changed. One for the whole app: the controls that ask and its codes are derived."
@@ -112,6 +120,9 @@ flow:
           description: The notice says the server refused the undo too, and the later unsent changes were undone.
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
+        platform.crashed:
+          target: crashed
+          description: The open screen failed to render.
     storing-locale:
       description: The settings store the chosen language; the language select takes no other choice meanwhile.
       on:
@@ -130,6 +141,9 @@ flow:
           description: The notice says the server refused the undo too, and the later unsent changes were undone.
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
+        platform.crashed:
+          target: crashed
+          description: The open screen failed to render; the chosen language stays on this device, and how its store ends is not said.
       invoke:
         src: settings.updateLocale
         input: { locale: app-shell.locale-select }
@@ -145,6 +159,46 @@ flow:
             description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
             actions:
               - show: { app-shell.notice-message: [ locale-not-stored ] }
+    crashed:
+      description: The open screen failed to render; the frame stays, with the navigation and the language select.
+      entry:
+        - show: { app-shell.crash-message: [ screen-crashed ] }
+      exit:
+        - clear: app-shell.crash-message
+      on:
+        app-shell.reload-button: reloading
+        platform.navigated:
+          target: ready
+          description: Another screen opens in the place of the one that failed, by a link, Back, Forward or an address typed.
+        app-shell.locale-select:
+          - target: storing-locale
+            guard: settingsHeld
+            description: The screen renders again in the chosen language while the settings store it.
+          - target: ready
+            guard: signedOut
+            description: The screen renders again in the chosen language, with no settings to store it.
+        model.settings.locale:
+          guard: storedElsewhere
+          description: Another device stored a language; the app speaks it at once.
+        platform.signed-out:
+          description: The notice goes with the account.
+          actions:
+            - clear: app-shell.notice-message
+        platform.change-rejected:
+          description: The notice says the server refused a change and this device undid it.
+          actions:
+            - show: { app-shell.notice-message: [ change-rejected ] }
+        platform.changes-reloaded:
+          description: The notice says the server refused the undo too, and the later unsent changes were undone.
+          actions:
+            - show: { app-shell.notice-message: [ changes-reloaded ] }
+    reloading:
+      description: The page loads again from the server.
+      invoke:
+        src: platform.reload
+        onDone:
+          target: crashed
+          description: Only while the page has not loaded again; the message stays.
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       on:

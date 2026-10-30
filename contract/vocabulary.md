@@ -180,6 +180,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
 | `unsaved-input` | `app-shell.leave-dialog` | the dialog asks whether to leave and lose what was typed but not saved |
+| `screen-crashed` | `app-shell.crash-message` | the open screen failed to render; another screen, a language chosen or a reload may bring it back |
 
 ## Choice values
 
@@ -208,6 +209,7 @@ screen name of its own.
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
+| `not-found` | what an address no other route takes opens (`/$`) |
 
 ## Roles
 
@@ -237,4 +239,6 @@ included.
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
 | `app-shell.confirmation` | the frame's question before a destructive action, which carries `data-code` and renders `app-shell.confirmation.confirm-button` (go on) and `app-shell.confirmation.cancel-button` (stay) |
+| `app-shell.crash-message` | the message in the place of a screen that failed to render, which carries `data-code` and renders no derived anchor |
+| `app-shell.reload-button` | the button that loads the page again, shown with `app-shell.crash-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
