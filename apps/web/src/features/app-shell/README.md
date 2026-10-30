@@ -13,7 +13,7 @@ with it (the bus's `sync.change-rejected` and `sync.changes-reloaded` reach the 
 its platform events through `application/shell.events.ts`); a notice goes when the account it
 was raised for signs out, here or from another device. It offers to load the page again when
 the server serves a newer build than the tab runs, or no longer takes this build's sync
-protocol. The folder has no
+protocol, and shows a signed-in account the state of this device's sync. The folder has no
 module manifest: the composition root mounts the shell around the router built from the
 modules' routes.
 
@@ -57,6 +57,11 @@ modules' routes.
   `sessionStorage` under `perch.update.reloaded`), so a server still serving an update after the
   reload, or alternating two, starts no loop.
   Only the tab that leads the sync hears a refused protocol; the others see the newer build.
+- The state of the sync: the shell container reads `SYNC_STATUS` (`useSyncExternalStore`) and
+  sends its value as the frame's platform event (`platform.synced`, `platform.sending`,
+  `platform.connecting`, `platform.offline`, `platform.sync-stopped`) while an account is signed
+  in; the flow shows `app-shell.sync-message` with that code in the header, in `ready` and around
+  a crash, and clears it when the account signs out. On a phone it takes two short lines at most.
 - Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
   key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no

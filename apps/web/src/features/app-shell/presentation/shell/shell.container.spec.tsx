@@ -522,4 +522,30 @@ describe('ShellContainer', () => {
       showTab('visible')
     }
   })
+
+  it('says the state of the sync the platform gives, and takes it away with the account', async () => {
+    const { services, frame } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+
+    act(() => services.sync('connecting'))
+
+    expect((await screen.findByTestId('app-shell.sync-message')).getAttribute('data-code')).toBe(
+      'connecting',
+    )
+
+    act(() => services.sync('synced'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe('synced'),
+    )
+
+    // Signed out, the session gives no state any more and the frame's flow clears it.
+    act(() => {
+      services.sync(undefined)
+      frame.actor.send({ type: 'platform.signed-out' })
+    })
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.sync-message')).toBeNull())
+  })
 })

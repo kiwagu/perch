@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Toast, Toaster } from '@workspace/ui/components/ui/toast'
 
+import type { SyncStatus } from '../../../../platform/sync-status.port'
 import { THEMES, type Theme } from '../../../../platform/theme'
 import type { ToastTone } from '../../../../platform/toasts'
 
@@ -60,6 +61,8 @@ export interface ShellViewProps {
   /** Whether the frame's flow takes the update's reload now: the button is enabled while it does. */
   readonly canUpdate?: boolean | undefined
   readonly onUpdate?: (() => void) | undefined
+  /** The code the state of the sync shows for a signed-in account; none for a guest. */
+  readonly sync?: SyncStatus | undefined
   readonly children?: ReactNode
 }
 
@@ -132,6 +135,24 @@ export function ShellView(props: ShellViewProps) {
       navigationTestId="app-shell.nav"
       actions={
         <>
+          {/* A signed-in account sees the state of this device's sync; on a phone it takes two
+              short lines at most, so the header never scrolls sideways. */}
+          {props.status === 'ready' && props.sync ? (
+            <p
+              className="max-w-24 text-right text-xs leading-tight text-muted-foreground sm:max-w-none"
+              role="status"
+              data-testid="app-shell.sync-message"
+              data-code={props.sync}
+            >
+              {match(props.sync)
+                .with('synced', () => t('app.shell.sync.synced'))
+                .with('sending', () => t('app.shell.sync.sending'))
+                .with('connecting', () => t('app.shell.sync.connecting'))
+                .with('offline', () => t('app.shell.sync.offline'))
+                .with('sync-stopped', () => t('app.shell.sync.sync-stopped'))
+                .exhaustive()}
+            </p>
+          ) : null}
           {/* Anyone chooses the theme of this device here, as on the settings screen. */}
           <OptionSelect
             label={t('app.shell.theme')}
