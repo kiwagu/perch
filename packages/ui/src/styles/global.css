@@ -138,4 +138,12 @@
   html {
     @apply font-sans;
   }
+  /* The class Base UI puts on a list that hides its native scrollbar. The kit's components inject
+     no inline <style> for it (a strict style policy refuses one), so the rule lives here. */
+  .base-ui-disable-scrollbar {
+    scrollbar-width: none;
+  }
+  .base-ui-disable-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

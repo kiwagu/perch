@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 5 screens, 67 anchors and 30 codes.
+The contract declares 5 screens, 70 anchors and 40 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 35/36, ignored 2.
 
 ## Model
 
@@ -58,22 +58,24 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4
 
 | Activity | Scenarios | Transitions | Walked |
 | --- | ---: | ---: | ---: |
-| session | 4 | 8 | 4 |
+| session | 4 | 8 | 5 |
 
 ## Controls
 
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
-| app-shell | 3 | 3 | 0 | 100% |
+| app-shell | 5 | 5 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
 | user | 11 | 11 | 0 | 100% |
-| ui kit | 2 | 2 | 2 | 100% |
-| all | 33 | 33 | 2 | 100% |
+| ui kit | 3 | 2 | 2 | 67% |
+| all | 36 | 35 | 2 | 97% |
 
 ### Unmarked
 
-None.
+```text
+packages/ui/src/components/ui/toast.tsx:81: button
+```
 
 ### Ignored
 
@@ -86,10 +88,10 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 15 |
+| app-shell | 12 | 24 |
 | device | 10 | 2 |
-| user.profile | 10 | 16 |
-| organisation | 30 | 4 |
+| user.profile | 10 | 19 |
+| organisation | 30 | 10 |
 | user.sign-in | 8 | 10 |
 
 <!-- coverage:end -->
