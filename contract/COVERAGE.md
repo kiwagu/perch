@@ -14,7 +14,7 @@ block below from the code and the contract; the text around it is written by han
 
 The contract declares 7 screens, 79 anchors and 41 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 38/39, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 40/41, ignored 2.
 
 ## Model
 
@@ -68,9 +68,9 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
-| user | 11 | 11 | 0 | 100% |
+| user | 13 | 13 | 0 | 100% |
 | ui kit | 3 | 2 | 2 | 67% |
-| all | 39 | 38 | 2 | 97% |
+| all | 41 | 40 | 2 | 98% |
 
 ### Unmarked
 

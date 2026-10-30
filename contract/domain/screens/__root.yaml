@@ -48,12 +48,13 @@ anchors:
     roles: [ guest ]
   app-shell.locale-select:
     kind: select
-    description: "The language of the app, the one the account's settings hold: a choice applies at once and is stored there, and a language another device stores applies here too."
+    description: "The language of the app for a guest, the one a new account starts with: a choice applies at once; a signed-in account chooses its language on its settings screen, and a language another device stores applies here too."
     binding:
       - model: settings.locale
       - action: settings.updateLocale
         params:
           locale: app-shell.locale-select
+    roles: [ guest ]
     dataValue: true
     derived: [ option ]
   app-shell.sign-out-here-button:
@@ -86,10 +87,8 @@ flow:
   initial: opening
   meta:
     guards:
-      settingsHeld: the account's settings are on this device
       signedOut: no account is signed in on this device
       storedElsewhere: the stored language is one this device neither stored nor has seen yet
-      accountLeft: the account the store was for has signed out since it began
   states:
     opening:
       description: The local data is being opened; no screen is rendered.
@@ -104,12 +103,9 @@ flow:
       description: The frame with the open screen.
       on:
         app-shell.locale-select:
-          - target: storing-locale
-            guard: settingsHeld
-            description: The app speaks the chosen language at once; before the account's settings arrive on this device, the select takes no choice.
           - target: ready
             guard: signedOut
-            description: No account is signed in, so the app speaks the chosen language with no settings to store it.
+            description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
@@ -128,42 +124,6 @@ flow:
         platform.crashed:
           target: crashed
           description: The open screen failed to render.
-    storing-locale:
-      description: The settings store the chosen language; the language select takes no other choice meanwhile.
-      on:
-        model.settings.locale:
-          guard: storedElsewhere
-          description: Another device stored a language; the app speaks it at once.
-        platform.signed-out:
-          description: The notice goes with the account; the store runs on.
-          actions:
-            - clear: app-shell.notice-message
-        platform.change-rejected:
-          description: The notice says the server refused a change and this device undid it.
-          actions:
-            - show: { app-shell.notice-message: [ change-rejected ] }
-        platform.changes-reloaded:
-          description: The notice says the server refused the undo too, and the later unsent changes were undone.
-          actions:
-            - show: { app-shell.notice-message: [ changes-reloaded ] }
-        platform.crashed:
-          target: crashed
-          description: The open screen failed to render; the chosen language stays on this device, and how its store ends is not said.
-      invoke:
-        src: settings.updateLocale
-        input: { locale: app-shell.locale-select }
-        toast: false
-        onDone:
-          target: ready
-          description: The settings hold the chosen language.
-        onError:
-          - target: ready
-            guard: accountLeft
-            description: The account signed out meanwhile; its notice went with it, and nothing is shown.
-          - target: ready
-            description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
-            actions:
-              - show: { app-shell.notice-message: [ locale-not-stored ] }
     crashed:
       description: The open screen failed to render; the frame stays, with the navigation and the language select.
       entry:
@@ -176,12 +136,9 @@ flow:
           target: ready
           description: Another screen opens in the place of the one that failed, by a link, Back, Forward or an address typed.
         app-shell.locale-select:
-          - target: storing-locale
-            guard: settingsHeld
-            description: The screen renders again in the chosen language while the settings store it.
           - target: ready
             guard: signedOut
-            description: The screen renders again in the chosen language, with no settings to store it.
+            description: The screen renders again in the guest's chosen language, with no settings to store it.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
