@@ -11,10 +11,7 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. `zod-without-eval.ts`, the start's first import, turns
-  off the parser Zod compiles from a string, so the front's Content-Security-Policy, which
-  allows no `'unsafe-eval'`, sees no probe for it; it must stay before any module that defines
-  a schema. The app starts only once the page's localStorage kept a
+  is opened while nobody is signed in. The app starts only once the page's localStorage kept a
   value and gave it back (`siteStorage`): a browser that blocks site data stops at a message that
   says so, instead of forgetting who signed in and the device's id. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device

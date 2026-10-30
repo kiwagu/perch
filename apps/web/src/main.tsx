@@ -1,5 +1,3 @@
-// First, before any module defines a schema: Zod never evaluates a string as code here.
-import './composition/zod-without-eval'
 import '@workspace/ui/styles/global.css'
 
 import { Outlet, RouterProvider } from '@tanstack/react-router'
