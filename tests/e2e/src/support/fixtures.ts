@@ -131,16 +131,17 @@ function frontOf(baseURL: string | undefined): string {
 }
 
 /** Fails the test with every problem a browser reported against the front's security policy. */
-async function expectSecure(watch: SecurityWatch): Promise<void> {
+function expectSecure(problems: readonly string[]): void {
   expect(
-    await watch.problems(),
+    problems,
     'the front sends its security headers and no page or worker breaks its policy',
   ).toEqual([])
 }
 
 /**
- * A browser context of the test's own, opened on first use; `close` closes it if it opened,
- * then fails the test if it reported a problem against the front's security policy.
+ * A browser context of the test's own, opened on first use and watched by the security check
+ * from before its first page; `close` closes it if it opened, then fails the test with the
+ * problems it reported until then.
  */
 function ownBrowser(
   browser: Browser,
@@ -153,7 +154,7 @@ function ownBrowser(
     open: async () => {
       opened ??= browser.newContext(options).then(async (context) => {
         browsers.add(context)
-        const security = watchSecurity(context, front)
+        const security = await watchSecurity(context, front)
 
         return { page: await context.newPage(), security }
       })
@@ -164,10 +165,11 @@ function ownBrowser(
       if (opened) {
         const { page, security } = await opened
         const context = page.context()
+        const problems = security.problems()
 
         browsers.delete(context)
         await context.close()
-        await expectSecure(security)
+        expectSecure(problems)
       }
     },
   }
@@ -175,12 +177,12 @@ function ownBrowser(
 
 const extended = base.extend<Fixtures>({
   page: async ({ page, baseURL }, use) => {
-    const security = watchSecurity(page.context(), frontOf(baseURL))
+    const security = await watchSecurity(page.context(), frontOf(baseURL))
 
     browsers.add(page.context())
     await use(page)
     browsers.clear()
-    await expectSecure(security)
+    expectSecure(security.problems())
   },
   signedIn: async ({ page }, use) => {
     await use(await signUp(page))

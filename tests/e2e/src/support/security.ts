@@ -1,4 +1,4 @@
-import type { BrowserContext, ConsoleMessage, Page, Response } from '@playwright/test'
+import type { BrowserContext, ConsoleMessage, Response, Route } from '@playwright/test'
 
 /**
  * The security headers the front sends with every response, exactly as the stands' Caddyfile
@@ -15,71 +15,106 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'x-content-type-options': 'nosniff',
 }
 
-/** How the browser words a violation of the policy, enforced or report-only, in a page or a worker. */
+/** How a violation of the policy reads on the console, the browser's own words or the listener's. */
 const VIOLATION = /Content Security Policy/i
 
 /** The responses whose headers set what a page or a worker may do: documents and scripts. */
 const POLICY_CARRIERS = new Set(['document', 'script'])
 
+/** The search parameter that marks a worker's script, with the kind of the worker as its value. */
+const WORKER_MARK = 'e2e-csp-worker'
+
+/** The test's own module, on the front's origin, that a module worker imports before its code. */
+const LISTENER_PATH = '/__e2e/csp-listener.js'
+
+/**
+ * Says each violation a page or a worker meets on its console. The browser puts some of them on
+ * the console by itself, but not all (a refused WASM compilation is only an exception and this
+ * event), and a worker's never reach the test's console: every one goes through this event.
+ */
+const LISTENER =
+  "self.addEventListener('securitypolicyviolation', (event) => console.error('Content Security Policy violation in ' + (typeof document === 'undefined' ? 'a worker' : 'a page') + ': ' + event.effectiveDirective + ' refused ' + (event.blockedURI || 'inline') + ' at ' + event.sourceFile + ':' + event.lineNumber))"
+
+/**
+ * Runs in every page before its own scripts: the listener, and a mark on the script of each
+ * worker the page starts, so the route below can put the listener before the worker's code.
+ */
+const IN_EVERY_PAGE = `${LISTENER};
+(() => {
+  const Native = self.Worker
+  self.Worker = class extends Native {
+    constructor(url, options) {
+      const marked = new URL(url, location.href)
+      marked.searchParams.set('${WORKER_MARK}', options?.type === 'module' ? 'module' : 'classic')
+      super(marked, options)
+    }
+  }
+})()`
+
 /** What a browser context reported against the front's security policy while a test ran. */
 export interface SecurityWatch {
-  /** Waits for the header checks under way, then lists the problems, each once. */
-  problems(): Promise<readonly string[]>
+  /** The problems so far, each once. */
+  problems(): readonly string[]
 }
 
 /**
- * Watches one browser context for the rest of the test: every CSP violation its pages and their
- * workers report on the console, and every document or script of the front that lacks one of
- * `SECURITY_HEADERS`.
+ * Watches one browser context for the rest of the test, before it opens a page: every CSP
+ * violation its pages and their workers meet, and every document or script of the front that
+ * lacks one of `SECURITY_HEADERS`.
  */
-export function watchSecurity(context: BrowserContext, front: string): SecurityWatch {
+export async function watchSecurity(
+  context: BrowserContext,
+  front: string,
+): Promise<SecurityWatch> {
   const found = new Set<string>()
-  const checks: Promise<void>[] = []
 
-  const onConsole = (message: ConsoleMessage): void => {
+  context.on('console', (message: ConsoleMessage) => {
     if (VIOLATION.test(message.text())) {
       found.add(`CSP violation: ${message.text()}`)
     }
-  }
-  const onPage = (page: Page): void => {
-    page.on('worker', (worker) => worker.on('console', onConsole))
-  }
-  const onResponse = (response: Response): void => {
+  })
+  context.on('response', (response: Response) => {
     if (
-      response.url().startsWith(front) &&
-      response.ok() &&
+      new URL(response.url()).origin === front &&
       POLICY_CARRIERS.has(response.request().resourceType())
     ) {
-      checks.push(checkHeaders(response, found))
+      checkHeaders(response, found)
     }
-  }
+  })
+  await context.addInitScript(IN_EVERY_PAGE)
+  await context.route(
+    (url) => url.origin === front && url.searchParams.has(WORKER_MARK),
+    listenFirst,
+  )
+  await context.route(`${front}${LISTENER_PATH}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/javascript',
+      headers: { ...SECURITY_HEADERS },
+      body: LISTENER,
+    }),
+  )
 
-  context.on('console', onConsole)
-  context.on('page', onPage)
-  context.on('response', onResponse)
-  for (const page of context.pages()) {
-    onPage(page)
-  }
-
-  return {
-    problems: async () => {
-      await Promise.all(checks)
-
-      return [...found]
-    },
-  }
+  return { problems: () => [...found] }
 }
 
-async function checkHeaders(response: Response, found: Set<string>): Promise<void> {
-  const headers = await response.allHeaders().catch(() => undefined)
+/** Serves a worker's script as the front sends it, with the listener first. */
+async function listenFirst(route: Route): Promise<void> {
+  const kind = new URL(route.request().url()).searchParams.get(WORKER_MARK)
+  // A module worker evaluates its imports before its own code: the listener is imported first.
+  const first = kind === 'module' ? `import '${LISTENER_PATH}';\n` : `${LISTENER};\n`
+  const response = await route.fetch()
 
-  // A page closed while the response was read: its headers are gone with it.
-  if (headers === undefined) {
-    return
-  }
+  await route.fulfill({ response, body: first + (await response.text()) })
+}
+
+function checkHeaders(response: Response, found: Set<string>): void {
+  const headers = response.headers()
+  const where = `${new URL(response.url()).pathname} (${response.status()})`
+
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     if (headers[name] !== value) {
-      found.add(`${new URL(response.url()).pathname}: ${name} is ${headers[name] ?? 'missing'}`)
+      found.add(`${where}: ${name} is ${headers[name] ?? 'missing'}`)
     }
   }
 }
