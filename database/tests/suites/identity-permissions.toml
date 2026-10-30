@@ -124,3 +124,33 @@ equals = "bob@example.test"
 [[cases.assertions]]
 path = "2"
 exists = false
+
+[[cases]]
+name = "alice cannot clear sessions_revoked_at"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE identity SET sessions_revoked_at = NONE RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "an email is kept in lower case, however it was written"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE identity SET email = 'Carol@Example.Test', password = 'x' RETURN VALUE email;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "carol@example.test"
+
+[[cases]]
+name = "an email held already, written in other case, is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE identity SET email = 'ALICE@Example.test', password = 'x';"
+allow = false
+error_contains = "identity_email"

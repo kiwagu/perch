@@ -1,0 +1,76 @@
+name = "membership-permissions"
+tags = ["permissions", "membership"]
+
+# An identity reads only its own memberships and writes none; the tenant table is closed to
+# every record user. Root seeds the rows as the gateway would.
+
+[[cases]]
+name = "root seeds a tenant and memberships for alice and bob"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE tenant:acme SET key = 'acme', name = 'Acme', database = 't_acme', status = 'ready', created_by = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]; CREATE membership:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], tenant = tenant:acme, role = 'admin'; CREATE membership:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], tenant = tenant:acme, role = 'member';"
+allow = true
+
+[[cases]]
+name = "alice sees only her own membership"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE role FROM membership;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "admin"
+
+[[cases.assertions]]
+path = "1"
+exists = false
+
+[[cases]]
+name = "alice cannot read the tenant table"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE key FROM tenant;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot make herself admin of bob's membership nor create one"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE membership:bob SET role = 'admin' RETURN AFTER; CREATE membership:extra SET identity = $auth.id, tenant = tenant:acme, role = 'admin';"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a tenant key outside the pattern is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE tenant:bad SET key = 'Acme-Corp', name = 'Bad', database = 't_bad', status = 'ready', created_by = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0];"
+allow = false
+error_contains = "string::matches"
+
+[[cases]]
+name = "the seeded rows are unchanged"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE role FROM membership ORDER BY role;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "admin"
+
+[[cases.assertions]]
+path = "1"
+equals = "member"
+
+[[cases.assertions]]
+path = "2"
+exists = false

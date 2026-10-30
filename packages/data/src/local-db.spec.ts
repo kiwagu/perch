@@ -2,20 +2,21 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { ok } from 'neverthrow'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { createAuth } from './auth'
 import { onChange } from './changes'
 import { runCommand } from './commands'
 import { nodeEngines } from './engines/node'
-import { openLocalDb } from './local-db'
+import { deleteLocalDb, openLocalDb } from './local-db'
 import { ShapeRunner } from './shape-runner'
 import { readSchema } from './testing'
 import type { Command, LocalDb, Shape } from './types'
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-const schema = read('../../../database/schema/identity.surql')
+const schema = read('../../../database/schema/directory/identity.surql')
 
 const createIdentity: Command<{ email: string }> = {
   id: 'fixture.create-identity',
@@ -156,18 +157,56 @@ describe('destroying a database', () => {
     await memory.close()
     await expect(memory.destroy()).resolves.toBeUndefined()
   })
+
+  it('deletes the IndexedDB database of an address that is not open, by its name', async () => {
+    const deleted: string[] = []
+
+    vi.stubGlobal('indexedDB', {
+      deleteDatabase: (name: string) => {
+        const request = {
+          onsuccess: null as (() => void) | null,
+          onerror: null as (() => void) | null,
+          error: null,
+        }
+
+        deleted.push(name)
+        queueMicrotask(() => request.onsuccess?.())
+
+        return request
+      },
+    })
+
+    try {
+      expect(await deleteLocalDb('indxdb://app-identity-idn_x-t_acme')).toEqual(ok(undefined))
+      expect(deleted).toEqual(['app-identity-idn_x-t_acme'])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('deletes nothing for an in-memory address, and refuses an address it cannot delete', async () => {
+    expect(await deleteLocalDb('mem://')).toEqual(ok(undefined))
+    expect((await deleteLocalDb('surrealkv:///tmp/x'))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_FAILED',
+    )
+    // Without IndexedDB there is nothing to delete an `indxdb://` address with.
+    expect((await deleteLocalDb('indxdb://app-identity-idn_x'))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_FAILED',
+    )
+  })
 })
 
 describe('a device database that is closed and opened again', () => {
   const dir = mkdtempSync(join(tmpdir(), 'perch-local-db-'))
   const open: LocalDb[] = []
-  const reopen = async (schemaText: string): Promise<LocalDb> => {
+  const reopen = async (schemaText: string, signingKey?: string): Promise<LocalDb> => {
     const opened = await openLocalDb({
       engines: nodeEngines(),
       url: `surrealkv://${dir}`,
       namespace: 'app',
       database: 'app',
       schema: schemaText,
+      ...(signingKey === undefined ? {} : { signingKey }),
     })
 
     if (opened.isErr()) {
@@ -180,7 +219,13 @@ describe('a device database that is closed and opened again', () => {
   }
   const auth = (db: LocalDb) =>
     createAuth(db, { access: 'identity', namespace: 'app', database: 'app' })
-  const full = readSchema()
+  const full = readSchema('directory')
+  const key = 'local-db-spec-signing-key-0000000000000000000000000000000000000000000000'
+  const otherKey = 'local-db-spec-signing-key-1111111111111111111111111111111111111111111111'
+  const closeFirst = async (db: LocalDb): Promise<void> => {
+    await db.close()
+    open.splice(open.indexOf(db), 1)
+  }
 
   // A file database stays locked until it is closed, also when a test fails.
   afterEach(async () => {
@@ -203,6 +248,57 @@ describe('a device database that is closed and opened again', () => {
     const second = await reopen(full)
 
     expect((await auth(second).resume({ access }))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('keeps issued tokens valid when the schema is applied again with the same signing key', async () => {
+    const first = await reopen(full, key)
+    const signedUp = auth(first)
+    const user = (
+      await signedUp.signUp({ email: 'h@example.test', password: 'secret-h' })
+    )._unsafeUnwrap()
+    const access = signedUp.tokens()?.access ?? ''
+
+    await closeFirst(first)
+
+    // The changed text makes the opening apply the schema again.
+    const second = await reopen(`${full}\n-- changed`, key)
+
+    expect((await auth(second).resume({ access }))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('applies the schema again under a new signing key: earlier access tokens are refused, the refresh key still renews', async () => {
+    const first = await reopen(full, key)
+    const signedUp = auth(first)
+    const user = (
+      await signedUp.signUp({ email: 'i@example.test', password: 'secret-i' })
+    )._unsafeUnwrap()
+    const saved = signedUp.tokens() ?? expect.unreachable('tokens after sign-up')
+
+    await closeFirst(first)
+
+    const second = await reopen(full, otherKey)
+
+    expect((await auth(second).resume({ access: saved.access }))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
+    expect((await auth(second).resume(saved))._unsafeUnwrap()).toEqual(user)
+  })
+
+  it('gives each apply a key of its own when none is given', async () => {
+    const first = await reopen(full)
+    const signedUp = auth(first)
+
+    expect((await signedUp.signUp({ email: 'j@example.test', password: 'secret-j' })).isOk()).toBe(
+      true,
+    )
+
+    const access = signedUp.tokens()?.access ?? ''
+
+    await closeFirst(first)
+
+    const second = await reopen(`${full}\n-- changed without a key`)
+
+    expect((await auth(second).resume({ access }))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
   })
 
   it('keeps a user signed in past the access token, through the refresh key', async () => {

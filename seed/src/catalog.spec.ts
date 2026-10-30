@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { isTenantKey } from '@workspace/kernel'
 import { checkProfileName } from '@workspace/web/seeding'
 
-import { accountFor, catalog, validateCatalog } from './catalog'
+import { accountFor, catalog, organisationFor, validateCatalog } from './catalog'
 
 const [first] = catalog.accounts
 
@@ -18,11 +19,13 @@ describe('seed catalog', () => {
   it('refuses a duplicate ref, a malformed ref and an empty name', () => {
     const preset = first ?? expect.unreachable('a preset')
 
-    expect(validateCatalog({ accounts: [preset, preset] })._unsafeUnwrapErr()).toContain(
-      `duplicate ref ${preset.ref}`,
-    )
-    expect(validateCatalog({ accounts: [{ ...preset, ref: 'Not A Ref' }] }).isErr()).toBe(true)
-    expect(validateCatalog({ accounts: [{ ...preset, name: ' ' }] }).isErr()).toBe(true)
+    expect(
+      validateCatalog({ ...catalog, accounts: [preset, preset] })._unsafeUnwrapErr(),
+    ).toContain(`duplicate ref ${preset.ref}`)
+    expect(
+      validateCatalog({ ...catalog, accounts: [{ ...preset, ref: 'Not A Ref' }] }).isErr(),
+    ).toBe(true)
+    expect(validateCatalog({ ...catalog, accounts: [{ ...preset, name: ' ' }] }).isErr()).toBe(true)
   })
 
   it('gives a demo account the same address every run and a fresh account a new one', () => {
@@ -39,5 +42,57 @@ describe('seed catalog', () => {
       expect(account.password.length).toBeGreaterThanOrEqual(8)
       expect(account.name).toBe(preset.name)
     }
+  })
+
+  it('describes an organisation of existing accounts, keyed for a demo and a fresh run', () => {
+    const [acme] = catalog.organisations
+    const preset = acme ?? expect.unreachable('an organisation')
+    const refs = catalog.accounts.map((account) => account.ref)
+
+    expect(refs).toContain(preset.admin)
+    expect(preset.members.every((member) => refs.includes(member))).toBe(true)
+    expect(organisationFor(preset, { kind: 'demo' })).toEqual({ key: 'acme', name: 'Acme Corp' })
+
+    const fresh = organisationFor(preset, { kind: 'fresh', run: Date.now().toString(36) })
+
+    expect(fresh.key).toMatch(/^acme_[a-z0-9]+$/)
+    expect(isTenantKey(fresh.key)).toBe(true)
+    expect(organisationFor(preset, { kind: 'fresh', run: 'r1' }).key).not.toBe(
+      organisationFor(preset, { kind: 'fresh', run: 'r2' }).key,
+    )
+  })
+
+  it('refuses an organisation whose admin or member is no account, or whose key is malformed', () => {
+    const [acme] = catalog.organisations
+    const preset = acme ?? expect.unreachable('an organisation')
+    const check = (organisation: unknown) =>
+      validateCatalog({ ...catalog, organisations: [organisation] })
+
+    expect(check({ ...preset, admin: 'nobody' })._unsafeUnwrapErr()).toContain(
+      'organisation acme: admin nobody is no account',
+    )
+    expect(check({ ...preset, members: ['nobody'] })._unsafeUnwrapErr()).toContain(
+      'organisation acme: member nobody is no account',
+    )
+    expect(check({ ...preset, key: 'Not-A-Key' })._unsafeUnwrapErr()).toContain(
+      'organisation acme: key Not-A-Key is not a tenant key',
+    )
+  })
+
+  it('refuses a key a fresh run makes too long, and a key valid only with a run suffix', () => {
+    const [acme] = catalog.organisations
+    const preset = acme ?? expect.unreachable('an organisation')
+    const run = 'r'.repeat(40)
+
+    expect(validateCatalog(catalog, { kind: 'fresh', run: 'r1' }).isOk()).toBe(true)
+    expect(validateCatalog(catalog, { kind: 'fresh', run })._unsafeUnwrapErr()).toEqual([
+      `organisation acme: key acme_${run} is not a tenant key`,
+    ])
+    expect(
+      validateCatalog(
+        { ...catalog, organisations: [{ ...preset, key: 'a' }] },
+        { kind: 'fresh', run: 'r1' },
+      )._unsafeUnwrapErr(),
+    ).toEqual(['organisation acme: key a is not a tenant key'])
   })
 })

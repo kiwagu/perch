@@ -1,4 +1,4 @@
-import type { LockManagerLike } from '../sync/leader'
+import type { LockManagerLike } from '../sync'
 
 type Mode = 'shared' | 'exclusive'
 

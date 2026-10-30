@@ -19,8 +19,11 @@ const schema: SchemaModel = {
         manager: { kind: 'record', tables: ['identity'] },
       },
     },
-    org: { idPrefix: 'org', fields: { name: S('string'), size: S('int') } },
-    member_of: { fields: { role: S('string') }, relation: { in: ['identity'], out: ['org'] } },
+    tenant: { idPrefix: 'tnt', fields: { name: S('string'), size: S('int') } },
+    member_of: {
+      fields: { role: S('string') },
+      relation: { in: ['identity'], out: ['tenant'] },
+    },
   },
 }
 
@@ -44,20 +47,20 @@ describe('inferResultType', () => {
   })
 
   it('infers arrays for graph edges and nested destructuring', () => {
-    const ast = parseShape('SELECT ->member_of->org.{ id, name } AS orgs FROM ONLY $id;')
+    const ast = parseShape('SELECT ->member_of->tenant.{ id, name } AS tenants FROM ONLY $id;')
 
     expect(inferResultType(ast, identity, schema)).toBe(
-      '{ orgs: Array<{ id: OrgId; name: string }> } | undefined',
+      '{ tenants: Array<{ id: TenantId; name: string }> } | undefined',
     )
   })
 
   it('types an edge without destructuring as ids and an incoming edge as edge records', () => {
     const ast = parseShape(
-      'SELECT ->member_of->org AS orgs, <-member_of.{ role } AS memberships FROM ONLY $id;',
+      'SELECT ->member_of->tenant AS tenants, <-member_of.{ role } AS memberships FROM ONLY $id;',
     )
 
-    expect(inferResultType(ast, [{ name: 'id', type: 'record<org>' }], schema)).toBe(
-      '{ orgs: Array<OrgId>; memberships: Array<{ role: string }> } | undefined',
+    expect(inferResultType(ast, [{ name: 'id', type: 'record<tenant>' }], schema)).toBe(
+      '{ tenants: Array<TenantId>; memberships: Array<{ role: string }> } | undefined',
     )
   })
 
@@ -90,10 +93,10 @@ describe('inferResultType', () => {
 describe('tablesOf', () => {
   it('lists the tables a shape reads, in a stable order', () => {
     const ast = parseShape(
-      'SELECT name, email, ->member_of->org.{ id, name } AS orgs, manager.name AS m FROM ONLY $id;',
+      'SELECT name, email, ->member_of->tenant.{ id, name } AS tenants, manager.name AS m FROM ONLY $id;',
     )
 
-    expect(tablesOf(ast, identity, schema)).toEqual(['identity', 'member_of', 'org'])
+    expect(tablesOf(ast, identity, schema)).toEqual(['identity', 'member_of', 'tenant'])
   })
 
   it('counts the tables a predicate, an ordering or a FETCH reads through record links', () => {
@@ -108,7 +111,7 @@ describe('tablesOf', () => {
         [],
         schema,
       ),
-    ).toEqual(['member_of', 'org'])
+    ).toEqual(['member_of', 'tenant'])
     expect(
       tablesOf(
         parseShape('SELECT role FROM member_of WHERE $owner.manager.name = "Ann";'),
@@ -118,22 +121,22 @@ describe('tablesOf', () => {
     ).toEqual(['member_of', 'identity'])
     expect(tablesOf(parseShape('SELECT role FROM member_of FETCH out;'), [], schema)).toEqual([
       'member_of',
-      'org',
+      'tenant',
     ])
     expect(tablesOf(parseShape('SELECT in FROM member_of FETCH in, out;'), [], schema)).toEqual([
       'member_of',
       'identity',
-      'org',
+      'tenant',
     ])
   })
 
   it('refuses a tail whose reads it cannot determine', () => {
     const tail = (rest: string) => () =>
-      tablesOf(parseShape(`SELECT name FROM org ${rest};`), [], schema)
+      tablesOf(parseShape(`SELECT name FROM tenant ${rest};`), [], schema)
 
     expect(tail('WHERE id IN (SELECT VALUE out FROM member_of)')).toThrow(/subquer/)
     expect(tail('WHERE <-member_of<-identity.name CONTAINS "Ann"')).toThrow(/graph/)
     expect(tail('WHERE fn::visible(id)')).toThrow(/fn::visible/)
-    expect(tail('WHERE nmae = "x"')).toThrow('org has no field nmae')
+    expect(tail('WHERE nmae = "x"')).toThrow('tenant has no field nmae')
   })
 })

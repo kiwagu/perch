@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
+import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
   /** Sign out even though this device holds changes the gateway has not received; they are lost. */
@@ -10,10 +11,27 @@ export interface SignOutOptions {
 
 /**
  * A word the session leaves for the sign-in page: `resend-after-sign-in` when the device was
- * signed out (its keys refused, or a write landing during its sign-out) while it held changes it
- * had not sent; they are kept on the device, and signing in again as the same identity sends them.
+ * signed out (its keys refused, signed out from another device, or a write landing during its
+ * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
+ * again as the same identity sends them. `signed-out-elsewhere` when another device of the
+ * identity signed this one out and nothing waited to be sent. `delete-pending` when the device
+ * signed out but another tab still held its databases open: they go once that tab closes them.
  */
-export type SessionNotice = 'resend-after-sign-in'
+export type SessionNotice = 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending'
+
+/** A change the gateway refused and this device undid: what the shell tells the user about. */
+export interface PushRejection {
+  readonly region: string
+  readonly batch: number
+  readonly reason: string
+  readonly detail: string
+  /**
+   * The gateway refused the change again once it was undone: the device dropped its copy of the
+   * region, with the changes made after the refused one and not sent yet, and loaded it again
+   * from the server.
+   */
+  readonly reloaded: boolean
+}
 
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
@@ -25,6 +43,17 @@ export interface SessionPort {
    * when changes could not be sent and signing out would lose them.
    */
   signOut(options?: SignOutOptions): ResultAsync<'signed-out' | 'needs-confirmation', DataError>
+  /**
+   * "Sign out everywhere", called before the gateway is asked to sign every device of the
+   * identity out: it names the session open now and returns what to run once the gateway did,
+   * this device included. That signs the session out as when its channel hears so (4001),
+   * without waiting for a channel it may not have: its keys are dead and forgotten; its data goes
+   * unless it holds changes not sent yet, which stay for the next sign-in as the identity, and
+   * the sign-in page says which. It resolves once done, and changes nothing once that session
+   * has ended (signed out already, maybe with another account, or the same one, signed in
+   * since): a late answer signs out only the session that asked.
+   */
+  signingOutEverywhere(): () => ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */
@@ -32,6 +61,17 @@ export interface SessionPort {
   /** The word the last session left for the sign-in page, until `clearNotice`. */
   notice(): SessionNotice | undefined
   clearNotice(): void
+  /** The organisations the signed-in identity belongs to, as the gateway last said; none while nobody is signed in. */
+  memberships(): readonly Membership[]
+  /** Hears the memberships or the current organisation change, a sign-in or sign-out included. */
+  subscribeMemberships(listener: () => void): () => void
+  /**
+   * The organisation the tenant region's reads and writes go to: the one selected last on this
+   * browser while the identity belongs to it, otherwise the first by key; none without memberships.
+   */
+  currentTenant(): Membership | undefined
+  /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
+  selectTenant(key: string): void
 }
 
 export const SESSION = token<SessionPort>('Session')

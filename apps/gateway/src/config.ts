@@ -11,6 +11,14 @@ export const gatewayConfig = z.object({
   /** The gateway's namespace user on the database. */
   GATEWAY_SURREAL_USER: z.string().min(1),
   GATEWAY_SURREAL_PASS: z.string().min(1),
+  /**
+   * The key the identity access method signs tokens with, given to the directory schema at
+   * apply: a schema applied again with it keeps every issued token valid. Required, with no
+   * default; a new value signs no device out: each renews once with its refresh key.
+   */
+  GATEWAY_JWT_KEY: z
+    .string()
+    .min(64, { error: 'must be at least 64 characters, such as openssl rand -hex 64' }),
   LOG_LEVEL: z.string().optional(),
 })
 
@@ -21,16 +29,3 @@ export const NAMESPACE = 'app'
 
 /** The central database: accounts, and the server's copy of the regions. */
 export const DIRECTORY = 'directory'
-
-/**
- * The database's RPC endpoint over plain HTTP for its WebSocket address: `ws` becomes
- * `http`, `wss` becomes `https`, and the path is `/rpc`.
- */
-export function httpRpcUrl(surrealUrl: string): string {
-  const url = new URL(surrealUrl)
-
-  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
-  url.pathname = '/rpc'
-
-  return url.toString()
-}

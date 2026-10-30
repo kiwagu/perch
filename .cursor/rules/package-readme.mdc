@@ -1,9 +1,9 @@
 ---
-description: 'Use when: creating a workspace package, or changing what a package is for, what it exports, or which scripts it runs.'
+description: 'Use when: creating a workspace package, a feature module or a gateway module, or changing what a package is for, what it exports, which scripts it runs, or a module''s routes, shapes, commands or providers.'
 alwaysApply: true
 ---
 
-# Every package keeps a short, current README
+# Every package and every module keeps a short, current README
 
 ## Pyramid Layer
 
@@ -12,11 +12,12 @@ alwaysApply: true
 ## Use This When
 
 - A new workspace appears under `apps/`, `packages/`, `tests/`, `database/` or `seed/`.
-- A change alters a package's role, its key exports or its commands.
+- A new feature module appears under an application's `src/features/`, or a new module under `apps/gateway/src/`.
+- A change alters a package's role, its key exports or its commands, or a module's routes, shapes, commands or providers.
 
 ## Stop Here If
 
-- The package's `README.md` matches the shape below and still describes the package as it is after your change.
+- The package's or module's `README.md` matches the shape below and still describes it as it is after your change.
 
 ## Core rule
 
@@ -25,6 +26,14 @@ alwaysApply: true
   - `## Role in the architecture`: what the package is for and which layer it serves, in a few sentences.
   - `## Key exports`: the public entry points and subpaths.
   - `## Commands`: how to test and check it.
-- Update the README in the same change that alters the role, exports or commands. A missing README is created, not deferred.
+- Every feature module (a folder under `src/features/`) has its own `README.md`, kept short:
+  - `# <Title> (module \`<id>\`)`, the id from its `*.module.ts` manifest (the folder name when it has none)
+  - Folders beginning with `__` or `.` (`__fixtures__`, `__snapshots__`) are support folders, not modules.
+  - `## Role in the architecture`: what the module is for and which layers it has.
+  - `## Surface`: routes and pages, shapes, commands, providers, the i18n namespace and test ids.
+  - `## Commands`: how to test and regenerate it.
+- A gateway module (a folder under `apps/gateway/src/` other than the composition root `composition/`, `entity-first-module-naming.mdc`) keeps a README of the same shape: `# <Title> (module \`<folder>\`)`, its role, its surface (routes, messages, services it offers the rest of the server) and its commands.
+- A module's details belong to the module's README. The application's README keeps one line per module pointing there, so nothing piles up in the parent.
+- Update the README in the same change that alters the role, exports, commands, routes, shapes or providers. A missing README is created, not deferred.
 - Describe what exists, not plans.
-- `bun run readme:check` (part of `bun run check`) fails on a missing README, a title that does not name the package, or a missing section.
+- `bun run readme:check` (part of `bun run check` and of the pre-commit hook) fails on a missing README, a title that does not name the package or module, or a missing section, for every workspace, every feature module and every gateway module.

@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "object",
+      "description": "Always \"object\"."
+    },
+    "description": {
+      "description": "What the entity is.",
+      "type": "string"
+    },
+    "x-perch": {
+      "type": "object",
+      "properties": {
+        "table": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The table of the entity."
+        },
+        "region": {
+          "type": "string",
+          "enum": [
+            "private",
+            "tenant"
+          ],
+          "description": "Where the entity lives: the account private region or the organisation one."
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]{3}$",
+          "description": "The id prefix of the entity, from the id registry."
+        },
+        "owner": {
+          "description": "The field that names the owner of an entry.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "can": {
+          "description": "Per role, per operation: on any entry or only on its own.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "A role of the vocabulary."
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "any",
+                "own"
+              ]
+            }
+          }
+        },
+        "actions": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "description": "What the action does.",
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Per parameter, the field it sets (`$id` for a new id)."
+              }
+            },
+            "required": [
+              "params"
+            ],
+            "additionalProperties": false,
+            "description": "One action on the entity."
+          },
+          "description": "The actions on the entity by name."
+        },
+        "unique": {
+          "default": [],
+          "description": "The field sets that are unique.",
+          "type": "array",
+          "items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        },
+        "index": {
+          "default": [],
+          "description": "The field sets that are indexed.",
+          "type": "array",
+          "items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        }
+      },
+      "required": [
+        "table",
+        "region",
+        "id",
+        "actions"
+      ],
+      "additionalProperties": false,
+      "description": "What the contract says about the entity beyond its shape."
+    },
+    "properties": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The JSON Schema type of the field.",
+            "type": "string"
+          },
+          "description": {
+            "description": "What the field holds.",
+            "type": "string"
+          },
+          "enum": {
+            "description": "The values the field takes.",
+            "type": "array",
+            "items": {}
+          },
+          "x-perch": {
+            "type": "object",
+            "properties": {
+              "readonly": {
+                "description": "No action changes the field once it is created.",
+                "type": "boolean"
+              },
+              "crdt": {
+                "description": "How concurrent edits merge; `none` for last-writer-wins.",
+                "type": "string",
+                "enum": [
+                  "text",
+                  "list",
+                  "counter",
+                  "none"
+                ]
+              },
+              "record": {
+                "description": "The table a record link points to.",
+                "type": "string"
+              },
+              "ref": {
+                "description": "The entity of the model the field refers to.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "How the field is stored and merged."
+          }
+        },
+        "additionalProperties": {},
+        "description": "One field of the entity, a JSON Schema."
+      },
+      "description": "The fields by name."
+    },
+    "required": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "description": "The fields every entry has."
+    },
+    "additionalProperties": {
+      "type": "boolean",
+      "const": false,
+      "description": "Always false: no other field."
+    }
+  },
+  "required": [
+    "type",
+    "x-perch",
+    "properties",
+    "required",
+    "additionalProperties"
+  ],
+  "additionalProperties": {},
+  "description": "One entity of the data model."
+}

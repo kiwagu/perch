@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { FakeHintChannel } from '../testing/fake-hint-channel'
+import { FakeHintChannel } from '../testing'
 
 import { type SyncHint, syncHints } from './hints'
 
@@ -29,6 +29,28 @@ describe('syncHints', () => {
     sender.post('sign-out')
     sender.post('kick')
     expect(received).toEqual(['sign-out', 'kick'])
+  })
+
+  it('a renew hint reaches the other tabs', () => {
+    const bus = new Set<FakeHintChannel>()
+    const sender = syncHints(new FakeHintChannel(bus))
+    const receiver = syncHints(new FakeHintChannel(bus))
+    const received: SyncHint[] = []
+
+    receiver.on((hint) => received.push(hint))
+    sender.post('renew')
+    expect(received).toEqual(['renew'])
+  })
+
+  it('a reset hint reaches the other tabs', () => {
+    const bus = new Set<FakeHintChannel>()
+    const sender = syncHints(new FakeHintChannel(bus))
+    const receiver = syncHints(new FakeHintChannel(bus))
+    const received: SyncHint[] = []
+
+    receiver.on((hint) => received.push(hint))
+    sender.post('reset')
+    expect(received).toEqual(['reset'])
   })
 
   it('an unknown message on the channel is ignored', () => {

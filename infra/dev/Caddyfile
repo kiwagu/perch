@@ -1,0 +1,38 @@
+{
+	admin off
+	auto_https off
+}
+
+# One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
+# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT), and
+# PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there).
+https://localhost:{$FRONT_PORT} {
+	bind 127.0.0.1
+	tls /certs/localhost.pem /certs/localhost-key.pem
+	root * /srv/web
+	encode zstd gzip
+
+	@shell path / /index.html
+
+	# The UI manifest the build ships, for tests and agents; PERCH_UI_MANIFEST=0 switches it off.
+	@manifestOff expression `"{$PERCH_UI_MANIFEST:1}" == "0"`
+	handle /ui-manifest/* {
+		header Cache-Control "no-store"
+		respond @manifestOff 404
+		file_server
+	}
+	handle_path /backend/* {
+		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
+	}
+	# The web app's build, a single-page app: any path that is not a file gets index.html.
+	# The route keeps the written order, so the headers see the path after try_files and a
+	# deep link served as index.html is revalidated like index.html itself.
+	handle {
+		route {
+			try_files {path} /index.html
+			header /assets/* Cache-Control "public, max-age=31536000, immutable"
+			header @shell Cache-Control "no-cache"
+			file_server
+		}
+	}
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type ManualClock, manualClock } from '../testing/manual-clock'
+import { type ManualClock, manualClock } from '../testing'
 
 import type { CadencePort, PassKind } from './cadence'
 import type { ChannelState } from './transport'

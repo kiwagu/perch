@@ -1,4 +1,5 @@
 import type { Region } from '@workspace/data'
+import type { TableAbilities } from '@workspace/kernel'
 
 /**
  * What the replica needs to know about a table's fields beyond plain values:
@@ -13,8 +14,8 @@ export type ReplicaField =
   | { readonly kind: 'record'; readonly table: string }
   | { readonly kind: 'datetime' }
 
-/** A replicated table: the region whose document holds its records, and its non-plain fields. */
-export interface ReplicaTable {
+/** A replicated table: the region whose document holds its records, its non-plain fields, and who may write it. */
+export interface ReplicaTable extends TableAbilities {
   readonly region: Region
   readonly fields: Readonly<Record<string, ReplicaField>>
 }

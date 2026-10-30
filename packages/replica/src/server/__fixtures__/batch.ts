@@ -1,10 +1,15 @@
-import { LoroDoc, LoroMap, LoroText } from 'loro-crdt'
+import { LoroDoc, LoroMap } from 'loro-crdt'
+
+import { OWNER_ABILITY } from '@workspace/kernel'
 
 import type { ReplicaSchema } from '../../schema'
 import type { ValidateBatchInput } from '../batch-validator'
 
-/** The record id of the identity that owns the private region these fixtures build. */
-export const owner = 'identity:idn_a'
+/** The identity id of the owner of the private region these fixtures build. */
+export const actor = 'idn_a'
+
+/** The record id of that identity, as the owner's records reference it. */
+export const owner = `identity:${actor}`
 
 const schema: ReplicaSchema = {
   profile: {
@@ -36,7 +41,7 @@ export function documentWithProfile(name: string): RecordsDoc {
   profile.set('identity', owner)
   profile.set('name', name)
   profile.set('created_at', '2026-10-16T09:00:00.000Z')
-  profile.setContainer('bio', new LoroText()).insert(0, 'Hello')
+  profile.ensureMergeableText('bio').insert(0, 'Hello')
   doc.commit()
 
   return doc
@@ -60,5 +65,12 @@ export function exportSince(client: LoroDoc, server: LoroDoc): Uint8Array {
 
 /** A batch the owner pushes to their private region. */
 export function input(doc: LoroDoc, updates: readonly Uint8Array[]): ValidateBatchInput {
-  return { doc, region: { kind: 'private', id: owner }, owner, schema, updates }
+  return {
+    doc,
+    region: { kind: 'private', id: owner },
+    actor,
+    ability: OWNER_ABILITY,
+    schema,
+    updates,
+  }
 }

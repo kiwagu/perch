@@ -2,31 +2,66 @@
 
 ## Role in the architecture
 
-The shared SurrealDB schema and its permission contract. `schema/*.surql` defines the
-tables, access methods and functions; comment annotations above each table
-(`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`) tell the modeling stage
-how the table replicates and which id prefix its keys use. The same schema is applied to
-the local replica and to a server, and the replica schema generated from it is the one
-description of replicated tables that every runtime reads.
+The SurrealDB schema and its permission contract, split by database: `schema/common` holds
+what every database has, `schema/directory` the directory database (accounts, organisations
+and memberships) and `schema/tenant` the database of one organisation (`t_<key>`). A
+database's schema is the common files and then its own, each set in file name order. Comment
+annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`,
+`-- @owner`, `-- @can`) tell the modeling stage how the table replicates, which id prefix its
+keys use and who may write it. The same schema is applied to the local replica and to a
+server, and the replica schema generated from it is the one description of replicated tables
+that every runtime reads. Notes carry their write rules there: a member creates notes and
+edits or deletes only those it wrote (`-- @owner author`), an admin edits or deletes any note.
 
 ## Key exports
 
-- `schema/`: the schema, applied in file name order: `identity` (accounts and the `identity`
-  record access with its refresh keys), `profile` (its owner reads it; only the gateway writes
-  it, through replication; a bio holds at most 2000 characters), and the replica's own tables
-  (`_replica_snapshot`, `_replica_update`, `_replica_outbox`, `_replica_projected`,
-  `_replica_head`, `_replica_cursor`: snapshots, the update log numbered without gaps, the
-  outbox, projected records, the pull cursor; a number is unique per region in the log and the
-  outbox), closed to every record user and never replicated.
+- `schema/common/`: `fn::entity_id` (record keys in the workspace id format) and the replica's
+  own tables (`_replica_snapshot`, `_replica_update`, `_replica_outbox`, `_replica_projected`,
+  `_replica_peer`, `_replica_head`, `_replica_cursor`: snapshots, the update log numbered
+  without gaps, the outbox, projected records, the identity each Loro peer of a region writes
+  as (bound at its first accepted batch), the pull cursor; a number is unique per region in the
+  log and the outbox; on a device `_replica_head` also holds the region's generation, which a
+  reset of its local copy moves), closed to every record user and never replicated.
+- `schema/directory/`: `identity` (accounts and the `identity` record access with its refresh
+  keys; an email is kept and matched in lower case, so an address in any case is one account),
+  `profile` (its owner reads it; only the gateway writes it, through replication; a bio
+  holds at most 2000 characters), `tenant` (an organisation: its key of 2 to 32 lowercase
+  letters, digits and underscores, its name, namespace, database and status; closed to every
+  record user) and `membership` (an identity's role in an organisation, `member` or `admin`; an
+  identity reads only its own rows, and only the gateway writes them) and `device_session`
+  (one row per device of an identity, with its label, its current refresh grant and when its
+  current session started, `started_at`, to the second like a token's `iat`, so a token of the
+  previous session issued in that very second passes for one of the new session until it
+  expires, at most 15 minutes; unique per identity and device, closed to every record user,
+  served by the gateway). `identity` also
+  holds `sessions_revoked_at`, and its access method an `AUTHENTICATE` clause that refuses every
+  token issued before it ("signed out everywhere"). A refresh exchange carries no token, so the
+  clause does not block it: only revoking the identity's grants
+  (`ACCESS identity ON DATABASE REVOKE WHERE subject.record = <identity>`, which the gateway's
+  namespace user may run) does. The access method signs its tokens with the key whoever applies
+  the schema gives as `$jwt_key`: a server applies it with the gateway's fixed key, so a schema
+  re-apply leaves every issued token valid; without a fixed key (a device's replica, a test) each
+  apply gives it a key of its own and earlier tokens stop working. Refresh grants survive a
+  redefinition, so a new key costs each device one renewal, not its session.
+- `schema/tenant/`: `member` (a member of the organisation keyed by the identity id, with its
+  role; server-only) and `note` (the organisation's notes in the `tenant` region, each naming
+  its author member, a text of at most 500 characters; only the gateway reads or writes it on
+  the server).
 - `./replica-schema`: `replicaSchema`, every replicated table with the region whose
   documents hold it and the field kinds the replica needs. Generated by `bun run model`
   into `src/replica.schema.gen.ts`, so every runtime that replicates reads the same one.
-- `tests/suites/*.toml`: SurrealKit permission suites; `tests/anonymous`: the
-  unauthenticated-client check over raw HTTP.
+- `tests/suites/*.toml`: SurrealKit suites, run on one ephemeral database that holds every
+  schema folder: the permissions of `identity`, `profile`, `membership` (with `tenant`) and `device_session`, the
+  structure of the tenant tables (`tenant-structure`), and the generated suites of the shapes.
+  `setup.surql`, which SurrealKit runs in each test database before it applies the schema, gives
+  that database a random `$jwt_key` for the identity access method (test databases only: a
+  server's key is never stored as a parameter, which `INFO FOR DB` would print in clear);
+  `tests/anonymous`: the unauthenticated-client check over raw HTTP.
 
 ## Commands
 
 - `bun run typecheck`, `bun run lint`.
 - `bun run test:db`: SurrealKit suites and the anonymous check against the stand at
-  `SURREAL_URL` (default `http://127.0.0.1:8010`, the `surrealdb-e2e` app).
+  `SURREAL_URL`, which `bun run test:db` at the repository root sets through `mcproc exec` from
+  the mcproc manifest (the `surrealdb-e2e` app, `http://127.0.0.1:8010` in the main checkout).
 - `surreal db validate 'database/**/*.surql'`: syntax check without a database.

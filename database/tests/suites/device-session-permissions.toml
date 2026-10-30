@@ -1,0 +1,50 @@
+name = "device-session-permissions"
+tags = ["permissions", "device_session"]
+
+# A device session is the gateway's own record: no record user reads or writes it. Root
+# seeds a row as the gateway would.
+
+[[cases]]
+name = "root creates a device session for alice"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Chrome on Linux', grant = 'g1', started_at = time::floor(time::now(), 1s);"
+allow = true
+
+[[cases]]
+name = "alice sees no device session"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT * FROM device_session;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot sign a device out"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE device_session SET revoked_at = time::now() RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a second row for the same device of the identity is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Again', grant = 'g2', started_at = time::floor(time::now(), 1s);"
+allow = false
+error_contains = "device_session_identity_device"
+
+[[cases]]
+name = "a device session without the start of its session is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-b', label = 'Firefox on Linux', grant = 'g3';"
+allow = false
+error_contains = "started_at"

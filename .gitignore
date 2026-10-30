@@ -1,10 +1,15 @@
 # dependencies and build output
 node_modules/
 dist/
+# the dev stand's build (apps/web), apart from the e2e stand's dist/
+dist-dev/
+# the UI manifest `bun run contract:manifest` writes at the root
+ui-manifest/
 .turbo/
 *.tsbuildinfo
 
 # test artifacts
+.gates/
 test-results/
 playwright-report/
 coverage/
@@ -21,3 +26,6 @@ lefthook-local.yml
 
 # the history a `surreal sql` session keeps in its working directory
 history.txt
+
+# the size ratchet baseline is machine-local, written on the first run
+refactor-baseline.json

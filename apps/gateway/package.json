@@ -8,11 +8,13 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:db": "bun scripts/smoke.ts"
+    "test:db": "bun scripts/smoke/cli.ts",
+    "load": "bun scripts/load/ws-clients.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",
     "@workspace/logger": "workspace:*",
     "@workspace/replica": "workspace:*",
@@ -22,7 +24,6 @@
   },
   "devDependencies": {
     "@types/bun": "catalog:",
-    "@workspace/ids": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

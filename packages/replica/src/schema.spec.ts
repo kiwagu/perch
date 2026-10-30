@@ -15,6 +15,6 @@ describe('replica schema', () => {
 
   it('lists the tables of a region', () => {
     expect(tablesOf(schema, 'private')).toEqual(['profile'])
-    expect(tablesOf(schema, 'org')).toEqual([])
+    expect(tablesOf(schema, 'tenant')).toEqual([])
   })
 })

@@ -20,11 +20,11 @@ describe('parseShapeFile', () => {
 
   it('keeps commas inside generic parameter types', () => {
     const { header } = parseShapeFile(
-      '-- @params $ids: array<record<identity | org>, 10>, $x: string\nSELECT name FROM $ids;',
+      '-- @params $ids: array<record<identity | tenant>, 10>, $x: string\nSELECT name FROM $ids;',
     )
 
     expect(header.params).toEqual([
-      { name: 'ids', type: 'array<record<identity | org>, 10>' },
+      { name: 'ids', type: 'array<record<identity | tenant>, 10>' },
       { name: 'x', type: 'string' },
     ])
   })
@@ -46,9 +46,9 @@ describe('parseShapeFile', () => {
   })
 
   it('rejects more than one statement', () => {
-    expect(() => parseShapeFile('-- @params\nSELECT * FROM identity; SELECT * FROM org;')).toThrow(
-      /single statement/,
-    )
+    expect(() =>
+      parseShapeFile('-- @params\nSELECT * FROM identity; SELECT * FROM tenant;'),
+    ).toThrow(/single statement/)
   })
 
   it('does not split on a semicolon inside a string', () => {

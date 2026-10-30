@@ -2,7 +2,7 @@ import type { Surreal } from 'surrealdb'
 
 import type { ChangeSpec } from '@workspace/kernel'
 
-export type Region = 'private' | 'public' | 'org' | 'server'
+export type Region = 'private' | 'public' | 'tenant' | 'server'
 
 /** A declared parameter: `$id: record<identity>` gives `{ name: 'id', type: 'record<identity>' }`. */
 export interface ParamDecl {

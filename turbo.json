@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["database/schema/**", "tests/e2e/specs/**"],
+  "globalDependencies": ["database/schema/**", "contract/**", "tests/e2e/scenarios/**"],
   "globalPassThroughEnv": [
     "CI",
     "SURREAL_URL",
@@ -11,6 +11,7 @@
     "GATEWAY_PORT",
     "GATEWAY_SURREAL_USER",
     "GATEWAY_SURREAL_PASS",
+    "GATEWAY_JWT_KEY",
     "GATEWAY_URL",
     "LOG_LEVEL",
     "LOG_FORMAT"
@@ -18,7 +19,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["PERCH_UI_HOOKS"]
     },
     "dev": {
       "cache": false,
@@ -29,7 +31,8 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD"]
     },
     "model": {
       "dependsOn": ["^build"],
@@ -52,6 +55,9 @@
     "//#typecheck:root": {
       "cache": false
     },
+    "//#test:root": {
+      "cache": false
+    },
     "//#lint:root": {
       "cache": false
     },
@@ -65,6 +71,16 @@
       "cache": false
     },
     "//#e2e:coverage": {
+      "cache": false
+    },
+    "//#contract:check": {
+      "cache": false
+    },
+    "//#contract:check:sources": {
+      "cache": false
+    },
+    "//#contract:check:consumers": {
+      "inputs": ["tests/e2e/src/**", "contract/**", "tests/e2e/scenarios/**"],
       "cache": false
     }
   }

@@ -1,106 +1,72 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { checkCoverage } from './coverage'
+import { project, removeProjects, scenarioOf } from './project.fixture'
 
-const spec = (steps: number) =>
+const test = (id: string, steps: number) =>
   [
-    '# A title',
-    '',
-    'Role: guest',
-    'Where: "/"',
-    '',
-    '## Test data',
-    '',
-    '## Scenario: Something',
-    '',
-    '### Steps',
-    ...Array.from({ length: steps }, (_, index) => `${index + 1}. Step ${index + 1}`),
-    '',
-    '### Expected result',
-    '- Done',
+    `// scenario: ${id}`,
+    ...Array.from({ length: steps }, (_, index) => `await test.step('${index + 1}. x', fn)`),
   ].join('\n')
 
-const test = (steps: number) =>
-  Array.from({ length: steps }, (_, index) => `await test.step('${index + 1}. x', fn)`).join('\n')
-
-const roots: string[] = []
-
-function project(files: Readonly<Record<string, string>>) {
-  const root = mkdtempSync(join(tmpdir(), 'e2e-spec-'))
-
-  roots.push(root)
-
-  for (const [path, content] of Object.entries(files)) {
-    mkdirSync(join(root, path, '..'), { recursive: true })
-    writeFileSync(join(root, path), content)
-  }
-
-  return { specs: join(root, 'specs'), tests: join(root, 'src') }
-}
-
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
+afterEach(removeProjects)
 
 describe('checkCoverage', () => {
-  it('passes when every spec has its test with a step per spec step', () => {
-    const dirs = project({
-      'specs/user/01-a.md': spec(2),
-      'src/user/01-a.e2e.spec.ts': test(2),
-      'src/support/fixtures.ts': 'export {}',
+  it('passes when every scenario has its test with a step per scenario step', () => {
+    const dirs = project([scenarioOf('user/base/a', 2)], {
+      'user/base/a.e2e.spec.ts': test('user/base/a', 2),
+      'support/fixtures.ts': 'export {}',
     })
 
-    expect(checkCoverage(dirs.specs, dirs.tests)).toEqual({
+    expect(checkCoverage(dirs.root, dirs.tests)).toEqual({
       missingTests: [],
-      missingSpecs: [],
+      missingScenarios: [],
       stepMismatch: [],
-      invalidSpecs: [],
+      wrongHeader: [],
+      problems: [],
     })
   })
 
-  it('reports a spec without a test, a test without a spec and a test with too few steps', () => {
-    const dirs = project({
-      'specs/user/01-a.md': spec(4),
-      'specs/user/02-b.md': spec(1),
-      'src/user/01-a.e2e.spec.ts': test(3),
-      'src/user/03-c.e2e.spec.ts': test(1),
+  it('reports a scenario without a test, a test without a scenario and a test with too few steps', () => {
+    const dirs = project([scenarioOf('user/base/a', 4), scenarioOf('user/base/b', 1)], {
+      'user/base/a.e2e.spec.ts': test('user/base/a', 3),
+      'user/base/c.e2e.spec.ts': test('user/base/c', 1),
     })
 
-    expect(checkCoverage(dirs.specs, dirs.tests)).toEqual({
-      missingTests: ['user/02-b'],
-      missingSpecs: ['user/03-c'],
-      stepMismatch: [{ spec: 'user/01-a', steps: 4, testSteps: 3 }],
-      invalidSpecs: [],
+    expect(checkCoverage(dirs.root, dirs.tests)).toEqual({
+      missingTests: ['user/base/b'],
+      missingScenarios: ['user/base/c'],
+      stepMismatch: [{ scenario: 'user/base/a', steps: 4, testSteps: 3 }],
+      wrongHeader: [],
+      problems: [],
     })
   })
 
   it('does not count steps that are commented out', () => {
-    const dirs = project({
-      'specs/user/01-a.md': spec(4),
-      'src/user/01-a.e2e.spec.ts': [
-        test(2),
+    const dirs = project([scenarioOf('user/base/a', 4)], {
+      'user/base/a.e2e.spec.ts': [
+        test('user/base/a', 2),
         "// await test.step('3. x', fn)",
         "/* await test.step('4. x', fn) */",
       ].join('\n'),
     })
 
-    expect(checkCoverage(dirs.specs, dirs.tests).stepMismatch).toEqual([
-      { spec: 'user/01-a', steps: 4, testSteps: 2 },
+    expect(checkCoverage(dirs.root, dirs.tests).stepMismatch).toEqual([
+      { scenario: 'user/base/a', steps: 4, testSteps: 2 },
     ])
   })
 
-  it('reports a spec it cannot read', () => {
-    const dirs = project({
-      'specs/user/01-a.md': '# Only a title',
-      'src/user/01-a.e2e.spec.ts': test(1),
+  it('reports a test whose first line names another scenario', () => {
+    const dirs = project([scenarioOf('user/base/a', 1)], {
+      'user/base/a.e2e.spec.ts': test('user/base/z', 1),
     })
 
-    expect(checkCoverage(dirs.specs, dirs.tests).invalidSpecs).toEqual(['user/01-a'])
+    expect(checkCoverage(dirs.root, dirs.tests).wrongHeader).toEqual(['user/base/a'])
+  })
+
+  it('reports a scenario file it cannot read', () => {
+    const dirs = project([{ ...scenarioOf('user/base/a', 1), steps: [] }])
+
+    expect(checkCoverage(dirs.root, dirs.tests).problems).toHaveLength(1)
   })
 })

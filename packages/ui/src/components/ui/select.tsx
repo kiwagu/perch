@@ -5,7 +5,83 @@ import { cn } from 'cn'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type * as React from 'react'
 
-const Select = SelectPrimitive.Root
+import { useTracksInput } from '@workspace/ui/unsaved-input'
+
+export interface SelectProps<Value, Multiple extends boolean | undefined = false>
+  extends SelectPrimitive.Root.Props<Value, Multiple> {
+  /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
+  readonly holdsInput?: boolean | undefined
+}
+
+/** What a select holds: one value, several, or none chosen. */
+type Choice<Value> = Value | readonly Value[] | null
+
+const isSeveral = <Value,>(choice: Choice<Value>): choice is readonly Value[] =>
+  Array.isArray(choice)
+
+/**
+ * Whether two choices are the same, each value compared as the select compares an item: a
+ * multiple select's choices in order, a single select's value whole (a list is one value there).
+ */
+function sameChoice<Value>(
+  equal: (item: Value, value: Value) => boolean,
+  several: boolean,
+): (a: Choice<Value>, b: Choice<Value>) => boolean {
+  return (a, b) => {
+    if (a === null || b === null) {
+      return a === b
+    }
+
+    if (!several) {
+      // A single select holds one value, whatever its shape, a list included.
+      return equal(a as Value, b as Value)
+    }
+
+    return (
+      isSeveral(a) &&
+      isSeveral(b) &&
+      a.length === b.length &&
+      a.every((item, index) => {
+        const other = b[index]
+
+        return other !== undefined && equal(item, other)
+      })
+    )
+  }
+}
+
+/** The select's root, tracking what is chosen with the comparison of its one mode. */
+function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
+  holdsInput = true,
+  onValueChange,
+  ...props
+}: SelectProps<Value, Multiple>) {
+  const several = props.multiple === true
+  const { typed } = useTracksInput<Choice<Value>>({
+    holdsInput,
+    value: props.value,
+    // Base UI starts a multiple select with none chosen as an empty list, a single one as null.
+    defaultValue: props.defaultValue ?? (several ? [] : null),
+    same: sameChoice(props.isItemEqualToValue ?? Object.is, several),
+  })
+
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      onValueChange={(value, details) => {
+        typed(value)
+        onValueChange?.(value, details)
+      }}
+    />
+  )
+}
+
+/** A select; one that turns from one choice to several, or back, is a new field. */
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectProps<Value, Multiple>,
+) {
+  return <TrackedSelect key={props.multiple === true ? 'several' : 'one'} {...props} />
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

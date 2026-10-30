@@ -1,0 +1,41 @@
+{
+  "name": "@workspace/ui-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ui-contract": "./src/cli/index.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./anchors": {
+      "types": "./src/anchors/index.ts",
+      "import": "./src/anchors/index.ts"
+    },
+    "./machines": {
+      "types": "./src/machines/index.ts",
+      "import": "./src/machines/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@workspace/zod": "workspace:*",
+    "ajv": "catalog:",
+    "ajv-formats": "catalog:",
+    "oxc-parser": "catalog:",
+    "xstate": "catalog:",
+    "yaml": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

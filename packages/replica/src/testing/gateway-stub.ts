@@ -1,23 +1,15 @@
-import type { Result, ResultAsync } from 'neverthrow'
-import { match } from 'ts-pattern'
-
 import type { DataError, LocalDb } from '@workspace/data'
 
 import type { Clock } from '../clock'
-import {
-  type ClientMessage,
-  type CompactionOutcome,
-  clientMessage,
-  decodeMessage,
-  encodeMessage,
-  type ProtocolError,
-  type ServerMessage,
-  serverMessage,
-} from '../protocol'
-import type { RegionRef } from '../region-doc'
+import type { Membership } from '../protocol'
 import type { ReplicaSchema } from '../schema'
-import { RegionHub, type Subscriber } from '../server/region-hub'
-import type { ChannelState, EndReason, SyncTransport } from '../sync/transport'
+import { RegionHub, singleDatabase } from '../server'
+import type { EndReason, SyncTransport } from '../sync'
+
+import { DeviceChannel } from './device-channel'
+import type { CompactionAnswer, Gateway, StubTransport } from './stub-state'
+
+export type { CompactionAnswer, StubTransport }
 
 export interface GatewayStubOptions {
   /** The gateway's database: the hub keeps the regions' logs there. */
@@ -26,27 +18,19 @@ export interface GatewayStubOptions {
   readonly clock: Clock
   /** How many log rows after the snapshot make an ack ask for a compaction. */
   readonly compactionLogLimit?: number
+  /**
+   * What every device is welcomed with; each opens its organisation's region, where the device's
+   * batches are checked with the abilities of the membership's role. None by default.
+   */
+  readonly memberships?: readonly Membership[]
 }
 
-/** A device's channel to the stub, which the test can take offline and bring back. */
-export interface StubTransport extends SyncTransport {
-  /** The connection drops: the channel goes down and messages are lost both ways. */
-  goOffline(): void
-  /** The device connects again, as a reconnect would: a new welcome follows. */
-  goOnline(): void
-  /** Started, not offline and not signed out: the channel is meant to be up. */
-  online(): boolean
-  /** How many times the engine gave a connection up with `reconnect`. */
-  reconnects(): number
-}
-
-export interface CompactionAnswer {
-  readonly covers: number
-  readonly outcome: CompactionOutcome
-}
+/** The device a channel of the stub names itself with when the test names none. */
+export const STUB_DEVICE = 'test-device'
 
 export interface GatewayStub {
-  transport(identity: string): StubTransport
+  /** A channel of a device of `identity`, which names itself `device` (`test-device` by default). */
+  transport(identity: string, device?: string): StubTransport
   readonly hub: RegionHub
   /** Loses the next batch of the others that the hub sends this device. */
   dropNextFanOutTo(transport: SyncTransport): void
@@ -69,6 +53,14 @@ export interface GatewayStub {
    * channel as a failed server (1011), which ends nothing; resolves once it arrived.
    */
   failNextSignOut(): Promise<void>
+  /**
+   * The next renewal hands over these keys: before the welcome of the next device to connect,
+   * as the gateway does when the access token a device presents no longer works, or as the
+   * answer to the next renewal a device asks for over its channel.
+   */
+  renewAtNextHello(tokens: { readonly access: string; readonly refresh: string }): void
+  /** Every renewal a device asks for over its channel is refused from now on, as by the limits. */
+  refuseRenewals(): void
   /** How many sign-outs the devices sent. */
   signOuts(): number
   /**
@@ -76,6 +68,13 @@ export interface GatewayStub {
    * keys (`unauthorized`) or signs the device out: the device hears why, then the channel falls.
    */
   endWith(reason: EndReason): void
+  /**
+   * Closes the channels of `identity` with `code`, those of `device` only when it is given, as
+   * the gateway closes the sockets of a device signed out from another one: a code that ends a
+   * channel (such as 4001) ends it for good with its reason, any other drops the connection and
+   * the device connects again.
+   */
+  closeChannels(identity: string, device: string | undefined, code: number): void
   /** How many rejects the devices were sent. */
   rejections(): number
   /** The outcomes of the compactions the devices proposed, in order. */
@@ -86,390 +85,6 @@ export interface GatewayStub {
   close(): Promise<void>
 }
 
-/** What every device channel of one stub shares. */
-interface Gateway {
-  readonly hub: RegionHub
-  readonly clock: Clock
-  readonly failures: DataError[]
-  readonly compactions: CompactionAnswer[]
-  rejections: number
-  signOuts: number
-  rejectAll: boolean
-  /** Set while the next push is to go unanswered: called when it arrives. */
-  swallowPush: (() => void) | undefined
-  /** Set while the next probe is to go unanswered: called when it arrives. */
-  swallowProbe: (() => void) | undefined
-  refusePull: boolean
-  /** Set while the next sign-out is to leave the channel open: called when it arrives. */
-  keepOpen: (() => void) | undefined
-  /** Set while the next sign-out is to fail its revoke: called when it arrives. */
-  failSignOut: (() => void) | undefined
-}
-
-/** One connection of a device: its end at the hub, up once welcomed. */
-interface Connection {
-  readonly subscriber: Subscriber
-  up: boolean
-  /** The device asked to be signed out on it: nothing it sends after is handled. */
-  signedOut: boolean
-  /** Subscriptions and pulls sent on it that wait for their updates. */
-  asked: number
-}
-
-/** A message the protocol refuses here was built wrong by the engine or the hub. */
-function crossed<T>(decoded: Result<T, ProtocolError>, type: string): T {
-  if (decoded.isErr()) {
-    throw new Error(`the protocol refuses a ${type} message: ${decoded.error.message}`)
-  }
-
-  return decoded.value
-}
-
-/** A device's message as the gateway reads it: encoded, then decoded. */
-function sentByDevice(message: ClientMessage): ClientMessage {
-  return crossed(decodeMessage(clientMessage, encodeMessage(clientMessage, message)), message.type)
-}
-
-/** A gateway's message as the device reads it: encoded, then decoded. */
-function sentToDevice(message: ServerMessage): ServerMessage {
-  return crossed(decodeMessage(serverMessage, encodeMessage(serverMessage, message)), message.type)
-}
-
-/**
- * A device's channel to the stub: like the gateway's sync connection, without a network. It
- * is welcomed with the identity's own region, hands subscriptions, pulls, pushes and
- * compactions in that region to the hub, answers probes with the hub's heads and delivers what
- * the hub sends, each message through the protocol's encoding both ways.
- */
-class DeviceChannel implements StubTransport {
-  readonly #gateway: Gateway
-  readonly #identity: string
-  readonly #region: RegionRef
-  readonly #messageListeners = new Set<(message: ServerMessage) => void>()
-  readonly #channelListeners = new Set<(state: ChannelState) => void>()
-  readonly #endedListeners = new Set<(reason: EndReason) => void>()
-  #started = false
-  #offline = false
-  #ended = false
-  #connection: Connection | undefined
-  #dropNextFanOut = false
-  #reconnects = 0
-
-  constructor(gateway: Gateway, identity: string) {
-    this.#gateway = gateway
-    this.#identity = identity
-    this.#region = { kind: 'private', id: `identity:${identity}` }
-  }
-
-  start(): void {
-    this.#started = true
-    this.#connect()
-  }
-
-  stop(): void {
-    this.#started = false
-    this.#disconnect()
-  }
-
-  goOffline(): void {
-    this.#offline = true
-    this.#disconnect()
-  }
-
-  goOnline(): void {
-    this.#offline = false
-    this.#connect()
-  }
-
-  online(): boolean {
-    return this.#started && !this.#offline && !this.#ended
-  }
-
-  /** The connection is given up and made again at once: the device is welcomed anew. */
-  reconnect(): void {
-    if (!this.#connection) {
-      return
-    }
-
-    this.#reconnects += 1
-    this.#disconnect()
-    this.#connect()
-  }
-
-  reconnects(): number {
-    return this.#reconnects
-  }
-
-  dropNextFanOut(): void {
-    this.#dropNextFanOut = true
-  }
-
-  /** The gateway ends the channel for good; a device that is not started has no channel. */
-  end(reason: EndReason): void {
-    if (!this.#started || this.#ended) {
-      return
-    }
-
-    this.#ended = true
-
-    for (const listener of this.#endedListeners) {
-      listener(reason)
-    }
-
-    this.#disconnect()
-  }
-
-  send(message: ClientMessage): boolean {
-    const connection = this.#connection
-
-    if (!connection?.up) {
-      return false
-    }
-
-    this.#serve(connection, sentByDevice(message))
-
-    return true
-  }
-
-  onMessage(listener: (message: ServerMessage) => void): () => void {
-    this.#messageListeners.add(listener)
-
-    return () => this.#messageListeners.delete(listener)
-  }
-
-  onChannel(listener: (state: ChannelState) => void): () => void {
-    this.#channelListeners.add(listener)
-
-    return () => this.#channelListeners.delete(listener)
-  }
-
-  onEnded(listener: (reason: EndReason) => void): () => void {
-    this.#endedListeners.add(listener)
-
-    return () => this.#endedListeners.delete(listener)
-  }
-
-  #connect(): void {
-    if (!this.online() || this.#connection) {
-      return
-    }
-
-    const connection: Connection = {
-      subscriber: {
-        id: crypto.randomUUID(),
-        send: (message) => this.#deliver(connection, message),
-      },
-      up: false,
-      asked: 0,
-      signedOut: false,
-    }
-
-    this.#connection = connection
-    this.#settle(
-      this.#gateway.hub
-        .heads([this.#region.id])
-        .andTee((regions) => this.#welcome(connection, regions)),
-    )
-  }
-
-  /** The gateway took the device's keys: the channel is up once the device is welcomed. */
-  #welcome(
-    connection: Connection,
-    regions: ReadonlyArray<{ readonly region: string; readonly head: number }>,
-  ): void {
-    if (this.#connection !== connection) {
-      return
-    }
-
-    connection.up = true
-    this.#deliver(connection, {
-      type: 'welcome',
-      identity: this.#identity,
-      regions: [...regions],
-      time: this.#gateway.clock.now(),
-    })
-
-    for (const listener of this.#channelListeners) {
-      listener('up')
-    }
-  }
-
-  /** The connection is gone: the hub forgets the device and nothing more crosses it. */
-  #disconnect(): void {
-    const connection = this.#connection
-
-    if (!connection) {
-      return
-    }
-
-    this.#connection = undefined
-    this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
-
-    if (connection.up) {
-      for (const listener of this.#channelListeners) {
-        listener('down')
-      }
-    }
-  }
-
-  #serve(connection: Connection, message: ClientMessage): void {
-    if (connection.signedOut) {
-      return
-    }
-
-    const hub = this.#gateway.hub
-    const own = this.#region.id
-    const subscriber = connection.subscriber
-    const named =
-      'region' in message ? [message.region] : message.type === 'probe' ? message.regions : []
-
-    if (named.some((region) => region !== own)) {
-      this.#deliver(connection, {
-        type: 'error',
-        code: 'forbidden-region',
-        message: 'the region is not open to this device',
-      })
-
-      return
-    }
-
-    match(message)
-      .with({ type: 'hello' }, () => {})
-      .with({ type: 'subscribe' }, ({ vv }) => {
-        connection.asked += 1
-        this.#settle(hub.subscribe(this.#region, own, subscriber, vv))
-      })
-      .with({ type: 'pull' }, ({ vv }) => {
-        connection.asked += 1
-
-        if (this.#gateway.refusePull) {
-          this.#gateway.refusePull = false
-          this.#deliver(connection, {
-            type: 'error',
-            code: 'protocol',
-            message: `not subscribed to region ${own}`,
-          })
-        } else {
-          this.#settle(hub.pull(own, subscriber, vv))
-        }
-      })
-      .with({ type: 'push' }, ({ batch, updates }) => {
-        const swallowed = this.#gateway.swallowPush
-
-        if (swallowed) {
-          this.#gateway.swallowPush = undefined
-          swallowed()
-        } else if (this.#gateway.rejectAll) {
-          this.#deliver(connection, {
-            type: 'reject',
-            region: own,
-            batch,
-            reason: 'foreign-table',
-            detail: 'the test gateway rejects every batch',
-          })
-        } else {
-          this.#settle(hub.push(own, subscriber, batch, updates))
-        }
-      })
-      .with({ type: 'compact' }, ({ covers, snapshot }) => {
-        this.#settle(hub.compact(own, subscriber, covers, snapshot))
-      })
-      .with({ type: 'probe' }, ({ regions }) => {
-        const swallowed = this.#gateway.swallowProbe
-
-        if (swallowed) {
-          this.#gateway.swallowProbe = undefined
-          swallowed()
-
-          return
-        }
-
-        this.#settle(
-          hub.heads(regions).andTee((heads) =>
-            this.#deliver(connection, {
-              type: 'heads',
-              regions: [...heads],
-              time: this.#gateway.clock.now(),
-            }),
-          ),
-        )
-      })
-      .with({ type: 'sign-out' }, () => this.#signOut(connection))
-      .exhaustive()
-  }
-
-  /** The gateway leaves the device's regions and closes the channel for good. */
-  #signOut(connection: Connection): void {
-    const keptOpen = this.#gateway.keepOpen
-    const failed = this.#gateway.failSignOut
-
-    this.#gateway.signOuts += 1
-
-    if (keptOpen) {
-      this.#gateway.keepOpen = undefined
-      connection.signedOut = true
-      this.#gateway.hub.unsubscribe(this.#region.id, connection.subscriber.id)
-      keptOpen()
-
-      return
-    }
-
-    // A close that ends nothing: the connection is gone, the device may come back.
-    if (failed) {
-      this.#gateway.failSignOut = undefined
-      failed()
-      this.#disconnect()
-
-      return
-    }
-
-    if (this.#connection === connection) {
-      this.end('signed-out')
-    }
-  }
-
-  /** Hands a message the hub or the stub sends to the device, unless its connection is gone. */
-  #deliver(connection: Connection, message: ServerMessage): void {
-    const received = sentToDevice(message)
-
-    if (received.type === 'reject') {
-      this.#gateway.rejections += 1
-    }
-
-    if (received.type === 'compaction') {
-      this.#gateway.compactions.push({ covers: received.covers, outcome: received.outcome })
-    }
-
-    if (this.#connection !== connection) {
-      return
-    }
-
-    if (received.type === 'updates' || received.type === 'error') {
-      if (connection.asked > 0) {
-        connection.asked -= 1
-      } else if (received.type === 'updates' && this.#dropNextFanOut) {
-        this.#dropNextFanOut = false
-
-        return
-      }
-    }
-
-    for (const listener of this.#messageListeners) {
-      listener(received)
-    }
-  }
-
-  /** The hub answers the device itself; a call that fails all the same is recorded. */
-  #settle(call: ResultAsync<unknown, DataError>): void {
-    void call.match(
-      () => {},
-      (error) => {
-        this.#gateway.failures.push(error)
-      },
-    )
-  }
-}
-
 /**
  * A gateway without a network for tests of the sync engine: a region hub on the given database
  * and, per device, a transport that behaves like the gateway's connection.
@@ -477,7 +92,7 @@ class DeviceChannel implements StubTransport {
 export function gatewayStub(options: GatewayStubOptions): GatewayStub {
   const failures: DataError[] = []
   const hub = new RegionHub({
-    local: options.local,
+    databases: singleDatabase(options.local),
     schema: options.schema,
     clock: options.clock,
     onError: (error) => failures.push(error),
@@ -487,7 +102,9 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
   })
   const gateway: Gateway = {
     hub,
+    schema: options.schema,
     clock: options.clock,
+    memberships: options.memberships ?? [],
     failures,
     compactions: [],
     rejections: 0,
@@ -498,13 +115,15 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     refusePull: false,
     keepOpen: undefined,
     failSignOut: undefined,
+    renewal: undefined,
+    refuseRenewals: false,
   }
   const channels: DeviceChannel[] = []
 
   return {
     hub,
-    transport(identity) {
-      const channel = new DeviceChannel(gateway, identity)
+    transport(identity, device = STUB_DEVICE) {
+      const channel = new DeviceChannel(gateway, identity, device)
 
       channels.push(channel)
 
@@ -545,10 +164,23 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
         gateway.failSignOut = resolve
       })
     },
+    renewAtNextHello(tokens) {
+      gateway.renewal = tokens
+    },
+    refuseRenewals() {
+      gateway.refuseRenewals = true
+    },
     signOuts: () => gateway.signOuts,
     endWith(reason) {
       for (const channel of channels) {
         channel.end(reason)
+      }
+    },
+    closeChannels(identity, device, code) {
+      for (const channel of channels) {
+        if (channel.belongsTo(identity, device)) {
+          channel.closeWith(code)
+        }
       }
     },
     rejections: () => gateway.rejections,

@@ -9,7 +9,7 @@ import { createLogger } from '@workspace/logger'
 import { systemClock } from '@workspace/replica'
 
 import { createGatewayRoot } from './composition/root'
-import { DIRECTORY, gatewayConfig, httpRpcUrl, NAMESPACE } from './config'
+import { DIRECTORY, gatewayConfig, NAMESPACE } from './config'
 import { startServer } from './server'
 
 /** The gateway listens on the loopback interface only. */
@@ -36,7 +36,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
     engines: remoteEngines(),
     url: config.SURREAL_URL,
     credentials: { username: config.GATEWAY_SURREAL_USER, password: config.GATEWAY_SURREAL_PASS },
-    rpcUrl: httpRpcUrl(config.SURREAL_URL),
+    signingKey: config.GATEWAY_JWT_KEY,
     clock: systemClock,
   })
 

@@ -3,9 +3,9 @@
 ## Role in the architecture
 
 The only package that depends on the SurrealDB driver. It opens the local database
-(applying the schema only when it changed since the last opening, so saved sessions
-stay valid across reloads), runs shapes and commands compiled from `.surql` files,
-announces table changes so watched shapes rerun, and handles accounts for the gateway,
+(applying the schema only when its text or its signing key changed since the last opening,
+so saved sessions stay valid across reloads), runs shapes and commands compiled from
+`.surql` files, announces table changes so watched shapes rerun, and handles accounts for the gateway,
 which signs devices up and in against its database: sign-up, sign-in, and sessions resumed
 from a saved access token or through a refresh key that is replaced on every use. Above this package ids are entity id strings and times are
 `Date`s; driver record ids and datetimes do not leave it.
@@ -14,10 +14,19 @@ from a saved access token or through a refresh key that is replaced on every use
 
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `AuthPort` / `AUTH`, `LocalDbPort` / `LOCAL_DB`.
-- Adapters: `openLocalDb`, `ShapeRunner`, `runCommand`, `SurrealWritePath`, `createAuth`. A
+- Adapters: `openLocalDb`, `applySchema`, `ShapeRunner`, `runCommand`, `SurrealWritePath`,
+  `createAuth`. `openLocalDb({ signingKey })` gives the schema's access methods the key they sign
+  tokens with, as `$jwt_key`: a server's database is opened with one fixed key, so applying the
+  schema again leaves issued tokens valid; without one each apply gives them a key of its own
+  (a device's replica, a test). `applySchema(local, schema, signingKey?)` applies a schema to an
+  open database the same way and remembers it, failing with `data:QUERY_FAILED`. A
   `LocalDb` closes once however often `close()` is called; `destroy()` closes it and deletes
   what it stored (the browser's IndexedDB database of an `indxdb://` address; an in-memory
-  database is gone once closed).
+  database is gone once closed). `deleteLocalDb(url)` deletes what a database that is not open
+  stored, the same way, without opening it. `createAuth` fails a call the database refused with
+  an auth code (`data:INVALID_CREDENTIALS`, `data:SIGN_UP_REJECTED`, `data:AUTH_FAILED`) and a
+  call it could not judge (the session did not open, the database could not be reached, the auth
+  object is closed) with `data:QUERY_FAILED`: only the first says the keys are dead.
 - `runAsOperator`: runs one SurrealQL text as a system user without applying the schema
   (a stand's namespaces, databases and system users), failing at once when the server
   does not answer.
@@ -29,13 +38,18 @@ from a saved access token or through a refresh key that is replaced on every use
   the namespace), and `wsRpcUrl`, the server's WebSocket RPC endpoint for any of its
   `http(s)://` or `ws(s)://` addresses; `./engines/wasm`: `wasmEngines()`, browser engines in a
   Web Worker (Vite builds only).
-- `./schema-files`: `readSchema()`, the shared schema as one text (Bun and Node).
+- `./schema-files`: `readSchema(database)`, the schema of the `directory` or the `tenant`
+  database as one text: the common files, then the database's own (Bun and Node).
+- Organisation names: `tenantDatabase(key)` (`t_<key>`) and `tenantRegionId(key)`
+  (`tenant:<key>`), for a key the kernel's `isTenantKey` accepts.
 - `./surql-names` (also from the root): `surqlComponentFile`, `surqlExportName`, `camelCase`,
   `pascalCase`, the names that bind a `.surql` file to its generated module, shared by the
   modeling stage and the bundler plugins.
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
-- `./testing`: `openTestDb()` (in-memory database with the shared schema), `readSchema()`,
+- `./testing`: `openTestDb({ signingKey? })` (in-memory database with the directory schema),
+  `TEST_SIGNING_KEY` (a test-only fixed key, for a test that applies a schema again and keeps its
+  tokens), `readSchema(database)`,
   `FakeShapeRunner` (a runner without a database for component tests),
   `interceptQueries()` (holds or fails queries, as a slow or broken database would; its
   queries keep `retry()`).

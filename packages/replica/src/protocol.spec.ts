@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CLOSE,
   clientMessage,
   decodeMessage,
   encodeMessage,
+  type Membership,
+  membership,
+  PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
 } from './protocol'
+
+const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, role: 'admin' }
 
 describe('sync protocol', () => {
   it('carries Loro bytes through JSON and back', () => {
@@ -40,6 +46,62 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
+  it('takes a hello of protocol 6 only', () => {
+    const hello = (protocol: number) =>
+      JSON.stringify({ type: 'hello', protocol, access: 'a', device: 'd' })
+
+    expect(PROTOCOL_VERSION).toBe(6)
+    expect(decodeMessage(clientMessage, hello(6)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(5)).isErr()).toBe(true)
+  })
+
+  it('takes a renew that carries nothing: the gateway holds the pair it renews', () => {
+    expect(decodeMessage(clientMessage, JSON.stringify({ type: 'renew' }))._unsafeUnwrap()).toEqual(
+      { type: 'renew' },
+    )
+    expect(
+      decodeMessage(clientMessage, JSON.stringify({ type: 'renew', refresh: 'r' }))._unsafeUnwrap(),
+    ).toEqual({ type: 'renew' })
+  })
+
+  it("decodes a reject that names a batch under another identity's peer", () => {
+    const reject: ServerMessage = {
+      type: 'reject',
+      region: 'tenant:acme',
+      batch: 3,
+      reason: 'foreign-peer',
+      detail: 'peer: 42 writes as another identity in tenant:acme',
+    }
+
+    expect(
+      decodeMessage(serverMessage, encodeMessage(serverMessage, reject))._unsafeUnwrap(),
+    ).toEqual(reject)
+  })
+
+  it('takes a hello that names its device in 1 to 64 characters', () => {
+    const hello = (device: string) =>
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a', device })
+
+    expect(decodeMessage(clientMessage, hello('d'.repeat(64)))._unsafeUnwrap()).toEqual({
+      type: 'hello',
+      protocol: PROTOCOL_VERSION,
+      access: 'a',
+      device: 'd'.repeat(64),
+    })
+    expect(decodeMessage(clientMessage, hello('')).isErr()).toBe(true)
+    expect(decodeMessage(clientMessage, hello('d'.repeat(65))).isErr()).toBe(true)
+  })
+
+  it('refuses a hello that names no device', () => {
+    const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a' })
+
+    expect(decodeMessage(clientMessage, hello).isErr()).toBe(true)
+  })
+
+  it('closes a device signed out from another one with 4001', () => {
+    expect(CLOSE.revoked).toBe(4001)
+  })
+
   it('refuses text that is not JSON', () => {
     expect(decodeMessage(serverMessage, 'not json').isErr()).toBe(true)
   })
@@ -50,9 +112,15 @@ describe('sync protocol', () => {
       {
         type: 'welcome',
         identity: 'idn_a',
-        regions: [{ region: 'identity:idn_a', head: 0 }],
+        regions: [
+          { region: 'identity:idn_a', head: 0 },
+          { region: 'tenant:acme', head: 2 },
+        ],
+        memberships: [acme],
         time: 1,
       },
+      { type: 'memberships', memberships: [acme] },
+      { type: 'memberships', memberships: [] },
       { type: 'tokens', access: 'a', refresh: 'r' },
       { type: 'updates', region: 'identity:idn_a', bytes, head: 3, snapshot: false },
       { type: 'ack', region: 'identity:idn_a', batch: 2, head: 4, compact: false },
@@ -66,6 +134,7 @@ describe('sync protocol', () => {
       { type: 'heads', regions: [{ region: 'identity:idn_a', head: 4 }], time: 2 },
       { type: 'compaction', region: 'identity:idn_a', covers: 4, outcome: 'accepted' },
       { type: 'error', code: 'protocol', message: 'bad' },
+      { type: 'error', code: 'rate-limited', message: 'too many renewals' },
     ]
 
     for (const message of messages) {
@@ -73,5 +142,10 @@ describe('sync protocol', () => {
         decodeMessage(serverMessage, encodeMessage(serverMessage, message))._unsafeUnwrap(),
       ).toEqual(message)
     }
+  })
+
+  it('parses a membership and refuses a role it does not know', () => {
+    expect(membership.parse(acme)).toEqual(acme)
+    expect(membership.safeParse({ ...acme, role: 'owner' }).success).toBe(false)
   })
 })

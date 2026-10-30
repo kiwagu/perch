@@ -14,6 +14,23 @@ commands compile into and write paths interpret.
 - `ExceptionBase` (stable `code`), `applyRules`, `DomainRule`.
 - `QuerySpec` with `isSatisfiedBy`; `ChangeSpec`, `ValueRef`, `resolveValue`.
 - `compareText`, `byText`: the one text ordering of the workspace.
+- `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key (2 to 32
+  lowercase letters, digits and underscores, starting with a letter), checked by the domain,
+  the gateway and the replica.
+- `defineAbilityFor(member, schema)`, `OWNER_ABILITY`, `NO_ABILITY`: see Abilities below.
+
+## Abilities
+
+`TENANT_ROLES` (`member`, `admin`) and `ACTIONS` (`create`, `update`, `delete`) are the one
+source of the roles; the replica protocol builds its role enum from them. What a role may do
+to the records of a table is data: each table declares `@owner` (the field naming the member
+a record belongs to) and `@can` (per role and action, scope `any` or `own`), and the modeling
+stage emits them as an `AbilitySchema`. `defineAbilityFor(member, schema)` returns an
+`Ability` whose `can(action, table, record?)` the browser asks before a command and the
+gateway before importing a batch. An `own` scope compares the owner field with the member id
+by key (`member:idn_a` and `idn_a` both name `idn_a`, see `ownerKeyOf`); a table or role
+without rules allows nothing. `OWNER_ABILITY` allows everything (the owner of a private
+region), `NO_ABILITY` nothing (nobody signed in). Reading is not an ability.
 
 ## Commands
 
