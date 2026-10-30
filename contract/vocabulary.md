@@ -191,6 +191,9 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 |---|---|---|
 | `app-shell.locale-select.option` | `en` | the option makes the app speak English |
 | `app-shell.locale-select.option` | `es` | the option makes the app speak Spanish |
+| `app-shell.theme-select.option` | `light` | the option shows the app light on this device |
+| `app-shell.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.settings.locale-select.option` | `en` | the option makes the account speak English |
 | `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
 | `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
@@ -242,6 +245,7 @@ included.
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
+| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |

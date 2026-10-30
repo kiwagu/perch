@@ -180,6 +180,7 @@ reserved:
   - app-shell.nav.organisation-link
   - app-shell.nav.devices-link
   - app-shell.nav.settings-link
+  - app-shell.theme-select
   - app-shell.locale-select
   - app-shell.sign-out-here-button
   - app-shell.leave-dialog

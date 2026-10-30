@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the language choice, a way out of a device whose data will not open, and a message with a reload in the place of a screen that failed to render."
+description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, and a message with a reload in the place of a screen that failed to render."
 frame: true
 flag: null
 bindings: []
@@ -46,6 +46,15 @@ anchors:
     description: The link to sign-in, the only link a guest sees.
     binding: { route: /sign-in }
     roles: [ guest ]
+  app-shell.theme-select:
+    kind: select
+    description: "The theme of this device, for anyone, a guest included: light, dark or the device's own setting; a choice applies at once and stays on this device, the same theme the settings screen chooses."
+    binding:
+      action: platform.theme.set
+      params:
+        theme: app-shell.theme-select
+    dataValue: true
+    derived: [ option ]
   app-shell.locale-select:
     kind: select
     description: "The language of the app for a guest, the one a new account starts with: a choice applies at once; a signed-in account chooses its language on its settings screen, and a language another device stores applies here too."
@@ -63,7 +72,7 @@ anchors:
     binding: { action: platform.sign-out }
   app-shell.crash-message:
     kind: message
-    description: Shown in the place of the open screen when it failed to render, the navigation and the language select still around it; another screen, a language chosen or a reload takes it away.
+    description: Shown in the place of the open screen when it failed to render, the navigation, the theme select and the language select still around it; another screen, a language chosen or a reload takes it away.
     codes: [ screen-crashed ]
   app-shell.reload-button:
     kind: button
@@ -80,7 +89,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the data is being opened; no screen is rendered.
-  ready: The navigation, the language select and the open screen; app-shell.status is a visually hidden text.
+  ready: The navigation, the theme select, the language select and the open screen; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
 flow:
@@ -99,6 +108,8 @@ flow:
         app-shell.locale-select:
           target: opening
           description: The app speaks the chosen language; no account's settings are open yet to store it.
+        app-shell.theme-select:
+          description: The app shows the chosen theme at once, and this device keeps it.
     ready:
       description: The frame with the open screen.
       on:
@@ -106,6 +117,8 @@ flow:
           - target: ready
             guard: signedOut
             description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
+        app-shell.theme-select:
+          description: The app shows the chosen theme at once, and this device keeps it.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
@@ -125,7 +138,7 @@ flow:
           target: crashed
           description: The open screen failed to render.
     crashed:
-      description: The open screen failed to render; the frame stays, with the navigation and the language select.
+      description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
       entry:
         - show: { app-shell.crash-message: [ screen-crashed ] }
       exit:
@@ -139,6 +152,8 @@ flow:
           - target: ready
             guard: signedOut
             description: The screen renders again in the guest's chosen language, with no settings to store it.
+        app-shell.theme-select:
+          description: The app shows the chosen theme at once, the message staying, and this device keeps it.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
@@ -168,6 +183,8 @@ flow:
         app-shell.locale-select:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
+        app-shell.theme-select:
+          description: The app shows the chosen theme at once, and this device keeps it.
     signing-out:
       invoke:
         src: platform.sign-out
@@ -190,6 +207,7 @@ flow:
 wireframe: |-
   - banner:
     - text: Perch
+    - combobox "Theme": As the device
     - combobox "Language": English
   - main:
     - text: Saved on this device
