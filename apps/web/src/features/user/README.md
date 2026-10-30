@@ -21,7 +21,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 
 - Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/me` (guard `authenticated`)
   renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
-  this device (the platform's `useDeviceTheme`, `platform.theme.set`) and the account's language
+  this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
+  chooses the same one) and the account's language
   (stored through `settings.updateLocale`, spoken at once), its screen's flow run as its machine
   (`application/settings/settings.machine.ts`, held to `contract/domain/screens/settings.yaml` by
   `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the

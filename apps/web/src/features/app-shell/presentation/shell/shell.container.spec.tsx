@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
+import { memoryTheme } from '../../../../platform/__fixtures__/theme'
 import en from '../../../../platform/i18n/app.en.json'
 import es from '../../../../platform/i18n/app.es.json'
 import { defineModule } from '../../../../platform/module'
@@ -14,6 +16,7 @@ import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
 import type { SessionPort } from '../../../../platform/session.port'
+import { ThemeContext } from '../../../../platform/theme'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { CrashSignal } from '../crash/crash-signal'
 
@@ -59,11 +62,13 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={openedFrame()}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
 
@@ -94,11 +99,13 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={openedFrame()}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')
@@ -160,11 +167,13 @@ describe('ShellContainer', () => {
     })
     const app = (locale: Locale) => (
       <I18nProvider locale={locale} catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={frame}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={frame}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>
     )
     const view = render(app('es'))
@@ -213,11 +222,13 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={openedFrame()}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')
@@ -227,6 +238,59 @@ describe('ShellContainer', () => {
 
     expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+  })
+
+  it("chooses the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const signedIn: SessionPort = { ...session, current: () => ann }
+    const services = fakeServices(signedIn)
+    const theme = memoryTheme('dark')
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: signedIn,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <ShellFrameContext.Provider value={openedFrame(theme.set)}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    const select = screen.getByTestId('app-shell.theme-select')
+
+    expect(select.getAttribute('data-value')).toBe('dark')
+
+    await userEvent.click(select)
+
+    const light = await screen.findByRole('option', { name: en['app.shell.theme.light'] })
+
+    // The list takes no pointer until it has finished opening.
+    await vi.waitFor(() => expect(getComputedStyle(light).pointerEvents).not.toBe('none'))
+    await userEvent.click(light)
+
+    expect(theme.current()).toBe('light')
+    await waitFor(() => expect(select.getAttribute('data-value')).toBe('light'))
+
+    // The settings screen chooses the same device theme.
+    act(() => theme.set('system'))
+
+    expect(select.getAttribute('data-value')).toBe('system')
   })
 
   it("speaks no signed-out account's stored language, and its notice goes with it", async () => {
@@ -263,11 +327,13 @@ describe('ShellContainer', () => {
     frame.actor.on('speak', ({ locale }) => spoken.push(locale))
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={frame}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <ShellFrameContext.Provider value={frame}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')

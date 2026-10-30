@@ -34,8 +34,5 @@
   "user.profile.error.failed": "The change was not saved. Try again.",
   "user.settings.title": "Settings",
   "user.settings.theme": "Theme",
-  "user.settings.theme.light": "Light",
-  "user.settings.theme.dark": "Dark",
-  "user.settings.theme.system": "As the device",
   "user.settings.locale": "Language"
 }

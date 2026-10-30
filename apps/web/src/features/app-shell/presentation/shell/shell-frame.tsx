@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react'
 import type { ActorRefFrom } from 'xstate'
 
 import type { LanguageWrites } from '../../../../platform/language-writes'
+import type { Theme } from '../../../../platform/theme'
 import type { LocaleWrites } from '../../application/locale-writes'
 import { createShellMachine } from '../../application/shell.machine'
 
@@ -22,9 +23,13 @@ export interface ShellLive {
   renderAgain: (() => void) | undefined
 }
 
-/** The frame's machine over what it reads, made at the start, before the services exist. */
+/**
+ * The frame's machine over what it reads, made at the start, before the services exist; a theme
+ * chosen goes to the device's.
+ */
 export function shellFrameMachine(
   live: ShellLive,
+  setTheme: (theme: Theme) => void,
   reload: () => void = () => window.location.reload(),
 ) {
   return createShellMachine({
@@ -32,6 +37,7 @@ export function shellFrameMachine(
     signOutHere: () =>
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
     reload,
+    setTheme,
   })
 }
 

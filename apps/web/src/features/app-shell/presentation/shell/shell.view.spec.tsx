@@ -20,6 +20,9 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
         activePath="/sign-in"
         canChooseLocale={true}
         onLocaleChange={() => {}}
+        theme="system"
+        canChooseTheme={true}
+        onThemeChange={() => {}}
         {...rest}
       >
         <p>page</p>
@@ -157,6 +160,25 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
   })
 
+  it("shows anyone the device's theme, a guest and a signed-in account alike", () => {
+    const { unmount } = renderShell({ theme: 'dark' })
+    const select = screen.getByTestId('app-shell.theme-select')
+
+    expect(select.getAttribute('role')).toBe('combobox')
+    expect(select.getAttribute('data-value')).toBe('dark')
+    unmount()
+
+    renderShell({ signedIn: true, activePath: '/me', theme: 'light' })
+
+    expect(screen.getByTestId('app-shell.theme-select').getAttribute('data-value')).toBe('light')
+  })
+
+  it('takes a theme choice only while the frame takes one', () => {
+    renderShell({ canChooseTheme: false })
+
+    expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(true)
+  })
+
   it("marks a guest's language select", () => {
     renderShell({ signedIn: false })
 
@@ -177,6 +199,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme
+          onThemeChange={() => {}}
         >
           <p>page</p>
         </ShellView>
@@ -241,6 +266,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale={true}
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
           notice={{ code: 'welcome', text: 'Welcome' }}
         >
           <p>page</p>
@@ -273,6 +301,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale={true}
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
           crash="screen-crashed"
           canReload={false}
           onReload={onReload}

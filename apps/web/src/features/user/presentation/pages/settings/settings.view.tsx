@@ -22,10 +22,10 @@ export function SettingsView(props: SettingsViewProps) {
     value: theme,
     label:
       theme === 'light'
-        ? t('user.settings.theme.light')
+        ? t('app.shell.theme.light')
         : theme === 'dark'
-          ? t('user.settings.theme.dark')
-          : t('user.settings.theme.system'),
+          ? t('app.shell.theme.dark')
+          : t('app.shell.theme.system'),
   }))
   const locales = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,

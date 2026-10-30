@@ -4,6 +4,8 @@ import { createActor, waitFor } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
+import type { Theme } from '../../../platform/theme'
+
 import { LocaleWrites } from './locale-writes'
 import { createShellMachine, type ShellValues } from './shell.machine'
 
@@ -12,8 +14,9 @@ function frame() {
   let values: ShellValues = { account: undefined, stored: undefined, writes: LocaleWrites.none }
   const signOutHere = vi.fn(() => okAsync(undefined))
   const reload = vi.fn()
+  const setTheme = vi.fn<(theme: Theme) => void>()
   const actor = createActor(
-    createShellMachine({ values: () => values, signOutHere, reload }),
+    createShellMachine({ values: () => values, signOutHere, reload, setTheme }),
   ).start()
   const spoken: Locale[] = []
   const emitted: unknown[] = []
@@ -25,6 +28,7 @@ function frame() {
     actor,
     signOutHere,
     reload,
+    setTheme,
     spoken,
     emitted,
     signIn: (account = 'idn_ann') => {
@@ -46,6 +50,9 @@ function frame() {
       values = { ...values, writes: step(values.writes) }
     },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
+    chooseTheme: (theme: Theme) => actor.send({ type: 'app-shell.theme-select', theme }),
+    canChooseTheme: () =>
+      actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'dark' }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
     is: (state: 'ready' | 'failed' | 'crashed') => actor.getSnapshot().matches(state),
   }
@@ -173,6 +180,47 @@ describe('shell machine', () => {
     shell.store('en')
 
     expect(shell.spoken).toEqual(['en', 'en'])
+  })
+
+  it('applies a theme chosen while the data opens, once open, signed in or not, and if it failed', () => {
+    const opening = frame()
+
+    opening.chooseTheme('dark')
+    opening.actor.send({ type: 'platform.opened' })
+    opening.chooseTheme('light')
+    opening.signIn()
+    opening.chooseTheme('system')
+
+    expect(opening.setTheme.mock.calls).toEqual([['dark'], ['light'], ['system']])
+    expect(opening.is('ready')).toBe(true)
+
+    const failed = frame()
+
+    failed.actor.send({ type: 'platform.open-failed' })
+    failed.chooseTheme('dark')
+
+    expect(failed.setTheme).toHaveBeenCalledWith('dark')
+    expect(failed.is('failed')).toBe(true)
+  })
+
+  it('applies a theme chosen around a crash, the message staying', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.chooseTheme('dark')
+
+    expect(shell.setTheme).toHaveBeenCalledWith('dark')
+    expect(shell.is('crashed')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(CRASHED)
+  })
+
+  it('takes no theme once the browser keeps no site data', () => {
+    const blocked = frame()
+
+    blocked.actor.send({ type: 'platform.storage-blocked' })
+
+    expect(blocked.canChooseTheme()).toBe(false)
   })
 
   it('signs the saved account out here when its data failed, then moves to sign-in', async () => {

@@ -3,6 +3,8 @@ import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
+import type { Theme } from '../../../platform/theme'
+
 import type { LocaleWrites } from './locale-writes'
 
 /** What the frame's guards read at the moment they are asked. */
@@ -20,6 +22,7 @@ export type ShellEvent =
   | { readonly type: 'platform.open-failed' }
   | { readonly type: 'platform.storage-blocked' }
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
+  | { readonly type: 'app-shell.theme-select'; readonly theme: Theme }
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'app-shell.sign-out-here-button' }
   | { readonly type: 'platform.signed-out' }
@@ -59,6 +62,8 @@ export interface ShellMachineDeps {
   readonly signOutHere: () => ResultAsync<unknown, unknown>
   /** Loads the page again from the server. */
   readonly reload: () => void
+  /** Shows a theme on this device and keeps it there. */
+  readonly setTheme: (theme: Theme) => void
 }
 
 /** A result that resolves once done, or rejects with its failure. */
@@ -86,6 +91,8 @@ const CRASHED = {
   params: { anchor: 'app-shell.crash-message', codes: ['screen-crashed'] },
 } as const
 const CRASH_GONE = { type: 'clear', params: { anchor: 'app-shell.crash-message' } } as const
+/** A theme chosen applies at once, whatever the frame is doing. */
+const THEME_CHOSEN = { actions: 'applyTheme' } as const
 
 /** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
@@ -119,6 +126,10 @@ export function createShellMachine(deps: ShellMachineDeps) {
 
         return { type: 'speak' as const, locale: event.locale }
       }),
+      applyTheme: ({ event }) => {
+        assertEvent(event, 'app-shell.theme-select')
+        deps.setTheme(event.theme)
+      },
       // Taken under the guard storedElsewhere, so the language is there to speak.
       speakStored: enqueueActions(({ enqueue }) => {
         const locale = storedElsewhere()
@@ -137,6 +148,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.open-failed': { target: 'failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },
+          'app-shell.theme-select': THEME_CHOSEN,
         },
       },
       ready: {
@@ -144,6 +156,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'app-shell.locale-select': [
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
+          'app-shell.theme-select': THEME_CHOSEN,
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
           'platform.signed-out': { actions: CLEAR_NOTICE },
           'platform.change-rejected': { actions: REJECTED },
@@ -160,6 +173,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'app-shell.locale-select': [
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
+          'app-shell.theme-select': THEME_CHOSEN,
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
           'platform.signed-out': { actions: CLEAR_NOTICE },
           'platform.change-rejected': { actions: REJECTED },
@@ -173,6 +187,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
+          'app-shell.theme-select': THEME_CHOSEN,
         },
       },
       'signing-out': {

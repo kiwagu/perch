@@ -34,8 +34,5 @@
   "user.profile.error.failed": "El cambio no se guardó. Inténtalo de nuevo.",
   "user.settings.title": "Ajustes",
   "user.settings.theme": "Tema",
-  "user.settings.theme.light": "Claro",
-  "user.settings.theme.dark": "Oscuro",
-  "user.settings.theme.system": "Como el dispositivo",
   "user.settings.locale": "Idioma"
 }

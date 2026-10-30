@@ -30,7 +30,7 @@ import { LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
-import { browserTheme, ThemeContext } from './platform/theme'
+import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
@@ -111,6 +111,7 @@ const STATUS = {
 function App() {
   const [boot, setBoot] = useState<Boot>({ status: 'opening' })
   const setLocale = useSetLocale()
+  const device = useDeviceTheme()
   // The frame's flow runs from the start: what it reads is filled in as the start and the shell learn it.
   const [made] = useState(() => {
     const live: ShellLive = {
@@ -122,7 +123,7 @@ function App() {
       renderAgain: undefined,
     }
 
-    return { live, machine: shellFrameMachine(live) }
+    return { live, machine: shellFrameMachine(live, device.set) }
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
@@ -175,6 +176,9 @@ function App() {
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}
+        theme={device.theme}
+        canChooseTheme={state.can({ type: 'app-shell.theme-select', theme: 'light' })}
+        onThemeChange={(theme) => send({ type: 'app-shell.theme-select', theme })}
         onSignOutHere={
           boot.status === 'failed' && boot.signOutHere
             ? () => send({ type: 'app-shell.sign-out-here-button' })
