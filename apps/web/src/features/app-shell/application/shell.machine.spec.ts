@@ -41,6 +41,10 @@ function frame() {
       actor.send({ type: 'model.settings.locale' })
       values = { ...values, writes: values.writes.arrived(stored) }
     },
+    /** This device's own writes of the language, as the settings screen tells them. */
+    write: (step: (writes: LocaleWrites) => LocaleWrites) => {
+      values = { ...values, writes: step(values.writes) }
+    },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
     is: (state: 'ready' | 'failed' | 'crashed') => actor.getSnapshot().matches(state),
@@ -151,6 +155,24 @@ describe('shell machine', () => {
     shell.store('en')
 
     expect(shell.spoken).toEqual(['es', 'en'])
+  })
+
+  it("takes this device's own writes coming back late for its own, a failed one too", () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.signIn()
+    shell.store('en')
+    // The settings screen stores es, then en, and en's store fails; es comes back late.
+    shell.write((writes) => writes.writing('es').writing('en').failed('en'))
+    shell.store('es')
+
+    expect(shell.spoken).toEqual(['en'])
+
+    // Another device stores en afterwards: that one is spoken.
+    shell.store('en')
+
+    expect(shell.spoken).toEqual(['en', 'en'])
   })
 
   it('signs the saved account out here when its data failed, then moves to sign-in', async () => {

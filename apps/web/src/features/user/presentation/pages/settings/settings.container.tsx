@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useLocale } from '@workspace/i18n'
 
 import { useSetLocale } from '../../../../../platform/i18n'
+import { trackedStore, useLanguageWrites } from '../../../../../platform/language-writes'
 import { useService, useShape } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
@@ -28,6 +29,7 @@ export function SettingsContainer() {
   const device = useDeviceTheme()
   const locale = useLocale()
   const setLocale = useSetLocale()
+  const writes = useLanguageWrites()
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
   const live = useRef<SettingsValues & { readonly store: typeof row }>({
     held: false,
@@ -43,15 +45,16 @@ export function SettingsContainer() {
       createSettingsMachine({
         values: () => live.current,
         setTheme: device.set,
-        storeLocale: (chosen) => {
+        // The frame learns of the write, so its echo is not taken for another device's language.
+        storeLocale: trackedStore(writes, (chosen) => {
           const stored = live.current.store
 
           live.current = { ...live.current, storingFor: live.current.account }
 
           return settings.updateLocale({ id: stored?.id ?? never(), locale: chosen })
-        },
+        }),
       }),
-    [device.set, settings],
+    [device.set, settings, writes],
   )
   const { state, send, actor } = useScreenMachine(machine)
 

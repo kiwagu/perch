@@ -25,6 +25,7 @@ import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
+import { type LanguageWrites, LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
@@ -123,6 +124,18 @@ function App() {
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+  // The settings screen's stores of the language, kept by the frame to tell their echo from another device's.
+  const languageWrites = useMemo<LanguageWrites>(
+    () => ({
+      writing: (locale) => {
+        made.live.writes = made.live.writes.writing(locale)
+      },
+      failed: (locale) => {
+        made.live.writes = made.live.writes.failed(locale)
+      },
+    }),
+    [made],
+  )
 
   useEffect(() => {
     const spoken = actor.on('speak', ({ locale }) => setLocale(locale))
@@ -182,9 +195,11 @@ function App() {
 
   return (
     <ShellFrameContext.Provider value={frame}>
-      <ServicesProvider services={boot.services}>
-        <RouterProvider router={boot.router} />
-      </ServicesProvider>
+      <LanguageWritesContext.Provider value={languageWrites}>
+        <ServicesProvider services={boot.services}>
+          <RouterProvider router={boot.router} />
+        </ServicesProvider>
+      </LanguageWritesContext.Provider>
     </ShellFrameContext.Provider>
   )
 }
