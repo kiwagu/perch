@@ -355,4 +355,20 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
     expect(screen.queryByTestId('app-shell.update-button')).toBeNull()
   })
+
+  it("says the state of this device's sync in the header, in the language the app speaks", () => {
+    renderShell({ signedIn: true, activePath: '/me', sync: 'offline', locale: 'es' })
+
+    const sync = screen.getByTestId('app-shell.sync-message')
+
+    expect(sync.getAttribute('data-code')).toBe('offline')
+    expect(sync.getAttribute('role')).toBe('status')
+    expect(sync.textContent).toBe(es['app.shell.sync.offline'])
+  })
+
+  it('shows no state of the sync without one, as for a guest', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+  })
 })

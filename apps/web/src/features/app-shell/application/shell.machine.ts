@@ -57,6 +57,11 @@ export type ShellEvent =
   | { readonly type: 'platform.protocol-refused' }
   | { readonly type: 'platform.tab-hidden' }
   | { readonly type: 'app-shell.update-button' }
+  | { readonly type: 'platform.synced' }
+  | { readonly type: 'platform.sending' }
+  | { readonly type: 'platform.connecting' }
+  | { readonly type: 'platform.offline' }
+  | { readonly type: 'platform.sync-stopped' }
 
 /**
  * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
@@ -101,8 +106,13 @@ async function settled<T>(result: ResultAsync<T, unknown>): Promise<T> {
 }
 
 const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
-/** The notice goes with the account that was signed in when it was raised. */
-const CLEAR_NOTICE = { type: 'clear', params: { anchor: 'app-shell.notice-message' } } as const
+/** The notice goes with the account that was signed in when it was raised, the state of its sync too. */
+const SIGNED_OUT = {
+  actions: [
+    { type: 'clear', params: { anchor: 'app-shell.notice-message' } },
+    { type: 'clear', params: { anchor: 'app-shell.sync-message' } },
+  ],
+} as const
 /** The gateway refused a change this device then undid, or refused the undo too. */
 const REJECTED = {
   type: 'show',
@@ -130,6 +140,18 @@ const NEW_VERSION = {
     'noteVersion',
     { type: 'show', params: { anchor: 'app-shell.update-message', codes: ['new-version'] } },
   ],
+} as const
+/** The state of this device's sync, as the platform says it. */
+const syncShows = (code: 'synced' | 'sending' | 'connecting' | 'offline' | 'sync-stopped') =>
+  ({
+    actions: { type: 'show', params: { anchor: 'app-shell.sync-message', codes: [code] } },
+  }) as const
+const SYNC = {
+  'platform.synced': syncShows('synced'),
+  'platform.sending': syncShows('sending'),
+  'platform.connecting': syncShows('connecting'),
+  'platform.offline': syncShows('offline'),
+  'platform.sync-stopped': syncShows('sync-stopped'),
 } as const
 const PROTOCOL_OUTDATED = {
   actions: [
@@ -225,7 +247,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           ],
           'app-shell.theme-select': THEME_CHOSEN,
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
-          'platform.signed-out': { actions: CLEAR_NOTICE },
+          'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
           'platform.crashed': { target: 'crashed' },
@@ -237,6 +259,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
             guard: 'quietReload',
             actions: 'markSelfReload',
           },
+          ...SYNC,
         },
       },
       crashed: {
@@ -250,7 +273,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           ],
           'app-shell.theme-select': THEME_CHOSEN,
           'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
-          'platform.signed-out': { actions: CLEAR_NOTICE },
+          'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
           'platform.new-version': NEW_VERSION,
@@ -261,6 +284,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
             guard: 'quietReload',
             actions: 'markSelfReload',
           },
+          ...SYNC,
         },
       },
       reloading: {

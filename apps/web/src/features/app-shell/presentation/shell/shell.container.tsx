@@ -19,6 +19,7 @@ import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
 import { SERVED_BUILD } from '../../../../platform/served-build.port'
 import { SESSION } from '../../../../platform/session.port'
+import { SYNC_STATUS, type SyncStatus } from '../../../../platform/sync-status.port'
 import { useDeviceTheme } from '../../../../platform/theme'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
@@ -33,6 +34,19 @@ const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props
 
 const CRASH_MESSAGE = 'app-shell.crash-message'
 const UPDATE_MESSAGE = 'app-shell.update-message'
+const SYNC_MESSAGE = 'app-shell.sync-message'
+
+/** The frame's platform event for each state of the sync. */
+const SYNC_EVENTS = {
+  synced: 'platform.synced',
+  sending: 'platform.sending',
+  connecting: 'platform.connecting',
+  offline: 'platform.offline',
+  'sync-stopped': 'platform.sync-stopped',
+} as const
+
+const syncCode = (codes: readonly string[]): SyncStatus | undefined =>
+  codes.find((code): code is SyncStatus => Object.hasOwn(SYNC_EVENTS, code))
 
 type UpdateCode = 'new-version' | 'protocol-outdated'
 
@@ -47,6 +61,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const session = useService(SESSION)
   const events = useService(EVENTS)
   const servedBuild = useService(SERVED_BUILD)
+  const syncStatus = useService(SYNC_STATUS)
+  const syncNow = useSyncExternalStore(
+    (onChange) => syncStatus.subscribe(onChange),
+    () => syncStatus.current(),
+  )
   const user = useSyncExternalStore(
     (onChange) => session.subscribe(onChange),
     () => session.current(),
@@ -72,6 +91,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const router = useRouter()
   const [crash, setCrash] = useState<'screen-crashed' | undefined>(undefined)
   const [update, setUpdate] = useState<UpdateCode | undefined>(undefined)
+  const [sync, setSync] = useState<SyncStatus | undefined>(undefined)
   const device = useDeviceTheme()
   const unsaved = useUnsavedInput()
 
@@ -140,6 +160,13 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     [servedBuild, actor],
   )
 
+  // The state of this device's sync, while an account is signed in: the frame's platform event.
+  useEffect(() => {
+    if (syncNow !== undefined) {
+      actor.send({ type: SYNC_EVENTS[syncNow] })
+    }
+  }, [syncNow, actor])
+
   // The tab going to the background: the frame's platform event, which loads the page again by
   // itself when an update waits and no field holds unsaved input.
   useEffect(() => {
@@ -167,6 +194,15 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       if (event.anchor === CRASH_MESSAGE) {
         setCrash(undefined)
       }
+
+      if (event.anchor === SYNC_MESSAGE) {
+        setSync(undefined)
+      }
+    })
+    const synced = actor.on('show', (event) => {
+      if (event.anchor === SYNC_MESSAGE) {
+        setSync(syncCode(event.codes))
+      }
     })
     // The update message stays until the page loads again: the flow never clears it.
     const updated = actor.on('show', (event) => {
@@ -179,6 +215,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       shown.unsubscribe()
       cleared.unsubscribe()
       updated.unsubscribe()
+      synced.unsubscribe()
     }
   }, [actor])
 
@@ -229,6 +266,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
           }
         })
       }}
+      sync={sync}
       update={update}
       canUpdate={canUpdate}
       onUpdate={() => {

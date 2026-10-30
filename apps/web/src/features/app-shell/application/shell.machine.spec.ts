@@ -86,6 +86,12 @@ const PROTOCOL_OUTDATED = {
   codes: ['protocol-outdated'],
 }
 const SERVED = '0.2.0+2b9a0c1d'
+const SYNC_CLEARED = { type: 'clear', anchor: 'app-shell.sync-message' }
+const syncShown = (code: string) => ({
+  type: 'show',
+  anchor: 'app-shell.sync-message',
+  codes: [code],
+})
 
 const sameAs = (event: unknown, expected: object): boolean =>
   JSON.stringify(event) === JSON.stringify(expected)
@@ -146,14 +152,14 @@ describe('shell machine', () => {
     expect(shell.canChoose()).toBe(true)
   })
 
-  it('clears the notice when the account signs out', () => {
+  it('clears the notice and the state of the sync when the account signs out', () => {
     const shell = frame()
 
     shell.actor.send({ type: 'platform.opened' })
     shell.signIn()
     shell.actor.send({ type: 'platform.signed-out' })
 
-    expect(shell.emitted).toEqual([CLEARED])
+    expect(shell.emitted).toEqual([CLEARED, SYNC_CLEARED])
     expect(shell.is('ready')).toBe(true)
   })
 
@@ -425,5 +431,36 @@ describe('shell machine', () => {
 
     expect(failed.actor.getSnapshot().can({ type: 'platform.protocol-refused' })).toBe(false)
     expect(failed.canUpdate()).toBe(false)
+  })
+
+  it('says the state of the sync the platform gives, around a crash too', () => {
+    const shell = frame()
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.signIn()
+
+    for (const code of ['connecting', 'synced', 'sending', 'offline', 'sync-stopped'] as const) {
+      shell.actor.send({ type: `platform.${code}` })
+
+      expect(shell.emitted.at(-1)).toEqual(syncShown(code))
+    }
+
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.actor.send({ type: 'platform.synced' })
+
+    expect(shell.is('crashed')).toBe(true)
+    expect(shell.emitted.at(-1)).toEqual(syncShown('synced'))
+  })
+
+  it('takes no state of the sync while the data opens or once it failed to', () => {
+    const opening = frame()
+
+    expect(opening.actor.getSnapshot().can({ type: 'platform.synced' })).toBe(false)
+
+    const failed = frame()
+
+    failed.actor.send({ type: 'platform.open-failed' })
+
+    expect(failed.actor.getSnapshot().can({ type: 'platform.offline' })).toBe(false)
   })
 })

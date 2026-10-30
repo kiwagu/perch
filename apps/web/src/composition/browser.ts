@@ -123,6 +123,15 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     deviceLabel: deviceLabel(navigator),
     online: () => navigator.onLine,
+    onOnlineChange: (listener) => {
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
     transport: (context) =>

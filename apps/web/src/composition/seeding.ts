@@ -363,6 +363,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
     online: () => true,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>

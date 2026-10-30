@@ -60,6 +60,7 @@ async function boot(
     gatewayAuth: fakeGatewayAuth(),
     deviceLabel: 'Chrome on Linux',
     online: () => false,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) =>
       organisationsApi('/backend', {
         ...deps,
