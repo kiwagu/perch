@@ -12,18 +12,26 @@ import type { Plugin } from 'vite'
 const MAGIC = [0x00, 0x61, 0x73, 0x6d]
 const HEADER = 8
 const CUSTOM = 0
-const SOURCE_MAP = 'sourceMappingURL'
+const SOURCE_MAP = new TextEncoder().encode('sourceMappingURL')
 
-/** An unsigned LEB128 number at `at`, and where the bytes after it start. */
+/**
+ * An unsigned 32-bit LEB128 number at `at`, read no further than `end`, and where the bytes
+ * after it start: at most five bytes, the fifth carrying no more than the top four bits.
+ */
 function unsigned(
   module: Uint8Array,
   at: number,
+  end: number,
 ): { readonly value: number; readonly next: number } {
   let value = 0
   let scale = 1
 
-  for (let next = at; next < module.length && next < at + 5; next += 1) {
+  for (let next = at; next < end && next < at + 5; next += 1) {
     const byte = module[next] ?? 0
+
+    if (next === at + 4 && byte > 0x0f) {
+      throw new Error(`a WASM number at byte ${at} does not fit in 32 bits`)
+    }
 
     value += (byte & 0x7f) * scale
     scale *= 0x80
@@ -36,14 +44,20 @@ function unsigned(
   throw new Error(`a WASM module has no complete number at byte ${at}`)
 }
 
-/** Whether the custom section whose contents start at `at` is named `sourceMappingURL`. */
+/**
+ * Whether the custom section whose contents run from `at` to `end` is named `sourceMappingURL`,
+ * byte for byte; a name that runs past its section fails the build.
+ */
 function namesSourceMap(module: Uint8Array, at: number, end: number): boolean {
-  const length = unsigned(module, at)
+  const length = unsigned(module, at, end)
+  const name = module.subarray(length.next, length.next + length.value)
+
+  if (length.next + length.value > end) {
+    throw new Error(`the name of the WASM custom section at byte ${at} runs past its section`)
+  }
 
   return (
-    length.next + length.value <= end &&
-    new TextDecoder().decode(module.subarray(length.next, length.next + length.value)) ===
-      SOURCE_MAP
+    name.length === SOURCE_MAP.length && name.every((byte, index) => byte === SOURCE_MAP[index])
   )
 }
 
@@ -57,7 +71,7 @@ export function withoutSourceMaps(module: Uint8Array): Uint8Array {
 
   for (let at = HEADER; at < module.length; ) {
     const id = module[at]
-    const size = unsigned(module, at + 1)
+    const size = unsigned(module, at + 1, module.length)
     const end = size.next + size.value
 
     if (end > module.length) {
