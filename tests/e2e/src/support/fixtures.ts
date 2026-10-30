@@ -11,6 +11,7 @@ import {
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { generate } from './data'
+import { type SecurityWatch, watchSecurity } from './security'
 
 export { expect }
 
@@ -120,47 +121,74 @@ export function pageLoads(page: Page): () => number {
 /** The browsers of the running test: the step check looks at every page they have open. */
 const browsers = new Set<BrowserContext>()
 
-/** A browser context of the test's own, opened on first use; `close` closes it if it opened. */
+/** The front every stand serves the app from, the origin the security check holds to its headers. */
+function frontOf(baseURL: string | undefined): string {
+  if (baseURL === undefined) {
+    throw new Error('the e2e projects give every browser the base URL of the front')
+  }
+
+  return new URL(baseURL).origin
+}
+
+/** Fails the test with every problem a browser reported against the front's security policy. */
+async function expectSecure(watch: SecurityWatch): Promise<void> {
+  expect(
+    await watch.problems(),
+    'the front sends its security headers and no page or worker breaks its policy',
+  ).toEqual([])
+}
+
+/**
+ * A browser context of the test's own, opened on first use; `close` closes it if it opened,
+ * then fails the test if it reported a problem against the front's security policy.
+ */
 function ownBrowser(
   browser: Browser,
   options: BrowserContextOptions,
+  front: string,
 ): { open(): Promise<Page>; close(): Promise<void> } {
-  let opened: Promise<Page> | undefined
+  let opened: Promise<{ page: Page; security: SecurityWatch }> | undefined
 
   return {
-    open: () => {
-      opened ??= browser.newContext(options).then((context) => {
+    open: async () => {
+      opened ??= browser.newContext(options).then(async (context) => {
         browsers.add(context)
+        const security = watchSecurity(context, front)
 
-        return context.newPage()
+        return { page: await context.newPage(), security }
       })
 
-      return opened
+      return (await opened).page
     },
     close: async () => {
       if (opened) {
-        const context = (await opened).context()
+        const { page, security } = await opened
+        const context = page.context()
 
         browsers.delete(context)
         await context.close()
+        await expectSecure(security)
       }
     },
   }
 }
 
 const extended = base.extend<Fixtures>({
-  page: async ({ page }, use) => {
+  page: async ({ page, baseURL }, use) => {
+    const security = watchSecurity(page.context(), frontOf(baseURL))
+
     browsers.add(page.context())
     await use(page)
     browsers.clear()
+    await expectSecure(security)
   },
   signedIn: async ({ page }, use) => {
     await use(await signUp(page))
   },
   // Playwright Test gives every context of a test the project's options (the device emulated,
   // the base URL, the front's certificate) on top of `contextOptions`.
-  secondDevice: async ({ browser, contextOptions, signedIn }, use) => {
-    const device = ownBrowser(browser, contextOptions)
+  secondDevice: async ({ browser, contextOptions, baseURL, signedIn }, use) => {
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
 
     await use({
       open: device.open,
@@ -174,9 +202,9 @@ const extended = base.extend<Fixtures>({
     })
     await device.close()
   },
-  anotherAccount: async ({ browser, contextOptions }, use) => {
+  anotherAccount: async ({ browser, contextOptions, baseURL }, use) => {
     const account = freshAccount()
-    const device = ownBrowser(browser, contextOptions)
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
 
     await use({
       account,

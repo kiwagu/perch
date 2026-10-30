@@ -15,7 +15,9 @@ contract's feedback loop: one that cannot be written from the contract alone nam
 the contract, fixed there and never worked around in a test. `bun run e2e:coverage` checks
 the pairs, and `bun run contract:check:consumers` checks every anchor, code, state and value
 a test names as a literal against the contract. After every step a check fails the test when
-any open page scrolls sideways. Each test signs up fresh accounts in fresh browser contexts,
+any open page scrolls sideways. At the end of every test a check fails it when a document or a
+script of the front came without the front's security headers, or when a page or one of its
+workers reported a Content-Security-Policy violation on the console. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
@@ -114,6 +116,10 @@ it can go offline and back (Playwright's offline mode leaves an open WebSocket u
 gives them (`databases`, `identityDatabase`, `organisationDatabase`), and the device's keys in
 its localStorage (`keysKept`, and `keepAccessToken`, which replaces the access token as a hand
 edit would).
+`src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
+response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
+context for a test (its documents' and scripts' headers, the CSP violations its pages and
+their workers report); the fixtures watch every browser a test opens.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).
