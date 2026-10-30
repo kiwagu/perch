@@ -36,6 +36,11 @@ anchors:
     description: The link to the devices of the account, shown to a signed-in account.
     binding: { route: /devices }
     roles: [ identity, member, admin ]
+  app-shell.nav.settings-link:
+    kind: link
+    description: The link to the settings, shown to a signed-in account.
+    binding: { route: /settings }
+    roles: [ identity, member, admin ]
   app-shell.nav.sign-in-link:
     kind: link
     description: The link to sign-in, the only link a guest sees.
@@ -235,3 +240,4 @@ wireframe: |-
     - link "Profile"
     - link "Organisation"
     - link "My devices"
+    - link "Settings"

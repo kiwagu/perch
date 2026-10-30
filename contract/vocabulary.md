@@ -191,6 +191,11 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 |---|---|---|
 | `app-shell.locale-select.option` | `en` | the option makes the app speak English |
 | `app-shell.locale-select.option` | `es` | the option makes the app speak Spanish |
+| `user.settings.locale-select.option` | `en` | the option makes the account speak English |
+| `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
+| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
+| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -210,6 +215,7 @@ screen name of its own.
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
+| `user.settings` | the settings of the signed-in account and of this device: the theme and the language (`/settings`) |
 
 ## Roles
 
@@ -230,11 +236,12 @@ included.
 |---|---|
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
-| `app-shell.nav` | the main navigation, whose links are the four anchors below, declared on their own and not derived |
+| `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
 | `app-shell.nav.sign-in-link` | the link to `/sign-in`, shown to a guest, which renders no derived anchor |
 | `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
+| `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
