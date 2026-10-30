@@ -45,5 +45,7 @@
   "app.title.user.profile": "Profile",
   "app.title.organisation": "Organisation",
   "app.title.device": "My devices",
-  "app.title.not-found": "Page not found"
+  "app.title.not-found": "Page not found",
+  "app.shell.nav.settings": "Settings",
+  "app.title.user.settings": "Settings"
 }

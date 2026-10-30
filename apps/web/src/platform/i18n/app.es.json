@@ -45,5 +45,7 @@
   "app.title.user.profile": "Perfil",
   "app.title.organisation": "Organización",
   "app.title.device": "Mis dispositivos",
-  "app.title.not-found": "Página no encontrada"
+  "app.title.not-found": "Página no encontrada",
+  "app.shell.nav.settings": "Ajustes",
+  "app.title.user.settings": "Ajustes"
 }

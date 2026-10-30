@@ -70,6 +70,11 @@ export function ShellView(props: ShellViewProps) {
           label: t('app.shell.nav.devices'),
           testId: 'app-shell.nav.devices-link',
         },
+        {
+          to: '/settings',
+          label: t('app.shell.nav.settings'),
+          testId: 'app-shell.nav.settings-link',
+        },
       ]
     : [
         {

@@ -31,5 +31,11 @@
   "user.profile.error.name-required": "Escribe un nombre.",
   "user.profile.error.name-too-long": "Usa como máximo 80 caracteres.",
   "user.profile.error.bio-too-long": "Usa como máximo 2000 caracteres para la biografía.",
-  "user.profile.error.failed": "El cambio no se guardó. Inténtalo de nuevo."
+  "user.profile.error.failed": "El cambio no se guardó. Inténtalo de nuevo.",
+  "user.settings.title": "Ajustes",
+  "user.settings.theme": "Tema",
+  "user.settings.theme.light": "Claro",
+  "user.settings.theme.dark": "Oscuro",
+  "user.settings.theme.system": "Como el dispositivo",
+  "user.settings.locale": "Idioma"
 }
