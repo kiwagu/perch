@@ -148,7 +148,10 @@ modeling stage.
   subscribe, once, onAny), for organisations and for devices,
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
-  app-wide catalogs. `ui-contract.ts` is
+  app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
+  kept in this browser under `perch.theme`, shown as the class `dark` on `<html>` and following
+  the device's setting under the system's; the start makes it before the first frame and gives it
+  to views through `ThemeContext`, read with `useDeviceTheme()`). `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then

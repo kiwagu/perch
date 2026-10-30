@@ -28,6 +28,7 @@ import { AppI18n, useSetLocale } from './platform/i18n'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { browserTheme, ThemeContext } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
@@ -196,18 +197,22 @@ if (__PERCH_UI_HOOKS__) {
   installUiHelper(window)
 }
 
+// The theme this device kept shows before the first frame.
+const theme = browserTheme()
 const root = document.getElementById('root')
 
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <AppI18n
-        initial={matchLocale(navigator.language)}
-        en={englishCatalog}
-        loadEs={loadSpanishCatalog}
-      >
-        <App />
-      </AppI18n>
+      <ThemeContext.Provider value={theme}>
+        <AppI18n
+          initial={matchLocale(navigator.language)}
+          en={englishCatalog}
+          loadEs={loadSpanishCatalog}
+        >
+          <App />
+        </AppI18n>
+      </ThemeContext.Provider>
     </StrictMode>,
   )
 }
