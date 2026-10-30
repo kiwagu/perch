@@ -151,8 +151,10 @@ modeling stage.
   signed-in account, the same in every tab: the leading tab shares its channel, whether its
   space holds unsent changes and a sync stopped for good as the record `perch.sync.leader` in
   the browser's storage, written on each change of its channel and every two seconds while it
-  leads; every tab reads it with its own network (`onOnlineChange`), and a record nobody
-  refreshed for six seconds belongs to a leader that went away. `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  leads (it says synced only once a read of the outbox, asked in its current leading period and
+  not overtaken by a later one, found nothing waiting); every tab reads it with its own network
+  (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
+  away. `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is

@@ -219,12 +219,14 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
 
   return session
     .restore()
-    .mapErr(
-      (error): BootFailure =>
-        savedIdentity(options.storage)
-          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
-          : { kind: 'open-failed', error },
-    )
+    .mapErr((error): BootFailure => {
+      // No frame reads the state of the sync of a start that failed.
+      sync.stop()
+
+      return savedIdentity(options.storage)
+        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
+        : { kind: 'open-failed', error }
+    })
     .map(() => {
       step('ready')
 

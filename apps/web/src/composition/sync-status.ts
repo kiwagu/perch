@@ -25,7 +25,8 @@ const STALE = 3 * EVERY
 
 const leaderSchema = z.object({
   channel: z.enum(['up', 'down']),
-  waiting: z.boolean(),
+  // Whether changes wait to be sent; null until a read of the outbox answered, or after one failed.
+  waiting: z.boolean().nullable(),
   stopped: z.boolean(),
   at: z.number(),
 })
@@ -76,7 +77,12 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
   const listeners = new Set<() => void>()
   let leading = false
   let channel: Leader['channel'] = 'down'
-  let waiting = false
+  let waiting: Leader['waiting'] = null
+  // Moves on each time this tab starts or stops leading, and when the source stops: a read of the
+  // outbox answers only the period it was asked in, and only while it is the latest one asked.
+  let period = 0
+  let asked = 0
+  let stopped = false
   let cancel = () => {}
   const notify = () => {
     for (const listener of listeners) {
@@ -93,18 +99,36 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
 
     options.storage.set(KEY, JSON.stringify(leader))
   }
-  // Whether changes wait, asked again of the open space; what it answers once this tab still leads.
+  const answer = (next: Leader['waiting']) => {
+    if (next !== waiting) {
+      waiting = next
+      publish()
+      notify()
+    }
+  }
+  // Whether changes wait, asked again of the open space. An answer counts only in the leading
+  // period it was asked in and while no later question was asked; a failed read leaves it unknown.
   const check = () => {
-    void options.unsent()?.match(
+    const reading = options.unsent()
+
+    if (reading === undefined) {
+      return
+    }
+
+    const mine = { period, question: ++asked }
+    const current = () => !stopped && leading && mine.period === period && mine.question === asked
+
+    void reading.match(
       (unsent) => {
-        if (leading && unsent !== waiting) {
-          waiting = unsent
-          publish()
-          notify()
+        if (current()) {
+          answer(unsent)
         }
       },
-      // Unread: the next tick asks again.
-      () => undefined,
+      () => {
+        if (current()) {
+          answer(null)
+        }
+      },
     )
   }
   const tick = () => {
@@ -152,7 +176,8 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         return 'connecting'
       }
 
-      return leader.waiting ? 'sending' : 'synced'
+      // Synced only once a read of the outbox found nothing waiting.
+      return leader.waiting === false ? 'synced' : 'sending'
     },
     subscribe(listener) {
       listeners.add(listener)
@@ -160,28 +185,44 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       return () => listeners.delete(listener)
     },
     syncState(state) {
+      if (stopped) {
+        return
+      }
+
       const led = leading
 
       leading = state.leader
       channel = state.channel
+
+      if (leading !== led) {
+        // A new leading period, or none: what the outbox said before is not known any more.
+        period += 1
+        waiting = null
+      }
 
       if (leading) {
         publish()
         check()
       } else if (led) {
         // This tab no longer leads, signed out or handing over: the next leader writes its own.
-        waiting = false
         options.storage.remove(KEY)
       }
 
       notify()
     },
     stop() {
+      if (stopped) {
+        return
+      }
+
+      stopped = true
+      period += 1
       cancel()
       unlistenStorage()
       unlistenNetwork()
 
       if (leading) {
+        leading = false
         options.storage.remove(KEY)
       }
     },

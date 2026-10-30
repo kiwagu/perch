@@ -1,6 +1,7 @@
-import { okAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
+import { dataError } from '@workspace/data'
 import { manualClock } from '@workspace/replica/testing'
 
 import { type MemoryStorage, memoryStorage } from './storage'
@@ -183,5 +184,97 @@ describe('syncStatus', () => {
     device.storage.set('perch.sync.leader', 'not a record')
 
     expect(device.tab().status.current()).toBe('connecting')
+  })
+
+  describe('reads of the outbox', () => {
+    /** A leading tab whose reads of the outbox the test answers, in any order. */
+    function leaderWithReads() {
+      const storage = memoryStorage()
+      const clock = manualClock(1_000_000)
+      const reads: Array<{ answer: (unsent: boolean) => void; fail: () => void }> = []
+      const status = syncStatus({
+        storage,
+        clock,
+        online: () => true,
+        onOnlineChange: () => () => {},
+        signedIn: () => true,
+        unsent: () =>
+          ResultAsync.fromPromise(
+            new Promise<boolean>((answer, fail) => {
+              reads.push({ answer, fail: () => fail(new Error('the outbox did not read')) })
+            }),
+            () => dataError('data:WRITE_FAILED', 'the outbox did not read'),
+          ),
+        protocolRefused: () => false,
+        canSync: true,
+      })
+
+      return { storage, clock, reads, status }
+    }
+
+    it('says synced only once a read found nothing waiting, and not after a read failed', async () => {
+      const { clock, reads, status } = leaderWithReads()
+
+      status.syncState({ leader: true, channel: 'up' })
+
+      // Up, but nothing read yet: changes may still wait.
+      expect(status.current()).toBe('sending')
+
+      reads[0]?.answer(false)
+      await settle()
+
+      expect(status.current()).toBe('synced')
+
+      await clock.advance(2_000)
+      reads[1]?.fail()
+      await settle()
+
+      expect(status.current()).toBe('sending')
+    })
+
+    it('takes no answer asked before a later question, nor in an earlier leading period', async () => {
+      const { reads, status } = leaderWithReads()
+
+      status.syncState({ leader: true, channel: 'down' })
+      status.syncState({ leader: true, channel: 'up' })
+      // The later question answers first, changes waiting; the earlier one, answering "none"
+      // after it, is not taken.
+      reads[1]?.answer(true)
+      await settle()
+      reads[0]?.answer(false)
+      await settle()
+
+      expect(status.current()).toBe('sending')
+
+      // A question asked in this leading period, still unanswered when the tab stops leading and
+      // leads again (another account, say): its late "none" is not the new period's.
+      status.syncState({ leader: true, channel: 'up' })
+      status.syncState({ leader: false, channel: 'down' })
+      status.syncState({ leader: true, channel: 'up' })
+      reads[2]?.answer(false)
+      await settle()
+
+      expect(status.current()).toBe('sending')
+
+      reads[3]?.answer(false)
+      await settle()
+
+      expect(status.current()).toBe('synced')
+    })
+
+    it('writes nothing more once stopped, whatever a read still under way answers', async () => {
+      const { storage, reads, status } = leaderWithReads()
+
+      status.syncState({ leader: true, channel: 'up' })
+      status.stop()
+      reads[0]?.answer(false)
+      await settle()
+
+      expect(storage.get('perch.sync.leader')).toBeUndefined()
+
+      status.syncState({ leader: true, channel: 'up' })
+
+      expect(storage.get('perch.sync.leader')).toBeUndefined()
+    })
   })
 })
