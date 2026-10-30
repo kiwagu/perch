@@ -33,6 +33,7 @@ export function fakeSession(): { readonly session: SessionPort } {
       flush: refused,
       notice: () => undefined,
       clearNotice: () => {},
+      protocolRefused: () => false,
       memberships: () => [],
       subscribeMemberships: () => () => {},
       currentTenant: () => undefined,

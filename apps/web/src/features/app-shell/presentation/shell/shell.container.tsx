@@ -121,8 +121,18 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // The frame's flow says its notice and clears it, as every screen's flow does.
   useFrameEffects(actor)
 
-  // The bus's refusals reach the frame's flow, which says them on the notice or offers a reload.
-  useEffect(() => shellEvents(events, actor), [events, actor])
+  // The bus's refusals reach the frame's flow, which says them on the notice or offers a reload;
+  // a protocol refused before the frame listened (the sync of a saved account starts with the
+  // page) reaches it now.
+  useEffect(() => {
+    const stop = shellEvents(events, actor)
+
+    if (session.protocolRefused()) {
+      actor.send({ type: 'platform.protocol-refused' })
+    }
+
+    return stop
+  }, [events, session, actor])
 
   // A newer build the server serves: the frame's platform event.
   useEffect(

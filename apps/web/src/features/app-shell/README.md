@@ -44,15 +44,18 @@ modules' routes.
   (`platform.reload`, `window.location.reload()`).
 - An update: the shell container watches the build the server serves (`SERVED_BUILD`, the
   frame's platform event `platform.new-version`, with the build named), and the bus's
-  `sync.protocol-refused` reaches the flow as `platform.protocol-refused`. The flow shows
+  `sync.protocol-refused` reaches the flow as `platform.protocol-refused`; a refusal heard
+  before the container listened (the sync of a saved account starts with the page) is read from
+  the session on mount (`protocolRefused()`). The flow shows
   `app-shell.update-message` (`new-version`, or `protocol-outdated`, which a newer build heard
   later does not replace) with `app-shell.update-button` above the page, in `ready` and around a
   crash, until the page loads again. The button asks the leave guard first (a leaving control)
   and loads the page again. The tab going to the background (`platform.tab-hidden`, sent on
   `visibilitychange`) loads it again by itself when an update waits, no field holds unsaved
   input (`live.unsaved`, from the kit's `useUnsavedInput`) and this tab has not done so for the
-  same update before (`tabSelfReloads`, in the tab's `sessionStorage` under
-  `perch.update.reloaded`), so a server still serving an update after the reload starts no loop.
+  same update before (`tabSelfReloads`, every such update one per line in the tab's
+  `sessionStorage` under `perch.update.reloaded`), so a server still serving an update after the
+  reload, or alternating two, starts no loop.
   Only the tab that leads the sync hears a refused protocol; the others see the newer build.
 - Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal

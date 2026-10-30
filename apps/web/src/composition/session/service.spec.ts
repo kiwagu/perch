@@ -552,11 +552,13 @@ describe('SessionService', () => {
     failures.splice(0)
   })
 
-  it('publishes a sync protocol the gateway no longer takes, and stays signed in', async () => {
+  it('publishes a sync protocol the gateway no longer takes, keeps it, and stays signed in', async () => {
     const { session, gateway, failures, published } = await bootSession({
       saved: ann,
       online: true,
     })
+
+    expect(session.protocolRefused()).toBe(false)
 
     gateway.endWith('protocol')
 
@@ -565,6 +567,8 @@ describe('SessionService', () => {
         { name: 'sync.protocol-refused', payload: null, actorId: ann.identity.id },
       ]),
     )
+    // Kept for a frame that starts listening later, until the page loads again.
+    expect(session.protocolRefused()).toBe(true)
     // The sync engine stopped and said so; nothing else changes on the device.
     expect(failures.map((failure) => failure.code)).toEqual(['data:SYNC_STOPPED'])
     expect(session.current()?.id).toBe(ann.identity.id)

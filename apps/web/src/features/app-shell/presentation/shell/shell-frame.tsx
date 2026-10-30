@@ -28,16 +28,18 @@ export interface ShellLive {
 const SELF_RELOADED = 'perch.update.reloaded'
 
 /**
- * The update this tab last loaded the page again for by itself, kept in the tab's own storage,
- * which outlives its reloads: a server still serving that update afterwards starts no loop. Read
- * only once the frame is open, so a browser that keeps no site data never reaches it.
+ * The updates this tab loaded the page again for by itself, one per line in the tab's own
+ * storage, which outlives its reloads: a server still serving one of them afterwards starts no
+ * loop. Read only once the frame is open, so a browser that keeps no site data never reaches it.
  */
-export const tabSelfReloads = (
-  storage: () => Pick<Storage, 'getItem' | 'setItem'>,
-): SelfReloads => ({
-  done: (update) => storage().getItem(SELF_RELOADED) === update,
-  mark: (update) => storage().setItem(SELF_RELOADED, update),
-})
+export function tabSelfReloads(storage: () => Pick<Storage, 'getItem' | 'setItem'>): SelfReloads {
+  const reloaded = (): string[] => storage().getItem(SELF_RELOADED)?.split('\n') ?? []
+
+  return {
+    done: (update) => reloaded().includes(update),
+    mark: (update) => storage().setItem(SELF_RELOADED, [...reloaded(), update].join('\n')),
+  }
+}
 
 /**
  * The frame's machine over what it reads, made at the start, before the services exist; a theme

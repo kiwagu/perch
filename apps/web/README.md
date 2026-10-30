@@ -126,8 +126,9 @@ modeling stage.
   left to do, and an answer that comes once the asking session has ended (another account, or
   the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
-  protocol the gateway refuses (4400) stops the sync and keeps everything, and the session
-  publishes it so that the frame offers to load the page again. One account per browser: a
+  protocol the gateway refuses (4400) stops the sync and keeps everything; the session publishes
+  it and keeps it until the page loads again (`protocolRefused()`), so that the frame offers to
+  load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); a sign-up or sign-in that finds another account saved is refused with

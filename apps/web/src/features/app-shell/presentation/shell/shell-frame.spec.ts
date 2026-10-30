@@ -44,7 +44,7 @@ describe('frameLanguageWrites', () => {
 })
 
 describe('tabSelfReloads', () => {
-  it("keeps the last update this tab loaded the page again for in the tab's storage", () => {
+  it("keeps every update this tab loaded the page again for in the tab's storage", () => {
     const kept = new Map<string, string>()
     const storage = {
       getItem: (key: string) => kept.get(key) ?? null,
@@ -59,5 +59,12 @@ describe('tabSelfReloads', () => {
     // The page loaded again: a new record over the same storage still knows it.
     expect(tabSelfReloads(() => storage).done('0.2.0+abc')).toBe(true)
     expect(reloads.done('0.3.0+def')).toBe(false)
+
+    // Another update afterwards: the first one stays known, so a server alternating the two
+    // starts no loop.
+    tabSelfReloads(() => storage).mark('0.3.0+def')
+
+    expect(tabSelfReloads(() => storage).done('0.2.0+abc')).toBe(true)
+    expect(tabSelfReloads(() => storage).done('0.3.0+def')).toBe(true)
   })
 })

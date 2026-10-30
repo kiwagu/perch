@@ -30,6 +30,7 @@ export class SessionElsewhere {
   readonly #organisations: SessionOrganisations
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
+  #protocolRefused = false
 
   constructor(options: SessionElsewhereOptions) {
     this.#host = options.host
@@ -49,6 +50,11 @@ export class SessionElsewhere {
       )
   }
 
+  /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
+  protocolRefused(): boolean {
+    return this.#protocolRefused
+  }
+
   transportContext(identity: IdentityId): TransportContext {
     return sessionTransportContext(identity, this.#host.options.storage, {
       renewal: this.#organisations,
@@ -62,15 +68,16 @@ export class SessionElsewhere {
         void this.#forced(() => this.#signingOut.refused(identity))
       },
       revoked: () => void this.#outElsewhere(identity),
+      // The build is what the gateway refuses, whichever account's channel heard it, and while
+      // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
-        if (this.#host.open()?.space.identity.id === identity) {
-          this.#host.options.publish({
-            name: 'sync.protocol-refused',
-            payload: null,
-            actorId: identity,
-            occurredAt: new Date(),
-          })
-        }
+        this.#protocolRefused = true
+        this.#host.options.publish({
+          name: 'sync.protocol-refused',
+          payload: null,
+          actorId: identity,
+          occurredAt: new Date(),
+        })
       },
     })
   }
