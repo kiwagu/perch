@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: user.settings
+title: Settings
+description: "The signed-in account's settings: the theme of this device (light, dark, or the device's own), and the language of the account, which follows it across its devices."
+flag: null
+bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
+entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select ]
+anchors:
+  user.settings.heading:
+    kind: heading
+    description: Names the screen.
+  user.settings.theme-select:
+    kind: select
+    description: "The theme of this device: a choice applies at once and stays on this device, the device's own setting followed live while it is system."
+    binding:
+      action: platform.theme.set
+      params:
+        theme: user.settings.theme-select
+    dataValue: true
+    derived: [ option ]
+  user.settings.locale-select:
+    kind: select
+    description: "The language of the account, the one its settings hold: a choice applies at once and is stored there, and the account's other devices speak it too; it takes no choice before the settings are on this device."
+    binding:
+      - model: settings.locale
+      - action: settings.updateLocale
+        params:
+          locale: user.settings.locale-select
+    dataValue: true
+    derived: [ option ]
+flow:
+  id: settings
+  description: The theme and the language are the regions of viewing, each in one of its states at a time.
+  initial: viewing
+  meta:
+    guards:
+      settingsHeld: the account's settings are on this device
+      accountLeft: the account the store was for has signed out since it began
+  states:
+    viewing:
+      type: parallel
+      description: The settings of the signed-in account and of this device.
+      states:
+        theme:
+          description: The theme of this device.
+          initial: idle
+          states:
+            idle:
+              on:
+                user.settings.theme-select: applying
+            applying:
+              invoke:
+                src: platform.theme.set
+                input: { theme: user.settings.theme-select }
+                onDone:
+                  target: idle
+                  description: The app shows the chosen theme, and this device keeps it.
+        language:
+          description: The language of the account.
+          initial: idle
+          states:
+            idle:
+              on:
+                user.settings.locale-select:
+                  target: storing
+                  guard: settingsHeld
+                  description: The app speaks the chosen language at once; before the account's settings arrive on this device, the select takes no choice.
+            storing:
+              invoke:
+                src: settings.updateLocale
+                input: { locale: user.settings.locale-select }
+                toast: false
+                onDone:
+                  target: idle
+                  description: The settings hold the chosen language, and the account's other devices speak it.
+                onError:
+                  - target: idle
+                    guard: accountLeft
+                    description: The account signed out meanwhile; its notice went with it, and nothing is shown.
+                  - target: idle
+                    description: The app keeps speaking the chosen language on this device, and the notice says the settings could not store it.
+                    actions:
+                      - show: { app-shell.notice-message: [ locale-not-stored ] }
+wireframe: |-
+  - heading "Settings" [level=1]
+  - combobox "Theme": System
+  - combobox "Language": English

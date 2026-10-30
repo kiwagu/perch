@@ -20,6 +20,9 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
         activePath="/sign-in"
         canChooseLocale={true}
         onLocaleChange={() => {}}
+        theme="system"
+        canChooseTheme={true}
+        onThemeChange={() => {}}
         {...rest}
       >
         <p>page</p>
@@ -145,13 +148,40 @@ describe('ShellView', () => {
     expect(notice.getAttribute('role')).toBe('status')
   })
 
-  it('marks the navigation and the language select', () => {
+  it("marks a signed-in account's navigation, settings included, with no language select", () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
     expect(navigation.tagName).toBe('NAV')
     expect(within(navigation).getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    expect(within(navigation).getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+    // The settings screen takes a signed-in account's language.
+    expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+  })
+
+  it("shows anyone the device's theme, a guest and a signed-in account alike", () => {
+    const { unmount } = renderShell({ theme: 'dark' })
+    const select = screen.getByTestId('app-shell.theme-select')
+
+    expect(select.getAttribute('role')).toBe('combobox')
+    expect(select.getAttribute('data-value')).toBe('dark')
+    unmount()
+
+    renderShell({ signedIn: true, activePath: '/me', theme: 'light' })
+
+    expect(screen.getByTestId('app-shell.theme-select').getAttribute('data-value')).toBe('light')
+  })
+
+  it('takes a theme choice only while the frame takes one', () => {
+    renderShell({ canChooseTheme: false })
+
+    expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(true)
+  })
+
+  it("marks a guest's language select", () => {
+    renderShell({ signedIn: false })
+
     expect(screen.getByTestId('app-shell.locale-select').getAttribute('role')).toBe('combobox')
   })
 
@@ -169,6 +199,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme
+          onThemeChange={() => {}}
         >
           <p>page</p>
         </ShellView>
@@ -233,6 +266,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale={true}
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
           notice={{ code: 'welcome', text: 'Welcome' }}
         >
           <p>page</p>
@@ -265,6 +301,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale={true}
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
           crash="screen-crashed"
           canReload={false}
           onReload={onReload}

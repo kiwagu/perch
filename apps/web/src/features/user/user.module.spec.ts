@@ -65,11 +65,16 @@ describe('UserModule', () => {
     ).toMatchObject([{ locale: 'en' }])
   })
 
-  it('routes guests to sign-in and signed-in users to their profile', () => {
+  it('routes guests to sign-in and signed-in users to their profile and their settings', () => {
     expect(UserModule.routes).toEqual([
       { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
       { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
+      { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },
     ])
-    expect(Object.keys(UserModule.declarations).sort()).toEqual(['ProfilePage', 'SignInPage'])
+    expect(Object.keys(UserModule.declarations).sort()).toEqual([
+      'ProfilePage',
+      'SettingsPage',
+      'SignInPage',
+    ])
   })
 })

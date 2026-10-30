@@ -69,6 +69,14 @@ actions:
     result: that device signs out; the list is read again
     codes:
       - device-sign-out-failed
+  theme.set:
+    description: Shows the app in a theme on this device and keeps it there.
+    params:
+      theme:
+        type: string
+        description: "light, dark, or system: the device's own setting, followed as it changes."
+    result: the app shows the theme at once and this device keeps it, the account's other devices untouched
+    codes: []
   reload:
     description: Loads the page again from the server.
     params: {}
@@ -171,6 +179,8 @@ reserved:
   - app-shell.nav.profile-link
   - app-shell.nav.organisation-link
   - app-shell.nav.devices-link
+  - app-shell.nav.settings-link
+  - app-shell.theme-select
   - app-shell.locale-select
   - app-shell.sign-out-here-button
   - app-shell.leave-dialog

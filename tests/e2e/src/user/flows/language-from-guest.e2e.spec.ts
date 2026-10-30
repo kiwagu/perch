@@ -25,19 +25,24 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
-      // Expected: After step 3 device A is on [/me] and shows [app-shell.locale-select] with
-      //   [value:es]
+      // Expected: After step 3 device A is on [/me], and its [/settings] shows
+      //   [user.settings.locale-select] with [value:es]
       await page.waitForURL('**/me')
-      await expect(page.getByTestId('app-shell.locale-select')).toHaveAttribute('data-value', 'es')
+      await page.getByTestId('app-shell.nav.settings-link').click()
+      await expect(page.getByTestId('user.settings.locale-select')).toHaveAttribute(
+        'data-value',
+        'es',
+      )
     })
 
     await test.step('4. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
       const deviceB = await anotherAccount.open()
 
       await signIn(deviceB, data)
-      // Expected: After step 4 device B is on [/me] and shows [app-shell.locale-select] with
-      //   [value:es], with no choice made on device B
-      await expect(deviceB.getByTestId('app-shell.locale-select')).toHaveAttribute(
+      // Expected: After step 4 device B is on [/me], and its [/settings] shows
+      //   [user.settings.locale-select] with [value:es], with no choice made on device B
+      await deviceB.getByTestId('app-shell.nav.settings-link').click()
+      await expect(deviceB.getByTestId('user.settings.locale-select')).toHaveAttribute(
         'data-value',
         'es',
         { timeout: 10_000 },

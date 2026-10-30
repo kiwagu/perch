@@ -25,6 +25,7 @@ import { createShellMachine } from '../features/app-shell/application/shell.mach
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
+import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
 import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
 
@@ -41,14 +42,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
     createShellMachine({
       values: () => ({
         account: undefined,
-        session: 0,
-        storingIn: undefined,
         stored: undefined,
         writes: LocaleWrites.none,
       }),
-      storeLocale: () => okAsync(undefined),
       signOutHere: () => okAsync(undefined),
       reload: () => {},
+      setTheme: () => {},
     }),
   device: () =>
     createDevicesMachine({
@@ -74,6 +73,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
         { createSettings: () => okAsync(undefined) },
       ),
     ),
+  'user.settings': () =>
+    createSettingsMachine({
+      values: () => ({ held: true, account: undefined, storingFor: undefined }),
+      setTheme: () => {},
+      storeLocale: () => okAsync(undefined),
+    }),
   'user.profile': () =>
     createProfileMachine({
       profiles: { updateName: () => okAsync(undefined), updateBio: () => okAsync(undefined) },

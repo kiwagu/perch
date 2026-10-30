@@ -9,11 +9,13 @@ import { identityIdFactory } from '@workspace/ids'
 
 import { FakeDevices, offline, phone, rejected } from '../../../../../platform/__fixtures__/devices'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
+import { memoryTheme } from '../../../../../platform/__fixtures__/theme'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { DEVICES } from '../../../../../platform/devices.port'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import { ThemeContext } from '../../../../../platform/theme'
 import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
 import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from '../../../../app-shell/presentation/shell/shell.container'
@@ -81,11 +83,13 @@ async function openPage(): Promise<void> {
 
   render(
     <I18nProvider locale="en" catalogs={{ en: englishCatalog }}>
-      <ShellFrameContext.Provider value={openedFrame()}>
-        <ServicesProvider services={services}>
-          <RouterProvider router={router} />
-        </ServicesProvider>
-      </ShellFrameContext.Provider>
+      <ThemeContext.Provider value={memoryTheme()}>
+        <ShellFrameContext.Provider value={openedFrame()}>
+          <ServicesProvider services={services}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
+      </ThemeContext.Provider>
     </I18nProvider>,
   )
   await screen.findByTestId('app-shell.nav.devices-link')
