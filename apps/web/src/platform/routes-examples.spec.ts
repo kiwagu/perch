@@ -37,6 +37,9 @@ const ROOT = join(import.meta.dirname, '../../../..')
 /** The route the router starts on: it only sends the visitor on (`router.tsx`), no screen binds it. */
 const START_PATH = '/'
 
+/** A path segment no route of the application takes, for a root splat. */
+const UNKNOWN_SEGMENT = 'no-such-page'
+
 /** The parameters the router matches for an example: a splat the link leaves out is empty. */
 function paramsMatched(binding: Binding, params: Readonly<Record<string, string>>) {
   const splat = parseRoutePath(binding.path).segments.some(({ kind }) => kind === 'splat')
@@ -49,7 +52,10 @@ function exampleCase(router: AppRouter, binding: Binding): void {
   const { params, search, link } = exampleOf(binding)
   const [pathname = '', query] = link.split('?')
   const searchStr = query === undefined ? '' : `?${query}`
-  const reached = matchAt(router, pathname, searchStr)
+  // A root splat's example leaves its segment out, which is the start path, and the router's
+  // start route outranks the splat there: the splat is matched at one segment instead.
+  const shadowed = pathname === START_PATH && binding.path !== START_PATH
+  const reached = matchAt(router, shadowed ? `/${UNKNOWN_SEGMENT}` : pathname, searchStr)
 
   expect(pathname, `the path of ${link}`).toBe(
     router.buildLocation({ to: binding.path, params }).href,
@@ -58,7 +64,9 @@ function exampleCase(router: AppRouter, binding: Binding): void {
   expect(trimPathRight(reached.fullPath ?? ''), `the route ${link} matches`).toBe(
     trimPathRight(binding.path),
   )
-  expect(reached.params, `the parameters ${link} matches`).toEqual(paramsMatched(binding, params))
+  expect(reached.params, `the parameters ${link} matches`).toEqual(
+    shadowed ? { [SPLAT]: UNKNOWN_SEGMENT, ...params } : paramsMatched(binding, params),
+  )
   expect(reached.searchError, `the refusal of ${link}`).toBeUndefined()
   expect(reached.search, `the search ${link} reads back`).toEqual(search)
 }
