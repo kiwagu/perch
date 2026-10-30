@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 7 screens, 80 anchors and 41 codes.
+The contract declares 7 screens, 82 anchors and 43 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 40/41, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 41/42, ignored 2.
 
 ## Model
 
@@ -64,13 +64,13 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
-| app-shell | 6 | 6 | 0 | 100% |
+| app-shell | 7 | 7 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
 | user | 13 | 13 | 0 | 100% |
 | ui kit | 3 | 2 | 2 | 67% |
-| all | 41 | 40 | 2 | 98% |
+| all | 42 | 41 | 2 | 98% |
 
 ### Unmarked
 
@@ -90,12 +90,12 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 1 |
-| app-shell | 16 | 27 |
+| app-shell | 18 | 29 |
 | device | 10 | 2 |
-| user.profile | 10 | 20 |
+| user.profile | 10 | 21 |
 | organisation | 30 | 10 |
 | user.settings | 3 | 4 |
-| user.sign-in | 8 | 12 |
+| user.sign-in | 8 | 13 |
 
 <!-- coverage:end -->
 

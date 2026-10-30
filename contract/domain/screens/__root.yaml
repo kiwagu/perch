@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, and a message with a reload in the place of a screen that failed to render."
+description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol."
 frame: true
 flag: null
 bindings: []
@@ -78,6 +78,14 @@ anchors:
     kind: button
     description: Loads the page again, shown with app-shell.crash-message.
     binding: { action: platform.reload }
+  app-shell.update-message:
+    kind: message
+    description: "Says the page should load again: the server serves a newer version of the app, or it no longer takes the sync protocol of the version this tab runs and this device's changes stop syncing; it stays, around a crash too, until the page loads again."
+    codes: [ new-version, protocol-outdated ]
+  app-shell.update-button:
+    kind: button
+    description: Loads the page again on the version the server serves, shown with app-shell.update-message.
+    binding: { action: platform.reload }
   app-shell.confirmation:
     kind: confirmation
     description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out. It carries data-code naming the action; its confirm-button lets the action run, its cancel-button stays with nothing changed. One for the whole app: the controls that ask and its codes are derived."
@@ -89,7 +97,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the data is being opened; no screen is rendered.
-  ready: The navigation, the theme select, the language select and the open screen; app-shell.status is a visually hidden text.
+  ready: The navigation, the theme select, the language select and the open screen, with app-shell.update-message when the page should load again; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
 flow:
@@ -98,6 +106,8 @@ flow:
     guards:
       signedOut: no account is signed in on this device
       storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      protocolTaken: the server has not refused the sync protocol of the version this tab runs since the page loaded
+      quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
   states:
     opening:
       description: The local data is being opened; no screen is rendered.
@@ -137,6 +147,20 @@ flow:
         platform.crashed:
           target: crashed
           description: The open screen failed to render.
+        platform.new-version:
+          guard: protocolTaken
+          description: The message says a newer version is served, with the button that loads it; a refused protocol says more, so its message stays.
+          actions:
+            - show: { app-shell.update-message: [ new-version ] }
+        platform.protocol-refused:
+          description: The message says the server no longer takes this version's protocol, so this device's changes stop syncing until the page loads again.
+          actions:
+            - show: { app-shell.update-message: [ protocol-outdated ] }
+        app-shell.update-button: updating
+        platform.tab-hidden:
+          target: updating
+          guard: quietReload
+          description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
     crashed:
       description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
       entry:
@@ -169,6 +193,20 @@ flow:
           description: The notice says the server refused the undo too, and the later unsent changes were undone.
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
+        platform.new-version:
+          guard: protocolTaken
+          description: The message says a newer version is served, the crash message staying; a refused protocol says more, so its message stays.
+          actions:
+            - show: { app-shell.update-message: [ new-version ] }
+        platform.protocol-refused:
+          description: The message says the server no longer takes this version's protocol, the crash message staying.
+          actions:
+            - show: { app-shell.update-message: [ protocol-outdated ] }
+        app-shell.update-button: reloading
+        platform.tab-hidden:
+          target: reloading
+          guard: quietReload
+          description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
     reloading:
       description: The page loads again from the server.
       invoke:
@@ -176,6 +214,13 @@ flow:
         onDone:
           target: crashed
           description: Only while the page has not loaded again; the message stays.
+    updating:
+      description: The page loads again on the version the server serves.
+      invoke:
+        src: platform.reload
+        onDone:
+          target: ready
+          description: Only while the page has not loaded again; the update message stays.
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       on:
