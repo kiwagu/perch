@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
@@ -15,6 +15,7 @@ import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
 import type { SessionPort } from '../../../../platform/session.port'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
+import { CrashSignal } from '../crash/crash-signal'
 
 import { openedFrame } from './__fixtures__/frame'
 import { NOTICE_TEXTS } from './notice-texts'
@@ -27,7 +28,53 @@ const HomeModule = defineModule({
   routes: [{ path: '/home', page: 'Home' }],
 })
 
+const BrokenModule = defineModule({
+  id: 'broken',
+  declarations: {
+    Broken: () => {
+      throw new Error('the page broke')
+    },
+  },
+  routes: [{ path: '/broken', page: 'Broken' }],
+})
+
 describe('ShellContainer', () => {
+  it('says a page that fails to render on arrival in its place, with the reload', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    const router = createAppRouter({
+      modules: [BrokenModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/broken'] }),
+      crash: CrashSignal,
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellFrameContext.Provider value={openedFrame()}>
+          <ServicesProvider services={services}>
+            <RouterProvider router={router} />
+          </ServicesProvider>
+        </ShellFrameContext.Provider>
+      </I18nProvider>,
+    )
+
+    const message = await screen.findByTestId('app-shell.crash-message')
+
+    expect(message.getAttribute('data-code')).toBe('screen-crashed')
+    expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(false)
+    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+    quiet.mockRestore()
+  })
+
   it('tells the user of a change the gateway refused and this device undid', async () => {
     const { session } = fakeSession()
     const services = fakeServices(session)

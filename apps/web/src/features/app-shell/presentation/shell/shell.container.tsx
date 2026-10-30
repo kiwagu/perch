@@ -1,6 +1,13 @@
 import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useSelector } from '@xstate/react'
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 
 import { useT } from '@workspace/i18n'
 
@@ -101,7 +108,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   useEffect(() => shellEvents(events, actor), [events, actor])
 
   // The crash message shows what the frame's flow shows on it, and goes when the flow clears it.
-  useEffect(() => {
+  // A layout effect: every one runs before any passive effect, so this listens before the crash
+  // put in a page's place (a descendant, whose passive effect runs first) raises it on arrival.
+  useLayoutEffect(() => {
     const shown = actor.on('show', (event) => {
       if (event.anchor === CRASH_MESSAGE && event.codes.includes('screen-crashed')) {
         setCrash('screen-crashed')
