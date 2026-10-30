@@ -243,4 +243,44 @@ describe('ShellView', () => {
     expect(container.querySelector('[data-slot="notice"]')).toBe(slot)
     expect(slot?.contains(screen.getByTestId('app-shell.notice-message'))).toBe(true)
   })
+
+  it('says a screen failed to render, in its place, with a reload while the flow takes one', () => {
+    const onReload = vi.fn()
+    const { rerender } = renderShell({ crash: 'screen-crashed', canReload: true, onReload })
+    const message = screen.getByTestId('app-shell.crash-message')
+
+    expect(message.getAttribute('data-code')).toBe('screen-crashed')
+    expect(message.textContent).toBe(en['app.shell.crash.screen-crashed'])
+    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('app-shell.reload-button'))
+
+    expect(onReload).toHaveBeenCalledOnce()
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale={true}
+          onLocaleChange={() => {}}
+          crash="screen-crashed"
+          canReload={false}
+          onReload={onReload}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows no crash message or reload while the screen renders', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.crash-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.reload-button')).toBeNull()
+  })
 })

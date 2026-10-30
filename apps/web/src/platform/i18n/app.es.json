@@ -37,5 +37,7 @@
   "app.shell.confirm.organisations-remove.confirm": "Quitar",
   "app.shell.confirm.devices-revoke.title": "¿Cerrar la sesión en ese dispositivo?",
   "app.shell.confirm.devices-revoke.body": "Los cambios que aún no haya enviado se quedan en él hasta que vuelvas a iniciar sesión allí.",
-  "app.shell.confirm.devices-revoke.confirm": "Cerrar sesión"
+  "app.shell.confirm.devices-revoke.confirm": "Cerrar sesión",
+  "app.shell.crash.screen-crashed": "No se ha podido mostrar esta página.",
+  "app.shell.reload": "Recargar la página"
 }

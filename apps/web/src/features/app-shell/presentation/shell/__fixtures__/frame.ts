@@ -13,6 +13,7 @@ export function openedFrame(): ShellFrame {
     writes: LocaleWrites.none,
     store: undefined,
     signOutHere: undefined,
+    renderAgain: undefined,
   }
   const actor = createActor(shellFrameMachine(live)).start()
 

@@ -37,5 +37,7 @@
   "app.shell.confirm.organisations-remove.confirm": "Remove",
   "app.shell.confirm.devices-revoke.title": "Sign out that device?",
   "app.shell.confirm.devices-revoke.body": "Changes it has not sent yet stay on it until you sign in there again.",
-  "app.shell.confirm.devices-revoke.confirm": "Sign out"
+  "app.shell.confirm.devices-revoke.confirm": "Sign out",
+  "app.shell.crash.screen-crashed": "This page could not be shown.",
+  "app.shell.reload": "Reload the page"
 }
