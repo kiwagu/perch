@@ -29,6 +29,7 @@ export class SyncNetwork {
   readonly #page: Page
   #online = true
   #refusing = false
+  #dropping = false
   /** The page side of the socket the page holds now. */
   #socket: WebSocketRoute | undefined
 
@@ -60,6 +61,21 @@ export class SyncNetwork {
   }
 
   /**
+   * The connection to the gateway breaks while the browser keeps its network: the socket the
+   * page holds drops, and every new one too until `restoreChannel`.
+   */
+  async dropChannel(): Promise<void> {
+    this.#dropping = true
+    await this.#socket?.close(DROPPED)
+    this.#socket = undefined
+  }
+
+  /** The gateway is reached again: the app's next attempt connects. */
+  restoreChannel(): void {
+    this.#dropping = false
+  }
+
+  /**
    * The gateway no longer takes the page's sync protocol: the socket the page holds ends with
    * the gateway's close for it, and so does every new one until `acceptProtocol`.
    */
@@ -75,7 +91,7 @@ export class SyncNetwork {
   }
 
   async #connect(socket: WebSocketRoute): Promise<void> {
-    if (!this.#online) {
+    if (!this.#online || this.#dropping) {
       await socket.close(DROPPED)
 
       return

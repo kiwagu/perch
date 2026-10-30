@@ -24,9 +24,14 @@ test.describe('Hear that the server no longer takes the protocol of this version
     await test.step('2. Make the server refuse the sync protocol of the version the tab runs: it closes the sync connection as an outdated protocol', async () => {
       await network.refuseProtocol()
       // Expected: After step 2 [app-shell.update-message] carries [code:protocol-outdated], with
-      //   [app-shell.update-button]
+      //   [app-shell.update-button],
       await expect(updateMessage).toHaveAttribute('data-code', 'protocol-outdated')
       await expect(page.getByTestId('app-shell.update-button')).toBeEnabled()
+      //   and [app-shell.sync-message] carries [code:sync-stopped]
+      await expect(page.getByTestId('app-shell.sync-message')).toHaveAttribute(
+        'data-code',
+        'sync-stopped',
+      )
     })
 
     await test.step('3. Click [app-shell.update-button]', async () => {
