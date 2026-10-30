@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { createFormats } from './formats'
+import { createFormats, type Formats } from './formats'
 import { I18nProvider, useFormats, useLocale, useT } from './provider'
 
 function Label() {
@@ -38,5 +38,42 @@ describe('I18nProvider', () => {
     expect(screen.getByTestId('moment').textContent).toBe(
       createFormats('es', 'Asia/Tokyo').dateTime(moment),
     )
+  })
+
+  it('keeps the same formats until the language or the time zone changes', () => {
+    const catalogs = { en: {}, es: {} }
+    const seen: Formats[] = []
+
+    function Probe() {
+      seen.push(useFormats())
+
+      return null
+    }
+
+    const { rerender } = render(
+      <I18nProvider locale="en" catalogs={catalogs} timeZone="UTC">
+        <Probe />
+      </I18nProvider>,
+    )
+
+    rerender(
+      <I18nProvider locale="en" catalogs={catalogs} timeZone="UTC">
+        <Probe />
+      </I18nProvider>,
+    )
+    rerender(
+      <I18nProvider locale="en" catalogs={catalogs} timeZone="Asia/Tokyo">
+        <Probe />
+      </I18nProvider>,
+    )
+    rerender(
+      <I18nProvider locale="es" catalogs={catalogs} timeZone="Asia/Tokyo">
+        <Probe />
+      </I18nProvider>,
+    )
+
+    expect(seen[1]).toBe(seen[0])
+    expect(seen[2]).not.toBe(seen[1])
+    expect(seen[3]).not.toBe(seen[2])
   })
 })

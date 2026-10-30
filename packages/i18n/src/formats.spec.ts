@@ -52,4 +52,31 @@ describe('createFormats', () => {
       new Intl.RelativeTimeFormat('es', { numeric: 'auto' }).format(-3, 'minute'),
     )
   })
+
+  it('counts only whole units, the same way before and after now', () => {
+    const now = new Date('2026-10-29T12:00:00Z')
+    const english = createFormats('en')
+    const words = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+    const away = (seconds: number) => new Date(now.getTime() + seconds * 1000)
+
+    for (const sign of [-1, 1]) {
+      expect(english.relative(away(sign * 59.6), now)).toBe(words.format(sign * 59, 'second'))
+      expect(english.relative(away(sign * 60), now)).toBe(words.format(sign, 'minute'))
+      expect(english.relative(away(sign * 23.5 * 3600), now)).toBe(words.format(sign * 23, 'hour'))
+      expect(english.relative(away(sign * 29.5 * 24 * 3600), now)).toBe(
+        words.format(sign * 29, 'day'),
+      )
+    }
+    expect(english.relative(away(-0.4), now)).toBe(words.format(0, 'second'))
+  })
+
+  it("writes moments in the runtime's own time zone when it is given none", () => {
+    expect(createFormats('en').dateTime(moment)).toBe(
+      new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(moment),
+    )
+  })
+
+  it('refuses a time zone that is not an IANA name', () => {
+    expect(() => createFormats('en', 'Not/AZone')).toThrow(RangeError)
+  })
 })

@@ -45,7 +45,8 @@ export function createFormats(locale: Locale, timeZone?: string): Formats {
       const seconds = (value.getTime() - now.getTime()) / 1000
       const [unit, length] = UNITS.find(([, size]) => Math.abs(seconds) >= size) ?? ['second', 1]
 
-      return distance.format(Math.round(seconds / length), unit)
+      // Whole units only, toward zero, so a moment just before and just after now read alike.
+      return distance.format(Math.trunc(seconds / length), unit)
     },
   }
 }
