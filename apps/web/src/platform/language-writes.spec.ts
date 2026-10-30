@@ -11,8 +11,13 @@ function record() {
   return {
     events,
     writes: {
-      writing: (locale: Locale) => events.push(`writing ${locale}`),
-      failed: (locale: Locale) => events.push(`failed ${locale}`),
+      writing: (locale: Locale) => {
+        events.push(`writing ${locale}`)
+
+        return () => {
+          events.push(`failed ${locale}`)
+        }
+      },
     },
   }
 }

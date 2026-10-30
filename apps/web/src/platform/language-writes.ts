@@ -12,10 +12,11 @@ import { createContext, useContext } from 'react'
 import type { Locale } from '@workspace/i18n'
 
 export interface LanguageWrites {
-  /** A store of `locale` starts on this device. */
-  writing(locale: Locale): void
-  /** That store failed: its language will not come back. */
-  failed(locale: Locale): void
+  /**
+   * A store of `locale` starts on this device; the function returned says that store failed, so
+   * its language will not come back, and says nothing once the account changed since it began.
+   */
+  writing(locale: Locale): () => void
 }
 
 export const LanguageWritesContext = createContext<LanguageWrites | undefined>(undefined)
@@ -36,8 +37,8 @@ export function trackedStore<E>(
   store: (locale: Locale) => ResultAsync<void, E>,
 ): (locale: Locale) => ResultAsync<void, E> {
   return (locale) => {
-    writes.writing(locale)
+    const failed = writes.writing(locale)
 
-    return store(locale).orTee(() => writes.failed(locale))
+    return store(locale).orTee(() => failed())
   }
 }

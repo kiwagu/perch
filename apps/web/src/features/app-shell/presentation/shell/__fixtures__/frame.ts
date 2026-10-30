@@ -9,6 +9,7 @@ export function openedFrame(): ShellFrame {
     account: undefined,
     stored: undefined,
     writes: LocaleWrites.none,
+    generation: 0,
     signOutHere: undefined,
     renderAgain: undefined,
   }

@@ -17,6 +17,7 @@ import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-tex
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
+  frameLanguageWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
@@ -25,7 +26,7 @@ import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
-import { type LanguageWrites, LanguageWritesContext } from './platform/language-writes'
+import { LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
@@ -116,6 +117,7 @@ function App() {
       account: undefined,
       stored: undefined,
       writes: LocaleWrites.none,
+      generation: 0,
       signOutHere: undefined,
       renderAgain: undefined,
     }
@@ -125,17 +127,7 @@ function App() {
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
   // The settings screen's stores of the language, kept by the frame to tell their echo from another device's.
-  const languageWrites = useMemo<LanguageWrites>(
-    () => ({
-      writing: (locale) => {
-        made.live.writes = made.live.writes.writing(locale)
-      },
-      failed: (locale) => {
-        made.live.writes = made.live.writes.failed(locale)
-      },
-    }),
-    [made],
-  )
+  const languageWrites = useMemo(() => frameLanguageWrites(made.live), [made])
 
   useEffect(() => {
     const spoken = actor.on('speak', ({ locale }) => setLocale(locale))

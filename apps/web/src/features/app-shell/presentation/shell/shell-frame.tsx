@@ -2,6 +2,7 @@ import { errAsync, type ResultAsync } from 'neverthrow'
 import { createContext, useContext } from 'react'
 import type { ActorRefFrom } from 'xstate'
 
+import type { LanguageWrites } from '../../../../platform/language-writes'
 import type { LocaleWrites } from '../../application/locale-writes'
 import { createShellMachine } from '../../application/shell.machine'
 
@@ -13,6 +14,8 @@ export interface ShellLive {
   stored: string | undefined
   /** What this device knows of the stored language and of its own writes on their way. */
   writes: LocaleWrites
+  /** Moves on each time the account changes: what this device wrote before was the earlier one's. */
+  generation: number
   /** Signs the saved account out on this device, when its data did not open. */
   signOutHere: (() => ResultAsync<unknown, unknown>) | undefined
   /** Renders the screen that failed again, kept by the crash put in its place; none before one. */
@@ -30,6 +33,26 @@ export function shellFrameMachine(
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
     reload,
   })
+}
+
+/**
+ * This device's own writes of the language over the frame's record: a write joins the record of
+ * the account it began for, and its failure leaves that record alone once the account changed.
+ */
+export function frameLanguageWrites(live: ShellLive): LanguageWrites {
+  return {
+    writing: (locale) => {
+      const generation = live.generation
+
+      live.writes = live.writes.writing(locale)
+
+      return () => {
+        if (live.generation === generation) {
+          live.writes = live.writes.failed(locale)
+        }
+      }
+    },
+  }
 }
 
 export interface ShellFrame {
