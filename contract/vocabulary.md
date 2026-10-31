@@ -188,6 +188,8 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `connecting` | `app-shell.sync-message` | the browser has a network, but the sync is not connected yet, or connects again |
 | `offline` | `app-shell.sync-message` | the browser has no network, so changes made on this device wait here until it is back |
 | `sync-stopped` | `app-shell.sync-message` | the sync stopped and does not resume in this page: the server no longer takes its protocol, or the browser cannot lead a sync |
+| `install-available` | `app-shell.install-message` | the browser can install the app and offers to; the reminder carries the button that asks it |
+| `install-by-steps` | `app-shell.install-message` | the browser installs the app only by the user's own steps, which the reminder shows (Share, then Add to Home Screen) |
 
 ## Choice values
 
@@ -262,4 +264,7 @@ included.
 | `app-shell.update-message` | the message that the page should load again, a newer version served or the sync protocol refused, which carries `data-code` and renders no derived anchor |
 | `app-shell.update-button` | the button that loads the page again on the version the server serves, shown with `app-shell.update-message`, which renders no derived anchor |
 | `app-shell.sync-message` | the state of this device's sync for a signed-in account, the same in every tab, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-message` | the reminder to install the app until it is installed, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
+| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |

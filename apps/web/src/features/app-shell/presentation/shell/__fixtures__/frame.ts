@@ -1,5 +1,6 @@
 import { createActor } from 'xstate'
 
+import type { DeviceInstall } from '../../../../../platform/install'
 import type { Theme } from '../../../../../platform/theme'
 import { LocaleWrites } from '../../../application/locale-writes'
 import type { SelfReloads } from '../../../application/shell.machine'
@@ -12,6 +13,8 @@ export interface OpenedFrameOptions {
   readonly reload?: () => void
   /** The updates the tab loaded the page again for by itself; none by default, kept in memory. */
   readonly selfReloads?: SelfReloads
+  /** Installing the app; a browser that offers no window by default. */
+  readonly install?: Pick<DeviceInstall, 'prompt' | 'postpone'>
 }
 
 /** In memory, the updates a tab loaded the page again for by itself. */
@@ -33,12 +36,15 @@ export function openedFrame(options: OpenedFrameOptions = {}): ShellFrame {
     unsaved: false,
   }
   const actor = createActor(
-    shellFrameMachine(
-      live,
-      options.setTheme ?? (() => {}),
-      options.reload ?? (() => {}),
-      options.selfReloads ?? memorySelfReloads(),
-    ),
+    shellFrameMachine(live, {
+      setTheme: options.setTheme ?? (() => {}),
+      reload: options.reload ?? (() => {}),
+      selfReloads: options.selfReloads ?? memorySelfReloads(),
+      install: options.install ?? {
+        prompt: () => Promise.reject(new Error('no window to install the app in this test')),
+        postpone: () => {},
+      },
+    }),
   ).start()
 
   actor.send({ type: 'platform.opened' })

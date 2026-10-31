@@ -17,7 +17,9 @@ the pairs, and `bun run contract:check:consumers` checks every anchor, code, sta
 a test names as a literal against the contract. After every step a check fails the test when
 any open page scrolls sideways. At the end of every test a check fails it when a document or a
 script of the front came without the front's security headers, or when a page or one of its
-workers reported a Content-Security-Policy violation on the console. Each test signs up fresh accounts in fresh browser contexts,
+workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
+service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
+`app-shell/base/open-offline`, which lets it run to open the app offline. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
