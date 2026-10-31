@@ -107,7 +107,8 @@ code and the tests follow; the checks hold them to the contract.
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes; an app's machine may lack what its flow added, and does
-   nothing the flow does not say; a scenario may wait for its test, which the landing on
+   nothing the flow does not say, or is still its flow at the branch's base; a scenario may
+   wait for its test, which the landing on
    `main` requires). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer

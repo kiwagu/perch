@@ -8,8 +8,10 @@
  * The app adds actions of its own (an `assign`), and its `input` is the app's, but no
  * mechanism the flow has no counterpart for. On a branch the pre-commit hook sets
  * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a
- * machine may lack what its flow added but does nothing the flow does not say; `bun run check`
- * and a commit on `main` hold every machine to its whole flow.
+ * machine may lack what its flow added but does nothing the flow does not say, or is still
+ * exactly its screen's flow at the branch's base (`CONTRACT_AHEAD_BASE`), so a business commit
+ * may change a transition before its implementation; `bun run check` and a commit on `main`
+ * hold every machine to its whole flow.
  */
 
 import { join } from 'node:path'
@@ -17,8 +19,8 @@ import { join } from 'node:path'
 import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem, loadScreens } from '@workspace/ui-contract'
-import { aheadOf, beyondTheSubset, projected } from '@workspace/ui-contract/machines'
+import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
+import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
 
 import { LocaleWrites } from '../features/app-shell/application/locale-writes'
 import { createShellMachine } from '../features/app-shell/application/shell.machine'
@@ -33,6 +35,28 @@ import { fakeSession } from './__fixtures__/session'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
+
+/** The merge base of the branch with `main`, which the pre-commit hook names on a branch. */
+const BASE = process.env['CONTRACT_AHEAD_BASE']
+
+/** The flows of the screens at the branch's base, by screen id; none outside the hook's ahead mode. */
+function flowsAtBase(): ReadonlyMap<string, unknown> {
+  if (!AHEAD || BASE === undefined || BASE === '') {
+    return new Map()
+  }
+
+  const base = contractAt(BASE, ROOT)
+
+  return 'missing' in base
+    ? new Map()
+    : new Map(
+        base.screens.screens.flatMap((screen) =>
+          screen.flow === undefined ? [] : [[screen.id, screen.flow] as const],
+        ),
+      )
+}
+
+const AT_BASE = flowsAtBase()
 
 const { screens, problems } = loadScreens(ROOT)
 
@@ -107,6 +131,12 @@ describe('the machines of the app', () => {
     const app = projected(config)
 
     expect(beyondTheSubset(config), `what ${id} does beyond its flow`).toEqual([])
-    expect(app).toEqual(AHEAD ? aheadOf(app, projected(flow)) : projected(flow))
+    const atBase = AT_BASE.get(id)
+
+    expect(app).toEqual(
+      AHEAD
+        ? laggingOf(app, projected(flow), atBase === undefined ? undefined : projected(atBase))
+        : projected(flow),
+    )
   })
 })

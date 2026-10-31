@@ -839,7 +839,9 @@ gap is fixed in the contract files first, never worked around in a test.
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
-  not say; on `main` and in `bun run check` every machine is its whole flow. A rename or a
+  not say, or is still exactly its screen's flow at the branch's merge base with `main`
+  (`CONTRACT_AHEAD_BASE`), so a business commit may change a transition the app has not
+  changed yet; on `main` and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the

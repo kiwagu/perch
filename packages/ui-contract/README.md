@@ -266,9 +266,11 @@ for Bun.
   `projected(config)` (initial state, states, final states, regions, events with their
   targets and guards, invoke sources, the contract's effects; the app's own actions left
   out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
-  counterpart for) and `aheadOf(app, flow)` (the flow as far as a machine that lags it has
+  counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
-  say), which a branch uses while a business commit runs ahead of the implementation.
+  say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is
+  still exactly that, else `aheadOf`), which a branch uses while a business commit runs ahead
+  of the implementation.
 
 ## Commands
 
