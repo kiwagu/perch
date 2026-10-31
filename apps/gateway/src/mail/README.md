@@ -27,6 +27,6 @@ language or with a link of another kind.
 ## Commands
 
 - `bun run test` in `apps/gateway` runs `html.spec.ts`, `verification-mail.spec.ts`,
-  `smtp-mailer.spec.ts` (against an SMTP sink on a loopback port) and the outbox fixture's own
-  `__fixtures__/outbox.spec.ts`.
+  `smtp-mailer.spec.ts` (against an SMTP sink on a loopback port) and the fixtures' own
+  `__fixtures__/outbox.spec.ts` and `__fixtures__/smtp-sink.spec.ts`.
 - `bun run i18n:check` in `apps/gateway` checks the catalogs' keys against the code.

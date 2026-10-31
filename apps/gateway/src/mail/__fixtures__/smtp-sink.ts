@@ -13,37 +13,74 @@ export interface SmtpSinkOptions {
   readonly refuseRecipients?: boolean
 }
 
-/** Answers one SMTP exchange line by line: EHLO, MAIL FROM, RCPT TO, DATA up to its dot, QUIT. */
+/** The line that ends a mail's DATA: a dot alone on its line. */
+const MAIL_END = '\r\n.\r\n'
+
+/**
+ * Answers one SMTP exchange: EHLO, MAIL FROM, RCPT TO, DATA up to its dot, QUIT. TCP may split a
+ * command, or the dot that ends a mail, across chunks, and join several in one: the sink keeps
+ * what it has not read yet and reads only whole lines and whole mails.
+ */
 function converse(socket: Socket, received: string[], options: SmtpSinkOptions): void {
+  let pending = ''
   let data = false
+  let quit = false
+
+  const answer = (line: string): void => {
+    if (/^(EHLO|HELO)/i.test(line)) socket.write('250-sink\r\n250 SMTPUTF8\r\n')
+    else if (/^RCPT TO/i.test(line) && options.refuseRecipients === true) {
+      socket.write(`550 5.1.1 ${line.slice(line.indexOf(':') + 1)}: no such recipient here\r\n`)
+    } else if (/^(MAIL FROM|RCPT TO|RSET|NOOP)/i.test(line)) socket.write('250 ok\r\n')
+    else if (/^DATA/i.test(line)) {
+      data = true
+      socket.write('354 go on\r\n')
+    } else if (/^QUIT/i.test(line)) {
+      quit = true
+      socket.write('221 bye\r\n')
+      socket.end()
+    }
+  }
+
+  /** Reads one whole command line, or the rest of a mail up to its end; false when it has neither yet, or after QUIT. */
+  const readOne = (): boolean => {
+    if (quit) return false
+
+    if (data) {
+      // The line break before the dot may be the DATA command's own, for a mail with no body.
+      const end = `\r\n${pending}`.indexOf(MAIL_END)
+
+      if (end === -1) return false
+
+      pending = pending.slice(end + MAIL_END.length - 2)
+      data = false
+      socket.write('250 queued\r\n')
+
+      return true
+    }
+
+    const lineEnd = pending.indexOf('\r\n')
+
+    if (lineEnd === -1) return false
+
+    const line = pending.slice(0, lineEnd)
+
+    pending = pending.slice(lineEnd + 2)
+    answer(line)
+
+    return true
+  }
 
   socket.write('220 sink ESMTP\r\n')
   socket.on('data', (chunk: Buffer) => {
     const text = chunk.toString()
 
     received.push(text)
+    pending += text
 
-    if (data) {
-      if (text.includes('\r\n.\r\n')) {
-        data = false
-        socket.write('250 queued\r\n')
-      }
+    let read = true
 
-      return
-    }
-
-    for (const line of text.split('\r\n').filter((each) => each !== '')) {
-      if (/^(EHLO|HELO)/i.test(line)) socket.write('250-sink\r\n250 SMTPUTF8\r\n')
-      else if (/^RCPT TO/i.test(line) && options.refuseRecipients === true) {
-        socket.write(`550 5.1.1 ${line.slice(line.indexOf(':') + 1)}: no such recipient here\r\n`)
-      } else if (/^(MAIL FROM|RCPT TO|RSET|NOOP)/i.test(line)) socket.write('250 ok\r\n')
-      else if (/^DATA/i.test(line)) {
-        data = true
-        socket.write('354 go on\r\n')
-      } else if (/^QUIT/i.test(line)) {
-        socket.write('221 bye\r\n')
-        socket.end()
-      }
+    while (read) {
+      read = readOne()
     }
   })
 }
