@@ -67,10 +67,6 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
 - `user/flows/one-account-per-browser`: a tab left on the sign-in page follows the account
   another tab signs in, onto "/me" within 5 seconds, and the browser keeps one account
   database.
-- `user/flows/key-renewal`: a route that refuses the access token (the test replaces it in the
-  browser's storage, as an expired one would be refused) has the tab that leads the sync renew
-  the keys with one `renew` over its open socket, from that tab and from a second tab; the route
-  answers with the new keys within 5 seconds, and no tab opens another sync socket.
 - `device/base/my-devices`: My devices lists the account's devices, this one marked and the
   other seen within the last minute; a device signed out from another one is on the sign-in
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
@@ -113,9 +109,7 @@ states and values, never the page's wording.
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
-gives them (`databases`, `identityDatabase`, `organisationDatabase`), and the device's keys in
-its localStorage (`keysKept`, and `keepAccessToken`, which replaces the access token as a hand
-edit would).
+gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
