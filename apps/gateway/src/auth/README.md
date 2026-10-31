@@ -95,23 +95,23 @@ is one account. Wrong credentials answer 401 and a sign-up of an email that has 
 with Better Auth's code in the body. A sign-up writes its identity, its credential row and its
 session in one transaction.
 
-The instance can verify an email, beside a sign-up that still signs its device in and sends
-nothing. Better Auth signs the verification link's token with the auth secret (an HS256 token
-naming the email) and hands it to `verificationMailer` (`verification-mail.ts`), its
-`sendVerificationEmail`, which starts the mail and returns at once: the request that asked for a
-mail never waits for it. The mail links to the front's own screen,
-`<GATEWAY_PUBLIC_URL>/verify-email?token=…` (`verificationLink`, `VERIFY_EMAIL_PATH`), never to
-Better Auth's own verifying URL, and its token lives a day (`VERIFICATION_LINK_LIFETIME_S`). It
-speaks the account's language: the one its settings name once it has settings (`accountLocale`,
-`account-locale.ts`), the one it signed up in before. Settings that could not be read, or name a
-language the gateway does not speak, send no mail and are logged as `mail:LOCALE_UNREADABLE`,
-never a mail in a guessed language; a mail that could
-not be written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`), never
-with its address or token. The first verification of an account signs the device that opened
-the link in, through the session hooks like a sign-in, so it names the device in its headers;
-the link opened again verifies nothing and signs nothing in, and a link past its lifetime is
-refused with `TOKEN_EXPIRED`. Better Auth's own resend answers alike for any email and mails
-only an account not verified yet; a sign-in sends nothing. Neither the verification nor the
+The instance can verify an email, beside a sign-up that still signs its device in and sends nothing.
+Better Auth signs the verification link's token with the auth secret (an HS256 token naming the
+email) and hands it to `verificationMailer` (`verification-mail.ts`), its `sendVerificationEmail`,
+which starts the mail and returns at once: the request that asked for a mail never waits for it. The
+mail links to the front's own screen, `<GATEWAY_PUBLIC_URL>/verify-email?token=…`
+(`verificationLink`, `VERIFY_EMAIL_PATH`), never to Better Auth's own verifying URL, and its token
+lives a day (`VERIFICATION_LINK_LIFETIME_S`). It speaks the account's language: the one its settings
+name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before.
+Settings that could not be read, or name a language the gateway does not speak, send no mail and are
+logged as `mail:LOCALE_UNREADABLE`, never a mail in a guessed language; a mail that could not be
+written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`), never with its
+address or token, and so is an account that reads without a language (a row written before the
+column had its default): no mail, `mail:SEND_FAILED`. The first verification of an account signs the
+device that opened the link in, through the session hooks like a sign-in, so it names the device in
+its headers; the link opened again verifies nothing and signs nothing in, and a link past its
+lifetime is refused with `TOKEN_EXPIRED`. Better Auth's own resend answers alike for any email and
+mails only an account not verified yet; a sign-in sends nothing. Neither the verification nor the
 resend is reachable through the mount yet: it serves the sign-up and the sign-in only.
 `AuthSessions` reads what the mount needs for them: the session a verification signed in, by the
 signed token of Better Auth's answer, with its account (`signedIn`), the identity of an email

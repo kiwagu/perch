@@ -134,11 +134,33 @@ describe('verificationMailer', () => {
 
     await send({ user: { email: ADDRESS }, token: 't' })
     await reported(lines, [
-      { code: 'mail:SEND_FAILED', message: 'a verification mail named no account' },
+      { code: 'mail:SEND_FAILED', message: 'the account of a verification mail could not be read' },
     ])
 
     expect(outbox.sent).toEqual([])
   })
+
+  // An account written before the column had a default reads with no language: it gets no mail
+  // in a guessed one, and the failure is reported.
+  it.each([
+    ['no language', (({ locale: _none, ...account }) => account)(user('en'))],
+    ['an empty language', { ...user('en'), locale: null }],
+  ])(
+    'sends nothing to an otherwise valid account with %s, and reports it by its code',
+    async (_label, account) => {
+      const { outbox, lines, send } = await mailer()
+
+      await send({ user: account, token: TOKEN })
+      await reported(lines, [
+        {
+          code: 'mail:SEND_FAILED',
+          message: 'the account of a verification mail could not be read',
+        },
+      ])
+
+      expect(outbox.sent).toEqual([])
+    },
+  )
 
   it('reports a mail the server did not take by its code, nothing of its address or token', async () => {
     const refusing: MailPort = {

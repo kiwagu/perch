@@ -41,8 +41,13 @@ async function deliver(
 ): Promise<void> {
   const account = mailedAccount.safeParse(user)
 
+  // An account Better Auth hands over without an id, an email, a name or a language it can be
+  // written in (a row written before its language had a default) gets no mail in a guessed one.
   if (!account.success) {
-    options.log.error({ code: 'mail:SEND_FAILED' }, 'a verification mail named no account')
+    options.log.error(
+      { code: 'mail:SEND_FAILED' },
+      'the account of a verification mail could not be read',
+    )
 
     return
   }
