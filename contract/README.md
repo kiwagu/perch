@@ -855,7 +855,8 @@ gap is fixed in the contract files first, never worked around in a test.
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
   (`CONTRACT_AHEAD_BASE`), so a business commit may change a transition the app has not
-  changed yet; on `main` and in `bun run check` every machine is its whole flow. A rename or a
+  changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  hook; on `main` and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the
