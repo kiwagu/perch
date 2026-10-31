@@ -21,6 +21,8 @@ time (one identity's membership changes). The modules that predate the index rul
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
   and their routes.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
+- [mail](src/mail/README.md): the mail port and its SMTP adapter, and the mails the gateway
+  writes.
 
 ## Key exports
 

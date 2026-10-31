@@ -1,0 +1,8 @@
+{
+  "mail.verify-email.subject": "Confirm your email for Perch",
+  "mail.verify-email.greeting": "Hello {name},",
+  "mail.verify-email.body": "Open this link to confirm {email} and sign in to your new Perch account:",
+  "mail.verify-email.action": "Confirm my email",
+  "mail.verify-email.expiry": "The link works for 24 hours. You can ask for a new one on the sign-in page.",
+  "mail.verify-email.ignore": "If you did not create a Perch account, ignore this mail: nothing happens without the link."
+}

@@ -7,6 +7,7 @@
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
+    "i18n:check": "i18n-check --root src",
     "test": "bun --bun vitest run",
     "test:db": "bun scripts/smoke/cli.ts",
     "load": "bun scripts/load/ws-clients.ts"
@@ -14,6 +15,7 @@
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/i18n": "workspace:*",
     "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",
     "@workspace/logger": "workspace:*",
@@ -21,6 +23,7 @@
     "@workspace/zod": "workspace:*",
     "better-auth": "catalog:",
     "neverthrow": "catalog:",
+    "nodemailer": "catalog:",
     "ts-pattern": "catalog:"
   },
   "devDependencies": {
