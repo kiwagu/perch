@@ -1,5 +1,5 @@
 import { errAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
@@ -56,7 +56,6 @@ async function mailer(options: MailerOptions = {}) {
     local,
     outbox,
     lines,
-    codes: () => lines.map(({ code }) => code),
     send: verificationMailer({
       mail: options.mail ?? outbox,
       directory,
@@ -73,8 +72,15 @@ const user = (locale: string) => ({
   locale,
 })
 
-/** Lets the mail that was started, and not awaited, run to its end. */
-const settled = () => new Promise((resolve) => setTimeout(resolve, 50))
+/** How long a test waits for the mail it started, and nobody awaits, to report its failure. */
+const REPORT_WAIT_MS = 2_000
+
+/**
+ * Waits, polling, until the mail that was started and not awaited has reported exactly `expected`;
+ * fails once `REPORT_WAIT_MS` passed without it.
+ */
+const reported = (lines: readonly unknown[], expected: readonly unknown[]) =>
+  vi.waitFor(() => expect(lines).toEqual(expected), { timeout: REPORT_WAIT_MS, interval: 5 })
 
 describe('verificationMailer', () => {
   it("starts the mail and returns before it is sent, linking to the front's /verify-email", async () => {
@@ -109,24 +115,29 @@ describe('verificationMailer', () => {
   })
 
   it('sends nothing when the settings cannot be read, and reports it by its code', async () => {
-    const { outbox, codes, lines, send } = await mailer({ settingsFail: true })
+    const { outbox, lines, send } = await mailer({ settingsFail: true })
 
     await send({ user: user('es'), token: TOKEN })
-    await settled()
+    await reported(lines, [
+      {
+        code: 'mail:LOCALE_UNREADABLE',
+        message: 'the language of a verification mail could not be read',
+      },
+    ])
 
     expect(outbox.sent).toEqual([])
-    expect(codes()).toEqual(['mail:LOCALE_UNREADABLE'])
     expect(JSON.stringify(lines)).not.toMatch(/MARKER|ann@example\.test/)
   })
 
   it('reports a mail that names no account by its code, and sends nothing', async () => {
-    const { outbox, codes, send } = await mailer()
+    const { outbox, lines, send } = await mailer()
 
     await send({ user: { email: ADDRESS }, token: 't' })
-    await settled()
+    await reported(lines, [
+      { code: 'mail:SEND_FAILED', message: 'a verification mail named no account' },
+    ])
 
     expect(outbox.sent).toEqual([])
-    expect(codes()).toEqual(['mail:SEND_FAILED'])
   })
 
   it('reports a mail the server did not take by its code, nothing of its address or token', async () => {
@@ -134,23 +145,25 @@ describe('verificationMailer', () => {
       send: () =>
         errAsync({ code: 'mail:SEND_FAILED', message: `the server refused ${ADDRESS} ${TOKEN}` }),
     }
-    const { codes, lines, send } = await mailer({ mail: refusing })
+    const { lines, send } = await mailer({ mail: refusing })
 
     await send({ user: user('en'), token: TOKEN })
-    await settled()
+    await reported(lines, [
+      { code: 'mail:SEND_FAILED', message: 'a verification mail did not go out' },
+    ])
 
-    expect(codes()).toEqual(['mail:SEND_FAILED'])
     expect(JSON.stringify(lines)).not.toMatch(/MARKER|ann@example\.test/)
   })
 
   it('reports a mail it cannot write by its code, and sends nothing', async () => {
-    const { outbox, codes, lines, send } = await mailer({ publicUrl: 'ftp://localhost:5443' })
+    const { outbox, lines, send } = await mailer({ publicUrl: 'ftp://localhost:5443' })
 
     await send({ user: user('en'), token: TOKEN })
-    await settled()
+    await reported(lines, [
+      { code: 'mail:LINK_INVALID', message: 'a verification mail did not go out' },
+    ])
 
     expect(outbox.sent).toEqual([])
-    expect(codes()).toEqual(['mail:LINK_INVALID'])
     expect(JSON.stringify(lines)).not.toMatch(/MARKER|ann@example\.test/)
   })
 
