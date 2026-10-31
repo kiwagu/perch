@@ -138,6 +138,14 @@ note texts).
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). `CI=1` runs one worker.
+- `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
+  and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
+  a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
+  visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared
+  (the profile with its data 1.5 s); each step is timed in the page when its element first
+  appears, and each number is the median of the runs. It measures and never fails: the numbers
+  move with the host's load. `--slow-4g` adds a slow mobile network, outside the budgets.
 - `bun run e2e:scaffold <scenario id>` (repository root): writes the failing test of a new
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.

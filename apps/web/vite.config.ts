@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm'
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
 
 import { pwa } from './build/pwa'
+import { sizeBudgets } from './build/size-budgets'
 import { stripWasmSourceMaps } from './build/wasm-source-maps'
 
 const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
@@ -128,6 +129,7 @@ export default defineConfig(({ mode }) => ({
     buildIdentity(),
     stripWasmSourceMaps(),
     pwa(),
+    sizeBudgets(),
   ],
   // The page helper `window.__perch.ui` (src/platform/ui-contract.ts): in development builds,
   // and in a production build made with PERCH_UI_HOOKS=1 (the e2e launcher's).

@@ -29,6 +29,7 @@
     "contract:routes": "ui-contract routes",
     "contract:flow": "ui-contract flow",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
+    "perf:measure": "mcproc exec --memory 3G --note perf -- bun tests/e2e/scripts/perf-measure.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",

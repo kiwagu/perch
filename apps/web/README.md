@@ -269,7 +269,11 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
   contract check passes, with its schema and the model's beside it, which the stands serve at
-  `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper.
+  `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper. A production
+  build fails over its size budgets (`build/size-budgets.ts`, gzipped): the first frame (the
+  page, the scripts and styles it names, its Basic Latin font) 310 kB, each lazy script 100 kB,
+  the SurrealDB WASM 5.2 MB and the Loro WASM 1.2 MB, and a WASM module without a budget fails
+  it too; otherwise it prints how close it came.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.
