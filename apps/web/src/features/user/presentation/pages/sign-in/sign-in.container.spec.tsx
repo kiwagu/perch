@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { err, errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
@@ -201,5 +201,53 @@ describe('SignInContainer', () => {
     expect(error.getAttribute('data-code')).toBe('email-not-verified')
     expect(screen.getByTestId('user.sign-in.resend-button')).toBeTruthy()
     expect(router.state.location.pathname).toBe('/sign-in')
+  })
+
+  it('keeps the mode sign-up while the sign-up runs and once it is refused, and goes back to sign-in on the toggle', async () => {
+    let refuse: () => void = () => {}
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signUp: () =>
+        new ResultAsync(
+          new Promise<Awaited<ReturnType<SessionPort['signUp']>>>((resolve) => {
+            refuse = () =>
+              resolve(err({ code: 'data:SIGN_UP_REJECTED', message: 'sign-up was rejected' }))
+          }),
+        ),
+    }
+
+    renderSignIn(session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+    fireEvent.change(screen.getByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'pass-word-1' },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    // While it runs, the form stays in the mode sign-up, its submit held.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(screen.getByTestId('user.sign-in.name-input')).toBeTruthy()
+    expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+
+    act(() => refuse())
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('sign-up-rejected')
+    expect(screen.getByTestId('user.sign-in.name-input')).toBeTruthy()
+    expect(screen.getByTestId('user.sign-in.toggle-button').getAttribute('data-value')).toBe(
+      'sign-in',
+    )
+
+    fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
+
+    expect(screen.queryByTestId('user.sign-in.name-input')).toBeNull()
+    expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
   })
 })

@@ -8,7 +8,7 @@ import { HOME_PATH } from '../../../../../platform/router'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import { createSignInMachine } from '../../../application/sign-in.machine'
-import { SIGN_IN_SERVICE, type SignInMode } from '../../../application/sign-in.service'
+import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
 
 import { SignInView } from './sign-in.view'
 
@@ -27,18 +27,13 @@ export function SignInContainer() {
   const done = state.matches('done')
   const busy = submitting || done
   // The mode is the state: sign-up only while creating an account, sign-in otherwise (asking to
-  // check the mail and offering the resend among them, the values kept); once done, the form
-  // keeps the mode of its attempt until it moves.
-  const [mode, setMode] = useState<SignInMode>('sign-in')
-  const shown = state.matches('sign-up') || state.matches('signing-up') ? 'sign-up' : 'sign-in'
+  // check the mail and offering the resend among them, the values kept, and done, which only a
+  // sign-in reaches).
+  const mode = state.matches('sign-up') || state.matches('signing-up') ? 'sign-up' : 'sign-in'
   const showResend = (['check-mail', 'unverified', 'resending'] as const).some((name) =>
     state.matches(name),
   )
   const canResend = state.can({ type: 'user.sign-in.resend-button', email: '' })
-
-  if (!done && shown !== mode) {
-    setMode(shown)
-  }
 
   useEffect(() => {
     if (notice) {

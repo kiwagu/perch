@@ -9,8 +9,6 @@ import type { SessionPort } from '../../../platform/session.port'
 
 import { profileName } from './profile-name.policy'
 
-export type SignInMode = 'sign-in' | 'sign-up'
-
 /** What the form collects, and the language the app speaks as it is sent; signing in ignores the name and the language. */
 export interface SignInForm {
   readonly email: string
