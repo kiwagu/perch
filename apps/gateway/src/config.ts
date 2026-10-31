@@ -1,5 +1,23 @@
 import { z } from '@workspace/zod'
 
+/**
+ * Whether the host of an smtp:// or smtps:// address names a mail server by a domain name or an
+ * IP address. The URL standard keeps the host of such an address opaque, so a NUL byte written
+ * `%00` or an escaped slash passes it, while the mail library reads the host the way a web
+ * address's host is read and refuses one that does not parse so, with an error that carries the
+ * whole address, the password with it. An address that does not parse at all is left to the
+ * address check.
+ */
+function namesMailServer(url: string): boolean {
+  if (!URL.canParse(url)) {
+    return true
+  }
+
+  const { host, hostname } = new URL(url)
+
+  return hostname === '' || URL.canParse(`http://${host}`)
+}
+
 /** The gateway's environment, parsed once at startup. */
 export const gatewayConfig = z.object({
   GATEWAY_PORT: z.coerce.number().int().min(1).max(65535),
@@ -44,6 +62,9 @@ export const gatewayConfig = z.object({
     })
     .refine((url) => !/[?#]/.test(url), {
       error: 'must carry no query string or fragment: the mail library reads them as its options',
+    })
+    .refine(namesMailServer, {
+      error: 'must name the mail server by a domain name or an IP address',
     }),
   /** The From of every mail the gateway sends, such as `Perch <no-reply@example.test>`. */
   GATEWAY_MAIL_FROM: z.string().regex(/^([^<>]+ <[^<>@\s]+@[^<>@\s]+>|[^<>@\s]+@[^<>@\s]+)$/, {

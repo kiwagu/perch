@@ -50,8 +50,10 @@ function fatalsOf(stdout: string): unknown[] {
 
 describe('the gateway process', () => {
   // The mail library refuses a host the URL standard takes for an opaque one (a NUL byte, written
-  // %00), and its error carries the whole URL, the server's password with it.
-  it('refuses an SMTP address the mail library cannot use by its code and exit code 1, never with the address', async () => {
+  // %00), and its error carries the whole URL, the server's password with it. The configuration
+  // refuses such a host first, naming the variable; the mailer's own refusal, `mail:URL_INVALID`,
+  // stays behind it (`mail/smtp-mailer.spec.ts`).
+  it('refuses an SMTP address the mail library cannot use with exit code 1, never with the address', async () => {
     const marker = `marker-${crypto.randomUUID()}`
     const { code, stdout, stderr } = await started({
       ...ENV,
@@ -64,8 +66,8 @@ describe('the gateway process', () => {
     expect(`${stdout}${stderr}`).not.toContain('bad%00')
     expect(fatalsOf(stdout)).toStrictEqual([
       expect.objectContaining({
-        code: 'mail:URL_INVALID',
-        msg: 'the mail server address could not be used',
+        msg: 'the gateway configuration is invalid',
+        issues: ['GATEWAY_SMTP_URL: must name the mail server by a domain name or an IP address'],
       }),
     ])
   }, 30_000)

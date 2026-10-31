@@ -144,6 +144,36 @@ describe('gatewayConfig.GATEWAY_SMTP_URL', () => {
       ],
     ])
   })
+
+  // The URL standard keeps the host of an smtp:// address opaque, so a NUL byte written %00 or an
+  // escaped slash passes it; the mail library reads that host the way a web address's host is
+  // read and refuses it with an error that carries the whole address, the password with it.
+  it.each([
+    ['a NUL byte', 'smtp://user:secret@bad%00.example.test:587'],
+    ['an escaped space', 'smtps://user:secret@bad%20x.example.test:465'],
+    ['an escaped slash', 'smtp://bad%2F.example.test:25'],
+    ['a broken escape', 'smtp://b%zzd.example.test:25'],
+    ['a label that is not an international name', 'smtp://xn--a.example.test:25'],
+    ['an IPv4 address out of range', 'smtp://999.1.1.1:25'],
+  ])('refuses a host with %s, naming the rule and not the value', (_label, url) => {
+    const refused = gatewayConfig.safeParse({ ...env, GATEWAY_SMTP_URL: url })
+
+    expect(refused.error?.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      ['GATEWAY_SMTP_URL', 'must name the mail server by a domain name or an IP address'],
+    ])
+    expect(JSON.stringify(refused.error?.issues)).not.toContain('secret')
+  })
+
+  it('takes a host by a domain name, an international one, or an IP address', () => {
+    for (const url of [
+      'smtp://mail.example.test:25',
+      'smtps://user:secret@münchen.example:465',
+      'smtp://127.0.0.1:1025',
+      'smtp://[::1]:1025',
+    ]) {
+      expect(gatewayConfig.safeParse({ ...env, GATEWAY_SMTP_URL: url }).success).toBe(true)
+    }
+  })
 })
 
 describe('gatewayConfig.GATEWAY_MAIL_FROM', () => {
