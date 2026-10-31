@@ -11,13 +11,13 @@ const BASE = 'https://app.example.test/backend'
 
 const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
 
-const signUpInput = { ...credentials, name: 'Ann' }
+const signUpInput = { ...credentials, name: 'Ann', locale: 'es' }
 
 const device = { id: 'device-1', label: 'Chrome on Linux' }
 
 const ann = identityIdFactory.create()
 
-/** The account as the gateway answers a sign-up or sign-in with it. */
+/** The account as the gateway answers a sign-in with it. */
 const user = {
   id: ann,
   email: credentials.email,
@@ -37,7 +37,7 @@ const withSignedHeader = (body: unknown) => () =>
     Response.json(body, { status: 200, headers: { 'set-auth-token': 'token-1.signature' } }),
   )
 
-const signUp = (auth: GatewayAuth) => auth.signUp(signUpInput, device)
+const signUp = (auth: GatewayAuth) => auth.signUp(signUpInput)
 const signIn = (auth: GatewayAuth) => auth.signIn(credentials, device)
 
 /** The token a verification link carries, and the session token its first exchange gives. */
@@ -75,9 +75,10 @@ function namesNone(error: DataError, ...secrets: string[]): void {
   }
 }
 
-/** Markers a failed request may carry back in its rejection: the link's token and an email. */
+/** Markers a failed request may carry back in its rejection: the link's token, an email, a password. */
 const TOKEN_MARKER = 'token-marker-7f3a'
 const EMAIL_MARKER = 'marker-7f3a@example.test'
+const PASSWORD_MARKER = 'password-marker-7f3a'
 
 /**
  * A fetch that rejects with what its request carried, in the rejection's message and in its own
@@ -85,39 +86,54 @@ const EMAIL_MARKER = 'marker-7f3a@example.test'
  */
 const rejectsCarrying = () => () =>
   Promise.reject(
-    Object.assign(new TypeError(`Failed to fetch ${TOKEN_MARKER} for ${EMAIL_MARKER}`), {
-      request: { body: JSON.stringify({ token: TOKEN_MARKER, email: EMAIL_MARKER }) },
-      sent: [TOKEN_MARKER, EMAIL_MARKER],
-    }),
+    Object.assign(
+      new TypeError(`Failed to fetch ${TOKEN_MARKER} for ${EMAIL_MARKER} with ${PASSWORD_MARKER}`),
+      {
+        request: {
+          body: JSON.stringify({
+            token: TOKEN_MARKER,
+            email: EMAIL_MARKER,
+            password: PASSWORD_MARKER,
+          }),
+        },
+        sent: [TOKEN_MARKER, EMAIL_MARKER, PASSWORD_MARKER],
+      },
+    ),
   )
 
-/** Whether `error` keeps no cause and names neither marker, in its message or anywhere else. */
+/** Whether `error` keeps no cause and names no marker, in its message or anywhere else. */
 function keepsNothingOfTheRejection(error: DataError): void {
   expect(error.code).toBe('data:OFFLINE')
   expect(error.cause).toBeUndefined()
   expect(Object.keys(error)).not.toContain('cause')
-  namesNone(error, TOKEN_MARKER, EMAIL_MARKER)
+  namesNone(error, TOKEN_MARKER, EMAIL_MARKER, PASSWORD_MARKER)
 }
 
-describe('gatewayAuth', () => {
-  it('signs up naming the device, and answers with the identity and its session token only', async () => {
-    const { fetcher, sent } = fakeFetch(respond(200, { token: 'token-1', user }))
+/** Credentials made of the markers, which a rejection must not carry back. */
+const markedCredentials = { email: EMAIL_MARKER, password: PASSWORD_MARKER }
 
-    expect((await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
-      identity: { id: ann, email: credentials.email },
-      token: 'token-1',
-    })
-    // Nothing else is asked: the session reads the memberships itself, with the token it keeps.
-    expect(sent).toEqual([
+describe('gatewayAuth', () => {
+  it('signs up at its own path with the name, email, password and language, naming no device', async () => {
+    const recorded = fakeFetch(accepted())
+    const { fetcher, types } = typed(recorded.fetcher)
+
+    // Nothing is signed in: the answer carries nothing to keep.
+    expect((await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toBeUndefined()
+    expect(recorded.sent).toEqual([
       {
         url: `${BASE}/auth/sign-up/email`,
         method: 'POST',
         authorization: null,
-        device: 'device-1',
-        label: 'Chrome on Linux',
-        body: signUpInput,
+        device: null,
+        body: {
+          name: 'Ann',
+          email: credentials.email,
+          password: credentials.password,
+          locale: 'es',
+        },
       },
     ])
+    expect(types).toEqual(['application/json'])
   })
 
   it('signs in at its own path with the email and the password only, naming the device', async () => {
@@ -166,17 +182,23 @@ describe('gatewayAuth', () => {
     )
   })
 
-  it('reads 422 as a refused sign-up', async () => {
-    const { fetcher } = fakeFetch(
-      respond(422, {
-        code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
-        message: 'User already exists',
-      }),
-    )
+  it('reads 400 and 422 to a sign-up as a refused sign-up, naming neither email nor password', async () => {
+    for (const status of [400, 422]) {
+      const { fetcher } = fakeFetch(respond(status, { code: 'sign-up-rejected' }))
+      const refused = (await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
 
-    expect((await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
-      'data:SIGN_UP_REJECTED',
-    )
+      expect(refused.code).toBe('data:SIGN_UP_REJECTED')
+      namesNone(refused, credentials.email, credentials.password)
+    }
+  })
+
+  it('fails a sign-up the gateway could not complete with its status', async () => {
+    const { fetcher } = fakeFetch(respond(500, { code: 'internal' }))
+    const failed = (await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
+
+    expect(failed.code).toBe('data:AUTH_FAILED')
+    expect(failed.message).toMatch(/500/)
+    namesNone(failed, credentials.email, credentials.password)
   })
 
   it('reads 429 to a sign-up or a sign-in as a request to wait', async () => {
@@ -189,31 +211,54 @@ describe('gatewayAuth', () => {
     }
   })
 
-  it('reads any other refusal as a failed attempt naming its status', async () => {
+  it('reads any other refusal of a sign-in as a failed attempt naming its status', async () => {
     const { fetcher } = fakeFetch(respond(400, { code: 'PASSWORD_TOO_SHORT' }))
-    const refused = (await signUp(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
+    const refused = (await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
 
     expect(refused.code).toBe('data:AUTH_FAILED')
     expect(refused.message).toBe('the gateway refused the request with 400')
   })
 
   it('is offline when the gateway cannot be reached', async () => {
-    const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+    for (const run of [signUp, signIn]) {
+      const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
 
-    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe('data:OFFLINE')
+      expect((await run(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe('data:OFFLINE')
+    }
   })
 
-  it('fails when the answer is not what the gateway promises', async () => {
+  it('keeps nothing of a rejected sign-up: no cause, no email, no password', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (
+        await gatewayAuth(BASE, fetcher).signUp({ ...markedCredentials, name: 'Ann', locale: 'en' })
+      )._unsafeUnwrapErr(),
+    )
+  })
+
+  it('keeps nothing of a rejected sign-in: no cause, no email, no password', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (await gatewayAuth(BASE, fetcher).signIn(markedCredentials, device))._unsafeUnwrapErr(),
+    )
+  })
+
+  it('fails when the answer is not what the gateway promises, keeping nothing of it', async () => {
     for (const answer of [
       respond(200, { token: 'token-1', user: { ...user, id: 'usr_x' } }),
       respond(200, { token: '', user }),
+      respond(200, { token: 'token-1', user: { ...user, email: 7 } }),
       respondText(200, '<html>'),
     ]) {
       const { fetcher } = fakeFetch(answer)
+      const failed = (await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
 
-      expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
-        'data:AUTH_FAILED',
-      )
+      expect(failed.code).toBe('data:AUTH_FAILED')
+      expect(failed.cause).toBeUndefined()
+      expect(Object.keys(failed)).not.toContain('cause')
+      namesNone(failed, 'token-1', credentials.email)
     }
   })
 

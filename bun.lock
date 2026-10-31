@@ -372,6 +372,7 @@
       "dependencies": {
         "@workspace/data": "workspace:*",
         "@workspace/kernel": "workspace:*",
+        "@workspace/mailbox": "workspace:*",
         "@workspace/web": "workspace:*",
         "@workspace/zod": "workspace:*",
         "neverthrow": "catalog:",

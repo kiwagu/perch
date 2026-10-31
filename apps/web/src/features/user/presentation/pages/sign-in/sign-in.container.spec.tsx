@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
@@ -72,12 +72,7 @@ function renderSignIn(session: SessionPort) {
     providers: [
       {
         provide: SIGN_IN_SERVICE,
-        useFactory: () =>
-          new SignInService(
-            session,
-            { createProfile: () => okAsync(undefined) },
-            { createSettings: () => okAsync(undefined) },
-          ),
+        useFactory: () => new SignInService(session),
       },
     ],
     declarations: { SignIn: SignInContainer, Me: () => <p>profile</p> },
@@ -140,5 +135,71 @@ describe('SignInContainer', () => {
     act(() => answer(ann))
 
     await screen.findByText('profile')
+  })
+
+  it('asks to check the mail after a sign-up, staying on the page with the resend, and resends to the email typed', async () => {
+    const resent: string[] = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signUp: () => okAsync(undefined),
+      resendVerification: (email) => {
+        resent.push(email)
+
+        return okAsync(undefined)
+      },
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+    fireEvent.change(screen.getByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'pass-word-1' },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const message = await screen.findByTestId('user.sign-in.mail-message')
+
+    expect(message.getAttribute('data-code')).toBe('check-your-mail')
+    expect(message.textContent).toContain(ann.email)
+    expect(router.state.location.pathname).toBe('/sign-in')
+    // The form is back in the mode sign-in, with the email kept.
+    expect(screen.queryByTestId('user.sign-in.name-input')).toBeNull()
+    expect((screen.getByTestId('user.sign-in.email-input') as HTMLInputElement).value).toBe(
+      ann.email,
+    )
+
+    fireEvent.click(screen.getByTestId('user.sign-in.resend-button'))
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(resent).toEqual([ann.email])
+    expect(screen.getByTestId('user.sign-in.mail-message').getAttribute('data-code')).toBe(
+      'check-your-mail',
+    )
+  })
+
+  it('offers the resend when a sign-in is refused because the email is not verified yet', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () =>
+        errAsync({ code: 'data:EMAIL_NOT_VERIFIED', message: 'the email is not verified yet' }),
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('email-not-verified')
+    expect(screen.getByTestId('user.sign-in.resend-button')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/sign-in')
   })
 })

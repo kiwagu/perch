@@ -23,11 +23,8 @@ import {
 
 import { SIGN_IN_LOCK } from './sign-in'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }
-
-/** Another device, where the accounts a test verifies were signed up. */
-const elsewhere = { id: 'elsewhere', label: 'Edge on Windows' }
+const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
 
 /** Carol, signed in on this browser by another tab. */
 const carol: KeptDevice = {
@@ -58,9 +55,11 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-/** An account signed up at the gateway on another device: its link is the latest it was mailed. */
+/** An account signed up at the gateway elsewhere: its link is the latest it was mailed. */
 async function signedUp(auth: FakeGatewayAuth, input = annSignUp): Promise<AuthUser> {
-  return (await auth.signUp(input, elsewhere))._unsafeUnwrap().identity
+  expect((await auth.signUp(input)).isOk()).toBe(true)
+
+  return auth.identityOf(input.email)
 }
 
 describe('verifying an email', () => {
@@ -96,8 +95,8 @@ describe('verifying an email', () => {
     })
     expect(tab.session.current()).toEqual(ann)
     expect(savedIdentity(tab.storage)).toEqual(ann)
-    expect(savedToken(tab.storage)).toBe('token-2')
-    expect(reads).toEqual([{ token: 'token-2', device }])
+    expect(savedToken(tab.storage)).toBe('token-1')
+    expect(reads).toEqual([{ token: 'token-1', device }])
     expect(tab.opened()).toEqual([ann.id])
   })
 
@@ -114,7 +113,7 @@ describe('verifying an email', () => {
       kind: 'verified-before',
     })
     expect(tab.session.current()).toEqual(ann)
-    expect(savedToken(tab.storage)).toBe('token-2')
+    expect(savedToken(tab.storage)).toBe('token-1')
     expect(tab.opened()).toEqual([ann.id])
 
     // Opened on another browser, where nobody is signed in: nobody is still.
@@ -149,7 +148,7 @@ describe('verifying an email', () => {
     await vi.waitFor(() =>
       expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-up', 'verify', 'sign-out']),
     )
-    expect(auth.requests[2]).toMatchObject({ kind: 'sign-out', token: 'token-2' })
+    expect(auth.requests[2]).toMatchObject({ kind: 'sign-out', token: 'token-1' })
     expect(pendingRevokes(tab.storage)).toEqual([])
   })
 
@@ -186,6 +185,55 @@ describe('verifying an email', () => {
     await held
 
     expect((await verifying)._unsafeUnwrap()).toMatchObject({ kind: 'signed-in', user: ann })
+  })
+})
+
+describe('signing up', () => {
+  it('asks the gateway with the name and the language, and signs nothing in', async () => {
+    const auth = fakeGatewayAuth()
+    const tab = await world({ auth, online: false })
+
+    expect(
+      (await tab.session.signUp({ ...annSignUp, locale: 'es' }))._unsafeUnwrap(),
+    ).toBeUndefined()
+    expect(auth.requests).toEqual([
+      { kind: 'sign-up', email: annSignUp.email, name: 'Ann', locale: 'es' },
+    ])
+    expect(tab.session.current()).toBeUndefined()
+    expect(savedIdentity(tab.storage)).toBeUndefined()
+    expect(savedToken(tab.storage)).toBeUndefined()
+    expect(tab.opened()).toEqual([])
+    // Until its link is opened, the account signs in nowhere; a wrong password still says so.
+    expect((await tab.session.signIn(annSignUp))._unsafeUnwrapErr().code).toBe(
+      'data:EMAIL_NOT_VERIFIED',
+    )
+    expect(
+      (await tab.session.signIn({ ...annSignUp, password: 'wrong-password' }))._unsafeUnwrapErr()
+        .code,
+    ).toBe('data:INVALID_CREDENTIALS')
+  })
+
+  it('answers an email that has an account as a new one, and changes nothing of that account', async () => {
+    const auth = fakeGatewayAuth()
+    const tab = await world({ auth, online: false })
+
+    expect((await tab.session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const link = auth.linkFor(annSignUp.email)
+    const again = { ...annSignUp, password: 'other-pass-word', name: 'Other' }
+
+    expect((await tab.session.signUp(again))._unsafeUnwrap()).toBeUndefined()
+    // No new link, and the account keeps its password and its name.
+    expect(auth.linkFor(annSignUp.email)).toBe(link)
+    expect((await tab.session.verifyEmail(link))._unsafeUnwrap()).toMatchObject({
+      kind: 'signed-in',
+      name: 'Ann',
+    })
+    expect((await tab.session.signOut()).isOk()).toBe(true)
+    expect((await tab.session.signIn(again))._unsafeUnwrapErr().code).toBe(
+      'data:INVALID_CREDENTIALS',
+    )
+    expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
   })
 })
 

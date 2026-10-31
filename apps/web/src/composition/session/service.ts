@@ -26,9 +26,11 @@ import { verifyEmail } from './verification'
 import { WriteBarrier } from './write-barrier'
 
 /**
- * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
- * device (its id and label), keeps the identity and its session token in the browser's storage
- * and opens the identity's space; restoring opens the saved identity's space without the network.
+ * The signed-in identity and its space. Signing up asks the gateway to create the account and
+ * mail its verification link, and signs nothing in. Signing in, or the first exchange of a
+ * verification link, goes through the gateway, naming the device (its id and label), keeps the
+ * identity and its session token in the browser's storage and opens the identity's space;
+ * restoring opens the saved identity's space without the network.
  * Signing out drains and has the gateway sign the device out, then forgets the token and
  * deletes the identity's databases, its own and every organisation database the device holds
  * for it; with changes that cannot be sent it asks first. A sign-out the gateway did not
@@ -134,8 +136,9 @@ export class SessionService implements SessionPort {
     return this.#state.subscribe(listener)
   }
 
-  signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
-    return this.#transitions.serially((generation) => this.#signingIn.signUp(input, generation))
+  /** Asks the gateway alone: nothing is signed in, so the session does not change. */
+  signUp(input: SignUpInput): ResultAsync<void, DataError> {
+    return this.#options.auth.signUp(input)
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {

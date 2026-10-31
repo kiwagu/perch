@@ -5,8 +5,8 @@
   "type": "module",
   "exports": {
     "./seeding": {
-      "types": "./src/composition/seeding.ts",
-      "import": "./src/composition/seeding.ts"
+      "types": "./src/composition/seeding/index.ts",
+      "import": "./src/composition/seeding/index.ts"
     }
   },
   "scripts": {

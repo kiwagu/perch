@@ -50,7 +50,11 @@ export type EmailVerified =
 
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
-  signUp(input: SignUpInput): ResultAsync<AuthUser, DataError>
+  /**
+   * Creates the account and has its verification mail sent; this device is not signed in, and an
+   * email that has an account answers the same.
+   */
+  signUp(input: SignUpInput): ResultAsync<void, DataError>
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email

@@ -4,7 +4,12 @@ import { identityIdFactory } from '@workspace/ids'
 import { FakeLocks } from '@workspace/replica/testing'
 
 import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
-import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
+import {
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+  type TestWorldOptions,
+} from '../__fixtures__/session'
 import {
   type MemoryStorage,
   memoryStorage,
@@ -17,8 +22,8 @@ import {
 import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { spaceLockName } from './space-deletion'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }
+const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
 
 const worlds: TestWorld[] = []
 
@@ -52,20 +57,26 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
-/** A tab that signed Ann up through the session and leads her sync with its channel up. */
-async function annSignedUp(options: TestWorldOptions = {}) {
-  const tab = await world(options)
+/**
+ * A tab that signed Ann up through the session and opened her link, and leads her sync with its
+ * channel up; with the gateway's accounts.
+ */
+async function annSignedUp(options: Omit<TestWorldOptions, 'auth'> = {}) {
+  const auth = fakeGatewayAuth()
+  const tab = await world({ ...options, auth })
 
-  expect((await tab.session.signUp(annSignUp)).isOk()).toBe(true)
+  expect((await signUpVerified(tab.session, auth, annSignUp)).isOk()).toBe(true)
   await vi.waitFor(() => expect(tab.states.at(-1)).toEqual({ leader: true, channel: 'up' }))
 
-  return { ...tab, ann: tab.session.current() ?? expect.unreachable('signed in') }
+  return { ...tab, accounts: auth, ann: tab.session.current() ?? expect.unreachable('signed in') }
 }
 
 describe('a delete another tab holds up', () => {
-  it('ends the sign-out once the grace passed, with a word for the sign-in page, and lets the next sign-up run', async () => {
+  it('ends the sign-out once the grace passed, with a word for the sign-in page, and lets the next account sign in', async () => {
     const held = deferred()
-    const { session, storage, ann, driveClock } = await annSignedUp({ heldDeletes: held.promise })
+    const { session, storage, ann, accounts, driveClock } = await annSignedUp({
+      heldDeletes: held.promise,
+    })
     const heard: Array<string | undefined> = []
 
     // The tab hears the sign-out only once the sign-in page can read its word.
@@ -79,7 +90,7 @@ describe('a delete another tab holds up', () => {
     expect(signingOutSince(storage)).toBeUndefined()
     expect(leftoverIdentities(storage)).toEqual([ann.id])
 
-    expect((await session.signUp(bobSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, accounts, bobSignUp)).isOk()).toBe(true)
 
     held.resolve()
     await vi.waitFor(() => expect(leftoverIdentities(storage)).toEqual([]))
@@ -197,7 +208,7 @@ describe('two tabs, one identity being deleted and signed in again', () => {
     const a = await world({ ...shared, online: false, heldDeletes: held.promise })
     const b = await world({ ...shared, online: false })
 
-    expect((await a.session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(a.session, shared.auth, annSignUp)).isOk()).toBe(true)
 
     const ann = a.session.current() ?? expect.unreachable('signed in')
 
@@ -239,7 +250,7 @@ describe('two tabs, one identity being deleted and signed in again', () => {
     })
     const b = await world({ ...shared, online: false })
 
-    expect((await a.session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(a.session, shared.auth, annSignUp)).isOk()).toBe(true)
 
     const ann = a.session.current() ?? expect.unreachable('signed in')
     const signingOut = a.driveClock(a.session.signOut())

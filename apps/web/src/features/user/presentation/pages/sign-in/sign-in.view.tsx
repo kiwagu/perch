@@ -25,9 +25,17 @@ export interface SignInViewProps {
    * another device signed it out.
    */
   readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
+  /** The code of the message asking to open the verification mail, once a sign-up or a resend went through. */
+  readonly mail?: 'check-your-mail' | undefined
+  /** Whether the button that sends the verification mail again shows. */
+  readonly showResend: boolean
+  /** Whether that button can send now. */
+  readonly canResend: boolean
   /** Signs in or up with the values: resolves whether it did. */
   readonly onSubmit: (values: SignInValues) => Promise<boolean>
   readonly onToggleMode: () => void
+  /** Sends the verification mail to `email` again: resolves whether it did. */
+  readonly onResend: (email: string) => Promise<boolean>
 }
 
 /** The contract code of a refusal, with its text. */
@@ -35,6 +43,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
       return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
+    case 'data:EMAIL_NOT_VERIFIED':
+      return { code: 'email-not-verified', text: t('user.sign-in.error.email-not-verified') }
     case 'data:SIGN_UP_REJECTED':
       return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
     case 'data:RATE_LIMITED':
@@ -99,6 +109,13 @@ export function SignInView(props: SignInViewProps) {
                 </AlertDescription>
               </Alert>
             ) : null}
+            {props.mail ? (
+              <Alert>
+                <AlertDescription data-testid="user.sign-in.mail-message" data-code={props.mail}>
+                  {t('user.sign-in.mail.check-your-mail', { email: values.email })}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {error ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid="user.sign-in.error" data-code={error.code}>
@@ -153,6 +170,17 @@ export function SignInView(props: SignInViewProps) {
             >
               {signingUp ? t('user.sign-in.have-account') : t('user.sign-in.create-account')}
             </Button>
+            {props.showResend ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!props.canResend}
+                onClick={() => void props.onResend(values.email)}
+                data-testid="user.sign-in.resend-button"
+              >
+                {t('user.sign-in.resend')}
+              </Button>
+            ) : null}
           </FieldGroup>
         </Form>
       </CardContent>

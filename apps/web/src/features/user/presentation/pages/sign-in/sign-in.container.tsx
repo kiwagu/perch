@@ -21,12 +21,20 @@ export function SignInContainer() {
   const { state, send, submit } = useScreenMachine(machine)
   const leaveNow = useLeaveNow()
   const locale = useLocale()
-  const submitting = state.matches('signing-in') || state.matches('signing-up')
+  const submitting = (['signing-in', 'signing-up', 'resending'] as const).some((name) =>
+    state.matches(name),
+  )
   const done = state.matches('done')
   const busy = submitting || done
-  // The mode is the state; once done, the form keeps the mode of its attempt until it moves.
+  // The mode is the state: sign-up only while creating an account, sign-in otherwise (asking to
+  // check the mail and offering the resend among them, the values kept); once done, the form
+  // keeps the mode of its attempt until it moves.
   const [mode, setMode] = useState<SignInMode>('sign-in')
   const shown = state.matches('sign-up') || state.matches('signing-up') ? 'sign-up' : 'sign-in'
+  const showResend = (['check-mail', 'unverified', 'resending'] as const).some((name) =>
+    state.matches(name),
+  )
+  const canResend = state.can({ type: 'user.sign-in.resend-button', email: '' })
 
   if (!done && shown !== mode) {
     setMode(shown)
@@ -57,8 +65,12 @@ export function SignInContainer() {
       submitting={submitting}
       error={state.context.error}
       notice={notice}
+      mail={state.context.mail}
+      showResend={showResend}
+      canResend={canResend}
       onSubmit={(form) => submit({ type: 'user.sign-in.submit-button', form: { ...form, locale } })}
       onToggleMode={() => send({ type: 'user.sign-in.toggle-button' })}
+      onResend={(email) => submit({ type: 'user.sign-in.resend-button', email })}
     />
   )
 }

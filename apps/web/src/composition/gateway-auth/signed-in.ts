@@ -1,4 +1,4 @@
-/** What a sign-up or a sign-in answers: the device the gateway signed in, or why it did not. */
+/** What a sign-in answers: the device the gateway signed in, or why it did not. */
 
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
@@ -16,10 +16,7 @@ export interface SignedInDevice {
   readonly token: string
 }
 
-/**
- * The device a sign-up, sign-in or verification names: the browser's own id, and a label for
- * people to read.
- */
+/** The device a sign-in or verification names: the browser's own id, and a label for people to read. */
 export interface NamedDevice {
   readonly id: string
   readonly label: string
@@ -31,28 +28,27 @@ export const deviceHeaders = (device: NamedDevice) => ({
   'X-Perch-Device-Label': device.label,
 })
 
-/** The sign-up's or sign-in's answer as Better Auth's client reads it: its body, or the status it refused with. */
+/** The sign-in's answer as Better Auth's client reads it: its body, or the status it refused with. */
 export interface ClientAnswer {
   readonly data: unknown
   readonly error: { readonly status: number } | null
 }
 
 /**
- * What a successful sign-up or sign-in answers with. Only the body's token is the session's own:
- * the `set-auth-token` header carries it signed, which the gateway's own routes do not match.
+ * What a successful sign-in answers with. Only the body's token is the session's own: the
+ * `set-auth-token` header carries it signed, which the gateway's own routes do not match.
  */
 const signedInAccount = z.object({
   token: z.string().min(1),
   user: z.object({ id: idSchemas.identity.schema, email: z.string() }),
 })
 
-/** The statuses the gateway refuses credentials with, and what each means here. */
+/** The statuses the gateway refuses a sign-in with, and what each means here. */
 const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly message: string }> =
   new Map([
     [401, { code: 'data:INVALID_CREDENTIALS', message: 'wrong email or password' }],
-    // Only a sign-in answers 403: the password was right, the email is not verified yet.
+    // The password was right, the email is not verified yet.
     [403, { code: 'data:EMAIL_NOT_VERIFIED', message: 'the email is not verified yet' }],
-    [422, { code: 'data:SIGN_UP_REJECTED', message: 'sign-up was rejected' }],
     [429, { code: 'data:RATE_LIMITED', message: 'too many attempts' }],
   ])
 
@@ -64,7 +60,10 @@ function refused(status: number): DataError {
     : dataError('data:AUTH_FAILED', `the gateway refused the request with ${status}`)
 }
 
-/** The device a sign-up's or sign-in's answer signed in; a refusal keeps its meaning. */
+/**
+ * The device a sign-in's answer signed in; a refusal keeps its meaning. An answer that is not a
+ * signed-in account fails without the parser's account of it, which could quote the answer.
+ */
 export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, DataError> {
   if (answer.error) {
     return errAsync(refused(answer.error.status))
@@ -81,7 +80,6 @@ export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, Data
         dataError(
           'data:AUTH_FAILED',
           'the gateway answered with something other than a signed-in account',
-          parsed.error,
         ),
       )
 }

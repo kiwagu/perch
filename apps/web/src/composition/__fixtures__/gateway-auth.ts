@@ -1,7 +1,7 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError } from '@workspace/data'
-import type { Locale } from '@workspace/i18n/translator'
+import { type AuthUser, type DataError, dataError, type SignUpInput } from '@workspace/data'
+import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { identityIdFactory } from '@workspace/ids'
 
 import type { EmailVerification, GatewayAuth, NamedDevice, SignedInDevice } from '../gateway-auth'
@@ -11,7 +11,7 @@ interface Account {
   readonly password: string
   /** The account's own name, as it signed up. */
   readonly name: string
-  /** The language the account signed up in: the gateway's default, as no sign-up names one yet. */
+  /** The language the account signed up in. */
   readonly locale: Locale
   /** Whether a link of the account was exchanged. */
   readonly verified: boolean
@@ -23,7 +23,7 @@ export type FakeAuthRequest =
       readonly kind: 'sign-up'
       readonly email: string
       readonly name: string
-      readonly device: NamedDevice
+      readonly locale: string
     }
   | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
@@ -37,21 +37,31 @@ export interface FakeGatewayAuth extends GatewayAuth {
   answerSignOut(answer: (token: string) => ResultAsync<void, DataError>): void
   /** The token of the latest verification link the gateway made for the account of `email`. */
   linkFor(email: string): string
+  /** The tokens of the verification links mailed to the account of `email`, oldest first. */
+  mailsTo(email: string): readonly string[]
+  /** The identity of the account of `email`, as the gateway keeps it. */
+  identityOf(email: string): AuthUser
 }
+
+/** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
+const isLocale = (locale: string): locale is Locale =>
+  SUPPORTED_LOCALES.some((supported) => supported === locale)
 
 /**
  * The gateway's sign-up, sign-in, verification and sign-out without a network: accounts live in
  * memory, keyed and answered by their email in lower case as the gateway keeps it, and each
- * answer that signs a device in carries a new session token. A sign-up still signs the device in,
- * and also makes the account a verification link, as its mail would carry; the first exchange of
- * any of the account's links verifies it and signs the device in, a later one signs nothing in.
+ * answer that signs a device in carries a new session token. A sign-up signs nothing in: a new
+ * email makes an account not verified yet and a verification link, as its mail would carry; one
+ * that has an account changes nothing; both answer alike. A sign-in with the right password of an
+ * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`. The first exchange of any of
+ * the account's links verifies it and signs the device in, a later one signs nothing in.
  */
 export function fakeGatewayAuth(): FakeGatewayAuth {
   const accounts = new Map<string, Account>()
   /** The email of the account each verification link's token verifies. */
   const links = new Map<string, string>()
-  /** The latest verification link's token of each account, by its email. */
-  const latestLinks = new Map<string, string>()
+  /** The verification links' tokens mailed to each account, oldest first, by its email. */
+  const mailed = new Map<string, string[]>()
   const requests: FakeAuthRequest[] = []
   let issued = 0
   let linked = 0
@@ -67,7 +77,7 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
     const link = `link-${linked}`
 
     links.set(link, email)
-    latestLinks.set(email, link)
+    mailed.set(email, [...(mailed.get(email) ?? []), link])
   }
 
   return {
@@ -76,42 +86,55 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       signOutAnswer = answer
     },
     linkFor: (email) => {
-      const link = latestLinks.get(email.toLowerCase())
+      const link = mailed.get(email.toLowerCase())?.at(-1)
 
       if (link === undefined) throw new Error('the gateway made no verification link for the email')
 
       return link
     },
-    signUp: (input, device) => {
-      requests.push({ kind: 'sign-up', email: input.email, name: input.name, device })
+    mailsTo: (email) => mailed.get(email.toLowerCase()) ?? [],
+    identityOf: (email) => {
+      const account = accounts.get(email.toLowerCase())
+
+      if (account === undefined) throw new Error('the gateway has no account of the email')
+
+      return account.identity
+    },
+    signUp: (input) => {
+      requests.push({ kind: 'sign-up', email: input.email, name: input.name, locale: input.locale })
 
       const email = input.email.toLowerCase()
+      const { locale } = input
 
-      if (accounts.has(email)) {
+      if (!isLocale(locale)) {
         return errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected'))
       }
 
-      const identity = { id: identityIdFactory.create(), email }
+      if (!accounts.has(email)) {
+        accounts.set(email, {
+          identity: { id: identityIdFactory.create(), email },
+          password: input.password,
+          name: input.name,
+          locale,
+          verified: false,
+        })
+        mintLink(email)
+      }
 
-      accounts.set(email, {
-        identity,
-        password: input.password,
-        name: input.name,
-        locale: 'en',
-        verified: false,
-      })
-      mintLink(email)
-
-      return okAsync({ identity, token: token() })
+      return okAsync(undefined)
     },
     signIn: (input, device) => {
       requests.push({ kind: 'sign-in', email: input.email, device })
 
       const account = accounts.get(input.email.toLowerCase())
 
-      return account?.password === input.password
+      if (account?.password !== input.password) {
+        return errAsync(dataError('data:INVALID_CREDENTIALS', 'wrong email or password'))
+      }
+
+      return account.verified
         ? okAsync({ identity: account.identity, token: token() })
-        : errAsync(dataError('data:INVALID_CREDENTIALS', 'wrong email or password'))
+        : errAsync(dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'))
     },
     verifyEmail: (link, device): ResultAsync<EmailVerification, DataError> => {
       requests.push({ kind: 'verify', token: link, device })
@@ -152,4 +175,25 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return signOutAnswer(signedOut)
     },
   }
+}
+
+/** The device on which `verifiedElsewhere` opens a link: not the test's own. */
+const ELSEWHERE: NamedDevice = { id: 'verified-elsewhere', label: 'Edge on Windows' }
+
+/**
+ * Signs `input` up at `auth` and opens its verification link on another device, as a person does
+ * there: the account then signs in anywhere. That device's session token stays at the gateway.
+ */
+export function verifiedElsewhere(
+  auth: FakeGatewayAuth,
+  input: SignUpInput,
+): ResultAsync<AuthUser, DataError> {
+  return auth
+    .signUp(input)
+    .andThen(() => auth.verifyEmail(auth.linkFor(input.email), ELSEWHERE))
+    .andThen((verified) =>
+      verified.kind === 'signed-in'
+        ? okAsync(verified.device.identity)
+        : errAsync(dataError('data:AUTH_FAILED', 'the link was opened before')),
+    )
 }

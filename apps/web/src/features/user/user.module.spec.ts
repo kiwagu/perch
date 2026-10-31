@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
+import { profileIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { openTestSession, type TestSession } from '../../composition/__fixtures__/session'
 import type { SessionService } from '../../composition/session'
@@ -49,12 +50,37 @@ afterEach(async () => {
 
 describe('UserModule', () => {
   it('provides sign-in, profile and settings services over the application ports', async () => {
-    const user = (
-      await container
-        .get(SIGN_IN_SERVICE)
-        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann', locale: 'en' })
-    )._unsafeUnwrap()
+    const email = 'ann@example.test'
 
+    expect(
+      (
+        await container
+          .get(SIGN_IN_SERVICE)
+          .signUp({ email, password: 'secret-ann', name: 'Ann', locale: 'en' })
+      ).isOk(),
+    ).toBe(true)
+
+    // The link of its mail signs this device in.
+    const verified = (await session.verifyEmail(opened.auth.linkFor(email)))._unsafeUnwrap()
+    const user = verified.kind === 'signed-in' ? verified.user : expect.unreachable('signed in')
+
+    expect(
+      (
+        await container.get(PROFILE_SERVICE).createProfile({
+          id: profileIdFactory.create(),
+          identity: user.id,
+          name: 'Ann',
+          email: user.email,
+        })
+      ).isOk(),
+    ).toBe(true)
+    expect(
+      (
+        await container
+          .get(SETTINGS_SERVICE)
+          .createSettings({ id: settingsIdFactory.create(), identity: user.id, locale: 'en' })
+      ).isOk(),
+    ).toBe(true)
     expect((await session.flush()).isOk()).toBe(true)
 
     expect(

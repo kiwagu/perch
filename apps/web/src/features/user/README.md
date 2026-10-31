@@ -13,8 +13,8 @@ session port, the `ProfileService` over the shape runner and the command bus, th
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
 machine (the flow of `contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt
-invokes `platform.sign-in` or `platform.sign-up`, and it emits `show` and `navigate` for the
-page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
+invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, it keeps the
+codes of the form's error and mail message, and emits `show` and `navigate` for the page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 `locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
 
 ## Surface
@@ -32,8 +32,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
 - Shape `settings.shape.surql`: the signed-in identity's settings (`id`, `locale`) from
   `settings` in the private region, one row per account.
-- Commands `settings.commands.surql`: `createSettings` (at sign-up, with the language the app
-  speaks then), `updateLocale`. Commands run on the device through the command bus and
+- Commands `settings.commands.surql`: `createSettings` (where the account's email is first
+  verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`; `SETTINGS_SERVICE` is provided app-wide by
   the composition root, since the frame reads and stores the settings too.
@@ -52,7 +52,14 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
   code concerns (the error's `fields`); Save and the sign-out button are enabled while the
   machine's state handles them; the chosen language, kept in the settings, follows the
   identity across devices (the frame stores and follows it, see the app-shell module), and a
-  new account's settings start in the language chosen before signing up;
+  new account's settings start in the language chosen before signing up, sent with the sign-up;
+  a sign-up creates the account and has its verification mail sent, signing nothing in: the page
+  stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
+  (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again
+  (`user.sign-in.resend-button`); a sign-in of an account whose email is not verified yet says so
+  (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
+  the account's settings and profile are created where its link is first opened, from the name
+  and the language it signed up with;
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
   device's session token while changes remain to send after the next sign-in, and says "You

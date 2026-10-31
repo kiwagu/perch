@@ -9,12 +9,13 @@ import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
 
 import { profileCommands } from '../../features/user/presentation/pages/profile/profile.model.gen'
-import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { createNote, organisationShape } from '../__fixtures__/note'
 import { createProfile, profileById } from '../__fixtures__/profile'
 import {
   browserDatabases,
   openTestWorld,
+  signUpVerified,
   TEST_DEVICE_LABEL,
   type TestWorld,
   type TestWorldOptions,
@@ -39,7 +40,7 @@ const ann: KeptDevice = {
   memberships: [],
 }
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
+const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
@@ -66,10 +67,7 @@ const signingIn = (device: SignedInDevice): GatewayAuth => ({
   signOut: () => okAsync(undefined),
 })
 
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }
-
-/** Another device, for accounts a test makes at the gateway before its session signs in. */
-const elsewhere = { id: 'elsewhere', label: 'Edge on Windows' }
+const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
 
 const worlds: TestWorld[] = []
 
@@ -267,16 +265,6 @@ describe('SessionService', () => {
 
     expect(session.current()?.id).toBe(ann.identity.id)
     expect(opened()).toEqual([ann.identity.id])
-  })
-
-  it("signs up through the gateway, saves the token and opens the new identity's database", async () => {
-    const { session, storage, opened } = await bootSession({ saved: undefined })
-    const user = (await session.signUp(annSignUp))._unsafeUnwrap()
-
-    expect(storage.get('perch.session.identity')).toContain(user.id)
-    expect(storage.get('perch.session.token')).toBeDefined()
-    expect(opened()).toEqual([user.id])
-    expect(session.current()).toEqual(user)
   })
 
   it('writes into the signed-in identity and reads it back through the session ports', async () => {
@@ -1054,9 +1042,10 @@ describe('SessionService', () => {
 
   it('takes a sign-out made during a sign-in after it, leaving the device signed out', async () => {
     const holding = holdingRegionLoads()
-    const { session, driveClock } = await world({ wrap: holding.wrap, online: false })
+    const auth = fakeGatewayAuth()
+    const { session, driveClock } = await world({ wrap: holding.wrap, online: false, auth })
 
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, annSignUp)).isOk()).toBe(true)
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
 
     holding.hold()
@@ -1077,10 +1066,11 @@ describe('SessionService', () => {
 
   it('runs overlapping sign-ins one after the other: a later one of another account waits, then is refused', async () => {
     const holding = holdingRegionLoads()
-    const { session, storage, auth } = await world({ wrap: holding.wrap })
+    const auth = fakeGatewayAuth()
+    const { session, storage } = await world({ wrap: holding.wrap, auth })
 
-    expect((await auth.signUp(bobSignUp, elsewhere)).isOk()).toBe(true)
-    expect((await auth.signUp(annSignUp, elsewhere)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
 
     holding.hold()
 
@@ -1107,10 +1097,11 @@ describe('SessionService', () => {
 
   it('attaches nothing after close, neither the transition running nor those waiting behind it', async () => {
     const holding = holdingRegionLoads()
-    const { session, auth } = await world({ wrap: holding.wrap })
+    const auth = fakeGatewayAuth()
+    const { session } = await world({ wrap: holding.wrap, auth })
 
-    expect((await auth.signUp(bobSignUp, elsewhere)).isOk()).toBe(true)
-    expect((await auth.signUp(annSignUp, elsewhere)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
 
     holding.hold()
 
@@ -1131,9 +1122,10 @@ describe('SessionService', () => {
   })
 
   it('does not run a sign-in called just before close', async () => {
-    const { session } = await world()
+    const auth = fakeGatewayAuth()
+    const { session } = await world({ auth })
 
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
 
     const pending = session.signIn(annSignUp)
 
@@ -1144,11 +1136,12 @@ describe('SessionService', () => {
   })
 
   it('tells subscribers when the signed-in user changes', async () => {
-    const { session, driveClock } = await world({ online: false })
+    const auth = fakeGatewayAuth()
+    const { session, driveClock } = await world({ online: false, auth })
     const seen: Array<string | undefined> = []
 
     session.subscribe((user) => seen.push(user?.email))
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, annSignUp)).isOk()).toBe(true)
     expect((await driveClock(session.signOut())).isOk()).toBe(true)
 
     expect(seen).toEqual([annSignUp.email, undefined])
@@ -1178,12 +1171,13 @@ describe('SessionService', () => {
 
 describe('SessionService memberships', () => {
   it('a sign-in keeps the memberships the gateway answered with, and the first by key is the current tenant', async () => {
-    const { session, storage, tenantsOpened } = await world({ memberships: [globex, acme] })
+    const auth = fakeGatewayAuth()
+    const { session, storage, tenantsOpened } = await world({ memberships: [globex, acme], auth })
     const heard: Array<string | undefined> = []
 
     session.subscribeMemberships(() => heard.push(session.currentTenant()?.tenant.key))
 
-    const user = (await session.signUp(annSignUp))._unsafeUnwrap()
+    const user = (await signUpVerified(session, auth, annSignUp))._unsafeUnwrap()
 
     expect(session.memberships()).toEqual([globex, acme])
     expect(session.currentTenant()).toEqual(acme)
@@ -1584,18 +1578,23 @@ describe('SessionService memberships', () => {
 })
 
 describe('SessionService devices', () => {
-  it('signs up and in naming this device: the id it keeps and its label', async () => {
+  it('names this device at a verification and a sign-in, the id it keeps and its label, and at a sign-up none', async () => {
     const auth = fakeGatewayAuth()
     const { session, storage } = await world({ auth })
 
     expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+
+    const link = auth.linkFor(annSignUp.email)
+
+    expect((await session.verifyEmail(link)).isOk()).toBe(true)
     expect((await session.signIn(annSignUp)).isOk()).toBe(true)
 
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
     const device = { id, label: TEST_DEVICE_LABEL }
 
     expect(auth.requests).toEqual([
-      { kind: 'sign-up', email: annSignUp.email, name: annSignUp.name, device },
+      { kind: 'sign-up', email: annSignUp.email, name: annSignUp.name, locale: 'en' },
+      { kind: 'verify', token: link, device },
       { kind: 'sign-in', email: annSignUp.email, device },
     ])
   })
@@ -1802,7 +1801,7 @@ describe('SessionService devices', () => {
     const failed = dataError('data:WRITE_FAILED', 'the gateway could not sign the token out (500)')
 
     // Ann signs out offline: her token waits.
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, annSignUp)).isOk()).toBe(true)
 
     const annToken = savedToken(storage) ?? expect.unreachable("Ann's token")
 
@@ -1811,7 +1810,7 @@ describe('SessionService devices', () => {
     // Sent before Bob signs in, it fails (500): it stays, and Bob signs in all the same.
     auth.answerSignOut(() => errAsync(failed))
 
-    expect((await session.signUp(bobSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, bobSignUp)).isOk()).toBe(true)
     expect(failures.splice(0)).toEqual([failed])
 
     const bobToken = savedToken(storage) ?? expect.unreachable("Bob's token")
@@ -1902,9 +1901,10 @@ describe('SessionService devices', () => {
   })
 
   it('signs out only the session that asked when the answer comes late: Bob, signed in after the 4001 signed Ann out, keeps his token and his database', async () => {
-    const { session, storage, destroyed, contexts } = await world({ online: false })
+    const auth = fakeGatewayAuth()
+    const { session, storage, destroyed, contexts } = await world({ online: false, auth })
 
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, annSignUp)).isOk()).toBe(true)
 
     const annId = session.current()?.id ?? expect.unreachable('Ann signed in')
     // Ann asks the gateway to sign every device out; its answer is held up on the way.
@@ -1916,7 +1916,7 @@ describe('SessionService devices', () => {
     }
 
     await vi.waitFor(() => expect(destroyed()).toEqual([annId]))
-    expect((await session.signUp(bobSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, bobSignUp)).isOk()).toBe(true)
 
     const bob = session.current() ?? expect.unreachable('Bob signed in')
     const bobToken = savedToken(storage) ?? expect.unreachable("Bob's token")
@@ -1930,9 +1930,10 @@ describe('SessionService devices', () => {
   })
 
   it('leaves the same account alone when it signed in again before the late answer: its new session did not ask', async () => {
-    const { session, storage, destroyed, contexts } = await world({ online: false })
+    const auth = fakeGatewayAuth()
+    const { session, storage, destroyed, contexts } = await world({ online: false, auth })
 
-    expect((await session.signUp(annSignUp)).isOk()).toBe(true)
+    expect((await signUpVerified(session, auth, annSignUp)).isOk()).toBe(true)
 
     const annId = session.current()?.id ?? expect.unreachable('Ann signed in')
     const signOutFirst = session.signingOutEverywhere()
@@ -1957,7 +1958,7 @@ describe('SessionService devices', () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
 
-    expect((await auth.signUp(annSignUp, elsewhere)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     addPendingRevoke(storage, annLeft)
 

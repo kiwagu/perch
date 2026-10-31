@@ -61,7 +61,7 @@ export interface AppRootOptions {
   /** Deletes the database of one organisation of an identity while it is not open. */
   readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
   readonly gatewayAuth: GatewayAuth
-  /** The label sign-ups and sign-ins give this browser, next to its own id: "Chrome on Linux". */
+  /** The label sign-ins and verifications give this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean

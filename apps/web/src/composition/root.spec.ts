@@ -15,6 +15,7 @@ import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
 import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
+import { signUpVerified } from './__fixtures__/session'
 import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
@@ -179,12 +180,12 @@ describe('createAppRoot', () => {
     expect(deleted).toEqual([ann.identity.id])
   })
 
-  it('names this device to the gateway: at sign-up with the label it is given, and on the organisation and device routes', async () => {
+  it('names this device to the gateway: at the verification with the label it is given, and on the organisation and device routes', async () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
     let deps: BearerDeps | undefined
     let devicesDeps: BearerDeps | undefined
-    // The sign-up reads the memberships through the organisation route.
+    // The verification reads the memberships through the organisation route.
     const organisationsFetch = fakeFetch(respond(200, { memberships: [] }))
     const { result } = await boot(storage, [], [], {
       gatewayAuth: auth,
@@ -210,19 +211,28 @@ describe('createAppRoot', () => {
     const email = 'ann@example.test'
 
     expect(
-      (await services.session.signUp({ email, password: 'pass-word-1', name: 'Ann' })).isOk(),
+      (
+        await signUpVerified(services.session, auth, {
+          email,
+          password: 'pass-word-1',
+          name: 'Ann',
+          locale: 'en',
+        })
+      ).isOk(),
     ).toBe(true)
 
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
 
+    // The sign-up names no device: nothing is signed in until the link is opened.
     expect(auth.requests).toEqual([
-      { kind: 'sign-up', email, name: 'Ann', device: { id, label: 'Safari on iPhone' } },
+      { kind: 'sign-up', email, name: 'Ann', locale: 'en' },
+      { kind: 'verify', token: auth.linkFor(email), device: { id, label: 'Safari on iPhone' } },
     ])
     expect(deps?.device()).toBe(id)
     expect(devicesDeps?.device()).toBe(id)
     expect(deps?.token()).toBe(storage.get('perch.session.token'))
     expect(devicesDeps?.token()).toBe(deps?.token())
-    // The memberships were read with the token the sign-up was given, naming this device.
+    // The memberships were read with the token the verification was given, naming this device.
     expect(organisationsFetch.sent).toEqual([
       {
         url: '/backend/organisations',

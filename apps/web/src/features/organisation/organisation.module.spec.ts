@@ -6,7 +6,12 @@ import { Container } from '@workspace/di'
 import { tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { openTestWorld, type TestWorld } from '../../composition/__fixtures__/session'
+import { type FakeGatewayAuth, fakeGatewayAuth } from '../../composition/__fixtures__/gateway-auth'
+import {
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+} from '../../composition/__fixtures__/session'
 import { COMMANDS } from '../../platform/commands.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
@@ -31,10 +36,12 @@ const unreachable: OrganisationsPort = {
 }
 
 let world: TestWorld
+let auth: FakeGatewayAuth
 let container: Container
 
 beforeEach(async () => {
-  world = await openTestWorld({ memberships: [acme] })
+  auth = fakeGatewayAuth()
+  world = await openTestWorld({ memberships: [acme], auth })
 
   const root = new Container()
     .singleton(SHAPE_RUNNER, () => world.session.runner)
@@ -58,10 +65,11 @@ afterEach(async () => {
 describe('OrganisationModule', () => {
   it("writes and reads the current organisation's notes over the application ports", async () => {
     const ann = (
-      await world.session.signUp({
+      await signUpVerified(world.session, auth, {
         email: 'ann@example.test',
         password: 'secret-ann',
         name: 'Ann',
+        locale: 'en',
       })
     )._unsafeUnwrap()
 

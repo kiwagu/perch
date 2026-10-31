@@ -1,6 +1,6 @@
 /**
- * The gateway's auth as the device calls it: Better Auth's client for the sign-up and the sign-in,
- * the gateway's own routes for the verification of an email, its resend and the sign-out.
+ * The gateway's auth as the device calls it: Better Auth's client for the sign-in, the gateway's
+ * own answers for the sign-up, the verification of an email, its resend and the sign-out.
  */
 
 import { createAuthClient } from 'better-auth/client'
@@ -10,11 +10,19 @@ import { type DataError, dataError, type SignInInput, type SignUpInput } from '@
 
 import { resentOf } from './resend'
 import { signedOutOf } from './sign-out'
+import { signedUpOf } from './sign-up'
 import { deviceHeaders, type NamedDevice, type SignedInDevice, signedIn } from './signed-in'
 import { type EmailVerification, verificationOf } from './verification'
 
 export interface GatewayAuth {
-  signUp(input: SignUpInput, device: NamedDevice): ResultAsync<SignedInDevice, DataError>
+  /**
+   * Creates the account and has its verification mail sent; nothing is signed in, so no device is
+   * named. An email that has an account answers alike, and sends nothing. A sign-up the gateway
+   * refuses for what it carries fails as `data:SIGN_UP_REJECTED`, a request to wait as
+   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer as
+   * `data:AUTH_FAILED` naming its status, never the email or the password.
+   */
+  signUp(input: SignUpInput): ResultAsync<void, DataError>
   /** Signs `device` in; an account whose email is not verified yet fails as `data:EMAIL_NOT_VERIFIED`. */
   signIn(input: SignInInput, device: NamedDevice): ResultAsync<SignedInDevice, DataError>
   /**
@@ -51,8 +59,8 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>
 const offline = (cause: unknown) => dataError('data:OFFLINE', 'could not reach the gateway', cause)
 
 /**
- * An unreachable gateway, for a request that carries a link's token or an email: the rejection is
- * not kept, since it may name what the request sent.
+ * An unreachable gateway, for a request that carries a password, a link's token or an email: the
+ * rejection is not kept, since it may name what the request sent.
  */
 const unreachable = () => dataError('data:OFFLINE', 'could not reach the gateway')
 
@@ -62,12 +70,13 @@ function urlOf(input: string | URL | Request): string {
 }
 
 /**
- * The gateway's `POST <baseUrl>/auth/sign-up/email` and `POST <baseUrl>/auth/sign-in/email`
- * through Better Auth's client, and its own `POST <baseUrl>/auth/verify-email`,
+ * The gateway's `POST <baseUrl>/auth/sign-in/email` through Better Auth's client, and its own
+ * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
  * `POST <baseUrl>/auth/send-verification-email` and `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
- * keep their meaning; any other answer fails the attempt with its status, never with a token.
+ * keep their meaning; any other answer fails the attempt with its status, never with a token, a
+ * password or an email.
  */
 export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayAuth {
   const client = createAuthClient({
@@ -102,18 +111,17 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
     )
 
   return {
-    signUp: (input, device) =>
-      ResultAsync.fromPromise(
-        client.signUp.email(
-          { name: input.name, email: input.email, password: input.password },
-          callOptions(device),
-        ),
-        offline,
-      ).andThen(signedIn),
+    signUp: (input) =>
+      post('sign-up/email', {
+        name: input.name,
+        email: input.email,
+        password: input.password,
+        locale: input.locale,
+      }).andThen(signedUpOf),
     signIn: (input, device) =>
       ResultAsync.fromPromise(
         client.signIn.email({ email: input.email, password: input.password }, callOptions(device)),
-        offline,
+        unreachable,
       ).andThen(signedIn),
     verifyEmail: (token, device) =>
       token === ''

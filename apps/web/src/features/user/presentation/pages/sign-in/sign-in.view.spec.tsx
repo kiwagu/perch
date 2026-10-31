@@ -9,12 +9,23 @@ import es from '../../i18n/user.es.json'
 import { SignInView, type SignInViewProps } from './sign-in.view'
 
 function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSubmit: vi.fn(() => Promise.resolve(true)), onToggleMode: vi.fn() }
+  const handlers = {
+    onSubmit: vi.fn(() => Promise.resolve(true)),
+    onToggleMode: vi.fn(),
+    onResend: vi.fn((_email: string) => Promise.resolve(true)),
+  }
 
-  renderWithProviders(<SignInView mode="sign-in" submitting={false} {...handlers} {...props} />, {
-    locale,
-    es,
-  })
+  renderWithProviders(
+    <SignInView
+      mode="sign-in"
+      submitting={false}
+      showResend={false}
+      canResend={false}
+      {...handlers}
+      {...props}
+    />,
+    { locale, es },
+  )
 
   return handlers
 }
@@ -113,6 +124,72 @@ describe('SignInView', () => {
     expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
       'Another account is signed in on this browser. Sign it out first.',
     )
+  })
+
+  it('says the email is not verified yet when a sign-in was refused for it', () => {
+    renderView({ error: 'data:EMAIL_NOT_VERIFIED' })
+
+    expect(screen.getByTestId('user.sign-in.error').getAttribute('data-code')).toBe(
+      'email-not-verified',
+    )
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      en['user.sign-in.error.email-not-verified'],
+    )
+  })
+
+  it('asks to open the link of the mail sent to the email typed', () => {
+    renderView({ mail: 'check-your-mail' })
+    type('user.sign-in.email-input', 'ann@example.test')
+
+    const message = screen.getByTestId('user.sign-in.mail-message')
+
+    expect(message.getAttribute('data-code')).toBe('check-your-mail')
+    expect(message.textContent).toBe(
+      en['user.sign-in.mail.check-your-mail'].replace('{email}', 'ann@example.test'),
+    )
+  })
+
+  it('asks it in Spanish', () => {
+    renderView({ mail: 'check-your-mail' }, 'es')
+    type('user.sign-in.email-input', 'ann@example.test')
+
+    expect(screen.getByTestId('user.sign-in.mail-message').textContent).toBe(
+      es['user.sign-in.mail.check-your-mail'].replace('{email}', 'ann@example.test'),
+    )
+  })
+
+  it('shows no mail message and no resend unless told', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.mail-message')).toBeNull()
+    expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+  })
+
+  it('offers to send the mail again to the email typed', () => {
+    const { onResend, onSubmit } = renderView({ showResend: true, canResend: true })
+
+    type('user.sign-in.email-input', 'ann@example.test')
+
+    const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
+
+    expect(resend.textContent).toBe(en['user.sign-in.resend'])
+    expect(resend.disabled).toBe(false)
+
+    fireEvent.click(resend)
+
+    expect(onResend).toHaveBeenCalledWith('ann@example.test')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('holds the resend while it cannot run', () => {
+    const { onResend } = renderView({ showResend: true, canResend: false })
+    const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
+
+    expect(resend.disabled).toBe(true)
+
+    fireEvent.click(resend)
+
+    expect(onResend).not.toHaveBeenCalled()
   })
 
   it('says nothing about how the last session ended unless the session left a notice', () => {

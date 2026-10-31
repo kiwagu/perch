@@ -1,18 +1,12 @@
 /**
- * The attempts to sign this browser in: a sign-up, a sign-in or a verification link's exchange,
- * one at a time in the browser's sign-in lock, the device it signed in kept whole or let go of,
- * and the restore of the identity an earlier sign-in saved.
+ * The attempts to sign this browser in: a sign-in or a verification link's exchange, one at a
+ * time in the browser's sign-in lock, the device it signed in kept whole or let go of, and the
+ * restore of the identity an earlier sign-in saved.
  */
 
 import { err, errAsync, okAsync, type Result, ResultAsync } from 'neverthrow'
 
-import {
-  type AuthUser,
-  type DataError,
-  dataError,
-  type SignInInput,
-  type SignUpInput,
-} from '@workspace/data'
+import { type AuthUser, type DataError, dataError, type SignInInput } from '@workspace/data'
 
 import type { NamedDevice, SignedInDevice } from '../../gateway-auth'
 import { deviceIdFrom, forgetDevice, IDENTITY_KEY, saveDevice, savedIdentity } from '../../storage'
@@ -26,7 +20,7 @@ import { closedDuringSignIn } from './closed'
 import { brokenSignIn, oneSignInAtATime } from './lock'
 import { type OpenSpaceDeps, openSpaceOf } from './space'
 
-/** The user a sign-up or sign-in signed in: its `ask` always answers a device, so none is a failure. */
+/** The user a sign-in signed in: its `ask` always answers a device, so none is a failure. */
 const signedInUser = (user: AuthUser | undefined): ResultAsync<AuthUser, DataError> =>
   user === undefined
     ? errAsync(dataError('data:AUTH_FAILED', 'the sign-in signed nothing in'))
@@ -53,14 +47,6 @@ export class SessionSignIn {
     }
     this.#pendingRevoke = options.pendingRevoke
     this.#deletion = options.deletion
-  }
-
-  signUp(input: SignUpInput, generation: number): ResultAsync<AuthUser, DataError> {
-    return this.enter(
-      input.email,
-      (device) => this.#host.options.auth.signUp(input, device),
-      generation,
-    ).andThen(signedInUser)
   }
 
   signIn(input: SignInInput, generation: number): ResultAsync<AuthUser, DataError> {
@@ -104,14 +90,14 @@ export class SessionSignIn {
     return this.#deletion.open(identity.id, () => openSpaceOf(this.#spaces, identity, generation))
   }
 
-  /** This browser as a sign-up, a sign-in or a verification names it. */
+  /** This browser as a sign-in or a verification names it. */
   #device(): NamedDevice {
     return { id: deviceIdFrom(this.#host.options.storage), label: this.#host.options.deviceLabel }
   }
 
   /**
-   * Signs this browser in through `ask`, which names the device to the gateway (a sign-up, a
-   * sign-in, a verification link's exchange). One account per browser: with the `email` of the
+   * Signs this browser in through `ask`, which names the device to the gateway (a sign-in, a
+   * verification link's exchange). One account per browser: with the `email` of the
    * account asked for, it is refused at once while another account is signed in on this browser,
    * before the gateway is asked; without one (a link names no email), only once the answer came,
    * as is any sign-in that finds another account saved by then. The tokens sign-outs left are

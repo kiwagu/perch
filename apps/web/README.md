@@ -25,12 +25,18 @@ modeling stage.
   device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
   (`SessionService.signOutUnopened()`): its session token is left to sign out and its databases deleted,
-  so a database that will never open is no dead end. Signing up or in goes through the gateway
-  (`gatewayAuth`: Better Auth's client over `POST /backend/auth/sign-up/email|sign-in/email` on
-  the page's own origin, the device in `X-Perch-Device` and `X-Perch-Device-Label`; the device
-  keeps the raw session token of the answer's body, never the signed one of its `set-auth-token`
-  header; a 401 is `data:INVALID_CREDENTIALS`, a 403 to a sign-in `data:EMAIL_NOT_VERIFIED`, a
-  422 `data:SIGN_UP_REJECTED`, a 429 `data:RATE_LIMITED`, and the sign-in page says to wait).
+  so a database that will never open is no dead end. Signing up asks the gateway to create the
+  account and mail its verification link (`SessionService.signUp`, the gateway's own
+  `POST /backend/auth/sign-up/email` with the name, the email, the password and the language the
+  app speaks, naming no device): it answers 202 alike whether the email is new or has an account,
+  signs nothing in and changes nothing in the session; a 400 or 422 is `data:SIGN_UP_REJECTED`, a
+  429 `data:RATE_LIMITED`. Signing in goes through the gateway (`gatewayAuth`: Better Auth's
+  client over `POST /backend/auth/sign-in/email` on the page's own origin, the device in
+  `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
+  answer's body, never the signed one of its `set-auth-token` header; a 401 is
+  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 429 `data:RATE_LIMITED`, and the
+  sign-in page says to wait; an unreachable gateway is `data:OFFLINE`, keeping nothing of what the
+  request carried).
   A verification link's token signs the device in the same way the first time it is exchanged
   (`SessionService.verifyEmail`, the gateway's own `POST /backend/auth/verify-email` with
   `{ token }` and the device's headers, its answer read through a zod schema): in the same lock,
@@ -57,7 +63,7 @@ modeling stage.
   Lock `perch.session.sign-in` held from the request to the saved device (not through the
   space's opening): a later sign-in asks the gateway only once the earlier one saved, so the
   storage ends with the live token (the gateway's later sign-in ends the device's earlier
-  session). A sign-up or sign-in names the
+  session). A sign-in or a verification names the
   device: the browser's own id (`perch.device.id`, minted once and kept across sign-outs, and
   minted again when the stored value is not a device id of 1 to 64 characters) and a
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
@@ -172,7 +178,7 @@ modeling stage.
   load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
-  sign-in is its own); a sign-up or sign-in that finds another account saved is refused with
+  sign-in is its own); a sign-in that finds another account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
@@ -268,12 +274,15 @@ modeling stage.
 
 ## Key exports
 
-`./seeding`: `openClient({ gatewayUrl })`, a device of the application in Bun or Node (the
-composition root over an in-memory database, always leading its identity's sync, named
-"Seed client" with an id minted into its memory storage) whose
-`ensureAccount` signs an account up or in through the gateway, writes its profile through
-commands and waits until the gateway acknowledged it, and whose `readAccount` signs in and
-reads the profile the gateway sends; one device, it signs the account it is in out before it
+`./seeding`: `openClient({ gatewayUrl, inbox })`, a device of the application in Bun or Node
+(the composition root over an in-memory database, always leading its identity's sync, named
+"Seed client" with an id minted into its memory storage) whose `ensureAccount` signs an account
+in through the gateway, or signs it up and verifies it through the link of its mail, which it
+reads in `inbox` (an `Inbox`: the stand's mailbox; an account not verified yet has its mail sent
+again, and an email that has an account with another password fails as invalid credentials, as
+a sign-in does, without waiting for a mail), writes its profile and settings through commands
+and waits until the gateway acknowledged them, and whose `readAccount` signs in and reads the
+profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one the account already
 administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and

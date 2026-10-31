@@ -6,7 +6,11 @@ import { type IdentityId, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { FakeLocks } from '@workspace/replica/testing'
 
-import { type FakeGatewayAuth, fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import {
+  type FakeGatewayAuth,
+  fakeGatewayAuth,
+  verifiedElsewhere,
+} from '../__fixtures__/gateway-auth'
 import {
   browserDatabases,
   openTestWorld,
@@ -14,6 +18,7 @@ import {
   type TestWorldOptions,
 } from '../__fixtures__/session'
 import { sharedStorage } from '../__fixtures__/shared-storage'
+import type { NamedDevice } from '../gateway-auth'
 import {
   deviceIdFrom,
   pendingRevokes,
@@ -24,11 +29,8 @@ import {
   saveTenantDatabases,
 } from '../storage'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }
-
-/** Another device, for accounts a test makes at the gateway before its tabs sign in. */
-const elsewhere = { id: 'elsewhere', label: 'Edge on Windows' }
+const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
@@ -81,13 +83,16 @@ function unreachableSignOuts(auth: FakeGatewayAuth): void {
   auth.answerSignOut(() => errAsync(dataError('data:OFFLINE', 'could not reach the gateway')))
 }
 
-/** Makes `input`'s account at the gateway from another device, and answers its identity. */
+/**
+ * Makes `input`'s account at the gateway and verifies it from another device, which takes the
+ * account's first session token, and answers its identity.
+ */
 async function accountOf(auth: FakeGatewayAuth, input: typeof annSignUp): Promise<IdentityId> {
-  const made = (await auth.signUp(input, elsewhere))._unsafeUnwrap()
+  const made = (await verifiedElsewhere(auth, input))._unsafeUnwrap()
 
   auth.requests.splice(0)
 
-  return made.identity.id
+  return made.id
 }
 
 describe("a sign-in whose memberships read is pending: nothing reaches the browser's storage", () => {
@@ -226,7 +231,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     // The gateway answers the sign-in only once the test lets it.
     const auth = {
       ...fake,
-      signIn: (input: typeof annSignUp, device: typeof elsewhere) => {
+      signIn: (input: typeof annSignUp, device: NamedDevice) => {
         asked = true
 
         return new ResultAsync(answered.then(() => fake.signIn(input, device)))
