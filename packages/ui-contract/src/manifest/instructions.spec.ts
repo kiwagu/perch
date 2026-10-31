@@ -48,9 +48,12 @@ describe('instructionsOf', () => {
       expect(instructions.notices).toContain(`\`${anchor}\``)
     }
   })
-  it('names the page helper and the platform actions that make an account', () => {
+  it('names the page helper, and sends what a platform action does to the platform file', () => {
     expect(instructions.screenMap).toContain('`window.__perch.ui.anchors()`')
-    expect(instructions.session).toContain('`platform.sign-up`')
+    expect(instructions.session).toContain(
+      'What a platform action does is read from `platform.actions.<name>`',
+    )
+    expect(instructions.session).toContain("never assume it from the action's name")
   })
   it('says a binding is a route of the router and a route a state address', () => {
     expect(instructions.screenMap).toContain('a TanStack Router path')
