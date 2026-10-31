@@ -27,19 +27,30 @@ export class Mailbox {
     this.#fetcher = fetcher
   }
 
-  /** The mails to `address`, in lower case as the gateway sends to it, oldest first. */
+  /**
+   * The mails to `address`, in lower case as the gateway sends to it, oldest first. A failure
+   * says what went wrong in fixed words: nothing of the address, and no cause that could hold it.
+   */
   async mails(address: string): Promise<readonly Mail[]> {
     const url = new URL('/email', this.#baseUrl)
 
     url.searchParams.set('to.address', address.toLowerCase())
 
-    const answer = await this.#fetcher(url.href)
+    const answer = await this.#fetcher(url.href).catch(() => {
+      throw new Error('the mailbox did not answer')
+    })
 
     if (!answer.ok) {
-      throw new Error(`the mailbox answered ${answer.status} for ${address}`)
+      throw new Error(`the mailbox answered ${answer.status}`)
     }
 
-    return mailsSchema.parse(await answer.json())
+    const mails = mailsSchema.safeParse(await answer.json().catch(() => undefined))
+
+    if (!mails.success) {
+      throw new Error('the mailbox answered something other than a list of mails')
+    }
+
+    return mails.data
   }
 
   async count(address: string): Promise<number> {
@@ -58,7 +69,7 @@ export class Mailbox {
       }
 
       if (Date.now() >= deadline) {
-        throw new Error(`no mail ${seen + 1} reached ${address} within ${timeoutMs} ms`)
+        throw new Error(`no mail ${seen + 1} came within ${timeoutMs} ms`)
       }
 
       await pause(POLL_MS)
