@@ -25,12 +25,12 @@ export class Outbox implements MailPort {
     return this.sent.filter((mail) => mail.to === address.toLowerCase())
   }
 
-  /** The mail to `address` after its first `seen`, once it was sent; fails after `timeoutMs`. */
+  /** The mail to `address` after its first `seen`, once it was sent; fails after `timeoutMs`, naming no address. */
   next(address: string, seen = 0, timeoutMs = WAIT_MS): Promise<MailMessage> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#waiting.delete(check)
-        reject(new Error(`no mail ${seen + 1} reached ${address} within ${timeoutMs} ms`))
+        reject(new Error('no awaited mail was sent in time'))
       }, timeoutMs)
       const check = (): void => {
         const mail = this.to(address)[seen]
@@ -48,13 +48,22 @@ export class Outbox implements MailPort {
   }
 }
 
-/** The token of the verification link a mail's text carries. */
+/**
+ * The token of the verification link a mail's text carries. Its failures are fixed texts: a test
+ * runner prints them, and they name nothing of the mail, its address or its link.
+ */
 export function linkToken(mail: MailMessage): string {
   const link = /https?:\/\/\S+/.exec(mail.text)?.[0]
-  const token = link === undefined ? null : new URL(link).searchParams.get('token')
+  const url = link === undefined ? undefined : URL.parse(link)
+
+  if (url === null) {
+    throw new Error('the link of the mail cannot be read')
+  }
+
+  const token = url?.searchParams.get('token') ?? null
 
   if (token === null) {
-    throw new Error(`the mail "${mail.subject}" carries no link with a token`)
+    throw new Error('the mail carries no link with a token')
   }
 
   return token
