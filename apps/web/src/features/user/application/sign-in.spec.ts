@@ -2,7 +2,7 @@ import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
-import { dataError } from '@workspace/data'
+import { dataError, type SignUpInput } from '@workspace/data'
 
 import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
@@ -84,6 +84,25 @@ describe('sign-in', () => {
 
     expect((await ordered.signUp(ann)).isOk()).toBe(true)
     expect(written).toEqual(['settings', 'profile'])
+  })
+
+  it('makes the account with the name of the form, as its profile takes it', async () => {
+    const asked: SignUpInput[] = []
+    const naming = new SignInService(
+      {
+        signIn: (input) => session.signIn(input),
+        signUp: (input) => {
+          asked.push(input)
+
+          return session.signUp(input)
+        },
+      },
+      profiles,
+      settings,
+    )
+
+    expect((await naming.signUp({ ...ann, name: '  Ann  ' })).isOk()).toBe(true)
+    expect(asked).toEqual([{ email: ann.email, password: ann.password, name: 'Ann' }])
   })
 
   it('writes no profile when the settings could not be created', async () => {

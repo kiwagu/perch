@@ -225,12 +225,38 @@ const extended = base.extend<Fixtures>({
 
 const originalStep = extended.step
 
+/** A read of a page that a navigation interrupted: the document it read went with it. */
+const navigatedAway = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('Execution context was destroyed')
+
+/**
+ * How wide a page is and how wide it shows. A step's last action may start a navigation (a
+ * sign-out moves to /sign-in), which can replace the document while it is read: the new one is
+ * measured once it has loaded, up to three times; any other failure fails at once.
+ */
+async function pageWidths(
+  page: Page,
+  attempt = 1,
+): Promise<{ readonly scrollWidth: number; readonly clientWidth: number }> {
+  try {
+    return await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+  } catch (error: unknown) {
+    if (!navigatedAway(error) || attempt === 3) {
+      throw error
+    }
+
+    await page.waitForLoadState('load')
+
+    return pageWidths(page, attempt + 1)
+  }
+}
+
 /** No page may scroll sideways: checked after every step, on phones and desktops. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }))
+  const { scrollWidth, clientWidth } = await pageWidths(page)
 
   expect(scrollWidth, `${page.url()} scrolls sideways`).toBeLessThanOrEqual(clientWidth)
 }

@@ -1,20 +1,29 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
+import { Input } from '@workspace/ui/components/ui/input'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { memoryInstall } from '../../../../platform/__fixtures__/install'
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
+import { memoryTheme } from '../../../../platform/__fixtures__/theme'
 import en from '../../../../platform/i18n/app.en.json'
 import es from '../../../../platform/i18n/app.es.json'
+import { InstallContext } from '../../../../platform/install'
 import { defineModule } from '../../../../platform/module'
 import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
 import { ServicesProvider } from '../../../../platform/services'
 import type { SessionPort } from '../../../../platform/session.port'
+import { ThemeContext } from '../../../../platform/theme'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
+import { CrashSignal } from '../crash/crash-signal'
+import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
 import { openedFrame } from './__fixtures__/frame'
 import { NOTICE_TEXTS } from './notice-texts'
@@ -27,7 +36,63 @@ const HomeModule = defineModule({
   routes: [{ path: '/home', page: 'Home' }],
 })
 
+const FormModule = defineModule({
+  id: 'form',
+  declarations: { Form: () => <Input aria-label="name" defaultValue="" /> },
+  routes: [{ path: '/form', page: 'Form' }],
+})
+
+const BrokenModule = defineModule({
+  id: 'broken',
+  declarations: {
+    Broken: () => {
+      throw new Error('the page broke')
+    },
+  },
+  routes: [{ path: '/broken', page: 'Broken' }],
+})
+
 describe('ShellContainer', () => {
+  it('says a page that fails to render on arrival in its place, with the reload', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    const router = createAppRouter({
+      modules: [BrokenModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/broken'] }),
+      crash: CrashSignal,
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+
+    const message = await screen.findByTestId('app-shell.crash-message')
+
+    expect(message.getAttribute('data-code')).toBe('screen-crashed')
+    expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(false)
+    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+    quiet.mockRestore()
+  })
+
   it('tells the user of a change the gateway refused and this device undid', async () => {
     const { session } = fakeSession()
     const services = fakeServices(session)
@@ -47,11 +112,15 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')
@@ -113,11 +182,15 @@ describe('ShellContainer', () => {
     })
     const app = (locale: Locale) => (
       <I18nProvider locale={locale} catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={frame}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>
     )
     const view = render(app('es'))
@@ -146,7 +219,7 @@ describe('ShellContainer', () => {
     )
   })
 
-  it("takes a language choice once the signed-in account's settings are on the device", async () => {
+  it('shows a signed-in account no language select: its settings screen takes the choice', async () => {
     const { session } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const signedIn: SessionPort = { ...session, current: () => ann }
@@ -166,27 +239,79 @@ describe('ShellContainer', () => {
 
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={openedFrame()}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')
-
-    // Signed in, the settings not here yet: the frame takes no choice.
-    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(true)
-
     act(() => {
       services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'en' }])
     })
 
-    await waitFor(() =>
-      expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(
-        false,
+    expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+    expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+  })
+
+  it("chooses the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const signedIn: SessionPort = { ...session, current: () => ann }
+    const services = fakeServices(signedIn)
+    const theme = memoryTheme('dark')
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: signedIn,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
       ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame({ setTheme: theme.set })}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
     )
+    await screen.findByText('home')
+
+    const select = screen.getByTestId('app-shell.theme-select')
+
+    expect(select.getAttribute('data-value')).toBe('dark')
+
+    await userEvent.click(select)
+
+    const light = await screen.findByRole('option', { name: en['app.shell.theme.light'] })
+
+    // The list takes no pointer until it has finished opening.
+    await vi.waitFor(() => expect(getComputedStyle(light).pointerEvents).not.toBe('none'))
+    await userEvent.click(light)
+
+    expect(theme.current()).toBe('light')
+    await waitFor(() => expect(select.getAttribute('data-value')).toBe('light'))
+
+    // The settings screen chooses the same device theme.
+    act(() => theme.set('system'))
+
+    expect(select.getAttribute('data-value')).toBe('system')
   })
 
   it("speaks no signed-out account's stored language, and its notice goes with it", async () => {
@@ -223,11 +348,15 @@ describe('ShellContainer', () => {
     frame.actor.on('speak', ({ locale }) => spoken.push(locale))
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
-        <ShellFrameContext.Provider value={frame}>
-          <ServicesProvider services={services}>
-            <RouterProvider router={router} />
-          </ServicesProvider>
-        </ShellFrameContext.Provider>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByText('home')
@@ -266,5 +395,197 @@ describe('ShellContainer', () => {
     )
     expect(spoken).toEqual(['es'])
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+  })
+
+  /**
+   * The shell for a guest, in a frame that loads the page again through `reload`: on /home, or
+   * `guarded` on /form with a field, inside the kit's unsaved-input scope and the frame's leave
+   * guard as the start mounts them; `refusedBefore` when the session heard the gateway refuse
+   * the protocol before the shell mounted.
+   */
+  async function homeShell(
+    options: { readonly guarded?: boolean; readonly refusedBefore?: boolean } = {},
+  ) {
+    const reload = vi.fn()
+    const install = memoryInstall()
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, protocolRefused: () => options.refusedBefore === true }
+    const services = fakeServices(session)
+    const frame = openedFrame({ reload, install })
+    const shell = (
+      <ShellContainer>
+        <Outlet />
+      </ShellContainer>
+    )
+    const router = createAppRouter({
+      modules: [HomeModule, FormModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          {options.guarded ? (
+            <UnsavedInputScope>
+              <LeaveGuard>{shell}</LeaveGuard>
+            </UnsavedInputScope>
+          ) : (
+            shell
+          )}
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: [options.guarded ? '/form' : '/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={install}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByTestId('app-shell.nav')
+
+    return { services, frame, reload, install }
+  }
+
+  /** The browser sends the tab to the background, or back to the front. */
+  function showTab(state: 'hidden' | 'visible') {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+
+  it('says a newer build the server serves, and its button loads the page again', async () => {
+    const { services, reload } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+
+    act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+
+    const message = await screen.findByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('new-version')
+
+    await userEvent.click(screen.getByTestId('app-shell.update-button'))
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+  })
+
+  it('says a protocol the server no longer takes', async () => {
+    const { services } = await homeShell()
+
+    await act(() => services.refuseProtocol())
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'protocol-outdated',
+    )
+    expect(screen.getByTestId('app-shell.update-button').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('loads the page again by itself when the tab goes to the background with an update waiting', async () => {
+    const { services, reload } = await homeShell()
+
+    try {
+      // Nothing waits: the tab goes and comes back as it is.
+      showTab('hidden')
+      showTab('visible')
+
+      expect(reload).not.toHaveBeenCalled()
+
+      act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+      await screen.findByTestId('app-shell.update-message')
+      showTab('hidden')
+
+      await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    } finally {
+      showTab('visible')
+    }
+  })
+
+  it('says a protocol the gateway refused before the shell listened', async () => {
+    await homeShell({ refusedBefore: true })
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'protocol-outdated',
+    )
+  })
+
+  it('never loads the page again by itself while a field holds unsaved input, and its button asks first', async () => {
+    const { services, reload } = await homeShell({ guarded: true })
+
+    try {
+      await userEvent.type(screen.getByLabelText('name'), 'Ann')
+      act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+      await screen.findByTestId('app-shell.update-message')
+      showTab('hidden')
+      showTab('visible')
+
+      expect(reload).not.toHaveBeenCalled()
+
+      // The button asks before the reload loses what was typed: staying keeps the page.
+      await userEvent.click(screen.getByTestId('app-shell.update-button'))
+      await userEvent.click(await screen.findByTestId('app-shell.leave-dialog.cancel-button'))
+
+      expect(reload).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByTestId('app-shell.update-button'))
+      await userEvent.click(await screen.findByTestId('app-shell.leave-dialog.confirm-button'))
+
+      await waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    } finally {
+      showTab('visible')
+    }
+  })
+
+  it('says the state of the sync the platform gives, and takes it away with the account', async () => {
+    const { services, frame } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+
+    act(() => services.sync('connecting'))
+
+    expect((await screen.findByTestId('app-shell.sync-message')).getAttribute('data-code')).toBe(
+      'connecting',
+    )
+
+    act(() => services.sync('synced'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe('synced'),
+    )
+
+    // Signed out, the session gives no state any more and the frame's flow clears it.
+    act(() => {
+      services.sync(undefined)
+      frame.actor.send({ type: 'platform.signed-out' })
+    })
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.sync-message')).toBeNull())
+  })
+
+  it("reminds to install the app at the browser's offer, puts it off, and installs it", async () => {
+    const { install } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.install-message')).toBeNull()
+
+    act(() => install.offer('install-offered'))
+
+    expect((await screen.findByTestId('app-shell.install-message')).getAttribute('data-code')).toBe(
+      'install-available',
+    )
+
+    await userEvent.click(screen.getByTestId('app-shell.install-later-button'))
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.install-message')).toBeNull())
+    expect(install.postponed()).toBe(1)
+
+    act(() => install.offer('install-offered'))
+    await userEvent.click(await screen.findByTestId('app-shell.install-button'))
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.install-message')).toBeNull())
+    expect(install.prompted()).toBe(1)
   })
 })

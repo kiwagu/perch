@@ -43,29 +43,21 @@ export interface GatewayStub {
   /** The next pull is answered with the protocol error a device that is not subscribed gets. */
   refuseNextPull(): void
   /**
-   * The next sign-out is taken in, as the gateway does while it revokes the grant (the device
+   * The next sign-out is taken in, as the gateway does while it ends the session (the device
    * leaves its regions, and nothing it sends after is handled), but the channel stays open;
    * resolves once it arrived.
    */
   keepOpenOnSignOut(): Promise<void>
   /**
-   * The next sign-out is taken in, but the grant cannot be revoked: the gateway closes the
+   * The next sign-out is taken in, but the session cannot be ended: the gateway closes the
    * channel as a failed server (1011), which ends nothing; resolves once it arrived.
    */
   failNextSignOut(): Promise<void>
-  /**
-   * The next renewal hands over these keys: before the welcome of the next device to connect,
-   * as the gateway does when the access token a device presents no longer works, or as the
-   * answer to the next renewal a device asks for over its channel.
-   */
-  renewAtNextHello(tokens: { readonly access: string; readonly refresh: string }): void
-  /** Every renewal a device asks for over its channel is refused from now on, as by the limits. */
-  refuseRenewals(): void
   /** How many sign-outs the devices sent. */
   signOuts(): number
   /**
    * Ends the channel of every started device for good, as the gateway does when it refuses the
-   * keys (`unauthorized`) or signs the device out: the device hears why, then the channel falls.
+   * token (`unauthorized`) or signs the device out: the device hears why, then the channel falls.
    */
   endWith(reason: EndReason): void
   /**
@@ -115,8 +107,6 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
     refusePull: false,
     keepOpen: undefined,
     failSignOut: undefined,
-    renewal: undefined,
-    refuseRenewals: false,
   }
   const channels: DeviceChannel[] = []
 
@@ -163,12 +153,6 @@ export function gatewayStub(options: GatewayStubOptions): GatewayStub {
       return new Promise((resolve) => {
         gateway.failSignOut = resolve
       })
-    },
-    renewAtNextHello(tokens) {
-      gateway.renewal = tokens
-    },
-    refuseRenewals() {
-      gateway.refuseRenewals = true
     },
     signOuts: () => gateway.signOuts,
     endWith(reason) {

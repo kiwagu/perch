@@ -100,7 +100,7 @@ export type SeedError = DataError | BusError
 /**
  * One device, signed in as one account at a time: signing in as the next account leaves the
  * previous one, and closing leaves the last one. Leaving closes the account's space and drops
- * its in-memory database, but never signs the account out, which would revoke its grant.
+ * its in-memory database, but never signs the account out, which would end its session.
  */
 export interface SeedClient {
   /** Signs up (or in, when the account exists), writes the profile and the settings through commands and waits until the gateway acknowledged everything. */
@@ -363,6 +363,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
     online: () => true,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
@@ -370,8 +371,6 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
         url: gatewaySyncUrl(options.gatewayUrl),
         device: context.device,
         credentials: context.credentials,
-        onTokens: context.onTokens,
-        onRenewalRefused: context.onRenewalRefused,
         onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
@@ -381,6 +380,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     clock: systemClock,
     storage: memoryStorage(),
     visibility: { current: () => 'visible', onChange: () => () => {} },
+    // A seed client shows no frame to offer a newer build in.
+    servedBuild: { watch: () => () => {} },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},

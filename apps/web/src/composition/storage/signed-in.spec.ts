@@ -1,35 +1,75 @@
 import { describe, expect, it } from 'vitest'
 
-import { identityIdFactory } from '@workspace/ids'
+import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { memoryStorage } from './key-value'
-import { forgetDevice, saveDevice, savedIdentity, savedKeys, saveKeys } from './signed-in'
+import { savedMemberships, savedTenant, saveTenant } from './memberships'
+import { forgetDevice, saveDevice, savedIdentity, savedToken } from './signed-in'
+
+const acme: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+  role: 'member',
+}
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-1', refresh: 'refresh-1' },
-  memberships: [] as readonly Membership[],
+  token: 'token-1',
+  memberships: [acme],
 }
 
 describe('the signed-in device', () => {
-  it('keeps the identity and its keys, renews the keys and forgets all of them', () => {
+  it('keeps the identity, its session token and its memberships, and forgets them with the tenant', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
+    saveTenant(storage, 'acme')
 
     expect(savedIdentity(storage)).toEqual(ann.identity)
-    expect(savedKeys(storage)).toEqual(ann.tokens)
-
-    saveKeys(storage, { access: 'access-2', refresh: 'refresh-2' })
-
-    expect(savedKeys(storage)).toEqual({ access: 'access-2', refresh: 'refresh-2' })
+    expect(savedToken(storage)).toBe('token-1')
+    expect(storage.get('perch.session.token')).toBe('token-1')
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
 
     forgetDevice(storage)
 
     expect(savedIdentity(storage)).toBeUndefined()
-    expect(savedKeys(storage)).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedTenant(storage)).toBeUndefined()
+  })
+
+  it('keeps one token and nothing else beside it: no second key is ever written', () => {
+    const storage = memoryStorage()
+    const written: string[] = []
+    const watched = {
+      ...storage,
+      set: (key: string, value: string) => {
+        written.push(key)
+        storage.set(key, value)
+      },
+    }
+
+    saveDevice(watched, ann)
+
+    expect(written).not.toContain('perch.session.refresh')
+    // The identity last: a tab that follows it finds the memberships and the token saved already.
+    expect(written).toEqual([
+      'perch.session.memberships',
+      'perch.session.token',
+      'perch.session.identity',
+    ])
+  })
+
+  it('forgets the refresh key an older build kept beside the token', () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+    storage.set('perch.session.refresh', 'refresh-1')
+
+    forgetDevice(storage)
+
+    expect(storage.get('perch.session.refresh')).toBeUndefined()
   })
 
   it('reads no identity from a value that does not describe one', () => {

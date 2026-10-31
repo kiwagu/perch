@@ -17,8 +17,8 @@ import {
 import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { spaceLockName } from './space-deletion'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2' }
+const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
+const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }
 
 const worlds: TestWorld[] = []
 
@@ -137,11 +137,7 @@ describe('the next start', () => {
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const storage = leftBehind(ann.id)
 
-    saveDevice(storage, {
-      identity: ann,
-      tokens: { access: 'access-ann', refresh: 'refresh-ann' },
-      memberships: [],
-    })
+    saveDevice(storage, { identity: ann, token: 'token-ann', memberships: [] })
 
     const tab = await world({ storage, online: false })
 
@@ -161,17 +157,13 @@ describe('a saved identity whose database does not open', () => {
   function annSaved(): MemoryStorage {
     const storage = memoryStorage()
 
-    saveDevice(storage, {
-      identity: ann,
-      tokens: { access: 'access-ann', refresh: 'refresh-ann' },
-      memberships: [],
-    })
+    saveDevice(storage, { identity: ann, token: 'token-ann', memberships: [] })
     saveTenantDatabases(storage, ann.id, ['acme'])
 
     return storage
   }
 
-  it('signs out on this device: the keys are left to revoke, and her databases deleted', async () => {
+  it('signs out on this device: the token is left to sign out, and her databases deleted', async () => {
     const storage = annSaved()
     const tab = await world({ storage, online: false, refusedIdentities: [ann.id] })
 
@@ -179,7 +171,7 @@ describe('a saved identity whose database does not open', () => {
     expect((await tab.session.signOutUnopened()).isOk()).toBe(true)
 
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(pendingRevokes(storage).map(({ refresh }) => refresh)).toEqual(['refresh-ann'])
+    expect(pendingRevokes(storage).map(({ token }) => token)).toEqual(['token-ann'])
     expect(tab.localsDeleted()).toEqual([ann.id])
     expect(tab.tenantsDeletedOf(ann.id)).toEqual(['acme'])
     expect(leftoverIdentities(storage)).toEqual([])

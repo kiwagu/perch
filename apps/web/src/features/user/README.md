@@ -20,7 +20,13 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
 ## Surface
 
 - Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/me` (guard `authenticated`)
-  renders `ProfilePage`.
+  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
+  this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
+  chooses the same one) and the account's language
+  (stored through `settings.updateLocale`, spoken at once), its screen's flow run as its machine
+  (`application/settings/settings.machine.ts`, held to `contract/domain/screens/settings.yaml` by
+  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
+  language changes.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
@@ -49,8 +55,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
   new account's settings start in the language chosen before signing up;
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
-  device's keys while changes remain to send after the next sign-in, and says "You were signed
-  out from another device." when this device was signed out from another one
+  device's session token while changes remain to send after the next sign-in, and says "You
+  were signed out from another device." when this device was signed out from another one
   (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);

@@ -17,10 +17,8 @@ import { openStand, runSeed, type StandTarget, sweep } from './seed'
 // The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
 // where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
 // share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
-// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses and the key
-// the stand's gateway signs with from the manifest's vars.
-const signingKeyRule =
-  'must be the key the gateway-e2e gateway signs with; run the suite with bun run test:db'
+// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses and the
+// origin of the stand's front from the manifest's vars.
 const stand = z
   .object({
     GATEWAY_URL: z.url({
@@ -33,7 +31,11 @@ const stand = z
       error:
         'must be the http(s):// address of the surrealdb-e2e stand; run the suite with bun run test:db',
     }),
-    GATEWAY_JWT_KEY: z.string({ error: signingKeyRule }).min(1, { error: signingKeyRule }),
+    GATEWAY_PUBLIC_URL: z.url({
+      protocol: /^https?$/,
+      error:
+        "must be the http(s):// origin of the e2e stand's front; run the suite with bun run test:db",
+    }),
   })
   .parse(process.env)
 const target: StandTarget = {
@@ -42,7 +44,6 @@ const target: StandTarget = {
   namespace: 'app',
   database: 'directory',
   credentials: { username: 'root', password: 'root' },
-  signingKey: stand.GATEWAY_JWT_KEY,
 }
 
 const demo: SeedMode = { kind: 'demo' }
@@ -60,24 +61,30 @@ const outsider = {
   locale: 'en',
 } as const
 
-// An account that keeps the pair it signed up with while the stand is opened as its operator.
+// An account that keeps the session token it signed up with while the stand is opened as its
+// operator.
 const keyholder = {
+  name: 'Keyholder Example',
   email: `keyholder.${run}@example.test`,
   password: 'keyholder-seed-password',
   device: { id: `seed-keyholder-${run}`, label: 'Seed spec' },
 } as const
 
-/** What a sign-up answers, as far as this spec reads it. */
-const signedUp = z.object({ tokens: z.object({ access: z.string() }) })
+/** What a sign-up answers, as far as this spec reads it: the session token the device keeps. */
+const signedUp = z.object({ token: z.string() })
 
 /**
  * The running test's client of the stand's gateway: each test is a simulated client with a
- * client address of its own, so the gateway's limits per address count the tests apart.
+ * client address of its own, so the gateway's limits per address count the tests apart, behind
+ * the stand's front, whose origin it names.
  */
 let client: ClientOptions & { readonly fetcher: Fetcher }
 
 beforeEach(({ task }) => {
-  client = { gatewayUrl: target.gatewayUrl, fetcher: simulatedFront(task.name) }
+  client = {
+    gatewayUrl: target.gatewayUrl,
+    fetcher: simulatedFront(task.name, stand.GATEWAY_PUBLIC_URL),
+  }
 })
 
 afterAll(async () => {
@@ -86,24 +93,32 @@ afterAll(async () => {
 })
 
 describe("the stand's operator", () => {
-  it('leaves the access tokens the gateway issued valid when it opens the stand', async () => {
-    const answer = await client.fetcher(`${target.gatewayUrl}/auth/sign-up`, {
+  it('leaves the sessions the gateway opened live when it opens the stand', async () => {
+    const answer = await client.fetcher(`${target.gatewayUrl}/auth/sign-up/email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(keyholder),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Perch-Device': keyholder.device.id,
+        'X-Perch-Device-Label': keyholder.device.label,
+      },
+      body: JSON.stringify({
+        name: keyholder.name,
+        email: keyholder.email,
+        password: keyholder.password,
+      }),
     })
 
     // The status first, so a refusal (a limit's 429 among them) fails with its status, not a parse.
     expect(answer.status).toBe(200)
 
-    const { access } = signedUp.parse(await answer.json()).tokens
+    const { token } = signedUp.parse(await answer.json())
     const opened = (await openStand(target))._unsafeUnwrap()
 
     await opened.close()
 
-    // The directory schema is applied with the gateway's key, or not at all: the token still works.
+    // The directory schema is applied as the gateway applies it, or not at all: the session lives.
     const organisations = await client.fetcher(`${target.gatewayUrl}/organisations`, {
-      headers: { Authorization: `Bearer ${access}`, 'X-Perch-Device': keyholder.device.id },
+      headers: { Authorization: `Bearer ${token}`, 'X-Perch-Device': keyholder.device.id },
     })
 
     expect(organisations.status).toBe(200)

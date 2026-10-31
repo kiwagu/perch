@@ -8,7 +8,7 @@ tags = ["permissions", "device_session"]
 name = "root creates a device session for alice"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Chrome on Linux', grant = 'g1', started_at = time::floor(time::now(), 1s);"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-a', expires_at = time::now() + 30d, device = 'dev-a', label = 'Chrome on Linux';"
 allow = true
 
 [[cases]]
@@ -23,10 +23,10 @@ path = "0"
 exists = false
 
 [[cases]]
-name = "alice cannot sign a device out"
+name = "alice cannot end a session"
 kind = "sql_expect"
 actor = "alice"
-sql = "UPDATE device_session SET revoked_at = time::now() RETURN AFTER;"
+sql = "UPDATE device_session SET expires_at = time::now() RETURN AFTER;"
 allow = true
 
 [[cases.assertions]]
@@ -34,17 +34,35 @@ path = "0"
 exists = false
 
 [[cases]]
-name = "a second row for the same device of the identity is refused"
+name = "a second row for the same device of the identity is accepted"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-a', label = 'Again', grant = 'g2', started_at = time::floor(time::now(), 1s);"
-allow = false
-error_contains = "device_session_identity_device"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-b', expires_at = time::now() + 30d, device = 'dev-a', label = 'Again';"
+allow = true
 
 [[cases]]
-name = "a device session without the start of its session is refused"
+name = "both rows of the device exist"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE device_session SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], device = 'dev-b', label = 'Firefox on Linux', grant = 'g3';"
+sql = "SELECT count() FROM device_session WHERE device = 'dev-a' GROUP ALL;"
+allow = true
+
+[[cases.assertions]]
+path = "0.count"
+equals = 2
+
+[[cases]]
+name = "a device session without a token is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), expires_at = time::now() + 30d, device = 'dev-b', label = 'Firefox on Linux';"
 allow = false
-error_contains = "started_at"
+error_contains = "token"
+
+[[cases]]
+name = "a second identical token is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE device_session SET identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]), token = 'tok-a', expires_at = time::now() + 30d, device = 'dev-c', label = 'Safari on Mac';"
+allow = false
+error_contains = "device_session_token"

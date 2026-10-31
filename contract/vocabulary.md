@@ -180,6 +180,16 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
 | `unsaved-input` | `app-shell.leave-dialog` | the dialog asks whether to leave and lose what was typed but not saved |
+| `screen-crashed` | `app-shell.crash-message` | the open screen failed to render; another screen, a language chosen or a reload may bring it back |
+| `new-version` | `app-shell.update-message` | the server serves a newer version of the app than the one this tab runs, and loading the page again brings it |
+| `protocol-outdated` | `app-shell.update-message` | the server no longer takes the sync protocol of the version this tab runs, so this device's changes stop syncing until the page loads again |
+| `synced` | `app-shell.sync-message` | the sync is connected and no change made on this device waits to be sent |
+| `sending` | `app-shell.sync-message` | the sync is connected and changes made on this device are on their way to the server |
+| `connecting` | `app-shell.sync-message` | the browser has a network, but the sync is not connected yet, or connects again |
+| `offline` | `app-shell.sync-message` | the browser has no network, so changes made on this device wait here until it is back |
+| `sync-stopped` | `app-shell.sync-message` | the sync stopped and does not resume in this page: the server no longer takes its protocol, or the browser cannot lead a sync |
+| `install-available` | `app-shell.install-message` | the browser can install the app and offers to; the reminder carries the button that asks it |
+| `install-by-steps` | `app-shell.install-message` | the browser installs the app only by the user's own steps, which the reminder shows (Share, then Add to Home Screen) |
 
 ## Choice values
 
@@ -190,6 +200,14 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 |---|---|---|
 | `app-shell.locale-select.option` | `en` | the option makes the app speak English |
 | `app-shell.locale-select.option` | `es` | the option makes the app speak Spanish |
+| `app-shell.theme-select.option` | `light` | the option shows the app light on this device |
+| `app-shell.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
+| `user.settings.locale-select.option` | `en` | the option makes the account speak English |
+| `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
+| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
+| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -208,6 +226,8 @@ screen name of its own.
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
+| `not-found` | what an address no other route takes opens (`/$`) |
+| `user.settings` | the settings of the signed-in account and of this device: the theme and the language (`/settings`) |
 
 ## Roles
 
@@ -228,13 +248,23 @@ included.
 |---|---|
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
-| `app-shell.nav` | the main navigation, whose links are the four anchors below, declared on their own and not derived |
+| `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
 | `app-shell.nav.sign-in-link` | the link to `/sign-in`, shown to a guest, which renders no derived anchor |
 | `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
+| `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
+| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
 | `app-shell.confirmation` | the frame's question before a destructive action, which carries `data-code` and renders `app-shell.confirmation.confirm-button` (go on) and `app-shell.confirmation.cancel-button` (stay) |
+| `app-shell.crash-message` | the message in the place of a screen that failed to render, which carries `data-code` and renders no derived anchor |
+| `app-shell.reload-button` | the button that loads the page again, shown with `app-shell.crash-message`, which renders no derived anchor |
+| `app-shell.update-message` | the message that the page should load again, a newer version served or the sync protocol refused, which carries `data-code` and renders no derived anchor |
+| `app-shell.update-button` | the button that loads the page again on the version the server serves, shown with `app-shell.update-message`, which renders no derived anchor |
+| `app-shell.sync-message` | the state of this device's sync for a signed-in account, the same in every tab, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-message` | the reminder to install the app until it is installed, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
+| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |

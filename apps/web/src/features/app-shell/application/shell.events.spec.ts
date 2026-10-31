@@ -16,7 +16,7 @@ const rejection = {
 const at = { actorId: 'idn_1', occurredAt: new Date(0) }
 
 describe('shellEvents', () => {
-  it("sends the frame's machine the two refusals of the bus, until it stops", async () => {
+  it("sends the frame's machine the three refusals of the bus, until it stops", async () => {
     const bus = new EventBus<AppEvent>()
     const sent: unknown[] = []
     const stop = shellEvents(bus, { send: (event) => sent.push(event) })
@@ -31,6 +31,9 @@ describe('shellEvents', () => {
         ])
       ).isOk(),
     ).toBe(true)
+    expect(
+      (await bus.publish([{ name: 'sync.protocol-refused', payload: null, ...at }])).isOk(),
+    ).toBe(true)
 
     stop()
 
@@ -40,6 +43,7 @@ describe('shellEvents', () => {
     expect(sent).toEqual([
       { type: 'platform.change-rejected' },
       { type: 'platform.changes-reloaded' },
+      { type: 'platform.protocol-refused' },
     ])
   })
 })

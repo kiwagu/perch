@@ -59,7 +59,7 @@ async function openSim(
   try {
     const { device } = await LoadDevice.open(
       `${run.base.replace(/^http/, 'ws')}/sync`,
-      account.tokens,
+      account.token,
       {
         onUpdates: (message, at) => {
           // The arrival is the fan-out's end; a failed import is an error of its own.

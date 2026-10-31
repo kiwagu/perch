@@ -21,9 +21,11 @@ import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
 import { organisationsApi } from './organisations-api'
 import { type AppServices, type BootFailure, createAppRoot } from './root'
+import { servedBuild } from './served-build'
 import type { VisibilitySource } from './session'
 import { siteStorage } from './site-storage'
 import { browserStorage } from './storage'
+import build from 'virtual:perch-build'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
   eager: true,
@@ -90,6 +92,7 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
   const origin = window.location.origin
   // Undefined in a page that is not a secure context: such a page does not sync, and says so.
   const locks: LockManager | undefined = navigator.locks
+  const visibility = documentVisibility(document)
 
   showSync({ leader: false, channel: 'down' })
 
@@ -120,6 +123,15 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     gatewayAuth: gatewayAuth(`${origin}/backend`),
     deviceLabel: deviceLabel(navigator),
     online: () => navigator.onLine,
+    onOnlineChange: (listener) => {
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
     organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
     devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
     transport: (context) =>
@@ -127,8 +139,6 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
         device: context.device,
         credentials: context.credentials,
-        onTokens: context.onTokens,
-        onRenewalRefused: context.onRenewalRefused,
         onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
@@ -137,7 +147,13 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
     clock: systemClock,
     storage: browserStorage(store.value, window),
-    visibility: documentVisibility(document),
+    visibility,
+    servedBuild: servedBuild({
+      running: build,
+      fetcher: (url, init) => fetch(url, init),
+      visibility,
+      clock: systemClock,
+    }),
     logger: {
       info: (fields) => logger.info(fields, 'command'),
       warn: (fields) => logger.warn(fields, 'command'),
@@ -146,8 +162,9 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     onStep: (step) => {
       html.dataset['bootStep'] = step
     },
-    onError: (error) =>
-      logger.error({ code: error.code, cause: String(error.cause) }, error.message),
+    // An error is logged by its code and message: its cause, whatever raised it, may carry a
+    // session token in its text.
+    onError: (error) => logger.error({ code: error.code }, error.message),
     onSyncState: showSync,
   })
 }

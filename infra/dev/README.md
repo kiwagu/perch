@@ -30,8 +30,8 @@ the gateway's `/sync`). No dev server runs behind it.
   it off with `ui_manifest: '0'` under `vars` in `.mcproc/mcproc.local.yaml`, then
   `mcproc restart caddy-dev` (or `caddy-e2e`). Every response carries the browser security
   headers of the snippet `security-headers`, each with its reason beside it: a
-  Content-Security-Policy that allows only this origin's scripts, styles, fonts, worker,
-  fetches and WebSocket, plus WASM compilation (`'wasm-unsafe-eval'`, never `'unsafe-eval'`),
+  Content-Security-Policy that allows only this origin's scripts, styles, fonts, web app
+  manifest, worker, fetches and WebSocket, plus WASM compilation (`'wasm-unsafe-eval'`, never `'unsafe-eval'`),
   and no framing; `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, a
   `Permissions-Policy` that turns off what the app does not use, and
   `X-Content-Type-Options: nosniff`. No `Strict-Transport-Security`: it binds the whole host,
@@ -45,7 +45,8 @@ the gateway's `/sync`). No dev server runs behind it.
   and the gateway's namespace user (role OWNER, no root account). The gateway's mcproc apps run it
   before each start; every statement may run again. Its password, `gateway-stand-password`, is a
   literal for the local in-memory stands only; a real deployment defines the gateway's user by
-  hand with a password of its own. So is the key the stands' gateways sign tokens with
-  (`GATEWAY_JWT_KEY`): a literal of the mcproc manifest, `stand_jwt_key` in its `vars`, given to
-  both gateway apps and to `mcproc exec`, for the local stands only; a real deployment sets a key
-  of its own (`openssl rand -hex 64`, one line of 128 characters).
+  hand with a password of its own. So is the secret the stands' gateways run Better Auth with
+  (`GATEWAY_AUTH_SECRET`): a literal of the mcproc manifest, `stand_auth_secret` in its `vars`,
+  given to both gateway apps and to `mcproc exec`, for the local stands only; a real deployment
+  sets a secret of its own (`openssl rand -hex 32`, at least 32 characters). Each gateway app
+  also gets its own front's origin as `GATEWAY_PUBLIC_URL`, and `mcproc exec` the e2e front's.

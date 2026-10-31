@@ -8,7 +8,7 @@ import { otherAccountSaved, otherIdentitySaved } from './one-account'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  token: 'token-ann',
   memberships: [],
 }
 

@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AuthUser,
-  createAuth,
   type DataError,
   type LocalDb,
   openLocalDb,
@@ -12,10 +11,12 @@ import {
 } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
-import type { IdentityId } from '@workspace/ids'
+import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
+import { AUTH_URL, deviceHeaders, signUpOn } from '../auth/__fixtures__/auth-instance'
+import { createAuthInstance } from '../auth/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
 
 import directoryRows from './__fixtures__/directory-rows.surql'
@@ -37,8 +38,6 @@ import membershipRemoveStatement from './surql/membership-remove.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import { TenantDatabases } from './tenant-databases'
 
-const PASSWORD = 'pass-word-1'
-
 /** Closes what a test opened, the organisations' databases before the directory. */
 const cleanups: Array<() => Promise<void>> = []
 
@@ -57,19 +56,18 @@ function refused(code: OrganisationRefusalCode) {
   return { kind: 'refused', code }
 }
 
-/** Signs an identity up through the directory's access method, as the gateway does. */
+/** Signs an identity up through Better Auth over the directory, as the gateway does. */
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
-  const auth = createAuth(directory, {
-    access: 'identity',
-    namespace: NAMESPACE,
-    database: DIRECTORY,
+  const auth = createAuthInstance({
+    local: directory,
+    secret: 'test-secret-0123456789-0123456789-0123456789',
+    baseURL: AUTH_URL,
+    trustedOrigins: [new URL(AUTH_URL).origin],
+    clock: manualClock(),
   })
+  const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
 
-  try {
-    return (await auth.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
-  } finally {
-    await auth.close()
-  }
+  return { id: idSchemas.identity.schema.parse(user.id), email: user.email }
 }
 
 /** A statement the organisations' databases hold until it is let go. */

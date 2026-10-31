@@ -9,13 +9,16 @@ import { matchLocale } from '@workspace/i18n'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
+import { serviceWorkerReload } from './composition/service-worker'
 import { LocaleWrites } from './features/app-shell/application/locale-writes'
 import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
+import { CrashSignal } from './features/app-shell/presentation/crash/crash-signal'
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
 import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
+  frameLanguageWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
@@ -24,9 +27,12 @@ import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
+import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
+import { LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
@@ -76,7 +82,12 @@ function bootOnce(): Promise<Boot> {
         (services) => ({
           status: 'ready',
           services,
-          router: createAppRouter({ modules, session: services.session, layout: Layout }),
+          router: createAppRouter({
+            modules,
+            session: services.session,
+            layout: Layout,
+            crash: CrashSignal,
+          }),
         }),
         (failure) =>
           failure.kind === 'storage-blocked'
@@ -99,25 +110,32 @@ const STATUS = {
   'storage-blocked': 'storage-blocked',
 } as const
 
-function App() {
+function App(props: { readonly reload: () => void }) {
   const [boot, setBoot] = useState<Boot>({ status: 'opening' })
   const setLocale = useSetLocale()
+  const device = useDeviceTheme()
+  const install = useDeviceInstall()
   // The frame's flow runs from the start: what it reads is filled in as the start and the shell learn it.
   const [made] = useState(() => {
     const live: ShellLive = {
       account: undefined,
-      session: 0,
-      storingIn: undefined,
       stored: undefined,
       writes: LocaleWrites.none,
-      store: undefined,
+      generation: 0,
       signOutHere: undefined,
+      renderAgain: undefined,
+      unsaved: false,
     }
 
-    return { live, machine: shellFrameMachine(live) }
+    return {
+      live,
+      machine: shellFrameMachine(live, { setTheme: device.set, install, reload: props.reload }),
+    }
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+  // The settings screen's stores of the language, kept by the frame to tell their echo from another device's.
+  const languageWrites = useMemo(() => frameLanguageWrites(made.live), [made])
 
   useEffect(() => {
     const spoken = actor.on('speak', ({ locale }) => setLocale(locale))
@@ -165,6 +183,9 @@ function App() {
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}
+        theme={device.theme}
+        canChooseTheme={state.can({ type: 'app-shell.theme-select', theme: 'light' })}
+        onThemeChange={(theme) => send({ type: 'app-shell.theme-select', theme })}
         onSignOutHere={
           boot.status === 'failed' && boot.signOutHere
             ? () => send({ type: 'app-shell.sign-out-here-button' })
@@ -177,9 +198,11 @@ function App() {
 
   return (
     <ShellFrameContext.Provider value={frame}>
-      <ServicesProvider services={boot.services}>
-        <RouterProvider router={boot.router} />
-      </ServicesProvider>
+      <LanguageWritesContext.Provider value={languageWrites}>
+        <ServicesProvider services={boot.services}>
+          <RouterProvider router={boot.router} />
+        </ServicesProvider>
+      </LanguageWritesContext.Provider>
     </ShellFrameContext.Provider>
   )
 }
@@ -189,18 +212,29 @@ if (__PERCH_UI_HOOKS__) {
   installUiHelper(window)
 }
 
+// The theme this device kept shows before the first frame.
+const theme = browserTheme()
+// Heard from the start, so an offer to install the browser makes early reaches the reminder.
+const install = browserInstall()
+// Production builds register the service worker, which opens the app offline; the frame's reload
+// then lets a waiting newer worker take over first.
+const reload = import.meta.env.PROD ? serviceWorkerReload(window) : () => window.location.reload()
 const root = document.getElementById('root')
 
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <AppI18n
-        initial={matchLocale(navigator.language)}
-        en={englishCatalog}
-        loadEs={loadSpanishCatalog}
-      >
-        <App />
-      </AppI18n>
+      <ThemeContext.Provider value={theme}>
+        <InstallContext.Provider value={install}>
+          <AppI18n
+            initial={matchLocale(navigator.language)}
+            en={englishCatalog}
+            loadEs={loadSpanishCatalog}
+          >
+            <App reload={reload} />
+          </AppI18n>
+        </InstallContext.Provider>
+      </ThemeContext.Provider>
     </StrictMode>,
   )
 }

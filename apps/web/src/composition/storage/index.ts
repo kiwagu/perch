@@ -20,17 +20,17 @@ export {
   addPendingRevoke,
   forgetPendingRevoke,
   PENDING_REVOKE_LIMIT,
-  type PendingPair,
+  type PendingToken,
   pendingRevokes,
 } from './pending-revokes'
 export {
-  ACCESS_KEY,
   forgetDevice,
   IDENTITY_KEY,
+  type KeptDevice,
   saveDevice,
   savedIdentity,
-  savedKeys,
-  saveKeys,
+  savedToken,
+  TOKEN_KEY,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
 export { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'

@@ -7,7 +7,6 @@ import { membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
-import type { SignedIn } from '../auth/identity-sessions'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { RequestLimits } from '../limits/request-limits'
 
@@ -20,6 +19,7 @@ import {
   harness,
   request,
   routeOptions,
+  type SignedUp,
 } from './__fixtures__/organisation-routes'
 import { organisationRoutes } from './organisation.routes'
 import { Organisations } from './organisations'
@@ -30,12 +30,12 @@ const created = z.object({ membership })
 afterEach(closeHarness)
 
 /** A member as the member list answers it. */
-function memberOf(signedIn: SignedIn, role: 'admin' | 'member') {
-  return { identity: signedIn.identity, role }
+function memberOf(signedUp: SignedUp, role: 'admin' | 'member') {
+  return { identity: signedUp.identity, role }
 }
 
 describe('organisationRoutes', () => {
-  it('lists the memberships of the identity its access token signs in', async () => {
+  it('lists the memberships of the identity whose session the token holds', async () => {
     const { ann, bob, ask, founded } = await harness()
     const acme = await founded()
 
@@ -355,16 +355,16 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 409, body: { code: 'self' } })
   })
 
-  it('answers 401 to a request without an access token that signs an identity in, and does nothing', async () => {
+  it('answers 401 to a request without a token that holds a live session, and does nothing', async () => {
     const { ann, ask } = await harness()
 
     for (const authorization of [
       undefined,
       `Basic ${btoa('ann@example.test:pass-word-1')}`,
       'Bearer',
-      'Bearer not.an.access.token',
-      // A refresh key is not taken in place of the access token it renews.
-      `Bearer ${ann.tokens.refresh}`,
+      'Bearer not-a-session-token',
+      // The signed form of a token names no session here: a session ends by its raw token.
+      `Bearer ${ann.token}.signature`,
     ]) {
       // From a device of Ann's: only the token is wrong.
       const device = deviceOf(ann.identity.email)
@@ -414,13 +414,13 @@ describe('organisationRoutes', () => {
     const [row] = (await root.deviceSessions.list(ann.identity.id))._unsafeUnwrap()
 
     ;(
-      await root.deviceSessions.revoke({
-        identity: ann.identity.id,
-        id: row?.id ?? expect.unreachable("Ann's device listed"),
-      })
+      await root.sessions.revoke(
+        ann.identity.id,
+        row?.id ?? expect.unreachable("Ann's device listed"),
+      )
     )._unsafeUnwrap()
 
-    // The access token still works, but the device it comes from is signed out.
+    // The device was signed out from another one: its token holds no live session any more.
     expect(await ask('GET', '/organisations', { as: ann })).toEqual({
       status: 401,
       body: { code: 'unauthorized' },
@@ -439,10 +439,9 @@ describe('organisationRoutes', () => {
 
     await directory.close()
 
-    // Organisations over a directory that is gone: the identity still signs in on the root's.
+    // Organisations over a directory that is gone: the session is still read on the root's.
     const routes = organisationRoutes(
       root.sessions,
-      root.deviceSessions,
       new Organisations({
         directory,
         databases: root.databases,

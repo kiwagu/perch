@@ -57,6 +57,14 @@ export interface TestWorldOptions {
   readonly memberships?: readonly Membership[]
   /** Signs devices up and in in place of the fake gateway's accounts. */
   readonly auth?: GatewayAuth
+  /**
+   * Reads the signed-in identity's memberships after a sign-in; by default every account belongs
+   * to `memberships`, as the stub welcomes it.
+   */
+  readonly listMemberships?: (
+    token: string,
+    device: string,
+  ) => ResultAsync<readonly Membership[], DataError>
   /** The organisations whose databases do not open on this device, by key. */
   readonly refusedTenants?: readonly string[]
   /** The identities whose own databases do not open on this device. */
@@ -194,7 +202,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const gateway = options.gateway ?? (await openTestGateway(memberships))
   const { stub, clock, queries } = gateway
   const storage = options.storage ?? memoryStorage()
-  const auth = options.auth ?? fakeGatewayAuth(memberships)
+  const auth = options.auth ?? fakeGatewayAuth()
   const failures: DataError[] = []
   const published: AppEvent[] = []
   const states: SyncState[] = []
@@ -210,6 +218,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
+    listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
     openLocal: (identity) =>
       (options.refusedIdentities?.includes(identity)
         ? errAsync(dataError('data:OPEN_FAILED', `the browser would not open ${identity}`))
@@ -263,17 +272,9 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
 
       contexts.push(context)
       transports.push(transport)
-      // The browser's WebSocket transport hands renewed keys and memberships to the context
-      // and calls `onEnded` itself; the stub tells its listeners.
+      // The browser's WebSocket transport hands memberships to the context and calls `onEnded`
+      // itself; the stub tells its listeners.
       transport.onMessage((message) => {
-        if (message.type === 'tokens') {
-          context.onTokens({ access: message.access, refresh: message.refresh })
-        }
-
-        if (message.type === 'error' && message.code === 'rate-limited') {
-          context.onRenewalRefused()
-        }
-
         if (message.type === 'welcome' || message.type === 'memberships') {
           context.onMemberships(message.memberships)
         }

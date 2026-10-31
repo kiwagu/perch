@@ -22,7 +22,9 @@ beforeEach(async () => {
     shape: profileShape,
     commands: profileCommands,
   })
-  me = (await session.signUp({ email: 'ann@example.test', password: 'secret-ann' }))._unsafeUnwrap()
+  me = (
+    await session.signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
+  )._unsafeUnwrap()
   profileId = profileIdFactory.create()
 
   expect(

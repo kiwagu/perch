@@ -14,6 +14,7 @@ import { ORGANISATIONS } from '../platform/organisations.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
+import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
 import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
@@ -60,6 +61,7 @@ async function boot(
     gatewayAuth: fakeGatewayAuth(),
     deviceLabel: 'Chrome on Linux',
     online: () => false,
+    onOnlineChange: () => () => {},
     organisationsApi: (deps) =>
       organisationsApi('/backend', {
         ...deps,
@@ -82,6 +84,7 @@ async function boot(
     clock,
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
+    servedBuild: { watch: () => () => {} },
     logger: { info: () => {}, warn: () => {} },
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),
@@ -94,7 +97,7 @@ async function boot(
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  token: 'token-ann',
   memberships: [],
 }
 
@@ -180,16 +183,16 @@ describe('createAppRoot', () => {
     const auth = fakeGatewayAuth()
     let deps: BearerDeps | undefined
     let devicesDeps: BearerDeps | undefined
+    // The sign-up reads the memberships through the organisation route.
+    const organisationsFetch = fakeFetch(respond(200, { memberships: [] }))
     const { result } = await boot(storage, [], [], {
       gatewayAuth: auth,
       deviceLabel: 'Safari on iPhone',
       organisationsApi: (given) => {
-        deps = given
+        // The first is the routes' own, over the saved token; a sign-in's read names its token.
+        deps ??= given
 
-        return organisationsApi('/backend', {
-          ...given,
-          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
-        })
+        return organisationsApi('/backend', { ...given, fetcher: organisationsFetch.fetcher })
       },
       devicesApi: (given) => {
         devicesDeps = given
@@ -205,15 +208,28 @@ describe('createAppRoot', () => {
 
     const email = 'ann@example.test'
 
-    expect((await services.session.signUp({ email, password: 'pass-word-1' })).isOk()).toBe(true)
+    expect(
+      (await services.session.signUp({ email, password: 'pass-word-1', name: 'Ann' })).isOk(),
+    ).toBe(true)
 
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
 
     expect(auth.requests).toEqual([
-      { kind: 'sign-up', email, device: { id, label: 'Safari on iPhone' } },
+      { kind: 'sign-up', email, name: 'Ann', device: { id, label: 'Safari on iPhone' } },
     ])
     expect(deps?.device()).toBe(id)
     expect(devicesDeps?.device()).toBe(id)
+    expect(deps?.token()).toBe(storage.get('perch.session.token'))
     expect(devicesDeps?.token()).toBe(deps?.token())
+    // The memberships were read with the token the sign-up was given, naming this device.
+    expect(organisationsFetch.sent).toEqual([
+      {
+        url: '/backend/organisations',
+        method: 'GET',
+        authorization: `Bearer ${deps?.token() ?? expect.unreachable('a token')}`,
+        device: id,
+        body: undefined,
+      },
+    ])
   })
 })

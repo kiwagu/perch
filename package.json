@@ -29,6 +29,7 @@
     "contract:routes": "ui-contract routes",
     "contract:flow": "ui-contract flow",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
+    "perf:measure": "mcproc exec --memory 3G --note perf -- bun tests/e2e/scripts/perf-measure.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
@@ -68,6 +69,7 @@
       "@fontsource-variable/inter": "5.3.0",
       "@playwright/test": "1.64.1",
       "@stylistic/eslint-plugin": "5.10.0",
+      "@surrealdb/better-auth": "0.1.0",
       "@surrealdb/node": "3.1.0",
       "@surrealdb/node-native": "3.3.4",
       "@surrealdb/surql-fmt": "0.1.0-beta.3",
@@ -87,6 +89,7 @@
       "@xstate/react": "6.1.0",
       "ajv": "8.20.0",
       "ajv-formats": "3.0.1",
+      "better-auth": "1.6.33",
       "class-variance-authority": "0.7.1",
       "cn": "0.5.0",
       "entity-id": "1.2.0",
@@ -114,9 +117,11 @@
       "typescript": "7.0.2",
       "typescript-eslint": "8.71.2",
       "vite": "8.3.4",
+      "vite-plugin-pwa": "2.0.0",
       "vite-plugin-wasm": "3.6.0",
       "vite-tsconfig-paths": "6.1.1",
       "vitest": "5.0.5",
+      "workbox-window": "7.4.1",
       "xstate": "5.33.2",
       "yaml": "2.9.1",
       "zod": "4.6.7"
@@ -126,5 +131,8 @@
         "typescript": "6.0.3"
       }
     }
+  },
+  "patchedDependencies": {
+    "@surrealdb/better-auth@0.1.0": "patches/@surrealdb%2Fbetter-auth@0.1.0.patch"
   }
 }

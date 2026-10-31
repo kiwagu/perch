@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
-import type { Membership } from '@workspace/replica/protocol'
+import { identityIdFactory } from '@workspace/ids'
 
 import { memoryStorage } from './key-value'
 import { forgetDevice, saveDevice } from './signed-in'
@@ -9,13 +8,8 @@ import { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from 
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-1', refresh: 'refresh-1' },
-  memberships: [] as readonly Membership[],
-}
-
-const acme: Membership = {
-  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  token: 'token-1',
+  memberships: [],
 }
 
 describe('the tenant databases on this device', () => {
@@ -109,7 +103,7 @@ describe('the tenant databases on this device', () => {
   it('outlives forgetDevice: databases kept for the next sign-in stay counted', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, { ...ann, memberships: [acme] })
+    saveDevice(storage, ann)
     saveTenantDatabases(storage, ann.identity.id, ['acme'])
     forgetDevice(storage)
 

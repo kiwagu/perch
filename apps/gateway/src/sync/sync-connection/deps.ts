@@ -5,8 +5,8 @@ import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { RegionHub } from '@workspace/replica/server'
 
+import type { AuthSessions } from '../../auth/auth-sessions'
 import type { DeviceSessions } from '../../auth/device-sessions'
-import type { IdentitySessions, RenewalGate } from '../../auth/identity-sessions'
 import type { Organisations } from '../../tenants/organisations'
 import type { ConnectionRegistry } from '../connections'
 
@@ -17,24 +17,16 @@ export interface SocketLike {
 }
 
 export interface SyncConnectionDeps {
-  readonly sessions: Pick<
-    IdentitySessions,
-    'authenticate' | 'renew' | 'exclusively' | 'park' | 'parked' | 'unpark'
-  >
-  /**
-   * The devices' rows: a hello is bound to its device's row (moved to the new grant when the
-   * hello renews the pair), the device is marked seen at its hello and then at most every five
-   * minutes, and a sign-out marks the row and revokes the device's grant.
-   */
-  readonly devices: Pick<DeviceSessions, 'seen' | 'bind' | 'rotate' | 'revokeGrant' | 'signedOut'>
+  /** Reads the session a hello's token holds, and ends it when the device signs out. */
+  readonly sessions: Pick<AuthSessions, 'read' | 'signOut'>
+  /** The devices' rows: a device is marked seen at its hello, then at most every five minutes. */
+  readonly devices: Pick<DeviceSessions, 'seen'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
-  /** Where the connection registers once the keys are accepted, to hear its memberships change. */
+  /** Where the connection registers once its session is read, to hear its memberships change. */
   readonly connections: ConnectionRegistry
   readonly clock: Clock
-  /** The gate a hello of `device` asks before its refresh key is exchanged: the renewal limits. */
-  readonly renewals: (device: string) => RenewalGate
-  /** Hears sign-outs and failures; no line carries a token, a key or a grant id. */
+  /** Hears sign-outs and failures; no line carries a token. */
   readonly log: Logger
   /** How long a device may stay silent before its hello; 10 s by default. */
   readonly helloTimeoutMs?: number

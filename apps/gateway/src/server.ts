@@ -1,13 +1,15 @@
 /**
- * The gateway's HTTP and WebSocket server: health, sign-up, sign-in, the organisation routes and
- * the device routes over HTTP, and the sync connection of each device over a WebSocket at `/sync`.
+ * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
+ * routes and Better Auth's sign-up and sign-in under `/auth`, the device routes in front so the
+ * two sign-outs under `/auth` are the gateway's own; and the sync connection of each device over a
+ * WebSocket at `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
 import { ExceptionBase } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 
-import { authRoutes } from './auth/auth.routes'
+import { authHandler } from './auth/auth-handler'
 import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
 import { clientAddress } from './limits/client-address'
@@ -27,18 +29,14 @@ export interface RunningServer {
   stop(): Promise<void>
 }
 
-/**
- * What the server keeps on each WebSocket: the client address it came from, and the device's sync
- * connection, once it opened.
- */
+/** What the server keeps on each WebSocket: the device's sync connection, once it opened. */
 interface SocketData {
-  readonly from: string
   connection?: SyncConnection
 }
 
 /**
- * The largest request body the server reads: a body is an email, a password and a device, an
- * organisation's key and name, an email, or a refresh key.
+ * The largest request body the server reads: a body is a sign-up's name, email and password, a
+ * sign-in's email and password, an organisation's key and name, or an email to invite.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -51,7 +49,7 @@ const MAX_MESSAGE = 4 * 1024 * 1024
  */
 type Route = (request: Request, from: string) => Promise<Response | undefined>
 
-/** The answer of the first route that answers the request. */
+/** The answer of the first route that answers the request, the routes asked in their order. */
 async function firstAnswer(
   routes: readonly Route[],
   request: Request,
@@ -78,16 +76,16 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const syncLog = createLogger('sync')
   // The code and the gateway's own message, never the cause: a database's text may hold anything.
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
+  // The device routes come first: `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` are
+  // theirs; the auth mount answers every other path under `/auth/`, handing Better Auth only its
+  // sign-up and sign-in.
   const routes: readonly Route[] = [
-    authRoutes(root.sessions, root.organisations, root.limits),
-    organisationRoutes(root.sessions, root.deviceSessions, root.organisations, {
-      onFailure,
-      limits: root.limits,
-    }),
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
-      limits: root.limits,
+      clock: root.clock,
     }),
+    organisationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
+    authHandler(root.auth, root.limits, root.connections),
   ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,
@@ -100,22 +98,21 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
         return new Response('ok')
       }
 
-      // The front's X-Forwarded-For names the client; a request without one comes from its peer.
-      const from = clientAddress(request, bun.requestIP(request)?.address)
-
       if (pathname === '/sync') {
-        return bun.upgrade(request, { data: { from } })
+        return bun.upgrade(request, { data: {} })
           ? undefined
           : new Response('upgrade required', { status: 426 })
       }
 
+      // The front's X-Forwarded-For names the client; a request without one comes from its peer.
+      const from = clientAddress(request, bun.requestIP(request)?.address)
       const response = await firstAnswer(routes, request, from)
 
       if (!response) {
         return new Response('not found', { status: 404 })
       }
 
-      // The routes answer a failure without its cause, which may name a key.
+      // The routes answer a failure without its cause, which may name a token.
       if (response.status >= 500) {
         httpLog.error({ status: response.status, path: pathname }, 'a request failed')
       }
@@ -136,8 +133,6 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           organisations: root.organisations,
           connections: root.connections,
           clock: root.clock,
-          // A renewal at hello counts against the device and the address the socket came from.
-          renewals: (device) => () => root.limits.renewal(socket.data.from, device).allowed,
           log: syncLog,
         })
       },

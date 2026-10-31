@@ -17,7 +17,9 @@ the pairs, and `bun run contract:check:consumers` checks every anchor, code, sta
 a test names as a literal against the contract. After every step a check fails the test when
 any open page scrolls sideways. At the end of every test a check fails it when a document or a
 script of the front came without the front's security headers, or when a page or one of its
-workers reported a Content-Security-Policy violation on the console. Each test signs up fresh accounts in fresh browser contexts,
+workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
+service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
+`app-shell/base/open-offline`, which lets it run to open the app offline. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
@@ -67,10 +69,6 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
 - `user/flows/one-account-per-browser`: a tab left on the sign-in page follows the account
   another tab signs in, onto "/me" within 5 seconds, and the browser keeps one account
   database.
-- `user/flows/key-renewal`: a route that refuses the access token (the test replaces it in the
-  browser's storage, as an expired one would be refused) has the tab that leads the sync renew
-  the keys with one `renew` over its open socket, from that tab and from a second tab; the route
-  answers with the new keys within 5 seconds, and no tab opens another sync socket.
 - `device/base/my-devices`: My devices lists the account's devices, this one marked and the
   other seen within the last minute; a device signed out from another one is on the sign-in
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
@@ -113,9 +111,7 @@ states and values, never the page's wording.
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
-gives them (`databases`, `identityDatabase`, `organisationDatabase`), and the device's keys in
-its localStorage (`keysKept`, and `keepAccessToken`, which replaces the access token as a hand
-edit would).
+gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
@@ -136,6 +132,14 @@ note texts).
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). `CI=1` runs one worker.
+- `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
+  and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
+  a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
+  visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared
+  (the profile with its data 1.5 s); each step is timed in the page when its element first
+  appears, and each number is the median of the runs. It measures and never fails: the numbers
+  move with the host's load. `--slow-4g` adds a slow mobile network, outside the budgets.
 - `bun run e2e:scaffold <scenario id>` (repository root): writes the failing test of a new
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
