@@ -32,7 +32,7 @@ export interface Contract {
   readonly activities: Activity[]
   /** The line of each key and item of each activity's file, by the activity's id. */
   readonly activityLines: ReadonlyMap<string, Lines>
-  /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
+  /** The scenarios of `tests/e2e/scenarios`, sorted by their ids. */
   readonly scenarios: Scenario[]
   /** The line of each field of each scenario's file, by the scenario's id. */
   readonly scenarioLines: ReadonlyMap<string, Lines>
