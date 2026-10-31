@@ -1,5 +1,7 @@
--- The key of the identity whose email is $email (in lower case, as identities keep it), or NONE.
-SELECT VALUE record::id(id)
+-- The key and the email of the identity whose email is $email, in any case (identities keep it in
+-- lower case), or NONE.
+SELECT record::id(id) AS key,
+email
 FROM ONLY identity
 WHERE email = string::lowercase($email)
 LIMIT 1;

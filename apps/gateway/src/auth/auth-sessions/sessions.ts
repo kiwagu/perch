@@ -1,15 +1,15 @@
-import { err, ok, type ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError, type LocalDb } from '@workspace/data'
-import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids'
+import type { DataError, LocalDb } from '@workspace/data'
+import type { DeviceSessionId, IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { AuthInstance } from '../auth-instance'
-import { reading, writing } from '../device-session-rows'
+import { writing } from '../device-session-rows'
+import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
-import identityByEmailStatement from '../surql/identity-by-email.surql'
 
 import { type SessionRevoke, type SignOutEnding, toSessionRevoke, toSignOutEnding } from './endings'
 import { readSession, type SessionRead } from './read'
@@ -109,19 +109,13 @@ export class AuthSessions {
 
   /** The identity whose email is `email`, in any case; none when no account has it. */
   identityOf(email: string): ResultAsync<IdentityId | undefined, DataError> {
-    return reading(
-      this.#directory.db.query<[unknown]>(identityByEmailStatement, { email }),
-      'could not read the identity of an email',
-    ).andThen(([value]) => {
-      const parsed = idSchemas.identity.schema.optional().safeParse(value ?? undefined)
-
-      return parsed.success
-        ? ok(parsed.data)
-        : err(dataError('data:QUERY_FAILED', 'an identity has an unknown id'))
-    })
+    return identityByEmail(this.#directory, email).map((identity) => identity?.id)
   }
 
-  /** The email a verification link's token names, in lower case, or none (`readVerificationEmail`). */
+  /**
+   * The email a verification link's token names, in lower case, or none
+   * (`readVerificationEmail`).
+   */
   verificationEmail(token: string): Promise<string | undefined> {
     return readVerificationEmail(token, this.#secret)
   }

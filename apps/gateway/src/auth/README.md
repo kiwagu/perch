@@ -176,8 +176,10 @@ error carries one.
   `verificationEmail`; `SignedInAccount`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
-  organisation routes) and `accountEmail` (`account-email.ts`, an email as the invitations take
-  it).
+  organisation routes), `accountEmail` (`account-email.ts`, an email as the invitations take
+  it) and `identityByEmail` (`identity-by-email.ts`: the one lookup of an identity by its email,
+  in any case, answering its key and email or none; `AuthSessions.identityOf` and the
+  organisations' invites use it, each deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session at a sign-in, the language an account's settings
@@ -194,6 +196,6 @@ error carries one.
   log, stderr or an answer when a query fails, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
-  `password-hash.spec.ts`, `verification-mail.spec.ts`).
+  `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
 - `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up, sign-in,
   the credential limits, device sessions and every sign-out against a stand.
