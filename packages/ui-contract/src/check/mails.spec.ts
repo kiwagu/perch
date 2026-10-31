@@ -54,6 +54,21 @@ describe('mailsProblems', () => {
       `${AT}.language: "tongue" is neither a parameter of "invite.send" nor account`,
     ])
   })
+  it('refuses a parameter named account on an action that sends a mail: account is the account', () => {
+    const contract = sending({
+      to: 'account',
+      language: 'account',
+      link: { screen: 'sample', search: 'tab' },
+    })
+
+    Object.assign(contract.screens.platform.actions['invite.send']?.params ?? {}, {
+      account: { type: 'string', description: 'An account.' },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/platform.yaml:1: actions["invite.send"].params.account: "account" names the signed-in account in a mail, so an action that sends one gives no parameter that name',
+    ])
+  })
   it('wants the link to open a screen with a route that declares the search parameter', () => {
     expect(
       printed(

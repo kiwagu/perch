@@ -2,6 +2,8 @@
  * Rule 15: the mail a platform action declares goes to a parameter of the action or the signed-in
  * account, speaks the language a parameter of the action holds or the account's, and links to a
  * screen with a route, every route of which declares the search parameter that carries the token.
+ * `account` is reserved: in a mail it names the signed-in account, so an action that sends one
+ * has no parameter of that name.
  */
 
 import { ACCOUNT, type Problem } from '../files'
@@ -27,6 +29,14 @@ export function mailsProblems(contract: Contract): Problem[] {
     )
 
     return [
+      ...(Object.hasOwn(action.params, ACCOUNT)
+        ? [
+            inScreens(
+              ['platform', 'actions', name, 'params', ACCOUNT],
+              `"${ACCOUNT}" names the signed-in account in a mail, so an action that sends one gives no parameter that name`,
+            ),
+          ]
+        : []),
       ...(named(mail.to)
         ? []
         : [

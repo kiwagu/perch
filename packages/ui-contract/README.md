@@ -69,7 +69,8 @@ for Bun.
     the region of a button `controlRegionSchema`, its anchors
     those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
-    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, and
+    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
+    reserved word no parameter of an action that sends a mail takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
     type `PlatformMail`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
@@ -132,7 +133,7 @@ for Bun.
     its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
     platform action declares goes to a parameter of the action or the account, takes its
     language from one or the account, and links to a screen whose every route declares its
-    search parameter)
+    search parameter; an action that sends a mail has no parameter named `account`)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity

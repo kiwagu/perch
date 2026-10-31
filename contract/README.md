@@ -113,9 +113,11 @@ The authored files, edited by hand or by a model in the modeling thread:
   mail goes to, or `account`, the signed-in account's own email; `language`, the parameter
   that holds the mail's language, or `account`, the account's settings once it has them, else
   the language it signed up in; `link`, the `screen` the mail's link opens and the `search`
-  parameter of that screen's route that carries the link's token. The check holds `to` and
-  `language` to the action's parameters and the link to a screen whose every route declares
-  that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
+  parameter of that screen's route that carries the link's token. `account` is a reserved
+  word there: it always names the signed-in account, so an action that sends a mail has no
+  parameter named `account`. The check holds `to` and `language` to the action's parameters,
+  refuses a parameter named `account` on an action that sends a mail, and holds the link to a
+  screen whose every route declares that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry

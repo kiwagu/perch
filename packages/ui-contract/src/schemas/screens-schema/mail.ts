@@ -11,7 +11,10 @@ import { z } from '@workspace/zod'
 
 import { screenNameSchema } from '../../names.schema'
 
-/** The signed-in account, as a mail's recipient or the source of its language. */
+/**
+ * The signed-in account, as a mail's recipient or the source of its language: a reserved word, so
+ * an action that sends a mail has no parameter of that name (`check/mails.ts`).
+ */
 export const ACCOUNT = 'account'
 
 const nameSchema = z.string().regex(/^[a-z][a-zA-Z0-9]*$/)
