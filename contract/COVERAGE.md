@@ -92,11 +92,11 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | not-found | 3 | 1 |
 | app-shell | 22 | 39 |
 | device | 10 | 1 |
-| user.profile | 10 | 28 |
+| user.profile | 10 | 29 |
 | organisation | 30 | 10 |
 | user.settings | 3 | 4 |
-| user.sign-in | 10 | 21 |
-| user.verify-email | 7 | 4 |
+| user.sign-in | 10 | 23 |
+| user.verify-email | 7 | 5 |
 
 <!-- coverage:end -->
 

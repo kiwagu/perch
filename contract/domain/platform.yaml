@@ -62,7 +62,7 @@ actions:
       email:
         type: string
         description: The email of the account.
-    result: the mail below is on its way when the email has an account not verified yet; an unknown email, or one verified already, gets the same answer and no mail
+    result: "the mail below is on its way when the email has an account not verified yet; an unknown email, or one verified already, gets the same answer and no mail; one email takes three resends within a quarter of an hour, and a fourth answers rate-limited and sends nothing"
     codes:
       - rate-limited
       - failed
