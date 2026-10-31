@@ -706,9 +706,9 @@ anchor").
 
 Wait for `app-shell.status` to reach the state `ready`
 (`[data-testid="app-shell.status"][data-state="ready"]`): the frame and the screen are
-rendered. Its other states are `opening`, `failed` and `storage-blocked`. Then wait for the
-screen's container to leave `loading`: a `list`, a `section` or a page `status` carries
-`loading`, `ready`, `empty` or `error`.
+rendered. Its other states, and what each means, are the vocabulary's table "App states".
+Then wait for the screen's container to leave `loading`: a `list`, a `section` or a page
+`status` carries one of the vocabulary's "Container states".
 
 ## Notices
 
