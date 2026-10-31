@@ -20,22 +20,28 @@ script of the front came without the front's security headers, or when a page or
 workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
 service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
 `app-shell/base/open-offline`, which lets it run to open the app offline. Each test signs up fresh accounts in fresh browser contexts,
-with data generated from the seed catalog. Key pages are compared with screenshots on
+with data generated from the seed catalog, each through the link of its verification mail, read
+from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
+(`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
+and the search parameter of its link, and the language of its HTML, never its wording. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
 --update-snapshots=changed` rewrites the ones that differ.
-The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `gateway-e2e` and the `caddy-e2e`
-front), not Playwright's web server, so `mcproc logs e2e` shows what a run saw. Tests open the
-front at `E2E_BASE_URL` (https://localhost:5493 in the main checkout; a worktree's slot shifts
-the port), which `bun run test:e2e` sets from the mcproc manifest through `mcproc exec`; it
+The stand is the mcproc `e2e` profile (`surrealdb-e2e`, `maildev-e2e`, `gateway-e2e` and the
+`caddy-e2e` front), not Playwright's web server, so `mcproc logs e2e` shows what a run saw. Tests
+open the front at `E2E_BASE_URL` (https://localhost:5493 in the main checkout; a worktree's slot
+shifts the port), which `bun run test:e2e` sets from the mcproc manifest through `mcproc exec`; it
 serves the web app's production build (`apps/web/dist`, written by the launcher before each
-run; no dev server) and, under `/backend/`, the gateway on one origin.
+run; no dev server) and, under `/backend/`, the gateway on one origin. They read the mails the
+gateway sent from the stand's MailDev at `MAILBOX_URL` (http://127.0.0.1:1090 in the main
+checkout), which `mcproc exec` sets too.
 
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
 (`{ tag: '@smoke' }`); nothing compares the two yet. `@smoke`: `user/base/` (one account on
 its own) and `contract/base/manifest`. `@full`: `user/flows/` (one account across devices,
-tabs or time), `device/base/my-devices` and `organisation/flows/` (two accounts, each in a
-browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
+tabs or time), `device/base/my-devices`, `user/base/resend-same-answer` and
+`user/base/resend-limit` (several mails of one run), and `organisation/flows/` (two accounts,
+each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
@@ -48,8 +54,22 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   `ready` with the account's name.
 - `app-shell/base/guest-start`: a guest whose database engines cannot load still reaches
   `ready` on `/sign-in` with the sign-in form.
-- `user/base/sign-up`: a new user signs up, lands on `/me` with the notice `welcome`, the
+- `user/base/sign-up`: a new user signs up and is asked to check the mail, still on
+  `/sign-in`; the link of the sign-up's mail lands on `/me` with the notice `welcome`, the
   entered name and email, and stays signed in after a reload.
+- `user/base/taken-email`: a sign-up with an email that has an account answers as a new one
+  does and sends no mail; the account signs in with its own password, not the other one.
+- `user/base/sign-in-unverified`: an account whose email is not verified is refused with
+  `email-not-verified`; the resend sends the mail again, and its link signs in.
+- `user/base/verify-link-invalid`: a made-up link answers `link-invalid` with a form that sends
+  a new one, whose link signs in.
+- `user/base/verified-before`: a link opened again answers `verified-before`, signs nothing in
+  and leads to the sign-in page.
+- `user/base/verified-sign-in`: an account whose email is verified signs in onto `/me`.
+- `user/base/resend-same-answer`: a resend answers alike for an email waiting for its link, an
+  unknown one and a verified one, and only the first gets a mail.
+- `user/base/resend-limit`: one email takes three resends within a quarter of an hour; the
+  fourth answers `rate-limited` and sends nothing.
 - `user/base/edit-profile-name`: a signed-in user changes the name, sees the toast
   `profile-saved`, and keeps the new name after a reload.
 - `user/base/blocked-storage`: a browser that refuses the page its localStorage is told that
@@ -105,14 +125,17 @@ None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tes
 `scenarios/` beside them holds their scenarios, one file each at the same path.
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures,
-`signedIn` (device A, signed up on `/me`), `secondDevice` (device B, a browser context of
+`signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks) and `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
 a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`), `signIn`
-(fails at once when the sign-in page shows its error, naming its code), `signUp`,
-`pageLoads` (counts a page's full loads, for "without a reload"), and `notice` and
-`signInNotice`, which locate `app-shell.notice-message` and `user.sign-in.notice-message` by
-their anchor and code together. Tests locate elements by their anchors and assert codes,
+(fails at once when the sign-in page shows its error, naming its code), `startSignUp` (submits
+the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
+opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
+`/me`), `pageLoads` (counts a page's full loads, for "without a reload"), and `notice`,
+`signInNotice` and `checkYourMail`, which locate `app-shell.notice-message`,
+`user.sign-in.notice-message` and `user.sign-in.mail-message` by their anchor and code
+together. Tests locate elements by their anchors and assert codes,
 states and values, never the page's wording.
 `src/support/engines.ts`: `holdEngines`, which holds back the WASM files of a browser context's
 pages until the test lets them go, so a page cannot open an account's data meanwhile.
@@ -127,14 +150,21 @@ their workers report); the fixtures watch every browser a test opens.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).
-`src/support/data.ts`: the generators (accounts, names, bios, organisation keys and names,
-note texts).
+`src/support/data.ts`: the generators (accounts, another password, names, bios, organisation
+keys and names, note texts).
+`src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
+at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for.
+`src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
+`platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
+with the declared search parameter set, and the language of its HTML, from the action's
+parameters or the account) and `openDeclaredMail` (waits for the action's mail to its declared
+recipient after the ones a test has seen, holds it to its declaration and opens its link).
 
 ## Commands
 
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
   memory lease (the run waits its turn when the host is short of memory) and with
-  `E2E_BASE_URL` set; the launcher builds the dependencies and the web app's production
+  `E2E_BASE_URL` and `MAILBOX_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs

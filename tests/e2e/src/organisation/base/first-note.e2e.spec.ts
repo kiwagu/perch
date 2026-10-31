@@ -14,7 +14,7 @@ test.describe('Add the first note', { tag: '@smoke' }, () => {
     }
     const notes = page.getByTestId('organisation.notes.list').getByTestId('organisation.notes.item')
 
-    await test.step('1. Sign up, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       await createOrganisation(page, data)

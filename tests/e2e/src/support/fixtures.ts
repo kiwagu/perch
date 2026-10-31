@@ -11,6 +11,7 @@ import {
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { generate } from './data'
+import { openDeclaredMail } from './mail-contract'
 import { type SecurityWatch, watchSecurity } from './security'
 
 export { expect }
@@ -35,12 +36,15 @@ export interface AnotherAccount {
   readonly account: SeedAccount
   /** The browser's page before it opens the app, for anything that must come first. */
   open(): Promise<Page>
-  /** Signs the account up through the sign-in page in that browser, on `/me`. */
+  /** Signs the account up through the sign-in page and its mail in that browser, on `/me`. */
   signUp(): Promise<Page>
 }
 
 interface Fixtures {
-  /** A user who has just signed up through the sign-in page and landed on `/me` (device A). */
+  /**
+   * A user who has just signed up through the sign-in page, opened the link of the verification
+   * mail and landed on `/me` (device A).
+   */
   readonly signedIn: SeedAccount
   readonly secondDevice: SecondDevice
   readonly anotherAccount: AnotherAccount
@@ -66,6 +70,10 @@ export const toast = (page: Page, code: string) =>
 export const signInNotice = (page: Page, code: string) =>
   page.locator(`[data-testid="user.sign-in.notice-message"][data-code="${code}"]`)
 
+/** The sign-in page asking to open the link of the verification mail, by anchor and code. */
+export const checkYourMail = (page: Page) =>
+  page.locator('[data-testid="user.sign-in.mail-message"][data-code="check-your-mail"]')
+
 /**
  * Signs in with an existing account through the sign-in page and waits for `/me`; fails at once
  * when the page shows its error instead.
@@ -90,8 +98,11 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
 /** A fresh account to sign up with, under a name of its own. */
 const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate.name() })
 
-/** Signs `account` (a fresh one by default) up through the sign-in page; returns it on `/me`. */
-export async function signUp(page: Page, account = freshAccount()): Promise<SeedAccount> {
+/**
+ * Opens the sign-in page, switches it to sign-up and submits `account`; waits until the page asks
+ * to check the mail, the sign-up's mail on its way and nothing signed in.
+ */
+export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
   await appReady(page)
   await page.getByTestId('user.sign-in.toggle-button').click()
@@ -99,6 +110,22 @@ export async function signUp(page: Page, account = freshAccount()): Promise<Seed
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
+  await expect(checkYourMail(page)).toBeVisible()
+}
+
+/**
+ * Signs `account` (a fresh one by default) up through the sign-in page in the app's language
+ * `locale` (the browser's, `en`, unless the test chose another), then opens the link of the mail
+ * the sign-up declares, held to its declaration, in the same page, which signs it in; returns it
+ * on `/me`.
+ */
+export async function signUp(
+  page: Page,
+  account = freshAccount(),
+  locale = 'en',
+): Promise<SeedAccount> {
+  await startSignUp(page, account)
+  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } })
   await page.waitForURL('**/me')
 
   return account

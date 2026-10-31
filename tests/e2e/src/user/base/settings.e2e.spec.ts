@@ -10,7 +10,7 @@ test.describe('Choose the theme of this device and the language of the account',
     const theme = page.getByTestId('user.settings.theme-select')
     const language = page.getByTestId('user.settings.locale-select')
 
-    await test.step('1. Sign up, click [app-shell.nav.settings-link] and wait for [user.settings.heading]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up], click [app-shell.nav.settings-link] and wait for [user.settings.heading]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.settings-link').click()
       await expect(page.getByTestId('user.settings.heading')).toBeVisible()
