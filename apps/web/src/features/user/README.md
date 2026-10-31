@@ -40,7 +40,8 @@ keeps the codes of the page's error and message) and one file per policy
   screen's effects once in development, which starts the machine's first invoke again, and the
   gateway signs a device in only at a link's first exchange, so the restart reuses the exchange
   already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
-  failed exchange) asks afresh. `/me` (guard `authenticated`)
+  failed exchange) asks afresh, and another token in the address of the open page starts another
+  exchange with its own machine (the part of the page that runs it is keyed by the token). `/me` (guard `authenticated`)
   renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
   this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
   chooses the same one) and the account's language

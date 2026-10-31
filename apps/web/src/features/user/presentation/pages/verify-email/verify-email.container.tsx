@@ -22,18 +22,26 @@ type Exchange = ReturnType<VerifyEmailService['verify']>
 const search = z.object({ token: z.string().optional() })
 
 /**
- * The page a verification mail's link opens: it runs the screen's flow as its machine over the
- * token of its address (none is an empty one, which the session refuses as a link that does not
- * work, asking nobody).
+ * The page a verification mail's link opens: one exchange of the token its address names (none is
+ * an empty one, which the session refuses as a link that does not work, asking nobody). Another
+ * token in the address while the page is open, as a move of the same router would bring, starts
+ * another exchange with its own machine: the outcome shown is always the current token's.
  */
 export function VerifyEmailContainer() {
-  const service = useService(VERIFY_EMAIL_SERVICE)
   const { token = '' } = search.parse(useSearch({ strict: false }))
+
+  return <TokenExchange key={token} token={token} />
+}
+
+/** The screen's flow run as its machine over one token, for as long as the address names it. */
+function TokenExchange(props: { readonly token: string }) {
+  const { token } = props
+  const service = useService(VERIFY_EMAIL_SERVICE)
   // React restarts a mounted screen's effects once in development (StrictMode), which starts its
   // machine's first invoke again; the gateway signs a device in only at a link's first exchange, so
   // a second exchange would answer "verified before". The exchange is kept by this mounted page
   // and reused across that restart; a page mounted anew (a later visit, a revisit after a sign-out
-  // or after a failed exchange) asks afresh.
+  // or after a failed exchange, another token in the address) asks afresh.
   const exchanges = useRef(new Map<string, Exchange>())
   const machine = useMemo(
     () =>

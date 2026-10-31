@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { errAsync, okAsync } from 'neverthrow'
 import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -167,6 +167,26 @@ describe('VerifyEmailContainer', () => {
     )
     expect(screen.queryByTestId('user.verify-email.error')).toBeNull()
     expect(exchange).toHaveBeenCalledTimes(2)
+  })
+
+  it('exchanges the token the address names now when the page moves to another link, its outcome replacing the first', async () => {
+    const { service, exchange } = verifying([
+      () => okAsync(verifiedBefore),
+      () => errAsync({ code: 'data:LINK_INVALID', message: 'the gateway refused the link' }),
+    ])
+    const { router } = renderPage(service, '/verify-email?token=first')
+
+    expect((await screen.findByTestId('user.verify-email.message')).getAttribute('data-code')).toBe(
+      'verified-before',
+    )
+
+    act(() => router.history.push('/verify-email?token=second'))
+
+    expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
+      'link-invalid',
+    )
+    expect(screen.queryByTestId('user.verify-email.message')).toBeNull()
+    expect(exchange.mock.calls).toEqual([['first'], ['second']])
   })
 
   it('sends a new link to the email typed once the link is refused, and says it is on its way', async () => {
