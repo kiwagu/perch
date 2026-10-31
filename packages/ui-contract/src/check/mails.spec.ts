@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest'
+
+import { formatProblem } from '../files'
+
+import { sampleContract } from './contract.fixture'
+import { mailsProblems } from './mails'
+
+const printed = (contract = sampleContract()): string[] =>
+  mailsProblems(contract).map(formatProblem)
+
+const AT = 'contract/domain/platform.yaml:1: actions["invite.send"].mail'
+
+/** The sample contract with a platform action that sends `mail`. */
+function sending(mail: unknown) {
+  const contract = sampleContract()
+
+  Object.assign(contract.screens.platform.actions, {
+    'invite.send': {
+      description: 'Sends an invitation.',
+      params: {
+        email: { type: 'string', description: 'The address.' },
+        locale: { type: 'string', description: 'A language.' },
+      },
+      result: 'a mail is on its way',
+      codes: ['failed'],
+      mail,
+    },
+  })
+
+  return contract
+}
+
+describe('mailsProblems', () => {
+  it('finds nothing in a contract whose mails go to a parameter or the account and link to a route', () => {
+    expect(printed()).toEqual([])
+    expect(
+      printed(
+        sending({ to: 'email', language: 'locale', link: { screen: 'sample', search: 'tab' } }),
+      ),
+    ).toEqual([])
+    expect(
+      printed(
+        sending({ to: 'account', language: 'account', link: { screen: 'sample', search: 'tab' } }),
+      ),
+    ).toEqual([])
+  })
+  it('wants the recipient and the language to be a parameter of the action or the account', () => {
+    expect(
+      printed(
+        sending({ to: 'address', language: 'tongue', link: { screen: 'sample', search: 'tab' } }),
+      ),
+    ).toEqual([
+      `${AT}.to: "address" is neither a parameter of "invite.send" nor account`,
+      `${AT}.language: "tongue" is neither a parameter of "invite.send" nor account`,
+    ])
+  })
+  it('wants the link to open a screen with a route that declares the search parameter', () => {
+    expect(
+      printed(
+        sending({ to: 'email', language: 'locale', link: { screen: 'gone', search: 'tab' } }),
+      ),
+    ).toEqual([`${AT}.link.screen: "gone" is no screen with a route`])
+    expect(
+      printed(
+        sending({ to: 'email', language: 'locale', link: { screen: 'app-shell', search: 'tab' } }),
+      ),
+    ).toEqual([`${AT}.link.screen: "app-shell" is no screen with a route`])
+    expect(
+      printed(
+        sending({ to: 'email', language: 'locale', link: { screen: 'sample', search: 'token' } }),
+      ),
+    ).toEqual([`${AT}.link.search: "token" is not a search parameter of every route of "sample"`])
+  })
+})

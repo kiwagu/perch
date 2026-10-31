@@ -68,7 +68,10 @@ for Bun.
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
     those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
-    and their parts,
+    and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
+    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, and
+    the `link` with the `screen` it opens and the `search` parameter carrying its token; the
+    type `PlatformMail`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
     leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
@@ -89,7 +92,7 @@ for Bun.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
-    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`).
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
@@ -126,8 +129,12 @@ for Bun.
     `toastsProblems` (each action of `platform.toasts` is an action of the platform),
     `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
     reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
-    its own, and actions that ask need an action under `leaving`)
-    and `scenariosProblems` (bracket references, roles and the
+    its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
+    platform action declares goes to a parameter of the action or the account, takes its
+    language from one or the account, and links to a screen whose every route declares its
+    search parameter)
+    and `scenariosProblems` (bracket references, a mail by the platform action that declares
+    it, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and

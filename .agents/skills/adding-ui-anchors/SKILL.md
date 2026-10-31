@@ -54,7 +54,8 @@ code and the tests follow; the checks hold them to the contract.
    state, a guard, a code, a facet) goes on through steps 2 to 5 like a new element.
 2. **The model.** A field or an action the screen needs goes into its entity of
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
-   `contract/domain/platform.yaml` when the platform runs it.
+   `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
+   mail declares it under `mail`.
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -92,7 +93,7 @@ code and the tests follow; the checks hold them to the contract.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references. When it cannot be written from the contract, the scenario has found a
+   bracket references; it names a mail by the action that sends it, `[mail:<action>]`. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either

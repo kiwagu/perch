@@ -1,3 +1,5 @@
+export { ACCOUNT, type PlatformMail } from '../../schemas'
+
 export { loadScreens, loadScreensWith } from './load'
 export type {
   AnchorBinding,

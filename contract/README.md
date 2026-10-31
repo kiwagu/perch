@@ -108,6 +108,16 @@ The authored files, edited by hand or by a model in the modeling thread:
   leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
   first, `toasts`, the platform actions whose success toasts with their codes, the reserved
   anchors and the readiness line.
+
+  An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
+  mail goes to, or `account`, the signed-in account's own email; `language`, the parameter
+  that holds the mail's language, or `account`, the account's settings once it has them, else
+  the language it signed up in; `link`, the `screen` the mail's link opens and the `search`
+  parameter of that screen's route that carries the link's token. The check holds `to` and
+  `language` to the action's parameters and the link to a screen whose every route declares
+  that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
+  test that reads a mail holds it to its declaration: its recipient, the path and the search
+  parameter of its link, and the language of its HTML.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -788,7 +798,8 @@ Where: [/me] then [user.profile.save-button]
 
 Brackets reference the contract, and the contract check resolves each one: `[<anchor>]` (a
 declared anchor, or one derived from a declared base with a suffix it lists), `[/path]` (the
-path of a binding), `[code:<code>]`, `[state:<state>]` and `[value:<value>]`.
+path of a binding), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and
+`[mail:<action>]` (a platform action that declares the mail it sends).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: user/base/edit-profile-name`, with one `test.step` per step.
@@ -817,7 +828,10 @@ gap is fixed in the contract files first, never worked around in a test.
   declared by the frame alone, once, reserved, with both answers and no action of its own,
   and `leaving` comes with
   `unsavedInput`, whose question is a reserved dialog with a
-  code and both answers that runs no action of its own; the versions agree; the generated schemas
+  code and both answers that runs no action of its own; every mail a platform action declares
+  goes to a parameter of the action or the account, takes its language from a parameter or
+  the account, and links to a screen whose every route declares the search parameter that
+  carries its token; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
