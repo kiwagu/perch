@@ -11,6 +11,8 @@ export interface SmtpSink {
 export interface SmtpSinkOptions {
   /** Refuses every recipient with a 550 whose text echoes the address, as real servers do. */
   readonly refuseRecipients?: boolean
+  /** Accepts connections and never greets, as a server that hangs. */
+  readonly silent?: boolean
 }
 
 /** The line that ends a mail's DATA: a dot alone on its line. */
@@ -85,10 +87,20 @@ function converse(socket: Socket, received: string[], options: SmtpSinkOptions):
   })
 }
 
-/** An SMTP server that takes every mail (or refuses every recipient) and keeps what it was sent. */
+/** An SMTP server that takes every mail (or refuses every recipient, or never greets) and keeps what it was sent. */
 export async function smtpSink(options: SmtpSinkOptions = {}): Promise<SmtpSink> {
   const received: string[] = []
-  const server = createServer((socket) => converse(socket, received, options))
+  const sockets = new Set<Socket>()
+  const server = createServer((socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+    // A client that gives up resets its connection: that ends its conversation, nothing more.
+    socket.on('error', () => undefined)
+
+    if (options.silent !== true) {
+      converse(socket, received, options)
+    }
+  })
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
@@ -98,6 +110,13 @@ export async function smtpSink(options: SmtpSinkOptions = {}): Promise<SmtpSink>
   return {
     url: `smtp://127.0.0.1:${port}`,
     received: () => received.join(''),
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        for (const socket of sockets) {
+          socket.destroy()
+        }
+
+        server.close(() => resolve())
+      }),
   }
 }

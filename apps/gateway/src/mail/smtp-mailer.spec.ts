@@ -54,6 +54,19 @@ describe('SmtpMailer', () => {
       spy.mockRestore()
     }
   })
+  it('gives up on a server that never greets once its wait is over, as unreachable', async () => {
+    const sink = await opened({ silent: true })
+    const mailer = new SmtpMailer({
+      url: sink.url,
+      from: 'a@example.test',
+      timeouts: { connectionMs: 200, greetingMs: 200, socketMs: 200 },
+    })
+    const started = performance.now()
+    const verified = await mailer.verify()
+
+    expect(verified._unsafeUnwrapErr().code).toBe('mail:UNREACHABLE')
+    expect(performance.now() - started).toBeLessThan(2_000)
+  })
   it('verifies a server that answers, and answers mail:UNREACHABLE for one that does not', async () => {
     const sink = await opened()
 

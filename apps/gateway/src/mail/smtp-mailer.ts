@@ -8,11 +8,29 @@ import {
 
 import type { MailError, MailMessage, MailPort } from './mail.port'
 
+/** How long the server has to accept a connection; nodemailer's own 2 minutes would hold a start or a send. */
+const CONNECTION_TIMEOUT_MS = 10_000
+
+/** How long the server has to greet once connected; nodemailer's own 30 s would hold a start or a send. */
+const GREETING_TIMEOUT_MS = 10_000
+
+/** How long an exchange may stay silent; nodemailer's own 10 minutes would hold a send. */
+const SOCKET_TIMEOUT_MS = 10_000
+
+/** The waits of one exchange with the server, in milliseconds. */
+export interface SmtpTimeouts {
+  readonly connectionMs: number
+  readonly greetingMs: number
+  readonly socketMs: number
+}
+
 export interface SmtpMailerOptions {
   /** The SMTP server: `smtp://host:port`, or `smtps://user:password@host:port`. */
   readonly url: string
   /** The From of every mail, such as `Perch <no-reply@example.test>`. */
   readonly from: string
+  /** The waits, 10 s each unless a spec shortens them. */
+  readonly timeouts?: SmtpTimeouts
 }
 
 /**
@@ -24,11 +42,22 @@ export class SmtpMailer implements MailPort {
   readonly #from: string
 
   constructor(options: SmtpMailerOptions) {
-    this.#transport = createTransport(options.url)
+    const timeouts = options.timeouts ?? {
+      connectionMs: CONNECTION_TIMEOUT_MS,
+      greetingMs: GREETING_TIMEOUT_MS,
+      socketMs: SOCKET_TIMEOUT_MS,
+    }
+
+    this.#transport = createTransport({
+      url: options.url,
+      connectionTimeout: timeouts.connectionMs,
+      greetingTimeout: timeouts.greetingMs,
+      socketTimeout: timeouts.socketMs,
+    })
     this.#from = options.from
   }
 
-  /** Connects and greets the server once: a gateway whose mail server does not answer does not start. */
+  /** Connects and greets the server once, within the waits: a gateway whose mail server does not answer does not start. */
   verify(): ResultAsync<void, MailError> {
     return ResultAsync.fromPromise(
       this.#transport.verify(),
