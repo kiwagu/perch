@@ -23,6 +23,7 @@ import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { RequestLimits } from '../limits/request-limits'
+import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
@@ -86,6 +87,8 @@ export interface GatewayRootOptions {
    * and the one origin Better Auth trusts.
    */
   readonly publicUrl: string
+  /** Where the account mails go: the SMTP server of `GATEWAY_SMTP_URL`, or a spec's outbox. */
+  readonly mail: MailPort
   readonly clock: Clock
 }
 
@@ -95,6 +98,7 @@ export function createGatewayRoot(
   const hubLog = createLogger('region-hub')
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
+  const authLog = createLogger('auth')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -149,11 +153,19 @@ export function createGatewayRoot(
       baseURL: `${options.publicUrl}${FRONT_PREFIX}/auth`,
       trustedOrigins: [options.publicUrl],
       clock: options.clock,
+      publicUrl: options.publicUrl,
+      mail: options.mail,
+      log: authLog,
     })
 
     return {
       auth,
-      sessions: new AuthSessions({ auth, directory: local, clock: options.clock }),
+      sessions: new AuthSessions({
+        auth,
+        directory: local,
+        clock: options.clock,
+        secret: options.authSecret,
+      }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       organisations,
       databases,

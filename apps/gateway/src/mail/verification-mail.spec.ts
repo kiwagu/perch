@@ -76,18 +76,19 @@ describe('verificationMail', () => {
       })
     },
   )
+  // Each case by a fixed label: a test report prints its title, and a link may carry a token.
   it.each([
-    'javascript:alert(1)',
-    'JavaScript:alert(1)',
-    'data:text/html,<script>alert(1)</script>',
-    'mailto:ann@example.test',
-    'ftp://example.test/verify-email?token=a.b.c',
-    '/verify-email?token=a.b.c',
-    'not a link',
-    '',
+    ['a script', 'javascript:alert(1)'],
+    ['a script in mixed case', 'JavaScript:alert(1)'],
+    ['a data address', 'data:text/html,<script>alert(1)</script>'],
+    ['a mail address', 'mailto:ann@example.test'],
+    ['an ftp address', 'ftp://example.test/verify-email?token=a.b.c'],
+    ['a path without an origin', '/verify-email?token=a.b.c'],
+    ['no address at all', 'not a link'],
+    ['empty', ''],
   ])(
-    'writes no mail whose link is %j, which is not an http or https address, and names nothing of it',
-    (link) => {
+    'writes no mail whose link is %s, which is not an http or https address, and names nothing of it',
+    (_label, link) => {
       const written = verificationMail({ to: 'ann@example.test', name: 'Ann', link, locale: 'en' })
 
       expect(written._unsafeUnwrapErr()).toStrictEqual({

@@ -1,12 +1,16 @@
+import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fromDriverValue, type LocalDb } from '@workspace/data'
 import { device_sessionIdFactory, type IdentityId, idSchemas } from '@workspace/ids'
 
-import { deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
-import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiries.surql'
-import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
-import { AuthSessions, type SessionCaller, type SessionRead } from './auth-sessions'
+import { linkToken } from '../../mail/__fixtures__/outbox'
+import { AUTH_SECRET, deviceHeaders, openAuth, signUpOn } from '../__fixtures__/auth-instance'
+import deviceSessionExpiriesStatement from '../__fixtures__/device-session-expiries.surql'
+import deviceSessionRowStatement from '../__fixtures__/device-session-row.surql'
+
+import type { SessionCaller, SessionRead } from './read'
+import { AuthSessions } from './sessions'
 
 const closers: Array<() => Promise<void>> = []
 
@@ -26,7 +30,12 @@ async function harness() {
 
   return {
     ...opened,
-    sessions: new AuthSessions({ auth: opened.auth, directory: opened.local, clock: opened.clock }),
+    sessions: new AuthSessions({
+      auth: opened.auth,
+      directory: opened.local,
+      clock: opened.clock,
+      secret: AUTH_SECRET,
+    }),
   }
 }
 
@@ -36,6 +45,17 @@ const identityOf = (id: string): IdentityId => idSchemas.identity.schema.parse(i
 /** The caller a read found; the test fails when it found none. */
 function callerOf(read: SessionRead): SessionCaller {
   return read.kind === 'session' ? read.caller : expect.unreachable(`a session, read ${read.kind}`)
+}
+
+/** Signs Ann up on her laptop and has her verification mail sent: the token of its link. */
+async function annsLinkToken(opened: Awaited<ReturnType<typeof harness>>): Promise<string> {
+  await signUpOn(opened.auth, 'ann@example.test', deviceHeaders('laptop'))
+  await opened.auth.api.sendVerificationEmail({
+    body: { email: 'ann@example.test' },
+    headers: deviceHeaders('laptop'),
+  })
+
+  return linkToken(await opened.outbox.next('ann@example.test'))
 }
 
 /** When each session row ends or ended, by its token. */
@@ -221,5 +241,88 @@ describe('AuthSessions', () => {
     expect((await sessions.signOut(token))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect((await sessions.revoke(ann, row))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect((await sessions.revokeAll(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+  })
+})
+
+describe('AuthSessions, the reads of a verification', () => {
+  it('reads the session a verification signed in by the signed token of its answer: the raw token and the account', async () => {
+    const opened = await harness()
+    const token = await annsLinkToken(opened)
+    const { headers } = await opened.auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('phone', 'Phone'),
+      returnHeaders: true,
+    })
+    const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
+    const read = (await opened.sessions.signedIn(signed))._unsafeUnwrap()
+    const raw = read?.token ?? expect.unreachable('a session')
+
+    expect(raw).not.toContain('.')
+    expect(signed.startsWith(`${raw}.`)).toBe(true)
+    expect(read).toEqual({
+      token: raw,
+      user: {
+        id: (await opened.sessions.identityOf('ann@example.test'))._unsafeUnwrap(),
+        email: 'ann@example.test',
+        name: 'Ann',
+        locale: 'en',
+      },
+    })
+    expect(callerOf(await opened.sessions.read(raw)).device).toBe('phone')
+    expect((await opened.sessions.signedIn('made.up'))._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it('reads the identity of an email in any case, and none for an email no account has', async () => {
+    const { auth, sessions } = await harness()
+    const { user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    expect((await sessions.identityOf('Ann@Example.test'))._unsafeUnwrap()).toBe(user.id)
+    expect((await sessions.identityOf('nobody@example.test'))._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it("reads the email of a link's token, and none for a token it did not sign or one past its lifetime", async () => {
+    const opened = await harness()
+    const token = await annsLinkToken(opened)
+    const otherSecret = await signJWT(
+      { email: 'ann@example.test' },
+      'another-secret-'.padEnd(44, '0'),
+    )
+    const expired = await signJWT({ email: 'ann@example.test' }, AUTH_SECRET, -10)
+
+    expect(await opened.sessions.verificationEmail(token)).toBe('ann@example.test')
+    expect(await opened.sessions.verificationEmail('not-a-token')).toBeUndefined()
+    expect(await opened.sessions.verificationEmail(otherSecret)).toBeUndefined()
+    expect(await opened.sessions.verificationEmail(expired)).toBeUndefined()
+  })
+
+  it('reads an email in lower case, and none from a token that names no email', async () => {
+    const { sessions } = await harness()
+
+    expect(
+      await sessions.verificationEmail(await signJWT({ email: 'Ann@Example.test' }, AUTH_SECRET)),
+    ).toBe('ann@example.test')
+    expect(
+      await sessions.verificationEmail(await signJWT({ sub: 'ann' }, AUTH_SECRET)),
+    ).toBeUndefined()
+  })
+
+  it('fails to read a verification session or an identity once the directory is closed', async () => {
+    const opened = await harness()
+    const token = await annsLinkToken(opened)
+    const { headers } = await opened.auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('phone', 'Phone'),
+      returnHeaders: true,
+    })
+    const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
+
+    await opened.local.close()
+
+    expect((await opened.sessions.signedIn(signed))._unsafeUnwrapErr().code).toBe(
+      'data:QUERY_FAILED',
+    )
+    expect((await opened.sessions.identityOf('ann@example.test'))._unsafeUnwrapErr().code).toBe(
+      'data:QUERY_FAILED',
+    )
   })
 })

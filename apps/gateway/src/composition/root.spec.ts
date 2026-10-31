@@ -13,6 +13,7 @@ import { manualClock } from '@workspace/replica/testing'
 
 import { deviceHeaders } from '../auth/__fixtures__/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Outbox } from '../mail/__fixtures__/outbox'
 
 import { createGatewayRoot, type GatewayRoot } from './root'
 
@@ -29,6 +30,7 @@ const rootOptions = {
   engines: nodeEngines(),
   authSecret: AUTH_SECRET,
   publicUrl: 'http://localhost',
+  mail: new Outbox(),
 } as const
 
 /** Signs Ann up on her laptop through the root's Better Auth: her identity and raw token. */

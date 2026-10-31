@@ -1,11 +1,15 @@
+import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fromDriverValue, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 
+import { linkToken } from '../mail/__fixtures__/outbox'
+
 import accountCredentialsStatement from './__fixtures__/account-credentials.surql'
 import {
+  AUTH_SECRET,
   AUTH_URL,
   CLOCK_START,
   deviceHeaders,
@@ -19,6 +23,7 @@ import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiri
 import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
 import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import identityEmailsStatement from './__fixtures__/identity-emails.surql'
+import { VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
 import { sessionHooks } from './session-hooks'
 
 const closers: Array<() => Promise<void>> = []
@@ -562,5 +567,115 @@ describe('createAuthInstance', () => {
       'bob@example.test',
       'zoe@example.test',
     ])
+  })
+})
+
+describe('createAuthInstance, the verification of an email', () => {
+  // The account of each is unverified: a sign-up still signs it in on `laptop`, and sends nothing.
+  it('sends the verification mail again for an unverified account, in its language, and alike answers for any email', async () => {
+    const { auth, outbox } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1', locale: 'es' },
+      headers: deviceHeaders('laptop'),
+    })
+
+    expect(outbox.sent).toEqual([])
+
+    for (const email of ['ann@example.test', 'nobody@example.test']) {
+      expect(
+        await auth.api.sendVerificationEmail({ body: { email }, headers: deviceHeaders('laptop') }),
+      ).toEqual({ status: true })
+    }
+
+    const mail = await outbox.next('ann@example.test')
+
+    expect(mail.subject).toBe('Confirma tu correo para Perch')
+    expect(mail.text).toContain('http://localhost/verify-email?token=')
+    expect(outbox.to('nobody@example.test')).toHaveLength(0)
+  })
+
+  it('keeps the language of the sign-up, English when it named none, and refuses one it does not speak', async () => {
+    const { auth, outbox } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+    await auth.api.sendVerificationEmail({
+      body: { email: 'ann@example.test' },
+      headers: deviceHeaders('laptop'),
+    })
+
+    expect((await outbox.next('ann@example.test')).subject).toBe('Confirm your email for Perch')
+    await expect(
+      auth.api.signUpEmail({
+        body: { name: 'Bob', email: 'bob@example.test', password: 'pass-word-1', locale: 'fr' },
+        headers: deviceHeaders('desk'),
+      }),
+    ).rejects.toMatchObject({ status: 'BAD_REQUEST' })
+  })
+
+  it('signs the device of the first verification in; the link opened again signs nothing in', async () => {
+    const { auth, outbox, local } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+    await auth.api.sendVerificationEmail({
+      body: { email: 'ann@example.test' },
+      headers: deviceHeaders('laptop'),
+    })
+
+    const token = linkToken(await outbox.next('ann@example.test'))
+    const first = await auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('phone', 'Phone'),
+      returnHeaders: true,
+    })
+    const again = await auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('phone', 'Phone'),
+      returnHeaders: true,
+    })
+    const [devices] = await local.db.query<[{ device: string; label: string }[]]>(
+      deviceSessionDevicesStatement,
+    )
+
+    expect(first.headers.get('set-auth-token')).not.toBeNull()
+    expect(again.headers.get('set-auth-token')).toBeNull()
+    expect(devices.map(({ device }) => device).sort()).toEqual(['laptop', 'phone'])
+  })
+
+  it('refuses a link past its lifetime with TOKEN_EXPIRED', async () => {
+    const { auth } = await instance()
+    const expired = await signJWT({ email: 'ann@example.test' }, AUTH_SECRET, -10)
+
+    await expect(
+      auth.api.verifyEmail({ query: { token: expired }, headers: deviceHeaders('phone') }),
+    ).rejects.toMatchObject({ status: 'UNAUTHORIZED', body: { code: 'TOKEN_EXPIRED' } })
+  })
+
+  it('signs a link that lives a day', async () => {
+    const { auth, outbox } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+    await auth.api.sendVerificationEmail({
+      body: { email: 'ann@example.test' },
+      headers: deviceHeaders('laptop'),
+    })
+
+    const [, payload] = linkToken(await outbox.next('ann@example.test')).split('.')
+    const claims = JSON.parse(Buffer.from(payload ?? '', 'base64url').toString('utf8')) as {
+      iat: number
+      exp: number
+    }
+
+    expect(claims.exp - claims.iat).toBe(VERIFICATION_LINK_LIFETIME_S)
+    expect(VERIFICATION_LINK_LIFETIME_S).toBe(86_400)
   })
 })

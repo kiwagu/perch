@@ -10,6 +10,7 @@ import { systemClock } from '@workspace/replica'
 
 import { createGatewayRoot } from './composition/root'
 import { DIRECTORY, gatewayConfig, NAMESPACE } from './config'
+import { SmtpMailer } from './mail'
 import { startServer } from './server'
 
 /** The gateway listens on the loopback interface only. */
@@ -28,6 +29,14 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
   }
 
   const config = parsed.data
+  // The gateway sends the account mails: it does not start without a mail server that answers.
+  const mail = new SmtpMailer({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM })
+  const reachable = await mail.verify()
+
+  if (reachable.isErr()) {
+    log.fatal({ code: reachable.error.code }, reachable.error.message)
+    process.exit(1)
+  }
 
   // The driver keeps trying a database it cannot reach, so the gateway waits for it here.
   log.info({ namespace: NAMESPACE, database: DIRECTORY }, 'gateway opening its database')
@@ -38,6 +47,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
     credentials: { username: config.GATEWAY_SURREAL_USER, password: config.GATEWAY_SURREAL_PASS },
     authSecret: config.GATEWAY_AUTH_SECRET,
     publicUrl: config.GATEWAY_PUBLIC_URL,
+    mail,
     clock: systemClock,
   })
 

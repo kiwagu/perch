@@ -22,7 +22,12 @@ import {
 import { RegionHub } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
 
-import { deviceHeaders, openAuth, signUpOn } from '../../auth/__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  deviceHeaders,
+  openAuth,
+  signUpOn,
+} from '../../auth/__fixtures__/auth-instance'
 import { authHandler } from '../../auth/auth-handler'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { NAMESPACE } from '../../config'
@@ -160,7 +165,12 @@ async function openGateway(options: GatewayOptions = {}) {
   })
 
   // Sessions end on the clock of Better Auth's hooks, which lies behind the system clock.
-  const sessions = new AuthSessions({ auth: opened.auth, directory: local, clock: opened.clock })
+  const sessions = new AuthSessions({
+    auth: opened.auth,
+    directory: local,
+    clock: opened.clock,
+    secret: AUTH_SECRET,
+  })
   const connections = new ConnectionRegistry({ onFailure: (error) => reported.push(error) })
   const organisations = new Organisations({
     directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,

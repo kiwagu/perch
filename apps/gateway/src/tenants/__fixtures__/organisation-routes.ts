@@ -10,9 +10,10 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
-import { deviceHeaders } from '../../auth/__fixtures__/auth-instance'
+import { AUTH_SECRET, deviceHeaders, mailsOf } from '../../auth/__fixtures__/auth-instance'
 import { createGatewayRoot, type GatewayRoot } from '../../composition/root'
 import { RequestLimits } from '../../limits/request-limits'
+import { Outbox } from '../../mail/__fixtures__/outbox'
 import { organisationRoutes } from '../organisation.routes'
 
 const PASSWORD = 'pass-word-1'
@@ -107,16 +108,19 @@ export async function answer(
 }
 
 async function openRoot(): Promise<GatewayRoot> {
+  const outbox = new Outbox()
   const root = (
     await createGatewayRoot({
       engines: nodeEngines(),
       url: 'mem://',
       clock: manualClock(),
-      authSecret: 'test-secret-0123456789-0123456789-0123456789',
+      authSecret: AUTH_SECRET,
       publicUrl: 'http://localhost',
+      mail: outbox,
     })
   )._unsafeUnwrap()
 
+  mailsOf(root.auth, outbox)
   cleanups.push(() => root.close())
 
   return root

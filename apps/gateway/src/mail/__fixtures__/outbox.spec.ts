@@ -27,9 +27,13 @@ describe('linkToken', () => {
       'a.b.c',
     )
   })
-  it.each(['Hello, no link here', 'Hello\n\nhttps://localhost:5443/verify-email?code=a.b.c'])(
-    'fails with a fixed message that names nothing of the mail when it carries no token: %j',
-    (text) => {
+  // Each case by a fixed label: a test report prints its title, and a mail's text may carry a link.
+  it.each([
+    ['no link', 'Hello, no link here'],
+    ['a link without a token', 'Hello\n\nhttps://localhost:5443/verify-email?code=a.b.c'],
+  ])(
+    'fails with a fixed message that names nothing of the mail when it carries %s',
+    (_label, text) => {
       expect(() => linkToken(mail(text))).toThrow(/^the mail carries no link with a token$/)
     },
   )

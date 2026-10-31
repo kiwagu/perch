@@ -14,6 +14,7 @@ import type { z } from '@workspace/zod'
 
 import { createGatewayRoot } from '../../src/composition/root'
 import { gatewayConfig } from '../../src/config'
+import { SmtpMailer } from '../../src/mail'
 import { startServer } from '../../src/server'
 import { profileCreate, profileRename } from '../../src/sync/__fixtures__/profile'
 
@@ -36,6 +37,8 @@ const smokeConfig = gatewayConfig.pick({
   GATEWAY_SURREAL_PASS: true,
   GATEWAY_AUTH_SECRET: true,
   GATEWAY_PUBLIC_URL: true,
+  GATEWAY_SMTP_URL: true,
+  GATEWAY_MAIL_FROM: true,
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
@@ -59,6 +62,13 @@ async function welcomed(
 }
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
+  const mail = await step('mail server answered', async () => {
+    const mailer = new SmtpMailer({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM })
+
+    unwrap(await mailer.verify())
+
+    return mailer
+  })
   const root = await step(`gateway opened ${config.SURREAL_URL}`, async () =>
     unwrap(
       await createGatewayRoot({
@@ -70,6 +80,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
         },
         authSecret: config.GATEWAY_AUTH_SECRET,
         publicUrl: config.GATEWAY_PUBLIC_URL,
+        mail,
         clock: systemClock,
       }),
     ),
@@ -182,9 +193,12 @@ export async function runSmoke(env: Readonly<Record<string, string | undefined>>
     SURREAL_URL: url !== undefined && URL.canParse(url) ? wsRpcUrl(url) : url,
     GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? STAND_USER.username,
     GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? STAND_USER.password,
-    // No defaults: the smoke's gateway runs with the stand gateway's own secret and front origin.
+    // No defaults: the smoke's gateway runs with the stand gateway's own secret, front origin and
+    // mail server.
     GATEWAY_AUTH_SECRET: env['GATEWAY_AUTH_SECRET'],
     GATEWAY_PUBLIC_URL: env['GATEWAY_PUBLIC_URL'],
+    GATEWAY_SMTP_URL: env['GATEWAY_SMTP_URL'],
+    GATEWAY_MAIL_FROM: env['GATEWAY_MAIL_FROM'],
   })
 
   if (!parsed.success) {

@@ -15,7 +15,8 @@ time (one identity's membership changes). The modules that predate the index rul
 `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up and sign-in behind the gateway's
-  limits, device sessions and their session tokens, the sign-outs and the Bearer caller.
+  limits, the verification of an email and its mail, device sessions and their session tokens,
+  the sign-outs and the Bearer caller.
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
@@ -31,11 +32,11 @@ None: this is an application. Its entry point is `src/index.ts`, which registers
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
 WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`: the gateway keeps
 one long-lived connection to the directory there), `GATEWAY_SURREAL_USER`,
-`GATEWAY_SURREAL_PASS`, `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL` (below), and optionally
-the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with an issue
-that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
-test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
-HTTP helpers the load test reuses).
+`GATEWAY_SURREAL_PASS`, `GATEWAY_AUTH_SECRET`, `GATEWAY_PUBLIC_URL`, `GATEWAY_SMTP_URL` and
+`GATEWAY_MAIL_FROM` (below), and optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid
+variable stops the gateway with an issue that names it, never its value. `scripts/smoke/cli.ts`
+is the entry point of the smoke test against a stand (the folder `scripts/smoke/`: the run, one
+module per path of steps, the HTTP helpers the load test reuses).
 
 Auth secret and public origin: `GATEWAY_AUTH_SECRET` is the secret Better Auth signs and
 encrypts with, required, with no default and at least 32 characters: generate one with
@@ -45,6 +46,16 @@ encrypts with, required, with no default and at least 32 characters: generate on
 The local stands use a literal of the mcproc manifest (`stand_auth_secret`) and their own
 front's origin, for those stands only; the smoke and the load test, which run a gateway of their
 own on the e2e stand, take the same two values from `mcproc exec`.
+
+Mail server: `GATEWAY_SMTP_URL` is the SMTP server the gateway sends the account mails through,
+`smtp://host:port` or `smtps://user:password@host:port` (such as a stand's MailDev,
+`smtp://127.0.0.1:1025`), with no query string or fragment: the mail library would read them as
+options of its own, over the gateway's waits and its silence. `GATEWAY_MAIL_FROM` is the From of
+every mail, an address with or without a name (`Perch <no-reply@example.test>`). Both are
+required, with no default: the gateway connects to the server and greets it at start, and does
+not start when it does not answer within 10 s (`mail:UNREACHABLE`). The local stands send to
+their own MailDev, the manifest's `stand_mail_from` as the From; the smoke and the load test take
+the e2e stand's two values from `mcproc exec`.
 
 Rotating the auth secret signs nobody out. A session is a bearer token stored in
 `device_session`, which the secret does not sign: the gateway looks a session up by its raw
@@ -69,8 +80,9 @@ the update; each device's next hello is then refused with 4401.
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
   operator defines, `scripts/stand-operator.ts` at the repository root) and with
-  `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL`, those the stand's gateway runs with (required,
-  no defaults; the root `bun run test:db` sets them from the manifest), signs up a new
+  `GATEWAY_AUTH_SECRET`, `GATEWAY_PUBLIC_URL`, `GATEWAY_SMTP_URL` and `GATEWAY_MAIL_FROM`, those
+  the stand's gateway runs with (required, no defaults; the root `bun run test:db` sets them from
+  the manifest), checks that the stand's mail server answers, signs up a new
   `@example.test` identity and drives two of its devices through sync and sign-out (the
   signed-out device's token then refused at hello with 4401); then the credential limits, each
   from a device, so a simulated client address, of its own (21 sign-ins of unknown emails

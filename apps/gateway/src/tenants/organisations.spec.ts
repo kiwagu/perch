@@ -15,9 +15,10 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
-import { AUTH_URL, deviceHeaders, signUpOn } from '../auth/__fixtures__/auth-instance'
+import { AUTH_SECRET, AUTH_URL, deviceHeaders, signUpOn } from '../auth/__fixtures__/auth-instance'
 import { createAuthInstance } from '../auth/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Outbox } from '../mail/__fixtures__/outbox'
 
 import directoryRows from './__fixtures__/directory-rows.surql'
 import identityForget from './__fixtures__/identity-forget.surql'
@@ -60,10 +61,13 @@ function refused(code: OrganisationRefusalCode) {
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
   const auth = createAuthInstance({
     local: directory,
-    secret: 'test-secret-0123456789-0123456789-0123456789',
+    secret: AUTH_SECRET,
     baseURL: AUTH_URL,
     trustedOrigins: [new URL(AUTH_URL).origin],
     clock: manualClock(),
+    publicUrl: new URL(AUTH_URL).origin,
+    mail: new Outbox(),
+    log: { error: () => {}, warn: () => {} },
   })
   const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
 

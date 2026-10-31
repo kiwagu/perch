@@ -45,8 +45,9 @@ ids and datetimes do not leave it.
 - `./bun-plugin-surql`: the `.surql` loader for Bun, imported first by CLIs.
 - `./better-auth-adapter`: `surrealAuthAdapter(local)`, Better Auth's database on an open
   connection through SurrealDB's adapter (Bun and Node; the adapter is patched under `patches/`
-  to use the connection's driver classes and to give each transaction a handle of its own, so
-  concurrent requests never run inside each other's transactions).
+  to use the connection's driver classes, to give each transaction a handle of its own, so
+  concurrent requests never run inside each other's transactions, and to leave a failed join's
+  error to its caller instead of printing it whole, the query's bindings with it, to stderr).
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb({ schema?, namespace?, database? })` (in-memory database with the
   directory schema by default), `readSchema(database)`,

@@ -10,7 +10,13 @@ import {
 import type { Clock } from '@workspace/replica'
 import { manualClock } from '@workspace/replica/testing'
 
-import { CLOCK_START, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  CLOCK_START,
+  deviceHeaders,
+  openAuth,
+  signUpOn,
+} from './__fixtures__/auth-instance'
 import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiries.surql'
 import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
 import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
@@ -308,7 +314,7 @@ describe('DeviceSessions', () => {
     'leaves a session ended by %s ended when a seen write that took its instants earlier lands after it, and again',
     async (_, end) => {
       const { auth, local, clock, devices } = await harness()
-      const sessions = new AuthSessions({ auth, directory: local, clock })
+      const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
       const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
       const identity = identityOf(user.id)
 
@@ -341,7 +347,7 @@ describe('DeviceSessions', () => {
     'marks a session that expired ended by %s, so a seen write that took its instants before the expiry cannot bring it back',
     async (_, end) => {
       const { auth, local, clock, devices } = await harness()
-      const sessions = new AuthSessions({ auth, directory: local, clock })
+      const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
       const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
       const identity = identityOf(user.id)
 

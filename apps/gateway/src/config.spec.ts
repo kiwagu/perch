@@ -9,6 +9,8 @@ const env = {
   GATEWAY_SURREAL_PASS: 'gateway-pass',
   GATEWAY_AUTH_SECRET: 'stand-only-auth-secret-not-for-any-deployment-0123456789abcdef',
   GATEWAY_PUBLIC_URL: 'https://localhost:5443',
+  GATEWAY_SMTP_URL: 'smtp://127.0.0.1:1025',
+  GATEWAY_MAIL_FROM: 'Perch <no-reply@example.test>',
   PATH: '/usr/bin',
 }
 
@@ -21,6 +23,8 @@ describe('gatewayConfig', () => {
       GATEWAY_SURREAL_PASS: 'gateway-pass',
       GATEWAY_AUTH_SECRET: env.GATEWAY_AUTH_SECRET,
       GATEWAY_PUBLIC_URL: 'https://localhost:5443',
+      GATEWAY_SMTP_URL: 'smtp://127.0.0.1:1025',
+      GATEWAY_MAIL_FROM: 'Perch <no-reply@example.test>',
     })
   })
 
@@ -93,5 +97,71 @@ describe('gatewayConfig.GATEWAY_PUBLIC_URL', () => {
     expect(gatewayConfig.safeParse({ ...env, GATEWAY_PUBLIC_URL: 'ws://localhost' }).success).toBe(
       false,
     )
+  })
+})
+
+describe('gatewayConfig.GATEWAY_SMTP_URL', () => {
+  it('is required', () => {
+    const { GATEWAY_SMTP_URL: _missing, ...partial } = env
+
+    expect(
+      gatewayConfig.safeParse(partial).error?.issues.map((issue) => issue.path.join('.')),
+    ).toEqual(['GATEWAY_SMTP_URL'])
+  })
+
+  it('takes smtp:// and smtps:// with credentials, and refuses http:// without naming the value', () => {
+    expect(
+      gatewayConfig.safeParse({
+        ...env,
+        GATEWAY_SMTP_URL: 'smtps://user:secret@smtp.example.test:465',
+      }).success,
+    ).toBe(true)
+
+    const refused = gatewayConfig.safeParse({
+      ...env,
+      GATEWAY_SMTP_URL: 'http://secret@smtp.example.test',
+    })
+
+    expect(refused.error?.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      ['GATEWAY_SMTP_URL', 'must be the smtp:// or smtps:// address of the mail server'],
+    ])
+  })
+
+  // The mail library reads a query parameter as an option of its transport, over the gateway's
+  // own (its waits, its logger: `?logger=true` would log every address).
+  it.each([
+    ['a query string', 'smtp://127.0.0.1:1025?logger=true'],
+    ['an empty query string', 'smtps://user:secret@smtp.example.test:465?'],
+    ['a fragment', 'smtp://127.0.0.1:1025#secret'],
+    ['an empty fragment', 'smtp://127.0.0.1:1025#'],
+  ])('refuses an address with %s, without naming the value', (_label, url) => {
+    const refused = gatewayConfig.safeParse({ ...env, GATEWAY_SMTP_URL: url })
+
+    expect(refused.error?.issues.map((issue) => [issue.path.join('.'), issue.message])).toEqual([
+      [
+        'GATEWAY_SMTP_URL',
+        'must carry no query string or fragment: the mail library reads them as its options',
+      ],
+    ])
+  })
+})
+
+describe('gatewayConfig.GATEWAY_MAIL_FROM', () => {
+  it('takes an address with or without a name, and refuses anything else', () => {
+    for (const from of ['Perch <no-reply@example.test>', 'no-reply@example.test']) {
+      expect(gatewayConfig.safeParse({ ...env, GATEWAY_MAIL_FROM: from }).success).toBe(true)
+    }
+
+    for (const from of ['Perch', 'Perch <no-reply>', '']) {
+      expect(gatewayConfig.safeParse({ ...env, GATEWAY_MAIL_FROM: from }).success).toBe(false)
+    }
+  })
+
+  it('is required', () => {
+    const { GATEWAY_MAIL_FROM: _missing, ...partial } = env
+
+    expect(
+      gatewayConfig.safeParse(partial).error?.issues.map((issue) => issue.path.join('.')),
+    ).toEqual(['GATEWAY_MAIL_FROM'])
   })
 })

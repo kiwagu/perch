@@ -30,6 +30,25 @@ export const gatewayConfig = z.object({
   GATEWAY_PUBLIC_URL: z
     .url({ protocol: /^https?$/, error: 'must be the http(s):// origin of the front' })
     .transform((url) => url.replace(/\/+$/, '')),
+  /**
+   * The SMTP server the gateway sends the account mails through, such as `smtp://127.0.0.1:1025`
+   * (a stand's MailDev) or `smtps://user:password@smtp.example.test:465`. Required: the account
+   * mails go out through it, and the gateway checks the server at start. It carries no query
+   * string or fragment: the mail library reads a query parameter as an option of its transport,
+   * over the gateway's own waits and its silence (`?logger=true` would log every address).
+   */
+  GATEWAY_SMTP_URL: z
+    .url({
+      protocol: /^smtps?$/,
+      error: 'must be the smtp:// or smtps:// address of the mail server',
+    })
+    .refine((url) => !/[?#]/.test(url), {
+      error: 'must carry no query string or fragment: the mail library reads them as its options',
+    }),
+  /** The From of every mail the gateway sends, such as `Perch <no-reply@example.test>`. */
+  GATEWAY_MAIL_FROM: z.string().regex(/^([^<>]+ <[^<>@\s]+@[^<>@\s]+>|[^<>@\s]+@[^<>@\s]+)$/, {
+    error: 'must be an address, such as Perch <no-reply@example.test>',
+  }),
   LOG_LEVEL: z.string().optional(),
 })
 
