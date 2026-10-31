@@ -554,7 +554,7 @@ states:
     on:
       user.sign-in.submit-button:
         target: profile
-        description: The account signs in, or is created in the mode sign-up, and the profile opens.
+        description: The account signs in, and the profile opens.
   profile:
     description: The profile of the account signed in.
     meta: { screen: user.profile, address: { path: /me } }
@@ -728,8 +728,9 @@ Then wait for the screen's container to leave `loading`: a `list`, a `section` o
 ## Notices
 
 `app-shell.notice-message` shows one notice at a time, the latest, and it outlives the page
-that raised it (the welcome after sign-up shows on the profile). Find it by its anchor and
-its code together, right after the action that raises it.
+that raised it (a notice an action raises just before its flow navigates shows on the page it
+navigates to). Find it by its anchor and its code together, right after the action that
+raises it.
 
 ## Scenarios
 

@@ -49,7 +49,8 @@ for Bun.
     `contract/domain/activities`, sorted by path, one activity each through `activitySchema`, its
     file named by its id; the folder is optional, so none is no problem) and
     `loadScenarios(root)` (every `.md` file under
-    `tests/e2e/scenarios`, sorted by path, its id the path without `.md`, through
+    `tests/e2e/scenarios`, its id the path without `.md`, sorted by that id (an id before the
+    ids that extend it, `user/base/sign-up` before `user/base/sign-up-taken-email`), through
     `parseScenario`; a path outside the id grammar or a layer outside `SCENARIO_LAYERS` is a
     problem of its file); both return beside their files `lines`, by id the line of each
     place of the file by its JSON path (`states.profile.on["user.profile.sign-out-button"]`,
