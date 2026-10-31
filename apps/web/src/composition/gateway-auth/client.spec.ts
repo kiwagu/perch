@@ -75,6 +75,30 @@ function namesNone(error: DataError, ...secrets: string[]): void {
   }
 }
 
+/** Markers a failed request may carry back in its rejection: the link's token and an email. */
+const TOKEN_MARKER = 'token-marker-7f3a'
+const EMAIL_MARKER = 'marker-7f3a@example.test'
+
+/**
+ * A fetch that rejects with what its request carried, in the rejection's message and in its own
+ * properties, as a failing fetch may.
+ */
+const rejectsCarrying = () => () =>
+  Promise.reject(
+    Object.assign(new TypeError(`Failed to fetch ${TOKEN_MARKER} for ${EMAIL_MARKER}`), {
+      request: { body: JSON.stringify({ token: TOKEN_MARKER, email: EMAIL_MARKER }) },
+      sent: [TOKEN_MARKER, EMAIL_MARKER],
+    }),
+  )
+
+/** Whether `error` keeps no cause and names neither marker, in its message or anywhere else. */
+function keepsNothingOfTheRejection(error: DataError): void {
+  expect(error.code).toBe('data:OFFLINE')
+  expect(error.cause).toBeUndefined()
+  expect(Object.keys(error)).not.toContain('cause')
+  namesNone(error, TOKEN_MARKER, EMAIL_MARKER)
+}
+
 describe('gatewayAuth', () => {
   it('signs up naming the device, and answers with the identity and its session token only', async () => {
     const { fetcher, sent } = fakeFetch(respond(200, { token: 'token-1', user }))
@@ -335,6 +359,14 @@ describe('gatewayAuth.verifyEmail', () => {
     expect((await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe('data:OFFLINE')
   })
 
+  it('keeps nothing of a rejected verification: no cause, no token, no email', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (await verify(gatewayAuth(BASE, fetcher), TOKEN_MARKER))._unsafeUnwrapErr(),
+    )
+  })
+
   it('refuses a link without a token as invalid, asking the gateway nothing', async () => {
     const { fetcher, sent } = fakeFetch(respond(200, verified))
 
@@ -413,5 +445,13 @@ describe('gatewayAuth.resendVerification', () => {
     expect(
       (await gatewayAuth(BASE, fetcher).resendVerification(email))._unsafeUnwrapErr().code,
     ).toBe('data:OFFLINE')
+  })
+
+  it('keeps nothing of a rejected resend: no cause, no token, no email', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (await gatewayAuth(BASE, fetcher).resendVerification(EMAIL_MARKER))._unsafeUnwrapErr(),
+    )
   })
 })

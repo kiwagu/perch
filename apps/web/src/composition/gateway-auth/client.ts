@@ -50,6 +50,12 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>
 
 const offline = (cause: unknown) => dataError('data:OFFLINE', 'could not reach the gateway', cause)
 
+/**
+ * An unreachable gateway, for a request that carries a link's token or an email: the rejection is
+ * not kept, since it may name what the request sent.
+ */
+const unreachable = () => dataError('data:OFFLINE', 'could not reach the gateway')
+
 /** The URL a request of the client goes to, whichever form the client names it in. */
 function urlOf(input: string | URL | Request): string {
   return input instanceof Request ? input.url : String(input)
@@ -81,7 +87,10 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
     disableSignal: true,
   })
 
-  /** Posts `body` as JSON to the gateway's own `path` under its auth, with `headers` besides. */
+  /**
+   * Posts `body` as JSON to the gateway's own `path` under its auth, with `headers` besides. A
+   * request that does not reach the gateway fails as `data:OFFLINE`, keeping nothing of its body.
+   */
   const post = (path: string, body: unknown, headers: Readonly<Record<string, string>> = {}) =>
     ResultAsync.fromPromise(
       fetcher(`${baseUrl}/auth/${path}`, {
@@ -89,7 +98,7 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(body),
       }),
-      offline,
+      unreachable,
     )
 
   return {
