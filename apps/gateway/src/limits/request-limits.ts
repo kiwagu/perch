@@ -14,28 +14,13 @@ const minute = 60 * second
 export const CREDENTIAL_CHECKS = { limit: 20, windowMs: 10 * second } as const
 
 /**
- * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until the
- * database answers, cleared by a successful sign-in: online guessing against one account is held
- * to about 960 tries a day, refused before the database is asked, parallel guesses included. An
- * email is counted in lower case, as the routes take it and the directory matches an account's,
- * so an address in any case shares one limit.
+ * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until it is
+ * answered, cleared by a successful sign-in: online guessing against one account is held to about
+ * 960 tries a day, refused before the password is checked, parallel guesses included. An email is
+ * counted in lower case, as the directory matches an account's, so an address in any case shares
+ * one limit.
  */
 export const FAILED_SIGN_INS = { limit: 10, windowMs: 15 * minute } as const
-
-/**
- * Renewals per device, 10 per 15 minutes: a device renews once per expired 15-minute access token,
- * at its next hello; a hello whose socket closes before the new pair arrives costs one more (the
- * spent key presented again), so 10 covers five flaps of a bad network in one window.
- */
-export const DEVICE_RENEWALS = { limit: 10, windowMs: 15 * minute } as const
-
-/**
- * Renewals per client address, 120 per minute: everyone behind one NAT renews when they open
- * their laptops after the access tokens expired overnight, and 120 a minute lets about 500
- * devices through in five minutes, a device the address refused retrying with its reconnect
- * backoff at no cost to its own limit; one guessing address is held to 2 lookups a second.
- */
-export const ADDRESS_RENEWALS = { limit: 120, windowMs: minute } as const
 
 /**
  * Invitations per inviting identity, 30 per 10 minutes, every attempt counted, an unknown email's
@@ -64,14 +49,14 @@ export interface RequestLimitsOptions {
 }
 
 /**
- * What the database answered a sign-in: wrong credentials (`failed`), signed in (`succeeded`), or
- * nothing it could judge (`unjudged`, the database could not be reached).
+ * What a sign-in was answered: wrong credentials (`failed`), signed in (`succeeded`), or anything
+ * that judged no password (`unjudged`: a request refused for another reason, or a failure).
  */
 export type SignInOutcome = 'failed' | 'succeeded' | 'unjudged'
 
 /**
- * A sign-in of an email let through, to settle once the database answered it (a second settle
- * changes nothing); or its refusal.
+ * A sign-in of an email let through, to settle once it was answered (a second settle changes
+ * nothing); or its refusal.
  */
 export type SignInAttempt =
   | { readonly allowed: true; settle(outcome: SignInOutcome): void }
@@ -80,15 +65,12 @@ export type SignInAttempt =
 /**
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
- * each email, the refresh-key renewals of each device and each client address, the invitations of
- * each inviting identity and each client address, and the organisations each identity and each
- * client address create.
+ * each email, the invitations of each inviting identity and each client address, and the
+ * organisations each identity and each client address create.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
   private readonly failedSignIns: FixedWindow
-  private readonly deviceRenewals: FixedWindow
-  private readonly addressRenewals: FixedWindow
   private readonly identityInvites: FixedWindow
   private readonly addressInvites: FixedWindow
   private readonly identityOrganisations: FixedWindow
@@ -97,8 +79,6 @@ export class RequestLimits {
   constructor(options: RequestLimitsOptions) {
     this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
     this.failedSignIns = new FixedWindow({ ...FAILED_SIGN_INS, clock: options.clock })
-    this.deviceRenewals = new FixedWindow({ ...DEVICE_RENEWALS, clock: options.clock })
-    this.addressRenewals = new FixedWindow({ ...ADDRESS_RENEWALS, clock: options.clock })
     this.identityInvites = new FixedWindow({ ...IDENTITY_INVITES, clock: options.clock })
     this.addressInvites = new FixedWindow({ ...ADDRESS_INVITES, clock: options.clock })
     this.identityOrganisations = new FixedWindow({
@@ -117,8 +97,8 @@ export class RequestLimits {
    * Lets a sign-in of `email` through while its failed sign-ins and those under way are below the
    * limit, holding a place for it until it is settled: a failure keeps the place, a success
    * forgets the email's window (its failures and the places of those under way), and an answer
-   * the database could not judge gives the place back. The email comes in lower case, as the
-   * routes take it and the directory matches it, so a sign-in in any case counts against one
+   * that judged no password gives the place back. The email comes in lower case, as the auth
+   * mount takes it and the directory matches it, so a sign-in in any case counts against one
    * account.
    */
   signInAttempt(email: string): SignInAttempt {
@@ -147,28 +127,6 @@ export class RequestLimits {
         }
       },
     }
-  }
-
-  /**
-   * Takes one renewal of `device` from the client at `address`, before its refresh key is
-   * exchanged; the address is charged only when the device's limit allows it, and a renewal the
-   * address's limit refuses gives the device's attempt back, so the devices that wait behind one
-   * busy address keep their own limit for when it lets them through.
-   */
-  renewal(address: string, device: string): Allowance {
-    const ofDevice = this.deviceRenewals.reserve(device)
-
-    if (!ofDevice.allowed) {
-      return ofDevice
-    }
-
-    const ofAddress = this.addressRenewals.take(addressKey(address))
-
-    if (!ofAddress.allowed) {
-      ofDevice.giveBack()
-    }
-
-    return ofAddress
   }
 
   /**

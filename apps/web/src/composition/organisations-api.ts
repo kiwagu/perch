@@ -1,7 +1,6 @@
 /**
- * The gateway's organisation routes over HTTP, called with the device's access token and its
- * id (`X-Perch-Device`). A refused token is renewed once through the sync leader and the call
- * is made again.
+ * The gateway's organisation routes over HTTP, called with the device's session token and its
+ * id (`X-Perch-Device`).
  */
 
 import type { ResultAsync } from 'neverthrow'

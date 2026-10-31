@@ -45,6 +45,10 @@
     "./surql-names": {
       "types": "./src/surql-names.ts",
       "import": "./src/surql-names.ts"
+    },
+    "./better-auth-adapter": {
+      "types": "./src/better-auth-adapter.ts",
+      "import": "./src/better-auth-adapter.ts"
     }
   },
   "scripts": {
@@ -53,6 +57,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@surrealdb/better-auth": "catalog:",
     "@surrealdb/node": "catalog:",
     "@surrealdb/node-native": "catalog:",
     "@surrealdb/wasm": "catalog:",

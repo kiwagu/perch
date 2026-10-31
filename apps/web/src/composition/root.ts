@@ -44,7 +44,7 @@ import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedKeys } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -66,7 +66,7 @@ export interface AppRootOptions {
   readonly online: () => boolean
   /** Hears the browser's network come or go (its `online` and `offline` events). */
   readonly onOnlineChange: (listener: () => void) => () => void
-  /** The gateway's organisation routes, called with the device's access token and id. */
+  /** The gateway's organisation routes, called with the device's session token and id. */
   readonly organisationsApi: (deps: BearerDeps) => OrganisationsApi
   /** The gateway's device routes, called the same way. */
   readonly devicesApi: (deps: BearerDeps) => DevicesPort
@@ -139,8 +139,17 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     })
   }
 
+  // The routes that act for the signed-in device present the token saved on this browser.
+  const bearer: BearerDeps = {
+    token: () => savedToken(options.storage),
+    device: () => deviceIdFrom(options.storage),
+  }
+  const organisationsApi = options.organisationsApi(bearer)
   const session = new SessionService({
     auth: options.gatewayAuth,
+    // A sign-in reads them with the token it was given, before it saves anything.
+    listMemberships: (token, device) =>
+      options.organisationsApi({ token: () => token, device: () => device }).list(),
     deviceLabel: options.deviceLabel,
     online: options.online,
     openLocal: options.openLocal,
@@ -186,13 +195,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
     logger: options.logger,
     events,
   })
-  // A route that refuses the access token has the sync leader renew the keys, once.
-  const bearer: BearerDeps = {
-    token: () => savedKeys(options.storage)?.access,
-    device: () => deviceIdFrom(options.storage),
-    renew: () => session.renewKeys(),
-  }
-  const organisations = createOrganisations(options.organisationsApi(bearer), session)
+  const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
   // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.
   const container = new Container()

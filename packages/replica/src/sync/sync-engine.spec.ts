@@ -137,7 +137,7 @@ describe('sync engine', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
 
-  it('hears that the gateway refused the keys, then the channel falls for good', async () => {
+  it('hears that the gateway refused the token, then the channel falls for good', async () => {
     const { a, stub } = await twoDevices()
     const heard: string[] = []
 
@@ -318,7 +318,7 @@ describe('sync engine', () => {
     expect(await outcome).toBe('offline')
     expect(stub.signOuts()).toBe(1)
     expect(a.channel()).toBe('down')
-    // Stopped: no reconnect brings the device back on keys the gateway could not revoke.
+    // Stopped: no reconnect brings the device back on a session the gateway could not end.
     expect(a.transport.online()).toBe(false)
     expect(a.engine.channelStopped()).toBe(true)
   })
@@ -346,7 +346,7 @@ describe('sync engine', () => {
 
     await clock.advance(1)
 
-    // A timer is no proof that the gateway revoked the grant.
+    // A timer is no proof that the gateway ended the session.
     expect(await outcome).toBe('offline')
     expect(a.channel()).toBe('down')
     expect(a.transport.online()).toBe(false)
@@ -663,35 +663,5 @@ describe('sync engine', () => {
 
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
-  })
-
-  it('renew() asks the gateway for new keys over the welcomed channel, and does nothing while it is down', async () => {
-    const { a, stub } = await twoDevices()
-
-    stub.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
-
-    expect(a.engine.renew()).toBe(true)
-    expect(a.transport.renews()).toBe(1)
-    expect(a.transport.reconnects()).toBe(0)
-
-    a.transport.goOffline()
-
-    expect(a.engine.renew()).toBe(false)
-    expect(a.transport.renews()).toBe(1)
-  })
-
-  it('takes a renewal the gateway refuses for no error: nothing is reported and the regions sync on', async () => {
-    const { a, b, stub, settle } = await twoDevices()
-
-    stub.refuseRenewals()
-
-    expect(a.engine.renew()).toBe(true)
-    await settle()
-    writeName(a.region, 'Ana')
-    a.engine.localWrite()
-    await settle()
-
-    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
-    expect(a.errors).toEqual([])
   })
 })

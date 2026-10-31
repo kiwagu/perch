@@ -139,8 +139,6 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
         url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
         device: context.device,
         credentials: context.credentials,
-        onTokens: context.onTokens,
-        onRenewalRefused: context.onRenewalRefused,
         onMemberships: context.onMemberships,
         onEnded: context.onEnded,
         clock: systemClock,
@@ -164,8 +162,9 @@ export function bootBrowser(): ResultAsync<AppServices, BootFailure> {
     onStep: (step) => {
       html.dataset['bootStep'] = step
     },
-    onError: (error) =>
-      logger.error({ code: error.code, cause: String(error.cause) }, error.message),
+    // An error is logged by its code and message: its cause, whatever raised it, may carry a
+    // session token in its text.
+    onError: (error) => logger.error({ code: error.code }, error.message),
     onSyncState: showSync,
   })
 }

@@ -61,8 +61,9 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
   `GATEWAY_URL` and `E2E_BASE_URL` of the e2e stand, `SURREAL_DEV_URL` and `GATEWAY_DEV_URL` of
-  the dev stand) and the stands' signing key `GATEWAY_JWT_KEY`; none of them has an address of
-  its own.
+  the dev stand) and what the e2e stand's gateway runs with: the stands' auth secret
+  `GATEWAY_AUTH_SECRET` and the public origin of its front, `GATEWAY_PUBLIC_URL`; none of them
+  has an address of its own.
 - `bun run load -- --devices 20 --members 10 --hold 15`: the gateway load test. It starts a
   gateway of its own on port 5197 in front of the e2e stand's SurrealDB and prints one table row
   per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
@@ -112,8 +113,9 @@ Each workspace has a README with its role, key exports and commands.
 
 - `apps/web`: the browser application; each signed-in identity's local replica in its own
   IndexedDB database, synced through the gateway by one leading tab per browser.
-- `apps/gateway`: the Bun server in front of the central SurrealDB: sign-up and sign-in over
-  HTTP, sync over a WebSocket.
+- `apps/gateway`: the Bun server in front of the central SurrealDB: accounts on Better Auth,
+  each device holding a session token, the device and organisation routes over HTTP, and sync
+  over a WebSocket.
 - `packages/replica`: Loro region documents, the projector into the local database, the
   sync protocol, the server's region log, batch validation and hub, and the device's sync engine.
 - `packages/data`: the SurrealDB driver: local databases, shapes and commands, accounts.
@@ -160,7 +162,8 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run contract:routes`: the routes of the screen files, one example deep link each,
   where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
-  the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
+  the seed data (with the dev stand's addresses from `mcproc exec`; neither needs the auth
+  secret).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
 - `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file that the first run on a checkout writes from the sizes committed where HEAD left `main`, never from the working tree (also in `check` and in the pre-commit hook): a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails, so a branch's growth fails from its checkout's first run.
 - `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.

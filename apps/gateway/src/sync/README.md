@@ -5,43 +5,23 @@
 The gateway's end of a device's sync channel: the WebSocket at `/sync`, from its hello to its
 close, and the registry of open connections that membership changes and sign-outs reach. The
 replicated regions themselves live in the region hub of `@workspace/replica/server`, which the
-composition root builds; the keys of a hello go through the auth module's services. Its
+composition root builds; the session of a hello is read through the auth module's services. Its
 connection is the folder `sync-connection/`, entered through its `index.ts`; the module itself
 has no `index.ts` yet: it predates the index rule and is imported file by file.
 
-Devices sync over a WebSocket at
-`/sync`: a device says hello with its keys and its device id at protocol 6 (the
-pair is renewed with the refresh key when the access token no longer works, and the new pair is
-sent first).
-The hello is bound to the device's row: a renewal moves the row from the grant it spent to the
-new one, only while the row holds the spent grant and is not signed out; any other hello reads
-the row. The access token the hello is accepted with (as it came, renewed or parked) must belong
-to the row's current session: the database verified it, and the gateway reads the second it was
-issued in from its payload. A device without a row, a renewal whose row holds another grant, and
-a token issued before the row's session started (one of an earlier session: the device was
-signed out, then signed in again) or naming no such second are closed with 4401 (`no session for
-this device`), a device signed out with 4001, and a pair renewed for any of them is revoked at
-once. What this does not catch: a live access token presented under another live device of the
-same identity, whose session started before the token was issued, binds to that device until
-the token expires (at most 15 minutes); the list of devices never gives their ids away. A
-welcomed device may ask for a new pair over its open channel (`renew`, no payload: the
-connection holds the pair it renews, `sync-connection/channel-renewal.ts`): the same limits, refresh exchange and
-row move as a hello's renewal, the new pair sent as `tokens` and held from then on; a renewal the
-limits refuse is answered with an `error` of code `rate-limited` and the channel kept; refused
-keys close with 4401, a device signed out with 4001 (its new pair revoked at once); a socket that
-closed before the pair could go leaves it parked for the device's next hello. A device holds one
-live socket: the hello that registers closes the device's older sockets with 1000 (`another
-connection of this device took over`, `ConnectionRegistry.supersede`), which signs nothing out,
-and the device's key operations (a hello from its key check to its registration, and a `renew`)
-run one at a time across its sockets (`PendingPairs.exclusively`). So a hello finds parked the
-pair a renewal under way could not deliver, whatever its access token; a `renew` that waited for
-a newer hello of the device finds its socket closed and spends nothing; and a `renew` whose key a
-hello of the device spent takes the pair that hello parked, looked up first, so no renewal is
-tried or counted. A `tokens` message the socket drops
-(`send` answers 0) or throws on is parked the same way and the socket closed as a failed server
-(1011), at hello and over the channel. A pair sent to an older socket the device gave up, before a
-newer hello of it came, is lost with that socket, and the device signs in again. A bound
-device is marked seen at its hello and then at most every five minutes it talks, and is welcomed
+Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
+device id at protocol 7; the gateway reads the session, checks the device, marks it seen and
+welcomes it. The session is read through Better Auth (`AuthSessions.read`) at every hello, so a
+session that ended or expired reads as none at once. A token that reads no live session closes
+the socket with 4401 (`the session was not accepted`), and a session opened on another device
+than the one the hello names with 4401 too (`no session for this device`): a session is bound to
+the device it was opened on. A read the directory could not make closes the socket as a failed
+server (1011), and the device comes back with the same token. Nothing is spent at a hello, so a
+device may say it again on any socket. A device holds one live socket: the hello that registers
+closes the device's older sockets with 1000 (`another connection of this device took over`,
+`ConnectionRegistry.supersede`), which signs nothing out. A device is marked seen at its hello and
+then at most every five minutes it talks, which extends its live session (`DeviceSessions.seen`);
+a mark that fails is logged and changes nothing for the device. It is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
 belongs to and those memberships, the only regions it may name (an organisation whose database
 cannot be read is left out of the welcome and logged, its membership kept: the device syncs only
@@ -60,51 +40,46 @@ deletes only its own notes, an admin any, and the hub rejects any other write as
 role applies to a device's subscriptions from its next subscribe or hello. The hub also refuses
 a batch that brings changes under a Loro peer another identity's batch was accepted under in the
 region (`foreign-peer`), so no member can write as another member's device and stop it.
-A connection registers in the `ConnectionRegistry` (`connections.ts`) once the keys are
-accepted; when an identity's memberships change, each of its connections leaves the regions it
+A connection registers in the `ConnectionRegistry` (`connections.ts`) once its session is read;
+when an identity's memberships change, each of its connections leaves the regions it
 may no longer name at once, without waiting for the device's messages under way (one handled
 from then on that names such a region closes the socket with 4403, and the hub sends it nothing
 more there), and is sent a `memberships` message; it subscribes to a new organisation's region
 itself. A change told while a connection's hello is under way applies right after its welcome.
-Text the protocol refuses (4400, a hello of an older protocol or one that names no device
-included), keys the database refused (4401), a region the device may not name (4403) and a hello
-that did not come within 10 seconds (4408, after which the device connects again) close the
-socket with the protocol's close codes; keys the database could not judge (it could not be
-reached) close it as a failed server (1011), and the device comes back with the same keys, as it
-does after a hello closed with 1013 because the limits refused its renewal (see `src/limits/README.md`). A
-device's sign-out leaves its regions, marks its row signed out, forgets the pairs parked for it
-and revokes its refresh grant through the database as the namespace user, as `POST
-/auth/sign-out` does, then closes the socket with 4000, which means the grant is revoked; a row
-that cannot be marked or a grant that cannot be revoked closes the socket with 1011 (`revoke
-failed`) instead, and the device sends its sign-out again through the route. A device signed
-out from another device is closed with 4001 at once, whatever
+Text the protocol refuses (4400, a hello of an earlier protocol or one that names no device
+included), a token that reads no session of the device (4401), a region the device may not name
+(4403) and a hello that did not come within 10 seconds (4408, after which the device connects
+again) close the socket with the protocol's close codes; a session the directory could not read
+closes it as a failed server (1011). A device's sign-out over its channel leaves its regions and
+ends the session its hello came with, by its token (`AuthSessions.signOut`, as `POST
+/auth/sign-out` does), then closes every socket of the device through the registry with 4000,
+which means the session ended (`ConnectionRegistry.close(identity, device, 4000)`): that moves
+the device's epoch, so a hello of the device that read the session before it ended is refused
+its registration (4001). A session that cannot be ended is logged with the identity and the
+error's code, nothing is closed through the registry, and the socket closes with 1011 (`revoke
+failed`) instead; the device sends its sign-out again through the route. A device signed out from another device is closed with 4001 at once, whatever
 it is doing, also while its hello is under way: the registry knows each connection's identity
 and device (`ConnectionRegistry.close(identity, device, code)`, every device of the identity
-when none is named), and each close moves a revocation epoch of the device or of the identity.
-A hello reads the epoch once its keys are accepted, before it reads the row, and registers with
-it: a sign-out that lands meanwhile refuses the registration (4001), one before it is seen by
-the read. A connection that fails to close is reported and the others are closed all the same.
-A renewed pair the socket closed before it could take is parked, for 60 seconds after the last
-hello that held it (one that takes it and parks it again, below, starts them over), under
-the device and a SHA-256 digest of the refresh key the renewal spent (the key itself is not
-kept) and logged at warn as `renewed pair not delivered: parked for the next hello of the
-device`: the device's next hello with that spent key is handed the parked pair once (`tokens`,
-before its welcome) and welcomed, looked up before its keys are checked, so no renewal is tried
-or counted; a pair is never handed to another device, and signing the device out or signing in
-on it again forgets it; a hello whose keys the database could not judge leaves it parked, and
-one that could not judge the parked pair, or whose renewal of it the limits refused, parks it
-again. Keys, tokens and grant ids never reach its logs.
+when none is named), and each close moves the registry's revocation epoch, recorded against
+what it names. A hello reads the epoch before it reads its session, and registers with it: a
+close of the device or of its identity that lands meanwhile refuses the registration (4001), and
+one before is seen by the read, since the routes end the session before they close the sockets.
+A new sign-up or sign-in of the device, once Better Auth accepted it, closes the identity's
+sockets on that device the same way, with 1000 (`another connection of this device took over`):
+its session ended the earlier one, and the device connects again with the new token. A
+connection that fails to close is reported and the others are closed all the same. No token
+reaches its logs.
 
 ## Surface
 
 - Route: `GET /sync`, upgraded to a WebSocket by `src/server.ts`.
-- `SyncConnection` (`sync-connection/`): one device's socket: the hello and its renewal, the
-  welcome, subscribe, pull, push, probe and compact through the region hub, `renew` and
-  sign-out over the channel; its index also exports `SocketLike`, `SyncConnectionDeps` and
-  `TRY_AGAIN_LATER` (the 1013 close of a hello whose renewal a limit refused).
+- `SyncConnection` (`sync-connection/`): one device's socket: the hello, the welcome, subscribe,
+  pull, push, probe and compact through the region hub, and sign-out over the channel; its index
+  also exports `SocketLike`, `SyncConnectionDeps` and `SUPERSEDED` (1000, the close of a socket
+  another connection or a new session of the device took over).
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
   closes them, tells them their identity's memberships and takes regions from them.
-- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 6.
+- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 7.
 
 ## Commands
 

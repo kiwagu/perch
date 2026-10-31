@@ -34,6 +34,7 @@
     "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",
     "@xstate/react": "catalog:",
+    "better-auth": "catalog:",
     "entity-id": "catalog:",
     "neverthrow": "catalog:",
     "react": "catalog:",

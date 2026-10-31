@@ -1,6 +1,6 @@
 /**
  * The session's transitions (a sign-in, a sign-out, a restore, following another tab), run one
- * at a time, each when the previous one has finished, so the saved keys and the space never
+ * at a time, each when the previous one has finished, so the saved token and the space never
  * serve two transitions at once. Each runs under a generation of its own: a transition that
  * finishes after a later one began is dropped.
  */

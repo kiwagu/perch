@@ -6,7 +6,6 @@
 import type { ResultAsync } from 'neverthrow'
 
 import {
-  createAuth,
   type DataError,
   type Engines,
   type LocalDb,
@@ -19,9 +18,10 @@ import { createLogger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { RegionHub } from '@workspace/replica/server'
 
+import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
+import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
-import { IdentitySessions } from '../auth/identity-sessions'
-import { DIRECTORY, NAMESPACE } from '../config'
+import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { RequestLimits } from '../limits/request-limits'
 import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
@@ -29,8 +29,14 @@ import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
-  readonly sessions: IdentitySessions
-  /** The devices of each identity, with the grant each holds: listed and signed out over HTTP. */
+  /**
+   * Better Auth over the directory: the server hands it the sign-up and the sign-in under
+   * `/auth`; the gateway reads sessions through its API.
+   */
+  readonly auth: AuthInstance
+  /** The sessions of devices: read through Better Auth, ended by the gateway's own updates. */
+  readonly sessions: AuthSessions
+  /** The session rows of each identity's devices: listed, looked up by token, marked seen. */
   readonly deviceSessions: DeviceSessions
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
@@ -51,8 +57,8 @@ export interface GatewayRoot {
   /** The directory database. */
   readonly local: LocalDb
   /**
-   * The request limits of this process: the credential checks of each client address and the
-   * failed sign-ins of each email.
+   * The request limits of this process: the failed sign-ins of each email, the invitations and
+   * the organisations created.
    */
   readonly limits: RequestLimits
   readonly clock: Clock
@@ -66,27 +72,27 @@ export interface GatewayRoot {
 export interface GatewayRootOptions {
   /** Engines from `@workspace/data/engines/remote`, or embedded ones in tests. */
   readonly engines: Engines
-  /** The database's WebSocket endpoint: auth sessions are not available over HTTP. */
+  /**
+   * The database's WebSocket endpoint: the directory's connection, opened as the gateway's
+   * namespace user, which Better Auth's adapter queries through too.
+   */
   readonly url: string
   /** The gateway's namespace user; an embedded database needs none. */
   readonly credentials?: { readonly username: string; readonly password: string }
+  /** The secret Better Auth signs and encrypts with. */
+  readonly authSecret: string
   /**
-   * The key the directory's identity access method signs tokens with, given to its schema at
-   * apply, so a schema applied again keeps every issued token valid. The organisations'
-   * databases do not take it.
+   * The front's public origin, with no trailing slash: the base of the auth routes' public URL
+   * and the one origin Better Auth trusts.
    */
-  readonly signingKey: string
+  readonly publicUrl: string
   readonly clock: Clock
 }
-
-/** The access method identities sign in through, and where its tokens are issued. */
-const identityAccess = { access: 'identity', namespace: NAMESPACE, database: DIRECTORY }
 
 export function createGatewayRoot(
   options: GatewayRootOptions,
 ): ResultAsync<GatewayRoot, DataError> {
   const hubLog = createLogger('region-hub')
-  const sessionsLog = createLogger('identity-sessions')
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
   const credentials = options.credentials
@@ -100,7 +106,6 @@ export function createGatewayRoot(
     namespace: NAMESPACE,
     database: DIRECTORY,
     schema: readSchema('directory'),
-    signingKey: options.signingKey,
     ...credentials,
   }).map((local): GatewayRoot => {
     const databases = new TenantDatabases({
@@ -136,17 +141,20 @@ export function createGatewayRoot(
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
-    const deviceSessions = new DeviceSessions({ directory: local, clock: options.clock })
+    // Better Auth serves its routes under the path of its public URL only, so the server hands it
+    // each `/auth/<rest>` it receives at `${FRONT_PREFIX}/auth/<rest>`.
+    const auth = createAuthInstance({
+      local,
+      secret: options.authSecret,
+      baseURL: `${options.publicUrl}${FRONT_PREFIX}/auth`,
+      trustedOrigins: [options.publicUrl],
+      clock: options.clock,
+    })
 
     return {
-      sessions: new IdentitySessions({
-        openAuth: () => createAuth(local, identityAccess),
-        scope: identityAccess,
-        onFailure: (error) => sessionsLog.warn({ code: error.code }, error.message),
-        devices: deviceSessions,
-        clock: options.clock,
-      }),
-      deviceSessions,
+      auth,
+      sessions: new AuthSessions({ auth, directory: local, clock: options.clock }),
+      deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       organisations,
       databases,
       hub,

@@ -34,8 +34,8 @@ it and its notification have settled, so the directory and the organisation's da
 the last change left them and its devices hear the lists in that order. This holds within one
 gateway process; gateways in several processes would need a durable revision of the memberships.
 `Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
-rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes,
-and one device's key operations, one at a time.
+rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes
+one at a time.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the

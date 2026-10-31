@@ -9,7 +9,7 @@ import { forgetDevice, saveDevice } from './signed-in'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-1', refresh: 'refresh-1' },
+  token: 'token-1',
   memberships: [] as readonly Membership[],
 }
 

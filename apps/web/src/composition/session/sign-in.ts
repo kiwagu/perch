@@ -3,7 +3,7 @@
  * device the gateway signed in and opens the identity's space.
  */
 
-import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import {
   type AuthUser,
@@ -26,6 +26,8 @@ import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
+import { cleanUpSignIn } from './sign-in-cleanup'
+import { brokenSignIn, oneSignInAtATime } from './sign-in-lock'
 import type { SpaceDeletion } from './space-deletion'
 import type { HeardSignOut, WriteBarrier } from './write-barrier'
 
@@ -62,7 +64,7 @@ export class SessionSignIn {
   signUp(input: SignUpInput, generation: number): ResultAsync<AuthUser, DataError> {
     return this.#signInAs(
       input.email,
-      () => this.#host.options.auth.signUp(input, this.#device()),
+      (device) => this.#host.options.auth.signUp(input, device),
       generation,
     )
   }
@@ -70,7 +72,7 @@ export class SessionSignIn {
   signIn(input: SignInInput, generation: number): ResultAsync<AuthUser, DataError> {
     return this.#signInAs(
       input.email,
-      () => this.#host.options.auth.signIn(input, this.#device()),
+      (device) => this.#host.options.auth.signIn(input, device),
       generation,
     )
   }
@@ -115,45 +117,129 @@ export class SessionSignIn {
 
   /**
    * Signs up or in through `ask`, refused at once while another account is signed in on this
-   * browser (one account per browser). The pairs sign-outs left are revoked first: the sign-in
-   * moves the device's session at the gateway to a new grant, after which they match it no more.
+   * browser (one account per browser). The tokens sign-outs left are signed out first: the
+   * sign-in replaces the device's session at the gateway, which a token left after it would no
+   * longer name.
    */
   #signInAs(
     email: string,
-    ask: () => ResultAsync<SignedInDevice, DataError>,
+    ask: (device: NamedDevice) => ResultAsync<SignedInDevice, DataError>,
     generation: number,
   ): ResultAsync<AuthUser, DataError> {
-    const ready: ResultAsync<void, DataError> = otherAccountSaved(this.#host.options.storage, email)
-      ? errAsync(otherAccountSignedIn())
-      : ResultAsync.fromSafePromise(this.#pendingRevoke.send())
+    const named = this.#device()
 
-    return ready.andThen(ask).andThen((device) => this.#enter(device, generation))
+    // The browser's tabs sign in one at a time, from the request to the saved device; the space
+    // opens once the lock is let go.
+    return oneSignInAtATime(this.#host.options.locks, () => {
+      // A session closed while the lock was awaited asks the gateway nothing.
+      if (generation !== this.#host.generation()) {
+        return errAsync(closedDuringSignIn())
+      }
+
+      const ready: ResultAsync<void, DataError> = otherAccountSaved(
+        this.#host.options.storage,
+        email,
+      )
+        ? errAsync(otherAccountSignedIn())
+        : ResultAsync.fromSafePromise(this.#pendingRevoke.send())
+
+      return ready
+        .andThen(() => ask(named))
+        .andThen((device) => this.#keep(device, named.id, generation))
+    }).andThen((device) => this.#open(device, generation))
   }
 
-  #enter(device: SignedInDevice, generation: number): ResultAsync<AuthUser, DataError> {
-    const storage = this.#host.options.storage
+  /**
+   * Makes the sign-in whole: until then its token lives here only, and nothing reaches the
+   * browser's storage, which the other tabs follow. The memberships are read with the token and
+   * the device it names; then, while the session is still open and no other account was saved
+   * meanwhile, the identity, the token and the memberships are saved in one step. Every way out
+   * that does not keep this attempt's token leaves it to be signed out (at once while the browser
+   * is online, else kept for later), never another tab's. A throw while it holds the token (the
+   * read, the save) lets go of it (`cleanUpSignIn`, a save it broke off midway undone) and fails
+   * as `brokenSignIn`, naming nothing of the throw.
+   */
+  #keep(
+    device: SignedInDevice,
+    named: string,
+    generation: number,
+  ): ResultAsync<SignedInDevice, DataError> {
+    const whole = () => this.#stillWhole(device, generation)
+    const kept = async (): Promise<Result<SignedInDevice, DataError>> => {
+      try {
+        return await whole()
+          .andThen(() => this.#host.options.listMemberships(device.token, named))
+          .andThen((memberships) => whole().map(() => memberships))
+          .map((memberships) => {
+            saveDevice(this.#host.options.storage, { ...device, memberships })
 
+            return device
+          })
+          .orElse((error) => this.#abandon<SignedInDevice>(device.token, error))
+      } catch {
+        cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, device.token)
+
+        return err(brokenSignIn())
+      }
+    }
+
+    return new ResultAsync(kept())
+  }
+
+  /**
+   * Opens the space of the device a sign-in saved. One that does not open lets go of this
+   * attempt's token (`cleanUpSignIn`: left to sign out first, then the device forgotten while the
+   * saved token is still this attempt's) and fails with the open's error; an open or a cleanup
+   * that threw fails as `brokenSignIn`, naming nothing of the throw. Closed meanwhile, or open
+   * before a throw, the device stays saved, whole, for the next start.
+   */
+  #open(device: SignedInDevice, generation: number): ResultAsync<AuthUser, DataError> {
+    const opened = async (): Promise<Result<AuthUser, DataError>> => {
+      let failure: DataError
+
+      try {
+        const result = await this.openSpace(device.identity, generation)
+
+        if (result.isOk()) {
+          return result
+        }
+
+        failure = result.error
+      } catch {
+        failure = brokenSignIn()
+      }
+
+      if (generation !== this.#host.generation() || this.#host.open()) {
+        return err(failure)
+      }
+
+      return cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, device.token)
+        ? err(failure)
+        : err(brokenSignIn())
+    }
+
+    return new ResultAsync(opened())
+  }
+
+  /** Leaves `token`, which this attempt does not keep, to be signed out, and fails with `error`. */
+  #abandon<T>(token: string, error: DataError): ResultAsync<T, DataError> {
+    this.#pendingRevoke.leave(token)
+
+    return errAsync(error)
+  }
+
+  /**
+   * Whether the sign-in may still be kept: the session was not closed meanwhile, and no other
+   * tab saved another account (one account per browser).
+   */
+  #stillWhole(device: SignedInDevice, generation: number): ResultAsync<void, DataError> {
     if (generation !== this.#host.generation()) {
       return errAsync(closedDuringSignIn())
     }
 
-    // Another tab signed someone else in meanwhile: this sign-in's new pair goes to be revoked.
-    if (otherIdentitySaved(storage, device.identity.id)) {
-      this.#pendingRevoke.leave(device.tokens)
-
-      return errAsync(otherAccountSignedIn())
-    }
-
-    // The keys are kept first: the space's channel presents them as soon as this tab leads.
-    saveDevice(storage, device)
-
-    return this.openSpace(device.identity, generation).orElse((error) => {
-      if (generation === this.#host.generation()) {
-        forgetDevice(storage)
-      }
-
-      return errAsync(error)
-    })
+    return otherIdentitySaved(this.#host.options.storage, device.identity.id)
+      ? errAsync(otherAccountSignedIn())
+      : okAsync(undefined)
   }
 
   #openSpaceNow(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {

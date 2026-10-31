@@ -88,24 +88,24 @@ describe('ConnectionRegistry', () => {
     const newer = connection()
     const phone = connection()
     const bobs = connection()
-    const epoch = registry.epoch(ann, 'laptop')
+    const epoch = registry.epoch()
 
     registry.add(ann, 'laptop', older, epoch)
     registry.add(ann, 'laptop', newer, epoch)
-    registry.add(ann, 'phone', phone, registry.epoch(ann, 'phone'))
-    registry.add(bob, 'laptop', bobs, registry.epoch(bob, 'laptop'))
+    registry.add(ann, 'phone', phone, registry.epoch())
+    registry.add(bob, 'laptop', bobs, registry.epoch())
     registry.supersede(ann, 'laptop', newer)
 
     expect(older.superseded.count).toBe(1)
     expect([newer, phone, bobs].map((each) => each.superseded.count)).toEqual([0, 0, 0])
-    expect(registry.epoch(ann, 'laptop')).toBe(epoch)
+    expect(registry.epoch()).toBe(epoch)
   })
 
   it('answers add with a function that removes the connection', () => {
     const registry = registryHeard()
     const ann = identityIdFactory.create()
     const device = connection()
-    const remove = registry.add(ann, 'device-laptop', device, registry.epoch(ann, 'device-laptop'))
+    const remove = registry.add(ann, 'device-laptop', device, registry.epoch())
 
     expect(registry.forIdentity(ann)).toEqual([device])
 
@@ -122,15 +122,10 @@ describe('ConnectionRegistry', () => {
     const laptop = connection()
     const phone = connection()
     const bobs = connection()
-    const removeLaptop = registry.add(
-      ann,
-      'device-laptop',
-      laptop,
-      registry.epoch(ann, 'device-laptop'),
-    )
+    const removeLaptop = registry.add(ann, 'device-laptop', laptop, registry.epoch())
 
-    registry.add(ann, 'device-phone', phone, registry.epoch(ann, 'device-phone'))
-    registry.add(bob, 'device-bobs', bobs, registry.epoch(bob, 'device-bobs'))
+    registry.add(ann, 'device-phone', phone, registry.epoch())
+    registry.add(bob, 'device-bobs', bobs, registry.epoch())
     removeLaptop?.()
 
     expect(registry.forIdentity(ann)).toEqual([phone])
@@ -146,11 +141,11 @@ describe('ConnectionRegistry', () => {
     const phone = connection(busy.promise)
     const bobs = connection()
 
-    registry.add(ann, 'device-laptop', laptop, registry.epoch(ann, 'device-laptop'))
-    registry.add(ann, 'device-phone', phone, registry.epoch(ann, 'device-phone'))
+    registry.add(ann, 'device-laptop', laptop, registry.epoch())
+    registry.add(ann, 'device-phone', phone, registry.epoch())
     const bob = identityIdFactory.create()
 
-    registry.add(bob, 'device-bobs', bobs, registry.epoch(bob, 'device-bobs'))
+    registry.add(bob, 'device-bobs', bobs, registry.epoch())
 
     const revoked = registry.revoke(ann, 'tenant:acme')
     const told = registry.tell(ann, [acme])
@@ -191,10 +186,10 @@ describe('ConnectionRegistry', () => {
     const phone = connection()
     const bobs = connection()
 
-    registry.add(ann, 'device-laptop', laptop, registry.epoch(ann, 'device-laptop'))
-    registry.add(ann, 'device-laptop', laptopAgain, registry.epoch(ann, 'device-laptop'))
-    registry.add(ann, 'device-phone', phone, registry.epoch(ann, 'device-phone'))
-    registry.add(bob, 'device-laptop', bobs, registry.epoch(bob, 'device-laptop'))
+    registry.add(ann, 'device-laptop', laptop, registry.epoch())
+    registry.add(ann, 'device-laptop', laptopAgain, registry.epoch())
+    registry.add(ann, 'device-phone', phone, registry.epoch())
+    registry.add(bob, 'device-laptop', bobs, registry.epoch())
 
     const closed = registry.close(ann, 'device-laptop', 4001)
     const closing = watch(closed)
@@ -218,11 +213,11 @@ describe('ConnectionRegistry', () => {
     const phone = connection()
     const bobs = connection()
 
-    registry.add(ann, 'device-laptop', laptop, registry.epoch(ann, 'device-laptop'))
-    registry.add(ann, 'device-phone', phone, registry.epoch(ann, 'device-phone'))
+    registry.add(ann, 'device-laptop', laptop, registry.epoch())
+    registry.add(ann, 'device-phone', phone, registry.epoch())
     const bob = identityIdFactory.create()
 
-    registry.add(bob, 'device-bobs', bobs, registry.epoch(bob, 'device-bobs'))
+    registry.add(bob, 'device-bobs', bobs, registry.epoch())
 
     await registry.close(ann, undefined, 4001)
 
@@ -238,36 +233,38 @@ describe('ConnectionRegistry', () => {
     const registry = registryHeard()
     const ann = identityIdFactory.create()
     const laptop = connection()
-    const before = registry.epoch(ann, 'device-laptop')
+    const before = registry.epoch()
 
     void registry.close(ann, 'device-laptop', 4001)
 
     expect(registry.add(ann, 'device-laptop', laptop, before)).toBeUndefined()
     expect(registry.forIdentity(ann)).toEqual([])
-    expect(
-      typeof registry.add(ann, 'device-laptop', laptop, registry.epoch(ann, 'device-laptop')),
-    ).toBe('function')
+    expect(typeof registry.add(ann, 'device-laptop', laptop, registry.epoch())).toBe('function')
   })
 
-  it("moves every device's epoch on a close of the whole identity, and only that identity's", () => {
+  it('refuses every device of an identity closed as a whole since the epoch was read, and only that identity', () => {
     const registry = registryHeard()
     const ann = identityIdFactory.create()
     const bob = identityIdFactory.create()
-    const anns = registry.epoch(ann, 'device-phone')
-    const phones = registry.epoch(ann, 'device-phone')
-    const bobs = registry.epoch(bob, 'device-phone')
+    const before = registry.epoch()
 
     void registry.close(ann, undefined, 4001)
 
-    expect(registry.epoch(ann, 'device-phone')).not.toBe(anns)
-    expect(registry.add(ann, 'device-phone', connection(), phones)).toBeUndefined()
-    expect(registry.add(bob, 'device-phone', connection(), bobs)).toBeDefined()
-    // A close of one device leaves another device's epoch where it was.
-    const tablet = registry.epoch(ann, 'device-tablet')
+    expect(registry.epoch()).not.toBe(before)
+    expect(registry.add(ann, 'device-phone', connection(), before)).toBeUndefined()
+    expect(registry.add(ann, 'device-tablet', connection(), before)).toBeUndefined()
+    expect(registry.add(bob, 'device-phone', connection(), before)).toBeDefined()
+  })
+
+  it('refuses no other device of the identity on a close of one device', () => {
+    const registry = registryHeard()
+    const ann = identityIdFactory.create()
+    const before = registry.epoch()
 
     void registry.close(ann, 'device-phone', 4001)
 
-    expect(registry.epoch(ann, 'device-tablet')).toBe(tablet)
+    expect(registry.add(ann, 'device-tablet', connection(), before)).toBeDefined()
+    expect(registry.add(ann, 'device-phone', connection(), before)).toBeUndefined()
   })
 
   it('reports a connection whose end throws, and still ends the others', async () => {
@@ -281,8 +278,8 @@ describe('ConnectionRegistry', () => {
     }
     const phone = connection()
 
-    registry.add(ann, 'device-laptop', broken, registry.epoch(ann, 'device-laptop'))
-    registry.add(ann, 'device-phone', phone, registry.epoch(ann, 'device-phone'))
+    registry.add(ann, 'device-laptop', broken, registry.epoch())
+    registry.add(ann, 'device-phone', phone, registry.epoch())
 
     await expect(registry.close(ann, undefined, 4001)).resolves.toBe(undefined)
     expect(phone.ended).toEqual([4001])

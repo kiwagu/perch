@@ -15,12 +15,14 @@ describe('readSchema', () => {
     expect(readSchema('directory')).toBe(
       [
         ...COMMON,
+        'directory/account.surql',
         'directory/device_session.surql',
         'directory/identity.surql',
         'directory/membership.surql',
         'directory/profile.surql',
         'directory/settings.surql',
         'directory/tenant.surql',
+        'directory/verification.surql',
       ]
         .map(file)
         .join('\n'),

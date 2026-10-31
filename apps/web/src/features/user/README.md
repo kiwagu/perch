@@ -55,8 +55,8 @@ page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`
   new account's settings start in the language chosen before signing up;
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
-  device's keys while changes remain to send after the next sign-in, and says "You were signed
-  out from another device." when this device was signed out from another one
+  device's session token while changes remain to send after the next sign-in, and says "You
+  were signed out from another device." when this device was signed out from another one
   (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);

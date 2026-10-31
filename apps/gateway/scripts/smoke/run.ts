@@ -22,7 +22,7 @@ import type { SmokeDevice } from './device'
 import { deviceSessionSteps } from './device-sessions'
 import { postCredentials, type SignedIn } from './http'
 import { organisationSteps } from './organisation'
-import { check, hello, helloOnRefresh, type Opened, step, takeUpdates, unwrap } from './steps'
+import { check, hello, type Opened, refusedHello, step, takeUpdates, unwrap } from './steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
@@ -34,7 +34,8 @@ const smokeConfig = gatewayConfig.pick({
   SURREAL_URL: true,
   GATEWAY_SURREAL_USER: true,
   GATEWAY_SURREAL_PASS: true,
-  GATEWAY_JWT_KEY: true,
+  GATEWAY_AUTH_SECRET: true,
+  GATEWAY_PUBLIC_URL: true,
 })
 
 type SmokeConfig = z.output<typeof smokeConfig>
@@ -67,7 +68,8 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
           username: config.GATEWAY_SURREAL_USER,
           password: config.GATEWAY_SURREAL_PASS,
         },
-        signingKey: config.GATEWAY_JWT_KEY,
+        authSecret: config.GATEWAY_AUTH_SECRET,
+        publicUrl: config.GATEWAY_PUBLIC_URL,
         clock: systemClock,
       }),
     ),
@@ -87,13 +89,13 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     password: crypto.randomUUID(),
   }
   const first = await step(`signed up ${credentials.email}`, () =>
-    postCredentials(base, '/auth/sign-up', {
+    postCredentials(base, '/auth/sign-up/email', {
       ...credentials,
       device: { id: 'smoke-device-1', label: 'Smoke device 1' },
     }),
   )
   const second = await step('signed in a second device', () =>
-    postCredentials(base, '/auth/sign-in', {
+    postCredentials(base, '/auth/sign-in/email', {
       ...credentials,
       device: { id: 'smoke-device-2', label: 'Smoke device 2' },
     }),
@@ -156,13 +158,16 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.signedOut, `closed with ${code}`)
   })
 
-  await step(`the revoked refresh key is refused: closed with ${CLOSE.unauthorized}`, async () => {
-    const { code } = await helloOnRefresh(base, opened, first)
+  await step(
+    `device 1's token after its sign-out: its hello closed with ${CLOSE.unauthorized}`,
+    async () => {
+      const { code } = await refusedHello(base, opened, first)
 
-    check(code === CLOSE.unauthorized, `closed with ${code}`)
-  })
+      check(code === CLOSE.unauthorized, `closed with ${code}`)
+    },
+  )
 
-  await accessSteps(base, root, config.GATEWAY_JWT_KEY, opened)
+  await accessSteps(base)
   await deviceSessionSteps(base, opened)
   await organisationSteps(base, opened, second, credentials)
 }
@@ -177,8 +182,9 @@ export async function runSmoke(env: Readonly<Record<string, string | undefined>>
     SURREAL_URL: url !== undefined && URL.canParse(url) ? wsRpcUrl(url) : url,
     GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? STAND_USER.username,
     GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? STAND_USER.password,
-    // No default: the smoke opens the stand's directory with the key its gateway signs with.
-    GATEWAY_JWT_KEY: env['GATEWAY_JWT_KEY'],
+    // No defaults: the smoke's gateway runs with the stand gateway's own secret and front origin.
+    GATEWAY_AUTH_SECRET: env['GATEWAY_AUTH_SECRET'],
+    GATEWAY_PUBLIC_URL: env['GATEWAY_PUBLIC_URL'],
   })
 
   if (!parsed.success) {

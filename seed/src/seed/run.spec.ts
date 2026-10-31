@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { TEST_SIGNING_KEY } from '@workspace/data/testing'
-
 import { runSeed } from './run'
 
 describe('runSeed', () => {
@@ -13,7 +11,6 @@ describe('runSeed', () => {
       namespace: 'app',
       database: 'directory',
       credentials: { username: 'root', password: 'root' },
-      signingKey: TEST_SIGNING_KEY,
       mode: { kind: 'demo' },
       fetcher: (url) => {
         called.push(url)
@@ -22,7 +19,7 @@ describe('runSeed', () => {
       },
     })
 
-    expect(called).toEqual(['http://127.0.0.1:9/auth/sign-up'])
+    expect(called).toEqual(['http://127.0.0.1:9/auth/sign-up/email'])
     expect(seeded._unsafeUnwrapErr().message).toBe('the gateway refused the request with 503')
   })
 
@@ -35,7 +32,6 @@ describe('runSeed', () => {
       namespace: 'app',
       database: 'directory',
       credentials: { username: 'root', password: 'root' },
-      signingKey: TEST_SIGNING_KEY,
       mode: { kind: 'fresh', run },
       reset: true,
       fetcher: (url) => {
