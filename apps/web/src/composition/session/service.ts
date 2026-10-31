@@ -10,29 +10,20 @@ import type {
   SignOutOptions,
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
-import type { IdentitySpace, SyncState } from '../identity-space'
+import type { IdentitySpace } from '../identity-space'
 import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity, savedNotice } from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
-import type { SessionHost } from './host'
-import type { OpenSpace } from './open-space'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
 import { SessionSignIn } from './sign-in'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
 import { SpaceDeletion } from './space-deletion'
+import { SessionState } from './state'
 import { SessionTransitions } from './transitions'
 import { verifyEmail } from './verification'
 import { WriteBarrier } from './write-barrier'
-
-const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
-
-/** The saved identity while the start opens its space, and the end of that open. */
-interface Opening {
-  readonly user: AuthUser
-  readonly settled: Promise<unknown>
-}
 
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
@@ -53,22 +44,21 @@ export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
   readonly writePath: CurrentSpaceWritePath
   readonly #options: SessionOptions
-  readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
+  readonly #state: SessionState
   readonly #organisations: SessionOrganisations
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   readonly #elsewhere: SessionElsewhere
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
-  #open: OpenSpace | undefined
-  #opening: Opening | undefined
-  #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(options: SessionOptions) {
     this.#options = options
+    // The organisations follow every change of identity, once the subscribers heard of it.
+    this.#state = new SessionState(options, this.#transitions, () => this.#organisations.tell())
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
-      open: () => this.#open,
+      open: () => this.#state.open(),
     })
 
     const barrier = new WriteBarrier({
@@ -92,20 +82,7 @@ export class SessionService implements SessionPort {
       inventory: (identity) => this.#organisations.databases(identity),
       onError: options.onError,
     })
-    const host: SessionHost = {
-      options,
-      open: () => this.#open,
-      opened: (open) => {
-        this.#open = open
-      },
-      drop: (open) => this.#drop(open),
-      generation: () => this.#transitions.generation(),
-      isClosed: () => this.#transitions.isClosed(),
-      serially: (run) => this.#transitions.serially(run),
-      leaveAndTell: () => this.#leaveAndTell(),
-      retire: (work) => this.#retire(work),
-      emit: (user) => this.#emit(user),
-    }
+    const host = this.#state
 
     this.#signingOut = new SessionSignOut({ host, barrier, pendingRevoke, deletion })
     this.#signingIn = new SessionSignIn({
@@ -124,10 +101,10 @@ export class SessionService implements SessionPort {
     })
 
     const spaces: SpaceSource = {
-      current: () => this.#open?.space,
+      current: () => this.#state.open()?.space,
       onSwitch: (listener) => this.subscribe(() => listener()),
-      opening: () => this.#opening?.settled,
-      signingOut: () => barrier.signingOut(this.#open?.heard),
+      opening: () => this.#state.opening()?.settled,
+      signingOut: () => barrier.signingOut(this.#state.open()?.heard),
       writing: (space, work) => barrier.writing(space.identity.id, work),
     }
 
@@ -141,22 +118,20 @@ export class SessionService implements SessionPort {
           this.#organisations.followSaved()
         }
       }),
-      options.visibility.onChange((state) => this.#open?.space.visibility(state)),
+      options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
     ]
   }
 
   current(): AuthUser | undefined {
-    return this.#open?.space.identity ?? this.#opening?.user
+    return this.#state.current()
   }
 
   space(): IdentitySpace | undefined {
-    return this.#open?.space
+    return this.#state.open()?.space
   }
 
   subscribe(listener: (user: AuthUser | undefined) => void): () => void {
-    this.#listeners.add(listener)
-
-    return () => this.#listeners.delete(listener)
+    return this.#state.subscribe(listener)
   }
 
   signUp(input: SignUpInput): ResultAsync<AuthUser, DataError> {
@@ -190,14 +165,14 @@ export class SessionService implements SessionPort {
    * none when it did not open or another identity's space opened instead.
    */
   signingOutEverywhere(): () => ResultAsync<void, DataError> {
-    const opening = this.#opening
+    const opening = this.#state.opening()
 
     if (!opening) {
       return this.#elsewhere.signingOutEverywhere()
     }
 
     const naming = opening.settled.then(() =>
-      this.#openFor(opening) ? this.#elsewhere.signingOutEverywhere() : undefined,
+      this.#state.openFor(opening) ? this.#elsewhere.signingOutEverywhere() : undefined,
     )
 
     return () =>
@@ -217,10 +192,7 @@ export class SessionService implements SessionPort {
 
     if (saved) {
       // The saved identity is current while its space opens, so the page renders for it at once.
-      const opening: Opening = { user: saved, settled: Promise.resolve(restoring) }
-
-      this.#opening = opening
-      void opening.settled.then(() => this.#opened(opening))
+      this.#state.startOpening(saved, restoring)
     }
 
     return restoring
@@ -238,7 +210,7 @@ export class SessionService implements SessionPort {
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
   flush(): ResultAsync<void, DataError> {
-    return this.#open?.space.flush() ?? okAsync(undefined)
+    return this.#state.open()?.space.flush() ?? okAsync(undefined)
   }
 
   notice(): SessionNotice | undefined {
@@ -275,11 +247,11 @@ export class SessionService implements SessionPort {
    * joins once that space is open, and nobody else's.
    */
   adoptMembership(created: Membership): Promise<void> {
-    const opening = this.#opening
+    const opening = this.#state.opening()
 
     return opening
       ? opening.settled.then(() =>
-          this.#openFor(opening) ? this.#organisations.adopt(created) : undefined,
+          this.#state.openFor(opening) ? this.#organisations.adopt(created) : undefined,
         )
       : this.#organisations.adopt(created)
   }
@@ -295,57 +267,7 @@ export class SessionService implements SessionPort {
       stop()
     }
 
-    this.#leaveAndTell()
-    await this.#retiring
-  }
-
-  /** Whether the space open now is the one the start's `opening` opened. */
-  #openFor(opening: Opening): boolean {
-    return this.#open?.space.identity.id === opening.user.id
-  }
-
-  /** The start's open of the saved identity's space ended, opened or not. */
-  #opened(opening: Opening): void {
-    if (this.#opening === opening) {
-      this.#opening = undefined
-    }
-  }
-
-  /** `open` is no longer the session's space: nobody is current, and its sync state is reported no more. */
-  #drop(open: OpenSpace): void {
-    this.#open = undefined
-    open.status.live = false
-    this.#options.onSyncState(NOT_SYNCING)
-  }
-
-  /** Closes the open space, if any, and tells the subscribers that nobody is signed in. */
-  #leaveAndTell(): void {
-    const open = this.#open
-
-    if (!open) {
-      return
-    }
-
-    this.#drop(open)
-    this.#retire(open.space.close())
-    this.#emit(undefined)
-  }
-
-  /** Work that outlives the space it ends; `close` waits for it. */
-  #retire(work: Promise<void>): void {
-    this.#retiring = Promise.all([this.#retiring, work.catch(() => undefined)])
-  }
-
-  #emit(user: AuthUser | undefined): void {
-    // Nobody is signed in any more: neither is the identity whose space the start was opening.
-    if (user === undefined) {
-      this.#opening = undefined
-    }
-
-    for (const listener of this.#listeners) {
-      listener(user)
-    }
-
-    this.#organisations.tell()
+    this.#state.leaveAndTell()
+    await this.#state.retired()
   }
 }
