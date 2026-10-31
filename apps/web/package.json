@@ -40,6 +40,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "ts-pattern": "catalog:",
+    "workbox-window": "catalog:",
     "xstate": "catalog:"
   },
   "devDependencies": {
@@ -55,6 +56,7 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plugin-pwa": "catalog:",
     "vite-plugin-wasm": "catalog:",
     "vitest": "catalog:"
   }

@@ -69,6 +69,9 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
   per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
   the in-memory e2e stand, so afterwards run `mcproc restart surrealdb-e2e`, then
   `mcproc restart gateway-e2e`; `bun run seed:sweep` reaches the dev stand only.
+- `bun run perf:measure`: the start's timings on a slowed-down phone against their budgets,
+  on the production build the e2e stand serves (see `tests/e2e/README.md`); the size budgets
+  are checked by every production build (see `apps/web/README.md`).
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
   profile, waits for each of its apps and runs the Playwright specs through the front;

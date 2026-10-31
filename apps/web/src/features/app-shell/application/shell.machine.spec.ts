@@ -27,8 +27,19 @@ function frame(reloadedFor: string[] = []) {
     done: (update: string) => reloadedFor.includes(update),
     mark: (update: string) => void reloadedFor.push(update),
   }
+  const install = {
+    prompt: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    postpone: vi.fn<() => void>(),
+  }
   const actor = createActor(
-    createShellMachine({ values: () => values, signOutHere, reload, setTheme, selfReloads }),
+    createShellMachine({
+      values: () => values,
+      signOutHere,
+      reload,
+      setTheme,
+      selfReloads,
+      install,
+    }),
   ).start()
   const spoken: Locale[] = []
   const emitted: unknown[] = []
@@ -41,6 +52,7 @@ function frame(reloadedFor: string[] = []) {
     signOutHere,
     reload,
     setTheme,
+    install,
     spoken,
     emitted,
     signIn: (account = 'idn_ann') => {
@@ -71,7 +83,7 @@ function frame(reloadedFor: string[] = []) {
       actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'dark' }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
     canUpdate: () => actor.getSnapshot().can({ type: 'app-shell.update-button' }),
-    is: (state: 'ready' | 'failed' | 'crashed' | 'updating' | 'reloading') =>
+    is: (state: 'ready' | 'failed' | 'crashed' | 'updating' | 'reloading' | 'installing') =>
       actor.getSnapshot().matches(state),
   }
 }
@@ -462,5 +474,62 @@ describe('shell machine', () => {
     failed.actor.send({ type: 'platform.open-failed' })
 
     expect(failed.actor.getSnapshot().can({ type: 'platform.offline' })).toBe(false)
+  })
+
+  it('reminds to install the app, installs it from the button, and puts it off from later', async () => {
+    const shell = frame()
+    const installShown = {
+      type: 'show',
+      anchor: 'app-shell.install-message',
+      codes: ['install-available'],
+    }
+    const installGone = { type: 'clear', anchor: 'app-shell.install-message' }
+
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.install-offered' })
+
+    expect(shell.emitted.at(-1)).toEqual(installShown)
+
+    shell.actor.send({ type: 'app-shell.install-button' })
+
+    expect(shell.is('installing')).toBe(true)
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.install.prompt).toHaveBeenCalledOnce()
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+
+    shell.actor.send({ type: 'platform.install-by-steps' })
+    shell.actor.send({ type: 'app-shell.install-later-button' })
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.install.postpone).toHaveBeenCalledOnce()
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+
+    shell.actor.send({ type: 'platform.installed' })
+
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+  })
+
+  it('takes the reminder away when the browser shows no window after all', async () => {
+    const shell = frame()
+
+    shell.install.prompt.mockImplementation(() => Promise.reject(new Error('no window')))
+    shell.actor.send({ type: 'platform.opened' })
+    shell.actor.send({ type: 'platform.install-offered' })
+    shell.actor.send({ type: 'app-shell.install-button' })
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.emitted.at(-1)).toEqual({ type: 'clear', anchor: 'app-shell.install-message' })
+  })
+
+  it('takes no install around a crash, while the data opens or once it failed to', () => {
+    const crashed = frame()
+
+    crashed.actor.send({ type: 'platform.opened' })
+    crashed.actor.send({ type: 'platform.crashed' })
+
+    expect(crashed.actor.getSnapshot().can({ type: 'app-shell.install-button' })).toBe(false)
+    expect(crashed.actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
+    expect(frame().actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
   })
 })

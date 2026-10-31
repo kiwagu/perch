@@ -30,8 +30,8 @@ the gateway's `/sync`). No dev server runs behind it.
   it off with `ui_manifest: '0'` under `vars` in `.mcproc/mcproc.local.yaml`, then
   `mcproc restart caddy-dev` (or `caddy-e2e`). Every response carries the browser security
   headers of the snippet `security-headers`, each with its reason beside it: a
-  Content-Security-Policy that allows only this origin's scripts, styles, fonts, worker,
-  fetches and WebSocket, plus WASM compilation (`'wasm-unsafe-eval'`, never `'unsafe-eval'`),
+  Content-Security-Policy that allows only this origin's scripts, styles, fonts, web app
+  manifest, worker, fetches and WebSocket, plus WASM compilation (`'wasm-unsafe-eval'`, never `'unsafe-eval'`),
   and no framing; `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, a
   `Permissions-Policy` that turns off what the app does not use, and
   `X-Content-Type-Options: nosniff`. No `Strict-Transport-Security`: it binds the whole host,

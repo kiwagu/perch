@@ -62,6 +62,13 @@ modules' routes.
   `platform.connecting`, `platform.offline`, `platform.sync-stopped`) while an account is signed
   in; the flow shows `app-shell.sync-message` with that code in the header, in `ready` and around
   a crash, and clears it when the account signs out. On a phone it takes two short lines at most.
+- Installing the app: the shell container reads the device's install (`platform/install.ts`,
+  `useDeviceInstall`) and sends its offer as the frame's platform event (`platform.install-offered`,
+  `platform.install-by-steps`, `platform.installed`); the flow shows `app-shell.install-message`
+  above the page in `ready` (`install-available` with `app-shell.install-button`, or
+  `install-by-steps` with the steps), and both its buttons run an invoke (`installing`: the
+  browser's window, a decline put off as later; `postponing`: three days on this device) that
+  clears it. Around a crash its buttons take nothing.
 - Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
   key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no

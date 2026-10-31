@@ -200,7 +200,12 @@ modeling stage.
   `data-id`, `data-value` and whether it is visible, with the page's URL
   (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
   Zod object) validates the URL's search, drops a parameter equal to its default and carries
-  the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
+  the `retain` parameters across navigations. `install.ts` installs the app on this device for
+  the frame's reminder: Chromium's `beforeinstallprompt` (its window opened by `prompt()`),
+  Safari on an iPhone or an iPad by the user's steps, the reminder put off for three days
+  (`perch.install.later`) or ended once installed (`perch.install.installed`, `appinstalled`, the
+  app running standalone); the start makes it before the first frame and gives it through
+  `InstallContext`. `routes-contract.spec.ts` proves every module
   route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
@@ -272,12 +277,24 @@ gateway does, which leaves a stand that already has it alone. `openStandTenant()
   manifest names; a commit or a new version rebuilds, so the bundle and the manifest stay one
   build. Every build also strips the `sourceMappingURL` custom section from the WASM it emits
   (`build/wasm-source-maps.ts`, in the main and the worker bundles): loro-crdt ships its module
-  naming a source map on a CDN, which DevTools would ask for and the front's policy block. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  naming a source map on a CDN, which DevTools would ask for and the front's policy block. And
+  every build writes the web app manifest and the service worker (`build/pwa.ts`,
+  `vite-plugin-pwa`): the icons are `public/icon.svg` with its PNG sizes; the worker caches the
+  page (as `/offline-shell`, an address nothing links to) and its hashed scripts and styles when
+  it installs, answers a page load from the network and only offline from that cached page,
+  serves hashed files from the cache first, caches each
+  WASM module the first time it loads, and never caches `/backend/` or the UI manifest. Only a
+  production build registers it (`src/composition/service-worker.ts`, from `main.tsx`), so the
+  dev stand runs without it and the e2e stand (a production build) has it. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
   reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
   contract check passes, with its schema and the model's beside it, which the stands serve at
-  `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper.
+  `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper. A production
+  build fails over its size budgets (`build/size-budgets.ts`, gzipped): the first frame (the
+  page, the scripts and styles it names, its Basic Latin font) 310 kB, each lazy script 100 kB,
+  the SurrealDB WASM 5.2 MB and the Loro WASM 1.2 MB, and a WASM module without a budget fails
+  it too; otherwise it prints how close it came.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.

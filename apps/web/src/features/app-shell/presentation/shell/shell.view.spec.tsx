@@ -371,4 +371,38 @@ describe('ShellView', () => {
 
     expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
   })
+
+  it('reminds to install the app with its button and later, each while the flow takes it', () => {
+    const onInstall = vi.fn()
+    const onPostponeInstall = vi.fn()
+
+    renderShell({
+      install: 'install-available',
+      canInstall: true,
+      onInstall,
+      canPostponeInstall: true,
+      onPostponeInstall,
+    })
+
+    const message = screen.getByTestId('app-shell.install-message')
+
+    expect(message.getAttribute('data-code')).toBe('install-available')
+    expect(message.textContent).toBe(en['app.shell.install.available'])
+
+    fireEvent.click(screen.getByTestId('app-shell.install-button'))
+    fireEvent.click(screen.getByTestId('app-shell.install-later-button'))
+
+    expect(onInstall).toHaveBeenCalledOnce()
+    expect(onPostponeInstall).toHaveBeenCalledOnce()
+  })
+
+  it('shows the steps that install the app with later and no install button, in Spanish too', () => {
+    renderShell({ install: 'install-by-steps', canPostponeInstall: false, locale: 'es' })
+
+    expect(screen.getByTestId('app-shell.install-message').textContent).toBe(
+      es['app.shell.install.by-steps'],
+    )
+    expect(screen.queryByTestId('app-shell.install-button')).toBeNull()
+    expect(screen.getByTestId('app-shell.install-later-button').hasAttribute('disabled')).toBe(true)
+  })
 })
