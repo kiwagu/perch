@@ -39,21 +39,35 @@ const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 /** The merge base of the branch with `main`, which the pre-commit hook names on a branch. */
 const BASE = process.env['CONTRACT_AHEAD_BASE']
 
-/** The flows of the screens at the branch's base, by screen id; none outside the hook's ahead mode. */
-function flowsAtBase(): ReadonlyMap<string, unknown> {
+/**
+ * The flows of the screens at the branch's base, by screen id (none outside the hook's ahead
+ * mode, or where the base has no contract), or why the contract there does not load.
+ */
+type AtBase = { readonly flows: ReadonlyMap<string, unknown> } | { readonly problem: string }
+
+function flowsAtBase(): AtBase {
   if (!AHEAD || BASE === undefined || BASE === '') {
-    return new Map()
+    return { flows: new Map() }
   }
 
-  const base = contractAt(BASE, ROOT)
+  let base: ReturnType<typeof contractAt>
 
-  return 'missing' in base
-    ? new Map()
-    : new Map(
-        base.screens.screens.flatMap((screen) =>
-          screen.flow === undefined ? [] : [[screen.id, screen.flow] as const],
-        ),
-      )
+  try {
+    base = contractAt(BASE, ROOT)
+  } catch (error) {
+    return { problem: error instanceof Error ? error.message : String(error) }
+  }
+
+  return {
+    flows:
+      'missing' in base
+        ? new Map()
+        : new Map(
+            base.screens.screens.flatMap((screen) =>
+              screen.flow === undefined ? [] : [[screen.id, screen.flow] as const],
+            ),
+          ),
+  }
 }
 
 const AT_BASE = flowsAtBase()
@@ -123,20 +137,27 @@ describe('the machines of the app', () => {
     expect(problems.map(formatProblem)).toEqual([])
   })
 
-  it.each(Object.entries(APP_MACHINES))('%s is the flow of its screen', (id, machine) => {
-    const flow =
-      screens?.screens.find((screen) => screen.id === id)?.flow ??
-      expect.unreachable(`a flow of ${id}`)
-    const { config } = machine()
-    const app = projected(config)
-
-    expect(beyondTheSubset(config), `what ${id} does beyond its flow`).toEqual([])
-    const atBase = AT_BASE.get(id)
-
-    expect(app).toEqual(
-      AHEAD
-        ? laggingOf(app, projected(flow), atBase === undefined ? undefined : projected(atBase))
-        : projected(flow),
-    )
+  // A base that does not load fails here, once; the machines then wait for it.
+  it("the contract at the branch's base loads", () => {
+    expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
   })
+
+  it.skipIf('problem' in AT_BASE).each(Object.entries(APP_MACHINES))(
+    '%s is the flow of its screen',
+    (id, machine) => {
+      const flow =
+        screens?.screens.find((screen) => screen.id === id)?.flow ??
+        expect.unreachable(`a flow of ${id}`)
+      const atBase = 'flows' in AT_BASE ? AT_BASE.flows.get(id) : expect.unreachable('a base')
+      const { config } = machine()
+      const app = projected(config)
+
+      expect(beyondTheSubset(config), `what ${id} does beyond its flow`).toEqual([])
+      expect(app).toEqual(
+        AHEAD
+          ? laggingOf(app, projected(flow), atBase === undefined ? undefined : projected(atBase))
+          : projected(flow),
+      )
+    },
+  )
 })
