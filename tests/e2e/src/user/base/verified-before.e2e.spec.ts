@@ -1,9 +1,7 @@
 // scenario: user/base/verified-before
-import { firstLink } from '@workspace/mailbox'
-
 import { generate } from '../../support/data'
-import { expect, startSignUp, test } from '../../support/fixtures'
-import { openDeclaredMail } from '../../support/mail-contract'
+import { expect, expectPathname, startSignUp, test } from '../../support/fixtures'
+import { openDeclaredMail, openMailLink } from '../../support/mail-contract'
 
 test.describe('Open a verification link a second time', { tag: '@smoke' }, () => {
   test('A link opened again says the email is verified and signs nothing in', async ({ page }) => {
@@ -20,7 +18,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
           params: { email: data.email, locale: 'en' },
         })
 
-        await page.waitForURL('**/me')
+        await expectPathname(page, '/me')
         await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
 
         return opened
@@ -32,14 +30,14 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
     })
 
     await test.step('3. Open the link of the same [mail:sign-up] again', async () => {
-      await page.goto(firstLink(mail))
+      await openMailLink(page, mail, 'sign-up')
       // Expected: After step 3 [user.verify-email.message] carries [code:verified-before], the
       //   URL stays [/verify-email] and [app-shell.nav.sign-in-link] shows
       await expect(page.getByTestId('user.verify-email.message')).toHaveAttribute(
         'data-code',
         'verified-before',
       )
-      await expect(page).toHaveURL(/\/verify-email(\?.*)?$/)
+      await expectPathname(page, '/verify-email')
       await expect(page.getByTestId('app-shell.nav.sign-in-link')).toBeVisible()
     })
 

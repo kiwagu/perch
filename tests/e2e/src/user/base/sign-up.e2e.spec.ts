@@ -1,6 +1,13 @@
 // scenario: user/base/sign-up
 import { generate } from '../../support/data'
-import { appReady, checkYourMail, expect, notice, test } from '../../support/fixtures'
+import {
+  appReady,
+  checkYourMail,
+  expect,
+  expectPathname,
+  notice,
+  test,
+} from '../../support/fixtures'
 import { openDeclaredMail } from '../../support/mail-contract'
 
 test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }, () => {
@@ -58,7 +65,7 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
     // - After step 5 the link opens [/verify-email], then [app-shell.notice-message] carries
     //   [code:welcome], the URL is [/me] and [user.profile.heading] shows the entered name
     await expect(notice(page, 'welcome')).toBeVisible()
-    await expect(page).toHaveURL(/\/me$/)
+    await expectPathname(page, '/me')
     await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
     // - [user.profile.email-input] shows the entered email
     await expect(page.getByTestId('user.profile.email-input')).toHaveValue(data.email)

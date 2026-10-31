@@ -1,6 +1,6 @@
 // scenario: user/base/verify-link-invalid
 import { generate } from '../../support/data'
-import { expect, notice, startSignUp, test } from '../../support/fixtures'
+import { expect, expectPathname, notice, startSignUp, test } from '../../support/fixtures'
 import { expectDeclaredMail, openDeclaredMail } from '../../support/mail-contract'
 import { mailbox } from '../../support/mailbox'
 
@@ -46,7 +46,7 @@ test.describe('Open a verification link that does not work', { tag: '@smoke' }, 
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible()
-      await expect(page).toHaveURL(/\/me$/)
+      await expectPathname(page, '/me')
     })
   })
 })

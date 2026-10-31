@@ -1,6 +1,6 @@
 // scenario: user/flows/language-from-guest
 import { generate } from '../../support/data'
-import { appReady, checkYourMail, expect, test } from '../../support/fixtures'
+import { appReady, checkYourMail, expect, expectPathname, test } from '../../support/fixtures'
 import { expectDeclaredMail, openDeclaredMail } from '../../support/mail-contract'
 import { mailbox } from '../../support/mailbox'
 
@@ -43,7 +43,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       await openDeclaredMail(deviceB, 'sign-up', signedUp)
       // Expected: After step 4 device B is on [/me], and its [/settings] shows
       //   [user.settings.locale-select] with [value:es], with no choice made on device B
-      await deviceB.waitForURL('**/me')
+      await expectPathname(deviceB, '/me')
       await deviceB.getByTestId('app-shell.nav.settings-link').click()
       await expect(deviceB.getByTestId('user.settings.locale-select')).toHaveAttribute(
         'data-value',

@@ -1,6 +1,14 @@
 // scenario: user/base/sign-in-unverified
 import { generate } from '../../support/data'
-import { appReady, checkYourMail, expect, notice, startSignUp, test } from '../../support/fixtures'
+import {
+  appReady,
+  checkYourMail,
+  expect,
+  expectPathname,
+  notice,
+  startSignUp,
+  test,
+} from '../../support/fixtures'
 import { expectDeclaredMail, openDeclaredMail } from '../../support/mail-contract'
 import { mailbox } from '../../support/mailbox'
 
@@ -50,7 +58,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible()
-      await expect(page).toHaveURL(/\/me$/)
+      await expectPathname(page, '/me')
     })
   })
 })

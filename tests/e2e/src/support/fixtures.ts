@@ -70,6 +70,24 @@ export const toast = (page: Page, code: string) =>
 export const signInNotice = (page: Page, code: string) =>
   page.locator(`[data-testid="user.sign-in.notice-message"][data-code="${code}"]`)
 
+/**
+ * Waits up to `timeout` until `page` is on `pathname`, reading its path alone: a page opened from a
+ * mail's link carries the link's token in its search, which a failure must not print.
+ */
+export async function expectPathname(
+  page: Page,
+  pathname: string,
+  timeout = 30_000,
+): Promise<void> {
+  await expect
+    .poll(() => new URL(page.url()).pathname, {
+      message: `the page is not on ${pathname}`,
+      timeout,
+      intervals: [100],
+    })
+    .toBe(pathname)
+}
+
 /** The sign-in page asking to open the link of the verification mail, by anchor and code. */
 export const checkYourMail = (page: Page) =>
   page.locator('[data-testid="user.sign-in.mail-message"][data-code="check-your-mail"]')
@@ -126,7 +144,7 @@ export async function signUp(
 ): Promise<SeedAccount> {
   await startSignUp(page, account)
   await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } })
-  await page.waitForURL('**/me')
+  await expectPathname(page, '/me')
 
   return account
 }
@@ -285,7 +303,10 @@ async function pageWidths(
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const { scrollWidth, clientWidth } = await pageWidths(page)
 
-  expect(scrollWidth, `${page.url()} scrolls sideways`).toBeLessThanOrEqual(clientWidth)
+  // The path alone: a page opened from a mail's link carries its token in the search.
+  expect(scrollWidth, `${new URL(page.url()).pathname} scrolls sideways`).toBeLessThanOrEqual(
+    clientWidth,
+  )
 }
 
 extended.step = Object.assign(

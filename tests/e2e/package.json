@@ -15,6 +15,7 @@
     "@workspace/seed": "workspace:*",
     "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",
+    "parse5": "catalog:",
     "typescript": "catalog:"
   }
 }

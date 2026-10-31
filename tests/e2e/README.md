@@ -23,7 +23,8 @@ service worker (`serviceWorkers: 'block'`, so requests and page loads stay the n
 with data generated from the seed catalog, each through the link of its verification mail, read
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
-and the search parameter of its link, and the language of its HTML, never its wording. Key pages are compared with screenshots on
+and the search parameter of its link, and the language of its HTML's root element, never its
+wording; a failed check prints no address, link, token or HTML of the mail. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
 --update-snapshots=changed` rewrites the ones that differ.
@@ -132,7 +133,9 @@ a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`),
 (fails at once when the sign-in page shows its error, naming its code), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
 opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
-`/me`), `pageLoads` (counts a page's full loads, for "without a reload"), and `notice`,
+`/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
+from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for
+"without a reload"), and `notice`,
 `signInNotice` and `checkYourMail`, which locate `app-shell.notice-message`,
 `user.sign-in.notice-message` and `user.sign-in.mail-message` by their anchor and code
 together. Tests locate elements by their anchors and assert codes,
@@ -156,9 +159,11 @@ keys and names, note texts).
 at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for.
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
-with the declared search parameter set, and the language of its HTML, from the action's
-parameters or the account) and `openDeclaredMail` (waits for the action's mail to its declared
-recipient after the ones a test has seen, holds it to its declaration and opens its link).
+with the declared search parameter set, and the `lang` of its HTML's root element as parse5
+reads it, from the action's parameters or the account; each check asserts a comparison's outcome
+under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
+`openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
+has seen, holds it to its declaration and opens its link).
 
 ## Commands
 

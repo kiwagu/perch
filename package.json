@@ -104,6 +104,7 @@
       "neverthrow": "8.2.0",
       "nodemailer": "10.1.5",
       "oxc-parser": "0.154.0",
+      "parse5": "8.0.1",
       "pino": "10.4.0",
       "react": "19.3.1",
       "react-dom": "19.3.1",

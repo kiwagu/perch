@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import { expect, type Page } from '@playwright/test'
+import { defaultTreeAdapter, parse } from 'parse5'
 
 import { firstLink, type Mail } from '@workspace/mailbox'
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
@@ -50,26 +51,60 @@ function valueNamed(name: string, values: MailValues, ofAccount: 'email' | 'lang
 }
 
 /**
+ * The `lang` of an HTML document's root element, as an HTML parser builds the document (parse5,
+ * the parser jsdom uses): a comment, a quote style or an attribute order changes nothing.
+ */
+function rootLanguage(html: string): string | undefined {
+  const root = parse(html).childNodes.find((node) => defaultTreeAdapter.isElementNode(node))
+
+  return root === undefined
+    ? undefined
+    : defaultTreeAdapter.getAttrList(root).find(({ name }) => name === 'lang')?.value
+}
+
+/**
  * Holds a mail to what its platform action declares (`platform.yaml`, `mail`): its one recipient,
  * the path of the screen its link opens with the declared search parameter set, and the language
- * of its HTML.
+ * of its HTML's root element. Each check asserts a comparison's outcome under a fixed message, so
+ * a failure prints no address, no link, no token and no HTML of the mail.
  */
 export function expectDeclaredMail(mail: Mail, action: string, values: MailValues): void {
   const { mail: declaration, paths } = declared(action)
-  const link = new URL(firstLink(mail))
+  const recipient = valueNamed(declaration.to, values, 'email').toLowerCase()
+  const language = valueNamed(declaration.language, values, 'language')
+  const link = URL.parse(firstLink(mail))
+  const named = `[mail:${action}]`
 
   expect(
-    mail.to.map(({ address }) => address),
-    `the recipient of [mail:${action}]`,
-  ).toEqual([valueNamed(declaration.to, values, 'email').toLowerCase()])
-  expect(paths, `the screen the link of [mail:${action}] opens`).toContain(link.pathname)
+    mail.to.length === 1 && mail.to[0]?.address === recipient,
+    `recipient mismatch: ${named} does not go to its declared recipient alone`,
+  ).toBe(true)
   expect(
-    link.searchParams.get(declaration.link.search),
-    `the ${declaration.link.search} of its link`,
-  ).toBeTruthy()
-  expect(mail.html, `the language of [mail:${action}]`).toContain(
-    `<html lang="${valueNamed(declaration.language, values, 'language')}">`,
-  )
+    link !== null && paths.includes(link.pathname),
+    `wrong path: the link of ${named} does not open its declared screen`,
+  ).toBe(true)
+  expect(
+    Boolean(link?.searchParams.get(declaration.link.search)),
+    `missing declared parameter: the link of ${named} carries no ${declaration.link.search}`,
+  ).toBe(true)
+  expect(
+    rootLanguage(mail.html) === language,
+    `language mismatch: the HTML of ${named} does not speak its declared language`,
+  ).toBe(true)
+}
+
+/**
+ * Opens the link of `mail`, the mail of `action`, in `page`. A failure says so in fixed words: the
+ * navigation's own error would print the link, and its token with it.
+ */
+export async function openMailLink(page: Page, mail: Mail, action: string): Promise<void> {
+  const link = firstLink(mail)
+
+  try {
+    await page.goto(link)
+  } catch {
+    throw new Error(`the link of [mail:${action}] did not open`)
+  }
 }
 
 /**
@@ -86,7 +121,7 @@ export async function openDeclaredMail(
   const mail = await mailbox.next(valueNamed(declaration.to, values, 'email'), seen)
 
   expectDeclaredMail(mail, action, values)
-  await page.goto(firstLink(mail))
+  await openMailLink(page, mail, action)
 
   return mail
 }
