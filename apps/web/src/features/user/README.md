@@ -9,17 +9,34 @@ profile is the account's face, the settings what the app is like for it (today i
 never read by anyone else. Layers:
 `domain/` holds the profile entity (schema and bounds) and one file per rule
 (`profile-name.rule.ts`, `profile-bio.rule.ts`); `application/` the `SignInService` over the
-session port, the `ProfileService` over the shape runner and the command bus, the
+session port, the `VerifyEmailService` over the session port and the profile and settings
+services (it exchanges a verification link's token, and the first verification, which signs
+this device in, creates the account's settings in the language it signed up in, then its profile
+with the name it signed up with; a link verified before creates nothing), the `ProfileService`
+over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
 machine (the flow of `contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt
 invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, it keeps the
-codes of the form's error and mail message, and emits `show` and `navigate` for the page) and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
-`locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
+codes of the form's error and mail message, and emits `show` and `navigate` for the page), the
+verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
+invoking `platform.verify-email` with the token of its address, given when the page builds it;
+the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
+ends on its message, a refused one offers `platform.resend-verification` to an email typed; it
+keeps the codes of the page's error and message) and one file per policy
+(`profile-name.policy.ts`, `profile-bio.policy.ts`, `locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
 
 ## Surface
 
-- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/me` (guard `authenticated`)
+- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/verify-email` (guard `guest`,
+  search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
+  its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
+  is an empty one, which the session refuses as `data:LINK_INVALID` without asking the gateway).
+  The exchange of a token is kept by the mounted page: React's StrictMode restarts a mounted
+  screen's effects once in development, which starts the machine's first invoke again, and the
+  gateway signs a device in only at a link's first exchange, so the restart reuses the exchange
+  already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
+  failed exchange) asks afresh. `/me` (guard `authenticated`)
   renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
   this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
   chooses the same one) and the account's language
@@ -35,10 +52,11 @@ codes of the form's error and mail message, and emits `show` and `navigate` for 
 - Commands `settings.commands.surql`: `createSettings` (where the account's email is first
   verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
-- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`; `SETTINGS_SERVICE` is provided app-wide by
-  the composition root, since the frame reads and stores the settings too.
+- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
+  is provided app-wide by the composition root, since the frame reads and stores the settings too.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
-- Anchors: screens `user.sign-in` and `user.profile` in `contract/domain/screens/sign-in.yaml` and
+- Anchors: screens `user.sign-in`, `user.verify-email` and `user.profile` in
+  `contract/domain/screens/sign-in.yaml`, `contract/domain/screens/verify-email.yaml` and
   `contract/domain/screens/me.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
@@ -59,7 +77,12 @@ codes of the form's error and mail message, and emits `show` and `navigate` for 
   (`user.sign-in.resend-button`); a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
   the account's settings and profile are created where its link is first opened, from the name
-  and the language it signed up with;
+  and the language it signed up with; the verify page says the link is being checked
+  (`user.verify-email.status`), says a link opened again is verified already beside the link to
+  sign in (`user.verify-email.message`, code `verified-before`), and for a link that does not
+  verify says why (`user.verify-email.error`: `link-invalid`, `link-expired`, `other-account`,
+  `rate-limited`, `failed`) and sends a new one to the email typed (`user.verify-email.form`),
+  saying it is on its way (code `check-your-mail`);
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
   device's session token while changes remain to send after the next sign-in, and says "You
@@ -75,6 +98,6 @@ codes of the form's error and mail message, and emits `show` and `navigate` for 
 ## Commands
 
 - `bun run test` in `apps/web` runs this module's specs (`*.spec.ts`, `*.view.spec.tsx`,
-  `sign-in.container.spec.tsx`).
+  `sign-in.container.spec.tsx`, `verify-email.container.spec.tsx`).
 - `bun run model` regenerates `profile.model.gen.ts` and the `.surql.d.ts` files after a
   change to the `.surql` files; `bun run model:check` verifies them.

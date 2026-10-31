@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { SHAPE_RUNNER } from '@workspace/data'
 import { Container } from '@workspace/di'
-import { profileIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { openTestSession, type TestSession } from '../../composition/__fixtures__/session'
 import type { SessionService } from '../../composition/session'
@@ -13,6 +12,7 @@ import { PROFILE_SERVICE } from './application/profile.service'
 import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
 import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
+import { VERIFY_EMAIL_SERVICE } from './application/verify-email.service'
 import { UserModule } from './user.module'
 
 let opened: TestSession
@@ -49,58 +49,51 @@ afterEach(async () => {
 })
 
 describe('UserModule', () => {
-  it('provides sign-in, profile and settings services over the application ports', async () => {
+  it('provides sign-in, verification, profile and settings services over the application ports', async () => {
     const email = 'ann@example.test'
 
     expect(
       (
         await container
           .get(SIGN_IN_SERVICE)
-          .signUp({ email, password: 'secret-ann', name: 'Ann', locale: 'en' })
+          .signUp({ email, password: 'secret-ann', name: 'Ann', locale: 'es' })
       ).isOk(),
     ).toBe(true)
 
-    // The link of its mail signs this device in.
-    const verified = (await session.verifyEmail(opened.auth.linkFor(email)))._unsafeUnwrap()
+    // The link of its mail signs this device in, and makes the account whole there.
+    const verified = (
+      await container.get(VERIFY_EMAIL_SERVICE).verify(opened.auth.linkFor(email))
+    )._unsafeUnwrap()
     const user = verified.kind === 'signed-in' ? verified.user : expect.unreachable('signed in')
 
-    expect(
-      (
-        await container.get(PROFILE_SERVICE).createProfile({
-          id: profileIdFactory.create(),
-          identity: user.id,
-          name: 'Ann',
-          email: user.email,
-        })
-      ).isOk(),
-    ).toBe(true)
-    expect(
-      (
-        await container
-          .get(SETTINGS_SERVICE)
-          .createSettings({ id: settingsIdFactory.create(), identity: user.id, locale: 'en' })
-      ).isOk(),
-    ).toBe(true)
     expect((await session.flush()).isOk()).toBe(true)
-
     expect(
       (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ name: 'Ann' }])
+    ).toMatchObject([{ name: 'Ann', email }])
     expect(
       (await container.get(SETTINGS_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ locale: 'en' }])
+    ).toMatchObject([{ locale: 'es' }])
   })
 
-  it('routes guests to sign-in and signed-in users to their profile and their settings', () => {
-    expect(UserModule.routes).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
-      { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
-      { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },
+  it('routes guests to sign-in and to the verification of their email, and signed-in users to their profile and their settings', () => {
+    expect(
+      UserModule.routes.map((route) => ({
+        path: route.path,
+        page: route.page,
+        guard: route.guard,
+        search: route.search === undefined ? undefined : Object.keys(route.search.shape),
+      })),
+    ).toEqual([
+      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: undefined },
+      { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
+      { path: '/me', page: 'ProfilePage', guard: 'authenticated', search: undefined },
+      { path: '/settings', page: 'SettingsPage', guard: 'authenticated', search: undefined },
     ])
     expect(Object.keys(UserModule.declarations).sort()).toEqual([
       'ProfilePage',
       'SettingsPage',
       'SignInPage',
+      'VerifyEmailPage',
     ])
   })
 })
