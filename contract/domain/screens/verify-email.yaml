@@ -100,7 +100,9 @@ flow:
             - show: { user.verify-email.message: [ check-your-mail ] }
         onError:
           target: resend-offered
+          description: The error says why the new link was not sent; a message of an earlier resend goes.
           actions:
+            - clear: user.verify-email.message
             - show: user.verify-email.error
     sent:
       description: The message says a new link is on its way to the email typed; the form sends another.
