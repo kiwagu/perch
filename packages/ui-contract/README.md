@@ -68,7 +68,11 @@ for Bun.
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
     those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
-    and their parts,
+    and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
+    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
+    reserved word no parameter of an action that sends a mail takes, and
+    the `link` with the `screen` it opens and the `search` parameter carrying its token; the
+    type `PlatformMail`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
     leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
@@ -89,14 +93,15 @@ for Bun.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
-    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`).
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`).
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
     screens is in the vocabulary, every code is used), `screensProblems` (anchors unique and
     never named like a derived one, entry and names), `bindingsProblems` (model fields,
-    actions and their params, routes, sources), `flowProblems` (a flow names states, events,
+    actions and their params, each an anchor, a constant or a search parameter every route of
+    the screen declares, routes, sources), `flowProblems` (a flow names states, events,
     guards, actions with their `input`, anchors with their codes and bindings that exist,
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
@@ -125,8 +130,12 @@ for Bun.
     `toastsProblems` (each action of `platform.toasts` is an action of the platform),
     `unsavedInputProblems` (`leaving` comes with `unsavedInput`, whose question is a declared,
     reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
-    its own, and actions that ask need an action under `leaving`)
-    and `scenariosProblems` (bracket references, roles and the
+    its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
+    platform action declares goes to a parameter of the action or the account, takes its
+    language from one or the account, and links to a screen whose every route declares its
+    search parameter; an action that sends a mail has no parameter named `account`)
+    and `scenariosProblems` (bracket references, a mail by the platform action that declares
+    it, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
@@ -265,9 +274,11 @@ for Bun.
   `projected(config)` (initial state, states, final states, regions, events with their
   targets and guards, invoke sources, the contract's effects; the app's own actions left
   out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
-  counterpart for) and `aheadOf(app, flow)` (the flow as far as a machine that lags it has
+  counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
-  say), which a branch uses while a business commit runs ahead of the implementation.
+  say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is
+  still exactly that, else `aheadOf`), which a branch uses while a business commit runs ahead
+  of the implementation.
 
 ## Commands
 

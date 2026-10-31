@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { referencesIn } from './references'
 
 describe('referencesIn', () => {
-  it('reads the five kinds of reference', () => {
+  it('reads the six kinds of reference', () => {
     const text =
-      'Open [/sign-in] and click [user.sign-in.submit-button] then see [code:welcome] in [state:ready] with [value:en]'
+      'Open [/sign-in] and click [user.sign-in.submit-button] then see [code:welcome] in [state:ready] with [value:en] after [mail:sign-up]'
 
     expect(referencesIn(text)).toEqual({
       references: [
@@ -18,6 +18,7 @@ describe('referencesIn', () => {
         { kind: 'code', value: 'welcome', raw: '[code:welcome]' },
         { kind: 'state', value: 'ready', raw: '[state:ready]' },
         { kind: 'value', value: 'en', raw: '[value:en]' },
+        { kind: 'mail', value: 'sign-up', raw: '[mail:sign-up]' },
       ],
       problems: [],
     })
@@ -25,7 +26,7 @@ describe('referencesIn', () => {
   it('reports a bracket group that is none of them', () => {
     expect(referencesIn('Click [Create]')).toEqual({
       references: [],
-      problems: ['not an anchor, a route, a code, a state or a value: "Create"'],
+      problems: ['not an anchor, a route, a code, a state, a value or a mail: "Create"'],
     })
   })
   it('finds nothing in text without brackets', () => {

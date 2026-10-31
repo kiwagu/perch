@@ -33,7 +33,7 @@
     "lint": {},
     "test": {
       "dependsOn": ["^build"],
-      "env": ["CONTRACT_AHEAD"]
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE"]
     },
     "model": {
       "dependsOn": ["^build"],

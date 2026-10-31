@@ -226,7 +226,8 @@ modeling stage.
   tree of the screen folder, both specs on the router of `__fixtures__/router.ts`.
   `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
-  (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added); running every flow and
+  (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added, or still be its flow at the
+  branch's base); running every flow and
   activity in XState is the contract check's, not the app's.
   The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
   lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the

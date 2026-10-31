@@ -813,11 +813,26 @@
                                     ],
                                     "additionalProperties": false,
                                     "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "search": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                        "description": "The name of a search parameter every route of the screen declares."
+                                      }
+                                    },
+                                    "required": [
+                                      "search"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                   }
                                 ],
-                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                               },
-                              "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                              "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                             }
                           },
                           "required": [
@@ -901,11 +916,26 @@
                                       ],
                                       "additionalProperties": false,
                                       "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "search": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                          "description": "The name of a search parameter every route of the screen declares."
+                                        }
+                                      },
+                                      "required": [
+                                        "search"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                     }
                                   ],
-                                  "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                  "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                                 },
-                                "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                                "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                               }
                             },
                             "required": [
@@ -1808,9 +1838,24 @@
                                     ],
                                     "additionalProperties": false,
                                     "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "search": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                        "description": "The name of a search parameter every route of the screen declares."
+                                      }
+                                    },
+                                    "required": [
+                                      "search"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                   }
                                 ],
-                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                               }
                             },
                             "onDone": {
@@ -3744,9 +3789,24 @@
                                                 ],
                                                 "additionalProperties": false,
                                                 "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "search": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                                    "description": "The name of a search parameter every route of the screen declares."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "search"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                               }
                                             ],
-                                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                            "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                                           }
                                         },
                                         "onDone": {
@@ -4676,11 +4736,26 @@
                               ],
                               "additionalProperties": false,
                               "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "search": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "The name of a search parameter every route of the screen declares."
+                                }
+                              },
+                              "required": [
+                                "search"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                             }
                           ],
-                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                         },
-                        "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                        "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                       }
                     },
                     "required": [
@@ -4764,11 +4839,26 @@
                                 ],
                                 "additionalProperties": false,
                                 "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "search": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "The name of a search parameter every route of the screen declares."
+                                  }
+                                },
+                                "required": [
+                                  "search"
+                                ],
+                                "additionalProperties": false,
+                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                               }
                             ],
-                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                            "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                           },
-                          "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                          "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                         }
                       },
                       "required": [
@@ -4960,6 +5050,49 @@
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                   "description": "A role of the vocabulary."
                 }
+              },
+              "mail": {
+                "description": "The mail the action sends, when it sends one.",
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email."
+                  },
+                  "language": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                  },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "screen": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                        "description": "The screen the link opens, at the path of its route."
+                      },
+                      "search": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                        "description": "The search parameter of that screen's route the link carries its token in."
+                      }
+                    },
+                    "required": [
+                      "screen",
+                      "search"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Where the mail's link leads."
+                  }
+                },
+                "required": [
+                  "to",
+                  "language",
+                  "link"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
