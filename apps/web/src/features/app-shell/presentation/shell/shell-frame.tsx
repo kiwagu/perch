@@ -2,6 +2,7 @@ import { errAsync, type ResultAsync } from 'neverthrow'
 import { createContext, useContext } from 'react'
 import type { ActorRefFrom } from 'xstate'
 
+import type { DeviceInstall } from '../../../../platform/install'
 import type { LanguageWrites } from '../../../../platform/language-writes'
 import type { Theme } from '../../../../platform/theme'
 import type { LocaleWrites } from '../../application/locale-writes'
@@ -41,23 +42,27 @@ export function tabSelfReloads(storage: () => Pick<Storage, 'getItem' | 'setItem
   }
 }
 
-/**
- * The frame's machine over what it reads, made at the start, before the services exist; a theme
- * chosen goes to the device's.
- */
-export function shellFrameMachine(
-  live: ShellLive,
-  setTheme: (theme: Theme) => void,
-  reload: () => void = () => window.location.reload(),
-  selfReloads: SelfReloads = tabSelfReloads(() => window.sessionStorage),
-) {
+/** What the frame's machine acts through besides what it reads: the device's own services. */
+export interface ShellFrameDeps {
+  /** Where a theme chosen goes: the device's. */
+  readonly setTheme: (theme: Theme) => void
+  /** Installing the app on this device. */
+  readonly install: Pick<DeviceInstall, 'prompt' | 'postpone'>
+  /** Loads the page again; the browser's own reload by default. */
+  readonly reload?: () => void
+  readonly selfReloads?: SelfReloads
+}
+
+/** The frame's machine over what it reads, made at the start, before the services exist. */
+export function shellFrameMachine(live: ShellLive, deps: ShellFrameDeps) {
   return createShellMachine({
     values: () => live,
     signOutHere: () =>
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
-    reload,
-    setTheme,
-    selfReloads,
+    reload: deps.reload ?? (() => window.location.reload()),
+    setTheme: deps.setTheme,
+    selfReloads: deps.selfReloads ?? tabSelfReloads(() => window.sessionStorage),
+    install: deps.install,
   })
 }
 

@@ -62,6 +62,11 @@ export type ShellEvent =
   | { readonly type: 'platform.connecting' }
   | { readonly type: 'platform.offline' }
   | { readonly type: 'platform.sync-stopped' }
+  | { readonly type: 'platform.install-offered' }
+  | { readonly type: 'platform.install-by-steps' }
+  | { readonly type: 'platform.installed' }
+  | { readonly type: 'app-shell.install-button' }
+  | { readonly type: 'app-shell.install-later-button' }
 
 /**
  * The params of the flow's effects: an anchor shows one of the codes, or none any more; the app
@@ -96,6 +101,8 @@ export interface ShellMachineDeps {
   /** Shows a theme on this device and keeps it there. */
   readonly setTheme: (theme: Theme) => void
   readonly selfReloads: SelfReloads
+  /** Installing the app on this device: the browser's own window, or the reminder put off. */
+  readonly install: { readonly prompt: () => Promise<void>; readonly postpone: () => void }
 }
 
 /** A result that resolves once done, or rejects with its failure. */
@@ -153,6 +160,20 @@ const SYNC = {
   'platform.offline': syncShows('offline'),
   'platform.sync-stopped': syncShows('sync-stopped'),
 } as const
+/** The reminder to install the app, until it is installed or put off. */
+const INSTALL_AVAILABLE = {
+  actions: {
+    type: 'show',
+    params: { anchor: 'app-shell.install-message', codes: ['install-available'] },
+  },
+} as const
+const INSTALL_BY_STEPS = {
+  actions: {
+    type: 'show',
+    params: { anchor: 'app-shell.install-message', codes: ['install-by-steps'] },
+  },
+} as const
+const INSTALL_GONE = { type: 'clear', params: { anchor: 'app-shell.install-message' } } as const
 const PROTOCOL_OUTDATED = {
   actions: [
     'noteProtocol',
@@ -179,6 +200,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
       'platform.sign-out': fromPromise<unknown>(() => settled(deps.signOutHere())),
       // The page unloads as it loads again; the outcome is seen only if it did not.
       'platform.reload': fromPromise<void>(async () => deps.reload()),
+      'platform.install.prompt': fromPromise<void>(() => deps.install.prompt()),
+      'platform.install.postpone': fromPromise<void>(async () => deps.install.postpone()),
     },
     guards: {
       signedOut: () => deps.values().account === undefined,
@@ -260,6 +283,11 @@ export function createShellMachine(deps: ShellMachineDeps) {
             actions: 'markSelfReload',
           },
           ...SYNC,
+          'platform.install-offered': INSTALL_AVAILABLE,
+          'platform.install-by-steps': INSTALL_BY_STEPS,
+          'platform.installed': { actions: INSTALL_GONE },
+          'app-shell.install-button': { target: 'installing' },
+          'app-shell.install-later-button': { target: 'postponing' },
         },
       },
       crashed: {
@@ -292,6 +320,19 @@ export function createShellMachine(deps: ShellMachineDeps) {
       },
       updating: {
         invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
+      },
+      installing: {
+        invoke: {
+          src: 'platform.install.prompt',
+          onDone: { target: 'ready', actions: INSTALL_GONE },
+          onError: { target: 'ready', actions: INSTALL_GONE },
+        },
+      },
+      postponing: {
+        invoke: {
+          src: 'platform.install.postpone',
+          onDone: { target: 'ready', actions: INSTALL_GONE },
+        },
       },
       failed: {
         on: {

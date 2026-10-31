@@ -63,6 +63,14 @@ export interface ShellViewProps {
   readonly onUpdate?: (() => void) | undefined
   /** The code the state of the sync shows for a signed-in account; none for a guest. */
   readonly sync?: SyncStatus | undefined
+  /** The code the reminder to install the app shows until it is installed or put off; none else. */
+  readonly install?: 'install-available' | 'install-by-steps' | undefined
+  /** Whether the frame's flow takes the install now: its button is enabled while it does. */
+  readonly canInstall?: boolean | undefined
+  readonly onInstall?: (() => void) | undefined
+  /** Whether the frame's flow takes the reminder put off now. */
+  readonly canPostponeInstall?: boolean | undefined
+  readonly onPostponeInstall?: (() => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -212,6 +220,39 @@ export function ShellView(props: ShellViewProps) {
           >
             {t('app.shell.reload')}
           </Button>
+        </Alert>
+      ) : null}
+      {props.status === 'ready' && props.install ? (
+        <Alert>
+          <AlertDescription data-testid="app-shell.install-message" data-code={props.install}>
+            {match(props.install)
+              .with('install-available', () => t('app.shell.install.available'))
+              .with('install-by-steps', () => t('app.shell.install.by-steps'))
+              .exhaustive()}
+          </AlertDescription>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {props.install === 'install-available' ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!props.canInstall}
+                onClick={props.onInstall}
+                data-testid="app-shell.install-button"
+              >
+                {t('app.shell.install.install')}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!props.canPostponeInstall}
+              onClick={props.onPostponeInstall}
+              data-testid="app-shell.install-later-button"
+            >
+              {t('app.shell.install.later')}
+            </Button>
+          </div>
         </Alert>
       ) : null}
       <div data-slot="notice" className="min-h-15 sm:min-h-10">

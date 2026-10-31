@@ -178,7 +178,12 @@ modeling stage.
   `data-id`, `data-value` and whether it is visible, with the page's URL
   (`renderedAnchors(document, location)`, `installUiHelper(window)`). A route's `search` (a
   Zod object) validates the URL's search, drops a parameter equal to its default and carries
-  the `retain` parameters across navigations. `routes-contract.spec.ts` proves every module
+  the `retain` parameters across navigations. `install.ts` installs the app on this device for
+  the frame's reminder: Chromium's `beforeinstallprompt` (its window opened by `prompt()`),
+  Safari on an iPhone or an iPad by the user's steps, the reminder put off for three days
+  (`perch.install.later`) or ended once installed (`perch.install.installed`, `appinstalled`, the
+  app running standalone); the start makes it before the first frame and gives it through
+  `InstallContext`. `routes-contract.spec.ts` proves every module
   route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
   retained parameters, and the input view of the search schema as JSON Schema, without its
   prose);
@@ -251,7 +256,14 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
   manifest names; a commit or a new version rebuilds, so the bundle and the manifest stay one
   build. Every build also strips the `sourceMappingURL` custom section from the WASM it emits
   (`build/wasm-source-maps.ts`, in the main and the worker bundles): loro-crdt ships its module
-  naming a source map on a CDN, which DevTools would ask for and the front's policy block. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
+  naming a source map on a CDN, which DevTools would ask for and the front's policy block. And
+  every build writes the web app manifest and the service worker (`build/pwa.ts`,
+  `vite-plugin-pwa`): the icons are `public/icon.svg` with its PNG sizes; the worker caches the
+  page and its hashed scripts and styles when it installs, answers a page load from the network
+  first and from the cached page offline, serves hashed files from the cache first, caches each
+  WASM module the first time it loads, and never caches `/backend/` or the UI manifest. Only a
+  production build registers it (`src/composition/service-worker.ts`, from `main.tsx`), so the
+  dev stand runs without it and the e2e stand (a production build) has it. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
   reload the page after a rebuild; `dist/` is the production build's alone.
 - `bun run build`: production build into `dist/`, then `ui-contract manifest --out
   dist/ui-manifest`: the UI manifest built from `contract/` and the scenario files, once the
