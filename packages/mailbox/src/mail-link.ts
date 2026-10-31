@@ -1,5 +1,8 @@
 import type { Mail } from './mail.schema'
 
+/** The front's screen a verification link opens, which reads the link's `token`. */
+const VERIFICATION_PATH = '/verify-email'
+
 // The failures below say what went wrong in fixed words: a mail's subject and its link may
 // carry the address, so neither appears in them.
 
@@ -14,12 +17,16 @@ export function firstLink(mail: Mail): string {
   return link
 }
 
-/** The `token` search parameter of a link, as the front's /verify-email reads it. */
+/** The `token` search parameter of a verification link, as the front's /verify-email reads it. */
 export function linkToken(link: string): string {
   const url = URL.parse(link)
 
   if (url === null) {
     throw new Error('the link is not a URL')
+  }
+
+  if (url.pathname !== VERIFICATION_PATH) {
+    throw new Error(`the link does not open ${VERIFICATION_PATH}`)
   }
 
   const token = url.searchParams.get('token')

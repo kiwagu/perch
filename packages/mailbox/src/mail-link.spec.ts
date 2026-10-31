@@ -14,13 +14,27 @@ describe('firstLink and linkToken', () => {
     expect(link).toBe('https://localhost:5493/verify-email?token=a.b.c')
     expect(linkToken(link)).toBe('a.b.c')
   })
-  it('fails on a mail without a link, and on a link without a token', () => {
-    expect(() => firstLink(mail('no link'))).toThrow()
-    expect(() => linkToken('https://localhost:5493/me')).toThrow()
+  it('fails on a mail without a link, and on a verification link without a token', () => {
+    expect(() => firstLink(mail('no link'))).toThrow('the mail carries no link')
+    expect(() => linkToken('https://localhost:5493/verify-email')).toThrow(
+      'the link carries no token',
+    )
+    expect(() => linkToken('https://localhost:5493/verify-email?token=')).toThrow(
+      'the link carries no token',
+    )
+  })
+  it('takes a token only from a link to the verification screen', () => {
+    expect(() => linkToken('https://localhost:5493/me?token=a.b.c')).toThrow(
+      'the link does not open /verify-email',
+    )
+    expect(() => linkToken('https://localhost:5493/verify-email/x?token=a.b.c')).toThrow(
+      'the link does not open /verify-email',
+    )
   })
   it('fail with nothing of the mail or the link', () => {
     expectNoLeak(thrown(() => firstLink({ ...mail('no link'), subject: `Welcome, ${LEAK}` })))
-    expectNoLeak(thrown(() => linkToken(`https://localhost:5493/${LEAK}`)))
+    expectNoLeak(thrown(() => linkToken(`https://localhost:5493/verify-email?${LEAK}=1`)))
+    expectNoLeak(thrown(() => linkToken(`https://localhost:5493/${LEAK}?token=a.b.c`)))
     expectNoLeak(thrown(() => linkToken(`not a link ${LEAK}`)))
   })
 })
