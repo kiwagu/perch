@@ -257,7 +257,9 @@ An anchor's `binding` says what the element does or shows:
 - `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`).
 - `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's
   `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each
-  parameter names the anchor whose value it takes, or a constant `{ value: true }`.
+  parameter names the anchor whose value it takes, a constant `{ value: true }`, or
+  `{ search: <name> }`: the value of that search parameter of the route the screen was opened
+  at, which every binding of the screen declares under `search` (the token a link carries).
 - `{ route: /path }`: the path of a binding of some screen.
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
@@ -318,8 +320,9 @@ unchanged, as it carries a binding into the router.
   navigate, params: { to, search } }`, the app moves to that binding. The app implements
   all three.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
-  names it as a binding does, `input` maps each parameter to the anchor whose value it
-  takes or to a constant `{ value: ... }`, and `onDone` and `onError` say what follows its
+  names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
+  anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
+  `{ search: <name> }`, and `onDone` and `onError` say what follows its
   success and its failure. Every `input` key is a parameter of the action; a parameter left
   out is the implementation's to compute (a minted `$id`, the `author`). An event that runs
   an action is a transition into such a state, named for what it does (`signing-in`,

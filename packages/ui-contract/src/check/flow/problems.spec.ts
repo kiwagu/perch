@@ -93,6 +93,20 @@ describe('flowProblems', () => {
       ])
     }
   })
+  it('takes an invoke input from a search parameter of every route of the screen', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    invoke.input = { title: { search: 'tab' } }
+
+    expect(printed(contract)).toEqual([])
+
+    invoke.input = { title: { search: 'token' } }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.input.title: "token" is not a search parameter of every route of the screen`,
+    ])
+  })
   it('leaves out the minted id and any parameter the implementation computes', () => {
     const contract = sampleContract()
 

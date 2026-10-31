@@ -58,6 +58,18 @@ describe('bindingsProblems', () => {
       `${AT}["sample.sign-out-button"].binding.params.everywhere: "everywhere" is not a parameter of "platform.sign-out"`,
     ])
   })
+  it('wants a search param to be a search parameter of every route of the screen', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.updateThing',
+      params: { title: { search: 'tab' }, id: { search: 'token' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.id: "token" is not a search parameter of every route of the screen`,
+    ])
+  })
   it('reports a name of the object prototype as unknown, never as found or thrown', () => {
     const contract = sampleContract()
 

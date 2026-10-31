@@ -41,6 +41,17 @@ describe('action params', () => {
     expect(anchorDefSchema.safeParse(button(action({ flag: { value: {} } }))).success).toBe(false)
     expect(anchorDefSchema.safeParse(button(action({ flag: { other: 1 } }))).success).toBe(false)
   })
+  it('accepts a search parameter of the route by its name', () => {
+    expect(anchorDefSchema.safeParse(button(action({ title: { search: 'token' } }))).success).toBe(
+      true,
+    )
+    expect(
+      anchorDefSchema.safeParse(button(action({ title: { search: 'Token-1' } }))).success,
+    ).toBe(false)
+    expect(
+      anchorDefSchema.safeParse(button(action({ title: { search: 'token', value: 1 } }))).success,
+    ).toBe(false)
+  })
 })
 
 describe('the question before a destructive action', () => {
