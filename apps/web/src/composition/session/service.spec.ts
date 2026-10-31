@@ -57,10 +57,12 @@ const annLeft = { token: ann.token, device: 'device-1' }
 /** Ann's device as a sign-in left it, a member of `memberships`. */
 const annIn = (memberships: readonly Membership[]): KeptDevice => ({ ...ann, memberships })
 
-/** A gateway whose sign-in always answers `device`, and which takes no sign-up. */
+/** A gateway whose sign-in always answers `device`, and which takes no sign-up and no link. */
 const signingIn = (device: SignedInDevice): GatewayAuth => ({
   signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
   signIn: () => okAsync(device),
+  verifyEmail: () => errAsync(dataError('data:LINK_INVALID', 'not in this test')),
+  resendVerification: () => errAsync(dataError('data:WRITE_REJECTED', 'not in this test')),
   signOut: () => okAsync(undefined),
 })
 
@@ -1311,6 +1313,8 @@ describe('SessionService memberships', () => {
       signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
       signIn: (input) =>
         okAsync(answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`)),
+      verifyEmail: () => errAsync(dataError('data:LINK_INVALID', 'not in this test')),
+      resendVerification: () => errAsync(dataError('data:WRITE_REJECTED', 'not in this test')),
       signOut: () => okAsync(undefined),
     }
 

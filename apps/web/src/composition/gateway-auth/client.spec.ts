@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import type { DataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeFetch, noContent, respond, respondText } from './__fixtures__/gateway-fetch'
-import { type GatewayAuth, gatewayAuth } from './gateway-auth'
+import { fakeFetch, noContent, respond, respondText } from '../__fixtures__/gateway-fetch'
+
+import { type Fetcher, type GatewayAuth, gatewayAuth } from './client'
 
 const BASE = 'https://app.example.test/backend'
 
@@ -37,6 +39,41 @@ const withSignedHeader = (body: unknown) => () =>
 
 const signUp = (auth: GatewayAuth) => auth.signUp(signUpInput, device)
 const signIn = (auth: GatewayAuth) => auth.signIn(credentials, device)
+
+/** The token a verification link carries, and the session token its first exchange gives. */
+const LINK_TOKEN = 'link-token-1'
+const SESSION_TOKEN = 'session-token-1'
+
+/** The first verification's answer: the raw session token and the account as it signed up. */
+const verified = {
+  token: SESSION_TOKEN,
+  user: { id: ann, email: credentials.email, name: 'Ann', locale: 'es' },
+}
+
+const verify = (auth: GatewayAuth, token = LINK_TOKEN) => auth.verifyEmail(token, device)
+
+/** An answer without a body that accepts the request (202). */
+const accepted = () => () => Promise.resolve(new Response(null, { status: 202 }))
+
+/** `fetcher`, also recording the content type each request names. */
+function typed(fetcher: Fetcher) {
+  const types: Array<string | null> = []
+  const recording: Fetcher = (url, init) => {
+    types.push(new Headers(init.headers).get('Content-Type'))
+
+    return fetcher(url, init)
+  }
+
+  return { fetcher: recording, types }
+}
+
+/** Whether `error` says nothing of `secrets`, in its message or anywhere else it carries. */
+function namesNone(error: DataError, ...secrets: string[]): void {
+  for (const secret of secrets) {
+    expect(error.message).not.toContain(secret)
+    expect(JSON.stringify(error)).not.toContain(secret)
+  }
+}
 
 describe('gatewayAuth', () => {
   it('signs up naming the device, and answers with the identity and its session token only', async () => {
@@ -93,6 +130,16 @@ describe('gatewayAuth', () => {
       'data:INVALID_CREDENTIALS',
     )
     expect(sent).toHaveLength(1)
+  })
+
+  it('reads 403 to a sign-in as an email not verified yet', async () => {
+    const { fetcher } = fakeFetch(
+      respond(403, { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified' }),
+    )
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
+      'data:EMAIL_NOT_VERIFIED',
+    )
   })
 
   it('reads 422 as a refused sign-up', async () => {
@@ -208,6 +255,163 @@ describe('gatewayAuth', () => {
 
     expect(
       (await gatewayAuth(BASE, fetcher).signOut('token-1', 'device-1'))._unsafeUnwrapErr().code,
+    ).toBe('data:OFFLINE')
+  })
+})
+
+describe('gatewayAuth.verifyEmail', () => {
+  it("posts the link's token in the body, naming the device, never in the address", async () => {
+    const recorded = fakeFetch(respond(200, verified))
+    const { fetcher, types } = typed(recorded.fetcher)
+
+    expect((await verify(gatewayAuth(BASE, fetcher))).isOk()).toBe(true)
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/verify-email`,
+        method: 'POST',
+        authorization: null,
+        device: 'device-1',
+        label: 'Chrome on Linux',
+        body: { token: LINK_TOKEN },
+      },
+    ])
+    expect(types).toEqual(['application/json'])
+  })
+
+  it('answers the first verification with the device signed in and the account as it signed up', async () => {
+    const { fetcher } = fakeFetch(respond(200, verified))
+
+    expect((await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
+      kind: 'signed-in',
+      device: { identity: { id: ann, email: credentials.email }, token: SESSION_TOKEN },
+      account: { name: 'Ann', locale: 'es' },
+    })
+  })
+
+  it('answers a link verified before as such, signing nothing in', async () => {
+    const { fetcher } = fakeFetch(respond(200, { token: null }))
+
+    expect((await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
+      kind: 'verified-before',
+    })
+  })
+
+  it('reads 401 link-expired as an expired link, and any other 401 or a 400 as an invalid one', async () => {
+    for (const [answer, code] of [
+      [respond(401, { code: 'link-expired' }), 'data:LINK_EXPIRED'],
+      [respond(401, { code: 'link-invalid' }), 'data:LINK_INVALID'],
+      [respond(401, { code: 'unauthorized' }), 'data:LINK_INVALID'],
+      [respondText(401, '<html>'), 'data:LINK_INVALID'],
+      [respond(400, { code: 'bad-request' }), 'data:LINK_INVALID'],
+    ] as const) {
+      const { fetcher } = fakeFetch(answer)
+      const refused = (await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
+
+      expect(refused.code).toBe(code)
+      namesNone(refused, LINK_TOKEN)
+    }
+  })
+
+  it('reads 429 to a verification as a request to wait', async () => {
+    const { fetcher } = fakeFetch(respond(429, { code: 'rate-limited' }))
+
+    expect((await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
+      'data:RATE_LIMITED',
+    )
+  })
+
+  it('fails a verification the gateway could not complete with its status, never a token', async () => {
+    const { fetcher } = fakeFetch(respond(500, { code: 'internal' }))
+    const failed = (await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
+
+    expect(failed.code).toBe('data:AUTH_FAILED')
+    expect(failed.message).toMatch(/500/)
+    namesNone(failed, LINK_TOKEN)
+  })
+
+  it('is offline when a verification cannot reach the gateway', async () => {
+    const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+
+    expect((await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe('data:OFFLINE')
+  })
+
+  it('refuses a link without a token as invalid, asking the gateway nothing', async () => {
+    const { fetcher, sent } = fakeFetch(respond(200, verified))
+
+    expect((await verify(gatewayAuth(BASE, fetcher), ''))._unsafeUnwrapErr().code).toBe(
+      'data:LINK_INVALID',
+    )
+    expect(sent).toEqual([])
+  })
+
+  it('fails when the answer is not what the gateway promises, naming no token', async () => {
+    for (const answer of [
+      respond(200, { ...verified, user: { ...verified.user, locale: 'fr' } }),
+      respond(200, { ...verified, user: { ...verified.user, id: 'usr_x' } }),
+      respond(200, { token: SESSION_TOKEN }),
+      respond(200, { ...verified, token: '' }),
+      respond(200, {}),
+      respondText(200, '<html>'),
+    ]) {
+      const { fetcher } = fakeFetch(answer)
+      const failed = (await verify(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr()
+
+      expect(failed.code).toBe('data:AUTH_FAILED')
+      namesNone(failed, LINK_TOKEN, SESSION_TOKEN)
+    }
+  })
+})
+
+describe('gatewayAuth.resendVerification', () => {
+  const email = 'Ann@example.test'
+
+  it('asks for the mail again with the email alone, no credentials and no device', async () => {
+    const recorded = fakeFetch(accepted())
+    const { fetcher, types } = typed(recorded.fetcher)
+
+    expect((await gatewayAuth(BASE, fetcher).resendVerification(email)).isOk()).toBe(true)
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/send-verification-email`,
+        method: 'POST',
+        authorization: null,
+        device: null,
+        body: { email },
+      },
+    ])
+    expect(types).toEqual(['application/json'])
+  })
+
+  it('reads 429 to a resend as a request to wait', async () => {
+    const { fetcher } = fakeFetch(respond(429, { code: 'rate-limited' }))
+
+    expect(
+      (await gatewayAuth(BASE, fetcher).resendVerification(email))._unsafeUnwrapErr().code,
+    ).toBe('data:RATE_LIMITED')
+  })
+
+  it('reads another 4xx to a resend as a refusal, and a failure as a resend that may be asked again', async () => {
+    for (const [status, code] of [
+      [400, 'data:WRITE_REJECTED'],
+      [404, 'data:WRITE_REJECTED'],
+      [500, 'data:WRITE_FAILED'],
+    ] as const) {
+      const { fetcher } = fakeFetch(respond(status, { code: 'bad-request' }))
+      const refused = (
+        await gatewayAuth(BASE, fetcher).resendVerification(email)
+      )._unsafeUnwrapErr()
+
+      expect(refused.code).toBe(code)
+      expect(refused.message).toMatch(new RegExp(String(status)))
+      namesNone(refused, email, email.toLowerCase())
+    }
+  })
+
+  it('is offline when a resend cannot reach the gateway', async () => {
+    const { fetcher } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+
+    expect(
+      (await gatewayAuth(BASE, fetcher).resendVerification(email))._unsafeUnwrapErr().code,
     ).toBe('data:OFFLINE')
   })
 })

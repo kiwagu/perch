@@ -29,8 +29,18 @@ modeling stage.
   (`gatewayAuth`: Better Auth's client over `POST /backend/auth/sign-up/email|sign-in/email` on
   the page's own origin, the device in `X-Perch-Device` and `X-Perch-Device-Label`; the device
   keeps the raw session token of the answer's body, never the signed one of its `set-auth-token`
-  header; a 401 is `data:INVALID_CREDENTIALS`, a 422 `data:SIGN_UP_REJECTED`, a 429
-  `data:RATE_LIMITED`, and the sign-in page says to wait). Until the sign-in is whole its token
+  header; a 401 is `data:INVALID_CREDENTIALS`, a 403 to a sign-in `data:EMAIL_NOT_VERIFIED`, a
+  422 `data:SIGN_UP_REJECTED`, a 429 `data:RATE_LIMITED`, and the sign-in page says to wait).
+  A verification link's token signs the device in the same way the first time it is exchanged
+  (`SessionService.verifyEmail`, the gateway's own `POST /backend/auth/verify-email` with
+  `{ token }` and the device's headers, its answer read through a zod schema): in the same lock,
+  kept and opened as a sign-in, and answered with the account's name and its sign-up language; as a link
+  names no email, another account saved on the browser refuses it (`data:OTHER_ACCOUNT`) only
+  once the gateway answered, and its new token is left to sign out. A link verified before signs
+  nothing in (`verified-before`), and a refused one fails as `data:LINK_EXPIRED` or
+  `data:LINK_INVALID`, naming no token. `resendVerification(email)` asks
+  `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
+  the session. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
   still open and no other tab saved another account, saves the memberships, the token and the

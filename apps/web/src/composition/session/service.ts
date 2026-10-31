@@ -3,7 +3,12 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { SessionNotice, SessionPort, SignOutOptions } from '../../platform/session.port'
+import type {
+  EmailVerified,
+  SessionNotice,
+  SessionPort,
+  SignOutOptions,
+} from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace, SyncState } from '../identity-space'
 import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity, savedNotice } from '../storage'
@@ -18,6 +23,7 @@ import { SessionSignIn } from './sign-in'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
 import { SpaceDeletion } from './space-deletion'
 import { SessionTransitions } from './transitions'
+import { verifyEmail } from './verification'
 import { WriteBarrier } from './write-barrier'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
@@ -159,6 +165,16 @@ export class SessionService implements SessionPort {
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
     return this.#transitions.serially((generation) => this.#signingIn.signIn(input, generation))
+  }
+
+  verifyEmail(token: string): ResultAsync<EmailVerified, DataError> {
+    return this.#transitions.serially((generation) =>
+      verifyEmail(this.#signingIn, this.#options.auth, token, generation),
+    )
+  }
+
+  resendVerification(email: string): ResultAsync<void, DataError> {
+    return this.#options.auth.resendVerification(email)
   }
 
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
