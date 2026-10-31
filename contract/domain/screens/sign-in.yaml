@@ -121,7 +121,7 @@ flow:
               - show: { user.sign-in.error: [ email-not-verified ] }
           - target: sign-in
             actions:
-              - show: user.sign-in.error
+              - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
     signing-up:
       description: The sign-up runs; the error of the last attempt goes.
       entry:
