@@ -14,7 +14,7 @@
 import type { FlowState, Problem } from '../../files'
 import { type FlowNode, flowNodes, type RegionStateNode, transitionsOf } from '../../files'
 import { type Contract, declaredAnchors, has } from '../contract'
-import { actionProblems, lookupsOf } from '../lookups'
+import { actionProblems, lookupsOf, searchOf } from '../lookups'
 
 import { areaProblems } from './areas'
 import type { At, InFlow } from './in-flow'
@@ -44,10 +44,13 @@ function stateProblems(
     ...(invoke === undefined
       ? []
       : [
-          ...actionProblems(inFlow, invoke.src, invoke.input, {
-            action: [...at, 'invoke', 'src'],
-            params: [...at, 'invoke', 'input'],
-          }),
+          ...actionProblems(
+            inFlow,
+            invoke.src,
+            invoke.input,
+            { action: [...at, 'invoke', 'src'], params: [...at, 'invoke', 'input'] },
+            searchOf(inFlow.screen),
+          ),
           ...transitionsProblems(inFlow, invoke.onDone, [...at, 'invoke', 'onDone'], within),
           ...(invoke.onError === undefined
             ? []

@@ -1,7 +1,8 @@
 /**
- * The composition root: the only module of the application that imports adapters. It
- * restores the session, which opens the signed-in identity's space, and binds each port to
- * its token; everything below receives ports only. Nothing is opened while nobody is signed in.
+ * The composition root: the only module of the application that imports adapters. It binds
+ * each port to its token and starts restoring the session, which opens the signed-in identity's
+ * space; the services are there at once, while that space opens, and everything below receives
+ * ports only. Nothing is opened while nobody is signed in.
  */
 
 import { okAsync, type ResultAsync } from 'neverthrow'
@@ -105,6 +106,15 @@ export type BootFailure =
       readonly signOutHere?: () => ResultAsync<void, DataError>
     }
 
+/**
+ * What the start gives the page: the services at once, and the open of the saved identity's
+ * space, which ends once it is open (at once when nobody is signed in) or says why it did not open.
+ */
+export interface AppStart {
+  readonly services: AppServices
+  readonly opened: ResultAsync<void, BootFailure>
+}
+
 /** What the application receives: ports, and the container that resolves them. */
 export interface AppServices {
   readonly container: Container
@@ -119,7 +129,7 @@ export interface AppServices {
   close(): Promise<void>
 }
 
-export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices, BootFailure> {
+export function createAppRoot(options: AppRootOptions): AppStart {
   let last: BootStep | undefined
   const step = (name: BootStep): void => {
     if (name !== last) {
@@ -220,7 +230,7 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
 
   step('restore-session')
 
-  return session
+  const opened = session
     .restore()
     .mapErr((error): BootFailure => {
       // No frame reads the state of the sync of a start that failed.
@@ -230,23 +240,24 @@ export function createAppRoot(options: AppRootOptions): ResultAsync<AppServices,
         ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
         : { kind: 'open-failed', error }
     })
-    .map(() => {
-      step('ready')
+    .map(() => step('ready'))
 
-      return {
-        container,
-        runner: session.runner,
-        writePath: session.writePath,
-        session,
-        commands,
-        organisations,
-        devices,
-        space: () => session.space(),
-        close: () => {
-          sync.stop()
+  return {
+    services: {
+      container,
+      runner: session.runner,
+      writePath: session.writePath,
+      session,
+      commands,
+      organisations,
+      devices,
+      space: () => session.space(),
+      close: () => {
+        sync.stop()
 
-          return session.close()
-        },
-      }
-    })
+        return session.close()
+      },
+    },
+    opened,
+  }
 }

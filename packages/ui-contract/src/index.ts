@@ -28,6 +28,7 @@ export {
   type IdTarget,
   idTargetOf,
   loadContract,
+  mailsProblems,
   type ParallelNode,
   parameterSample,
   parseRoutePath,
@@ -56,6 +57,7 @@ export {
   scanConsumers,
 } from './consumers'
 export {
+  ACCOUNT,
   ACTIVITIES_DIR,
   ACTIVITY_SCHEMA_FILE,
   type Activity,
@@ -92,6 +94,7 @@ export {
   PLATFORM_FILE,
   PLATFORM_SCHEMA_FILE,
   type Platform,
+  type PlatformMail,
   type Problem,
   parseVocabulary,
   SCENARIOS_DIR,
@@ -187,6 +190,7 @@ export {
   manifestSchema,
   paramValueSchema,
   platformFileSchema,
+  platformMailSchema,
   platformSchema,
   screenFileSchema,
   screenSchema,

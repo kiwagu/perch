@@ -40,6 +40,7 @@ interface ShellContext {
 }
 
 export type ShellEvent =
+  | { readonly type: 'platform.started' }
   | { readonly type: 'platform.opened' }
   | { readonly type: 'platform.open-failed' }
   | { readonly type: 'platform.storage-blocked' }
@@ -256,10 +257,17 @@ export function createShellMachine(deps: ShellMachineDeps) {
     states: {
       opening: {
         on: {
-          'platform.opened': { target: 'ready' },
+          'platform.started': [{ target: 'ready', guard: 'signedOut' }, { target: 'opening-data' }],
           'platform.open-failed': { target: 'failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },
+          'app-shell.theme-select': THEME_CHOSEN,
+        },
+      },
+      'opening-data': {
+        on: {
+          'platform.opened': { target: 'ready' },
+          'platform.open-failed': { target: 'failed' },
           'app-shell.theme-select': THEME_CHOSEN,
         },
       },

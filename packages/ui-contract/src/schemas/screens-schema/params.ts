@@ -1,4 +1,7 @@
-/** What an action receives: per parameter, the anchor whose value it takes or a constant. */
+/**
+ * What an action receives: per parameter, the anchor whose value it takes, a constant, or a
+ * search parameter of the route the screen was opened at.
+ */
 
 import { z } from '@workspace/zod'
 
@@ -14,9 +17,23 @@ export const paramValueSchema = z
           .describe('The constant: a string, a number or a boolean.'),
       })
       .describe('A constant the parameter always takes: `{ "value": true }`.'),
+    z
+      .strictObject({
+        search: z
+          .string()
+          .regex(/^[a-z][a-zA-Z0-9]*$/)
+          .describe('The name of a search parameter every route of the screen declares.'),
+      })
+      .describe(
+        'The value of a search parameter of the route the screen was opened at: `{ "search": "token" }`, the token a link carries.',
+      ),
   ])
-  .describe('An anchor (the control whose value it takes) or a constant `{ "value": ... }`.')
+  .describe(
+    'An anchor (the control whose value it takes), a constant `{ "value": ... }`, or a search parameter of the screen\'s route `{ "search": "<name>" }`.',
+  )
 
 export const actionParamsSchema = z
   .record(z.string(), paramValueSchema)
-  .describe('Per parameter of the action, the anchor whose value it takes or a constant.')
+  .describe(
+    'Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route.',
+  )

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol, the state of this device's sync for a signed-in account, and a reminder to install the app until it is installed."
+description: "The frame around every screen: the readiness status, the signed-in account's frame with its open screen while its data opens, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol, the state of this device's sync for a signed-in account, and a reminder to install the app until it is installed."
 frame: true
 flag: null
 bindings: []
@@ -9,8 +9,8 @@ entry: [ app-shell.status, app-shell.nav ]
 anchors:
   app-shell.status:
     kind: status
-    description: "The readiness line of the app: one element whose state says where the start is; in ready it is a visually hidden text, otherwise the visible message."
-    states: [ opening, ready, failed, storage-blocked ]
+    description: "The readiness line of the app: one element whose state says where the start is; in ready it is a visually hidden text, in opening-data a visible line beside the open screen, otherwise the visible message."
+    states: [ opening, opening-data, ready, failed, storage-blocked ]
   app-shell.notice-message:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
@@ -112,7 +112,8 @@ anchors:
     codes: [ unsaved-input ]
     derived: [ confirm-button, cancel-button ]
 states:
-  opening: app-shell.status says the data is being opened; no screen is rendered.
+  opening: app-shell.status says the app is starting; no screen is rendered.
+  opening-data: "The navigation of the signed-in account, the theme select and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
   ready: The navigation, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again and app-shell.install-message until the app is installed; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
@@ -126,14 +127,26 @@ flow:
       quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
   states:
     opening:
-      description: The local data is being opened; no screen is rendered.
+      description: "The app starts: it checks the site storage and who is signed in on this device; no screen is rendered."
       on:
-        platform.opened: ready
+        platform.started:
+          - target: ready
+            guard: signedOut
+            description: Nobody is signed in, so there is no data to open and the screen renders at once, the sign-in form loading no database engine.
+          - target: opening-data
+            description: An account is signed in, so its frame and the open screen render at once while its data opens.
         platform.open-failed: failed
         platform.storage-blocked: storage-blocked
         app-shell.locale-select:
           target: opening
           description: The app speaks the chosen language; no account's settings are open yet to store it.
+        app-shell.theme-select:
+          description: The app shows the chosen theme at once, and this device keeps it.
+    opening-data:
+      description: The signed-in account's frame and the open screen, while its local data is being opened.
+      on:
+        platform.opened: ready
+        platform.open-failed: failed
         app-shell.theme-select:
           description: The app shows the chosen theme at once, and this device keeps it.
     ready:

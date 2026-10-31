@@ -154,7 +154,8 @@ actions:
     roles:
       - admin
 events:
-  opened: The local data is open, and the frame renders the screen.
+  started: "The start is done: the browser keeps site data and the app knows who is signed in on this device, so the frame and the open screen can render."
+  opened: The signed-in account's local data is open.
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
@@ -219,6 +220,7 @@ status:
   anchor: app-shell.status
   states:
     - opening
+    - opening-data
     - ready
     - failed
     - storage-blocked
