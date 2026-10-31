@@ -45,10 +45,11 @@ those created at the same instant), the new row itself when a newer one exists a
 holds one live session, and its sign-ins converge on the newest whatever order their rows are
 inserted and their hooks run in. Sessions of the identity on other devices, and of other
 identities on a device of the same id, stay live.
-Once Better Auth accepted a sign-up or a sign-in, and before its answer is returned, the mount
-closes the identity's sync sockets on that device with 1000: a socket opened with the session
-just ended goes no further, the device connects again with the new token, and a hello with the
-earlier token whose session read was under way is refused 4001 at its registration. Every call
+Once Better Auth accepted a sign-up or a sign-in, or signed a device in at a verification, and
+before its answer is returned, the mount closes the identity's sync sockets on that device with
+1000: a socket opened with the session just ended goes no further, the device connects again with
+the new token, and a hello with the earlier token whose session read was under way is refused 4001
+at its registration. Every call
 with a token must name the device its session was opened on, so a token carried to another
 device is refused.
 
@@ -70,21 +71,26 @@ of several rows at once would stop at the first refusal, so Better Auth's bulk e
 sessions that way, are switched off in the instance (`auth-instance.ts`). Rows whose session
 ended 30 days ago or more are forgotten when the identity's devices are listed next.
 
-Better Auth's handler is mounted behind an allowlist (`auth-handler.ts`). Of the paths under
-`/auth/`, only `POST /auth/sign-up/email` and `POST /auth/sign-in/email` reach it; every other
-path answers 404 `not-found` without asking it, and another method on those two answers 405 with
-`Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
+Better Auth's handler is mounted behind an allowlist (`auth-handler/`). Of the paths under
+`/auth/`, only `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email`
+and `POST /auth/send-verification-email` reach it; every other path answers 404 `not-found`
+without asking it, and another method on those four answers 405 with `Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
 sessions with every token, another ends a session without closing its device's sockets. Better
 Auth serves its routes only under its public URL, `<GATEWAY_PUBLIC_URL>/backend/auth`, and trusts
 requests from that origin only; the front strips its `/backend` prefix, so the mount puts it back
 before it hands a request over. In front of Better Auth, the mount applies the gateway's own
-limits (see `src/limits/README.md`): every sign-up and sign-in takes one of its client address's
-20 credential checks in 10 s, and a sign-in must find a place among its email's 10 failed
-sign-ins in 15 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before any
-password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming an
-email answers 400 `bad-request`; one that is reaches Better Auth as that very JSON, so the email
-whose password is checked is the email counted. Better Auth's answers reach the client without
-their `Set-Cookie` headers: the web signs in by bearer token alone.
+limits (see `src/limits/README.md`): every sign-up, sign-in and verification takes one of its
+client address's 20 credential checks in 10 s, a sign-in must find a place among its email's 10
+failed sign-ins in 15 minutes (a 403, the password right and the email not verified, clears them
+as a success does), and a resend takes one of its address's 200 verification mails and one of its
+email's 3 resends in 15 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
+any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
+an email answers 400 `bad-request`; one that is reaches Better Auth as that very JSON, so the
+email whose password is checked is the email counted. Better Auth's answers reach the client
+without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
+Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
+more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
+what was sent or what failed.
 
 A sign-up takes `{ name, email, password }` (a password of 8 to 128 characters) and, optionally,
 `locale`, the language the person signs up in (`en` or `es`, any other answered 400; `en` when
@@ -92,7 +98,7 @@ it names none), which the identity keeps; a sign-in takes `{ email, password }`,
 device's headers. Each answers 200 with the raw session token (`token`) and the account (`user`,
 its `id` the identity's). An email is kept and matched in lower case, so an address in any case
 is one account. Wrong credentials answer 401 and a sign-up of an email that has an account 422,
-with Better Auth's code in the body. A sign-up writes its identity, its credential row and its
+with Better Auth's code alone in the body. A sign-up writes its identity, its credential row and its
 session in one transaction.
 
 The instance can verify an email, beside a sign-up that still signs its device in and sends nothing.
@@ -111,11 +117,38 @@ column had its default): no mail, `mail:SEND_FAILED`. The first verification of 
 device that opened the link in, through the session hooks like a sign-in, so it names the device in
 its headers; the link opened again verifies nothing and signs nothing in, and a link past its
 lifetime is refused with `TOKEN_EXPIRED`. Better Auth's own resend answers alike for any email and
-mails only an account not verified yet; a sign-in sends nothing. Neither the verification nor the
-resend is reachable through the mount yet: it serves the sign-up and the sign-in only.
+mails only an account not verified yet; a sign-in sends nothing.
 `AuthSessions` reads what the mount needs for them: the session a verification signed in, by the
 signed token of Better Auth's answer, with its account (`signedIn`), the identity of an email
 (`identityOf`), and the email a link's token names, read with the secret (`verificationEmail`).
+
+The mount serves both. A verification is `POST /auth/verify-email` with `{ token }` in its body
+and the device's headers, so a link's token never sits in a URL the gateway serves. It runs in
+this order. The device is named first (none answers 400 `bad-request`): Better Auth marks the
+email verified before it creates the session, so a session refused for want of a device would
+leave the email verified and nobody signed in. The token's email is read with the secret, and the
+account's turn is taken (`GatewayRoot.accountTurns`, by the email in lower case): one account's
+verifications run one at a time in this process, so Better Auth rereads the account's
+`emailVerified` inside the turn, and of two exchanges at once, on one link or two, the second
+answers `{ token: null }` and signs nothing in. A token the secret does not read (forged, or past
+its lifetime) takes no turn: Better Auth refuses it. Inside the turn the identity of the email is
+read (a failure answers 500 `internal` with nothing verified), then Better Auth's own
+`GET /verify-email` is asked with the token alone (no `callbackURL`, so it never redirects) and
+without the request's `Authorization` and `Cookie`, so no session of the request is taken for the
+account's. When its answer carries a session, the identity's sockets on the device are closed
+with 1000 at once, before the session is read back for the answer, so a readback that fails (500
+`internal`) still leaves no socket of the device's earlier session open. It answers 200
+`{ token, user: { id, email, name, locale } }` the first time (the raw token, the account's name
+and the language it signed up in), 200 `{ token: null }` for an account verified before, and 401
+`link-expired` for a link past its lifetime or `link-invalid` for any other that verifies
+nothing, an unknown account's included. The turns are this process's: several gateway processes
+would need a claim in the database.
+
+A resend is `POST /auth/send-verification-email` with `{ email }`: Better Auth is handed the email
+alone, without the request's `Authorization` and `Cookie`, so only its path for a visitor runs,
+which answers alike, after the same floor of 500 ms, for an unverified, a verified and an unknown
+email, and mails only the unverified one. The mount answers every resend it lets through 202 with
+no body, the same headers whatever the email.
 
 Nothing Better Auth reports reaches a log as it said it. Its logger and its error hook are the
 gateway's (`auth-log.ts`): an error is logged as a code from a fixed table
@@ -123,8 +156,9 @@ gateway's (`auth-log.ts`): an error is logged as a code from a fixed table
 `auth:LIBRARY`) or by Better Auth's own code (`auth:<CODE>`, `auth:UNEXPECTED` when it names
 none), with a fixed message; its words, its arguments and an error's cause are dropped, and its
 warnings (a wrong password, an unknown email) are not logged. A failure that is not one of
-Better Auth's answers, such as a query that failed, is answered 500 with no body: Better Auth's
-router would otherwise print it whole to stderr, the query's bindings with it. SurrealDB's
+Better Auth's answers, such as a query that failed, is answered by Better Auth 500 with no body,
+which the mount passes on as `internal`: Better Auth's router would otherwise print it whole to
+stderr, the query's bindings with it. SurrealDB's
 adapter, which printed a failed join the same way, is patched to leave it to its caller.
 
 The device routes (`device.routes.ts`) come before the mount in the server, so the two sign-outs
@@ -159,12 +193,16 @@ error carries one.
 
 ## Surface
 
-- Routes: `POST /auth/sign-up/email` and `POST /auth/sign-in/email`, Better Auth's behind the
-  mount (`authHandler`, `auth-handler.ts`); `GET /devices`, `DELETE /devices/:id`,
+- Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
+  `POST /auth/send-verification-email`, Better Auth's behind the mount (`authHandler` and
+  `AuthMountDeps`, `auth-handler/`: the mount, the sign-up, the sign-in, the verification and
+  the resend, the close of a device's sockets, and the requests and refusals as Better Auth and
+  the client get them), which one account's turns serialise (`GatewayRoot.accountTurns`, a
+  `KeyedTurns` by the email in lower case); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
   `device.routes.ts`).
-- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-up
-  and sign-in, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
+- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-up,
+  sign-in and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
   which the schema check reads too, `SESSION_LIFETIME_MS` and `VERIFICATION_LINK_LIFETIME_S`),
   `AUTH_MODELS` and `generateAuthId` (`auth-models.ts`), `hashPassword` and `verifyPassword`
@@ -192,8 +230,10 @@ error carries one.
 ## Commands
 
 - `bun run test` in `apps/gateway` runs this module's specs on an embedded in-memory directory
-  (`auth-handler.spec.ts`, which also holds that nothing of an address or a token reaches a
-  log, stderr or an answer when a query fails, `auth-instance.spec.ts`, `auth-log.spec.ts`,
+  (`auth-handler/mount.spec.ts` and `auth-handler/verification.spec.ts`, which also hold that
+  nothing of an address, a token or a link reaches a log, stderr or an answer, a failed query's
+  included, that one account's verifications at once sign one device in, and that a device's
+  sockets close before a readback that fails, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).

@@ -22,6 +22,7 @@ import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
@@ -31,8 +32,8 @@ import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
   /**
-   * Better Auth over the directory: the server hands it the sign-up and the sign-in under
-   * `/auth`; the gateway reads sessions through its API.
+   * Better Auth over the directory: the server hands it the sign-up, the sign-in, the
+   * verification and the resend under `/auth`; the gateway reads sessions through its API.
    */
   readonly auth: AuthInstance
   /** The sessions of devices: read through Better Auth, ended by the gateway's own updates. */
@@ -62,6 +63,11 @@ export interface GatewayRoot {
    * the organisations created.
    */
   readonly limits: RequestLimits
+  /**
+   * One account's sign-ups and verifications run one at a time in this process, by its email in
+   * lower case.
+   */
+  readonly accountTurns: KeyedTurns<string>
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -174,6 +180,7 @@ export function createGatewayRoot(
       connections,
       local,
       limits: new RequestLimits({ clock: options.clock }),
+      accountTurns: new KeyedTurns<string>(),
       clock: options.clock,
       close: async () => {
         await hub.close()

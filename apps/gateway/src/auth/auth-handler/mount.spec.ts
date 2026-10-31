@@ -1,18 +1,17 @@
-import { inspect } from 'node:util'
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
-import { type IdentityId, identityIdFactory } from '@workspace/ids'
-import { manualClock } from '@workspace/replica/testing'
+import { identityIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
-import { RequestLimits } from '../limits/request-limits'
-import { SUPERSEDED } from '../sync/sync-connection'
+import { KeyedTurns } from '../../keyed-turns'
+import { RequestLimits } from '../../limits/request-limits'
+import { SUPERSEDED } from '../../sync/sync-connection'
+import { deviceHeaders, type OpenAuthOptions, openAuth } from '../__fixtures__/auth-instance'
+import identityRefuseStatement from '../__fixtures__/identity-refuse.surql'
 
-import { deviceHeaders, type OpenAuthOptions, openAuth } from './__fixtures__/auth-instance'
-import identityRefuseStatement from './__fixtures__/identity-refuse.surql'
-import { authHandler } from './auth-handler'
+import { fakeConnections, mounted, noSessions, printedDuring } from './__fixtures__/mount'
+import { authHandler } from './mount'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -66,61 +65,6 @@ afterEach(async () => {
   }
 })
 
-/**
- * A stand-in for Better Auth's handler: it keeps every request it is handed and answers each
- * with what `answer` makes of it.
- */
-function fakeAuth(answer: (request: Request) => Response) {
-  const received: Request[] = []
-
-  return {
-    received,
-    auth: {
-      handler: async (request: Request) => {
-        received.push(request)
-
-        return answer(request)
-      },
-    },
-  }
-}
-
-/**
- * A stand-in for the registry of sync connections: it keeps each close it is asked for, by
- * identity, device and code, and resolves each once `closing` does.
- */
-function fakeConnections(closing: Promise<void> = Promise.resolve()) {
-  const closes: Array<readonly [IdentityId, string | undefined, number]> = []
-
-  return {
-    closes,
-    connections: {
-      close: (identity: IdentityId, device: string | undefined, code: number) => {
-        closes.push([identity, device, code])
-
-        return closing
-      },
-    },
-  }
-}
-
-/**
- * The mount over a stand-in answering `answer`, with real limits on a manual clock and a stand-in
- * registry whose closes resolve once `closing` does.
- */
-function mounted(answer: (request: Request) => Response, closing?: Promise<void>) {
-  const clock = manualClock(1_000)
-  const fake = fakeAuth(answer)
-  const { closes, connections } = fakeConnections(closing)
-
-  return {
-    ...fake,
-    clock,
-    closes,
-    route: authHandler(fake.auth, new RequestLimits({ clock }), connections),
-  }
-}
-
 const status = (code: number) => () => new Response(null, { status: code })
 
 /** `count` times `code`: the statuses of as many sign-ins answered alike. */
@@ -155,7 +99,14 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
   cleanups.push(opened.close)
 
   const { closes, connections } = fakeConnections()
-  const route = authHandler(opened.auth, new RequestLimits({ clock: opened.clock }), connections)
+  const route = authHandler({
+    auth: opened.auth,
+    sessions: noSessions,
+    limits: new RequestLimits({ clock: opened.clock }),
+    connections,
+    clock: opened.clock,
+    accounts: new KeyedTurns<string>(),
+  })
   const send = async (
     method: string,
     path: string,
@@ -215,39 +166,6 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
   }
 
   return { ...opened, closes, route, send, annOnTwoDevices }
-}
-
-/**
- * What `run` resolves to, and everything printed meanwhile to the console or to the process's
- * output streams, as text: the printing itself is held back.
- */
-async function printedDuring<T>(run: () => Promise<T>): Promise<{ result: T; printed: string }> {
-  const chunks: string[] = []
-  const keep = (...args: unknown[]): void => {
-    chunks.push(args.map((arg) => (typeof arg === 'string' ? arg : inspect(arg))).join(' '))
-  }
-  const write = (chunk: string | Uint8Array): boolean => {
-    keep(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'))
-
-    return true
-  }
-  const spies = [
-    vi.spyOn(console, 'error').mockImplementation(keep),
-    vi.spyOn(console, 'warn').mockImplementation(keep),
-    vi.spyOn(console, 'log').mockImplementation(keep),
-    vi.spyOn(console, 'info').mockImplementation(keep),
-    vi.spyOn(console, 'debug').mockImplementation(keep),
-    vi.spyOn(process.stderr, 'write').mockImplementation(write),
-    vi.spyOn(process.stdout, 'write').mockImplementation(write),
-  ]
-
-  try {
-    return { result: await run(), printed: chunks.join('\n') }
-  } finally {
-    for (const spy of spies) {
-      spy.mockRestore()
-    }
-  }
 }
 
 /**
@@ -333,13 +251,16 @@ describe('authHandler', () => {
     expect(received).toHaveLength(0)
   })
 
-  it('answers 405 with Allow to another method on the sign-up and the sign-in', async () => {
+  it('answers 405 with Allow to another method on the paths it serves', async () => {
     const { route, received } = mounted(status(200))
 
     for (const [method, path] of [
       ['GET', '/auth/sign-up/email'],
       ['GET', '/auth/sign-in/email'],
       ['PUT', '/auth/sign-in/email'],
+      // Better Auth's own verification is a GET with the token in its URL: never served so.
+      ['GET', '/auth/verify-email?token=a.link.token'],
+      ['GET', '/auth/send-verification-email'],
     ] as const) {
       const response = await route(new Request(`http://gateway.test${path}`, { method }), FROM)
 
@@ -437,6 +358,20 @@ describe('authHandler', () => {
     answer = 401
 
     // The success forgot the nine failures: ten more reach Better Auth before the limit.
+    expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
+    expect(received).toHaveLength(20)
+  })
+
+  it("clears an email's failed sign-ins once Better Auth answers 403: the password was right, the email is not verified", async () => {
+    let answer = 401
+    const { route, received } = mounted(() => new Response(null, { status: answer }))
+
+    await signIns(route, 'ann@example.test', 9)
+    answer = 403
+    expect(await signIns(route, 'ann@example.test', 1)).toEqual([403])
+    answer = 401
+
+    // The 403 forgot the nine failures: ten more reach Better Auth before the limit.
     expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
     expect(received).toHaveLength(20)
   })
@@ -785,7 +720,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     return { ...mounted, failure }
   }
 
-  it('answers a sign-in whose account lookup fails 500 with no body, and logs its codes alone', async () => {
+  it('answers a sign-in whose account lookup fails 500 internal, and logs its codes alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bFROM\s+`?account`?/
@@ -793,13 +728,13 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
       send('POST', '/auth/sign-in/email', 'phone', { body: credentials }),
     )
 
-    expect(result).toEqual({ status: 500, text: '', cookies: [] })
+    expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
     expect(logs.map(({ code }) => code)).toEqual(['auth:LIBRARY', 'auth:UNEXPECTED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
   })
 
-  it('answers a sign-in whose session cannot be created 500 with no body, and logs its code alone', async () => {
+  it('answers a sign-in whose session cannot be created 500 internal, and logs its code alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bINSERT\s+INTO\s+`?device_session`?/
@@ -807,7 +742,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
       send('POST', '/auth/sign-in/email', 'phone', { body: credentials }),
     )
 
-    expect(result).toEqual({ status: 500, text: '', cookies: [] })
+    expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
     expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
@@ -823,10 +758,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     )
 
     expect(result.status).toBe(422)
-    expect(JSON.parse(result.text)).toEqual({
-      code: 'FAILED_TO_CREATE_USER',
-      message: 'Failed to create user',
-    })
+    expect(JSON.parse(result.text)).toEqual({ code: 'FAILED_TO_CREATE_USER' })
     expect(logs.map(({ code }) => code)).toEqual(['auth:CREATE_USER_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)

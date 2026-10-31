@@ -31,6 +31,7 @@ import {
 import { authHandler } from '../../auth/auth-handler'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { NAMESPACE } from '../../config'
+import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
@@ -181,11 +182,14 @@ async function openGateway(options: GatewayOptions = {}) {
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
   /** The gateway's mount of Better Auth's sign-up and sign-in, over the same registry. */
-  const authRoute = authHandler(
-    opened.auth,
-    new RequestLimits({ clock: opened.clock }),
+  const authRoute = authHandler({
+    auth: opened.auth,
+    sessions,
+    limits: new RequestLimits({ clock: opened.clock }),
     connections,
-  )
+    clock: opened.clock,
+    accounts: new KeyedTurns<string>(),
+  })
 
   return {
     clock,

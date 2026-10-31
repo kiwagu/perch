@@ -14,9 +14,9 @@ for its role, surface and commands. `src/server.ts` routes each request to its m
 time (one identity's membership changes). The modules that predate the index rule have no
 `index.ts` yet and are imported file by file.
 
-- [auth](src/auth/README.md): accounts on Better Auth: sign-up and sign-in behind the gateway's
-  limits, the verification of an email and its mail, device sessions and their session tokens,
-  the sign-outs and the Bearer caller.
+- [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an
+  email and the resend of its mail behind the gateway's limits, device sessions and their session
+  tokens, the sign-outs and the Bearer caller.
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,

@@ -1,8 +1,8 @@
 /**
  * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes and Better Auth's sign-up and sign-in under `/auth`, the device routes in front so the
- * two sign-outs under `/auth` are the gateway's own; and the sync connection of each device over a
- * WebSocket at `/sync`.
+ * routes and Better Auth's sign-up, sign-in, verification and resend under `/auth`, the device
+ * routes in front so the two sign-outs under `/auth` are the gateway's own; and the sync
+ * connection of each device over a WebSocket at `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
@@ -36,7 +36,8 @@ interface SocketData {
 
 /**
  * The largest request body the server reads: a body is a sign-up's name, email and password, a
- * sign-in's email and password, an organisation's key and name, or an email to invite.
+ * sign-in's email and password, a verification link's token, an email to send it to again, an
+ * organisation's key and name, or an email to invite.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -78,14 +79,21 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   // The device routes come first: `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` are
   // theirs; the auth mount answers every other path under `/auth/`, handing Better Auth only its
-  // sign-up and sign-in.
+  // sign-up, sign-in, verification and resend.
   const routes: readonly Route[] = [
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
       clock: root.clock,
     }),
     organisationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
-    authHandler(root.auth, root.limits, root.connections),
+    authHandler({
+      auth: root.auth,
+      sessions: root.sessions,
+      limits: root.limits,
+      connections: root.connections,
+      clock: root.clock,
+      accounts: root.accountTurns,
+    }),
   ]
   const server = Bun.serve<SocketData, never>({
     port: options.port,

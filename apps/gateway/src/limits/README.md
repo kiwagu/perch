@@ -2,24 +2,27 @@
 
 ## Role in the architecture
 
-The gateway's request limits: how many credential checks, failed sign-ins, invitations and
-organisation creations a client address, an email or an identity may make in a window, and the
-429 a refusal answers. The routes ask before the work is done. It has no `index.ts` yet: it
+The gateway's request limits: how many credential checks, failed sign-ins, verification mails,
+invitations and organisation creations a client address, an email or an identity may make in a
+window, and the 429 a refusal answers. The routes ask before the work is done. It has no `index.ts` yet: it
 predates the index rule and is imported file by file.
 
 `RequestLimits` (`request-limits.ts`) keeps fixed windows (`fixed-window.ts`) in the gateway
 process's memory, each starting at its key's first attempt; every gateway process keeps its own, so several processes
-multiply them. Credential checks, `POST /auth/sign-up/email` and `POST /auth/sign-in/email`
-together (each one argon2 run), are limited to 20 per client address in 10 s by the auth mount
-in front of Better Auth's handler (`src/auth/auth-handler.ts`), before anything else is asked.
+multiply them. Credential checks, `POST /auth/sign-up/email`, `POST /auth/sign-in/email` and
+`POST /auth/verify-email` together (a sign-up and a sign-in are each one argon2 run; a
+verification signs a device in as a sign-in does), are limited to 20 per client address in 10 s
+by the auth mount in front of Better Auth's handler (`src/auth/auth-handler/`), before anything
+else is asked.
 Better Auth's own limiter is off (`src/auth/auth-instance.ts`): it restarts its count only after
 a pause as long as its window, so it would refuse an address's 21st request however slowly the
 20 before it came. Failed sign-ins (answered 401) are limited to 10 per email in 15
-minutes, cleared by a successful sign-in, by the same mount. An email counts in lower case, as
+minutes, cleared by a successful sign-in, or one Better Auth answers 403 (the password was
+right, the email is not verified yet), by the same mount. An email counts in lower case, as
 the directory keeps and matches an account's: an address in any case is one account, and its
 failures in any case share one limit. A sign-in holds one of its
 email's 10 places from the moment it is let through until Better Auth answers, so parallel
-guesses are counted while under way: wrong credentials (401) keep the place, a success (200)
+guesses are counted while under way: wrong credentials (401) keep the place, a success (200, or 403)
 clears the email's window, and any other answer, or a handler that threw instead of answering,
 gives the place back; each sign-in is settled once. A sign-in whose body is not JSON naming an
 email answers 400 and counts against no email (its address's check, taken first, stays taken, as
@@ -28,6 +31,19 @@ JSON, whatever content type it came with, so the email whose password is checked
 counted. A
 refusal answers 429 `{ "code": "rate-limited" }` with `Retry-After` in whole seconds (at least
 1), before the password is checked, and is not logged.
+Verification mails are limited to 200 per client address in 15 minutes
+(`ADDRESS_VERIFICATION_MAILS`), sign-ups and resends together, every attempt counted whatever the
+email (`verificationMail(address)` for a sign-up's mail, `verificationMail(address, email)` for a
+resend): one client can make at most 200 such mails go out per quarter hour, where the credential
+limit alone would let 1,800 sign-ups through. The auth mount charges every
+`POST /auth/send-verification-email` it reads an email from; a sign-up still signs its device in
+and sends no mail. A resend also takes one of its email's 3 resends in 15 minutes
+(`EMAIL_VERIFICATION_MAILS`, the email in lower case), whatever the email, an unknown or a
+verified one too, so the limit tells nothing about accounts. The address is asked first: its place
+is reserved, then given back when the email refuses, so a resend the address refuses moves no
+email's counter (a client that spent its budget cannot use up another inbox's resends), and one
+the email refuses costs the address nothing. A resend takes no credential check; a refusal answers
+429 `rate-limited` with `Retry-After`, Better Auth not asked.
 The client address (`clientAddress`) is the rightmost `X-Forwarded-For` entry when it is an IPv4
 or IPv6 address, else the socket's peer; an IPv6 address counts by its /64. The front must set
 `X-Forwarded-For` to the address it saw, as Caddy's `reverse_proxy` does; behind a front that
@@ -57,8 +73,9 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
 ## Surface
 
 - `RequestLimits` (`request-limits.ts`) with the windows it keeps (`CREDENTIAL_CHECKS`,
-  `FAILED_SIGN_INS`, `IDENTITY_INVITES`, `ADDRESS_INVITES`, `IDENTITY_ORGANISATIONS`,
-  `ADDRESS_ORGANISATIONS`), over `FixedWindow` (`fixed-window.ts`).
+  `FAILED_SIGN_INS`, `ADDRESS_VERIFICATION_MAILS`, `EMAIL_VERIFICATION_MAILS`,
+  `IDENTITY_INVITES`, `ADDRESS_INVITES`, `IDENTITY_ORGANISATIONS`, `ADDRESS_ORGANISATIONS`), over
+  `FixedWindow` (`fixed-window.ts`); `verificationMail` takes a sign-up's or a resend's mail.
 - `clientAddress` (`client-address.ts`) and `addressKey` (`address-key.ts`): the address a
   request counts under.
 - `tooMany` (`too-many.ts`): the 429 answer with `Retry-After`.

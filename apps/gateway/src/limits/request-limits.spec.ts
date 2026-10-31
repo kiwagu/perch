@@ -19,6 +19,17 @@ function settle(attempt: SignInAttempt, outcome: SignInOutcome): void {
   attempt.settle(outcome)
 }
 
+/** The client address the verification mails come from, unless a test names another. */
+const FROM = '203.0.113.7'
+
+/** Another client address, which nothing from `FROM` charges. */
+const ELSEWHERE = '203.0.113.8'
+
+/** The answers of `count` calls of `ask`, one after the other. */
+function answers<T>(count: number, ask: (n: number) => T): T[] {
+  return Array.from({ length: count }, (_, n) => ask(n))
+}
+
 function limitsOn() {
   const clock = manualClock(1_000)
 
@@ -204,6 +215,75 @@ describe('RequestLimits', () => {
     expect(limits.createOrganisation(identity(3), '203.0.113.8')).toEqual({ allowed: true })
     await clock.advance(45 * minute)
     expect(limits.createOrganisation(identity(4), '203.0.113.7')).toEqual({ allowed: true })
+  })
+
+  it('takes three resends of an email within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
+    const { clock, limits } = limitsOn()
+
+    expect(answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))).toEqual(
+      answers(3, () => ({ allowed: true })),
+    )
+    await clock.advance(5 * minute)
+    expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({
+      allowed: false,
+      retryAfterMs: 10 * minute,
+    })
+    // The address took three of its 200: 197 more fit, the refused resend's place given back.
+    expect(answers(197, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(197, () => true),
+    )
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+  })
+
+  it('takes 200 verification mails of one address within 15 minutes, sign-ups and resends together, and refuses the 201st of either kind', async () => {
+    const { clock, limits } = limitsOn()
+    const mixed = answers(200, (n) =>
+      n % 2 === 0
+        ? limits.verificationMail(FROM)
+        : limits.verificationMail(FROM, `user-${n}@example.test`),
+    )
+
+    expect(mixed).toEqual(answers(200, () => ({ allowed: true })))
+    await clock.advance(5 * minute)
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: 10 * minute })
+    expect(limits.verificationMail(FROM, 'fresh@example.test')).toEqual({
+      allowed: false,
+      retryAfterMs: 10 * minute,
+    })
+    // Another address keeps its own budget.
+    expect(limits.verificationMail(ELSEWHERE)).toEqual({ allowed: true })
+    expect(limits.verificationMail(ELSEWHERE, 'fresh@example.test')).toEqual({ allowed: true })
+  })
+
+  it("leaves an email's resends untouched by the resends its address's budget refuses", () => {
+    const { limits } = limitsOn()
+
+    answers(200, () => limits.verificationMail(FROM))
+
+    expect(answers(3, () => limits.verificationMail(FROM, 'victim@example.test').allowed)).toEqual([
+      false,
+      false,
+      false,
+    ])
+    // The victim's three resends are all still there, from anywhere else.
+    expect(
+      answers(4, () => limits.verificationMail(ELSEWHERE, 'victim@example.test').allowed),
+    ).toEqual([true, true, true, false])
+  })
+
+  it("opens the address's and the email's windows again once 15 minutes have passed", async () => {
+    const { clock, limits } = limitsOn()
+
+    answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))
+    answers(197, () => limits.verificationMail(FROM))
+
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    expect(limits.verificationMail(ELSEWHERE, 'ghost@example.test').allowed).toBe(false)
+
+    await clock.advance(15 * minute)
+
+    expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({ allowed: true })
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: true })
   })
 
   it("leaves the address uncharged by a creation its identity's limit refuses", () => {
