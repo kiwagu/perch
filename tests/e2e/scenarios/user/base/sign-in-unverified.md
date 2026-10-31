@@ -22,5 +22,5 @@ Where: [/sign-in] after a sign-up whose verification mail was not opened
 
 ### Expected result
 - After step 2 [user.sign-in.error] carries [code:email-not-verified], [user.sign-in.resend-button] shows and the URL stays [/sign-in]
-- After step 3 [user.sign-in.mail-message] carries [code:check-your-mail] and [mail:resend-verification] reaches the email
+- After step 3 [user.sign-in.mail-message] carries [code:check-your-mail], the error of step 2 is gone (no [user.sign-in.error] shows), and [mail:resend-verification] reaches the email
 - After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]

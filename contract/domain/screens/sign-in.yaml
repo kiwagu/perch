@@ -89,6 +89,8 @@ flow:
         user.sign-in.toggle-button:
           target: sign-up
           description: The name input appears; the error is cleared.
+          actions:
+            - clear: user.sign-in.error
         user.sign-in.submit-button: signing-in
     sign-up:
       description: The form in the mode sign-up, with the name input.
@@ -96,8 +98,13 @@ flow:
         user.sign-in.toggle-button:
           target: sign-in
           description: The name input goes; the error is cleared.
+          actions:
+            - clear: user.sign-in.error
         user.sign-in.submit-button: signing-up
     signing-in:
+      description: The sign-in runs; the error of the last attempt goes.
+      entry:
+        - clear: user.sign-in.error
       invoke:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
@@ -116,6 +123,9 @@ flow:
             actions:
               - show: user.sign-in.error
     signing-up:
+      description: The sign-up runs; the error of the last attempt goes.
+      entry:
+        - clear: user.sign-in.error
       invoke:
         src: platform.sign-up
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
@@ -149,7 +159,12 @@ flow:
         user.sign-in.toggle-button:
           target: sign-up
           description: The name input appears; the error is cleared.
+          actions:
+            - clear: user.sign-in.error
     resending:
+      description: The verification mail is asked for again; the error of the last attempt goes, so a mail sent shows its message alone.
+      entry:
+        - clear: user.sign-in.error
       invoke:
         src: platform.resend-verification
         input: { email: user.sign-in.email-input }
