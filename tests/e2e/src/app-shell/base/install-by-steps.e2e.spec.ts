@@ -5,7 +5,8 @@ import { appReady, expect, test } from '../../support/fixtures'
 const IPHONE_SAFARI =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1'
 
-// The page tells the browser by its user agent, which is all it reads of it.
+// Chromium under Safari's user agent: the page tells Safari on an iPhone apart by its user agent
+// alone, so this proves the steps the page shows there, not Safari's own Add to Home Screen.
 test.use({ userAgent: IPHONE_SAFARI })
 
 test.describe('Be shown the steps that install the app where the browser cannot', {

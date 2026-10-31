@@ -2,8 +2,11 @@
  * The app's service worker (`build/pwa.ts` writes it), registered by production builds: the page
  * opens offline with the shell it kept. The worker never reloads a page itself. The reload the
  * frame asks for lets a waiting newer worker take over first, then loads the page again; a page
- * load goes to the network first, so either way it brings the build the server serves. A newer
- * worker is looked for each time the tab comes back to the foreground, as a newer build is.
+ * load goes to the network, so either way it brings the build the server serves. Only the tab
+ * that asked loads again when the newer worker takes over: every other tab keeps what it holds,
+ * unsaved input included, and its own reload, asked later through the frame's guard, is a plain
+ * one. A newer worker is looked for each time the tab comes back to the foreground, as a newer
+ * build is.
  */
 
 import { registerSW } from 'virtual:pwa-register'
@@ -11,10 +14,19 @@ import { registerSW } from 'virtual:pwa-register'
 /** Registers the worker; gives the frame's reload. */
 export function serviceWorkerReload(page: Window): () => void {
   let waiting = false
+  let asked = false
   const update = registerSW({
     immediate: true,
     onNeedRefresh: () => {
       waiting = true
+    },
+    // A newer worker took over, asked for by this tab or by another one.
+    onNeedReload: () => {
+      waiting = false
+
+      if (asked) {
+        page.location.reload()
+      }
     },
     onRegisteredSW: (_script, registration) => {
       page.document.addEventListener('visibilitychange', () => {
@@ -32,6 +44,7 @@ export function serviceWorkerReload(page: Window): () => void {
 
   return () => {
     if (waiting) {
+      asked = true
       void update(true)
     } else {
       page.location.reload()

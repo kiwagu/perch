@@ -259,8 +259,9 @@ that key. `openStandTenant()` opens an organisation's database on the stand the 
   naming a source map on a CDN, which DevTools would ask for and the front's policy block. And
   every build writes the web app manifest and the service worker (`build/pwa.ts`,
   `vite-plugin-pwa`): the icons are `public/icon.svg` with its PNG sizes; the worker caches the
-  page and its hashed scripts and styles when it installs, answers a page load from the network
-  first and from the cached page offline, serves hashed files from the cache first, caches each
+  page (as `/offline-shell`, an address nothing links to) and its hashed scripts and styles when
+  it installs, answers a page load from the network and only offline from that cached page,
+  serves hashed files from the cache first, caches each
   WASM module the first time it loads, and never caches `/backend/` or the UI manifest. Only a
   production build registers it (`src/composition/service-worker.ts`, from `main.tsx`), so the
   dev stand runs without it and the e2e stand (a production build) has it. There is no dev server: the dev stand's Caddy front serves `dist-dev/`, so
