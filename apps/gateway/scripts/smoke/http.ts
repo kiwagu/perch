@@ -1,7 +1,9 @@
 /**
  * The HTTP side of the smoke test: signing an identity up on a device and verifying it through
  * the mail the stand's mailbox received, signing it in, and calling the gateway's routes with the
- * session token the device keeps. An answer the smoke does not expect fails the step.
+ * session token the device keeps. An answer the smoke does not expect fails the step, which names
+ * its status and its code (`reported`), never its body: a session, an email or a link could be in
+ * it, and the failure is printed.
  *
  * The smoke and the load test talk to the gateway directly, so they play the front: like Caddy,
  * which names the address it saw in `X-Forwarded-For`, they give each simulated device a client
@@ -11,6 +13,8 @@
 
 import type { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
+
+import { reported } from './reported-answer'
 
 /** What a sign-in or a first verification answers, as far as the smoke reads it. */
 const signedIn = z.object({
@@ -83,9 +87,23 @@ function deviceHeaders(device: string | NamedDevice): Record<string, string> {
 }
 
 /**
+ * The session a sign-in or a first verification answered, or a failure in fixed words: the
+ * answer is never printed, since it carries the session's token and the account's email.
+ */
+function sessionOf(path: string, body: unknown): SignedIn['identity'] & { readonly token: string } {
+  const read = signedIn.safeParse(body)
+
+  if (!read.success) {
+    throw new Error(`${path} answered 200 with no session`)
+  }
+
+  return { id: read.data.user.id, email: read.data.user.email, token: read.data.token }
+}
+
+/**
  * Signs in from the device `credentials` names (`X-Perch-Device` and its label in
  * `X-Perch-Device-Label`); the device keeps the session token of the answer. An answer other
- * than 200 fails with its status and body, which carry no token.
+ * than 200 fails with its status and its code (`reported`), never its body.
  */
 export async function postCredentials(
   base: string,
@@ -96,18 +114,23 @@ export async function postCredentials(
   const answer = await call(base, 'POST', path, undefined, { email, password }, credentials.device)
 
   if (answer.status !== 200) {
-    throw new Error(`${path} answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    throw new Error(`${path} answered ${reported(answer)}`)
   }
 
-  const { token, user } = signedIn.parse(answer.body)
+  const session = sessionOf(path, answer.body)
 
-  return { identity: { id: user.id, email: user.email }, token, device: credentials.device.id }
+  return {
+    identity: { id: session.id, email: session.email },
+    token: session.token,
+    device: credentials.device.id,
+  }
 }
 
 /**
  * Signs `credentials` up and verifies the account through its mail in the stand's mailbox, as a
  * person opening the link on the device does: the sign-up answers 202, the mail's token goes to the
- * gateway's verification, which signs the device in.
+ * gateway's verification, which signs the device in. An answer it does not expect fails with its
+ * status and its code (`reported`), never its body, which could carry a session.
  */
 export async function signUp(
   base: string,
@@ -130,7 +153,7 @@ export async function signUp(
   )
 
   if (up.status !== 202) {
-    throw new Error(`/auth/sign-up/email answered ${up.status} ${JSON.stringify(up.body)}`)
+    throw new Error(`/auth/sign-up/email answered ${reported(up)}`)
   }
 
   const token = await mailbox.verificationToken(credentials.email, seen)
@@ -144,18 +167,12 @@ export async function signUp(
   )
 
   if (verified.status !== 200) {
-    throw new Error(
-      `/auth/verify-email answered ${verified.status} ${JSON.stringify(verified.body)}`,
-    )
+    throw new Error(`/auth/verify-email answered ${reported(verified)}`)
   }
 
-  const { token: session, user } = signedIn.parse(verified.body)
+  const { id, email, token: session } = sessionOf('/auth/verify-email', verified.body)
 
-  return {
-    identity: { id: user.id, email: user.email },
-    token: session,
-    device: credentials.device.id,
-  }
+  return { identity: { id, email }, token: session, device: credentials.device.id }
 }
 
 /**

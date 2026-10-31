@@ -8,6 +8,7 @@ import { noteCreate, noteDelete, noteUpdate } from '../../src/sync/__fixtures__/
 
 import { callAs, postCredentials, type SignedIn, signUp } from './http'
 import { refusedWriteSteps } from './refused-writes'
+import { reported } from './reported-answer'
 import {
   check,
   hello,
@@ -56,7 +57,7 @@ export async function organisationSteps(
   await step(`organisation ${key} created: 201 with the owner as admin`, async () => {
     const answer = await callAs(base, 'POST', '/organisations', owner, { key, name: 'Smoke' })
 
-    check(answer.status === 201, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 201, `answered ${reported(answer)}`)
 
     const { membership: created } = createdOrganisation.parse(answer.body)
 
@@ -71,7 +72,7 @@ export async function organisationSteps(
     })
     const answer = await callAs(base, 'GET', '/organisations', signedUp)
 
-    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 200, `answered ${reported(answer)}`)
     check(
       listedMemberships.parse(answer.body).memberships.length === 0,
       'the new identity belongs to an organisation',
@@ -85,7 +86,7 @@ export async function organisationSteps(
       email: guest.identity.email,
     })
 
-    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 200, `answered ${reported(answer)}`)
   })
 
   const guestDoc = RegionDoc.inMemory('tenant', region)
@@ -234,7 +235,7 @@ export async function organisationSteps(
 
     check(
       answer.status === 403 && refusal.safeParse(answer.body).data?.code === 'not-admin',
-      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+      `answered ${reported(answer)}`,
     )
   })
 
@@ -246,7 +247,7 @@ export async function organisationSteps(
       owner,
     )
 
-    check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 204, `answered ${reported(answer)}`)
   })
 
   await step(
@@ -272,7 +273,7 @@ export async function organisationSteps(
   await step('the members of the organisation no longer list the second identity', async () => {
     const answer = await callAs(base, 'GET', `/organisations/${key}/members`, owner)
 
-    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 200, `answered ${reported(answer)}`)
 
     const { members } = listedMembers.parse(answer.body)
 

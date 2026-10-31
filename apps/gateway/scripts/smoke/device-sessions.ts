@@ -8,6 +8,7 @@ import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { type Answer, call, callAs, postCredentials, type SignedIn, signUp } from './http'
+import { reported } from './reported-answer'
 import { check, hello, type Opened, refusal, refusedHello, step } from './steps'
 
 /**
@@ -34,7 +35,7 @@ const listedDevices = z.strictObject({
 async function listOf(base: string, signedIn: SignedIn) {
   const answer = await callAs(base, 'GET', '/devices', signedIn)
 
-  check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+  check(answer.status === 200, `answered ${reported(answer)}`)
 
   return { devices: listedDevices.parse(answer.body).devices, raw: JSON.stringify(answer.body) }
 }
@@ -105,7 +106,7 @@ export async function deviceSessionSteps(
 
     check(
       answer.status === 400 && refusal.safeParse(answer.body).data?.code === 'bad-request',
-      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+      `answered ${reported(answer)}`,
     )
   })
 
@@ -136,7 +137,7 @@ export async function deviceSessionSteps(
     async () => {
       const answer = await callAs(base, 'DELETE', `/devices/${phoneRow.id}`, laptop)
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
 
       const { code } = await sockets.phone.closed
       const ended = (await devicesOf(base, laptop)).find((device) => device.id === phoneRow.id)
@@ -164,7 +165,7 @@ export async function deviceSessionSteps(
       const old = await callAs(base, 'GET', '/devices', phone)
 
       check(code === CLOSE.unauthorized, `the old token's hello closed with ${code}`)
-      check(refused(old), `the old token answered ${old.status} ${JSON.stringify(old.body)}`)
+      check(refused(old), `the old token answered ${reported(old)}`)
 
       const { device } = await hello(base, opened, again)
       const fresh = await callAs(base, 'GET', '/devices', again)
@@ -182,10 +183,7 @@ export async function deviceSessionSteps(
       const second = await signIn('smoke-tablet', 'Smoke tablet')
       const stale = await callAs(base, 'GET', '/devices', first)
 
-      check(
-        refused(stale),
-        `the first token answered ${stale.status} ${JSON.stringify(stale.body)}`,
-      )
+      check(refused(stale), `the first token answered ${reported(stale)}`)
 
       return { signedIn: second, socket: (await hello(base, opened, second)).device }
     },
@@ -196,7 +194,7 @@ export async function deviceSessionSteps(
     async () => {
       const answer = await callAs(base, 'POST', '/auth/sign-out-everywhere', laptop)
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
 
       const codes = await Promise.all(
         [sockets.laptop, phoneAgain.socket, tablet.socket].map(
@@ -242,7 +240,7 @@ export async function deviceSessionSteps(
       const answer = await signOut(base, desktop.token, desktop.device)
       const { code } = await device.closed
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
       check(code === CLOSE.revoked, `closed with ${code}`)
     },
   )
@@ -250,12 +248,12 @@ export async function deviceSessionSteps(
   await step('POST /auth/sign-out with the same token again: 204', async () => {
     const answer = await signOut(base, desktop.token, desktop.device)
 
-    check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 204, `answered ${reported(answer)}`)
   })
 
   await step('POST /auth/sign-out with a made-up token: 401', async () => {
     const answer = await signOut(base, crypto.randomUUID(), desktop.device)
 
-    check(refused(answer), `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(refused(answer), `answered ${reported(answer)}`)
   })
 }

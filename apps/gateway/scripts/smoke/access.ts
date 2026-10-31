@@ -9,6 +9,7 @@ import type { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
 import { type Answer, type Credentials, call, signUp } from './http'
+import { reported } from './reported-answer'
 import { check, step } from './steps'
 
 /** The answer of the gateway's limit that refused a request. */
@@ -102,11 +103,6 @@ function acceptedEmpty(answer: Answer): boolean {
   return answer.status === 202 && answer.body === undefined
 }
 
-/** `answer` as a step reports it: its status and its body, which carry no address or token. */
-function described(answer: Answer): string {
-  return `${answer.status} ${JSON.stringify(answer.body)}`
-}
-
 /**
  * The credential steps: 20 sign-ins per client address within 10 s (sign-ins of unknown emails,
  * so no email's own limit counts), 10 failed sign-ins per email, each limit answering
@@ -136,7 +132,10 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       401,
     )
 
-    check(rateLimited.safeParse(last?.body).success, `the last said ${JSON.stringify(last?.body)}`)
+    check(
+      rateLimited.safeParse(last?.body).success,
+      `the last answered ${last === undefined ? 'nothing' : reported(last)}`,
+    )
   })
 
   await step(
@@ -154,8 +153,8 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       ])
       const names = (answer: Answer) => [...answer.headers.keys()].sort().join(' ')
 
-      check(acceptedEmpty(again), `the taken email answered ${described(again)}`)
-      check(acceptedEmpty(other), `the new email answered ${described(other)}`)
+      check(acceptedEmpty(again), `the taken email answered ${reported(again)}`)
+      check(acceptedEmpty(other), `the new email answered ${reported(other)}`)
       check(names(again) === names(other), 'the two answers carry different headers')
       // The new email's mail went out through the same mailer a taken one's would.
       await mailbox.next(fresh.email, 0)
@@ -168,14 +167,14 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
     const device = deviceNamed('unverified')
     const up = await signUpOnly(base, account, device)
 
-    check(acceptedEmpty(up), `the sign-up answered ${described(up)}`)
+    check(acceptedEmpty(up), `the sign-up answered ${reported(up)}`)
 
     const answer = await signIn(base, account, device)
 
     check(
       answer.status === 403 &&
         z.object({ code: z.literal('EMAIL_NOT_VERIFIED') }).safeParse(answer.body).success,
-      `answered ${described(answer)}`,
+      `answered ${reported(answer)}`,
     )
   })
 
@@ -191,14 +190,14 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
         signUp(base, mailbox, { ...verified, device: deviceNamed('resend-verified') }),
       ])
 
-      check(acceptedEmpty(up), `the sign-up answered ${described(up)}`)
+      check(acceptedEmpty(up), `the sign-up answered ${reported(up)}`)
       await mailbox.next(unverified.email, 0)
 
       const answers = await Promise.all(
         [unverified, verified, unknown].map(({ email }) => resend(base, email, device)),
       )
 
-      check(answers.every(acceptedEmpty), `answered ${answers.map(described).join(', ')}`)
+      check(answers.every(acceptedEmpty), `answered ${answers.map(reported).join(', ')}`)
       await mailbox.next(unverified.email, 1)
       check((await mailbox.count(verified.email)) === 1, 'the verified email was mailed again')
       check((await mailbox.count(unknown.email)) === 0, 'the unknown email was mailed')
@@ -220,7 +219,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
 
       check(
         rateLimited.safeParse(last?.body).success,
-        `the last said ${JSON.stringify(last?.body)}`,
+        `the last answered ${last === undefined ? 'nothing' : reported(last)}`,
       )
     },
   )
@@ -233,7 +232,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const seen = await mailbox.count(account.email)
       const up = await signUpOnly(base, account, device)
 
-      check(acceptedEmpty(up), `the sign-up answered ${described(up)}`)
+      check(acceptedEmpty(up), `the sign-up answered ${reported(up)}`)
 
       const token = await mailbox.verificationToken(account.email, seen)
       const madeUp = await verify(base, 'made-up-token', device)
@@ -243,7 +242,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       check(
         madeUp.status === 401 &&
           z.object({ code: z.literal('link-invalid') }).safeParse(madeUp.body).success,
-        `the made-up token answered ${described(madeUp)}`,
+        `the made-up token answered ${reported(madeUp)}`,
       )
       check(
         first.status === 200 && verifiedFirst.safeParse(first.body).success,
@@ -251,7 +250,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       )
       check(
         again.status === 200 && JSON.stringify(again.body) === '{"token":null}',
-        `the second opening answered ${described(again)}`,
+        `the second opening answered ${reported(again)}`,
       )
     },
   )
@@ -264,7 +263,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       const seen = await mailbox.count(account.email)
       const up = await signUpOnly(base, account, device)
 
-      check(acceptedEmpty(up), `the sign-up answered ${described(up)}`)
+      check(acceptedEmpty(up), `the sign-up answered ${reported(up)}`)
 
       const token = await mailbox.verificationToken(account.email, seen)
       const unnamed = await verify(base, token)
@@ -272,7 +271,7 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       check(
         unnamed.status === 400 &&
           z.object({ code: z.literal('bad-request') }).safeParse(unnamed.body).success,
-        `the verification without a device answered ${described(unnamed)}`,
+        `the verification without a device answered ${reported(unnamed)}`,
       )
 
       const before = await signIn(base, account, device)
