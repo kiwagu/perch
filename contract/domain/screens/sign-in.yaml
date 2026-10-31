@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
-description: "Where a visitor signs in with an existing account or creates one: the only screen a guest sees, and where a signed-out device returns."
+description: "Where a visitor signs in with an existing account, or creates one and is asked to open the link of the mail that verifies its email: the only screen a guest sees, and where a signed-out device returns."
 flag: null
 bindings: [ { path: /sign-in, guard: guest, roles: [ guest ], history: push } ]
 entry: [ user.sign-in.form, user.sign-in.email-input, user.sign-in.submit-button, user.sign-in.toggle-button ]
@@ -13,6 +13,10 @@ anchors:
     kind: message
     description: Why the last session on this device ended, when the person should know; shown once, while the page stays open.
     codes: [ resend-after-sign-in, signed-out-elsewhere, delete-pending ]
+  user.sign-in.mail-message:
+    kind: message
+    description: "Asks to open the link of the mail that verifies the email typed, once a sign-up or a resend went through; an email that has an account already gets the same words, and no mail."
+    codes: [ check-your-mail ]
   user.sign-in.error:
     kind: error
     description: Why the last attempt failed; the next attempt or a switch of mode clears it.
@@ -24,6 +28,9 @@ anchors:
         params:
           email: user.sign-in.email-input
       - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+      - action: platform.resend-verification
         params:
           email: user.sign-in.email-input
   user.sign-in.password-input:
@@ -61,10 +68,20 @@ anchors:
     kind: button
     description: Switches between signing in and creating an account; its value is the mode it switches to.
     dataValue: true
+  user.sign-in.resend-button:
+    kind: button
+    description: "Sends the mail that verifies the email typed again; shown after a sign-up, and after a sign-in refused with email-not-verified; disabled while it sends."
+    binding:
+      action: platform.resend-verification
+      params:
+        email: user.sign-in.email-input
 states:
   ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
 flow:
   initial: sign-in
+  meta:
+    guards:
+      emailNotVerified: the sign-in was refused because the account's email is not verified yet
   states:
     sign-in:
       description: The form in the mode sign-in.
@@ -90,22 +107,61 @@ flow:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me
         onError:
-          target: sign-in
-          actions:
-            - show: user.sign-in.error
+          - target: unverified
+            guard: emailNotVerified
+            description: The error says the email is not verified yet, and the resend button shows.
+            actions:
+              - show: { user.sign-in.error: [ email-not-verified ] }
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
     signing-up:
       invoke:
         src: platform.sign-up
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
         onDone:
-          target: done
-          description: The account is created with its profile.
+          target: check-mail
+          description: "The account is created, or the email has one already: either way the device is not signed in, and the form goes back to the mode sign-in with the email kept."
           actions:
-            - show: { app-shell.notice-message: [ welcome ] }
-            - navigate: /me
+            - show: { user.sign-in.mail-message: [ check-your-mail ] }
         onError:
           target: sign-up
           actions:
+            - show: user.sign-in.error
+    check-mail:
+      description: "The form in the mode sign-in with the email kept; the message asks to open the link of the verification mail, and the resend button sends it again."
+      on:
+        user.sign-in.resend-button: resending
+        user.sign-in.submit-button:
+          target: signing-in
+          actions:
+            - clear: user.sign-in.mail-message
+        user.sign-in.toggle-button:
+          target: sign-up
+          description: The name input appears; the message goes.
+          actions:
+            - clear: user.sign-in.mail-message
+    unverified:
+      description: "The form in the mode sign-in; the error says why the last attempt failed, and the resend button sends the verification mail to the email typed."
+      on:
+        user.sign-in.resend-button: resending
+        user.sign-in.submit-button: signing-in
+        user.sign-in.toggle-button:
+          target: sign-up
+          description: The name input appears; the error is cleared.
+    resending:
+      invoke:
+        src: platform.resend-verification
+        input: { email: user.sign-in.email-input }
+        onDone:
+          target: check-mail
+          actions:
+            - show: { user.sign-in.mail-message: [ check-your-mail ] }
+        onError:
+          target: unverified
+          description: The error says why the mail was not sent; the resend button stays.
+          actions:
+            - clear: user.sign-in.mail-message
             - show: user.sign-in.error
     done:
       description: The app has moved to /me.

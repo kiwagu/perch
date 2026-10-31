@@ -2,30 +2,33 @@
 version: 1
 actions:
   sign-up:
-    description: Creates an account with its profile and its settings, and signs this device in.
+    description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
     params:
       email:
         type: string
         description: The email of the new account.
       password:
         type: string
-        description: The password of the new account.
+        description: The password of the new account, 8 to 128 characters.
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
       locale:
         type: string
-        description: The language the new account's settings start with.
-    result: the account is created with its profile and its settings, the device is signed in, the app moves to /me with code welcome
+        description: The language the new account's mails speak and its settings start with.
+    result: "the account is created and the mail below is sent to it; the device is not signed in, and /sign-in asks to check the mail; an email that has an account already gets the same answer and no mail"
     codes:
       - sign-up-rejected
       - rate-limited
-      - other-account
       - name-required
       - name-too-long
       - failed
+    mail:
+      to: email
+      language: locale
+      link: { screen: user.verify-email, search: token }
   sign-in:
-    description: Signs this device in to an account.
+    description: Signs this device in to an account whose email is verified.
     params:
       email:
         type: string
@@ -33,12 +36,40 @@ actions:
       password:
         type: string
         description: The password of the account.
-    result: the device is signed in, the app moves to /me with code welcome
+    result: the device is signed in, the app moves to /me with code welcome; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
     codes:
       - invalid-credentials
+      - email-not-verified
       - rate-limited
       - other-account
       - failed
+  verify-email:
+    description: Verifies the email of an account with the token its verification mail carries, and signs this device in to the account the first time.
+    params:
+      token:
+        type: string
+        description: The token the link of the verification mail carries in the address of /verify-email.
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened again after that answers verified-before and signs nothing in; a link older than a day answers link-expired"
+    codes:
+      - link-invalid
+      - link-expired
+      - other-account
+      - rate-limited
+      - failed
+  resend-verification:
+    description: Sends the mail whose link verifies an account's email again.
+    params:
+      email:
+        type: string
+        description: The email of the account.
+    result: the mail below is on its way when the email has an account not verified yet; an unknown email, or one verified already, gets the same answer and no mail
+    codes:
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.verify-email, search: token }
   sign-out:
     description: Signs this device out, after sending what it can.
     params:

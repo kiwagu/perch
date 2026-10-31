@@ -15,7 +15,7 @@ Where: [/org] of a new organisation, then [organisation.notes.add-button]
 ## Scenario: An administrator adds the first note of a new organisation and sees it as its own
 
 ### Steps
-1. Sign up, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. Sign up, open the link of [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 2. Click [organisation.notes.add-button] with [organisation.notes.new-textarea] empty
 3. Enter the note into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 4. Reload the page and wait for [organisation.notes.section] to reach [state:ready]

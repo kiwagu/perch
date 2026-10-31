@@ -149,7 +149,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 
 | Code | Where | Meaning |
 |---|---|---|
-| `welcome` | `app-shell.notice-message` | the account signed up or signed in |
+| `welcome` | `app-shell.notice-message` | the account signed in, or its email was verified and this device signed in to it |
 | `devices-read-failed` | `app-shell.notice-message` | the devices of the account could not be read |
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
@@ -161,14 +161,19 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message` | a mail whose link verifies the email typed is on its way, if that email has an account waiting for it; the same words when it has none, so the page tells nobody which emails have accounts |
+| `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
+| `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
+| `link-invalid` | `user.verify-email.error` | the link is not one a verification mail carried, or its account is gone |
+| `link-expired` | `user.verify-email.error` | the link is older than a day; the same page sends a new one |
 | `invalid-credentials` | `user.sign-in.error` | the email or the password is wrong |
-| `sign-up-rejected` | `user.sign-in.error` | no account can be created with this email |
-| `rate-limited` | `user.sign-in.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
-| `other-account` | `user.sign-in.error` | another account is signed in on this browser and must be signed out first |
+| `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password is shorter than 8 or longer than 128 characters |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
+| `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
@@ -224,6 +229,7 @@ screen name of its own.
 |---|---|
 | `app-shell` | the frame around every screen, with the navigation, the language, the status and the notices |
 | `user.sign-in` | the page that signs an account in or creates one (`/sign-in`) |
+| `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in (`/verify-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
