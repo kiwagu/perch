@@ -20,6 +20,8 @@ export interface VerifyEmailViewProps {
   readonly verifying: boolean
   /** The code the message shows: the link was verified before, or a new one is on its way. */
   readonly message?: 'verified-before' | 'check-your-mail' | undefined
+  /** The address the new link went to, which `check-your-mail` names. */
+  readonly sentTo?: string | undefined
   /** The code of the failure the error shows: of the link, or of the last resend. */
   readonly error?: string | undefined
   /** Whether the form that sends a new link shows. */
@@ -76,7 +78,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
               <AlertDescription data-testid="user.verify-email.message" data-code={props.message}>
                 {props.message === 'verified-before'
                   ? t('user.verify-email.message.verified-before')
-                  : t('user.verify-email.message.check-your-mail', { email })}
+                  : t('user.verify-email.message.check-your-mail', { email: props.sentTo ?? '' })}
               </AlertDescription>
             </Alert>
           ) : null}

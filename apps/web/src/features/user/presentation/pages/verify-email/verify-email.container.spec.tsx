@@ -211,6 +211,16 @@ describe('VerifyEmailContainer', () => {
     expect(message.textContent).toContain(ann.email)
     expect(screen.queryByTestId('user.verify-email.error')).toBeNull()
     expect(resend).toHaveBeenCalledExactlyOnceWith(ann.email)
+
+    // Typing another address after it went keeps the message on the address it went to.
+    fireEvent.change(screen.getByTestId('user.verify-email.email-input'), {
+      target: { value: 'someone-else@example.test' },
+    })
+
+    expect(screen.getByTestId('user.verify-email.message').textContent).toContain(ann.email)
+    expect(screen.getByTestId('user.verify-email.message').textContent).not.toContain(
+      'someone-else@example.test',
+    )
   })
 
   it('exchanges an empty token when the address carries none', async () => {

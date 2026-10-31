@@ -131,7 +131,12 @@ describe('verify-email machine', () => {
 
     const sent = await waitFor(actor, (state) => state.matches('sent'))
 
-    expect(sent.context).toEqual({ error: undefined, message: 'check-your-mail' })
+    // The address it went to stays with the message, whatever the field holds later.
+    expect(sent.context).toStrictEqual({
+      error: undefined,
+      message: 'check-your-mail',
+      sentTo: ann.email,
+    })
     expect(sent.can({ type: RESEND, email: ann.email })).toBe(true)
   })
 
@@ -150,7 +155,11 @@ describe('verify-email machine', () => {
 
     const failed = await waitFor(actor, (state) => state.matches('resend-offered'))
 
-    expect(failed.context).toEqual({ error: 'data:RATE_LIMITED', message: undefined })
+    expect(failed.context).toStrictEqual({
+      error: 'data:RATE_LIMITED',
+      message: undefined,
+      sentTo: undefined,
+    })
     expect(resend).toHaveBeenCalledTimes(2)
   })
 })

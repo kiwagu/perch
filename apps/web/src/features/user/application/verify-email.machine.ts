@@ -1,5 +1,5 @@
 import type { ResultAsync } from 'neverthrow'
-import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
+import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import { failureOf, settled } from '../../../platform/actor-outcome'
 import type { EmailVerified } from '../../../platform/session.port'
@@ -25,6 +25,8 @@ export interface VerifyEmailContext {
   readonly error: string | undefined
   /** The code the message shows: the link was verified before, or a new one is on its way. */
   readonly message: MessageCode | undefined
+  /** The address the last resend that went through was sent to, which its message names. */
+  readonly sentTo: string | undefined
 }
 
 /** The events of the screen's flow: the user acts on these anchors. */
@@ -99,8 +101,9 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
       'platform.verify-email': fromPromise<EmailVerified, { readonly token: string }>(({ input }) =>
         settled(deps.verify(input.token)),
       ),
-      'platform.resend-verification': fromPromise<void, { readonly email: string }>(({ input }) =>
-        settled(deps.resend(input.email)),
+      // It ends with the address it sent to: the message names that one, not the field's.
+      'platform.resend-verification': fromPromise<string, { readonly email: string }>(({ input }) =>
+        settled(deps.resend(input.email)).then(() => input.email),
       ),
     },
     actions: {
@@ -117,7 +120,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
         if (params.anchor === VERIFY_ERROR) {
           enqueue.assign({ error: undefined })
         } else if (params.anchor === VERIFY_MESSAGE) {
-          enqueue.assign({ message: undefined })
+          enqueue.assign({ message: undefined, sentTo: undefined })
         } else {
           enqueue.emit({ type: 'clear', ...params })
         }
@@ -127,7 +130,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
   }).createMachine({
     id: 'user.verify-email',
     initial: 'verifying',
-    context: { error: undefined, message: undefined },
+    context: { error: undefined, message: undefined, sentTo: undefined },
     states: {
       verifying: {
         invoke: {
@@ -185,6 +188,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
             actions: [
               { type: 'clear', params: { anchor: VERIFY_ERROR } },
               { type: 'show', params: { anchor: VERIFY_MESSAGE, codes: ['check-your-mail'] } },
+              assign({ sentTo: ({ event }) => event.output }),
             ],
           },
           onError: {

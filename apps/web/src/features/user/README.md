@@ -27,8 +27,9 @@ verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: i
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
 ends on its message, a refused one offers `platform.resend-verification` to an email typed; it
-keeps the codes of the page's error and message) and one file per policy
-(`profile-name.policy.ts`, `profile-bio.policy.ts`, `locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
+keeps the codes of the page's error and message, and the address the last resend went to)
+and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
+`locale-change.policy.ts`); `presentation/` the pages, their views and the i18n catalogs.
 
 ## Surface
 
@@ -88,7 +89,8 @@ keeps the codes of the page's error and message) and one file per policy
   sign in (`user.verify-email.message`, code `verified-before`), and for a link that does not
   verify says why (`user.verify-email.error`: `link-invalid`, `link-expired`, `other-account`,
   `rate-limited`, `failed`) and sends a new one to the email typed (`user.verify-email.form`),
-  saying it is on its way (code `check-your-mail`);
+  saying it is on its way to the address it went to (code `check-your-mail`), which typing in the
+  field afterwards does not change;
   signing out asks before losing changes this device could not send, at once when the browser
   says it has no network; the sign-in page says so when the gateway refused the
   device's session token while changes remain to send after the next sign-in, and says "You

@@ -104,15 +104,21 @@ describe('VerifyEmailView', () => {
     )
   })
 
-  it('says a new link is on its way to the email typed, the form there for another', () => {
-    renderView({ message: 'check-your-mail', showForm: true, canResend: true })
+  it('says a new link is on its way to the address it went to, which editing the field does not change', () => {
+    renderView({
+      message: 'check-your-mail',
+      sentTo: 'ann@example.test',
+      showForm: true,
+      canResend: true,
+    })
 
-    type('user.verify-email.email-input', 'ann@example.test')
+    type('user.verify-email.email-input', 'someone-else@example.test')
 
     const message = screen.getByTestId('user.verify-email.message')
 
     expect(message.getAttribute('data-code')).toBe('check-your-mail')
     expect(message.textContent).toContain('ann@example.test')
+    expect(message.textContent).not.toContain('someone-else@example.test')
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
     expect(screen.getByTestId('user.verify-email.form')).toBeTruthy()
   })

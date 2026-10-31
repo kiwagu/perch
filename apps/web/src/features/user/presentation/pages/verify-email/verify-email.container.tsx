@@ -73,6 +73,7 @@ function TokenExchange(props: { readonly token: string }) {
     <VerifyEmailView
       verifying={state.matches('verifying')}
       message={state.context.message}
+      sentTo={state.context.sentTo}
       error={state.context.error}
       showForm={showForm}
       canResend={state.can({ type: 'user.verify-email.resend-button', email: '' })}
