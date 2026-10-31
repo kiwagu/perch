@@ -7,7 +7,7 @@ import type { BrowserContext, ConsoleMessage, Response, Route } from '@playwrigh
  */
 export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'content-security-policy':
-    "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'x-frame-options': 'DENY',
   'referrer-policy': 'same-origin',
   'permissions-policy':

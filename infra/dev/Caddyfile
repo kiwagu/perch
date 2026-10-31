@@ -9,10 +9,11 @@
 (security-headers) {
 	header {
 		# The app loads only what this origin serves: its scripts (no inline one), its styles and
-		# fonts, the engine's module worker, fetches and the WebSocket to /backend. The two WASM
-		# engines compile their modules, which 'wasm-unsafe-eval' allows without allowing eval.
+		# fonts, its web app manifest (which makes it installable), the engine's module worker,
+		# fetches and the WebSocket to /backend. The two WASM engines compile their modules, which
+		# 'wasm-unsafe-eval' allows without allowing eval.
 		# No other site may frame the app, no <base> may move its links, forms post only here.
-		Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 		# The same ban on framing for browsers that predate frame-ancestors.
 		X-Frame-Options "DENY"
 		# A full referrer stays on this origin; another origin learns nothing of the page.
