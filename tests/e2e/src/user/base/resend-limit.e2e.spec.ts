@@ -2,7 +2,7 @@
 import { generate } from '../../support/data'
 import { checkYourMail, expect, startSignUp, test } from '../../support/fixtures'
 import { expectDeclaredMail } from '../../support/mail-contract'
-import { mailbox } from '../../support/mailbox'
+import { expectBoundedNonArrival, mailbox } from '../../support/mailbox'
 
 test.describe('Ask for the verification mail again too often', { tag: '@full' }, () => {
   test('One email takes three resends of its verification mail within a quarter of an hour; the fourth is refused and sends nothing', async ({
@@ -48,12 +48,15 @@ test.describe('Ask for the verification mail again too often', { tag: '@full' },
         'data-code',
         'rate-limited',
       )
+
+      // The error shows once the gateway answered the resend.
+      const answeredAt = Date.now()
+
       await expect(page.getByTestId('user.sign-in.mail-message')).toHaveCount(0)
       await expect(resend).toBeVisible()
-      // The gateway does not await its sends: a mail that would come comes within a second on the
-      // stand, so after two seconds the mailbox holds every mail the resend made go out.
-      await page.waitForTimeout(2_000)
-      expect(await mailbox.count(data.email), 'the sign-up mail and three resends').toBe(4)
+      // Within the delivery window after that answer the email still holds the sign-up mail and
+      // the three resends (bounded non-arrival).
+      await expectBoundedNonArrival(data.email, { mails: 4, answeredAt })
     })
   })
 })

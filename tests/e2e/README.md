@@ -156,7 +156,10 @@ and `expectInvited` (the toast `invited` and the account in the members list).
 `src/support/data.ts`: the generators (accounts, another password, names, bios, organisation
 keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
-at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for.
+at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for; and
+`expectBoundedNonArrival`, a bounded non-arrival: an address's mail count stays put from the
+moment a test saw the answer to an action that must send none until `MAIL_DELIVERY_WINDOW_MS`
+(2 s) after it, read every 200 ms (no mail within the window, not "never").
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
 with the declared search parameter set, and the `lang` of its HTML's root element as parse5

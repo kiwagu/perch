@@ -1,7 +1,7 @@
 // scenario: user/base/taken-email
 import { generate } from '../../support/data'
 import { checkYourMail, expect, notice, signUp, test } from '../../support/fixtures'
-import { mailbox } from '../../support/mailbox'
+import { expectBoundedNonArrival } from '../../support/mailbox'
 
 test.describe('Sign up again with an email that has an account', { tag: '@smoke' }, () => {
   test('A sign-up with a taken email answers as a new one does, sends no mail, and the account keeps its own password', async ({
@@ -33,11 +33,14 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       //   the sign-up of a new email, the URL stays [/sign-in], and no second [mail:sign-up] reaches
       //   the email
       await expect(checkYourMail(page)).toBeVisible()
+
+      // The page asks to check the mail once the gateway answered the sign-up.
+      const answeredAt = Date.now()
+
       await expect(page).toHaveURL(/\/sign-in$/)
-      // The gateway does not await its sends: a mail that would come comes within a second on the
-      // stand, so after two seconds the mailbox holds every mail the sign-up made go out.
-      await page.waitForTimeout(2_000)
-      expect(await mailbox.count(data.email), 'the mails to the email').toBe(1)
+      // Within the delivery window after that answer the email still holds the mail of its first
+      // sign-up alone (bounded non-arrival).
+      await expectBoundedNonArrival(data.email, { mails: 1, answeredAt })
     })
 
     await test.step('3. Enter the other password into [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
