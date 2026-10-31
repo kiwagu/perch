@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { formatProblem } from '../files'
 
 import { bindingsProblems } from './bindings'
-import { anchorIn, sampleContract } from './contract.fixture'
+import { anchorIn, sampleContract, screenIn } from './contract.fixture'
 
 const printed = (contract = sampleContract()): string[] =>
   bindingsProblems(contract).map(formatProblem)
@@ -68,6 +68,23 @@ describe('bindingsProblems', () => {
 
     expect(printed(contract)).toEqual([
       `${AT}["sample.save-button"].binding.params.id: "token" is not a search parameter of every route of the screen`,
+    ])
+  })
+  it('wants a search param on every route of the screen, not on one of them', () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').bindings.push({
+      path: '/sample',
+      roles: ['member'],
+      history: 'push',
+    })
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.updateThing',
+      params: { title: { search: 'tab' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.title: "tab" is not a search parameter of every route of the screen`,
     ])
   })
   it('reports a name of the object prototype as unknown, never as found or thrown', () => {

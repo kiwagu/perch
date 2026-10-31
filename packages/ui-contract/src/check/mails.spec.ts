@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
 
-import { sampleContract } from './contract.fixture'
+import { sampleContract, screenIn } from './contract.fixture'
 import { mailsProblems } from './mails'
 
 const printed = (contract = sampleContract()): string[] =>
@@ -70,5 +70,22 @@ describe('mailsProblems', () => {
         sending({ to: 'email', language: 'locale', link: { screen: 'sample', search: 'token' } }),
       ),
     ).toEqual([`${AT}.link.search: "token" is not a search parameter of every route of "sample"`])
+  })
+  it('wants the search parameter on every route of the screen, not on one of them', () => {
+    const contract = sending({
+      to: 'email',
+      language: 'locale',
+      link: { screen: 'sample', search: 'tab' },
+    })
+
+    screenIn(contract, 'sample').bindings.push({
+      path: '/sample',
+      roles: ['member'],
+      history: 'push',
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.link.search: "tab" is not a search parameter of every route of "sample"`,
+    ])
   })
 })
