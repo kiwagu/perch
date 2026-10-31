@@ -11,11 +11,11 @@ and their members; devices sync over a WebSocket at `/sync`; `GET /health` answe
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
 `src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
-time (one identity's membership changes, one device's key operations). The modules that
-predate the index rule have no `index.ts` yet and are imported file by file.
+time (one identity's membership changes). The modules that predate the index rule have no
+`index.ts` yet and are imported file by file.
 
-- [auth](src/auth/README.md): sign-up, sign-in and sign-out, device sessions, tokens and the
-  Bearer caller.
+- [auth](src/auth/README.md): accounts on Better Auth: sign-up and sign-in behind the gateway's
+  limits, device sessions and their session tokens, the sign-outs and the Bearer caller.
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
@@ -27,26 +27,34 @@ predate the index rule have no `index.ts` yet and are imported file by file.
 None: this is an application. Its entry point is `src/index.ts`, which registers the
 `.surql` loader and runs `src/main.ts`; `SIGINT` and `SIGTERM` stop the server and close
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
-WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
-`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, `GATEWAY_JWT_KEY` (the signing key, below), and
-optionally the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with
-an issue that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`: the gateway keeps
+one long-lived connection to the directory there), `GATEWAY_SURREAL_USER`,
+`GATEWAY_SURREAL_PASS`, `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL` (below), and optionally
+the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with an issue
+that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
 test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
 HTTP helpers the load test reuses).
 
-Signing key: the identity access method signs every access token with `GATEWAY_JWT_KEY` (HS512),
-which the gateway gives the directory schema when it applies it, so a schema applied again (at a
-restart after a schema change, or on a deployment) keeps every issued token valid. It is
-required, with no default and at least 64 characters: generate one with `openssl rand -hex 64`
-(128 characters on one line).
-The local stands use a literal of the mcproc manifest (`stand_jwt_key`), for those stands only;
-everything else that opens a stand's directory (the smoke, the load test's gateway, the seed's
-sweep) applies the schema with that same key, from `mcproc exec`, or it would give the stand a
-key of its own.
-To rotate it, set a new value and restart the gateway: the schema is applied again under the new
-key, earlier access tokens are refused, and each device renews its pair once with its refresh
-key at its next hello; nobody is signed out. The organisations' databases have no access method
-of their own yet; when they get one, it takes its key from this variable too.
+Auth secret and public origin: `GATEWAY_AUTH_SECRET` is the secret Better Auth signs and
+encrypts with, required, with no default and at least 32 characters: generate one with
+`openssl rand -hex 32`. `GATEWAY_PUBLIC_URL` is the front's public origin, such as
+`https://localhost:5443` (a trailing slash is dropped): Better Auth serves its routes under
+`<origin>/backend/auth` and trusts requests from that origin only.
+The local stands use a literal of the mcproc manifest (`stand_auth_secret`) and their own
+front's origin, for those stands only; the smoke and the load test, which run a gateway of their
+own on the e2e stand, take the same two values from `mcproc exec`.
+
+Rotating the auth secret signs nobody out. A session is a bearer token stored in
+`device_session`, which the secret does not sign: the gateway looks a session up by its raw
+token, so every session open before a new secret stays live after it
+(`src/composition/root.spec.ts` holds this). After a leak, a new secret is not enough: end the
+sessions themselves. An account ends its own with "Sign out everywhere" on My devices
+(`POST /auth/sign-out-everywhere`), which also closes its sockets. To end every session at once,
+run `LET $now = time::now(); UPDATE device_session SET ended_at = ended_at ?? time::min([expires_at,
+$now]), expires_at = time::min([expires_at, $now]) WHERE ended_at = NONE;` in the directory as the
+gateway's namespace user (`ended_at` keeps a late mark of a device seen from extending a session
+again, an expired one included), then restart the gateway, which closes the sockets opened before
+the update; each device's next hello is then refused with 4401.
 
 ## Commands
 
@@ -59,39 +67,34 @@ of their own yet; when they get one, it takes its key from this variable too.
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
   operator defines, `scripts/stand-operator.ts` at the repository root) and with
-  `GATEWAY_JWT_KEY`, the key the stand's gateway signs with (required, no default; the root
-  `bun run test:db` sets it from the manifest), signs up a new
-  `@example.test` identity and drives two of its devices through sync and sign-out, then
-  the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  each device welcomed with its membership and role, the invited device writing a note into the
-  organisation's region that the owner's device receives, the owner editing that note as an
-  admin, the invited device deleting its own note, a late device of the owner subscribing to a
-  snapshot that holds the admin's note and not the deleted one, the invited device's edit of
-  the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
+  `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL`, those the stand's gateway runs with (required,
+  no defaults; the root `bun run test:db` sets them from the manifest), signs up a new
+  `@example.test` identity and drives two of its devices through sync and sign-out (the
+  signed-out device's token then refused at hello with 4401); then the credential limits, each
+  from a device, so a simulated client address, of its own (21 sign-ins of unknown emails
+  within 10 s, the 21st answered 429 with `Retry-After` by the gateway's limit per address; 11
+  wrong passwords for a further identity, the 11th answered 429 by its limit per email) and a
+  sign-up of a taken email answered 422; then on another identity its device sessions: a hello
+  under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
+  400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone
+  signed out from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row
+  showing `revokedAt`, its token's hello closed with 4401) and signed in again (the old token
+  refused at hello with 4401 and by `GET /devices` with 401, the new one welcomed), a tablet
+  signed in twice (the first session ended by the second), then every device signed out from
+  the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
+  refused), a sign-in right after it answered 200 with a working token, the laptop's old token
+  refused at hello (4401), and a device signing itself out with `POST /auth/sign-out` (204 with
+  its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
+  identity, the organisation path (an organisation `smoke_<time>` created, a second identity
+  invited, each device welcomed with its membership and role, the invited device writing a note
+  into the organisation's region that the owner's device receives, the owner editing that note
+  as an admin, the invited device deleting its own note, a late device of the owner subscribing
+  to a snapshot that holds the admin's note and not the deleted one, the invited device's edit
+  of the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
   `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
   owner's next note still acknowledged and delivered, the member list refused to it with 403,
   the removal that closes the region with 4403, and the removed identity's sign-out, after
-  which its refresh key is refused with 4401), on a further identity the clause of the access method: its fresh token accepted, the
-  same token refused once `sessions_revoked_at` is set after it, a refresh not blocked by it, and
-  the namespace user revoking the identity's grants (`ACCESS identity ON DATABASE REVOKE`) so
-  that the refresh is refused; on a further identity the directory schema applied again with the
-  stand's key, the access token issued before it still accepted without a renewal; the limits of
-  the credential routes, each from a device, so a simulated client address, of its own (21
-  sign-ins of unknown emails within 10 s, the 21st answered 429 with `Retry-After`; 11 wrong
-  passwords for a further identity, the 11th answered 429); the renewal limit of a device (11
-  hellos of one device with a dead access token and a made-up refresh key within 15 minutes,
-  the first 10 closed with 4401, the 11th with 1013, counted by the smoke's own gateway); and on
-  another identity its device sessions: a hello under a
-  device with no session closed with 4401 and a call without `X-Perch-Device` answered 400, a
-  laptop and a phone listed by `GET /devices` with the laptop as current, the phone signed out
-  from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row revoked, its hello
-  with its still working access token closed with 4001) and signed in again in a later second
-  (that old token refused at hello with 4401 and by `GET /devices` with 401, the new pair
-  welcomed), a tablet signed in and
-  then every device signed out from the laptop (`POST /auth/sign-out-everywhere`, the laptop's
-  and the tablet's sockets closed with 4001, in a later second than every token issued before),
-  a sign-in right after it answered 200 with a working token, the laptop's old pair refused at
-  hello (4401) and by `POST /auth/sign-out` (401); one line per step.
+  which its token is refused at hello with 4401); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.

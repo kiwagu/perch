@@ -36,7 +36,8 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
     engines: remoteEngines(),
     url: config.SURREAL_URL,
     credentials: { username: config.GATEWAY_SURREAL_USER, password: config.GATEWAY_SURREAL_PASS },
-    signingKey: config.GATEWAY_JWT_KEY,
+    authSecret: config.GATEWAY_AUTH_SECRET,
+    publicUrl: config.GATEWAY_PUBLIC_URL,
     clock: systemClock,
   })
 

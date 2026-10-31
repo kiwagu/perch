@@ -9,7 +9,8 @@ import { fail, type Run } from './state'
 export async function signUp(run: Run, count: number): Promise<SignedIn[]> {
   const first = run.accounts
   const signedUp = await inParallel(Array.from({ length: count }), (_, i) =>
-    postCredentials(run.base, '/auth/sign-up', {
+    postCredentials(run.base, '/auth/sign-up/email', {
+      name: 'Load test',
       email: `load-${run.id}-${first + i}@example.test`,
       password: run.password,
       device: { id: `load-${run.id}-${first + i}`, label: 'Load test device' },

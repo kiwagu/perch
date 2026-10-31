@@ -1,691 +1,405 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { type AuthTokens, createAuth, fromDriverValue, type LocalDb } from '@workspace/data'
-import { interceptQueries, openTestDb } from '@workspace/data/testing'
-import { device_sessionIdFactory, type IdentityId } from '@workspace/ids'
-import { type ManualClock, manualClock } from '@workspace/replica/testing'
+import type { LocalDb } from '@workspace/data'
+import {
+  device_sessionIdFactory,
+  type IdentityId,
+  identityIdFactory,
+  idSchemas,
+} from '@workspace/ids'
+import type { Clock } from '@workspace/replica'
+import { manualClock } from '@workspace/replica/testing'
 
-import { DIRECTORY, NAMESPACE } from '../config'
-
-import sessionsRevokedAtStatement from './__fixtures__/identity-sessions-revoked-at.surql'
+import { CLOCK_START, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiries.surql'
+import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
+import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
+import { type AuthInstance, SESSION_LIFETIME_MS } from './auth-instance'
+import { AuthSessions } from './auth-sessions'
+import { deviceRoutes } from './device.routes'
+import { endedAt } from './device-session-rows'
 import { DeviceSessions } from './device-sessions'
-import { grantIdOf } from './identity-sessions'
-import deviceTouchStatement from './surql/device-touch.surql'
-import grantRevokeStatement from './surql/grant-revoke.surql'
-import grantsRevokeAllStatement from './surql/grants-revoke-all.surql'
-import sessionsRevokedStatement from './surql/identity-sessions-revoked.surql'
-import { issuedAtOf } from './token-claims'
 
-const PASSWORD = 'pass-word-1'
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-const opened: LocalDb[] = []
+const closers: Array<() => Promise<void>> = []
 
 afterEach(async () => {
-  await Promise.all(opened.splice(0).map((local) => local.close()))
+  await Promise.all(closers.splice(0).map((close) => close()))
 })
 
-async function directory(): Promise<LocalDb> {
-  const local = (await openTestDb({ namespace: NAMESPACE, database: DIRECTORY }))._unsafeUnwrap()
+const MINUTE_MS = 60_000
 
-  opened.push(local)
+const DAY_MS = 24 * 60 * MINUTE_MS
 
-  return local
-}
+/** A Better Auth instance and the device rows of its directory, on its clock. */
+async function harness() {
+  const opened = await openAuth()
 
-/** An auth session on the directory's access method, closed once `run` is done. */
-async function withAuth<T>(
-  local: LocalDb,
-  run: (auth: ReturnType<typeof createAuth>) => Promise<T>,
-): Promise<T> {
-  const auth = createAuth(local, {
-    access: 'identity',
-    namespace: NAMESPACE,
-    database: DIRECTORY,
-  })
+  closers.push(opened.close)
 
-  try {
-    return await run(auth)
-  } finally {
-    await auth.close()
+  return {
+    ...opened,
+    devices: new DeviceSessions({ directory: opened.local, clock: opened.clock }),
   }
 }
 
-/** An identity signed in through the directory's access method: its id and its pair. */
-interface Signed {
+/** The identity id the sign-up answered with, as the gateway types it. */
+const identityOf = (id: string): IdentityId => idSchemas.identity.schema.parse(id)
+
+const bearer = (token: string) => new Headers({ authorization: `Bearer ${token}` })
+
+/** What ending a session takes: the instance, the gateway's endings, its identity and token. */
+interface Ending {
+  readonly auth: AuthInstance
+  readonly sessions: AuthSessions
   readonly identity: IdentityId
-  readonly access: string
-  readonly refresh: string
+  readonly token: string
 }
 
-/** Signs an identity up, or in again, through the directory's access method. */
-async function signed(local: LocalDb, email: string, how: 'signUp' | 'signIn'): Promise<Signed> {
-  return withAuth(local, async (auth) => {
-    const user = (await auth[how]({ email, password: PASSWORD }))._unsafeUnwrap()
-    const tokens = auth.tokens()
+/** Every way the session of Ann's laptop ends, each at the moment the clock reads. */
+const ENDINGS: ReadonlyArray<readonly [string, (ending: Ending) => Promise<void>]> = [
+  [
+    'its sign-out',
+    async ({ sessions, token }) => {
+      ;(await sessions.signOut(token))._unsafeUnwrap()
+    },
+  ],
+  [
+    'its ending by its row',
+    async ({ sessions, identity, token }) => {
+      const read = await sessions.read(token)
+      const id = read.kind === 'session' ? read.caller.session : expect.unreachable('a session')
 
-    if (tokens?.refresh === undefined) {
-      return expect.unreachable('a sign-in with a refresh key')
-    }
+      ;(await sessions.revoke(identity, id))._unsafeUnwrap()
+    },
+  ],
+  [
+    'the ending of every session of its identity',
+    async ({ sessions, identity }) => {
+      ;(await sessions.revokeAll(identity))._unsafeUnwrap()
+    },
+  ],
+  [
+    "Better Auth's own sign-out",
+    async ({ auth, token }) => {
+      await auth.api.signOut({ headers: bearer(token) })
+    },
+  ],
+  [
+    'a new sign-in of its device',
+    async ({ auth }) => {
+      await auth.api.signInEmail({
+        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        headers: deviceHeaders('laptop'),
+      })
+    },
+  ],
+]
 
-    return { identity: user.id, access: tokens.access, refresh: tokens.refresh }
-  })
+/** What marking a session that expired takes, beside what ending a live one takes. */
+interface ExpiredEnding extends Ending {
+  readonly devices: DeviceSessions
+  readonly clock: Clock
 }
 
-const signUp = (local: LocalDb, email: string): Promise<Signed> => signed(local, email, 'signUp')
+/**
+ * Every way a session that already expired, and was never ended, is marked ended, each at the
+ * moment the clock reads.
+ */
+const EXPIRED_ENDINGS: ReadonlyArray<readonly [string, (ending: ExpiredEnding) => Promise<void>]> =
+  [
+    [
+      'its sign-out over the route, which closes no socket',
+      async ({ sessions, devices, clock, token }) => {
+        const closed: unknown[] = []
+        const routes = deviceRoutes(
+          sessions,
+          devices,
+          {
+            close: async (...close) => {
+              closed.push(close)
+            },
+          },
+          { onFailure: () => expect.unreachable('a failure'), clock },
+        )
+        const response = await routes(
+          new Request('http://gateway.test/auth/sign-out', {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'X-Perch-Device': 'laptop' },
+          }),
+          '203.0.113.7',
+        )
 
-/** Whether the access token `access` still signs its identity in, without a refresh key. */
-async function accepted(local: LocalDb, access: string): Promise<boolean> {
-  return withAuth(local, async (auth) => (await auth.resume({ access })).isOk())
-}
+        expect(response?.status).toBe(204)
+        // No live session ended now: the device's sockets are not this session's.
+        expect(closed).toEqual([])
+      },
+    ],
+    [
+      'a read of it, which Better Auth answers by deleting its row',
+      async ({ auth, token }) => {
+        expect(await auth.api.getSession({ headers: bearer(token) })).toBeNull()
+      },
+    ],
+    [
+      'its ending by its row',
+      async ({ sessions, devices, identity, token }) => {
+        const row = (await devices.byToken(token))._unsafeUnwrap() ?? expect.unreachable('a row')
 
-/** When the access token `access` was issued: its `iat`, a whole second, in milliseconds. */
-function issuedAt(access: string): number {
-  return (
-    issuedAtOf(access) ?? expect.unreachable('a token that names when it was issued')
-  ).getTime()
-}
+        expect((await sessions.revoke(identity, row.id))._unsafeUnwrap().kind).toBe('already-ended')
+      },
+    ],
+    [
+      'the ending of every session of its identity',
+      async ({ sessions, identity }) => {
+        ;(await sessions.revokeAll(identity))._unsafeUnwrap()
+      },
+    ],
+  ]
 
-/** The second the device sessions of most tests started in, as a sign-in names it. */
-const SESSION = new Date(1_760_000_000_000)
+/** The tokens of every session row of the directory. */
+async function tokens(local: LocalDb): Promise<string[]> {
+  const [rows] = await local.db.query<[{ token: string }[]]>(deviceSessionExpiriesStatement)
 
-/** The refresh key of the pair `refresh` renews to, or `undefined` when it renews nothing. */
-async function renew(local: LocalDb, refresh: string): Promise<string | undefined> {
-  const tokens: AuthTokens = { access: 'expired.or.garbage', refresh }
-
-  return withAuth(local, async (auth) =>
-    (await auth.resume(tokens)).isOk() ? auth.tokens()?.refresh : undefined,
-  )
-}
-
-/** The grant id of a refresh key, which every refresh key names. */
-function grantOf(refresh: string): string {
-  return grantIdOf(refresh) ?? expect.unreachable('a refresh key that names its grant')
-}
-
-async function harness(clock: ManualClock = manualClock(Date.now())) {
-  const local = await directory()
-
-  return { local, clock, devices: new DeviceSessions({ directory: local, clock }) }
+  return rows.map((row) => row.token).sort()
 }
 
 describe('DeviceSessions', () => {
-  it('records a device once per identity and device, renewing its grant and label', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-
-    const first = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Firefox on Linux',
-        grant: 'grant-1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-    const revoked = (await devices.revoke({ identity: ann.identity, id: first.id }))._unsafeUnwrap()
-    const again = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Chrome on Linux',
-        grant: 'grant-2',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-
-    expect(device_sessionIdFactory.is(first.id)).toBe(true)
-    expect(first).toMatchObject({
-      identity: ann.identity,
-      device: 'device-laptop',
-      label: 'Firefox on Linux',
-      grant: 'grant-1',
+  it('lists the session rows of the devices of an identity, live ones without an end', async () => {
+    const { auth, clock, devices } = await harness()
+    const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop', 'Laptop'))
+    const phone = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('phone', 'Phone'),
     })
-    expect(first.revokedAt).toBeUndefined()
-    expect(first.createdAt).toBeInstanceOf(Date)
-    expect(first.lastSeenAt).toBeInstanceOf(Date)
-    expect(revoked?.revokedAt).toBeInstanceOf(Date)
-    expect(again).toMatchObject({
-      id: first.id,
-      label: 'Chrome on Linux',
-      grant: 'grant-2',
-      createdAt: first.createdAt,
-    })
-    expect(again.revokedAt).toBeUndefined()
-    expect(again.lastSeenAt.getTime()).toBeGreaterThanOrEqual(first.lastSeenAt.getTime())
+    const ann = identityOf(laptop.user.id)
+
+    await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
+
+    const rows = (await devices.list(ann))._unsafeUnwrap()
+
+    expect(rows.map((row) => [row.identity, row.device, row.label, row.token])).toEqual([
+      [ann, 'laptop', 'Laptop', laptop.token],
+      [ann, 'phone', 'Phone', phone.token],
+    ])
+    expect(rows.map((row) => endedAt(row, clock.now()))).toEqual([undefined, undefined])
+    expect(rows[0]?.id).toMatch(/^dvs_/)
+    expect(rows[0]?.createdAt).toBeInstanceOf(Date)
+    expect(rows[0]?.lastSeenAt).toBeInstanceOf(Date)
   })
 
-  it('answers the grant a touched row held before, and none for a new row', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const touch = (grant: string) =>
-      devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant,
-        startedAt: SESSION,
-      })
-
-    const first = (await touch('grant-1'))._unsafeUnwrap()
-    const second = (await touch('grant-2'))._unsafeUnwrap()
-
-    expect(first.previous).toBeUndefined()
-    expect(first.row.grant).toBe('grant-1')
-    expect(second.previous).toBe('grant-1')
-    expect(second.row).toMatchObject({ id: first.row.id, grant: 'grant-2' })
-  })
-
-  it('records a new device once when two sign-ins on it touch it at the same moment', async () => {
-    const local = await directory()
-    let release = () => {}
-    const together = new Promise<void>((resolve) => {
-      release = resolve
+  it('lists an ended session with its end, and forgets it 30 days after it ended', async () => {
+    const { auth, local, clock, devices } = await harness()
+    const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const phone = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('phone'),
     })
-    let held = 0
-    const devices = new DeviceSessions({
-      // Both touches wait until both are in flight, then reach the database at once.
-      directory: interceptQueries(local, (text) => {
-        if (text !== deviceTouchStatement) {
-          return undefined
-        }
+    const bob = await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
+    const ann = identityOf(laptop.user.id)
+    const ended = new Date(clock.now())
 
-        held += 1
-
-        if (held === 2) {
-          release()
-        }
-
-        return together
-      }),
-      clock: manualClock(Date.now()),
-    })
-    const ann = await signUp(local, 'ann@example.test')
-    const touch = (grant: string) =>
-      devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant,
-        startedAt: SESSION,
-      })
-
-    const touched = (await Promise.all([touch('grant-1'), touch('grant-2')])).map((result) =>
-      result._unsafeUnwrap(),
-    )
-    const rows = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    expect(rows).toHaveLength(1)
-    expect(new Set(touched.map(({ row }) => row.id))).toEqual(new Set([rows[0]?.id]))
-    // One of them made the row. The other's write conflicted with it, and the retry every write
-    // is sent with replayed it: it found the row and took its grant over.
-    expect(
-      touched.map(({ previous }) => previous).filter((previous) => previous !== undefined),
-    ).toHaveLength(1)
-  })
-
-  it('lists the devices of the identity only, the earliest first', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-
-    for (const [identity, device] of [
-      [ann.identity, 'device-laptop'],
-      [bob.identity, 'device-bobs'],
-      [ann.identity, 'device-phone'],
-    ] as const) {
-      ;(
-        await devices.touch({
-          identity,
-          device,
-          label: device,
-          grant: `${device}-grant`,
-          startedAt: SESSION,
-        })
-      )._unsafeUnwrap()
+    for (const token of [phone.token, bob.token]) {
+      await local.db.query(deviceSessionMoveEndStatement, { session_token: token, ends_at: ended })
     }
 
-    const listed = (await devices.list(ann.identity))._unsafeUnwrap()
+    const listed = (await devices.list(ann))._unsafeUnwrap()
 
-    expect(listed.map((row) => row.device)).toEqual(['device-laptop', 'device-phone'])
-    expect(listed.every((row) => row.identity === ann.identity)).toBe(true)
+    expect(listed.map((row) => [row.device, endedAt(row, clock.now())])).toEqual([
+      ['laptop', undefined],
+      ['phone', ended],
+    ])
+
+    await clock.advance(30 * DAY_MS - 1)
+
+    expect((await devices.list(ann))._unsafeUnwrap().map((row) => row.device)).toEqual([
+      'laptop',
+      'phone',
+    ])
+
+    await clock.advance(1)
+
+    const later = (await devices.list(ann))._unsafeUnwrap()
+
+    expect(later.map((row) => [row.device, endedAt(row, clock.now())])).toEqual([
+      ['laptop', undefined],
+    ])
+    // Only the rows of the identity listed are forgotten.
+    expect(await tokens(local)).toEqual([laptop.token, bob.token].sort())
   })
 
-  it('lists a device revoked within the last 30 days, and no device revoked before', async () => {
-    const now = Date.now()
-    const clock = manualClock(now)
-    const { local, devices } = await harness(clock)
-    const ann = await signUp(local, 'ann@example.test')
-    const laptop = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant: 'grant-1',
-        startedAt: SESSION,
+  it("lists a device's latest session once, in the place of the device's first", async () => {
+    const { auth, devices } = await harness()
+    const first = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const signIn = (device: string) =>
+      auth.api.signInEmail({
+        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        headers: deviceHeaders(device),
       })
-    )._unsafeUnwrap().row
+    const phone = await signIn('phone')
+    const again = await signIn('laptop')
 
-    ;(
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-phone',
-        label: 'Phone',
-        grant: 'grant-2',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap()
-    ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
+    const rows = (await devices.list(identityOf(first.user.id)))._unsafeUnwrap()
 
-    const soon = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    await clock.advance(30 * DAY_MS + 60_000)
-
-    const later = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    expect(soon.map((row) => row.device)).toEqual(['device-laptop', 'device-phone'])
-    expect(later.map((row) => row.device)).toEqual(['device-phone'])
+    expect(rows.map((row) => [row.device, row.token])).toEqual([
+      ['laptop', again.token],
+      ['phone', phone.token],
+    ])
   })
 
-  it('marks the seen time of a device', async () => {
+  it('lists the row of the greater id when two rows of a device were created at once', async () => {
     const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const touched = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant: 'grant-1',
-        startedAt: SESSION,
+    const identity = identityIdFactory.create()
+    const one = device_sessionIdFactory.create()
+    const other = device_sessionIdFactory.create()
+    const [lower, greater] = one < other ? [one, other] : [other, one]
+
+    for (const key of [greater, lower]) {
+      await local.db.query(deviceSessionRowStatement, {
+        identity,
+        device: 'tablet',
+        key,
+        session_token: `token-${key}`,
+        created_at: new Date(CLOCK_START),
       })
-    )._unsafeUnwrap().row
-
-    await new Promise((resolve) => setTimeout(resolve, 5))
-    ;(await devices.seen({ identity: ann.identity, device: 'device-laptop' }))._unsafeUnwrap()
-
-    const [seen] = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    expect(seen?.lastSeenAt.getTime()).toBeGreaterThan(touched.lastSeenAt.getTime())
-  })
-
-  it("revokes a device of the identity and its refresh grant, and no other identity's device", async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-    const anns = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant: grantOf(ann.refresh),
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-
-    expect((await devices.revoke({ identity: bob.identity, id: anns.id }))._unsafeUnwrap()).toBe(
-      undefined,
-    )
-    expect(
-      (
-        await devices.revoke({ identity: ann.identity, id: device_sessionIdFactory.create() })
-      )._unsafeUnwrap(),
-    ).toBe(undefined)
-    // Neither marked Ann's row, before anything touches it again.
-    expect((await devices.list(ann.identity))._unsafeUnwrap()[0]?.revokedAt).toBeUndefined()
-
-    // Neither touched Ann's grant; its renewal replaces it, and the row holds the new one.
-    const current = (await renew(local, ann.refresh)) ?? expect.unreachable('a renewed pair')
-
-    ;(
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'Laptop',
-        grant: grantOf(current),
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap()
-
-    const revoked = (await devices.revoke({ identity: ann.identity, id: anns.id }))._unsafeUnwrap()
-
-    expect(revoked).toMatchObject({ id: anns.id, device: 'device-laptop' })
-    expect(revoked?.revokedAt).toBeInstanceOf(Date)
-    expect(await renew(local, current)).toBeUndefined()
-    expect(await renew(local, bob.refresh)).toMatch(/^surreal-refresh-/)
-  })
-
-  it('binds a device to its row: bound, revoked or missing', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-    const laptop = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant: 'g1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-
-    ;(
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-phone',
-        label: 'P',
-        grant: 'g2',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap()
-    ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
-
-    const bind = async (identity: IdentityId, device: string) =>
-      (await devices.bind({ identity, device, issuedAt: SESSION }))._unsafeUnwrap()
-
-    expect(await bind(ann.identity, 'device-phone')).toMatchObject({
-      kind: 'bound',
-      row: { device: 'device-phone', grant: 'g2' },
-    })
-    expect(await bind(ann.identity, 'device-laptop')).toMatchObject({
-      kind: 'revoked',
-      row: { id: laptop.id },
-    })
-    expect(await bind(ann.identity, 'device-tablet')).toEqual({ kind: 'missing' })
-    // Another identity's device of the same id is not this one's.
-    expect(await bind(bob.identity, 'device-phone')).toEqual({ kind: 'missing' })
-  })
-
-  it('rotates the grant of a device only from the grant it holds, and only while it is not revoked', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const laptop = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant: 'g1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-    const rotate = async (device: string, spent: string, next: string) =>
-      (
-        await devices.rotate({ identity: ann.identity, device, spent, next, issuedAt: SESSION })
-      )._unsafeUnwrap()
-
-    const moved = await rotate('device-laptop', 'g1', 'g2')
-    const fromAnother = await rotate('device-laptop', 'g1', 'g3')
-    const unknown = await rotate('device-tablet', 'g2', 'g3')
-
-    expect(moved).toMatchObject({ kind: 'bound', row: { id: laptop.id, grant: 'g2' } })
-    expect(fromAnother).toEqual({ kind: 'other-grant' })
-    expect(unknown).toEqual({ kind: 'missing' })
-
-    ;(await devices.revoke({ identity: ann.identity, id: laptop.id }))._unsafeUnwrap()
-
-    expect(await rotate('device-laptop', 'g2', 'g3')).toMatchObject({ kind: 'revoked' })
-
-    const [row] = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    expect(row?.grant).toBe('g2')
-    expect(row?.revokedAt).toBeInstanceOf(Date)
-  })
-
-  it('records when the current session of a device started, and moves it with every sign-in', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const later = new Date(SESSION.getTime() + 60_000)
-    const touch = (grant: string, startedAt: Date) =>
-      devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant,
-        startedAt,
-      })
-
-    const first = (await touch('g1', SESSION))._unsafeUnwrap().row
-    const again = (await touch('g2', later))._unsafeUnwrap().row
-    const [listed] = (await devices.list(ann.identity))._unsafeUnwrap()
-
-    expect(first.startedAt).toEqual(SESSION)
-    expect(again.startedAt).toEqual(later)
-    expect(listed?.startedAt).toEqual(later)
-  })
-
-  it("binds a token issued before its device's session started as stale, one issued in that second or after as bound", async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-
-    ;(
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant: 'g1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap()
-
-    const bind = async (issuedAt: Date) =>
-      (
-        await devices.bind({ identity: ann.identity, device: 'device-laptop', issuedAt })
-      )._unsafeUnwrap().kind
-
-    expect(await bind(new Date(SESSION.getTime() - 1_000))).toBe('stale-token')
-    expect(await bind(SESSION)).toBe('bound')
-    expect(await bind(new Date(SESSION.getTime() + 1_000))).toBe('bound')
-
-    const rotate = async (spent: string, next: string, issuedAt: Date) =>
-      (
-        await devices.rotate({
-          identity: ann.identity,
-          device: 'device-laptop',
-          spent,
-          next,
-          issuedAt,
-        })
-      )._unsafeUnwrap().kind
-
-    // A renewal's token is issued as it renews, after its session started; an earlier one is not.
-    expect(await rotate('g1', 'g2', new Date(SESSION.getTime() - 1_000))).toBe('stale-token')
-    expect(await rotate('g2', 'g3', new Date(SESSION.getTime() + 1_000))).toBe('bound')
-  })
-
-  it("marks the device of a signed-out pair by its grant, once, and no other identity's device", async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-
-    ;(
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant: 'g1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap()
-
-    expect((await devices.signedOut({ identity: bob.identity, grant: 'g1' }))._unsafeUnwrap()).toBe(
-      undefined,
-    )
-    expect((await devices.signedOut({ identity: ann.identity, grant: 'g9' }))._unsafeUnwrap()).toBe(
-      undefined,
-    )
-
-    const marked = (
-      await devices.signedOut({ identity: ann.identity, grant: 'g1' })
-    )._unsafeUnwrap()
-
-    expect(marked).toMatchObject({ device: 'device-laptop', grant: 'g1' })
-    expect(marked?.revokedAt).toBeInstanceOf(Date)
-
-    // A device signed out already answers its row again, signed out when it first was.
-    const again = (await devices.signedOut({ identity: ann.identity, grant: 'g1' }))._unsafeUnwrap()
-
-    expect(again?.id).toBe(marked?.id)
-    expect(again?.revokedAt).toEqual(marked?.revokedAt)
-  })
-
-  it("revokes one refresh grant of the identity, and no other identity's", async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-
-    ;(
-      await devices.revokeGrant({ identity: bob.identity, grant: grantOf(ann.refresh) })
-    )._unsafeUnwrap()
-
-    const current = (await renew(local, ann.refresh)) ?? expect.unreachable('a renewed pair')
-
-    ;(
-      await devices.revokeGrant({ identity: ann.identity, grant: grantOf(current) })
-    )._unsafeUnwrap()
-
-    expect(await renew(local, current)).toBeUndefined()
-  })
-
-  it('answers a revoke that failed after marking the row with that row, the failure partial', async () => {
-    const local = await directory()
-    const devices = new DeviceSessions({
-      directory: interceptQueries(local, (text) => {
-        if (text === grantRevokeStatement) {
-          throw new Error('the directory went away')
-        }
-      }),
-      clock: manualClock(Date.now()),
-    })
-    const ann = await signUp(local, 'ann@example.test')
-    const laptop = (
-      await devices.touch({
-        identity: ann.identity,
-        device: 'device-laptop',
-        label: 'L',
-        grant: 'g1',
-        startedAt: SESSION,
-      })
-    )._unsafeUnwrap().row
-
-    const failure = (
-      await devices.revoke({ identity: ann.identity, id: laptop.id })
-    )._unsafeUnwrapErr()
-
-    expect('kind' in failure && failure.kind === 'partial' ? failure.row?.device : undefined).toBe(
-      'device-laptop',
-    )
-    expect((await devices.list(ann.identity))._unsafeUnwrap()[0]?.revokedAt).toBeInstanceOf(Date)
-  })
-
-  it('answers a sign-out everywhere that failed after its first write as partial, and one that failed before as a failure', async () => {
-    let refused: string | undefined
-    const local = await directory()
-    const devices = new DeviceSessions({
-      directory: interceptQueries(local, (text) => {
-        if (text === refused) {
-          throw new Error('the directory went away')
-        }
-      }),
-      clock: manualClock(Date.now()),
-    })
-    const ann = await signUp(local, 'ann@example.test')
-
-    refused = sessionsRevokedStatement
-
-    const before = (await devices.revokeAll(ann.identity))._unsafeUnwrapErr()
-
-    refused = grantsRevokeAllStatement
-
-    const after = (await devices.revokeAll(ann.identity))._unsafeUnwrapErr()
-
-    expect('kind' in before).toBe(false)
-    expect('kind' in after && after.kind === 'partial').toBe(true)
-  })
-
-  it('revokes every device of the identity, its grants and the tokens issued before', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
-
-    for (const device of ['device-laptop', 'device-phone']) {
-      ;(
-        await devices.touch({
-          identity: ann.identity,
-          device,
-          label: device,
-          grant: device,
-          startedAt: SESSION,
-        })
-      )._unsafeUnwrap()
     }
 
-    ;(
-      await devices.touch({
-        identity: bob.identity,
-        device: 'device-bobs',
-        label: 'Bob',
-        grant: 'bob',
-        startedAt: SESSION,
+    expect((await devices.list(identity))._unsafeUnwrap().map((row) => row.id)).toEqual([greater])
+  })
+
+  it('finds a row by the session token it holds, and none for a token nobody holds', async () => {
+    const { auth, devices } = await harness()
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    expect((await devices.byToken(token))._unsafeUnwrap()).toMatchObject({
+      identity: user.id,
+      device: 'laptop',
+      token,
+    })
+    expect((await devices.byToken('nonsense'))._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it("marks a device's live session seen now and slides it to a full lifetime again", async () => {
+    const { auth, clock, devices } = await harness()
+    const first = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await clock.advance(MINUTE_MS)
+
+    // Signing the laptop in again ends its first session now.
+    const again = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+    const ended = (await devices.byToken(first.token))._unsafeUnwrap()
+
+    await clock.advance(MINUTE_MS)
+    ;(await devices.seen({ identity: identityOf(first.user.id), device: 'laptop' }))._unsafeUnwrap()
+
+    const seenAt = clock.now()
+
+    expect((await devices.byToken(again.token))._unsafeUnwrap()).toMatchObject({
+      lastSeenAt: new Date(seenAt),
+      expiresAt: new Date(seenAt + SESSION_LIFETIME_MS),
+    })
+    // The ended session stays as it was: neither seen nor extended.
+    expect((await devices.byToken(first.token))._unsafeUnwrap()).toEqual(ended)
+  })
+
+  it.each(ENDINGS)(
+    'leaves a session ended by %s ended when a seen write that took its instants earlier lands after it, and again',
+    async (_, end) => {
+      const { auth, local, clock, devices } = await harness()
+      const sessions = new AuthSessions({ auth, directory: local, clock })
+      const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+      const identity = identityOf(user.id)
+
+      // Just behind the system clock, which Better Auth judges expiry by: a session extended from
+      // here would read as live again.
+      await clock.advance(Date.now() - 2 * MINUTE_MS - clock.now())
+
+      // A seen write takes its instants now and lands only after the ending, a minute later.
+      const late = new DeviceSessions({ directory: local, clock: manualClock(clock.now()) })
+
+      await clock.advance(MINUTE_MS)
+      await end({ auth, sessions, identity, token })
+
+      const ended = (await devices.byToken(token))._unsafeUnwrap()
+
+      // Sent late, then sent again with the same instants, as a retry after a conflict sends it.
+      ;(await late.seen({ identity, device: 'laptop' }))._unsafeUnwrap()
+      ;(await late.seen({ identity, device: 'laptop' }))._unsafeUnwrap()
+
+      expect(await sessions.read(token)).toEqual({ kind: 'none' })
+      expect((await devices.byToken(token))._unsafeUnwrap()).toEqual(ended)
+      expect(ended).toMatchObject({
+        expiresAt: new Date(clock.now()),
+        endedAt: new Date(clock.now()),
       })
-    )._unsafeUnwrap()
-    ;(await devices.revokeAll(ann.identity))._unsafeUnwrap()
+    },
+  )
 
-    const [anns] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
-      identity: ann.identity,
-    })
-    const [bobs] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
-      identity: bob.identity,
-    })
-    const annsDevices = (await devices.list(ann.identity))._unsafeUnwrap()
+  it.each(EXPIRED_ENDINGS)(
+    'marks a session that expired ended by %s, so a seen write that took its instants before the expiry cannot bring it back',
+    async (_, end) => {
+      const { auth, local, clock, devices } = await harness()
+      const sessions = new AuthSessions({ auth, directory: local, clock })
+      const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+      const identity = identityOf(user.id)
 
-    expect(fromDriverValue(anns)).toBeInstanceOf(Date)
-    expect(bobs ?? undefined).toBeUndefined()
-    expect(annsDevices).toHaveLength(2)
-    expect(annsDevices.every((row) => row.revokedAt instanceof Date)).toBe(true)
-    expect((await devices.list(bob.identity))._unsafeUnwrap()[0]?.revokedAt).toBeUndefined()
-    expect(await renew(local, ann.refresh)).toBeUndefined()
-    expect(await renew(local, bob.refresh)).toMatch(/^surreal-refresh-/)
+      // Just behind the system clock, which Better Auth judges expiry by.
+      await clock.advance(Date.now() - 3 * MINUTE_MS - clock.now())
+
+      // A seen write takes its instants now, while the session is live; it lands much later.
+      const late = new DeviceSessions({ directory: local, clock: manualClock(clock.now()) })
+      const expiry = new Date(clock.now() + MINUTE_MS)
+
+      await local.db.query(deviceSessionMoveEndStatement, { session_token: token, ends_at: expiry })
+      // The session expired a minute ago, and nothing ended it.
+      await clock.advance(2 * MINUTE_MS)
+      await end({ auth, sessions, devices, clock, identity, token })
+
+      const ended = (await devices.byToken(token))._unsafeUnwrap()
+
+      // Sent late, then sent again with the same instants, as a retry after a conflict sends it.
+      ;(await late.seen({ identity, device: 'laptop' }))._unsafeUnwrap()
+      ;(await late.seen({ identity, device: 'laptop' }))._unsafeUnwrap()
+
+      expect(await sessions.read(token)).toEqual({ kind: 'none' })
+      expect((await devices.byToken(token))._unsafeUnwrap()).toEqual(ended)
+      // Marked ended at its expiry, which stays where it was.
+      expect(ended).toMatchObject({ expiresAt: expiry, endedAt: expiry })
+    },
+  )
+
+  it('fails its reads and writes once the directory is closed', async () => {
+    const { auth, local, devices } = await harness()
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const ann = identityOf(user.id)
+
+    await local.close()
+
+    expect((await devices.list(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect((await devices.byToken(token))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    expect((await devices.seen({ identity: ann, device: 'laptop' }))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_FAILED',
+    )
   })
+})
 
-  it('signs out everywhere from the start of its second: a token issued in that second stays valid, one issued a second before does not', async () => {
-    const { local } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-    const bob = await signUp(local, 'bob@example.test')
+describe('endedAt', () => {
+  const row = {
+    id: device_sessionIdFactory.create(),
+    identity: identityOf('idn_0000000000000000000000000'),
+    device: 'laptop',
+    label: '',
+    token: 'token-1',
+    createdAt: new Date(0),
+    lastSeenAt: new Date(0),
+    expiresAt: new Date(1_000),
+  }
 
-    // Ann is signed out everywhere late in the second her token was issued, Bob late in the
-    // second after his.
-    await local.db.query(sessionsRevokedStatement, {
-      identity: ann.identity,
-      at: new Date(issuedAt(ann.access) + 999),
-    })
-    await local.db.query(sessionsRevokedStatement, {
-      identity: bob.identity,
-      at: new Date(issuedAt(bob.access) + 1_999),
-    })
-
-    const [anns] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
-      identity: ann.identity,
-    })
-
-    expect(fromDriverValue(anns)).toEqual(new Date(issuedAt(ann.access)))
-    expect(await accepted(local, ann.access)).toBe(true)
-    expect(await accepted(local, bob.access)).toBe(false)
-  })
-
-  it('lets the identity sign in again right after a sign-out everywhere', async () => {
-    const { local, devices } = await harness()
-    const ann = await signUp(local, 'ann@example.test')
-
-    ;(await devices.revokeAll(ann.identity))._unsafeUnwrap()
-
-    const again = await signed(local, 'ann@example.test', 'signIn')
-    const [mark] = await local.db.query<[unknown]>(sessionsRevokedAtStatement, {
-      identity: ann.identity,
-    })
-    const revokedAt = fromDriverValue(mark)
-
-    expect(revokedAt).toBeInstanceOf(Date)
-    expect(revokedAt instanceof Date && revokedAt.getTime() % 1_000).toBe(0)
-    expect(await accepted(local, again.access)).toBe(true)
+  it('is the end of a session that ended by now, and none before', () => {
+    expect(endedAt(row, 999)).toBeUndefined()
+    expect(endedAt(row, 1_000)).toEqual(new Date(1_000))
+    expect(endedAt(row, 2_000)).toEqual(new Date(1_000))
   })
 })

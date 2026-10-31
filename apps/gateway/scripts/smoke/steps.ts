@@ -67,45 +67,29 @@ export async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
-export async function hello(
-  base: string,
-  opened: Opened,
-  { identity, tokens, device: id }: SignedIn,
-) {
+/** Opens a socket to the sync endpoint and says hello as `signedIn`, with its session token. */
+async function sayHello(base: string, opened: Opened, { token, device: id }: SignedIn) {
   const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
 
   opened.devices.push(device)
-  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens, device: id })
+  device.send({ type: 'hello', protocol: PROTOCOL_VERSION, token, device: id })
 
+  return device
+}
+
+/** Opens a device of the identity: its hello is welcomed, and the welcome comes with it. */
+export async function hello(base: string, opened: Opened, signedIn: SignedIn) {
+  const device = await sayHello(base, opened, signedIn)
   const welcome = await device.next('welcome')
 
-  check(welcome.identity === identity.id, `welcomed as ${welcome.identity}`)
+  check(welcome.identity === signedIn.identity.id, `welcomed as ${welcome.identity}`)
 
   return { device, welcome }
 }
 
-/**
- * Opens a device of the identity whose hello carries an unreadable access key and its refresh
- * key, so the gateway must renew the pair; settles with how the gateway closed it.
- */
-export async function helloOnRefresh(
-  base: string,
-  opened: Opened,
-  { tokens, device: id }: SignedIn,
-) {
-  const device = await SmokeDevice.open(`${base.replace(/^http/, 'ws')}/sync`)
-
-  opened.devices.push(device)
-  device.send({
-    type: 'hello',
-    protocol: PROTOCOL_VERSION,
-    access: 'not-a-token',
-    refresh: tokens.refresh,
-    device: id,
-  })
-
-  return device.closed
+/** Says hello as `signedIn` from its device and settles with how the gateway closed the socket. */
+export async function refusedHello(base: string, opened: Opened, signedIn: SignedIn) {
+  return (await sayHello(base, opened, signedIn)).closed
 }
 
 /** Takes the device's next `updates` into its document; answers with the update's head. */

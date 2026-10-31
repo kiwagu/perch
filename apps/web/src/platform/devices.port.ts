@@ -20,8 +20,8 @@ export interface DeviceView {
 }
 
 /**
- * The signed-in identity's devices at the gateway: listing them, signing one out (its grant
- * revoked and its sockets closed), and signing every one out, this device included.
+ * The signed-in identity's devices at the gateway: listing them, signing one out (its session
+ * ended and its sockets closed), and signing every one out, this device included.
  */
 export interface DevicesPort {
   list(): ResultAsync<readonly DeviceView[], DataError>

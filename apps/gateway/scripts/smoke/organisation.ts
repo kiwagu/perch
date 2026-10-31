@@ -10,15 +10,17 @@ import { refusedWriteSteps } from './refused-writes'
 import {
   check,
   hello,
-  helloOnRefresh,
   type Opened,
   refusal,
+  refusedHello,
   step,
   takeUpdates,
   unwrap,
 } from './steps'
 
 const createdOrganisation = z.object({ membership: membership })
+
+const listedMemberships = z.object({ memberships: z.array(membership) })
 
 const listedMembers = z.object({
   members: z.array(z.object({ identity: z.object({ id: z.string() }) })),
@@ -60,13 +62,18 @@ export async function organisationSteps(
   })
 
   const guest: SignedIn = await step('signed up a second identity: no memberships', async () => {
-    const signedUp = await postCredentials(base, '/auth/sign-up', {
+    const signedUp = await postCredentials(base, '/auth/sign-up/email', {
       email: `smoke-${crypto.randomUUID()}@example.test`,
       password: crypto.randomUUID(),
       device: { id: 'smoke-guest-device', label: 'Smoke guest' },
     })
+    const answer = await callAs(base, 'GET', '/organisations', signedUp)
 
-    check(signedUp.memberships.length === 0, 'the new identity belongs to an organisation')
+    check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(
+      listedMemberships.parse(answer.body).memberships.length === 0,
+      'the new identity belongs to an organisation',
+    )
 
     return signedUp
   })
@@ -196,7 +203,7 @@ export async function organisationSteps(
   await step(
     "a late device of the owner subscribed: the snapshot at head 4 holds the admin's note only",
     async () => {
-      const late = await postCredentials(base, '/auth/sign-in', {
+      const late = await postCredentials(base, '/auth/sign-in/email', {
         ...ownerCredentials,
         device: { id: 'smoke-device-late', label: 'Smoke late device' },
       })
@@ -285,11 +292,11 @@ export async function organisationSteps(
     check(code === CLOSE.signedOut, `closed with ${code}`)
   })
 
-  // The sign-out ends the grant the invited device signed up with, not only this connection.
+  // The sign-out ends the session the invited device signed up with, not only this connection.
   await step(
-    `the signed-out identity's refresh key is refused: closed with ${CLOSE.unauthorized}`,
+    `the signed-out identity's token at hello: closed with ${CLOSE.unauthorized}`,
     async () => {
-      const { code } = await helloOnRefresh(base, opened, guest)
+      const { code } = await refusedHello(base, opened, guest)
 
       check(code === CLOSE.unauthorized, `closed with ${code}`)
     },

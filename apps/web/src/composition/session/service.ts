@@ -24,13 +24,13 @@ const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
- * device (its id and label), keeps the identity and its keys in the browser's storage and
- * opens the identity's space; restoring opens the saved identity's space without the network.
- * Signing out drains and has the gateway sign the device out, then forgets the keys and
+ * device (its id and label), keeps the identity and its session token in the browser's storage
+ * and opens the identity's space; restoring opens the saved identity's space without the network.
+ * Signing out drains and has the gateway sign the device out, then forgets the token and
  * deletes the identity's databases, its own and every organisation database the device holds
  * for it; with changes that cannot be sent it asks first. A sign-out the gateway did not
- * confirm leaves the pair to revoke once online (`PendingRevoke`). Keys the gateway refuses,
- * or a sign-out from another device, sign the device out without it; the database goes too
+ * confirm leaves the token to sign out once online (`PendingRevoke`). A token the gateway
+ * refuses, or a sign-out from another device, sign the device out without it; the database goes too
  * unless it holds changes not sent yet, which wait for the next sign-in as the identity. One
  * account per browser: the tabs follow the saved identity, and a sign-in finding another account
  * saved is refused. While a sign-out runs, no tab of the browser takes a write: a write landing
@@ -54,7 +54,6 @@ export class SessionService implements SessionPort {
     this.#options = options
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
-      clock: options.clock,
       open: () => this.#open,
     })
 
@@ -169,15 +168,15 @@ export class SessionService implements SessionPort {
 
   /**
    * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
-   * Online, a pair a sign-out left to revoke is sent meanwhile.
+   * Online, a token a sign-out left to sign out is sent meanwhile.
    */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
     return this.#transitions.serially((generation) => this.#signingIn.restore(generation))
   }
 
   /**
-   * The saved identity's space did not open: signs it out on this device without it. Its keys
-   * are left to revoke (sent at once online) and its databases deleted, its own and every
+   * The saved identity's space did not open: signs it out on this device without it. Its token
+   * is left to sign out (sent at once online) and its databases deleted, its own and every
    * organisation one counted for it, with whatever they held that was not sent. Changes nothing
    * while a space is open or nobody is saved.
    */
@@ -223,13 +222,8 @@ export class SessionService implements SessionPort {
     return this.#organisations.adopt(created)
   }
 
-  /** Has the gateway renew the device's keys, through the leading tab; see `SessionOrganisations.renewKeys`. */
-  renewKeys(): Promise<boolean> {
-    return this.#organisations.renewKeys()
-  }
-
   /**
-   * Closes the space, keeping the saved keys, and resolves once its last writes are persisted
+   * Closes the space, keeping the saved token, and resolves once its last writes are persisted
    * and projected and its database is closed (or deleted, by a sign-out under way).
    */
   async close(): Promise<void> {

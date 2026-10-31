@@ -8,9 +8,7 @@
  * `bun run seed` sets from the mcproc manifest: this checkout's dev gateway. The stand behind
  * it is reached only by the sweep (`seed sweep`, and `--reset` before seeding): `--url` (else
  * `SURREAL_DEV_URL`, set the same way), `--namespace=`, `--database=`, `--user=` and `--pass=`
- * name it and its system user, by default the stand's root on the gateway's database. The sweep
- * applies the directory schema with `GATEWAY_JWT_KEY`, the key the stand's gateway signs with,
- * which `bun run seed` sets from the manifest as well: required, so the stand keeps its key.
+ * name it and its system user, by default the stand's root on the gateway's database.
  */
 
 import { writeFileSync } from 'node:fs'
@@ -34,11 +32,6 @@ const standAddress = z.url({
   protocol: /^(https?|wss?)$/,
   error: 'must be the http(s):// or ws(s):// address of the stand',
 })
-
-/** The key the stand's gateway signs with; an issue names the variable, never the value. */
-const signingKey = z
-  .string({ error: "must be the key the stand's gateway signs with" })
-  .min(1, { error: "must be the key the stand's gateway signs with" })
 
 function readOption(argv: readonly string[], name: string): string | undefined {
   const prefix = `--${name}=`
@@ -83,14 +76,6 @@ export async function main(
     return 1
   }
 
-  const key = signingKey.safeParse(env['GATEWAY_JWT_KEY'])
-
-  if (!key.success) {
-    console.error(`seed: GATEWAY_JWT_KEY ${key.error.issues[0]?.message ?? ''}`)
-
-    return 1
-  }
-
   const target: StandTarget = {
     gatewayUrl: gateway.data,
     url: stand.data,
@@ -100,7 +85,6 @@ export async function main(
       username: readOption(argv, 'user') ?? 'root',
       password: readOption(argv, 'pass') ?? 'root',
     },
-    signingKey: key.data,
   }
 
   if (argv[0] === 'sweep') {

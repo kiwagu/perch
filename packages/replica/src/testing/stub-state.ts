@@ -31,8 +31,6 @@ export interface StubTransport extends SyncTransport {
   online(): boolean
   /** How many times the engine gave a connection up with `reconnect`. */
   reconnects(): number
-  /** How many renewals the device asked for over its channel. */
-  renews(): number
 }
 
 export interface CompactionAnswer {
@@ -60,10 +58,6 @@ export interface Gateway {
   keepOpen: (() => void) | undefined
   /** Set while the next sign-out is to fail its revoke: called when it arrives. */
   failSignOut: (() => void) | undefined
-  /** The keys the next renewal hands over: at a device's hello, or asked for over its channel. */
-  renewal: { readonly access: string; readonly refresh: string } | undefined
-  /** Whether renewals asked for over a channel are refused, as the gateway's limits do. */
-  refuseRenewals: boolean
 }
 
 /** A region the device may name, and who it subscribes there as. */

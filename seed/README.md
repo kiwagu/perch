@@ -40,10 +40,9 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   device left. Re-creating an organisation under the key of a swept one works: the gateway
   opens a new connection to its database. Sweep only once the seed clients have left (`runSeed` closes its client
   before it returns), or a device still connected keeps the swept region in the gateway.
-- `openStand(target)`: the operator's connection to a stand that the sweep runs on. Its target
-  names the key the stand's gateway signs with (`signingKey`): the directory schema is applied
-  with it, so a sweep never gives the stand's access method another key, which would refuse
-  every device's access token. `openStandTenant(target, database)` connects to an
+- `openStand(target)`: the operator's connection to a stand that the sweep runs on, as a
+  system user; the directory schema is applied as the gateway applies it, which leaves a stand
+  that already has it alone. `openStandTenant(target, database)` connects to an
   organisation's database the same way, with the organisation schema, for the member rows.
 
 ## Commands
@@ -55,20 +54,21 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   Flags: `--fresh`, `--reset` (sweep first), `--manifest=<file>`. The stand behind the
   gateway is reached only by the sweep: `--url=` (else `SURREAL_DEV_URL`),
   `--namespace=` and `--database=` (default `app` and `directory`, the gateway's
-  database), `--user=` and `--pass=` (default the stand's root). `GATEWAY_JWT_KEY`, the key the
-  stand's gateway signs with, is required (no default; `mcproc exec` sets the stands' key from
-  the manifest), and a run without it stops naming the variable, never its value. Demo
+  database), `--user=` and `--pass=` (default the stand's root). Demo
   accounts sign in with the password `<ref>-seed-password`.
 - `bun run seed:sweep`: removes the seed data from the stand (same stand flags).
 - `bun run test`: the offline catalog check, and that `runSeed` calls the gateway through the `fetcher` it is given.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
-  `GATEWAY_URL` and its SurrealDB at `SURREAL_URL`, with the gateway's key in
-  `GATEWAY_JWT_KEY`, all set by `bun run test:db` through `mcproc exec` from the mcproc manifest
-  (`http://127.0.0.1:5191` and `http://127.0.0.1:8010` in the main checkout). First, an access
-  token the gateway issued still works after the stand was opened as its operator. Each test
+  `GATEWAY_URL` and its SurrealDB at `SURREAL_URL`, with the origin of the stand's front in
+  `GATEWAY_PUBLIC_URL`, all set by `bun run test:db` through `mcproc exec` from the mcproc
+  manifest (`http://127.0.0.1:5191`, `http://127.0.0.1:8010` and `https://localhost:5493` in the
+  main checkout). First, a session the gateway opened at a sign-up stays live after the
+  stand was opened as its operator. Each test
   plays the front for a simulated client of its own (`__fixtures__/simulated-front.ts`): its
   calls carry `X-Forwarded-For: 198.18.<a>.<b>` from a hash of the test's name, so the gateway's
-  limit of 20 sign-ups and sign-ins per client address in 10 s counts each test apart. It sweeps
+  limit of 20 sign-ups and sign-ins per client address in 10 s counts each test apart, and the
+  front's origin in `Origin`, as a browser's do: Node's fetch marks its requests as a browser's,
+  and the gateway's sign-up and sign-in then want the front's origin. It sweeps
   only the demo accounts (and one outsider and one key-holder account) it seeds, so the other
   suites on the stand keep theirs.

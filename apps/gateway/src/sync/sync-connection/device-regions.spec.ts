@@ -43,7 +43,6 @@ describe('regionsOf', () => {
     expect(regionsOf({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() })).toEqual([
       'tenant:acme',
     ])
-    expect(regionsOf({ type: 'renew' })).toEqual([])
     expect(regionsOf({ type: 'sign-out', scope: 'device' })).toEqual([])
   })
 })

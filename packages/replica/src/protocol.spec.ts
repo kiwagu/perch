@@ -46,22 +46,39 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 6 only', () => {
+  it('takes a hello of protocol 7 only', () => {
     const hello = (protocol: number) =>
-      JSON.stringify({ type: 'hello', protocol, access: 'a', device: 'd' })
+      JSON.stringify({ type: 'hello', protocol, token: 't', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(6)
-    expect(decodeMessage(clientMessage, hello(6)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(5)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(7)
+    expect(decodeMessage(clientMessage, hello(7)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(6)).isErr()).toBe(true)
   })
 
-  it('takes a renew that carries nothing: the gateway holds the pair it renews', () => {
-    expect(decodeMessage(clientMessage, JSON.stringify({ type: 'renew' }))._unsafeUnwrap()).toEqual(
-      { type: 'renew' },
-    )
-    expect(
-      decodeMessage(clientMessage, JSON.stringify({ type: 'renew', refresh: 'r' }))._unsafeUnwrap(),
-    ).toEqual({ type: 'renew' })
+  it('takes a hello that carries the session token, and no access or refresh key', () => {
+    const hello = (fields: object) =>
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, device: 'd', ...fields })
+
+    expect(decodeMessage(clientMessage, hello({ token: 't' }))._unsafeUnwrap()).toEqual({
+      type: 'hello',
+      protocol: PROTOCOL_VERSION,
+      token: 't',
+      device: 'd',
+    })
+    expect(decodeMessage(clientMessage, hello({ access: 'a' })).isErr()).toBe(true)
+    expect(decodeMessage(clientMessage, hello({ access: 'a', refresh: 'r' })).isErr()).toBe(true)
+    expect(decodeMessage(clientMessage, hello({})).isErr()).toBe(true)
+    expect(decodeMessage(clientMessage, hello({ token: '' })).isErr()).toBe(true)
+  })
+
+  it('refuses a renew: a session token is never renewed by the client', () => {
+    expect(decodeMessage(clientMessage, JSON.stringify({ type: 'renew' })).isErr()).toBe(true)
+  })
+
+  it('refuses a tokens message: the gateway sends no renewed keys', () => {
+    const text = JSON.stringify({ type: 'tokens', access: 'a', refresh: 'r' })
+
+    expect(decodeMessage(serverMessage, text).isErr()).toBe(true)
   })
 
   it("decodes a reject that names a batch under another identity's peer", () => {
@@ -80,12 +97,12 @@ describe('sync protocol', () => {
 
   it('takes a hello that names its device in 1 to 64 characters', () => {
     const hello = (device: string) =>
-      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a', device })
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, token: 't', device })
 
     expect(decodeMessage(clientMessage, hello('d'.repeat(64)))._unsafeUnwrap()).toEqual({
       type: 'hello',
       protocol: PROTOCOL_VERSION,
-      access: 'a',
+      token: 't',
       device: 'd'.repeat(64),
     })
     expect(decodeMessage(clientMessage, hello('')).isErr()).toBe(true)
@@ -93,7 +110,7 @@ describe('sync protocol', () => {
   })
 
   it('refuses a hello that names no device', () => {
-    const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, access: 'a' })
+    const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, token: 't' })
 
     expect(decodeMessage(clientMessage, hello).isErr()).toBe(true)
   })
@@ -121,7 +138,6 @@ describe('sync protocol', () => {
       },
       { type: 'memberships', memberships: [acme] },
       { type: 'memberships', memberships: [] },
-      { type: 'tokens', access: 'a', refresh: 'r' },
       { type: 'updates', region: 'identity:idn_a', bytes, head: 3, snapshot: false },
       { type: 'ack', region: 'identity:idn_a', batch: 2, head: 4, compact: false },
       {
@@ -134,7 +150,6 @@ describe('sync protocol', () => {
       { type: 'heads', regions: [{ region: 'identity:idn_a', head: 4 }], time: 2 },
       { type: 'compaction', region: 'identity:idn_a', covers: 4, outcome: 'accepted' },
       { type: 'error', code: 'protocol', message: 'bad' },
-      { type: 'error', code: 'rate-limited', message: 'too many renewals' },
     ]
 
     for (const message of messages) {

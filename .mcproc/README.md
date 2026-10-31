@@ -16,8 +16,10 @@ of the checkout it runs in.
   namespace `app`, the database `directory` and the user `gateway`), then serves. pm2 restarts
   it (`watch:`) on a change of its sources or of a workspace package it imports, a fresh process
   each time: a tree caught mid-edit fails one start, pm2 retries with a growing delay
-  (`exp_backoff_restart_delay`), and the next change brings it back. Both sign tokens with the
-  manifest's stand-only key, `stand_jwt_key` in `vars`, as `GATEWAY_JWT_KEY`.
+  (`exp_backoff_restart_delay`), and the next change brings it back. Both run Better Auth with
+  the manifest's stand-only secret, `stand_auth_secret` in `vars`, as `GATEWAY_AUTH_SECRET`, and
+  each with its own front's origin as `GATEWAY_PUBLIC_URL` (https://localhost:5443 and
+  https://localhost:5493).
 
 - `web` (profile `dev`, kind `build`): the web application's build watcher, `vite build
   --watch` in development mode. It listens on no port: every source change rewrites
@@ -44,10 +46,11 @@ http://127.0.0.1:8010 --user root --pass root` opens a shell against the e2e sta
 Every app declares the memory it takes (`memory:`; `containers:` names the docker containers
 counted with it) and `resources` keeps 4G for the host: a start that does not fit waits its
 turn in the host's queue (`mcproc leases`). `mcproc exec -- <command>` runs a command with
-this checkout's stand addresses and the stands' signing key (`GATEWAY_JWT_KEY`, so the smoke,
-the load test and the seed's sweep open a stand's directory with its gateway's key) in its
-environment (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
-seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section
+this checkout's stand addresses and what the e2e stand's gateway runs with
+(`GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL`, so the smoke and the load test run a gateway of
+their own on that stand with the same secret and front origin) in its environment
+(`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run seed:sweep`
+go through it, the e2e run under a 4G lease of its own. The `worktree` section
 names what a new worktree copies from the main checkout (the certificates, the local hook file,
 the screenshot baselines) and how it installs.
 

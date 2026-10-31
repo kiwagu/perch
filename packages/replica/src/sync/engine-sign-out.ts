@@ -123,10 +123,10 @@ export class EngineSignOut {
 
   /**
    * Resolves `signed-out` once the transport reports the channel ended with the sign-out (the
-   * gateway revoked the grant and closed it). Anything else signed nothing out for sure and
+   * gateway ended the session and closed it). Anything else signed nothing out for sure and
    * resolves `offline`, the transport stopped so that it does not connect again: a channel
-   * that ends otherwise (refused keys or protocol, a sign-out from another device), falls
-   * without ending (a gateway that failed to revoke the grant closes so), or is not closed
+   * that ends otherwise (a refused token or protocol, a sign-out from another device), falls
+   * without ending (a gateway that failed to end the session closes so), or is not closed
    * within 10 seconds on the clock.
    */
   #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
@@ -159,7 +159,7 @@ export class EngineSignOut {
           }
         }),
         // A gateway that never closes the channel may never have taken the sign-out in: the
-        // grant may stand, so the device leaves as when it is offline.
+        // session may still be live, so the device leaves as when it is offline.
         this.#clock.schedule(SIGN_OUT_CLOSE_MS, () => {
           finish('offline')
           this.#stopChannel()
