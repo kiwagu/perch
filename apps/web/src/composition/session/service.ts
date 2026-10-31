@@ -1,4 +1,4 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import type { Membership } from '@workspace/replica/protocol'
@@ -6,7 +6,7 @@ import type { Membership } from '@workspace/replica/protocol'
 import type { SessionNotice, SessionPort, SignOutOptions } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace, SyncState } from '../identity-space'
-import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedNotice } from '../storage'
+import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity, savedNotice } from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
 import type { SessionHost } from './host'
@@ -22,6 +22,12 @@ import { WriteBarrier } from './write-barrier'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
+/** The saved identity while the start opens its space, and the end of that open. */
+interface Opening {
+  readonly user: AuthUser
+  readonly settled: Promise<unknown>
+}
+
 /**
  * The signed-in identity and its space. Signing up or in goes through the gateway, naming the
  * device (its id and label), keeps the identity and its session token in the browser's storage
@@ -34,7 +40,8 @@ const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
  * unless it holds changes not sent yet, which wait for the next sign-in as the identity. One
  * account per browser: the tabs follow the saved identity, and a sign-in finding another account
  * saved is refused. While a sign-out runs, no tab of the browser takes a write: a write landing
- * after the final drain would go with the database.
+ * after the final drain would go with the database. While the start opens the saved identity's
+ * space, that identity is the current one, and what is read or written waits for the space.
  */
 export class SessionService implements SessionPort {
   readonly runner: CurrentSpaceRunner
@@ -48,6 +55,7 @@ export class SessionService implements SessionPort {
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
   #open: OpenSpace | undefined
+  #opening: Opening | undefined
   #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(options: SessionOptions) {
@@ -112,6 +120,7 @@ export class SessionService implements SessionPort {
     const spaces: SpaceSource = {
       current: () => this.#open?.space,
       onSwitch: (listener) => this.subscribe(() => listener()),
+      opening: () => this.#opening?.settled,
       signingOut: () => barrier.signingOut(this.#open?.heard),
       writing: (space, work) => barrier.writing(space.identity.id, work),
     }
@@ -131,7 +140,7 @@ export class SessionService implements SessionPort {
   }
 
   current(): AuthUser | undefined {
-    return this.#open?.space.identity
+    return this.#open?.space.identity ?? this.#opening?.user
   }
 
   space(): IdentitySpace | undefined {
@@ -160,18 +169,45 @@ export class SessionService implements SessionPort {
    * Names the session open now, before it asks the gateway to sign every device of the identity
    * out; what it returns signs that session out once the gateway did, as on the channel's 4001,
    * which it may never hear (no Web Locks, or its WebSocket blocked). A late answer finds the
-   * session ended (the 4001 came first) and changes nothing, whoever signed in since.
+   * session ended (the 4001 came first) and changes nothing, whoever signed in since. Asked while
+   * the start opens the saved identity's space, it names the session that open makes, once made:
+   * none when it did not open or another identity's space opened instead.
    */
   signingOutEverywhere(): () => ResultAsync<void, DataError> {
-    return this.#elsewhere.signingOutEverywhere()
+    const opening = this.#opening
+
+    if (!opening) {
+      return this.#elsewhere.signingOutEverywhere()
+    }
+
+    const naming = opening.settled.then(() =>
+      this.#openFor(opening) ? this.#elsewhere.signingOutEverywhere() : undefined,
+    )
+
+    return () =>
+      ResultAsync.fromSafePromise(naming).andThen((signOut) => signOut?.() ?? okAsync(undefined))
   }
 
   /**
    * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
-   * Online, a token a sign-out left to sign out is sent meanwhile.
+   * Online, a token a sign-out left to sign out is sent meanwhile. Until the space is open (or did
+   * not open), the saved identity is the current one and reads and writes wait for its space.
    */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
-    return this.#transitions.serially((generation) => this.#signingIn.restore(generation))
+    const saved = savedIdentity(this.#options.storage)
+    const restoring = this.#transitions.serially((generation) =>
+      this.#signingIn.restore(generation),
+    )
+
+    if (saved) {
+      // The saved identity is current while its space opens, so the page renders for it at once.
+      const opening: Opening = { user: saved, settled: Promise.resolve(restoring) }
+
+      this.#opening = opening
+      void opening.settled.then(() => this.#opened(opening))
+    }
+
+    return restoring
   }
 
   /**
@@ -217,9 +253,19 @@ export class SessionService implements SessionPort {
     this.#organisations.select(key)
   }
 
-  /** An organisation this device created joins the identity's memberships; see `SessionOrganisations.adopt`. */
+  /**
+   * An organisation this device created joins the identity's memberships; see
+   * `SessionOrganisations.adopt`. One created while the start opens the saved identity's space
+   * joins once that space is open, and nobody else's.
+   */
   adoptMembership(created: Membership): Promise<void> {
-    return this.#organisations.adopt(created)
+    const opening = this.#opening
+
+    return opening
+      ? opening.settled.then(() =>
+          this.#openFor(opening) ? this.#organisations.adopt(created) : undefined,
+        )
+      : this.#organisations.adopt(created)
   }
 
   /**
@@ -235,6 +281,18 @@ export class SessionService implements SessionPort {
 
     this.#leaveAndTell()
     await this.#retiring
+  }
+
+  /** Whether the space open now is the one the start's `opening` opened. */
+  #openFor(opening: Opening): boolean {
+    return this.#open?.space.identity.id === opening.user.id
+  }
+
+  /** The start's open of the saved identity's space ended, opened or not. */
+  #opened(opening: Opening): void {
+    if (this.#opening === opening) {
+      this.#opening = undefined
+    }
   }
 
   /** `open` is no longer the session's space: nobody is current, and its sync state is reported no more. */
@@ -263,6 +321,11 @@ export class SessionService implements SessionPort {
   }
 
   #emit(user: AuthUser | undefined): void {
+    // Nobody is signed in any more: neither is the identity whose space the start was opening.
+    if (user === undefined) {
+      this.#opening = undefined
+    }
+
     for (const listener of this.#listeners) {
       listener(user)
     }

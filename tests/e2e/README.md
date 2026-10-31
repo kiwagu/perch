@@ -42,6 +42,12 @@ browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
   `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in the manifest's `ids` with
   the same kind, or derived from one with a suffix it lists, and the helper reports the page's
   URL with `app-shell.status` in `ready`.
+- `app-shell/base/open-before-data`: a signed-in device reloaded while its database engines
+  are held back shows `app-shell.status` in `opening-data` on `/me`, with the account's four
+  navigation links and `user.profile.status` in `loading`; once the engines load, it reaches
+  `ready` with the account's name.
+- `app-shell/base/guest-start`: a guest whose database engines cannot load still reaches
+  `ready` on `/sign-in` with the sign-in form.
 - `user/base/sign-up`: a new user signs up, lands on `/me` with the notice `welcome`, the
   entered name and email, and stays signed in after a reload.
 - `user/base/edit-profile-name`: a signed-in user changes the name, sees the toast
@@ -108,6 +114,8 @@ a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`),
 `signInNotice`, which locate `app-shell.notice-message` and `user.sign-in.notice-message` by
 their anchor and code together. Tests locate elements by their anchors and assert codes,
 states and values, never the page's wording.
+`src/support/engines.ts`: `holdEngines`, which holds back the WASM files of a browser context's
+pages until the test lets them go, so a page cannot open an account's data meanwhile.
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
@@ -137,7 +145,7 @@ note texts).
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
   a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
   visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared
-  (the profile with its data 1.5 s); each step is timed in the page when its element first
+  (the profile's screen, ready, and the profile with its data 1.5 s); each step is timed in the page when its element first
   appears, and each number is the median of the runs. It measures and never fails: the numbers
   move with the host's load. `--slow-4g` adds a slow mobile network, outside the budgets.
 - `bun run e2e:scaffold <scenario id>` (repository root): writes the failing test of a new

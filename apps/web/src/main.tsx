@@ -2,6 +2,7 @@ import '@workspace/ui/styles/global.css'
 
 import { Outlet, RouterProvider } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
+import type { ResultAsync } from 'neverthrow'
 import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -36,18 +37,24 @@ import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
 
+/** Signs the saved account out on this device, when its data is what did not open. */
+type SignOutHere = Extract<BootFailure, { kind: 'open-failed' }>['signOutHere']
+
+/** What the start made of the page: the services and the router, which render at once. */
+interface Started {
+  readonly services: AppServices
+  readonly router: ReturnType<typeof createAppRouter>
+  /** Loads the engines a sign-in opens ahead of it. */
+  readonly warm: () => void
+}
+
+/**
+ * How the start ended: started, with the open of the saved account's data still going on;
+ * stopped because the browser keeps no site data; or failed, its code not loaded.
+ */
 type Boot =
-  | { readonly status: 'opening' | 'storage-blocked' }
-  | {
-      readonly status: 'failed'
-      /** Signs the saved account out on this device, when its data is what did not open. */
-      readonly signOutHere?: Extract<BootFailure, { kind: 'open-failed' }>['signOutHere']
-    }
-  | {
-      readonly status: 'ready'
-      readonly services: AppServices
-      readonly router: ReturnType<typeof createAppRouter>
-    }
+  | ({ readonly status: 'started'; readonly opened: ResultAsync<void, BootFailure> } & Started)
+  | { readonly status: 'storage-blocked' | 'failed' }
 
 function Layout() {
   return (
@@ -73,15 +80,16 @@ function Layout() {
 let booting: Promise<Boot> | undefined
 
 function bootOnce(): Promise<Boot> {
-  // The database code and its WASM engine load after the first frame, so the
-  // shell paints without waiting for them; nothing opens until someone is signed in.
+  // The database code loads after the first frame, so the shell paints without waiting for it;
+  // its WASM engines load only when a space opens, so nothing loads them until someone is signed in.
   booting ??= import('./composition/browser')
-    .then(({ bootBrowser }) => bootBrowser())
-    .then((result) =>
-      result.match<Boot>(
-        (services) => ({
-          status: 'ready',
+    .then(({ bootBrowser }) =>
+      bootBrowser().match<Boot>(
+        ({ services, opened, warm }) => ({
+          status: 'started',
           services,
+          opened,
+          warm,
           router: createAppRouter({
             modules,
             session: services.session,
@@ -89,10 +97,9 @@ function bootOnce(): Promise<Boot> {
             crash: CrashSignal,
           }),
         }),
-        (failure) =>
-          failure.kind === 'storage-blocked'
-            ? { status: 'storage-blocked' }
-            : { status: 'failed', signOutHere: failure.signOutHere },
+        (failure) => ({
+          status: failure.kind === 'storage-blocked' ? 'storage-blocked' : 'failed',
+        }),
       ),
     )
     // A start that throws (its code did not load) failed too: it does not open any more.
@@ -101,7 +108,7 @@ function bootOnce(): Promise<Boot> {
   return booting
 }
 
-/** The frame's state before the router renders it: where the start is. */
+/** The frame's states with no screen rendered, and the status each shows. */
 const STATUS = {
   opening: 'opening',
   failed: 'failed',
@@ -111,7 +118,8 @@ const STATUS = {
 } as const
 
 function App(props: { readonly reload: () => void }) {
-  const [boot, setBoot] = useState<Boot>({ status: 'opening' })
+  const [started, setStarted] = useState<Started | undefined>(undefined)
+  const [signOutHere, setSignOutHere] = useState<SignOutHere>(undefined)
   const setLocale = useSetLocale()
   const device = useDeviceTheme()
   const install = useDeviceInstall()
@@ -152,19 +160,40 @@ function App(props: { readonly reload: () => void }) {
   useEffect(() => {
     let mounted = true
 
-    void bootOnce().then((next) => {
-      if (mounted) {
-        made.live.signOutHere = next.status === 'failed' ? next.signOutHere : undefined
-        setBoot(next)
-        send({
-          type:
-            next.status === 'ready'
-              ? 'platform.opened'
-              : next.status === 'failed'
-                ? 'platform.open-failed'
-                : 'platform.storage-blocked',
-        })
+    void bootOnce().then((boot) => {
+      if (!mounted) {
+        return
       }
+
+      if (boot.status !== 'started') {
+        send({
+          type: boot.status === 'failed' ? 'platform.open-failed' : 'platform.storage-blocked',
+        })
+
+        return
+      }
+
+      // The frame and the screen render at once: a guest's at once ready, a signed-in account's
+      // while its data opens, which the frame hears when it ends.
+      made.live.account = boot.services.session.current()?.id
+      setStarted({ services: boot.services, router: boot.router, warm: boot.warm })
+      send({ type: 'platform.started' })
+      void boot.opened.match(
+        () => {
+          if (mounted) {
+            send({ type: 'platform.opened' })
+          }
+        },
+        (failure) => {
+          if (mounted) {
+            const out = failure.kind === 'open-failed' ? failure.signOutHere : undefined
+
+            made.live.signOutHere = out
+            setSignOutHere(() => out)
+            send({ type: 'platform.open-failed' })
+          }
+        },
+      )
     })
 
     return () => {
@@ -172,13 +201,22 @@ function App(props: { readonly reload: () => void }) {
     }
   }, [made, send])
 
-  if (boot.status !== 'ready') {
-    // Until the start is ready the machine has not opened the frame: it is in one of these states.
-    const status = STATUS[state.value as keyof typeof STATUS]
+  // A guest's sign-in opens the engines: they load once the frame and its page are up, so they
+  // never compete with them.
+  useEffect(() => {
+    if (started !== undefined && made.live.account === undefined) {
+      started.warm()
+    }
+  }, [started, made])
 
+  // The frame's states with no screen: the start goes on, stopped, or the data did not open.
+  const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
+    STATUS[state.value as keyof typeof STATUS]
+
+  if (started === undefined || unrouted !== undefined) {
     return (
       <ShellView
-        status={status}
+        status={unrouted ?? 'opening'}
         signedIn={false}
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
@@ -187,9 +225,7 @@ function App(props: { readonly reload: () => void }) {
         canChooseTheme={state.can({ type: 'app-shell.theme-select', theme: 'light' })}
         onThemeChange={(theme) => send({ type: 'app-shell.theme-select', theme })}
         onSignOutHere={
-          boot.status === 'failed' && boot.signOutHere
-            ? () => send({ type: 'app-shell.sign-out-here-button' })
-            : undefined
+          signOutHere ? () => send({ type: 'app-shell.sign-out-here-button' }) : undefined
         }
         signingOutHere={!state.can({ type: 'app-shell.sign-out-here-button' })}
       />
@@ -199,8 +235,8 @@ function App(props: { readonly reload: () => void }) {
   return (
     <ShellFrameContext.Provider value={frame}>
       <LanguageWritesContext.Provider value={languageWrites}>
-        <ServicesProvider services={boot.services}>
-          <RouterProvider router={boot.router} />
+        <ServicesProvider services={started.services}>
+          <RouterProvider router={started.router} />
         </ServicesProvider>
       </LanguageWritesContext.Provider>
     </ShellFrameContext.Provider>

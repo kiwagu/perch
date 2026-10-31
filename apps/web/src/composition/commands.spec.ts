@@ -149,6 +149,7 @@ describe('createCommandBus', () => {
     const result = await bus(
       new CurrentSpaceWritePath({
         current: () => undefined,
+        opening: () => undefined,
         signingOut: () => false,
         writing: (_space, work) => work(),
       }),

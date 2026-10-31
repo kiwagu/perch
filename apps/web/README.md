@@ -11,7 +11,15 @@ writes are declared in `.surql` files next to their components and compiled by t
 modeling stage.
 
 - `src/composition/`: the composition root, the only code that imports adapters. Nothing
-  is opened while nobody is signed in. The app starts only once the page's localStorage and
+  is opened while nobody is signed in, and the page renders without waiting for any database:
+  the space's code, Loro's WASM engine with it, loads when a space first opens (`spaceCode`), so
+  a guest's sign-in page loads no engine, and once that page is up the engines a sign-in opens
+  load ahead of it (`warmEngines`: the space's code, and the database engine's WASM module into
+  the browser's cache, at low priority; nothing when the browser asks to save data). A saved
+  identity is the current one while the start opens its space (`createAppRoot` gives the
+  services at once and the open as `opened`): its frame and its screen render, and what is read
+  or written meanwhile waits for the space (`SpaceSource.opening`); the identity's database opens
+  in its worker while the space's code loads. The app starts only once the page's localStorage and
   the tab's sessionStorage each kept a value and gave it back (`siteStorage`): a browser that
   blocks site data stops at a message that says so, instead of forgetting who signed in, the
   device's id and the updates the tab already loaded the page again for. A saved identity whose

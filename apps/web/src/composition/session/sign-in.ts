@@ -16,13 +16,14 @@ import type { IdentityId } from '@workspace/ids'
 import { leadership, lockName } from '@workspace/replica/sync'
 
 import type { NamedDevice, SignedInDevice } from '../gateway-auth'
-import { openIdentitySpace } from '../identity-space'
+import type { openIdentitySpace } from '../identity-space'
+import { spaceCode } from '../space-code'
 import { deviceIdFrom, forgetDevice, IDENTITY_KEY, saveDevice, savedIdentity } from '../storage'
 
 import type { SessionHost } from './host'
 import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from './one-account'
 import type { SpaceStatus } from './open-space'
-import type { TransportContext } from './options'
+import type { SessionOptions, TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { PendingRevoke } from './pending-revoke'
 import { rejectionOf } from './push-rejection'
@@ -244,6 +245,36 @@ export class SessionSignIn {
 
   #openSpaceNow(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
     const options = this.#host.options
+    // The identity's database opens while the space's code loads: its engine in its worker, beside
+    // Loro's on the page.
+    const local = options.openLocal(identity.id)
+    const openLocal: SessionOptions['openLocal'] = (id) =>
+      id === identity.id ? local : options.openLocal(id)
+
+    return ResultAsync.fromPromise(spaceCode(), (cause) =>
+      dataError('data:OPEN_FAILED', "the space's code did not load", cause),
+    )
+      .orElse((error) =>
+        // The database opened for a space whose code did not load closes again.
+        ResultAsync.fromSafePromise(
+          local.match(
+            (db) => db.close(),
+            () => undefined,
+          ),
+        ).andThen(() => errAsync(error)),
+      )
+      .andThen((code) =>
+        this.#openSpaceWith(code.openIdentitySpace, identity, generation, openLocal),
+      )
+  }
+
+  #openSpaceWith(
+    open: typeof openIdentitySpace,
+    identity: AuthUser,
+    generation: number,
+    openLocal: SessionOptions['openLocal'],
+  ): ResultAsync<AuthUser, DataError> {
+    const options = this.#host.options
     const status: SpaceStatus = { live: true }
     const lead = leadership(options.locks, lockName(identity.id))
     const hints = options.hints(identity.id)
@@ -252,9 +283,9 @@ export class SessionSignIn {
     // Another tab's sign-out holds this tab's writes back until it ends; the space closes the hints.
     hints.on((hint) => this.#barrier.hear(heard, hint))
 
-    return openIdentitySpace({
+    return open({
       identity,
-      openLocal: options.openLocal,
+      openLocal,
       openTenantLocal: options.openTenantLocal,
       deleteTenantLocal: options.deleteTenantLocal,
       tenantDatabases: this.#organisations.databases(identity.id),

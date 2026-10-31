@@ -339,7 +339,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
   const failures: DataError[] = []
   const fetcher: Fetcher = options.fetcher ?? fetch
 
-  return createAppRoot({
+  const start = createAppRoot({
     openLocal: () =>
       openLocalDb({
         engines: nodeEngines(),
@@ -386,6 +386,6 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     onError: (error) => failures.push(error),
     onSyncState: () => {},
   })
-    .mapErr(({ error }) => error)
-    .map((services) => seedClient(services, failures))
+
+  return start.opened.mapErr(({ error }) => error).map(() => seedClient(start.services, failures))
 }

@@ -1,4 +1,4 @@
-import { errAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, ResultAsync } from 'neverthrow'
 
 import {
   type DataError,
@@ -10,7 +10,11 @@ import {
 
 import { type SpaceSource, signedOut } from './space-source'
 
-/** Reads through the current space; a watch moves to the next space when the identity changes. */
+/**
+ * Reads through the current space; a watch moves to the next space when the identity changes.
+ * While the saved identity's space opens at the start, a read waits for it and a watch starts
+ * once it is open.
+ */
 export class CurrentSpaceRunner implements ShapeRunnerPort {
   constructor(private readonly spaces: SpaceSource) {}
 
@@ -18,11 +22,13 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
     shape: Shape<Params, Result>,
     params: Params,
   ): ResultAsync<Result, DataError> {
-    const space = this.spaces.current()
+    const opening = this.spaces.current() ? undefined : this.spaces.opening()
 
-    return space
-      ? space.runner.read(shape, params)
-      : errAsync(dataError('data:QUERY_FAILED', signedOut(`shape ${shape.id}`)))
+    return opening
+      ? ResultAsync.fromSafePromise(Promise.resolve(opening)).andThen(() =>
+          this.#readNow(shape, params),
+        )
+      : this.#readNow(shape, params)
   }
 
   watch<Params, Result>(
@@ -35,7 +41,10 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
       const space = this.spaces.current()
 
       if (!space) {
-        options?.onError?.(dataError('data:QUERY_FAILED', signedOut(`shape ${shape.id}`)))
+        // A space still opening starts the watch once it is open: the session switches to it.
+        if (this.spaces.opening() === undefined) {
+          options?.onError?.(dataError('data:QUERY_FAILED', signedOut(`shape ${shape.id}`)))
+        }
 
         return () => {}
       }
@@ -52,5 +61,16 @@ export class CurrentSpaceRunner implements ShapeRunnerPort {
       unswitch()
       stop()
     }
+  }
+
+  #readNow<Params, Result>(
+    shape: Shape<Params, Result>,
+    params: Params,
+  ): ResultAsync<Result, DataError> {
+    const space = this.spaces.current()
+
+    return space
+      ? space.runner.read(shape, params)
+      : errAsync(dataError('data:QUERY_FAILED', signedOut(`shape ${shape.id}`)))
   }
 }

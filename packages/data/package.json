@@ -38,6 +38,10 @@
       "types": "./src/engines/wasm.ts",
       "import": "./src/engines/wasm.ts"
     },
+    "./engines/wasm-module": {
+      "types": "./src/engines/wasm-module.ts",
+      "import": "./src/engines/wasm-module.ts"
+    },
     "./bun-plugin-surql": {
       "types": "./src/bun-plugin-surql.ts",
       "import": "./src/bun-plugin-surql.ts"

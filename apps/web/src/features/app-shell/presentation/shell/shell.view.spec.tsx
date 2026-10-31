@@ -43,15 +43,42 @@ describe('ShellView', () => {
     expect(screen.getByText('page')).toBeTruthy()
   })
 
-  it('tells the user the database is opening and holds the page back', () => {
+  it('tells the user the app is starting and holds the page back', () => {
     renderShell({ status: 'opening' })
 
     const status = screen.getByTestId('app-shell.status')
 
     expect(status.getAttribute('data-state')).toBe('opening')
     expect(status.getAttribute('role')).toBe('status')
-    expect(status.textContent).toBe(en['app.shell.opening-db'])
+    expect(status.textContent).toBe(en['app.shell.starting'])
     expect(screen.queryByText('page')).toBeNull()
+  })
+
+  it("shows a signed-in account's navigation and screen while its data opens, saying so", () => {
+    renderShell({ status: 'opening-data', signedIn: true, sync: 'synced', update: 'new-version' })
+
+    const status = screen.getByTestId('app-shell.status')
+
+    expect(status.getAttribute('data-state')).toBe('opening-data')
+    expect(status.textContent).toBe(en['app.shell.opening-db'])
+    expect(status.className).not.toContain('sr-only')
+    expect(screen.getByText('page')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    // No message of the platform shows before the data is open.
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+  })
+
+  it("shows no notice and no toast while a signed-in account's data opens", () => {
+    renderShell({
+      status: 'opening-data',
+      signedIn: true,
+      notice: { code: 'devices-read-failed', text: 'The devices could not be read.' },
+      toasts: [{ id: 1, code: 'device-signed-out', tone: 'success', text: 'Signed out.' }],
+    })
+
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.toast')).toBeNull()
   })
 
   it('says the browser keeps no site data when it blocks storage, and holds the page back', () => {

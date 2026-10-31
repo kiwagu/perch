@@ -135,6 +135,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
   useSelector(actor, (state) => state)
+  // A signed-in account's data still opening: the frame shows no message of the platform yet, so
+  // what the platform says reaches the frame's flow once the data is open.
+  const dataOpening = actor.getSnapshot().matches('opening-data')
   const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
   const canReload = actor.getSnapshot().can({ type: 'app-shell.reload-button' })
   const canChooseTheme = actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'light' })
@@ -172,6 +175,10 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // a protocol refused before the frame listened (the sync of a saved account starts with the
   // page) reaches it now.
   useEffect(() => {
+    if (dataOpening) {
+      return
+    }
+
     const stop = shellEvents(events, actor)
 
     if (session.protocolRefused()) {
@@ -179,27 +186,30 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     }
 
     return stop
-  }, [events, session, actor])
+  }, [dataOpening, events, session, actor])
 
   // A newer build the server serves: the frame's platform event.
   useEffect(
-    () => servedBuild.watch((served) => actor.send({ type: 'platform.new-version', served })),
-    [servedBuild, actor],
+    () =>
+      dataOpening
+        ? undefined
+        : servedBuild.watch((served) => actor.send({ type: 'platform.new-version', served })),
+    [dataOpening, servedBuild, actor],
   )
 
   // The state of this device's sync, while an account is signed in: the frame's platform event.
   useEffect(() => {
-    if (syncNow !== undefined) {
+    if (!dataOpening && syncNow !== undefined) {
       actor.send({ type: SYNC_EVENTS[syncNow] })
     }
-  }, [syncNow, actor])
+  }, [dataOpening, syncNow, actor])
 
   // The browser's offer to install the app, or the app installed: the frame's platform event.
   useEffect(() => {
-    if (offer !== undefined) {
+    if (!dataOpening && offer !== undefined) {
       actor.send({ type: INSTALL_EVENTS[offer] })
     }
-  }, [offer, actor])
+  }, [dataOpening, offer, actor])
 
   // The tab going to the background: the frame's platform event, which loads the page again by
   // itself when an update waits and no field holds unsaved input.
@@ -276,7 +286,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   return (
     <ShellView
-      status="ready"
+      status={dataOpening ? 'opening-data' : 'ready'}
       signedIn={user !== undefined}
       activePath={pathname}
       canChooseLocale={canChoose}
