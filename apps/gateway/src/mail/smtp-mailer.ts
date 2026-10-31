@@ -1,4 +1,4 @@
-import { ResultAsync } from 'neverthrow'
+import { Result, ResultAsync } from 'neverthrow'
 import {
   createTransport,
   type Mail,
@@ -6,7 +6,7 @@ import {
   type SMTPTransportOptions,
 } from 'nodemailer'
 
-import type { MailError, MailMessage, MailPort } from './mail.port'
+import type { MailError, MailMessage, MailPort, MailSetupError } from './mail.port'
 
 /** How long the server has to accept a connection; nodemailer's own 2 minutes would hold a start or a send. */
 const CONNECTION_TIMEOUT_MS = 10_000
@@ -33,28 +33,49 @@ export interface SmtpMailerOptions {
   readonly timeouts?: SmtpTimeouts
 }
 
+/** The transport nodemailer builds for one SMTP server. */
+type SmtpTransport = Mail<SMTPSentMessageInfo, SMTPTransportOptions>
+
 /**
  * The mail port over one SMTP server, through nodemailer. A failure answers by its code: the
  * server's text, which may echo the address, stays out of it.
  */
 export class SmtpMailer implements MailPort {
-  readonly #transport: Mail<SMTPSentMessageInfo, SMTPTransportOptions>
+  readonly #transport: SmtpTransport
   readonly #from: string
 
-  constructor(options: SmtpMailerOptions) {
+  private constructor(transport: SmtpTransport, from: string) {
+    this.#transport = transport
+    this.#from = from
+  }
+
+  /**
+   * The mailer of the server at `options.url`; nothing connects yet. The mail library reads the
+   * address at once and refuses a host it cannot use with an error that carries the whole
+   * address, the server's password with it: that answers `mail:URL_INVALID` with fixed words, and
+   * keeps nothing of the error.
+   */
+  static create(options: SmtpMailerOptions): Result<SmtpMailer, MailSetupError> {
     const timeouts = options.timeouts ?? {
       connectionMs: CONNECTION_TIMEOUT_MS,
       greetingMs: GREETING_TIMEOUT_MS,
       socketMs: SOCKET_TIMEOUT_MS,
     }
+    const transport = Result.fromThrowable(
+      () =>
+        createTransport({
+          url: options.url,
+          connectionTimeout: timeouts.connectionMs,
+          greetingTimeout: timeouts.greetingMs,
+          socketTimeout: timeouts.socketMs,
+        }),
+      (): MailSetupError => ({
+        code: 'mail:URL_INVALID',
+        message: 'the mail server address could not be used',
+      }),
+    )
 
-    this.#transport = createTransport({
-      url: options.url,
-      connectionTimeout: timeouts.connectionMs,
-      greetingTimeout: timeouts.greetingMs,
-      socketTimeout: timeouts.socketMs,
-    })
-    this.#from = options.from
+    return transport().map((built) => new SmtpMailer(built, options.from))
   }
 
   /** Connects and greets the server once, within the waits: a gateway whose mail server does not answer does not start. */

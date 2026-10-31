@@ -53,7 +53,9 @@ Mail server: `GATEWAY_SMTP_URL` is the SMTP server the gateway sends the account
 options of its own, over the gateway's waits and its silence. `GATEWAY_MAIL_FROM` is the From of
 every mail, an address with or without a name (`Perch <no-reply@example.test>`). Both are
 required, with no default: the gateway connects to the server and greets it at start, and does
-not start when it does not answer within 10 s (`mail:UNREACHABLE`). The local stands send to
+not start when it does not answer within 10 s (`mail:UNREACHABLE`), nor when the mail library
+cannot use its address (`mail:URL_INVALID`), which it reports by that code alone, never with the
+address (`src/main.spec.ts` starts the process to hold this). The local stands send to
 their own MailDev, the manifest's `stand_mail_from` as the From; the smoke and the load test take
 the e2e stand's two values from `mcproc exec`, with `MAILBOX_URL`, the REST API of that stand's
 MailDev, where they read the verification mail of every account they sign up: each verifies

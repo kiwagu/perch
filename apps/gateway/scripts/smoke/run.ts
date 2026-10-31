@@ -74,7 +74,9 @@ async function welcomed(
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   const mail = await step('mail server answered', async () => {
-    const mailer = new SmtpMailer({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM })
+    const mailer = unwrap(
+      SmtpMailer.create({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM }),
+    )
 
     unwrap(await mailer.verify())
 

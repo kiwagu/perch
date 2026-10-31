@@ -30,7 +30,16 @@ export async function main(env: Readonly<Record<string, string | undefined>>): P
 
   const config = parsed.data
   // The gateway sends the account mails: it does not start without a mail server that answers.
-  const mail = new SmtpMailer({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM })
+  // The mail library's refusal of the address would carry it, the server's password with it: the
+  // mailer answers a fixed word instead, logged like any other start failure.
+  const mailer = SmtpMailer.create({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM })
+
+  if (mailer.isErr()) {
+    log.fatal({ code: mailer.error.code }, mailer.error.message)
+    process.exit(1)
+  }
+
+  const mail = mailer.value
   const reachable = await mail.verify()
 
   if (reachable.isErr()) {

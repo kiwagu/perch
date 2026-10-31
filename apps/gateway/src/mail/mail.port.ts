@@ -14,6 +14,15 @@ export interface MailError {
   readonly message: string
 }
 
+/**
+ * Why the mailer could not be built: the mail library refused the server's address. Never with
+ * that address, which may carry the server's password.
+ */
+export interface MailSetupError {
+  readonly code: 'mail:URL_INVALID'
+  readonly message: string
+}
+
 /** Why a mail could not be written: its input lies outside what the mails support; never with that input. */
 export interface MailWriteError {
   readonly code: 'mail:LOCALE_UNSUPPORTED' | 'mail:LINK_INVALID'
