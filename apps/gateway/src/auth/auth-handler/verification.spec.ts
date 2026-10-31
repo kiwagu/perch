@@ -27,6 +27,12 @@ const FROM = '203.0.113.7'
 /** An email no account has. */
 const GHOST = 'ghost@example.test'
 
+/** Better Auth's floor for a resend without a session: no answer comes sooner. */
+const RESEND_FLOOR_MS = 500
+
+/** How early a resend may be measured against the floor: a timer's wake and the clock's rounding. */
+const RESEND_FLOOR_SLACK_MS = 10
+
 /** A verification of the link's `token` from `device` (none names no device), as the web sends it. */
 function verify(token: string, device: string | null): Request {
   const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
@@ -252,20 +258,22 @@ describe('authHandler, the resend of the verification mail', () => {
     const elapsed: number[] = []
 
     for (const email of ['bob@example.test', GHOST, ANN]) {
-      // Timed as Better Auth times its floor, by the wall clock in whole milliseconds.
-      const began = Date.now()
+      const began = performance.now()
       const answer = await route(resendRequest(email), FROM)
 
-      elapsed.push(Date.now() - began)
+      elapsed.push(performance.now() - began)
       answers.push(await seen(answer))
     }
 
     expect(answers[0]).toEqual({ status: 202, headers: [], body: '' })
     expect(answers).toEqual([answers[0], answers[0], answers[0]])
 
-    // No resend answers sooner than Better Auth's floor of 500 ms, whatever the email.
+    // No resend answers before Better Auth's floor of 500 ms, whatever the email. The floor is
+    // reckoned in whole milliseconds of the wall clock and waited out by a one-shot timer, which
+    // may wake a millisecond or so early, so the check allows 10 ms: without the floor a resend
+    // answers within a few milliseconds, far below it.
     for (const time of elapsed) {
-      expect(time).toBeGreaterThanOrEqual(500)
+      expect(time).toBeGreaterThanOrEqual(RESEND_FLOOR_MS - RESEND_FLOOR_SLACK_MS)
     }
 
     // Ann's link once from her sign-up and once from this resend; Bob's from his sign-up alone.
