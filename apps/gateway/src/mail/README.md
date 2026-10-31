@@ -9,13 +9,16 @@ answer, so a gateway can refuse to start without a mail server. A failed send an
 `mail:SEND_FAILED` by its code; the server's text, which may echo the address, stays out of it,
 and the adapter logs nothing. The mails are written here, in the account's language, from the
 catalogs of `i18n/` through the translator of `@workspace/i18n/translator`; their HTML escapes
-every value it writes.
+every value it writes. A mail asked in a language the mails are not written in, or whose link is
+not an `http:` or `https:` address, is not written: it answers its code, never a mail in another
+language or with a link of another kind.
 
 ## Surface
 
-- `MailPort`, `MailMessage`, `MailError` (`mail.port.ts`); `SmtpMailer` (`smtp-mailer.ts`).
+- `MailPort`, `MailMessage`, `MailError`, `MailWriteError` (`mail.port.ts`); `SmtpMailer`
+  (`smtp-mailer.ts`).
 - `verificationMail({ to, name, link, locale })` (`verification-mail.ts`): the mail whose link
-  verifies an account's email.
+  verifies an account's email, or `mail:LOCALE_UNSUPPORTED` / `mail:LINK_INVALID`.
 - `escapeHtml` (`html.ts`).
 - Catalogs `i18n/mail.en.json`, `i18n/mail.es.json`, namespace `mail.*`.
 - Fixtures: `Outbox` and `linkToken` (`__fixtures__/outbox.ts`), `smtpSink` (`__fixtures__/smtp-sink.ts`,
