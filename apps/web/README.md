@@ -47,8 +47,15 @@ modeling stage.
   `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
   this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
   start is kept in `perch.session.account-start` (the identity, the name and the sign-up
-  language) until its settings and its profile both exist, finished each time that identity's
-  space opens here again, and forgotten when the browser signs out. `resendVerification(email)` asks
+  language) until its settings and its profile both exist, and finished each time that
+  identity's space opens here again. The tabs take their turns under the Web Lock
+  `perch.session.account-start` (`oneTabAtATime`, the helper the sign-in lock runs on too): each
+  reads the kept start and the account's records afresh in the local store they share, and
+  leaves what it wrote durable and projected before it lets go, so no tab creates a record
+  another one created. A sign-out forgets the kept start with the device (`forgetDevice`); a
+  session that only closes (a tab that goes) keeps it for the next open. A start that a sign-out
+  left unfinished stays so: later sign-ins do not finish it, and the account shows what it has,
+  its profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
   the session. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named

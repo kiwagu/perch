@@ -122,7 +122,7 @@ describe('VerifyEmailService on a session', () => {
     })
     service = new VerifyEmailService(
       opened.session,
-      new AccountStartService(profiles, settings, keptHere()),
+      new AccountStartService(profiles, settings, keptHere(), (run) => run()),
     )
   })
 

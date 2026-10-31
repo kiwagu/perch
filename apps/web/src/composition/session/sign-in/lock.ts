@@ -6,10 +6,12 @@
  * it or a sign-out queued for it.
  */
 
-import { err, type Result, ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 import type { LockManagerLike } from '@workspace/replica/sync'
+
+import { oneTabAtATime } from '../../tab-lock'
 
 /** The lock every tab's sign-in holds exclusive. */
 export const SIGN_IN_LOCK = 'perch.session.sign-in'
@@ -21,15 +23,6 @@ export const SIGN_IN_LOCK = 'perch.session.sign-in'
 export const brokenSignIn = (): DataError =>
   dataError('data:AUTH_FAILED', 'the sign-in could not be completed')
 
-/** The attempt's result, a throw or a rejection of it read as `brokenSignIn`. */
-async function settled<T>(attempt: () => ResultAsync<T, DataError>): Promise<Result<T, DataError>> {
-  try {
-    return await attempt()
-  } catch {
-    return err(brokenSignIn())
-  }
-}
-
 /**
  * Runs `attempt` holding the sign-in lock exclusive, and answers once the lock is let go, however
  * the attempt ended, a throw included (`brokenSignIn`). Without Web Locks the attempt runs at
@@ -39,30 +32,13 @@ export function oneSignInAtATime<T>(
   locks: LockManagerLike | undefined,
   attempt: () => ResultAsync<T, DataError>,
 ): ResultAsync<T, DataError> {
-  if (!locks) {
-    return new ResultAsync(settled(attempt))
-  }
-
-  const released = new Promise<Result<T, DataError>>((resolve) => {
-    let ran = false
-    // Called once the lock is let go: the attempt's result, kept until then.
-    let answer = () => resolve(err(brokenSignIn()))
-
-    locks
-      .request(SIGN_IN_LOCK, { mode: 'exclusive' }, async () => {
-        const result = await settled(attempt)
-
-        ran = true
-        answer = () => resolve(result)
-      })
-      .then(
-        () => answer(),
-        (cause: unknown) =>
-          ran
-            ? answer()
-            : resolve(err(dataError('data:AUTH_FAILED', 'could not take the sign-in lock', cause))),
-      )
-  })
-
-  return new ResultAsync(released)
+  return oneTabAtATime(
+    locks,
+    SIGN_IN_LOCK,
+    {
+      broken: brokenSignIn,
+      unlocked: (cause) => dataError('data:AUTH_FAILED', 'could not take the sign-in lock', cause),
+    },
+    attempt,
+  )
 }

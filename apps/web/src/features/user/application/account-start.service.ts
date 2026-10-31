@@ -33,6 +33,13 @@ export interface KeptStartPort {
   forget(): void
 }
 
+/**
+ * Runs `run` as the only account start among this browser's tabs, once the tab before it left what
+ * it wrote durable and projected in the local store the tabs share, so `run` reads it there; it
+ * leaves its own writes so for the next.
+ */
+export type StartTurns = <T>(run: () => ResultAsync<T, SignInError>) => ResultAsync<T, SignInError>
+
 /** What an id keeps after its prefix. */
 const bodyOf = (identity: IdentityId): string => identity.slice(identity.indexOf('_') + 1)
 
@@ -54,13 +61,17 @@ const profileIdOf = (identity: IdentityId): ProfileId =>
  * the device holds none, under an id derived from the identity. The start is kept on this browser
  * until both exist, so one that stopped half-way (a write that failed, a page closed) is finished
  * when the account's space opens here again; the gateway signs only that device in at the first
- * verification, so no other device ever holds a start to finish.
+ * verification, so no other device ever holds a start to finish. The browser's tabs take turns
+ * (`StartTurns`): each reads the kept start and the account's records afresh in its turn, so a tab
+ * never creates a record another tab created, whose later edits a second record under the same
+ * key could hide.
  */
 export class AccountStartService {
   constructor(
     private readonly profiles: Pick<ProfileService, 'read' | 'createProfile'>,
     private readonly settings: Pick<SettingsService, 'read' | 'createSettings'>,
     private readonly kept: KeptStartPort,
+    private readonly turns: StartTurns,
   ) {}
 
   /**
@@ -81,22 +92,19 @@ export class AccountStartService {
 
     this.kept.keep(start)
 
-    return this.#finish(user, start)
-  }
-
-  /** Finishes the start this browser kept for `user`, whose space opened here: what is missing is created. */
-  resume(user: AuthUser): ResultAsync<void, SignInError> {
-    const start = this.kept.kept()
-
-    return start?.identity === user.id ? this.#finish(user, start) : okAsync(undefined)
+    return this.turns(() => this.#finish(user, start))
   }
 
   /**
-   * Forgets the kept start: this browser signed out, and the data it held went with it, so it no
-   * longer knows what the account has.
+   * Finishes the start this browser kept for `user`, whose space opened here: what is missing is
+   * created. A start another tab finished meanwhile is no longer kept, and nothing is created.
    */
-  forget(): void {
-    this.kept.forget()
+  resume(user: AuthUser): ResultAsync<void, SignInError> {
+    return this.turns(() => {
+      const start = this.kept.kept()
+
+      return start?.identity === user.id ? this.#finish(user, start) : okAsync(undefined)
+    })
   }
 
   #finish(user: AuthUser, start: AccountStart): ResultAsync<void, SignInError> {

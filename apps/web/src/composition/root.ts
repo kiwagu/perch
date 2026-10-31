@@ -221,6 +221,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     commands,
     settings,
     storage: options.storage,
+    locks: options.locks,
     logger: options.logger,
   })
   // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.

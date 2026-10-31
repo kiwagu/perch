@@ -277,6 +277,25 @@ describe('createAppRoot', () => {
     ])
   })
 
+  it('keeps the kept start when the session merely closes: its tab goes, the browser stays signed in', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [])
+    const booted = result._unsafeUnwrap()
+
+    // Another tab's start, still to finish there.
+    keptAccountStart(storage).keep({
+      identity: identityIdFactory.create(),
+      name: 'Bob',
+      locale: 'en',
+    })
+    await booted.close()
+
+    expect(keptAccountStart(storage).kept()).toBeDefined()
+  })
+
   it('forgets the kept start once this browser signs out, with the data it held', async () => {
     const storage = memoryStorage()
 

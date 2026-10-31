@@ -47,6 +47,7 @@ beforeEach(async () => {
           }),
           settings,
           keptAccountStart(memoryStorage()),
+          (run) => run(),
         ),
     )
 

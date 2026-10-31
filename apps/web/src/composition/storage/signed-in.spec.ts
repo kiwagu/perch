@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
+import { keptAccountStart } from './account-start'
 import { memoryStorage } from './key-value'
 import { savedMemberships, savedTenant, saveTenant } from './memberships'
 import { forgetDevice, saveDevice, savedIdentity, savedToken } from './signed-in'
@@ -37,6 +38,16 @@ describe('the signed-in device', () => {
     expect(storage.get('perch.session.token')).toBeUndefined()
     expect(savedMemberships(storage, ann.identity.id)).toEqual([])
     expect(savedTenant(storage)).toBeUndefined()
+  })
+
+  it('forgets, with the device, the start of the account the browser kept to finish', () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'en' })
+    forgetDevice(storage)
+
+    expect(keptAccountStart(storage).kept()).toBeUndefined()
   })
 
   it('keeps one token and nothing else beside it: no second key is ever written', () => {

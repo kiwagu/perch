@@ -15,8 +15,11 @@ starts the account there, and a link verified before starts nothing), the `Accou
 over the profile and settings services (the account's settings in the language it signed up in,
 then its profile with the name it signed up with, each created only where the device holds none,
 under an id derived from the identity, so the account never has two; the start is kept on the
-browser until both exist and finished when the account's space opens there again, and the
-composition root provides the service app-wide and runs that finish), the `ProfileService`
+browser until both exist and finished when the account's space opens there again, the browser's
+tabs taking their turns so that one tab never creates what another created; the composition
+root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start,
+which then stays unfinished: later sign-ins do not finish it, and the profile page shows its
+empty state when the profile is missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in

@@ -1,4 +1,4 @@
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { type AuthUser, dataError } from '@workspace/data'
@@ -7,12 +7,20 @@ import { identityIdFactory, profileIdFactory, settingsIdFactory } from '@workspa
 import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
-import { type AccountStart, AccountStartService, type KeptStartPort } from './account-start.service'
+import {
+  type AccountStart,
+  AccountStartService,
+  type KeptStartPort,
+  type StartTurns,
+} from './account-start.service'
 import { type NewProfile, ProfileService } from './profile.service'
 import { settingsCommands, settingsShape } from './settings/settings.model.gen'
 import { type NewSettings, SettingsService } from './settings/settings.service'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
+
+/** Each turn at once: a single tab. */
+const inTurn: StartTurns = (run) => run()
 
 /** The one start a browser keeps, in memory. */
 function keptHere(): KeptStartPort & { readonly now: () => AccountStart | undefined } {
@@ -79,7 +87,7 @@ describe('AccountStartService', () => {
   it('starts a new account with its settings, then its profile, under ids derived from its identity, and keeps nothing once both exist', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
 
     expect((await starts.start(ann, { name: 'Ann', locale: 'es' })).isOk()).toBe(true)
     expect(held.created).toEqual(['settings', 'profile'])
@@ -100,7 +108,7 @@ describe('AccountStartService', () => {
   it('refuses a name the profile would refuse before it writes or keeps anything', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
 
     expect((await starts.start(ann, { name: '  ', locale: 'en' }))._unsafeUnwrapErr().code).toBe(
       'profile:NAME_REQUIRED',
@@ -112,7 +120,7 @@ describe('AccountStartService', () => {
   it('keeps a start whose profile could not be created, and the next open of its space here creates exactly that profile', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
 
     held.refuseProfiles(true)
 
@@ -137,7 +145,7 @@ describe('AccountStartService', () => {
   it("creates nothing on the open of another account's space, nor where nothing was kept", async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
     const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
     expect((await starts.resume(ann)).isOk()).toBe(true)
@@ -148,15 +156,27 @@ describe('AccountStartService', () => {
     expect(held.created).toEqual([])
   })
 
-  it('forgets the kept start: this browser signed out, and the data it held went with it', () => {
+  it('reads the kept start in its turn: one another tab finished meanwhile creates nothing', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept)
+    let letRun = () => {}
+    const waiting = new Promise<void>((resolve) => {
+      letRun = resolve
+    })
+    // The turn comes once another tab's turn ended.
+    const later: StartTurns = (run) => ResultAsync.fromSafePromise(waiting).andThen(() => run())
+    const starts = new AccountStartService(held.profiles, held.settings, kept, later)
 
     kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
-    starts.forget()
 
-    expect(kept.now()).toBeUndefined()
+    const resuming = starts.resume(ann)
+
+    // Another tab finished the start in its turn, and forgot it.
+    kept.forget()
+    letRun()
+
+    expect((await resuming).isOk()).toBe(true)
+    expect(held.created).toEqual([])
   })
 })
 
@@ -207,6 +227,7 @@ describe('AccountStartService on a session', () => {
       },
       settings,
       kept,
+      inTurn,
     )
 
     expect((await failing.start(user, { name: 'Ann', locale: 'es' })).isErr()).toBe(true)
