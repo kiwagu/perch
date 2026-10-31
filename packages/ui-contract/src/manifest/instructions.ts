@@ -32,7 +32,7 @@ const LANGUAGE = [
 
 const SESSION = [
   'Every scenario starts in a fresh browser context with nobody signed in (`guest`).',
-  '`platform.sign-up` makes an account (an email, a password and a name) and signs the device in; `platform.sign-in` signs an existing one in.',
+  "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows) and, when it sends a mail, its `mail`; never assume it from the action's name.",
   'One account per browser: a second account, or a second device of the same one, needs a browser context of its own.',
 ].join(' ')
 
