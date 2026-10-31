@@ -17,11 +17,6 @@ export function publicUrl(request: Request): string {
   return url.href
 }
 
-/** The request at the path Better Auth serves it under, its method, headers and body as sent. */
-export function atPublicPath(request: Request): Request {
-  return new Request(publicUrl(request), request)
-}
-
 /**
  * The request at the path Better Auth serves it under, carrying `body` as JSON, with `headers`
  * (the request's own unless named). Better Auth reads a body by its content type, a form too, so

@@ -13,6 +13,9 @@
 
 import { hostname } from 'node:os'
 
+import { Mailbox } from '@workspace/mailbox'
+import { z } from '@workspace/zod'
+
 import { LatencyBook, parseArgs, type StepReport } from '../metrics'
 
 import { closeDevices } from './devices'
@@ -21,6 +24,9 @@ import type { Run } from './state'
 import { runLoad } from './steps'
 
 const SIGNAL_EXIT = 130
+
+/** The REST API of the stand's MailDev, where every sign-up's verification mail is read. */
+const mailboxUrl = z.url({ protocol: /^https?$/ })
 
 /** Closes every device and stops the gateway child: SIGTERM, then SIGKILL after 5 s. */
 async function teardown(run: Run, gateway: Bun.Subprocess | undefined): Promise<void> {
@@ -39,12 +45,23 @@ export async function runLoadTest(
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<number> {
   const args = parseArgs(argv, env)
+  const mailbox = mailboxUrl.safeParse(env['MAILBOX_URL'])
+
+  if (!mailbox.success) {
+    console.error(
+      "load: MAILBOX_URL must be the http(s):// address of the stand's mailbox: run through mcproc exec or set it",
+    )
+
+    return 1
+  }
+
   const id = Date.now().toString(36)
   const startedAt = new Date().toISOString()
   const run: Run = {
     id,
     args,
     base: `http://127.0.0.1:${args.gatewayPort}`,
+    mailbox: new Mailbox(mailbox.data),
     password: crypto.randomUUID(),
     book: new LatencyBook(),
     counters: { errors: 0, closes: 0, asked: 0, accepted: 0, other: 0, firstReject: undefined },

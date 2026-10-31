@@ -1,7 +1,7 @@
 /**
- * The HTTP side of the smoke test: signing an identity up or in on a device through Better
- * Auth's routes, and calling the gateway's routes with the session token the device keeps. An
- * answer the smoke does not expect fails the step.
+ * The HTTP side of the smoke test: signing an identity up on a device and verifying it through
+ * the mail the stand's mailbox received, signing it in, and calling the gateway's routes with the
+ * session token the device keeps. An answer the smoke does not expect fails the step.
  *
  * The smoke and the load test talk to the gateway directly, so they play the front: like Caddy,
  * which names the address it saw in `X-Forwarded-For`, they give each simulated device a client
@@ -9,9 +9,10 @@
  * the device id, so the gateway's limits per client address count each device apart.
  */
 
+import type { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
-/** What a sign-up or a sign-in answers, as far as the smoke reads it. */
+/** What a sign-in or a first verification answers, as far as the smoke reads it. */
 const signedIn = z.object({
   /** The session token itself, which the device keeps and sends as its Bearer token. */
   token: z.string().min(1),
@@ -40,8 +41,8 @@ export interface Credentials {
   readonly name?: string
 }
 
-/** Better Auth's routes a device signs up and in through, by email and password. */
-export type CredentialsPath = '/auth/sign-up/email' | '/auth/sign-in/email'
+/** Better Auth's route a device signs in through, by email and password. */
+export type CredentialsPath = '/auth/sign-in/email'
 
 /** What a route answered: its status, its headers and its body, which is not necessarily JSON. */
 export interface Answer {
@@ -81,17 +82,8 @@ function deviceHeaders(device: string | NamedDevice): Record<string, string> {
   }
 }
 
-/** What a sign-up or a sign-in posts: a sign-up names the account, a sign-in does not. */
-function credentialsBody(path: CredentialsPath, credentials: Credentials): unknown {
-  const { email, password } = credentials
-
-  return path === '/auth/sign-up/email'
-    ? { name: credentials.name ?? 'Smoke', email, password }
-    : { email, password }
-}
-
 /**
- * Signs up or in from the device `credentials` names (`X-Perch-Device` and its label in
+ * Signs in from the device `credentials` names (`X-Perch-Device` and its label in
  * `X-Perch-Device-Label`); the device keeps the session token of the answer. An answer other
  * than 200 fails with its status and body, which carry no token.
  */
@@ -100,14 +92,8 @@ export async function postCredentials(
   path: CredentialsPath,
   credentials: Credentials,
 ): Promise<SignedIn> {
-  const answer = await call(
-    base,
-    'POST',
-    path,
-    undefined,
-    credentialsBody(path, credentials),
-    credentials.device,
-  )
+  const { email, password } = credentials
+  const answer = await call(base, 'POST', path, undefined, { email, password }, credentials.device)
 
   if (answer.status !== 200) {
     throw new Error(`${path} answered ${answer.status} ${JSON.stringify(answer.body)}`)
@@ -116,6 +102,60 @@ export async function postCredentials(
   const { token, user } = signedIn.parse(answer.body)
 
   return { identity: { id: user.id, email: user.email }, token, device: credentials.device.id }
+}
+
+/**
+ * Signs `credentials` up and verifies the account through its mail in the stand's mailbox, as a
+ * person opening the link on the device does: the sign-up answers 202, the mail's token goes to the
+ * gateway's verification, which signs the device in.
+ */
+export async function signUp(
+  base: string,
+  mailbox: Mailbox,
+  credentials: Credentials,
+): Promise<SignedIn> {
+  const seen = await mailbox.count(credentials.email)
+  const up = await call(
+    base,
+    'POST',
+    '/auth/sign-up/email',
+    undefined,
+    {
+      name: credentials.name ?? 'Smoke',
+      email: credentials.email,
+      password: credentials.password,
+      locale: 'en',
+    },
+    credentials.device,
+  )
+
+  if (up.status !== 202) {
+    throw new Error(`/auth/sign-up/email answered ${up.status} ${JSON.stringify(up.body)}`)
+  }
+
+  const token = await mailbox.verificationToken(credentials.email, seen)
+  const verified = await call(
+    base,
+    'POST',
+    '/auth/verify-email',
+    undefined,
+    { token },
+    credentials.device,
+  )
+
+  if (verified.status !== 200) {
+    throw new Error(
+      `/auth/verify-email answered ${verified.status} ${JSON.stringify(verified.body)}`,
+    )
+  }
+
+  const { token: session, user } = signedIn.parse(verified.body)
+
+  return {
+    identity: { id: user.id, email: user.email },
+    token: session,
+    device: credentials.device.id,
+  }
 }
 
 /**

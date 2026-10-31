@@ -19,7 +19,7 @@ routes of `src/tenants` share its Bearer caller. It has no domain rules of its o
 imported file by file.
 
 A session is a `device_session` row, and its token is the device's one credential: a random
-value Better Auth mints at sign-up and sign-in, sent as `Authorization: Bearer <token>` on every
+value Better Auth mints at a sign-in and at the first verification of an email, sent as `Authorization: Bearer <token>` on every
 route and in the hello of the sync channel. Only the raw token, as the sign-in's body answers it
 and the row holds it, names a session here. The signed form in Better Auth's `set-auth-token`
 header (`<token>.<signature>`) is refused, since the gateway ends a session by its raw token. A
@@ -34,24 +34,25 @@ bring a session back however late it lands, its retries included, though its ins
 taken before an ending committed. Better Auth reads the row at every read, with no cookie cache,
 so a session that ended or expired reads as none at once.
 
-Every session is bound to a device. A sign-up and a sign-in name it in `X-Perch-Device` (the
-browser's own id, 1 to 64 characters) and `X-Perch-Device-Label` (at most 60 characters; any
-other label is stored empty), which the session hooks (`session-hooks.ts`) write into the new
-row. A request without a valid device is refused 400 `bad-request` when its session is about to
-be created, so a sign-in with wrong credentials answers 401 before its device is looked at, and
-a sign-up refused so leaves no account behind. Once the row exists, every session of the
+Every session is bound to a device. A sign-in and a verification name it in `X-Perch-Device`
+(the browser's own id, 1 to 64 characters) and `X-Perch-Device-Label` (at most 60 characters;
+any other label is stored empty), which the session hooks (`session-hooks.ts`) write into the
+new row. A request without a valid device is refused 400 `bad-request` when its session is about
+to be created, so a sign-in with wrong credentials answers 401 before its device is looked at; a
+sign-up creates no session, and the mount names a verification's device before it asks Better
+Auth (below). Once the row exists, every session of the
 identity on that device but the newest ends (the newest: created last, of the greater id among
 those created at the same instant), the new row itself when a newer one exists already: a device
 holds one live session, and its sign-ins converge on the newest whatever order their rows are
 inserted and their hooks run in. Sessions of the identity on other devices, and of other
 identities on a device of the same id, stay live.
-Once Better Auth accepted a sign-up or a sign-in, or signed a device in at a verification, and
-before its answer is returned, the mount closes the identity's sync sockets on that device with
-1000: a socket opened with the session just ended goes no further, the device connects again with
-the new token, and a hello with the earlier token whose session read was under way is refused 4001
-at its registration. Every call
-with a token must name the device its session was opened on, so a token carried to another
-device is refused.
+Once Better Auth accepted a sign-in, or signed a device in at the first verification of an
+email, and before its answer is returned, the mount closes the identity's sync sockets on that
+device with 1000 (a sign-up signs nothing in and closes nothing): a socket opened with the
+session just ended goes no further, the device connects again with the new token, and a hello
+with the earlier token whose session read was under way is refused 4001 at its registration.
+Every call with a token must name the device its session was opened on, so a token carried to
+another device is refused.
 
 A session ends and is never deleted: its row's `expires_at` and `ended_at` become the moment it
 ended, on the gateway's clock, and the row stays, so a device signed out from another one stays
@@ -82,8 +83,9 @@ before it hands a request over. In front of Better Auth, the mount applies the g
 limits (see `src/limits/README.md`): every sign-up, sign-in and verification takes one of its
 client address's 20 credential checks in 10 s, a sign-in must find a place among its email's 10
 failed sign-ins in 15 minutes (a 403, the password right and the email not verified, clears them
-as a success does), and a resend takes one of its address's 200 verification mails and one of its
-email's 3 resends in 15 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
+as a success does), a sign-up takes one of its address's 200 verification mails in 15 minutes,
+whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
+minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
 an email answers 400 `bad-request`; one that is reaches Better Auth as that very JSON, so the
 email whose password is checked is the email counted. Better Auth's answers reach the client
@@ -92,16 +94,31 @@ Auth's reaches the client as its status and its code alone, `{ code }`, and a fa
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
 what was sent or what failed.
 
-A sign-up takes `{ name, email, password }` (a password of 8 to 128 characters) and, optionally,
-`locale`, the language the person signs up in (`en` or `es`, any other answered 400; `en` when
-it names none), which the identity keeps; a sign-in takes `{ email, password }`, both with the
-device's headers. Each answers 200 with the raw session token (`token`) and the account (`user`,
-its `id` the identity's). An email is kept and matched in lower case, so an address in any case
-is one account. Wrong credentials answer 401 and a sign-up of an email that has an account 422,
-with Better Auth's code alone in the body. A sign-up writes its identity, its credential row and its
-session in one transaction.
+No account signs in before its email is verified (`requireEmailVerification`). A sign-up takes
+`{ name, email, password }` (a password of 8 to 128 characters) and, optionally, `locale`, the
+language the person signs up in (`en` or `es`, any other answered 400; `en` when it names none),
+which the identity keeps. It signs nothing in: Better Auth writes the identity and its credential
+row in one transaction and mails the account its verification link (`sendOnSignUp`), and for an
+email that has an account it writes nothing, mails nothing, and answers with an account it made up,
+whose fields differ from a real one's. So the mount answers every sign-up Better Auth accepted
+(`auth-handler/sign-up.ts`) with its own `202` and no body, the same headers for a new, a taken
+and a concurrently taken email, never sooner than `SIGN_UP_FLOOR_MS` (800 ms) after its request
+began: the floor sits above the work of either branch (a new account's writes, a taken email's
+hashing) and above Better Auth's own floor for a resend, so neither the answer nor its time tells
+whether the email has an account. One email's sign-ups run one at a time (the account's turn,
+`GatewayRoot.accountTurns`, by the email in lower case): two at once of a new email would
+otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
+sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
+address's verification mails, whatever its email (429 when they are spent); a body that names no
+email answers 400 `bad-request`. Better Auth's refusals (a short password, a malformed email, a
+language the gateway does not speak) pass as their status and code alone; they do not depend on
+the email having an account. A sign-in takes `{ email, password }` with the device's headers and
+answers 200 with the raw session token (`token`) and the account (`user`, its `id` the
+identity's). An email is kept and matched in lower case, so an address in any case is one
+account. Wrong credentials answer 401; the right password of an account not verified yet answers
+403 `EMAIL_NOT_VERIFIED` and sends nothing (`sendOnSignIn: false`): the person asks for the mail
+again.
 
-The instance can verify an email, beside a sign-up that still signs its device in and sends nothing.
 Better Auth signs the verification link's token with the auth secret (an HS256 token naming the
 email) and hands it to `verificationMailer` (`verification-mail.ts`), its `sendVerificationEmail`,
 which starts the mail and returns at once: the request that asked for a mail never waits for it. The
@@ -195,14 +212,14 @@ error carries one.
 
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
   `POST /auth/send-verification-email`, Better Auth's behind the mount (`authHandler` and
-  `AuthMountDeps`, `auth-handler/`: the mount, the sign-up, the sign-in, the verification and
-  the resend, the close of a device's sockets, and the requests and refusals as Better Auth and
+  `AuthMountDeps`, `auth-handler/`: the mount, the sign-up and its floor, `SIGN_UP_FLOOR_MS`, the
+  sign-in, the verification and the resend, the close of a device's sockets, and the requests and refusals as Better Auth and
   the client get them), which one account's turns serialise (`GatewayRoot.accountTurns`, a
   `KeyedTurns` by the email in lower case); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
   `device.routes.ts`).
-- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-up,
-  sign-in and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
+- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
+  and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
   which the schema check reads too, `SESSION_LIFETIME_MS` and `VERIFICATION_LINK_LIFETIME_S`),
   `AUTH_MODELS` and `generateAuthId` (`auth-models.ts`), `hashPassword` and `verifyPassword`
@@ -232,10 +249,15 @@ error carries one.
 - `bun run test` in `apps/gateway` runs this module's specs on an embedded in-memory directory
   (`auth-handler/mount.spec.ts` and `auth-handler/verification.spec.ts`, which also hold that
   nothing of an address, a token or a link reaches a log, stderr or an answer, a failed query's
-  included, that one account's verifications at once sign one device in, and that a device's
-  sockets close before a readback that fails, `auth-instance.spec.ts`, `auth-log.spec.ts`,
+  included, that one account's verifications at once sign one device in, that a device's
+  sockets close before a readback that fails, and that every resend answers no sooner than
+  Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
+  concurrently taken email answer alike and no sooner than the floor, and that every sign-up
+  takes one of its address's verification mails; `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
-- `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up, sign-in,
-  the credential limits, device sessions and every sign-out against a stand.
+- `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up and the
+  verification through the mail in the stand's mailbox, sign-in, the credential limits, the
+  uniform sign-up and resend, the verification's refusals, device sessions and every sign-out
+  against a stand.

@@ -48,8 +48,7 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
 }
 
 /**
- * Hands a request that signs a device in (a sign-up or a sign-in) to Better Auth. An accepted one
- * (200) closes the device's sockets (`closeDevice`) before its answer is returned without its
+ * Hands a sign-in to Better Auth. An accepted one (200) closes the device's sockets (`closeDevice`) before its answer is returned without its
  * cookies; any other answer reaches the client as its status and code alone (`refusalOf`).
  */
 export async function handedOver(deps: AuthMountDeps, request: Request): Promise<Response> {

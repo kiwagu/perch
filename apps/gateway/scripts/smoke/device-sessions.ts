@@ -3,10 +3,11 @@
  * from another device and everywhere, and signing itself out with its own token.
  */
 
+import type { Mailbox } from '@workspace/mailbox'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { type Answer, call, callAs, postCredentials, type SignedIn } from './http'
+import { type Answer, call, callAs, postCredentials, type SignedIn, signUp } from './http'
 import { check, hello, type Opened, refusal, refusedHello, step } from './steps'
 
 /**
@@ -54,7 +55,7 @@ function signOut(base: string, token: string, device: string): Promise<Answer> {
 }
 
 /**
- * Device sessions, on a fresh identity with a laptop and a phone: a hello under a device with no
+ * Device sessions, on a fresh identity verified on a laptop and signed in on a phone: a hello under a device with no
  * session refused (4401) and a call that names no device refused (400); both devices listed, the
  * laptop as the current one; the phone signed out from the laptop (its socket closed with 4001,
  * its row showing when its session ended, its token's hello closed with 4401), then signed in
@@ -64,7 +65,11 @@ function signOut(base: string, token: string, device: string): Promise<Answer> {
  * laptop's old token is refused at hello, and a device signs itself out with its own token
  * (204, again 204, a made-up token 401).
  */
-export async function deviceSessionSteps(base: string, opened: Opened): Promise<void> {
+export async function deviceSessionSteps(
+  base: string,
+  mailbox: Mailbox,
+  opened: Opened,
+): Promise<void> {
   const credentials = {
     email: `smoke-${crypto.randomUUID()}@example.test`,
     password: crypto.randomUUID(),
@@ -72,9 +77,9 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
   const signIn = (id: string, label: string) =>
     postCredentials(base, '/auth/sign-in/email', { ...credentials, device: { id, label } })
   const { laptop, phone } = await step(
-    'devices: signed up on a laptop, signed in on a phone',
+    'devices: signed up and verified on a laptop, signed in on a phone',
     async () => ({
-      laptop: await postCredentials(base, '/auth/sign-up/email', {
+      laptop: await signUp(base, mailbox, {
         ...credentials,
         device: { id: 'smoke-laptop', label: 'Smoke laptop' },
       }),

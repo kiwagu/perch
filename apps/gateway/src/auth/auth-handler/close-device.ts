@@ -6,12 +6,12 @@ import type { ConnectionRegistry } from '../../sync/connections'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { DEVICE_HEADER } from '../session-hooks'
 
-/** As much of an accepted sign-up's or sign-in's answer as closing the device's sockets needs. */
+/** As much of an accepted sign-in's answer as closing the device's sockets needs. */
 const acceptedBody = z.object({ user: z.object({ id: idSchemas.identity.schema }) })
 
 /**
- * Closes, with 1000, the sync sockets of the device a sign-up or sign-in Better Auth accepted
- * (`response`, 200) was made on, for the identity its answer names. The new session ended the
+ * Closes, with 1000, the sync sockets of the device a sign-in Better Auth accepted (`response`,
+ * 200) was made on, for the identity its answer names. The new session ended the
  * identity's earlier one on that device, and a socket opened with the earlier token would
  * otherwise go on reading and writing with it, however long the new token stays unused. The
  * close also moves the device's epoch, so a hello with the earlier token whose session read is

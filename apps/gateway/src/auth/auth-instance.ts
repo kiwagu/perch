@@ -56,10 +56,13 @@ export function authOptions(options: AuthInstanceOptions) {
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
+      // No session before the email is verified: a sign-up answers with no token, a taken email
+      // as a new one, and a sign-in of an unverified account is refused after its password.
+      requireEmailVerification: true,
     },
     emailVerification: {
-      // A sign-up sends nothing yet: it still signs its device in.
-      sendOnSignUp: false,
+      // Every sign-up sends the mail; a taken email's sends none.
+      sendOnSignUp: true,
       // A sign-in of an unverified account sends nothing; the person asks for the mail again.
       sendOnSignIn: false,
       // The first verification signs the device that opened the link in; a link opened again

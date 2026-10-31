@@ -13,17 +13,16 @@ import {
   ANN,
   annsLink,
   fakeConnection,
-  mounted,
+  mountedOnFakeAuth,
   mountedOnRealAuth,
+  ORIGIN,
   printedDuring,
   READBACK_FAILURE,
+  resendRequest,
 } from './__fixtures__/mount'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
-
-/** The front's origin, which the browser names on every request. */
-const ORIGIN = 'http://localhost'
 
 /** An email no account has. */
 const GHOST = 'ghost@example.test'
@@ -38,15 +37,6 @@ function verify(token: string, device: string | null): Request {
     method: 'POST',
     headers,
     body: JSON.stringify({ token }),
-  })
-}
-
-/** A resend of the verification mail to `email`, as the web sends it. */
-function resend(email: string): Request {
-  return new Request('http://gateway.test/auth/send-verification-email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: ORIGIN },
-    body: JSON.stringify({ email }),
   })
 }
 
@@ -116,16 +106,16 @@ describe('authHandler, the verification of an email', () => {
 
     expect(bodies.filter((body) => typeof body.token === 'string')).toHaveLength(1)
     expect(bodies.filter((body) => body.token === null)).toHaveLength(1)
-    expect(
-      devices.map(({ device }) => device).filter((device) => device !== 'laptop'),
-    ).toHaveLength(1)
+    // The sign-up signed nothing in: the one session is the verifying device's.
+    expect(devices).toHaveLength(1)
   })
 
   it('signs exactly one device in when two links of one account are opened at once', async () => {
     const { route, outbox, local, auth } = await mountedOnRealAuth()
     const first = await annsLink(outbox)
 
-    // A token is signed to the second: the second link differs from the first once a second passed.
+    // A token is signed to the second: the second link (a resend's, after the sign-up's) differs
+    // from the first once a second passed.
     await vi.waitFor(
       () => expect(Date.now()).toBeGreaterThanOrEqual((issuedAt(first) + 1) * 1000),
       {
@@ -148,9 +138,7 @@ describe('authHandler, the verification of an email', () => {
     const [devices] = await local.db.query<[{ device: string }[]]>(deviceSessionDevicesStatement)
 
     expect(bodies.filter((body) => typeof body.token === 'string')).toHaveLength(1)
-    expect(
-      devices.map(({ device }) => device).filter((device) => device !== 'laptop'),
-    ).toHaveLength(1)
+    expect(devices).toHaveLength(1)
   })
 
   it("closes the device's sockets even when the session cannot be read back", async () => {
@@ -188,7 +176,7 @@ describe('authHandler, the verification of an email', () => {
   })
 
   it('answers a verification that names no device, or no token, 400 without asking Better Auth', async () => {
-    const { route, received } = mounted(() => Response.json({ status: true, user: null }))
+    const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true, user: null }))
     const tokenless = verify('', 'phone')
 
     for (const request of [verify('a-token', null), tokenless]) {
@@ -202,7 +190,7 @@ describe('authHandler, the verification of an email', () => {
   })
 
   it("hands Better Auth the token alone, by GET at its public path, without the request's credentials or callback", async () => {
-    const { route, received } = mounted(() => Response.json({ status: true, user: null }))
+    const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true, user: null }))
     const headers = deviceHeaders('phone')
 
     headers.set('content-type', 'application/json')
@@ -232,7 +220,7 @@ describe('authHandler, the verification of an email', () => {
   })
 
   it("takes one of its address's 20 credential checks per verification: the 21st within 10 s answers 429", async () => {
-    const { route, received } = mounted(() =>
+    const { route, received } = mountedOnFakeAuth(() =>
       Response.json({ code: 'INVALID_TOKEN' }, { status: 401 }),
     )
     const statuses: number[] = []
@@ -254,32 +242,44 @@ describe('authHandler, the verification of an email', () => {
 describe('authHandler, the resend of the verification mail', () => {
   it('answers 202 with an empty body alike for an unverified, a verified and an unknown email, and mails only the unverified', async () => {
     const { route, outbox } = await mountedOnRealAuth()
+    // Each sign-up mails its own link: Bob's, which he opens, and Ann's, which she does not.
     const bobs = await annsLink(outbox, 'bob@example.test')
 
     expect((await route(verify(bobs, 'desk'), FROM))?.status).toBe(200)
     await annsLink(outbox)
 
     const answers = []
+    const elapsed: number[] = []
 
     for (const email of ['bob@example.test', GHOST, ANN]) {
-      answers.push(await seen(await route(resend(email), FROM)))
+      // Timed as Better Auth times its floor, by the wall clock in whole milliseconds.
+      const began = Date.now()
+      const answer = await route(resendRequest(email), FROM)
+
+      elapsed.push(Date.now() - began)
+      answers.push(await seen(answer))
     }
 
     expect(answers[0]).toEqual({ status: 202, headers: [], body: '' })
     expect(answers).toEqual([answers[0], answers[0], answers[0]])
 
-    // Ann's link once from her sign-up's resend and once from this one; nobody else got one.
+    // No resend answers sooner than Better Auth's floor of 500 ms, whatever the email.
+    for (const time of elapsed) {
+      expect(time).toBeGreaterThanOrEqual(500)
+    }
+
+    // Ann's link once from her sign-up and once from this resend; Bob's from his sign-up alone.
     await outbox.next(ANN, 1)
     expect(outbox.to('bob@example.test')).toHaveLength(1)
     expect(outbox.to(GHOST)).toHaveLength(0)
   })
 
   it("answers an email's fourth resend within 15 minutes 429, the first three 202", async () => {
-    const { route, received } = mounted(() => Response.json({ status: true }))
+    const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
     const statuses: number[] = []
 
     for (let n = 0; n < 4; n += 1) {
-      statuses.push((await route(resend(GHOST), FROM))?.status ?? 0)
+      statuses.push((await route(resendRequest(GHOST), FROM))?.status ?? 0)
     }
 
     expect(statuses).toEqual([202, 202, 202, 429])
@@ -287,8 +287,8 @@ describe('authHandler, the resend of the verification mail', () => {
   })
 
   it("hands Better Auth the email alone, by POST at its public path, without the request's credentials", async () => {
-    const { route, received } = mounted(() => Response.json({ status: true }))
-    const request = resend(ANN)
+    const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
+    const request = resendRequest(ANN)
 
     request.headers.set('authorization', 'Bearer a-session-token')
     request.headers.set('cookie', 'better-auth.session_token=signed')
@@ -312,7 +312,7 @@ describe('authHandler, the resend of the verification mail', () => {
   })
 
   it('answers a resend whose body names no email 400 without asking Better Auth', async () => {
-    const { route, received } = mounted(() => Response.json({ status: true }))
+    const { route, received } = mountedOnFakeAuth(() => Response.json({ status: true }))
 
     for (const body of ['{}', '{"email":""}', '{"email":["ann@example.test"]}', 'not json']) {
       const answer = await route(
@@ -346,11 +346,11 @@ describe("authHandler, Better Auth's refusals", () => {
       body: JSON.stringify({ email: ANN, password: 'pass-word-1' }),
     }),
     verify('a.link.token', 'phone'),
-    resend(ANN),
+    resendRequest(ANN),
   ]
 
   it('passes a refusal on as its code alone, and a failure as internal, on every path', async () => {
-    const refusal = mounted(() => {
+    const refusal = mountedOnFakeAuth(() => {
       const headers = new Headers({ 'set-cookie': 'better-auth.session_token=signed' })
 
       return Response.json(
@@ -358,7 +358,9 @@ describe("authHandler, Better Auth's refusals", () => {
         { status: 400, headers },
       )
     })
-    const failure = mounted(() => new Response('MARKER ann@example.test failed', { status: 500 }))
+    const failure = mountedOnFakeAuth(
+      () => new Response('MARKER ann@example.test failed', { status: 500 }),
+    )
 
     for (const request of requests()) {
       expect(await seen(await refusal.route(request, FROM))).toEqual({
@@ -393,8 +395,8 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
         await seen(await route(verify(token, 'tablet'), FROM)),
         await seen(await route(verify(expired, 'tablet'), FROM)),
         await seen(await route(verify(`${token}x`, 'tablet'), FROM)),
-        await seen(await route(resend(MARKED), FROM)),
-        await seen(await route(resend('marker-nobody@example.test'), FROM)),
+        await seen(await route(resendRequest(MARKED), FROM)),
+        await seen(await route(resendRequest('marker-nobody@example.test'), FROM)),
       ]
 
       return { first, others }

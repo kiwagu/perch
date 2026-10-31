@@ -36,8 +36,9 @@ Verification mails are limited to 200 per client address in 15 minutes
 email (`verificationMail(address)` for a sign-up's mail, `verificationMail(address, email)` for a
 resend): one client can make at most 200 such mails go out per quarter hour, where the credential
 limit alone would let 1,800 sign-ups through. The auth mount charges every
-`POST /auth/send-verification-email` it reads an email from; a sign-up still signs its device in
-and sends no mail. A resend also takes one of its email's 3 resends in 15 minutes
+`POST /auth/sign-up/email` before it reads its body, a taken email's and one that names none
+included (each new account's sign-up mails its link, and a taken email's must cost the same), and
+every `POST /auth/send-verification-email` it reads an email from. A resend also takes one of its email's 3 resends in 15 minutes
 (`EMAIL_VERIFICATION_MAILS`, the email in lower case), whatever the email, an unknown or a
 verified one too, so the limit tells nothing about accounts. The address is asked first: its place
 is reserved, then given back when the email refuses, so a resend the address refuses moves no
@@ -86,5 +87,5 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
 - `bun run test` in `apps/gateway` runs this module's specs (`request-limits.spec.ts`,
   `fixed-window.spec.ts`, `client-address.spec.ts`, `address-key.spec.ts`,
   `too-many.spec.ts`).
-- `bun run test:db` (the smoke) drives the per-address and the failed sign-in limits against a
-  stand.
+- `bun run test:db` (the smoke) drives the per-address, the failed sign-in and the per-email
+  resend limits against a stand.

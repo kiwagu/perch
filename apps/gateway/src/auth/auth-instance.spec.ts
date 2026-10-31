@@ -8,6 +8,7 @@ import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 import { linkToken } from '../mail/__fixtures__/outbox'
 
 import accountCredentialsStatement from './__fixtures__/account-credentials.surql'
+import accountRefuseStatement from './__fixtures__/account-refuse.surql'
 import {
   AUTH_SECRET,
   AUTH_URL,
@@ -23,6 +24,7 @@ import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiri
 import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
 import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import identityEmailsStatement from './__fixtures__/identity-emails.surql'
+import identityVerifiedStatement from './__fixtures__/identity-verified.surql'
 import { VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
 import { sessionHooks } from './session-hooks'
 
@@ -460,29 +462,61 @@ describe('createAuthInstance', () => {
     expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
   })
 
-  it('signs the email up after a sign-up refused for naming no device, leaving nothing behind', async () => {
-    const { auth } = await instance()
+  it('a verification that names no device creates no session', async () => {
+    const { auth, outbox, local } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+
+    const token = linkToken(await outbox.next('ann@example.test'))
 
     await expect(
-      auth.api.signUpEmail({
-        body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      auth.api.verifyEmail({
+        query: { token },
         headers: new Headers({ origin: 'http://localhost' }),
       }),
     ).rejects.toMatchObject({ status: 'BAD_REQUEST' })
 
-    const { user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
+    const [identities] =
+      await local.db.query<[{ email: string; email_verified: boolean }[]]>(
+        identityVerifiedStatement,
+      )
 
-    expect(user.id).toMatch(/^idn_/)
+    expect(devices).toEqual([])
+    // Better Auth marks the email verified before it creates the session: that is why the mount
+    // names the device before it asks.
+    expect(identities).toEqual([{ email: 'ann@example.test', email_verified: true }])
   })
 
-  it('refuses a second account with the same email in another case', async () => {
-    const { auth } = await instance()
+  it('answers a taken email, in any case, as a new one, and sends it no mail', async () => {
+    const { auth, outbox, local } = await instance()
 
     await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
 
-    await expect(signUpOn(auth, 'Ann@Example.test', deviceHeaders('phone'))).rejects.toMatchObject({
-      status: 'UNPROCESSABLE_ENTITY',
+    const taken = await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'Ann@Example.test', password: 'pass-word-2' },
+      headers: deviceHeaders('phone'),
     })
+    const fresh = await auth.api.signUpEmail({
+      body: { name: 'Bob', email: 'bob@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('desk'),
+    })
+
+    // A new email's mail has gone out by now, through the same mailer a taken one's would.
+    await outbox.next('bob@example.test')
+
+    const [identities] = await local.db.query<[{ email: string }[]]>(identityEmailsStatement)
+
+    expect([taken.token, fresh.token]).toEqual([null, null])
+    expect(taken.user.email).toBe('ann@example.test')
+    expect(outbox.to('ann@example.test')).toHaveLength(1)
+    expect(identities.map(({ email }) => email).sort()).toEqual([
+      'ann@example.test',
+      'bob@example.test',
+    ])
   })
 
   it('signs eight devices up at once, each into its own identity and session', async () => {
@@ -524,17 +558,20 @@ describe('createAuthInstance', () => {
 
   it('leaves no identity behind sign-ups refused inside their transactions, beside ones that pass', async () => {
     const { auth, local } = await instance()
-    // The session hook refuses a request that names no device after the identity and its account
-    // were written in the sign-up's transaction.
+
+    // The directory refuses the credential row of a `refused-` email, which the sign-up writes in
+    // its transaction after the identity.
+    await local.db.query(accountRefuseStatement)
+
     const refused = (email: string) =>
       auth.api.signUpEmail({
         body: { name: 'Ann', email, password: 'pass-word-1' },
-        headers: new Headers({ origin: 'http://localhost' }),
+        headers: deviceHeaders('desk'),
       })
     const settled = await Promise.allSettled([
-      refused('nobody-0@example.test'),
+      refused('refused-0@example.test'),
       signUpOn(auth, 'ann@example.test', deviceHeaders('laptop')),
-      refused('nobody-1@example.test'),
+      refused('refused-1@example.test'),
       signUpOn(auth, 'bob@example.test', deviceHeaders('phone')),
     ])
 
@@ -544,12 +581,6 @@ describe('createAuthInstance', () => {
       'rejected',
       'fulfilled',
     ])
-
-    for (const outcome of [settled[0], settled[2]]) {
-      expect(outcome?.status === 'rejected' ? outcome.reason : outcome).toMatchObject({
-        status: 'BAD_REQUEST',
-      })
-    }
 
     // The next sign-up on the same instance runs on the connection again, not on a finished
     // transaction.
@@ -571,7 +602,39 @@ describe('createAuthInstance', () => {
 })
 
 describe('createAuthInstance, the verification of an email', () => {
-  // The account of each is unverified: a sign-up still signs it in on `laptop`, and sends nothing.
+  // A sign-up signs nothing in and mails the account its link; the account stays unverified until
+  // a test opens it.
+  it('signs nothing in at sign-up and sends one mail, in the language signed up in', async () => {
+    const { auth, outbox, local } = await instance()
+    const answer = await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1', locale: 'es' },
+      headers: deviceHeaders('laptop'),
+    })
+    const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
+
+    expect(answer.token).toBeNull()
+    expect((await outbox.next('ann@example.test')).subject).toBe('Confirma tu correo para Perch')
+    expect(devices).toEqual([])
+  })
+
+  it('refuses the sign-in of an unverified account with its right password, and sends nothing', async () => {
+    const { auth, outbox } = await instance()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      headers: deviceHeaders('laptop'),
+    })
+    await outbox.next('ann@example.test')
+
+    await expect(
+      auth.api.signInEmail({
+        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        headers: deviceHeaders('laptop'),
+      }),
+    ).rejects.toMatchObject({ status: 'FORBIDDEN', body: { code: 'EMAIL_NOT_VERIFIED' } })
+    expect(outbox.to('ann@example.test')).toHaveLength(1)
+  })
+
   it('sends the verification mail again for an unverified account, in its language, and alike answers for any email', async () => {
     const { auth, outbox } = await instance()
 
@@ -579,8 +642,7 @@ describe('createAuthInstance, the verification of an email', () => {
       body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1', locale: 'es' },
       headers: deviceHeaders('laptop'),
     })
-
-    expect(outbox.sent).toEqual([])
+    await outbox.next('ann@example.test')
 
     for (const email of ['ann@example.test', 'nobody@example.test']) {
       expect(
@@ -588,7 +650,8 @@ describe('createAuthInstance, the verification of an email', () => {
       ).toEqual({ status: true })
     }
 
-    const mail = await outbox.next('ann@example.test')
+    // The sign-up's mail first, the resend's second.
+    const mail = await outbox.next('ann@example.test', 1)
 
     expect(mail.subject).toBe('Confirma tu correo para Perch')
     expect(mail.text).toContain('http://localhost/verify-email?token=')
@@ -600,10 +663,6 @@ describe('createAuthInstance, the verification of an email', () => {
 
     await auth.api.signUpEmail({
       body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
-      headers: deviceHeaders('laptop'),
-    })
-    await auth.api.sendVerificationEmail({
-      body: { email: 'ann@example.test' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -621,10 +680,6 @@ describe('createAuthInstance, the verification of an email', () => {
 
     await auth.api.signUpEmail({
       body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
-      headers: deviceHeaders('laptop'),
-    })
-    await auth.api.sendVerificationEmail({
-      body: { email: 'ann@example.test' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -645,7 +700,8 @@ describe('createAuthInstance, the verification of an email', () => {
 
     expect(first.headers.get('set-auth-token')).not.toBeNull()
     expect(again.headers.get('set-auth-token')).toBeNull()
-    expect(devices.map(({ device }) => device).sort()).toEqual(['laptop', 'phone'])
+    // The sign-up on the laptop signed nothing in: the one session is the phone's.
+    expect(devices.map(({ device }) => device)).toEqual(['phone'])
   })
 
   it('refuses a link past its lifetime with TOKEN_EXPIRED', async () => {
@@ -662,10 +718,6 @@ describe('createAuthInstance, the verification of an email', () => {
 
     await auth.api.signUpEmail({
       body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
-      headers: deviceHeaders('laptop'),
-    })
-    await auth.api.sendVerificationEmail({
-      body: { email: 'ann@example.test' },
       headers: deviceHeaders('laptop'),
     })
 

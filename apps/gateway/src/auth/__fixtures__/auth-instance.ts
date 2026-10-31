@@ -1,14 +1,16 @@
 /**
  * A Better Auth instance on an embedded directory database, for the specs of the auth module: the
- * instance, the database to read rows back from, and the requests a device signs up with.
+ * instance, the database to read rows back from, the requests a device signs up with, and a
+ * sign-up verified through its mail.
  */
 
 import type { LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
+import type { Locale } from '@workspace/i18n/translator'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
-import { Outbox } from '../../mail/__fixtures__/outbox'
+import { linkToken, Outbox } from '../../mail/__fixtures__/outbox'
 import { type AuthInstance, createAuthInstance } from '../auth-instance'
 import type { AuthLog } from '../auth-log'
 import { DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
@@ -105,22 +107,51 @@ export function deviceHeaders(id: string, label = 'Firefox on Linux'): Headers {
   return new Headers({ [DEVICE_HEADER]: id, [DEVICE_LABEL_HEADER]: label, origin: ORIGIN })
 }
 
-/** Signs `email` up with the password `pass-word-1` from the device the headers name. */
+/**
+ * Signs `email` up (the password `pass-word-1` unless `options` names one) and verifies it through
+ * the mail the sign-up sent, which signs in the device the headers name, as a person opening the
+ * link on it does.
+ */
 export async function signUpOn(
   auth: AuthInstance,
   email: string,
   headers: Headers,
+  options: {
+    readonly locale?: Locale
+    readonly password?: string
+    readonly name?: string
+  } = {},
 ): Promise<{ token: string; user: { id: string; email: string } }> {
-  const { headers: answered, response } = await auth.api.signUpEmail({
-    body: { name: 'Ann', email, password: 'pass-word-1' },
+  const outbox = outboxOf(auth)
+  const seen = outbox.to(email).length
+
+  await auth.api.signUpEmail({
+    body: {
+      name: options.name ?? 'Ann',
+      email,
+      password: options.password ?? 'pass-word-1',
+      locale: options.locale ?? 'en',
+    },
+    headers,
+  })
+
+  const token = linkToken(await outbox.next(email, seen))
+  const { headers: answered } = await auth.api.verifyEmail({
+    query: { token },
     headers,
     returnHeaders: true,
   })
-  const token = response.token ?? answered.get('set-auth-token')
+  const signed = answered.get('set-auth-token')
+  const read =
+    signed === null
+      ? null
+      : await auth.api.getSession({
+          headers: new Headers({ authorization: `Bearer ${signed}` }),
+        })
 
-  if (token === null) {
-    throw new Error(`the sign-up of ${email} returned no session token`)
+  if (read === null) {
+    throw new Error('the verification signed nothing in')
   }
 
-  return { token, user: response.user }
+  return { token: read.session.token, user: { id: read.user.id, email: read.user.email } }
 }

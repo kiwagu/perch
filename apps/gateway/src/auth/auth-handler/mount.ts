@@ -57,18 +57,23 @@ const SERVED_PATHS: ReadonlySet<string> = new Set([
  * path outside `/auth/` is not answered here (`undefined`). The device routes come before this
  * one in the server, so the sign-outs they serve under `/auth/` are theirs.
  *
- * - `POST /auth/sign-up/email` and `POST /auth/sign-in/email`: 200 with the raw session token and
- *   the account, as Better Auth answers them without their cookies. Each first takes one of its
- *   client address's credential checks (`RequestLimits.credentials`, `from` being the address the
- *   server resolved). A sign-in must then find a place among its email's failed sign-ins and
- *   those still under way (`RequestLimits.signInAttempt`, the email in lower case), held until
- *   Better Auth answers: 401 (wrong credentials) keeps it as a failure, 200 and 403 (the password
- *   was right, the email is not verified) clear the email's, and any other answer, or a handler
- *   that threw, gives it back. A sign-in whose body is not JSON naming an email answers 400
- *   `bad-request`; one that is reaches Better Auth as that JSON, whatever content type it came
- *   with, so the email Better Auth checks is the one counted. One Better Auth accepts closes the
- *   identity's sync sockets on the device the request names with 1000 (`connections`) before its
- *   answer is returned: the new session ended the device's earlier one.
+ * - `POST /auth/sign-up/email` and `POST /auth/sign-in/email` each first take one of their client
+ *   address's credential checks (`RequestLimits.credentials`, `from` being the address the server
+ *   resolved). A sign-up then takes one of the address's verification mails, whatever its email,
+ *   and runs one email at a time (`signUp`): 202 with no body for every sign-up Better Auth
+ *   accepts, a new, a taken or a concurrently taken email alike, no sooner than
+ *   `SIGN_UP_FLOOR_MS` after the request began; 400 `bad-request` for a body that names no email;
+ *   it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
+ *   the account, as Better Auth answers it without its cookies. It must first find a place among
+ *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
+ *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a
+ *   failure, 200 and 403 (the password was right, the email is not verified) clear the email's,
+ *   and any other answer, or a handler that threw, gives it back. A sign-in whose body is not
+ *   JSON naming an email answers 400 `bad-request`; one that is reaches Better Auth as that JSON,
+ *   whatever content type it came with, so the email Better Auth checks is the one counted. A
+ *   sign-in Better Auth accepts closes the identity's sync sockets on the device the request
+ *   names with 1000 (`connections`) before its answer is returned: the new session ended the
+ *   device's earlier one.
  * - `POST /auth/verify-email` `{ token }`, with the device's headers: takes one of the address's
  *   credential checks too, then exchanges the link's token (`verify`): 200 `{ token, user: { id,
  *   email, name, locale } }` the first time, which signs the device in, 200 `{ token: null }` for
@@ -115,7 +120,7 @@ export function authHandler(
     }
 
     if (pathname === SIGN_UP_PATH) {
-      return signUp(deps, request)
+      return signUp(deps, request, from)
     }
 
     return pathname === VERIFY_PATH ? verify(deps, request) : signIn(deps, request)

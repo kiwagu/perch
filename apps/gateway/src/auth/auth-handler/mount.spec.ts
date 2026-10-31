@@ -6,12 +6,26 @@ import { z } from '@workspace/zod'
 
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
-import { deviceHeaders, type OpenAuthOptions, openAuth } from '../__fixtures__/auth-instance'
+import {
+  deviceHeaders,
+  type OpenAuthOptions,
+  openAuth,
+  signUpOn,
+} from '../__fixtures__/auth-instance'
 import identityRefuseStatement from '../__fixtures__/identity-refuse.surql'
 
-import { fakeConnections, mounted, noSessions, printedDuring } from './__fixtures__/mount'
+import {
+  ANN,
+  fakeConnections,
+  mountedOnFakeAuth,
+  noSessions,
+  printedDuring,
+  signUpRequest,
+} from './__fixtures__/mount'
 import { authHandler } from './mount'
+import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -41,7 +55,7 @@ const UNSERVED = [
 
 const notFound = { status: 404, body: { code: 'not-found' } }
 
-/** What a sign-up or a sign-in answers, as far as these tests read it. */
+/** What a sign-in answers, as far as these tests read it. */
 const signedIn = z.object({ token: z.string().min(1) })
 
 /**
@@ -69,15 +83,6 @@ const status = (code: number) => () => new Response(null, { status: code })
 
 /** `count` times `code`: the statuses of as many sign-ins answered alike. */
 const times = (count: number, code: number): number[] => Array.from({ length: count }, () => code)
-
-/** A sign-up of Ann, as Better Auth's client sends it. */
-function signUp(): Request {
-  return new Request('http://gateway.test/auth/sign-up/email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-perch-device': 'laptop' },
-    body: JSON.stringify({ name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' }),
-  })
-}
 
 /** A sign-in of `email` with a wrong password, as Better Auth's client sends it. */
 function signIn(email: string): Request {
@@ -150,18 +155,22 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
       cookies: response?.headers.getSetCookie() ?? [],
     }
   }
-  /** Signs Ann up on her laptop and in on her phone through the mount: each device's token. */
+  /**
+   * Signs Ann up and verifies her email on her laptop, then signs her in through the mount on the
+   * laptop and on her phone: each device's token, and the mount's answers.
+   */
   const annOnTwoDevices = async () => {
-    const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
-    const up = await send('POST', '/auth/sign-up/email', 'laptop', {
-      body: { name: 'Ann', ...credentials },
-    })
+    const credentials = { email: ANN, password: 'pass-word-1' }
+
+    await signUpOn(opened.auth, ANN, deviceHeaders('laptop'))
+
+    const laptop = await send('POST', '/auth/sign-in/email', 'laptop', { body: credentials })
     const phone = await send('POST', '/auth/sign-in/email', 'phone', { body: credentials })
 
     return {
-      laptop: signedIn.parse(JSON.parse(up.text)).token,
+      laptop: signedIn.parse(JSON.parse(laptop.text)).token,
       phone: signedIn.parse(JSON.parse(phone.text)).token,
-      answers: [up.text, phone.text],
+      answers: [laptop.text, phone.text],
     }
   }
 
@@ -173,7 +182,7 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
  * address of its own: only the email's limit counts them.
  */
 async function signIns(
-  route: ReturnType<typeof mounted>['route'],
+  route: ReturnType<typeof mountedOnFakeAuth>['route'],
   email: string,
   count: number,
 ): Promise<number[]> {
@@ -188,7 +197,9 @@ async function signIns(
 
 describe('authHandler', () => {
   it("hands a request to Better Auth at the auth routes' public path, its method, headers and body kept", async () => {
-    const { route, received } = mounted(() => Response.json({ token: 'raw-token' }))
+    const { route, received, clock } = mountedOnFakeAuth(() =>
+      Response.json({ token: null, user: {} }),
+    )
     const body = JSON.stringify({ name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' })
     const sent = new Request('http://gateway.test/auth/sign-up/email?callbackURL=%2F', {
       method: 'POST',
@@ -201,9 +212,13 @@ describe('authHandler', () => {
       body,
     })
     const headers = [...sent.headers]
-    const response = await route(sent, FROM)
+    const pending = route(sent, FROM)
 
-    expect(response?.status).toBe(200)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+
+    const response = await pending
+
+    expect(response?.status).toBe(202)
     expect(received).toHaveLength(1)
 
     const [handed] = received
@@ -217,12 +232,11 @@ describe('authHandler', () => {
   })
 
   it('hands the sign-up and the sign-in to Better Auth at their public paths, and nothing else', async () => {
-    const { route, received } = mounted(status(200))
+    const { route, received, clock } = mountedOnFakeAuth(status(200))
+    const up = route(signUpRequest(ANN), FROM)
 
-    expect(
-      (await route(new Request('http://gateway.test/auth/sign-up/email', { method: 'POST' }), FROM))
-        ?.status,
-    ).toBe(200)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
     expect((await route(signIn('ann@example.test'), FROM))?.status).toBe(200)
     expect(received.map((request) => [request.method, new URL(request.url).pathname])).toEqual([
       ['POST', '/backend/auth/sign-up/email'],
@@ -231,7 +245,7 @@ describe('authHandler', () => {
   })
 
   it('answers 404 to every other endpoint of Better Auth, without reaching it', async () => {
-    const { route, received } = mounted(status(200))
+    const { route, received } = mountedOnFakeAuth(status(200))
 
     for (const path of UNSERVED) {
       for (const method of ['GET', 'POST']) {
@@ -252,7 +266,7 @@ describe('authHandler', () => {
   })
 
   it('answers 405 with Allow to another method on the paths it serves', async () => {
-    const { route, received } = mounted(status(200))
+    const { route, received } = mountedOnFakeAuth(status(200))
 
     for (const [method, path] of [
       ['GET', '/auth/sign-up/email'],
@@ -273,43 +287,50 @@ describe('authHandler', () => {
   })
 
   it('answers the 21st sign-up from one address within 10 s 429 with Retry-After, without asking Better Auth', async () => {
-    const { route, received, clock } = mounted(status(200))
+    const { route, received, clock } = mountedOnFakeAuth(status(200))
+    /** The statuses of `count` sign-ups from `from`, started together, once the floor passed. */
     const signUps = async (from: string, count: number) => {
-      const statuses: number[] = []
+      const pending = Array.from({ length: count }, (_, n) =>
+        route(signUpRequest(`user-${n}@example.test`), from),
+      )
 
-      for (let n = 0; n < count; n += 1) {
-        statuses.push((await route(signUp(), from))?.status ?? 0)
-      }
+      await clock.advance(SIGN_UP_FLOOR_MS)
 
-      return statuses
+      return (await Promise.all(pending)).map((answer) => answer?.status ?? 0)
     }
 
-    expect(await signUps(FROM, 20)).toEqual(times(20, 200))
-    await clock.advance(4_000)
+    expect(await signUps(FROM, 20)).toEqual(times(20, 202))
+    await clock.advance(4_000 - SIGN_UP_FLOOR_MS)
 
-    const refused = await route(signUp(), FROM)
+    const refused = await route(signUpRequest(ANN), FROM)
 
     expect(refused?.status).toBe(429)
     expect(await refused?.json()).toEqual({ code: 'rate-limited' })
     expect(refused?.headers.get('Retry-After')).toBe('6')
     expect(received).toHaveLength(20)
     // Another address keeps its own limit.
-    expect(await signUps(ELSEWHERE, 1)).toEqual([200])
+    expect(await signUps(ELSEWHERE, 1)).toEqual([202])
     // Once the window has passed, the address signs up again.
-    await clock.advance(6_000)
-    expect(await signUps(FROM, 1)).toEqual([200])
+    await clock.advance(6_000 - SIGN_UP_FLOOR_MS)
+    expect(await signUps(FROM, 1)).toEqual([202])
     expect(received).toHaveLength(22)
   })
 
   it("counts an address's sign-ups and sign-ins against one limit; a sign-in it refuses takes no place of its email", async () => {
-    const { route, received } = mounted((request) =>
+    const { route, received, clock } = mountedOnFakeAuth((request) =>
       new URL(request.url).pathname.endsWith('/sign-up/email')
         ? new Response(null, { status: 200 })
         : new Response(null, { status: 401 }),
     )
+    // Ten sign-ups started together, answered once the floor passed.
+    const signUps = Array.from({ length: 10 }, (_, n) =>
+      route(signUpRequest(`user-${n}@example.test`), FROM),
+    )
+
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await Promise.all(signUps)).map((answer) => answer?.status)).toEqual(times(10, 202))
 
     for (let n = 0; n < 10; n += 1) {
-      expect((await route(signUp(), FROM))?.status).toBe(200)
       expect((await route(signIn('ann@example.test'), FROM))?.status).toBe(401)
     }
 
@@ -324,7 +345,7 @@ describe('authHandler', () => {
   })
 
   it("answers an email's eleventh sign-in after ten failed ones 429 with Retry-After, without asking Better Auth", async () => {
-    const { route, received } = mounted(status(401))
+    const { route, received } = mountedOnFakeAuth(status(401))
 
     expect(await signIns(route, 'ann@example.test', 10)).toEqual(times(10, 401))
 
@@ -339,7 +360,7 @@ describe('authHandler', () => {
   })
 
   it('counts an email in any case against one limit', async () => {
-    const { route, received } = mounted(status(401))
+    const { route, received } = mountedOnFakeAuth(status(401))
 
     await signIns(route, 'ann@example.test', 5)
     await signIns(route, 'Ann@Example.TEST', 5)
@@ -350,7 +371,7 @@ describe('authHandler', () => {
 
   it("clears an email's failed sign-ins once one succeeds", async () => {
     let answer = 401
-    const { route, received } = mounted(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
 
     await signIns(route, 'ann@example.test', 9)
     answer = 200
@@ -364,7 +385,7 @@ describe('authHandler', () => {
 
   it("clears an email's failed sign-ins once Better Auth answers 403: the password was right, the email is not verified", async () => {
     let answer = 401
-    const { route, received } = mounted(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
 
     await signIns(route, 'ann@example.test', 9)
     answer = 403
@@ -378,7 +399,7 @@ describe('authHandler', () => {
 
   it('gives the place of a sign-in Better Auth did not judge back', async () => {
     let answer = 500
-    const { route, received } = mounted(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
 
     // Answers that are neither a success nor wrong credentials count nothing.
     expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 500))
@@ -391,7 +412,7 @@ describe('authHandler', () => {
 
   it('gives the place of a sign-in whose handler threw back, and lets the throw through', async () => {
     let fail = true
-    const { route } = mounted(() => {
+    const { route } = mountedOnFakeAuth(() => {
       if (fail) {
         throw new Error('the handler failed')
       }
@@ -408,7 +429,7 @@ describe('authHandler', () => {
   })
 
   it('lets the email sign in again once its window has passed', async () => {
-    const { route, clock } = mounted(status(401))
+    const { route, clock } = mountedOnFakeAuth(status(401))
 
     await signIns(route, 'ann@example.test', 10)
     expect(await signIns(route, 'ann@example.test', 1)).toEqual([429])
@@ -417,7 +438,7 @@ describe('authHandler', () => {
   })
 
   it('answers 400 to a sign-in whose body is not JSON naming an email, without asking Better Auth', async () => {
-    const { route, received } = mounted(status(401))
+    const { route, received } = mountedOnFakeAuth(status(401))
     const sent = (contentType: string, body: string) =>
       new Request('http://gateway.test/auth/sign-in/email', {
         method: 'POST',
@@ -445,7 +466,7 @@ describe('authHandler', () => {
   })
 
   it('hands Better Auth the sign-in body the limit counted, as JSON, whatever its content type', async () => {
-    const { route, received } = mounted(status(401))
+    const { route, received } = mountedOnFakeAuth(status(401))
     const body = smuggled('decoy@example.test', 'guess-pass-word')
     const sent = new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
@@ -469,9 +490,9 @@ describe('authHandler', () => {
     expect(await signIns(route, 'decoy@example.test', 10)).toEqual([...times(9, 401), 429])
   })
 
-  it("strips every Set-Cookie from Better Auth's answers, the rest of the answer kept", async () => {
+  it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
     const body = JSON.stringify({ token: 'raw-token' })
-    const { route } = mounted(() => {
+    const { route, clock } = mountedOnFakeAuth(() => {
       const headers = new Headers({ 'content-type': 'application/json' })
 
       headers.append('Set-Cookie', 'better-auth.session_token=signed; Path=/; HttpOnly')
@@ -479,26 +500,43 @@ describe('authHandler', () => {
 
       return new Response(body, { status: 200, headers })
     })
+    const response = await route(signIn('ann@example.test'), FROM)
 
-    for (const request of [signUp(), signIn('ann@example.test')]) {
-      const response = await route(request, FROM)
+    expect(response?.status).toBe(200)
+    expect(response?.headers.getSetCookie()).toEqual([])
+    expect(response?.headers.has('set-cookie')).toBe(false)
+    expect(response?.headers.get('content-type')).toBe('application/json')
+    expect(await response?.text()).toBe(body)
 
-      expect(response?.status).toBe(200)
-      expect(response?.headers.getSetCookie()).toEqual([])
-      expect(response?.headers.has('set-cookie')).toBe(false)
-      expect(response?.headers.get('content-type')).toBe('application/json')
-      expect(await response?.text()).toBe(body)
-    }
+    // A sign-up answers the mount's own 202: nothing of Better Auth's answer, its cookies included.
+    const up = route(signUpRequest(ANN), FROM)
+
+    await clock.advance(SIGN_UP_FLOOR_MS)
+
+    const signedUp = await up
+
+    expect(signedUp?.status).toBe(202)
+    expect(signedUp?.headers.has('set-cookie')).toBe(false)
+    expect(await signedUp?.text()).toBe('')
   })
 
   it("reaches Better Auth's sign-up and sign-in from the path the gateway receives", async () => {
-    const { send } = await overBetterAuth()
-    const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
-    const up = await send('POST', '/auth/sign-up/email', 'laptop', {
+    const { auth, clock, outbox, send } = await overBetterAuth()
+    const credentials = { email: ANN, password: 'pass-word-1' }
+    const up = send('POST', '/auth/sign-up/email', 'laptop', {
       body: { name: 'Ann', ...credentials },
     })
 
-    expect(up.status).toBe(200)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect(await up).toEqual({ status: 202, text: '', cookies: [] })
+
+    // The account is not verified yet: its right password is refused 403, a wrong one 401.
+    const unverified = await send('POST', '/auth/sign-in/email', 'laptop', { body: credentials })
+
+    expect([unverified.status, JSON.parse(unverified.text)]).toEqual([
+      403,
+      { code: 'EMAIL_NOT_VERIFIED' },
+    ])
     expect(
       (
         await send('POST', '/auth/sign-in/email', 'laptop', {
@@ -507,17 +545,23 @@ describe('authHandler', () => {
       ).status,
     ).toBe(401)
 
+    // Verified through the mail the sign-up sent, the account signs in.
+    await auth.api.verifyEmail({
+      query: { token: linkToken(await outbox.next(ANN)) },
+      headers: deviceHeaders('laptop'),
+    })
+
     const again = await send('POST', '/auth/sign-in/email', 'laptop', { body: credentials })
 
     expect(again.status).toBe(200)
     // Better Auth answers the raw session token in the body, and no cookie reaches the client.
     expect(signedIn.safeParse(JSON.parse(again.text)).success).toBe(true)
-    expect([up.cookies, again.cookies]).toEqual([[], []])
+    expect(again.cookies).toEqual([])
   })
 
   it('keeps a locked email locked when a sign-in body names it only when read as a form', async () => {
-    const { send } = await overBetterAuth()
-    const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
+    const { auth, send } = await overBetterAuth()
+    const credentials = { email: ANN, password: 'pass-word-1' }
     const signIn = (body: object | string, contentType?: string, from = FROM) =>
       send('POST', '/auth/sign-in/email', 'laptop', {
         body,
@@ -525,7 +569,7 @@ describe('authHandler', () => {
         ...(contentType === undefined ? {} : { contentType }),
       })
 
-    await send('POST', '/auth/sign-up/email', 'laptop', { body: { name: 'Ann', ...credentials } })
+    await signUpOn(auth, ANN, deviceHeaders('laptop'))
 
     for (let n = 0; n < 10; n += 1) {
       expect((await signIn({ ...credentials, password: 'wrong-pass-word' })).status).toBe(401)
@@ -567,7 +611,7 @@ describe('authHandler', () => {
       }
     }
 
-    // The laptop's token went to the laptop's own sign-up answer only.
+    // The laptop's token went to the laptop's own sign-in answer only.
     expect(answers.filter((answer) => answer.includes(laptop))).toEqual([answers[0]])
   })
 
@@ -595,7 +639,7 @@ describe('authHandler', () => {
     const closing = new Promise<void>((resolve) => {
       release = resolve
     })
-    const { route, closes } = mounted(
+    const { route, closes } = mountedOnFakeAuth(
       () => Response.json({ token: 'raw-token', user: { id: ann } }),
       closing,
     )
@@ -615,14 +659,20 @@ describe('authHandler', () => {
     expect(await (await answer)?.json()).toEqual({ token: 'raw-token', user: { id: ann } })
   })
 
-  it("closes the device's sockets once a sign-up is answered too", async () => {
+  it('closes no socket for a sign-up Better Auth accepted: it signs nothing in', async () => {
     const ann = identityIdFactory.create()
-    const { route, closes } = mounted(() =>
+    const { route, closes, clock } = mountedOnFakeAuth(() =>
       Response.json({ token: 'raw-token', user: { id: ann } }),
     )
+    const request = signUpRequest(ANN)
 
-    expect((await route(signUp(), FROM))?.status).toBe(200)
-    expect(closes).toEqual([[ann, 'laptop', SUPERSEDED]])
+    request.headers.set('x-perch-device', 'laptop')
+
+    const up = route(request, FROM)
+
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
+    expect(closes).toEqual([])
   })
 
   it('closes nothing for a sign-in Better Auth refused, or an answer that names no identity or no device', async () => {
@@ -635,7 +685,7 @@ describe('authHandler', () => {
     ]
 
     for (const answer of answers) {
-      const { route, closes } = mounted(answer)
+      const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
 
       expect(response?.status).toBe(answer().status)
@@ -643,44 +693,53 @@ describe('authHandler', () => {
       expect(closes).toEqual([])
     }
 
-    // A sign-up that names no device: Better Auth refuses it, and a stand-in that does not closes
+    // A sign-in that names no device: Better Auth refuses it, and a stand-in that does not closes
     // nothing all the same.
-    const { route, closes } = mounted(() =>
+    const { route, closes } = mountedOnFakeAuth(() =>
       Response.json({ token: 'raw-token', user: { id: ann } }),
     )
-    const unnamed = new Request('http://gateway.test/auth/sign-up/email', { method: 'POST' })
+    const unnamed = new Request('http://gateway.test/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: ANN, password: 'pass-word-1' }),
+    })
 
     expect((await route(unnamed, FROM))?.status).toBe(200)
     expect(closes).toEqual([])
   })
 
-  it('closes the sockets of the device each sign-up and sign-in Better Auth accepts, and none for wrong credentials', async () => {
-    const { send, closes } = await overBetterAuth()
-    const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
-    const up = await send('POST', '/auth/sign-up/email', 'laptop', {
+  it('closes the sockets of the device each sign-in Better Auth accepts, and none for a sign-up or wrong credentials', async () => {
+    const { auth, clock, outbox, send, closes } = await overBetterAuth()
+    const credentials = { email: ANN, password: 'pass-word-1' }
+    const up = send('POST', '/auth/sign-up/email', 'laptop', {
       body: { name: 'Ann', ...credentials },
     })
-    const ann = z.object({ user: z.object({ id: z.string() }) }).parse(JSON.parse(up.text)).user.id
 
-    expect(closes).toEqual([[ann, 'laptop', SUPERSEDED]])
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up).status).toBe(202)
+    expect(closes).toEqual([])
+    await auth.api.verifyEmail({
+      query: { token: linkToken(await outbox.next(ANN)) },
+      headers: deviceHeaders('laptop'),
+    })
 
     const wrong = await send('POST', '/auth/sign-in/email', 'phone', {
       body: { ...credentials, password: 'wrong-pass-word' },
     })
 
     expect(wrong.status).toBe(401)
-    expect(closes).toHaveLength(1)
-    expect((await send('POST', '/auth/sign-in/email', 'phone', { body: credentials })).status).toBe(
-      200,
-    )
-    expect(closes).toEqual([
-      [ann, 'laptop', SUPERSEDED],
-      [ann, 'phone', SUPERSEDED],
-    ])
+    expect(closes).toEqual([])
+
+    const right = await send('POST', '/auth/sign-in/email', 'phone', { body: credentials })
+    const ann = z.object({ user: z.object({ id: z.string() }) }).parse(JSON.parse(right.text))
+      .user.id
+
+    expect(right.status).toBe(200)
+    expect(closes).toEqual([[ann, 'phone', SUPERSEDED]])
   })
 
   it('leaves a path outside /auth/ to the other routes', async () => {
-    const { route, received } = mounted(status(200))
+    const { route, received } = mountedOnFakeAuth(status(200))
 
     for (const path of ['/devices', '/organisations', '/auth', '/authority/sign-in', '/health']) {
       expect(await route(new Request(`http://gateway.test${path}`), FROM)).toBeUndefined()
@@ -691,7 +750,7 @@ describe('authHandler', () => {
 })
 
 describe('authHandler over Better Auth: nothing of an address or a token on stderr, in a log or in an answer', () => {
-  /** An address signed up through the mount, and a failure that names it with a token. */
+  /** An address signed up and verified, and a failure that names it with a token. */
   const EMAIL = 'marker-ann@example.test'
   const FAILURE = `MARKER the directory failed for ${EMAIL} with tok_MARKER_0123`
   const MARKED = /MARKER|marker-ann/i
@@ -709,13 +768,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
         }),
     })
 
-    expect(
-      (
-        await mounted.send('POST', '/auth/sign-up/email', 'laptop', {
-          body: { name: 'Ann', ...credentials },
-        })
-      ).status,
-    ).toBe(200)
+    await signUpOn(mounted.auth, EMAIL, deviceHeaders('laptop'))
 
     return { ...mounted, failure }
   }

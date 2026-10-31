@@ -1,7 +1,8 @@
 /**
  * The set-ups of the auth mount's specs: the mount over a stand-in for Better Auth, or over a real
  * instance on an embedded directory with the gateway's sessions, limits, sockets and turns; an
- * account with its verification link; a connection that records its closes; and what a run prints.
+ * account with its verification link; a sign-up and a resend as the web sends them; a connection
+ * that records its closes; and what a run prints.
  */
 
 import { inspect } from 'node:util'
@@ -22,7 +23,6 @@ import {
   deviceHeaders,
   type OpenAuthOptions,
   openAuth,
-  signUpOn,
 } from '../../__fixtures__/auth-instance'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
@@ -30,6 +30,9 @@ import { type AuthMountDeps, authHandler } from '../mount'
 
 /** The account most specs sign up and verify. */
 export const ANN = 'ann@example.test'
+
+/** The front's origin, which the browser names on every request. */
+export const ORIGIN = 'http://localhost'
 
 /** A close the mount asked the registry for: the identity, the device and the code. */
 export type Close = readonly [IdentityId, string | undefined, number]
@@ -86,7 +89,7 @@ export const noSessions: AuthMountDeps['sessions'] = {
  * The mount over a stand-in answering `answer`, with real limits on a manual clock and a stand-in
  * registry whose closes resolve once `closing` does.
  */
-export function mounted(answer: (request: Request) => Response, closing?: Promise<void>) {
+export function mountedOnFakeAuth(answer: (request: Request) => Response, closing?: Promise<void>) {
   const clock = manualClock(1_000)
   const fake = fakeAuth(answer)
   const { closes, connections } = fakeConnections(closing)
@@ -176,8 +179,8 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
 }
 
 /**
- * Signs `email` up (Ann, on `laptop`, unverified), asks Better Auth for the verification mail
- * again, and answers the token of the link it carries.
+ * Signs `email` up (Ann, on `laptop`), which signs nothing in and mails the account its link, and
+ * answers the token of that link: the account stays unverified until a test opens it.
  */
 export async function annsLink(outbox: Outbox, email = ANN): Promise<string> {
   const auth = INSTANCES.get(outbox)
@@ -188,10 +191,30 @@ export async function annsLink(outbox: Outbox, email = ANN): Promise<string> {
 
   const seen = outbox.to(email).length
 
-  await signUpOn(auth, email, deviceHeaders('laptop'))
-  await auth.api.sendVerificationEmail({ body: { email }, headers: deviceHeaders('laptop') })
+  await auth.api.signUpEmail({
+    body: { name: 'Ann', email, password: 'pass-word-1', locale: 'en' },
+    headers: deviceHeaders('laptop'),
+  })
 
   return linkToken(await outbox.next(email, seen))
+}
+
+/** A sign-up of `email`, as the web sends it from the front's origin. */
+export function signUpRequest(email: string): Request {
+  return new Request('http://gateway.test/auth/sign-up/email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: ORIGIN },
+    body: JSON.stringify({ name: 'Ann', email, password: 'pass-word-1', locale: 'en' }),
+  })
+}
+
+/** A resend of the verification mail to `email`, as the web sends it from the front's origin. */
+export function resendRequest(email: string): Request {
+  return new Request('http://gateway.test/auth/send-verification-email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: ORIGIN },
+    body: JSON.stringify({ email }),
+  })
 }
 
 /** A sync connection that records the codes it is closed with. */

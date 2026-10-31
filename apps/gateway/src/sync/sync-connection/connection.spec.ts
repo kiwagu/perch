@@ -181,7 +181,7 @@ async function openGateway(options: GatewayOptions = {}) {
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
-  /** The gateway's mount of Better Auth's sign-up and sign-in, over the same registry. */
+  /** The gateway's mount of Better Auth's sign-in, over the same registry. */
   const authRoute = authHandler({
     auth: opened.auth,
     sessions,
@@ -214,7 +214,10 @@ async function openGateway(options: GatewayOptions = {}) {
 
       return response?.status
     },
-    /** Signs `email` up on `device`: the identity, and the raw session token the sign-up gave. */
+    /**
+     * Signs `email` up and verifies it on `device`: the identity, and the raw token of the session
+     * the verification signed in.
+     */
     signUp: async ({ email }: { readonly email: string }, device: string = DEVICE) => {
       const { token, user } = await signUpOn(opened.auth, email, deviceHeaders(device))
 

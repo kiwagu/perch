@@ -11,7 +11,7 @@ import { readSchema } from '@workspace/data/testing'
 import { idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
-import { deviceHeaders } from '../auth/__fixtures__/auth-instance'
+import { deviceHeaders, mailsOf, signUpOn } from '../auth/__fixtures__/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { Outbox } from '../mail/__fixtures__/outbox'
 
@@ -33,17 +33,21 @@ const rootOptions = {
   mail: new Outbox(),
 } as const
 
-/** Signs Ann up on her laptop through the root's Better Auth: her identity and raw token. */
+/**
+ * Signs Ann up on her laptop through the root's Better Auth and verifies her email through the
+ * mail it sent, which signs the laptop in: her identity and raw token.
+ */
 async function signUpAnn(root: GatewayRoot) {
-  const { token, user } = await root.auth.api.signUpEmail({
-    body: { name: 'Ann', ...ann },
-    headers: deviceHeaders(laptop.id, laptop.label),
-  })
+  mailsOf(root.auth, rootOptions.mail)
 
-  return {
-    identity: idSchemas.identity.schema.parse(user.id),
-    token: token ?? expect.unreachable('the sign-up answered a session token'),
-  }
+  const { token, user } = await signUpOn(
+    root.auth,
+    ann.email,
+    deviceHeaders(laptop.id, laptop.label),
+    { password: ann.password },
+  )
+
+  return { identity: idSchemas.identity.schema.parse(user.id), token }
 }
 
 describe('createGatewayRoot', () => {

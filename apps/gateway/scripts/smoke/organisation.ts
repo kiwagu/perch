@@ -1,11 +1,12 @@
 import { noteIdFactory } from '@workspace/ids'
+import type { Mailbox } from '@workspace/mailbox'
 import { RegionDoc } from '@workspace/replica'
 import { CLOSE, type Membership, membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { noteCreate, noteDelete, noteUpdate } from '../../src/sync/__fixtures__/note'
 
-import { callAs, postCredentials, type SignedIn } from './http'
+import { callAs, postCredentials, type SignedIn, signUp } from './http'
 import { refusedWriteSteps } from './refused-writes'
 import {
   check,
@@ -44,6 +45,7 @@ function rolesOf(memberships: readonly Membership[]): string {
  */
 export async function organisationSteps(
   base: string,
+  mailbox: Mailbox,
   opened: Opened,
   owner: SignedIn,
   ownerCredentials: { readonly email: string; readonly password: string },
@@ -62,7 +64,7 @@ export async function organisationSteps(
   })
 
   const guest: SignedIn = await step('signed up a second identity: no memberships', async () => {
-    const signedUp = await postCredentials(base, '/auth/sign-up/email', {
+    const signedUp = await signUp(base, mailbox, {
       email: `smoke-${crypto.randomUUID()}@example.test`,
       password: crypto.randomUUID(),
       device: { id: 'smoke-guest-device', label: 'Smoke guest' },

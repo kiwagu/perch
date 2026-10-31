@@ -15,7 +15,13 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
-import { AUTH_SECRET, AUTH_URL, deviceHeaders, signUpOn } from '../auth/__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  AUTH_URL,
+  deviceHeaders,
+  mailsOf,
+  signUpOn,
+} from '../auth/__fixtures__/auth-instance'
 import { createAuthInstance } from '../auth/auth-instance'
 import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
 import { DIRECTORY, NAMESPACE } from '../config'
@@ -57,8 +63,12 @@ function refused(code: OrganisationRefusalCode) {
   return { kind: 'refused', code }
 }
 
-/** Signs an identity up through Better Auth over the directory, as the gateway does. */
+/**
+ * Signs an identity up through Better Auth over the directory, as the gateway does, and verifies
+ * it through the mail the sign-up sent.
+ */
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
+  const outbox = new Outbox()
   const auth = createAuthInstance({
     local: directory,
     secret: AUTH_SECRET,
@@ -66,9 +76,12 @@ async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
     trustedOrigins: [new URL(AUTH_URL).origin],
     clock: manualClock(),
     publicUrl: new URL(AUTH_URL).origin,
-    mail: new Outbox(),
+    mail: outbox,
     log: { error: () => {}, warn: () => {} },
   })
+
+  mailsOf(auth, outbox)
+
   const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
 
   return { id: idSchemas.identity.schema.parse(user.id), email: user.email }

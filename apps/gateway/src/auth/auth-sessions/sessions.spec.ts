@@ -47,11 +47,13 @@ function callerOf(read: SessionRead): SessionCaller {
   return read.kind === 'session' ? read.caller : expect.unreachable(`a session, read ${read.kind}`)
 }
 
-/** Signs Ann up on her laptop and has her verification mail sent: the token of its link. */
+/**
+ * Signs Ann up on her laptop, which signs nothing in and mails her the verification link: the
+ * token of its link.
+ */
 async function annsLinkToken(opened: Awaited<ReturnType<typeof harness>>): Promise<string> {
-  await signUpOn(opened.auth, 'ann@example.test', deviceHeaders('laptop'))
-  await opened.auth.api.sendVerificationEmail({
-    body: { email: 'ann@example.test' },
+  await opened.auth.api.signUpEmail({
+    body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
     headers: deviceHeaders('laptop'),
   })
 
@@ -96,13 +98,16 @@ describe('AuthSessions', () => {
 
   it('reads no session for the signed form of a token, which no ending would match', async () => {
     const { auth, sessions } = await harness()
-    const { headers, response } = await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+
+    await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    const { headers, response } = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'pass-word-1' },
       headers: deviceHeaders('laptop'),
       returnHeaders: true,
     })
     const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
-    const raw = response.token ?? expect.unreachable('a raw token')
+    const raw = response.token
 
     // Better Auth takes either form; the gateway ends a session by its raw token only.
     expect(signed.startsWith(`${raw}.`)).toBe(true)

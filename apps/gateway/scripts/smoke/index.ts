@@ -7,5 +7,6 @@ export {
   type NamedDevice,
   postCredentials,
   type SignedIn,
+  signUp,
 } from './http'
 export { runSmoke } from './run'
