@@ -44,7 +44,11 @@ modeling stage.
   names no email, another account saved on the browser refuses it (`data:OTHER_ACCOUNT`) only
   once the gateway answered, and its new token is left to sign out. A link verified before signs
   nothing in (`verified-before`), and a refused one fails as `data:LINK_EXPIRED` or
-  `data:LINK_INVALID`, naming no token. `resendVerification(email)` asks
+  `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
+  this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
+  start is kept in `perch.session.account-start` (the identity, the name and the sign-up
+  language) until its settings and its profile both exist, finished each time that identity's
+  space opens here again, and forgotten when the browser signs out. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
   the session. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named

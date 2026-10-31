@@ -9,10 +9,14 @@ profile is the account's face, the settings what the app is like for it (today i
 never read by anyone else. Layers:
 `domain/` holds the profile entity (schema and bounds) and one file per rule
 (`profile-name.rule.ts`, `profile-bio.rule.ts`); `application/` the `SignInService` over the
-session port, the `VerifyEmailService` over the session port and the profile and settings
-services (it exchanges a verification link's token, and the first verification, which signs
-this device in, creates the account's settings in the language it signed up in, then its profile
-with the name it signed up with; a link verified before creates nothing), the `ProfileService`
+session port, the `VerifyEmailService` over the session port and the account's start (it
+exchanges a verification link's token; the first verification, which signs this device in,
+starts the account there, and a link verified before starts nothing), the `AccountStartService`
+over the profile and settings services (the account's settings in the language it signed up in,
+then its profile with the name it signed up with, each created only where the device holds none,
+under an id derived from the identity, so the account never has two; the start is kept on the
+browser until both exist and finished when the account's space opens there again, and the
+composition root provides the service app-wide and runs that finish), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
@@ -53,7 +57,8 @@ keeps the codes of the page's error and message) and one file per policy
   verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
-  is provided app-wide by the composition root, since the frame reads and stores the settings too.
+  is provided app-wide by the composition root, since the frame reads and stores the settings too,
+  and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in`, `user.verify-email` and `user.profile` in
   `contract/domain/screens/sign-in.yaml`, `contract/domain/screens/verify-email.yaml` and

@@ -34,8 +34,7 @@ type Exchange = ReturnType<SessionPort['verifyEmail']>
 
 /**
  * A verification service over a session that answers each exchange of a token in turn, the last
- * answer again for any later one, and counts them; the account's settings and profile it creates
- * are counted too.
+ * answer again for any later one, and counts them; the accounts it starts are counted too.
  */
 function verifying(answers: readonly (() => Exchange)[]) {
   const exchange = vi.fn((_token: string): Exchange => {
@@ -44,26 +43,19 @@ function verifying(answers: readonly (() => Exchange)[]) {
     return answer ? answer() : expect.unreachable('an answer')
   })
   const resend = vi.fn((_email: string) => okAsync(undefined))
-  const created: string[] = []
+  const started: string[] = []
   const service = new VerifyEmailService(
     { verifyEmail: exchange, resendVerification: resend },
     {
-      createProfile: () => {
-        created.push('profile')
-
-        return okAsync(undefined)
-      },
-    },
-    {
-      createSettings: () => {
-        created.push('settings')
+      start: (user) => {
+        started.push(user.id)
 
         return okAsync(undefined)
       },
     },
   )
 
-  return { service, exchange, resend, created }
+  return { service, exchange, resend, started }
 }
 
 /** The notice the frame shows, by its code. */
@@ -123,7 +115,7 @@ const noticeCode = () => document.querySelector('p[data-code]')?.getAttribute('d
 
 describe('VerifyEmailContainer', () => {
   it('exchanges the token of the address once, though StrictMode starts its machine again, and lands on the profile with the welcome', async () => {
-    const { service, exchange, created } = verifying([() => okAsync(signedIn)])
+    const { service, exchange, started } = verifying([() => okAsync(signedIn)])
     const { router } = renderPage(service)
 
     await screen.findByText('profile')
@@ -131,11 +123,11 @@ describe('VerifyEmailContainer', () => {
     expect(router.state.location.pathname).toBe('/me')
     expect(noticeCode()).toBe('welcome')
     expect(exchange).toHaveBeenCalledExactlyOnceWith('the-token')
-    expect(created).toEqual(['settings', 'profile'])
+    expect(started).toEqual([ann.id])
   })
 
   it('asks afresh when the page is opened again with the same token, after a visit that ended', async () => {
-    const { service, exchange, created } = verifying([
+    const { service, exchange, started } = verifying([
       () => okAsync(signedIn),
       () => okAsync(verifiedBefore),
     ])
@@ -153,7 +145,7 @@ describe('VerifyEmailContainer', () => {
       '/sign-in',
     )
     expect(exchange).toHaveBeenCalledTimes(2)
-    expect(created).toEqual(['settings', 'profile'])
+    expect(started).toEqual([ann.id])
   })
 
   it('keeps no failed exchange: opened again, the page asks again and shows the new answer', async () => {

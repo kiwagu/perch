@@ -1,5 +1,5 @@
 import { errAsync, okAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
@@ -8,6 +8,12 @@ import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
+import { ProfileService } from '../features/user/application/profile.service'
+import { SETTINGS_SERVICE } from '../features/user/application/settings/settings.service'
+import {
+  profileCommands,
+  profileShape,
+} from '../features/user/presentation/pages/profile/profile.model.gen'
 import { COMMANDS } from '../platform/commands.port'
 import { DEVICES } from '../platform/devices.port'
 import { ORGANISATIONS } from '../platform/organisations.port'
@@ -20,7 +26,7 @@ import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
-import { type MemoryStorage, memoryStorage, saveDevice } from './storage'
+import { keptAccountStart, type MemoryStorage, memoryStorage, saveDevice } from './storage'
 
 let services: AppServices | undefined
 const cleanups: Array<() => Promise<void>> = []
@@ -242,5 +248,51 @@ describe('createAppRoot', () => {
         body: undefined,
       },
     ])
+  })
+
+  it("finishes, as the saved identity's space opens, the start of its account this browser kept", async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+    // A first verification here created nothing yet when the page went.
+    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'es' })
+
+    const { result } = await boot(storage, [], [])
+
+    services = result._unsafeUnwrap()
+
+    const profiles = new ProfileService(services.runner, services.commands, {
+      shape: profileShape,
+      commands: profileCommands,
+    })
+    const identity = ann.identity.id
+
+    await vi.waitFor(() => expect(keptAccountStart(storage).kept()).toBeUndefined())
+    expect((await services.session.flush()).isOk()).toBe(true)
+    expect(
+      (await services.container.get(SETTINGS_SERVICE).read({ identity }))._unsafeUnwrap(),
+    ).toMatchObject([{ locale: 'es' }])
+    expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
+      { name: 'Ann', email: ann.identity.email },
+    ])
+  })
+
+  it('forgets the kept start once this browser signs out, with the data it held', async () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [])
+
+    services = result._unsafeUnwrap()
+    // Kept for an account whose space this browser does not open: nothing finishes it here.
+    keptAccountStart(storage).keep({
+      identity: identityIdFactory.create(),
+      name: 'Bob',
+      locale: 'en',
+    })
+
+    expect((await services.session.signOut())._unsafeUnwrap()).toBe('signed-out')
+    expect(keptAccountStart(storage).kept()).toBeUndefined()
   })
 })
