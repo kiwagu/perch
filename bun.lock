@@ -245,6 +245,18 @@
         "vitest": "catalog:",
       },
     },
+    "packages/mailbox": {
+      "name": "@workspace/mailbox",
+      "version": "0.1.0",
+      "dependencies": {
+        "@workspace/zod": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/modeling": {
       "name": "@workspace/modeling",
       "version": "0.1.0",
@@ -1152,6 +1164,8 @@
     "@workspace/kernel": ["@workspace/kernel@workspace:packages/kernel"],
 
     "@workspace/logger": ["@workspace/logger@workspace:packages/logger"],
+
+    "@workspace/mailbox": ["@workspace/mailbox@workspace:packages/mailbox"],
 
     "@workspace/modeling": ["@workspace/modeling@workspace:packages/modeling"],
 
