@@ -4,3 +4,5 @@
  */
 
 export { SessionSignIn, type SessionSignInOptions } from './attempts'
+/** The Web Lock every tab's sign-in holds exclusive. */
+export { SIGN_IN_LOCK } from './lock'

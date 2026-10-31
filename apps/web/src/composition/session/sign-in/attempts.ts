@@ -19,11 +19,11 @@ import { deviceIdFrom, forgetDevice, IDENTITY_KEY, saveDevice, savedIdentity } f
 import type { SessionHost } from '../host'
 import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from '../one-account'
 import type { PendingRevoke } from '../pending-revoke'
-import { cleanUpSignIn } from '../sign-in-cleanup'
-import { brokenSignIn, oneSignInAtATime } from '../sign-in-lock'
 import type { SpaceDeletion } from '../space-deletion'
 
+import { cleanUpSignIn } from './cleanup'
 import { closedDuringSignIn } from './closed'
+import { brokenSignIn, oneSignInAtATime } from './lock'
 import { type OpenSpaceDeps, openSpaceOf } from './space'
 
 /** The user a sign-up or sign-in signed in: its `ask` always answers a device, so none is a failure. */

@@ -5,7 +5,7 @@ import type { DataError } from '@workspace/data'
 import type { LockManagerLike } from '@workspace/replica/sync'
 import { FakeLocks } from '@workspace/replica/testing'
 
-import { oneSignInAtATime, SIGN_IN_LOCK } from './sign-in-lock'
+import { oneSignInAtATime, SIGN_IN_LOCK } from './lock'
 
 /** An attempt that throws, its text carrying a token as a broken call might. */
 const throwing = (): ResultAsync<string, DataError> => {

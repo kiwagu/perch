@@ -21,7 +21,7 @@ import {
   savedToken,
 } from '../storage'
 
-import { SIGN_IN_LOCK } from './sign-in-lock'
+import { SIGN_IN_LOCK } from './sign-in'
 
 const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
 const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob' }

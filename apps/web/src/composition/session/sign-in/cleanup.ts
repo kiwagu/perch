@@ -4,9 +4,8 @@
  * live session at the gateway that nobody ends.
  */
 
-import { forgetDevice, type KeyValueStorage, savedToken } from '../storage'
-
-import type { PendingRevoke } from './pending-revoke'
+import { forgetDevice, type KeyValueStorage, savedToken } from '../../storage'
+import type { PendingRevoke } from '../pending-revoke'
 
 /**
  * Lets go of a sign-in's `token`: it goes to be signed out first, then the device a save made is
