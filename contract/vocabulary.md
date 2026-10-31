@@ -114,8 +114,9 @@ The `data-state` of `app-shell.status`.
 
 | State | Meaning |
 |---|---|
-| `opening` | the local data is being opened and no screen is rendered yet |
-| `ready` | the frame and the screen are rendered, so a test may start |
+| `opening` | the app starts: it checks the site storage and who is signed in, and no screen is rendered yet |
+| `opening-data` | the signed-in account's frame and the open screen are rendered while its local data is being opened |
+| `ready` | the frame and the screen are rendered, and a signed-in account's data is open, so a test may start |
 | `failed` | the saved account's data could not be opened, and the frame offers `app-shell.sign-out-here-button` |
 | `storage-blocked` | the browser keeps no site data, so the app stops with a message and shows no sign-in form |
 

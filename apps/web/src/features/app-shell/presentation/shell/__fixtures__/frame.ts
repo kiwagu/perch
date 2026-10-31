@@ -26,8 +26,18 @@ function memorySelfReloads(): SelfReloads {
 
 /** The frame the start makes, already opened: what a page test renders the shell container in. */
 export function openedFrame(options: OpenedFrameOptions = {}): ShellFrame {
+  return startedFrame(undefined, options)
+}
+
+/** The frame of `account`, signed in on this device, started while its data still opens. */
+export function openingFrame(account: string, options: OpenedFrameOptions = {}): ShellFrame {
+  return startedFrame(account, options)
+}
+
+/** The frame the start makes, started: a guest's ready, a signed-in account's opening its data. */
+function startedFrame(account: string | undefined, options: OpenedFrameOptions): ShellFrame {
   const live: ShellLive = {
-    account: undefined,
+    account,
     stored: undefined,
     writes: LocaleWrites.none,
     generation: 0,
@@ -47,7 +57,7 @@ export function openedFrame(options: OpenedFrameOptions = {}): ShellFrame {
     }),
   ).start()
 
-  actor.send({ type: 'platform.opened' })
+  actor.send({ type: 'platform.started' })
 
   return { actor, live }
 }

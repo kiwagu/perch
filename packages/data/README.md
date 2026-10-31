@@ -33,7 +33,8 @@ ids and datetimes do not leave it.
   `openLocalDb({ credentials })` (a root user, or a namespace user when the credentials name
   the namespace), and `wsRpcUrl`, the server's WebSocket RPC endpoint for any of its
   `http(s)://` or `ws(s)://` addresses; `./engines/wasm`: `wasmEngines()`, browser engines in a
-  Web Worker (Vite builds only).
+  Web Worker (Vite builds only); `./engines/wasm-module`: `wasmEngineModule`, the address of
+  the WASM module that worker loads, for a page that fetches it ahead of the engine.
 - `./schema-files`: `readSchema(database)`, the schema of the `directory` or the `tenant`
   database as one text: the common files, then the database's own (Bun and Node).
 - Organisation names: `tenantDatabase(key)` (`t_<key>`) and `tenantRegionId(key)`

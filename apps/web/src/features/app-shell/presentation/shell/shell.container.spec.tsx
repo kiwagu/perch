@@ -25,7 +25,7 @@ import { settingsShape } from '../../../user/application/settings/settings.model
 import { CrashSignal } from '../crash/crash-signal'
 import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
-import { openedFrame } from './__fixtures__/frame'
+import { openedFrame, openingFrame } from './__fixtures__/frame'
 import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
@@ -564,6 +564,71 @@ describe('ShellContainer', () => {
     })
 
     await waitFor(() => expect(screen.queryByTestId('app-shell.sync-message')).toBeNull())
+  })
+
+  it("shows a signed-in account's screen while its data opens, and the platform's messages once open", async () => {
+    const install = memoryInstall()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const frame = openingFrame(ann.id, { install })
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={install}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    expect(screen.getByTestId('app-shell.status').getAttribute('data-state')).toBe('opening-data')
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+
+    act(() => {
+      install.offer('install-offered')
+      services.sync('synced')
+    })
+
+    expect(screen.queryByTestId('app-shell.install-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+
+    act(() => {
+      frame.actor.send({ type: 'platform.opened' })
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.status').getAttribute('data-state')).toBe('ready'),
+    )
+    expect((await screen.findByTestId('app-shell.install-message')).getAttribute('data-code')).toBe(
+      'install-available',
+    )
+    expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe('synced')
+
+    act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'new-version',
+    )
   })
 
   it("reminds to install the app at the browser's offer, puts it off, and installs it", async () => {

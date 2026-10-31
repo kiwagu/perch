@@ -30,13 +30,18 @@ modules' routes.
   and gone after a few seconds or a click); the theme select (`platform/theme.ts`'s
   `useDeviceTheme` gives its value, the machine's `setTheme` the device's choice, at the start, a
   crash or data that failed to open alike), the guest's language select and "Sign out on this
-  device" are enabled while the machine's state takes them. Before the frame is mounted, the shell says where the start is: opening the
-  data, a browser that keeps no site data, or data that could not be opened, which offers
-  "Sign out on this device" when an account is saved.
+  device" are enabled while the machine's state takes them. Before the router renders, the shell says where the start is: starting
+  (`opening`), a browser that keeps no site data, or data that could not be opened, which offers
+  "Sign out on this device" when an account is saved. Once started (`platform.started`), a
+  guest's page renders ready, and a signed-in account's frame and open screen render while its
+  data opens (`opening-data`, until `platform.opened`): the status line says so beside the
+  screen, and what the platform says (a refused change, the sync, an update, the install
+  reminder, a screen that failed to render) reaches the flow only once the data is open, when
+  the container starts listening to it.
 - A screen that fails to render: the router puts `presentation/crash/crash-signal.tsx`
   (`CrashSignal`, handed to `createAppRouter` as `crash` by the start) in the page's place; it
-  raises the frame's platform event `platform.crashed` and keeps the page's `reset` in the
-  frame (`renderAgain`). The frame's flow then shows `app-shell.crash-message` (`screen-crashed`)
+  raises the frame's platform event `platform.crashed`, once the data is open when the page
+  failed while it opened, and keeps the page's `reset` in the frame (`renderAgain`). The frame's flow then shows `app-shell.crash-message` (`screen-crashed`)
   with `app-shell.reload-button` in the screen's place, the navigation, the theme select and the
   language select still around it. Another screen opening (`platform.navigated`, sent when the router starts a
   navigation) takes the message away; a language chosen renders the page again; the reload

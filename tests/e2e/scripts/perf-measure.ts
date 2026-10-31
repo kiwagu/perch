@@ -3,8 +3,9 @@
  * The start's timings against their budgets, on the production build the e2e stand serves
  * (`prepareStand` builds it and brings the stand up first), in Chromium as a Pixel 7 with the
  * CPU slowed four times and the service worker blocked: a guest's first visit (first paint, the
- * page ready) and a signed-in reload, with the browser's cache kept and cleared (first paint,
- * ready, the profile showing the account's data). Each step is timed in the page from the start
+ * page ready) and a signed-in reload, with the browser's cache kept and cleared (first paint, the
+ * profile's screen, whose data may still be opening, ready, the profile showing the account's
+ * data). Each step is timed in the page from the start
  * of its navigation, the moment its element first appears, and each number is the median of
  * the runs. The numbers move with the host's load, so this measures and never fails: the size
  * budgets are the gate (apps/web/build/size-budgets.ts). `--slow-4g` adds a slow mobile network
@@ -27,15 +28,22 @@ declare global {
 }
 
 /** The steps timed by their element, in the order the start reaches them. */
-const STEPS = { ready: APP_READY, profile: '[data-testid="user.profile.heading"]' }
+const STEPS = {
+  screen: '[data-testid="user.profile.status"], [data-testid="user.profile.heading"]',
+  ready: APP_READY,
+  profile: '[data-testid="user.profile.heading"]',
+}
 const PAINT = 'first paint'
 
 const SCENARIOS = [
   { name: 'guest, first visit', budgets: { [PAINT]: 500, ready: 1000 } },
-  { name: 'signed in, reload', budgets: { [PAINT]: undefined, ready: undefined, profile: 1500 } },
+  {
+    name: 'signed in, reload',
+    budgets: { [PAINT]: undefined, screen: undefined, ready: undefined, profile: 1500 },
+  },
   {
     name: 'signed in, cache cleared',
-    budgets: { [PAINT]: undefined, ready: undefined, profile: 1500 },
+    budgets: { [PAINT]: undefined, screen: undefined, ready: undefined, profile: 1500 },
   },
 ] as const
 

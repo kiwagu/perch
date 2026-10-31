@@ -49,7 +49,7 @@ async function boot(
     await server.close()
   })
 
-  const result = await createAppRoot({
+  const start = createAppRoot({
     openLocal: (identity) => {
       opened.push(identity)
 
@@ -91,6 +91,7 @@ async function boot(
     onSyncState: () => {},
     ...overrides,
   })
+  const result = (await start.opened).map(() => start.services)
 
   return { result, opened }
 }
