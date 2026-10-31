@@ -1,7 +1,7 @@
 /**
  * Runs the unit tests of the pre-commit hook in the mode the branch takes. On `main`, the
  * landing, every app machine is held to its whole flow: the command runs without the ahead
- * mode. On a branch a business commit may run ahead of its implementation: the command runs
+ * mode, and so it does on a detached HEAD, which names no branch to run ahead on. On a branch a business commit may run ahead of its implementation: the command runs
  * with `CONTRACT_AHEAD=1` and `CONTRACT_AHEAD_BASE`, the merge base of HEAD and the local
  * `main`, at whose flows a machine may still be. When that merge base cannot be found (no
  * local `main`, or no history shared with it), nothing runs and the hook fails: a branch never
@@ -33,7 +33,9 @@ function git(args: readonly string[]): string | undefined {
 }
 
 function modeOf(): Mode {
-  if (git(['branch', '--show-current']) === LANDING_BRANCH) {
+  const branch = git(['branch', '--show-current'])
+
+  if (branch === LANDING_BRANCH || branch === '') {
     return { kind: 'strict' }
   }
 

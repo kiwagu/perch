@@ -78,6 +78,19 @@ describe('contract-ahead', () => {
     expect(JSON.parse(result.stdout)).toEqual([null, null])
   })
 
+  it('runs the command on a detached HEAD in the strict mode, as on main', () => {
+    const root = checkout('main')
+
+    git(root, 'switch', '-q', '-c', 'feature')
+    commit(root, 'feature')
+    git(root, 'switch', '-q', '--detach', 'HEAD')
+
+    const result = run(root)
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual([null, null])
+  })
+
   it('runs the command on a branch in the ahead mode, at its merge base with main', () => {
     const root = checkout('main')
     const base = git(root, 'rev-parse', 'HEAD')
