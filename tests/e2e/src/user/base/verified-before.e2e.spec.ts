@@ -44,7 +44,7 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
     await test.step('4. Click [user.verify-email.sign-in-link]', async () => {
       await page.getByTestId('user.verify-email.sign-in-link').click()
       // Expected: After step 4 the URL is [/sign-in]
-      await expect(page).toHaveURL(/\/sign-in$/)
+      await expectPathname(page, '/sign-in')
     })
   })
 })
