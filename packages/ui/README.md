@@ -36,7 +36,8 @@ than its portal or overlay. A control that is not a test target carries a
 - `./components/platform/*`: props-driven building blocks of the application shell.
   - `AppShell`: the page frame (brand, actions, status, the navigation as a bottom bar on
     small screens and a side rail from `lg`); `navigationTestId` is the anchor of its
-    `<nav>`.
+    `<nav>`. Without `navigation` it renders no `<nav>`, and the page takes the whole width
+    with no room kept for the bar.
   - `OptionSelect`: a labelled choice between a few options; `testId` marks the trigger, and
     each option carries the derived `<testId>.option` with its value as `data-value`.
   - `ConfirmDialog`: a modal question with one action and a way back (`title`,

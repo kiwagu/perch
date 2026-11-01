@@ -32,13 +32,13 @@ test.describe('Open a verification link a second time', { tag: '@smoke' }, () =>
     await test.step('3. Open the link of the same [mail:sign-up] again', async () => {
       await openMailLink(page, mail, 'sign-up')
       // Expected: After step 3 [user.verify-email.message] carries [code:verified-before], the
-      //   URL stays [/verify-email] and [app-shell.nav.sign-in-link] shows
+      //   URL stays [/verify-email] and [user.verify-email.sign-in-link] shows
       await expect(page.getByTestId('user.verify-email.message')).toHaveAttribute(
         'data-code',
         'verified-before',
       )
       await expectPathname(page, '/verify-email')
-      await expect(page.getByTestId('app-shell.nav.sign-in-link')).toBeVisible()
+      await expect(page.getByTestId('user.verify-email.sign-in-link')).toBeVisible()
     })
 
     await test.step('4. Click [user.verify-email.sign-in-link]', async () => {
