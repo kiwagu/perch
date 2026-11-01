@@ -79,7 +79,8 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   // The device routes come first: `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` are
   // theirs; the auth mount answers every other path under `/auth/`, handing Better Auth only its
-  // sign-up, sign-in, verification and resend.
+  // sign-up, sign-in, verification and resend, and answering the recovery and the changes of a
+  // password and an email itself.
   const routes: readonly Route[] = [
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
@@ -89,6 +90,10 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
     authHandler({
       auth: root.auth,
       sessions: root.sessions,
+      passwords: root.passwords,
+      resets: root.resets,
+      emailChanges: root.emailChanges,
+      mails: root.mails,
       limits: root.limits,
       connections: root.connections,
       clock: root.clock,

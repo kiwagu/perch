@@ -11,6 +11,9 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { linkToken, Outbox } from '../../mail/__fixtures__/outbox'
+import { EmailChanges, ResetLinks } from '../account-links'
+import { AccountMails } from '../account-mails'
+import { AccountPasswords } from '../account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth-instance'
 import type { AuthLog } from '../auth-log'
 import { DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
@@ -41,6 +44,8 @@ export interface AuthLogLine {
 export interface OpenedAuth {
   readonly auth: AuthInstance
   readonly local: LocalDb
+  /** Where the instance's log lines go, as the gateway's mails log theirs too. */
+  readonly log: AuthLog
   /** The clock of the session hooks; a test moves it to mark when an ending happens. */
   readonly clock: ManualClock
   /** Where the instance's mails go, oldest first. */
@@ -83,7 +88,30 @@ export async function openAuth(options: OpenAuthOptions = {}): Promise<OpenedAut
 
   OUTBOXES.set(auth, outbox)
 
-  return { auth, local, clock, outbox, logs, close: () => local.close() }
+  return { auth, local, log, clock, outbox, logs, close: () => local.close() }
+}
+
+/**
+ * The gateway's services of passwords, account links and account mails over an instance the
+ * fixture opened: its directory, its clock, its outbox and its log, as the composition root builds
+ * them over the gateway's own.
+ */
+export function accountServicesOf(opened: OpenedAuth) {
+  return {
+    passwords: new AccountPasswords({ auth: opened.auth, directory: opened.local }),
+    resets: new ResetLinks(opened.local),
+    emailChanges: new EmailChanges({
+      directory: opened.local,
+      secret: AUTH_SECRET,
+      clock: opened.clock,
+    }),
+    mails: new AccountMails({
+      mail: opened.outbox,
+      directory: opened.local,
+      publicUrl: ORIGIN,
+      log: opened.log,
+    }),
+  }
 }
 
 /** Names where the mails of an instance the fixture did not open go (a gateway root's). */

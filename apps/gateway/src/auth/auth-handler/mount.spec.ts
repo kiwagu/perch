@@ -9,6 +9,7 @@ import { RequestLimits } from '../../limits/request-limits'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
+  accountServicesOf,
   deviceHeaders,
   type OpenAuthOptions,
   openAuth,
@@ -46,7 +47,11 @@ const UNSERVED = [
   '/get-session',
   '/sign-out',
   '/update-user',
-  '/change-password',
+  // Better Auth's own reset link, a GET that redirects with the token, and its server-only
+  // endpoints of a password: the gateway answers the reset and the change itself.
+  '/reset-password/reset-token-0123456789abcdef',
+  '/verify-password',
+  '/set-password',
   '/delete-user',
   '/token',
   '/jwks',
@@ -107,6 +112,7 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
   const route = authHandler({
     auth: opened.auth,
     sessions: noSessions,
+    ...accountServicesOf(opened),
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
@@ -275,6 +281,11 @@ describe('authHandler', () => {
       // Better Auth's own verification is a GET with the token in its URL: never served so.
       ['GET', '/auth/verify-email?token=a.link.token'],
       ['GET', '/auth/send-verification-email'],
+      ['GET', '/auth/request-password-reset'],
+      ['GET', '/auth/reset-password?token=reset-token-0123456789abcdef'],
+      ['GET', '/auth/change-password'],
+      ['GET', '/auth/change-email'],
+      ['GET', '/auth/confirm-email?token=a.link.token'],
     ] as const) {
       const response = await route(new Request(`http://gateway.test${path}`, { method }), FROM)
 

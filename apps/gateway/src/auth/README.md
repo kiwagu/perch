@@ -69,13 +69,18 @@ directory connection themselves: Better Auth's adapter writes only the fields of
 so it would drop `ended_at`, which is the gateway's column. A delete
 of several rows at once would stop at the first refusal, so Better Auth's bulk endings
 (`/revoke-sessions`, `/revoke-other-sessions`) and `/change-password`, which ends the other
-sessions that way, are switched off in the instance (`auth-instance.ts`). Rows whose session
-ended 30 days ago or more are forgotten when the identity's devices are listed next.
+sessions that way when asked to, are switched off in the instance's HTTP handler
+(`auth-instance.ts`); the gateway calls the change through `auth.api` without that and ends the
+other sessions itself (`AuthSessions.revokeOthers`). Rows whose session ended 30 days ago or more
+are forgotten when the identity's devices are listed next.
 
 Better Auth's handler is mounted behind an allowlist (`auth-handler/`). Of the paths under
 `/auth/`, only `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email`
-and `POST /auth/send-verification-email` reach it; every other path answers 404 `not-found`
-without asking it, and another method on those four answers 405 with `Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
+and `POST /auth/send-verification-email` reach it, and the mount answers five more itself,
+calling Better Auth on the server where it needs it: `POST /auth/request-password-reset`,
+`POST /auth/reset-password`, `POST /auth/change-password`, `POST /auth/change-email` and
+`POST /auth/confirm-email` (below). Every other path answers 404 `not-found` without asking
+Better Auth, and another method on those nine answers 405 with `Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
 sessions with every token, another ends a session without closing its device's sockets. Better
 Auth serves its routes only under its public URL, `<GATEWAY_PUBLIC_URL>/backend/auth`, and trusts
 requests from that origin only; the front strips its `/backend` prefix, so the mount puts it back
@@ -176,6 +181,85 @@ which answers alike, after the same floor of 500 ms, for an unverified, a verifi
 email, and mails only the unverified one. The mount answers every resend it lets through 202 with
 no body, the same headers whatever the email.
 
+A password is recovered through a reset link. `POST /auth/request-password-reset` `{ email }`
+takes one of its client address's 200 mails in 15 minutes (the budget sign-ups and resends
+share) and one of the email's 3 reset mails in 15 minutes, whatever the email (429 when either
+is spent), then, in the account's turn by the email in lower case, asks Better Auth
+(`AccountPasswords.requestReset`): for an email that has an account, it keeps a link in
+`verification` (`reset-password:<token>`, the identity's key as its value, an hour of life,
+`RESET_LINK_LIFETIME_S`) and calls `resetMailer` (`reset-mail.ts`), which ends the account's
+earlier links first, so only the newest works, then starts the reset mail to the front's
+`/reset-password?token=…` (`AccountMails.resetPassword`). Every request it took answers 202 with
+no body, no sooner than `RESET_REQUEST_FLOOR_MS` (800 ms) after it began, alike for any email; one
+whose email is not an email answers 400. `POST /auth/reset-password` `{ token, password }` takes
+one of its address's 20 attempts in 10 minutes first, refused or not (429), then answers 400
+`password-rejected` for a password that breaks the rules of a new password, the link kept; 401
+`link-invalid` for a token no link holds (unknown, used, or replaced by a newer link), 401
+`link-expired` for a link past its hour on the gateway's clock. Better Auth's own reset is not
+used: it spends a link inside a transaction through a call SurrealDB's adapter lacks. In the
+account's turn by its identity, the gateway spends the link itself (`ResetLinks.claim`, once
+however many resets run at once; 401 `link-invalid` for the one that finds it gone) and sets the
+password on the credential row, hashed as Better Auth hashes one (`AccountPasswords.set`). Then
+every session of the account ends, the request's own session too when it is one of them, the
+account's sockets close with 4002 (`CLOSE.passwordChanged`, `signed out because the password
+changed`), every reset link and the pending change of its email end, and the notice of a changed
+password starts (`afterPasswordChange`): 204 with no body, and nothing is signed in. Better Auth's
+clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
+expired, not unknown: an account keeps one reset link and one pending change of its email at
+most, each replaced by the next.
+
+A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
+password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
+`unauthorized` for a token that holds no live session of it). It takes one of the address's
+credential checks, answers 400 `password-rejected` for a new password that breaks the rules,
+and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
+(429 when they are spent): a wrong current password keeps its place there and answers 400
+`invalid-credentials`, a right one clears them. In the account's turn, Better Auth checks the
+current password and sets the new one (`AccountPasswords.change`, its `/change-password` through
+`auth.api`, never with `revokeOtherSessions`); then every other session of the account ends and
+the sockets of their devices close with 4002, the caller's own session and sockets staying, every
+reset link and the pending change of its email end, and the notice starts: 204 with no body.
+
+A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
+its token and `X-Perch-Device`. After a credential check of its address, a new email that is not
+an email answers 400 `email-invalid`; then one of the address's mails and one of the account's 3
+changes in 15 minutes are taken (429), and the password must find a place among the account's
+failed sign-ins, a wrong one answering 400 `invalid-credentials` (`AccountPasswords.matches`,
+Better Auth's `/verify-password` through `auth.api`). In the account's turn its earlier pending
+change ends; when no account has the new email (the account's own counts as taken), a new change
+is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
+key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
+`/confirm-email?token=…` (`AccountMails.confirmEmail`). The token is a JWT naming the identity,
+its email and the new one, the `jti` and when it was asked, signed with a key derived from the
+auth secret (`account-links/change-token.ts`), so Better Auth's verification never takes it for
+one of its own, nor the gateway one of Better Auth's for it. Both answer 202 with no body, no
+sooner than `CHANGE_EMAIL_FLOOR_MS` (800 ms) after the request began, so neither the answer nor
+its time tells whether the new email has an account; a taken email gets no mail. Better Auth's own
+`/change-email` is switched off: it mails through the verification mail and signs the device that
+confirms it in. `POST /auth/confirm-email` `{ token }`, with no session needed and none signed
+in, takes one of its address's 20 attempts in 10 minutes first (429), then answers 401
+`link-invalid` for a token the gateway did not sign as a confirmation, 401 `link-expired` for one
+asked a day ago or more on the gateway's clock (`CONFIRMATION_LINK_LIFETIME_MS`). In the turn of
+the account and then of the new email (so no sign-up of the new email runs meanwhile), the
+pending change the token names is spent (`EmailChanges.claim`, once), and the account's email
+becomes the new one only while it is still the email the change was asked from
+(`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
+by a newer one, or ended by a change of the password), when the account's email changed since, or
+when the new email has got an account meanwhile. Once it changed, the notice of a changed email
+starts to the old email, written from the old email, the account's name and language alone
+(`AccountMails.emailChanged`), and it answers 200 `{ identity, email }`, the account whose email
+changed and its new email. Sessions stay: a session's caller reads the account's email afresh,
+so every device's next call and hello sees the new one; the profile the devices show is
+replicated, and the gateway does not write it.
+
+The mails of a reset, a confirmation and the two notices (`account-mails.ts`, written by
+`@workspace/email`) start at once and never hold the request, and speak the account's language,
+as the verification mail does: its settings' once it has settings, its sign-up's before; settings
+that could not be read send nothing (`mail:LOCALE_UNREADABLE`), and a mail that could not be read,
+written or sent is logged by its code, never with its address, its name or its link. A notice of a
+changed password links to the front's `/forgot-password`; the notice of a changed email carries
+no link.
+
 Nothing Better Auth reports reaches a log as it said it. Its logger and its error hook are the
 gateway's (`auth-log.ts`): an error is logged as a code from a fixed table
 (`auth:CREATE_USER_FAILED`, `auth:CREATE_SESSION_FAILED`, `auth:BACKGROUND_TASK_FAILED`, else
@@ -220,13 +304,23 @@ error carries one.
 ## Surface
 
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
-  `POST /auth/send-verification-email`, Better Auth's behind the mount (`authHandler` and
+  `POST /auth/send-verification-email`, Better Auth's behind the mount, and
+  `POST /auth/request-password-reset`, `POST /auth/reset-password`, `POST /auth/change-password`,
+  `POST /auth/change-email` and `POST /auth/confirm-email`, the mount's own (`authHandler` and
   `AuthMountDeps`, `auth-handler/`: the mount, the sign-up and its floor, `SIGN_UP_FLOOR_MS`, the
-  sign-in, the verification and the resend, the close of a device's sockets, and the requests and refusals as Better Auth and
-  the client get them), which one account's turns serialise (`GatewayRoot.accountTurns`, a
-  `KeyedTurns` by the email in lower case); `GET /devices`, `DELETE /devices/:id`,
+  sign-in, the verification and the resend, the request for a reset mail and its floor
+  `RESET_REQUEST_FLOOR_MS` and the reset (`password-reset.ts`), the change of a password
+  (`password-change.ts`), the change of an email and its floor `CHANGE_EMAIL_FLOOR_MS` and its
+  confirmation (`email-change.ts`), what follows a new password (`password-changed.ts`), the
+  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`floor.ts`), the close of a
+  device's sockets, and the requests and refusals as Better Auth and the client get them),
+  which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
+  lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
   `device.routes.ts`).
+- Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
+  a change of the password ended, so the device can tell its person why it was signed out; 4001
+  stays a sign-out from another device.
 - Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
   and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
@@ -234,20 +328,27 @@ error carries one.
   `AUTH_MODELS` and `generateAuthId` (`auth-models.ts`), `hashPassword` and `verifyPassword`
   (`password-hash.ts`), `AuthLog`, `authLogger` and `authErrorReporter` (`auth-log.ts`),
   `verificationMailer`, `verificationLink` and `VERIFY_EMAIL_PATH` (`verification-mail.ts`),
+  `resetMailer` and `RESET_LINK_LIFETIME_S` (`reset-mail.ts`), `AccountMails`,
+  `RESET_PASSWORD_PATH`, `CONFIRM_EMAIL_PATH` and `FORGOT_PASSWORD_PATH` (`account-mails.ts`),
+  `AccountPasswords` (`account-passwords.ts`: `requestReset`, `set`, `change`, `matches`),
+  `ResetLinks` (`read`, `claim`, `endAll`, `keepNewest`) and `EmailChanges` (`ask`, `cancel`,
+  `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) (`account-links/`),
   `accountLocale` (`account-locale.ts`), `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
-  `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`, `identityOf` and
-  `verificationEmail`; `SignedInAccount`), `DeviceSessions` (`device-sessions.ts`: `list`,
+  `signOut`, `revoke`, `revokeAll`, `revokeOthers`, and for a verification `signedIn`,
+  `identityOf` and `verificationEmail`; `SignedInAccount`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
-  organisation routes), `accountEmail` (`account-email.ts`, an email as the invitations take
+  organisation routes, and the caller's email and session row besides), `accountEmail` (`account-email.ts`, an email as the invitations take
   it) and `identityByEmail` (`identity-by-email.ts`: the one lookup of an identity by its email,
   in any case, answering its key and email or none; `AuthSessions.identityOf` and the
   organisations' invites use it, each deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
-  that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
+  that ended 30 days ago, the mark of a device seen, the four endings of `AuthSessions`, the
   ending of all but a device's newest session at a sign-in, the language an account's settings
-  name, and the identity of an email).
+  name, the identity of an email, an identity's email, name and language for a mail, a reset
+  link read, spent and ended, a pending change of the email kept, ended and spent, the move of
+  an identity's email, and a password set on a credential row).
 - Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
   these options.
@@ -262,11 +363,20 @@ error carries one.
   sockets close before a readback that fails, and that every resend answers no sooner than
   Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
-  takes one of its address's verification mails; `auth-instance.spec.ts`, `auth-log.spec.ts`,
+  takes one of its address's verification mails; `auth-handler/password-reset.spec.ts`,
+  `auth-handler/password-change.spec.ts` and `auth-handler/email-change.spec.ts`, which hold the
+  uniform answers and their floors, each limit, the single use, the newest link only, the
+  expiry of a reset link and of a confirmation, the sessions ended with their sockets closed
+  with 4002, every link ended after a reset, a change and a confirmation, the notices with their
+  recipient and language, the old address's notice holding no part of the new email, and that
+  nothing of an email, a token or a password reaches a log; `account-links/reset-links.spec.ts`,
+  `account-links/email-changes.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,
+  `reset-mail.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
 - `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up and the
   verification through the mail in the stand's mailbox, sign-in, the credential limits, the
-  uniform sign-up and resend, the verification's refusals, device sessions and every sign-out
-  against a stand.
+  uniform sign-up and resend, the verification's refusals, the reset of a password through its
+  mail (the uniform request, the link that signs a device out with 4002, the link spent), device
+  sessions and every sign-out against a stand.

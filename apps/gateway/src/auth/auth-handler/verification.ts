@@ -10,14 +10,18 @@ import { SUPERSEDED } from '../../sync/sync-connection'
 import { DEVICE_HEADER } from '../session-hooks'
 
 import type { AuthMountDeps } from './mount'
-import { publicUrl, refusalOf, withJsonBody, withoutCredentials } from './requests'
+import {
+  badRequest,
+  internal,
+  publicUrl,
+  refusalOf,
+  withJsonBody,
+  withoutCredentials,
+} from './requests'
 
 const verifyBody = z.object({ token: z.string().min(1).max(4096) })
 const resendBody = z.object({ email: z.string().min(1).max(320) })
 const linkRefusal = z.object({ code: z.string() })
-
-const badRequest = (): Response => Response.json({ code: 'bad-request' }, { status: 400 })
-const internal = (): Response => Response.json({ code: 'internal' }, { status: 500 })
 
 /**
  * Asks Better Auth for the exchange, holding the account's turn: the identity the token's email

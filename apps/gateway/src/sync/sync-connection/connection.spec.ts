@@ -24,6 +24,7 @@ import { manualClock } from '@workspace/replica/testing'
 
 import {
   AUTH_SECRET,
+  accountServicesOf,
   deviceHeaders,
   openAuth,
   signUpOn,
@@ -185,6 +186,7 @@ async function openGateway(options: GatewayOptions = {}) {
   const authRoute = authHandler({
     auth: opened.auth,
     sessions,
+    ...accountServicesOf(opened),
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,

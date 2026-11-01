@@ -18,6 +18,9 @@ import { createLogger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { RegionHub } from '@workspace/replica/server'
 
+import { EmailChanges, ResetLinks } from '../auth/account-links'
+import { AccountMails } from '../auth/account-mails'
+import { AccountPasswords } from '../auth/account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
@@ -40,6 +43,14 @@ export interface GatewayRoot {
   readonly sessions: AuthSessions
   /** The session rows of each identity's devices: listed, looked up by token, marked seen. */
   readonly deviceSessions: DeviceSessions
+  /** The reset, the change and the check of a password, through Better Auth on the server. */
+  readonly passwords: AccountPasswords
+  /** The reset links Better Auth keeps: read by token, ended for an account. */
+  readonly resets: ResetLinks
+  /** The pending changes of accounts' emails, their links, and the change itself. */
+  readonly emailChanges: EmailChanges
+  /** The mails about an account the gateway sends itself: confirmations and notices. */
+  readonly mails: AccountMails
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -64,8 +75,8 @@ export interface GatewayRoot {
    */
   readonly limits: RequestLimits
   /**
-   * One account's sign-ups and verifications run one at a time in this process, by its email in
-   * lower case.
+   * One account's work runs one turn at a time in this process: its sign-ups, verifications and
+   * reset requests by its email in lower case, its resets and changes by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
   readonly clock: Clock
@@ -173,6 +184,19 @@ export function createGatewayRoot(
         secret: options.authSecret,
       }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
+      passwords: new AccountPasswords({ auth, directory: local }),
+      resets: new ResetLinks(local),
+      emailChanges: new EmailChanges({
+        directory: local,
+        secret: options.authSecret,
+        clock: options.clock,
+      }),
+      mails: new AccountMails({
+        mail: options.mail,
+        directory: local,
+        publicUrl: options.publicUrl,
+        log: authLog,
+      }),
       organisations,
       databases,
       hub,
