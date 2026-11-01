@@ -5,7 +5,7 @@ import type { MailWriteError } from './mail.error'
 import { type RenderedMail, renderMail } from './mail.render'
 import { mailTranslator } from './mail.translator'
 import { checkMailInput } from './mail-input'
-import { VerificationMail } from './templates/verification.template'
+import { ActionMail } from './templates/action.template'
 
 export interface VerificationMailInput {
   /** The account's email, which the mail goes to and names. */
@@ -29,7 +29,7 @@ export function renderVerificationMail(
 ): ResultAsync<RenderedMail, MailWriteError> {
   return checkMailInput(input).asyncAndThen((locale) => {
     const t = mailTranslator(locale)
-    const element = createElement(VerificationMail, {
+    const element = createElement(ActionMail, {
       lang: locale,
       preview: t('mail.verify-email.preview'),
       brand: t('mail.layout.brand'),
@@ -39,8 +39,7 @@ export function renderVerificationMail(
       action: t('mail.verify-email.action'),
       link: input.link,
       fallback: t('mail.verify-email.fallback'),
-      expiry: t('mail.verify-email.expiry'),
-      ignore: t('mail.verify-email.ignore'),
+      notes: [t('mail.verify-email.expiry'), t('mail.verify-email.ignore')],
       tagline: t('mail.layout.tagline'),
       reason: t('mail.verify-email.reason'),
     })
