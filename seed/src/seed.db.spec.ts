@@ -64,7 +64,7 @@ const run = Date.now().toString(36)
 const outsider = {
   run,
   email: `outsider.${run}@example.test`,
-  password: 'outsider-seed-password',
+  password: 'Seed-outsider-password-1',
   name: 'Outsider Example',
   bio: 'Creates an organisation that the seed does not.',
   locale: 'en',
@@ -75,7 +75,7 @@ const outsider = {
 const keyholder = {
   name: 'Keyholder Example',
   email: `keyholder.${run}@example.test`,
-  password: 'keyholder-seed-password',
+  password: 'Seed-keyholder-password-1',
   device: { id: `seed-keyholder-${run}`, label: 'Seed spec' },
 } as const
 

@@ -25,9 +25,10 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
 - `catalog`, `accountFor(preset, mode)`, `organisationFor(preset, mode)`, `validateCatalog()`,
   `SEED_EMAIL_DOMAIN`: the presets (name, bio and language; organisations with their key,
   administrator and members, by account ref), the account data for a `demo` (same address every run) or `fresh`
-  (new address per run) seed, and the offline check of the catalog (`validateCatalog(candidate,
-  mode?)`: the organisation keys must be tenant keys as given and as the run's mode suffixes
-  them); `./catalog` exports them alone, without the gateway client, for the e2e tests.
+  (new address per run) seed, its password `Seed-<ref>-password-1` in both, and the offline check
+  of the catalog (`validateCatalog(candidate, mode?)`: each account's password must keep the rules
+  of a new password, and the organisation keys must be tenant keys as given and as the run's mode
+  suffixes them); `./catalog` exports them alone, without the gateway client, for the e2e tests.
 - `runSeed(options)`: seeds every preset through the gateway at `gatewayUrl` and returns
   the manifest (`accounts`: ref to account id, email and profile id; `organisations`: ref to
   organisation id, key and name); `demo` is idempotent, and `reset` sweeps the stand first. The
@@ -63,7 +64,11 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   gateway is reached only by the sweep: `--url=` (else `SURREAL_DEV_URL`),
   `--namespace=` and `--database=` (default `app` and `directory`, the gateway's
   database), `--user=` and `--pass=` (default the stand's root). Demo
-  accounts sign in with the password `<ref>-seed-password`.
+  accounts sign in with the password `Seed-<ref>-password-1` (`Seed-ann-password-1`), which keeps
+  the rules of a new password. A stand seeded before those rules keeps its demo accounts with the
+  password they were created with, `<ref>-seed-password`, which still signs in by hand; a `demo`
+  run over such a stand fails at their sign-in as invalid credentials, so seed it with `--reset`
+  (which sweeps the seed data first) to recreate them with the new password.
 - `bun run seed:sweep`: removes the seed data from the stand (same stand flags).
 - `bun run test`: the offline catalog check, and that `runSeed` calls the gateway through the `fetcher` it is given.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
