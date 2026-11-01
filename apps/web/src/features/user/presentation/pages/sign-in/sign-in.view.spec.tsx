@@ -53,6 +53,29 @@ function markedMet(): string[] {
   return RULE_ITEMS.filter((testId) => screen.getByTestId(testId).getAttribute('data-state'))
 }
 
+/** The text tones a rule item can take: muted, the success tone, or red. */
+const TONES = ['text-muted-foreground', 'text-success', 'text-destructive']
+
+/**
+ * The tones that apply to a rule item in the state it carries, the one that shows last: its plain
+ * classes, then its variants of that state. Tailwind's `data-[state=…]:` rule also selects the
+ * attribute and comes after the plain utilities, so it wins while it applies.
+ */
+function tonesOf(testId: string): string[] {
+  const item = screen.getByTestId(testId)
+  const state = item.getAttribute('data-state')
+  const classes = [...item.classList]
+  const variant = state ? `data-[state=${state}]:` : undefined
+  const applied = [
+    ...classes.filter((name) => !name.startsWith('data-[')),
+    ...classes.flatMap((name) =>
+      variant && name.startsWith(variant) ? [name.slice(variant.length)] : [],
+    ),
+  ]
+
+  return applied.filter((name) => TONES.includes(name))
+}
+
 /** The notice of the last session, once it carries `code`. */
 function noticeWith(code: string): HTMLElement {
   const notice = screen.getByTestId('user.sign-in.notice-message')
@@ -191,6 +214,18 @@ describe('SignInView', () => {
 
     type('user.sign-in.password-input', 'Abcdefghij1!Abcdefghij1!Abcdefghij1!')
     expect(markedMet()).toEqual([CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
+  })
+
+  it('shows a kept rule in the success tone and one not kept yet muted, never red', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    expect(tonesOf(LENGTH)).toEqual(['text-muted-foreground', 'text-success'])
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground'])
+
+    type('user.sign-in.password-input', 'abcdefghij!')
+
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground', 'text-success'])
   })
 
   it('reads each rule with whether it is met, the icons left out', () => {
