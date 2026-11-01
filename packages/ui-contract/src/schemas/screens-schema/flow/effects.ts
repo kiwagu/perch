@@ -9,7 +9,7 @@ import { z } from '@workspace/zod'
 import { anchorSchema, codeSchema } from '../../../names.schema'
 import { routePathSchema } from '../binding'
 
-import { searchSchema } from './names'
+import { navigateSearchSchema } from './names'
 
 const showSchema = z
   .strictObject({
@@ -40,7 +40,7 @@ const clearSchema = z
 export const navigateParamsSchema = z
   .strictObject({
     to: routePathSchema.describe('The path of the binding the app moves to.'),
-    search: searchSchema.exactOptional(),
+    search: navigateSearchSchema.exactOptional(),
   })
   .describe('Which binding, and its search.')
 

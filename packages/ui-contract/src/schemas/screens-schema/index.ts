@@ -20,7 +20,13 @@ export {
   platformEventNameSchema,
   transitionSchema,
 } from './flow'
-export { ACCOUNT, type PlatformMail, platformMailSchema } from './mail'
+export {
+  ACCOUNT,
+  type PlatformMail,
+  type PlatformNotice,
+  platformMailSchema,
+  platformNoticeSchema,
+} from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
 export { platformSchema } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'

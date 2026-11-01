@@ -40,7 +40,7 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [state:busy] is not a state of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:c] is not a choice value of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:kx] is not a choice value of the vocabulary',
-      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state, a value or a mail: "Save"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state, a value, a mail or a notice: "Save"',
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
@@ -101,6 +101,34 @@ describe('scenariosProblems', () => {
     expect(printed(contract)).toEqual([
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [mail:sign-out] names no platform action that sends a mail',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: [mail:gone] names no platform action that sends a mail',
+    ])
+  })
+  it('resolves a notice by the platform action that declares it and its name', () => {
+    const contract = sampleContract()
+    const scenario = firstScenario(contract)
+
+    Object.assign(contract.screens.platform.actions, {
+      'password.change': {
+        description: 'Changes the password.',
+        params: {},
+        result: 'the password is changed',
+        codes: ['failed'],
+        notices: [{ name: 'password-changed', to: 'account', language: 'account' }],
+      },
+    })
+    scenario.steps = [
+      'Read [notice:password.change.password-changed]',
+      'And [notice:password.change.email-changed]',
+      'And [notice:gone.password-changed]',
+      'And [notice:sign-out.password-changed]',
+      'And [notice:password-changed]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [notice:password.change.email-changed] names no notice "email-changed" of "password.change"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: [notice:gone.password-changed] names no platform action "gone"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[3]: [notice:sign-out.password-changed] names no notice "password-changed" of "sign-out"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[4]: [notice:password-changed] is not <action>.<name>',
     ])
   })
   it('wants every device to act as a role of the vocabulary', () => {

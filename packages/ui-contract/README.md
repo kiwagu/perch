@@ -68,15 +68,21 @@ for Bun.
     flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
-    those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
+    those of `authoredAnchorDefSchema`, whose `binding` is a model field, an action, a route or
+    `{ search }`, the search parameter a field starts with; the source of
+    `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
-    reserved word no parameter of an action that sends a mail takes, and
+    reserved word no parameter of an action that sends a mail or a notice takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
-    type `PlatformMail`),
+    type `PlatformMail`) and `platformNoticeSchema` (a notice of the action's `notices`, a mail
+    that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, `to:
+    account` being the account's email as it was before the action changed anything, and an
+    optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
-    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
+    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema` (a navigate's
+    search value a literal or `{ anchor }`, the value a field of the screen holds)
     and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
     `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
@@ -94,21 +100,25 @@ for Bun.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
-    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`).
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
+    `[notice:<action>.<name>]`).
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
     screens is in the vocabulary, every code is used, no choice values for a
     `visibility-button`, whose values its suffix defines), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names, a `visibility-button` derived by an `input`
-    alone), `bindingsProblems` (model fields,
+    never named like a derived one, entry and names, `secret` on a field alone, a
+    `visibility-button` derived by a secret `input` alone), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
     input), a constant or a search parameter every route of the screen declares, routes,
-    sources), `flowProblems` (a flow names states, events
+    the search parameter a field starts with, one every route of the screen declares, never on
+    another kind nor a secret field, sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
-    that exist,
+    that exist, a navigate's search keys of the binding it moves to, each value a literal or
+    `{ anchor }`, a field its own screen declares (never a `visibility-button` nor a secret
+    field),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
@@ -140,9 +150,13 @@ for Bun.
     its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
     platform action declares goes to a parameter of the action or the account, takes its
     language from one or the account, and links to a screen whose every route declares its
-    search parameter; an action that sends a mail has no parameter named `account`)
+    search parameter; an action that sends a mail or a notice has no parameter named
+    `account`), `noticesProblems` (the notices of a platform action carry names unique within
+    it, go to a parameter of the action or the account, take their language from one or the
+    account, and link, when they do, to a screen with a route, every route of which needs no
+    parameter: no `$param`, no splat, no required search key)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
-    it, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
+    it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
@@ -221,8 +235,9 @@ for Bun.
     both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
     them), the codes as `<anchor> <code>` and an error's fields as `<error> <code>
     -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
-    the actions of `platform.leaving` added and removed, and the entries of
-    `platform.unsavedInput` as `<leave>: <how it asks>`;
+    the actions of `platform.leaving` added and removed, the entries of
+    `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
+    actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
     <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one

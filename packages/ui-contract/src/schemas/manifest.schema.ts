@@ -155,6 +155,12 @@ const idSchema = z
       .describe(
         'The field holds input: the app is to ask before a leave that would lose what is typed into it.',
       ),
+    secret: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.',
+      ),
   })
   .describe('One declared anchor, as a test looks it up.')
 

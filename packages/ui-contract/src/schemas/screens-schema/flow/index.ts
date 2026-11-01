@@ -16,6 +16,7 @@ export {
   flowTargetSchema,
   guardNameSchema,
   modelEventNameSchema,
+  navigateSearchSchema,
   platformEventNameSchema,
   searchSchema,
 } from './names'

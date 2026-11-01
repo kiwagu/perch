@@ -14,6 +14,7 @@ const LISTS = [
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
+  ['notices', 'notice', 'notices'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
   ['activities', 'activity', 'activities'],

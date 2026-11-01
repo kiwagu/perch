@@ -4,13 +4,23 @@
  * platform event of `platform.events`, or a data event
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
  * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, a
- * `navigate` the path of a binding and search
- * parameters of that binding; an address is a binding of the flow's own screen (its first
- * one when the path is left out) with search parameters of that binding.
+ * `navigate` the path of a binding and search parameters of that binding, each a literal or the
+ * value a field of the flow's own screen holds (`{ anchor }`, never a visibility-button nor a
+ * secret field, which would put a password into an address and its history); an
+ * address is a binding of the flow's own screen (its first one when the path is left out) with
+ * search parameters of that binding.
  */
 
+import { FIELD_KINDS } from '../../anchors'
 import type { Binding, Effect, FlowState, Problem } from '../../files'
-import { bindingRefsOf, fieldProblem, has, PLATFORM_ACTION, presentationOnly } from '../contract'
+import {
+  bindingRefsOf,
+  fieldProblem,
+  has,
+  own,
+  PLATFORM_ACTION,
+  presentationOnly,
+} from '../contract'
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
@@ -39,6 +49,45 @@ const searchProblems = (
       inScreens([...at, key], `"${key}" is not a search parameter of "${binding.path}"`),
     )
 
+type NavigateSearch = Extract<Effect, { type: 'navigate' }>['params']['search']
+
+/** The values a navigate's search takes from a field: each a field the flow's own screen declares. */
+const carriedProblems = (
+  { screen, visibilityButtons, inScreens }: InFlow,
+  search: NavigateSearch,
+  at: At,
+): Problem[] =>
+  Object.entries(search ?? {}).flatMap(([key, value]) => {
+    if (typeof value !== 'object') {
+      return []
+    }
+
+    const { anchor } = value
+    const where = [...at, key, 'anchor']
+    const def = own(screen.anchors, anchor)
+
+    if (visibilityButtons.has(anchor)) {
+      return [inScreens(where, presentationOnly(anchor, 'a value a search carries'))]
+    }
+
+    if (def === undefined) {
+      return [inScreens(where, `"${anchor}" is not a declared anchor of the screen`)]
+    }
+
+    if (!FIELD_KINDS.has(def.kind)) {
+      return [
+        inScreens(
+          where,
+          `"${anchor}" is a ${def.kind}, not a field: a search takes the value a field holds`,
+        ),
+      ]
+    }
+
+    return def.secret === true
+      ? [inScreens(where, `"${anchor}" is a secret field: never a value a search carries`)]
+      : []
+  })
+
 export function effectProblems(
   inFlow: InFlow,
   effects: readonly Effect[] | undefined,
@@ -53,9 +102,12 @@ export function effectProblems(
       const { to, search } = effect.params
       const binding = inFlow.bindings.get(to)
 
-      return binding === undefined
-        ? routeProblems(inFlow, to, [...params, 'to'])
-        : searchProblems(inFlow, binding, search, [...params, 'search'])
+      return [
+        ...(binding === undefined
+          ? routeProblems(inFlow, to, [...params, 'to'])
+          : searchProblems(inFlow, binding, search, [...params, 'search'])),
+        ...carriedProblems(inFlow, search, [...params, 'search']),
+      ]
     }
 
     const { anchor } = effect.params
