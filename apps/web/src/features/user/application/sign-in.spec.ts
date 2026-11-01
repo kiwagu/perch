@@ -17,7 +17,7 @@ import { ProfileService } from './profile.service'
 import { settingsCommands, settingsShape } from './settings/settings.model.gen'
 import { SettingsService } from './settings/settings.service'
 import { createSignInMachine } from './sign-in.machine'
-import { SignInService } from './sign-in.service'
+import { type SignInForm, SignInService } from './sign-in.service'
 
 const ann = {
   email: 'ann@example.test',
@@ -71,6 +71,13 @@ function recordingSession(
 
   return { asked, port }
 }
+
+/** The submit of `form`, the password typed again the same. */
+const submitted = (form: SignInForm) => ({
+  type: 'user.sign-in.submit-button' as const,
+  form,
+  confirmation: form.password,
+})
 
 const start = (service: SignInService = signIn) => createActor(createSignInMachine(service)).start()
 
@@ -143,7 +150,7 @@ describe('the sign-in form', () => {
 
     actor.on('*', (event) => emitted.push(event))
     actor.send({ type: 'user.sign-in.toggle-button' })
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
 
     const asked = await settled(actor)
 
@@ -166,7 +173,7 @@ describe('the sign-in form', () => {
 
     actor.on('show', (event) => asked.push(event))
     actor.on('navigate', (event) => asked.push(event))
-    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, name: '' } })
+    actor.send(submitted({ ...ann, name: '' }))
 
     expect((await settled(actor)).value).toBe('done')
     expect(session.current()?.email).toBe(ann.email)
@@ -181,7 +188,7 @@ describe('the sign-in form', () => {
 
     const actor = start()
 
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
 
     const refused = await settled(actor)
 
@@ -200,11 +207,11 @@ describe('the sign-in form', () => {
       const actor = start()
 
       actor.send({ type: 'user.sign-in.toggle-button' })
-      actor.send({ type: 'user.sign-in.submit-button', form: ann })
+      actor.send(submitted(ann))
       await settled(actor)
 
       if (from === 'unverified') {
-        actor.send({ type: 'user.sign-in.submit-button', form: ann })
+        actor.send(submitted(ann))
         await waitFor(actor, (state) => state.matches('unverified'))
       }
 
@@ -231,7 +238,7 @@ describe('the sign-in form', () => {
     const actor = start(new SignInService(port))
 
     actor.send({ type: 'user.sign-in.toggle-button' })
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
     expect((await settled(actor)).context.mail).toBe('check-your-mail')
 
     actor.send({ type: 'user.sign-in.resend-button', email: ann.email })
@@ -249,10 +256,10 @@ describe('the sign-in form', () => {
     const actor = start()
 
     actor.send({ type: 'user.sign-in.toggle-button' })
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
     await settled(actor)
 
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
 
     expect(actor.getSnapshot()).toMatchObject({
       value: 'signing-in',
@@ -264,7 +271,7 @@ describe('the sign-in form', () => {
     const actor = start()
 
     actor.send({ type: 'user.sign-in.toggle-button' })
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
     await settled(actor)
 
     actor.send({ type: 'user.sign-in.toggle-button' })
@@ -280,7 +287,7 @@ describe('the sign-in form', () => {
 
     const actor = start()
 
-    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, password: 'wrong-password' } })
+    actor.send(submitted({ ...ann, password: 'wrong-password' }))
 
     const failed = await settled(actor)
 
@@ -288,7 +295,7 @@ describe('the sign-in form', () => {
     expect(failed.context.error).toBe('data:INVALID_CREDENTIALS')
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'user.sign-in.submit-button', form: ann })
+    actor.send(submitted(ann))
 
     expect((await waitFor(actor, (state) => state.matches('done'))).context.error).toBeUndefined()
   })
@@ -297,7 +304,7 @@ describe('the sign-in form', () => {
     const actor = start()
 
     actor.send({ type: 'user.sign-in.toggle-button' })
-    actor.send({ type: 'user.sign-in.submit-button', form: { ...ann, name: ' ' } })
+    actor.send(submitted({ ...ann, name: ' ' }))
 
     const failed = await settled(actor)
 

@@ -1,7 +1,13 @@
-import type { ResultAsync } from 'neverthrow'
 import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
-import type { SignInError, SignInForm, SignInService } from './sign-in.service'
+import { failureOf, settled } from '../../../platform/actor-outcome'
+import {
+  checkPasswordConfirmation,
+  type PasswordConfirmation,
+  type Passwords,
+} from '../domain/password-confirmation.rule'
+
+import type { SignInForm, SignInService } from './sign-in.service'
 
 /** The anchor of the form's own error: the machine keeps the code it shows for the view. */
 const SIGN_IN_ERROR = 'user.sign-in.error'
@@ -15,6 +21,9 @@ const CHECK_YOUR_MAIL = 'check-your-mail'
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'sign-in:UNKNOWN'
 
+/** The code the error keeps while the password typed again differs, which the form finds itself. */
+const PASSWORDS_DIFFER = 'sign-in:PASSWORDS_DIFFER'
+
 export interface SignInContext {
   /** The code of the last failure, cleared by the next attempt and by a switch of mode. */
   readonly error: string | undefined
@@ -24,10 +33,19 @@ export interface SignInContext {
   readonly sentTo: string | undefined
 }
 
-/** The events of the screen's flow: the user acts on these anchors. */
+/**
+ * The events of the screen's flow: the user acts on these anchors. A keystroke in either password
+ * carries both as typed; the submit, the password typed again beside the form, never sent with it.
+ */
 export type SignInEvent =
   | { readonly type: 'user.sign-in.toggle-button' }
-  | { readonly type: 'user.sign-in.submit-button'; readonly form: SignInForm }
+  | {
+      readonly type: 'user.sign-in.submit-button'
+      readonly form: SignInForm
+      readonly confirmation: string
+    }
+  | ({ readonly type: 'user.sign-in.password-input' } & Passwords)
+  | ({ readonly type: 'user.sign-in.password-confirmation-input' } & Passwords)
   | { readonly type: 'user.sign-in.resend-button'; readonly email: string }
 
 /** The params of the flow's effects: an anchor shows one of the codes or goes; the app moves to a path. */
@@ -50,31 +68,26 @@ export type SignInEmitted =
   | ({ readonly type: 'clear' } & ClearParams)
   | ({ readonly type: 'navigate' } & NavigateParams)
 
-/** The code a failed attempt rejected with, read off the error event of its invoke. */
-function failureOf(event: object): string {
-  const error = 'error' in event ? event.error : undefined
-
-  return typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    typeof error.code === 'string'
-    ? error.code
-    : UNKNOWN_FAILURE
-}
-
-/** One attempt of a platform action: it resolves with its outcome, or rejects with the failure. */
-const attempt = <T, Input>(run: (input: Input) => ResultAsync<T, SignInError>) =>
-  fromPromise<T, Input>(async ({ input }) => {
-    const result = await run(input)
-
-    return result.isOk() ? result.value : Promise.reject(result.error)
-  })
-
 /** The form the submit button sent, which a sign-in or a sign-up takes. */
 function formInput({ event }: { readonly event: SignInEvent }): { readonly form: SignInForm } {
   assertEvent(event, 'user.sign-in.submit-button')
 
   return { form: event.form }
+}
+
+/** How the password typed again stands to the password, as the event carries both. */
+function confirmationOf(event: SignInEvent): PasswordConfirmation {
+  assertEvent(event, [
+    'user.sign-in.submit-button',
+    'user.sign-in.password-input',
+    'user.sign-in.password-confirmation-input',
+  ])
+
+  return checkPasswordConfirmation(
+    event.type === 'user.sign-in.submit-button'
+      ? { password: event.form.password, confirmation: event.confirmation }
+      : event,
+  )
 }
 
 /** The email the resend button sent, which the resend takes. */
@@ -84,6 +97,9 @@ function emailInput({ event }: { readonly event: SignInEvent }): { readonly emai
   return { email: event.email }
 }
 
+/** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
+const showError = (...codes: readonly string[]) =>
+  ({ type: 'show', params: { anchor: SIGN_IN_ERROR, codes } }) as const
 const clearError = { type: 'clear', params: { anchor: SIGN_IN_ERROR } } as const
 const clearMail = { type: 'clear', params: { anchor: MAIL_MESSAGE } } as const
 const showMail = {
@@ -95,9 +111,10 @@ const showMail = {
  * The sign-in form as the screen's flow says (`contract/domain/screens/sign-in.yaml`): the mode is
  * the state, an attempt is an invoke of its platform action, a failure goes back to the mode with
  * its code; a sign-up, or a resend of the verification mail, leaves the form in the mode sign-in
- * asking to check the mail, and a sign-in of an account not verified yet offers the resend. Its
- * `show` and `clear` keep the codes of the form's own error and mail message for the view and
- * emit any other; its `navigate` emits the path, for the host to move to.
+ * asking to check the mail, and a sign-in of an account not verified yet offers the resend. At
+ * sign-up the password typed again is compared as either is typed, and holds the submit while it
+ * differs. Its `show` and `clear` keep the codes of the form's own error and mail message for the
+ * view and emit any other; its `navigate` emits the path, for the host to move to.
  */
 export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'signUp' | 'resend'>) {
   return setup({
@@ -107,25 +124,37 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       emitted: {} as SignInEmitted,
     },
     guards: {
-      emailNotVerified: ({ event }) => failureOf(event) === 'data:EMAIL_NOT_VERIFIED',
+      emailNotVerified: ({ event }) =>
+        failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
+      passwordsDiffer: ({ event }) => confirmationOf(event) !== 'same',
+      confirmationStrays: ({ event }) => confirmationOf(event) === 'strayed',
+      confirmationFollows: ({ event }) => confirmationOf(event) !== 'strayed',
     },
     actors: {
-      'platform.sign-in': attempt((input: { readonly form: SignInForm }) =>
-        service.signIn(input.form),
+      'platform.sign-in': fromPromise(
+        ({ input }: { readonly input: { readonly form: SignInForm } }) =>
+          settled(service.signIn(input.form)),
       ),
       // A sign-up and a resend end with the address they mailed: the message names that one, not
       // the field's, which can change after.
-      'platform.sign-up': attempt((input: { readonly form: SignInForm }) =>
-        service.signUp(input.form).map(() => input.form.email),
+      'platform.sign-up': fromPromise(
+        ({ input }: { readonly input: { readonly form: SignInForm } }) =>
+          settled(service.signUp(input.form).map(() => input.form.email)),
       ),
-      'platform.resend-verification': attempt((input: { readonly email: string }) =>
-        service.resend(input.email).map(() => input.email),
+      'platform.resend-verification': fromPromise(
+        ({ input }: { readonly input: { readonly email: string } }) =>
+          settled(service.resend(input.email).map(() => input.email)),
       ),
     },
     actions: {
       show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
         if (params.anchor === SIGN_IN_ERROR) {
-          enqueue.assign({ error: failureOf(event) })
+          // The form finds the passwords differ itself; any other code is the failure's.
+          enqueue.assign({
+            error: params.codes.includes('passwords-differ')
+              ? PASSWORDS_DIFFER
+              : failureOf(event, UNKNOWN_FAILURE),
+          })
         } else if (params.anchor === MAIL_MESSAGE) {
           enqueue.assign({
             mail: params.codes.includes(CHECK_YOUR_MAIL) ? CHECK_YOUR_MAIL : undefined,
@@ -159,7 +188,30 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       'sign-up': {
         on: {
           'user.sign-in.toggle-button': { target: 'sign-in', actions: [clearError] },
-          'user.sign-in.submit-button': { target: 'signing-up' },
+          'user.sign-in.password-confirmation-input': {
+            target: 'passwords-differ',
+            guard: 'confirmationStrays',
+          },
+          'user.sign-in.password-input': {
+            target: 'passwords-differ',
+            guard: 'confirmationStrays',
+          },
+          'user.sign-in.submit-button': [
+            { target: 'passwords-differ', guard: 'passwordsDiffer' },
+            { target: 'signing-up' },
+          ],
+        },
+      },
+      'passwords-differ': {
+        entry: [showError('passwords-differ')],
+        exit: [clearError],
+        on: {
+          'user.sign-in.password-confirmation-input': {
+            target: 'sign-up',
+            guard: 'confirmationFollows',
+          },
+          'user.sign-in.password-input': { target: 'sign-up', guard: 'confirmationFollows' },
+          'user.sign-in.toggle-button': { target: 'sign-in' },
         },
       },
       'signing-in': {
@@ -178,20 +230,12 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
             {
               target: 'unverified',
               guard: 'emailNotVerified',
-              actions: [
-                { type: 'show', params: { anchor: SIGN_IN_ERROR, codes: ['email-not-verified'] } },
-              ],
+              actions: [showError('email-not-verified')],
             },
             {
               target: 'sign-in',
               actions: [
-                {
-                  type: 'show',
-                  params: {
-                    anchor: SIGN_IN_ERROR,
-                    codes: ['invalid-credentials', 'rate-limited', 'other-account', 'failed'],
-                  },
-                },
+                showError('invalid-credentials', 'rate-limited', 'other-account', 'failed'),
               ],
             },
           ],
@@ -209,19 +253,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           onError: {
             target: 'sign-up',
             actions: [
-              {
-                type: 'show',
-                params: {
-                  anchor: SIGN_IN_ERROR,
-                  codes: [
-                    'sign-up-rejected',
-                    'rate-limited',
-                    'name-required',
-                    'name-too-long',
-                    'failed',
-                  ],
-                },
-              },
+              showError(
+                'sign-up-rejected',
+                'rate-limited',
+                'name-required',
+                'name-too-long',
+                'failed',
+              ),
             ],
           },
         },
@@ -251,13 +289,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           },
           onError: {
             target: 'unverified',
-            actions: [
-              clearMail,
-              {
-                type: 'show',
-                params: { anchor: SIGN_IN_ERROR, codes: ['rate-limited', 'failed'] },
-              },
-            ],
+            actions: [clearMail, showError('rate-limited', 'failed')],
           },
         },
       },

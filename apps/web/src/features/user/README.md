@@ -8,7 +8,9 @@ read and written on the device and kept in step across devices through the gatew
 profile is the account's face, the settings what the app is like for it (today its language),
 never read by anyone else. Layers:
 `domain/` holds the profile entity (schema and bounds) and one file per rule
-(`profile-name.rule.ts`, `profile-bio.rule.ts`); `application/` the `SignInService` over the
+(`profile-name.rule.ts`, `profile-bio.rule.ts`, and `password-confirmation.rule.ts`: how the
+password typed again at sign-up stands to the password, the same, following while it is how the
+password begins, or strayed); `application/` the `SignInService` over the
 session port, the `VerifyEmailService` over the session port and the account's start (it
 exchanges a verification link's token; the first verification, which signs this device in,
 starts the account there, and a link verified before starts nothing), the `AccountStartService`
@@ -24,9 +26,10 @@ over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
 machine (the flow of `contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt
-invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, it keeps the
-codes of the form's error and mail message, and the address the last sign-up or resend mailed,
-and emits `show` and `navigate` for the page), the
+invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it
+compares the password typed again as either password is typed, it keeps the codes of the form's
+error and mail message, and the address the last sign-up or resend mailed, and emits `show` and
+`navigate` for the page), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -82,6 +85,11 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   machine's state handles them; the chosen language, kept in the settings, follows the
   identity across devices (the frame stores and follows it, see the app-shell module), and a
   new account's settings start in the language chosen before signing up, sent with the sign-up;
+  a sign-up asks for the password twice, checked as it is typed: once the password typed again is
+  no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
+  `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
+  submit is disabled until the two agree again; a submit while only a part of it was typed asks for
+  nothing and says the same; the password typed again is never sent;
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
   stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again

@@ -12,18 +12,12 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
   const handlers = {
     onSubmit: vi.fn(() => Promise.resolve(true)),
     onToggleMode: vi.fn(),
+    onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
   }
 
   renderWithProviders(
-    <SignInView
-      mode="sign-in"
-      submitting={false}
-      showResend={false}
-      canResend={false}
-      {...handlers}
-      {...props}
-    />,
+    <SignInView mode="sign-in" showResend={false} can={() => true} {...handlers} {...props} />,
     { locale, es },
   )
 
@@ -32,6 +26,11 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
 
 const type = (testId: string, value: string) =>
   fireEvent.change(screen.getByTestId(testId), { target: { value } })
+
+/** The code the form's error keeps while the password typed again differs. */
+const PASSWORDS_DIFFER = 'sign-in:PASSWORDS_DIFFER'
+
+const input = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
 /** The notice of the last session, once it carries `code`. */
 function noticeWith(code: string): HTMLElement {
@@ -47,7 +46,9 @@ describe('SignInView', () => {
     const { onSubmit, onToggleMode } = renderView()
 
     expect(screen.getByTestId('user.sign-in.form').tagName).toBe('FORM')
+    expect(screen.queryByTestId('user.sign-in.password-confirmation-input')).toBeNull()
     expect(screen.queryByTestId('user.sign-in.name-input')).toBeNull()
+    expect(input('user.sign-in.password-input').autocomplete).toBe('current-password')
     expect(screen.getByTestId('user.sign-in.toggle-button').getAttribute('data-value')).toBe(
       'sign-up',
     )
@@ -65,6 +66,7 @@ describe('SignInView', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       email: 'ann@example.test',
       password: 'secret-ann',
+      confirmation: '',
       name: '',
     })
 
@@ -73,11 +75,12 @@ describe('SignInView', () => {
     expect(onToggleMode).toHaveBeenCalledOnce()
   })
 
-  it('also asks for a name to create an account', () => {
+  it('also asks for the password again and a name to create an account', () => {
     const { onSubmit } = renderView({ mode: 'sign-up' })
 
     type('user.sign-in.email-input', 'ann@example.test')
     type('user.sign-in.password-input', 'secret-ann')
+    type('user.sign-in.password-confirmation-input', 'secret-ann')
     type('user.sign-in.name-input', 'Ann')
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
 
@@ -93,8 +96,92 @@ describe('SignInView', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       email: 'ann@example.test',
       password: 'secret-ann',
+      confirmation: 'secret-ann',
       name: 'Ann',
     })
+  })
+
+  it('asks for the password again to create an account, both as a new password', () => {
+    renderView({ mode: 'sign-up' })
+
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(confirmation.type).toBe('password')
+    expect(confirmation.autocomplete).toBe('new-password')
+    expect(confirmation.labels?.[0]?.textContent).toBe(en['user.sign-in.password-confirmation'])
+    expect(input('user.sign-in.password-input').autocomplete).toBe('new-password')
+  })
+
+  it('tells each keystroke in either password while creating an account, with both as typed', () => {
+    const { onTypePassword } = renderView({ mode: 'sign-up' })
+
+    type('user.sign-in.password-input', 'secret-ann')
+    type('user.sign-in.password-confirmation-input', 's')
+    type('user.sign-in.password-confirmation-input', 'se')
+    type('user.sign-in.password-input', 'secret-anx')
+
+    expect(onTypePassword.mock.calls).toEqual([
+      ['password', { password: 'secret-ann', confirmation: '' }],
+      ['confirmation', { password: 'secret-ann', confirmation: 's' }],
+      ['confirmation', { password: 'secret-ann', confirmation: 'se' }],
+      ['password', { password: 'secret-anx', confirmation: 'se' }],
+    ])
+  })
+
+  it('tells no keystroke in the password while signing in', () => {
+    const { onTypePassword } = renderView()
+
+    type('user.sign-in.password-input', 'secret-ann')
+
+    expect(onTypePassword).not.toHaveBeenCalled()
+  })
+
+  it('says the passwords differ under the password typed again, marking it invalid, and holds the submit', () => {
+    renderView({
+      mode: 'sign-up',
+      error: PASSWORDS_DIFFER,
+      can: (control) => control !== 'user.sign-in.submit-button',
+    })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(error.getAttribute('data-code')).toBe('passwords-differ')
+    expect(error.textContent).toBe(en['user.sign-in.error.passwords-differ'])
+    expect(confirmation.getAttribute('aria-invalid')).toBe('true')
+    expect(input('user.sign-in.password-input').getAttribute('aria-invalid')).toBeNull()
+    // Under it: in the confirmation's own field, after the input.
+    expect(confirmation.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(
+      confirmation.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(input('user.sign-in.submit-button').disabled).toBe(true)
+  })
+
+  it('says it in Spanish', () => {
+    renderView({ mode: 'sign-up', error: PASSWORDS_DIFFER }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      es['user.sign-in.error.passwords-differ'],
+    )
+    expect(input('user.sign-in.password-confirmation-input').labels?.[0]?.textContent).toBe(
+      es['user.sign-in.password-confirmation'],
+    )
+  })
+
+  it('shows any other reason above the fields, marking none of them invalid', () => {
+    renderView({ mode: 'sign-up', error: 'data:SIGN_UP_REJECTED' })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(error.getAttribute('data-code')).toBe('sign-up-rejected')
+    expect(confirmation.getAttribute('aria-invalid')).toBeNull()
+    expect(confirmation.closest('[data-slot="field"]')?.contains(error)).toBe(false)
+    expect(
+      error.compareDocumentPosition(input('user.sign-in.email-input')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('explains why the last attempt failed', () => {
@@ -165,7 +252,7 @@ describe('SignInView', () => {
   })
 
   it('offers to send the mail again to the email typed', () => {
-    const { onResend, onSubmit } = renderView({ showResend: true, canResend: true })
+    const { onResend, onSubmit } = renderView({ showResend: true })
 
     type('user.sign-in.email-input', 'ann@example.test')
 
@@ -181,7 +268,10 @@ describe('SignInView', () => {
   })
 
   it('holds the resend while it cannot run', () => {
-    const { onResend } = renderView({ showResend: true, canResend: false })
+    const { onResend } = renderView({
+      showResend: true,
+      can: (control) => control !== 'user.sign-in.resend-button',
+    })
     const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
 
     expect(resend.disabled).toBe(true)
@@ -237,8 +327,8 @@ describe('SignInView', () => {
     )
   })
 
-  it('holds the form while an attempt is running', () => {
-    renderView({ submitting: true })
+  it('holds the submit while the flow does not take it', () => {
+    renderView({ can: (control) => control !== 'user.sign-in.submit-button' })
 
     expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
       true,
