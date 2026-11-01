@@ -257,8 +257,7 @@ included.
 |---|---|
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
-| `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
-| `app-shell.nav.sign-in-link` | the link to `/sign-in`, shown to a guest, which renders no derived anchor |
+| `app-shell.nav` | the main navigation, whose links are the four anchors below, declared on their own and not derived |
 | `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |

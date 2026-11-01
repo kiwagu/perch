@@ -42,11 +42,6 @@ anchors:
     description: The link to the settings, shown to a signed-in account.
     binding: { route: /settings }
     roles: [ identity, member, admin ]
-  app-shell.nav.sign-in-link:
-    kind: link
-    description: "The link to sign-in that a guest's navigation held. A guest sees no navigation now, so the link goes: kept declared until the frame no longer renders it, then dropped."
-    binding: { route: /sign-in }
-    roles: [ guest ]
   app-shell.theme-select:
     kind: select
     description: "The theme of this device, for anyone, a guest included: light, dark or the device's own setting; a choice applies at once and stays on this device, the same theme the settings screen chooses."
