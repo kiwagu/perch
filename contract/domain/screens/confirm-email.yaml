@@ -29,8 +29,9 @@ anchors:
     codes: [ email-changed ]
   user.confirm-email.sign-in-link:
     kind: link
-    description: Leads to the sign-in page; shown with email-changed unless this device is signed in to the account whose email changed.
+    description: Leads to the sign-in page; shown with email-changed when nobody is signed in on this device.
     binding: { route: /sign-in }
+    roles: [ guest ]
   user.confirm-email.profile-link:
     kind: link
     description: Leads to the profile, which shows the new email; shown with email-changed when this device is signed in to the account whose email changed.
@@ -48,6 +49,7 @@ flow:
   meta:
     guards:
       thisAccount: this device is signed in to the account whose email the link changed
+      nobodyHere: nobody is signed in on this device
   states:
     confirming:
       description: The token of the link is being exchanged.
@@ -61,7 +63,12 @@ flow:
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
           - target: done
+            guard: nobodyHere
             description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
+            actions:
+              - show: { user.confirm-email.message: [ email-changed ] }
+          - target: done-elsewhere
+            description: "Another account is signed in on this device: the message says the email is the new one, with no link, since signing in needs that other account signed out first."
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
         onError:
@@ -73,6 +80,9 @@ flow:
       type: final
     done:
       description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
+      type: final
+    done-elsewhere:
+      description: The message says the email is the new one; another account stays signed in on this device, and no link is offered.
       type: final
     failed:
       description: The error says why the link did not change the email; a new link is asked for from the settings.
