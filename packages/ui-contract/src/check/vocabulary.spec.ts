@@ -70,6 +70,16 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.gone-select.option": no such anchor in the screens',
     ])
   })
+  it('refuses choice values for a visibility-button, whose values are its suffix own', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    contract.vocabulary.choiceValues['sample.title-input.visibility-button'] = { show: 'shows it' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: choice values of "sample.title-input.visibility-button": a visibility-button carries show or hide, the values of its suffix, and takes no rows',
+    ])
+  })
   it('reports a code no anchor or platform action uses', () => {
     const contract = sampleContract()
 

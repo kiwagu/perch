@@ -99,11 +99,16 @@ for Bun.
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
-    screens is in the vocabulary, every code is used), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names), `bindingsProblems` (model fields,
-    actions and their params, each an anchor, a constant or a search parameter every route of
-    the screen declares, routes, sources), `flowProblems` (a flow names states, events,
-    guards, actions with their `input`, anchors with their codes and bindings that exist,
+    screens is in the vocabulary, every code is used, no choice values for a
+    `visibility-button`, whose values its suffix defines), `screensProblems` (anchors unique and
+    never named like a derived one, entry and names, a `visibility-button` derived by an `input`
+    alone), `bindingsProblems` (model fields,
+    actions and their params, each an anchor (never a `visibility-button`, which holds no
+    input), a constant or a search parameter every route of the screen declares, routes,
+    sources), `flowProblems` (a flow names states, events
+    (never a `visibility-button`, which is presentation only), guards, actions with their
+    `input` (taken from no `visibility-button` either), anchors with their codes and bindings
+    that exist,
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
@@ -117,7 +122,8 @@ for Bun.
     state of the root a target lands in, each region at its starting state: a deep target's,
     else the initial, and the region states the deep targets of the root enter),
     `activitiesProblems` (an activity's states visit screens that exist
-    at bindings of theirs, its events are anchors of that screen or of the frame, and each
+    at bindings of theirs, its events are anchors of that screen or of the frame, never a
+    `visibility-button`, and each
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),
     `runsProblems` (every flow and every activity runs in XState as written: the walk of
@@ -136,12 +142,13 @@ for Bun.
     language from one or the account, and links to a screen whose every route declares its
     search parameter; an action that sends a mail has no parameter named `account`)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
-    it, roles and the
+    it, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
-    `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
+    `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each
+    with its base when the call writes it as a literal),
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
@@ -152,7 +159,9 @@ for Bun.
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, every suffix in the vocabulary and every code a code of the contract
+    a suffix, every suffix in the vocabulary and listed in the `derived` of an anchor of the
+    contract (of the base itself when it is a literal), so a `visibility-button` no input
+    declares is never rendered, and every code a code of the contract
     (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
     codes the loader derived), and a `holdsInput` written only as
     `{false}` on a field the contract says holds no input, never on another kind, and on every
@@ -183,12 +192,15 @@ for Bun.
     collects the `.ts` files under `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given;
     `compareConsumers(consumed, contract)` wants every anchor known (declared, or derived
     from a declared base with a suffix it lists in `derived`), every code, state and choice
-    value in the vocabulary, as the scenarios check resolves its bracket references.
+    value in the vocabulary (and `show` or `hide` once an input renders a
+    `visibility-button`), as the scenarios check resolves its bracket references.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section), the screens verbatim with
+    states taken from the vocabulary and the platform section) and `derivedParts` (each derived
+    suffix with the kind of the part it marks and, for a `visibility-button`, its values), the
+    screens verbatim with
     each binding's `example` link (`exampleOf`), the platform section and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
     with its kind, its screen and its attributes, `holdsInput` of a field among them), `routeParams` and the model document.
@@ -206,7 +218,8 @@ for Bun.
     after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
     `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
     added are a rename when they are the only ones of their screen and kind; on the anchors
-    both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
+    both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
+    them), the codes as `<anchor> <code>` and an error's fields as `<error> <code>
     -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
     the actions of `platform.leaving` added and removed, and the entries of
     `platform.unsavedInput` as `<leave>: <how it asks>`;
@@ -262,6 +275,10 @@ for Bun.
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
+  suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
+  the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
+  with what each says).
   The page helper's contract: `PAGE_HELPER` (`__perch.ui`), `ANCHOR_ATTRIBUTES` (the
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
@@ -317,8 +334,9 @@ for Bun.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
-  fields the anchors both hold gain or lose (derived ones included), the fields that start or
+  `<ref>`, all of it as added when that commit has no `contract/`, the derived parts, the codes
+  and the error fields the anchors both hold gain or lose (derived ones included), the fields
+  that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
   transitions changed in each included; prints the hand-over block, or the changes as JSON
   with `--json`). A change to the contract carries the output of

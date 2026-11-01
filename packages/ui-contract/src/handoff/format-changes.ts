@@ -6,6 +6,7 @@ import type { Change, ContractChanges } from './diff'
 const LISTS = [
   ['screens', 'screen', 'screens'],
   ['anchors', 'anchor', 'anchors'],
+  ['derived', 'derived anchor', 'derived anchors'],
   ['codes', 'code', 'codes'],
   ['anchorCodes', 'anchor code', 'anchor codes'],
   ['errorFields', 'error field', 'error fields'],

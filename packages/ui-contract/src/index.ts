@@ -13,6 +13,9 @@ export {
   screenOf,
   segmentsOf,
   testIdFor,
+  VISIBILITY_BASE_KIND,
+  VISIBILITY_BUTTON,
+  VISIBILITY_VALUES,
 } from './anchors'
 export {
   activitiesProblems,

@@ -476,3 +476,46 @@ A control whose anchor is an event of the flow (a button, a select, a switch) is
 exactly while a state the machine is in handles that event: the view asks the machine (`snapshot.can({ type: anchor })`, passed to
 the view as `can`) and keeps no flag of its own, so Save is disabled while `saving-name` or
 `saving-bio` runs and the sign-out button while the sign-out does.
+
+## 13. A password input's eye
+
+A password input may render an eye beside itself that shows what it holds as typed, or hides
+it again: the derived `visibility-button`. It is presentation only. Whether the field shows
+its value is the one transient state a component keeps of its own, never a state of the flow:
+the eye is no event of the flow, the machine does not enable it, and it is always enabled. Its
+`data-value` says what a click does, `show` or `hide`, the suffix's own values, never rows of
+"Choice values". This example is illustrative, not a file of the app. The screen file lists
+the suffix on the input:
+
+```yaml
+user.sign-in.password-input:
+  kind: input
+  derived: [ visibility-button ]
+```
+
+A kit composite takes the input's `testId` and derives the eye, as `ConfirmDialog` derives its
+buttons:
+
+```tsx
+const [shown, setShown] = useState(false)
+const eyeTestId = testId === undefined ? undefined : testIdFor(testId, 'visibility-button')
+// ...
+<Input {...props} type={shown ? 'text' : 'password'} data-testid={testId} />
+<Button
+  type="button"
+  aria-label={shown ? props.hideLabel : props.showLabel}
+  aria-pressed={shown}
+  data-testid={eyeTestId}
+  data-value={shown ? 'hide' : 'show'}
+  onClick={() => setShown((value) => !value)}
+/>
+```
+
+A test clicks it and reads what the next click does:
+
+```ts
+const eye = page.getByTestId('user.sign-in.password-input.visibility-button')
+
+await eye.click()
+await expect(eye).toHaveAttribute('data-value', 'hide')
+```

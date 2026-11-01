@@ -97,6 +97,21 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].holdsInput: only a field holds input',
     ])
   })
+  it('takes a visibility-button on an input and refuses it on any other kind', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+
+    expect(printed(contract)).toEqual([])
+
+    anchorIn(contract, 'sample.save-button').derived = ['visibility-button']
+    anchorIn(contract, 'sample.mode-select').derived = ['option', 'visibility-button']
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].derived[0]: only an input renders a visibility-button',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].derived[1]: only an input renders a visibility-button',
+    ])
+  })
   it('wants every anchor to start with its screen id and end with its kind', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')
