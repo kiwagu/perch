@@ -75,3 +75,21 @@ the dev database) alone. An app removed from the manifest is
 unknown to mcproc afterwards; the pm2 process it leaves (`<project>-<app>` in `pm2 ls`,
 `perch-<app>` in the main checkout) goes with `pm2 delete perch-<app>`, as `web-e2e`, the old
 e2e dev server, did.
+
+## Worktrees
+
+A branch gets a checkout of its own, with stands of its own, next to the repository:
+
+- `mcproc worktree add feat/x` (from the main checkout; `--from main` starts a new branch there)
+  makes `../perch.worktrees/feat/x`, claims the next free slot, copies the local certificates,
+  `lefthook-local.yml` and the screenshot baselines, runs `bun install` and writes
+  `.mcproc/mcproc.local.yaml` there with the slot and the project slug (`perch-w1`). In that
+  folder `mcproc start dev` brings the stand up on slot 1's ports (8100, 5281,
+  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; there `bun run
+  seed` addresses that dev stand, `bun run test:db` and `CI=1 bun run test:e2e` that checkout's
+  e2e stand.
+- A start asks the host for memory first: every app declares what it takes and the manifest
+  keeps a reserve, so a stand that does not fit waits its turn (`mcproc ls` shows it as
+  `queued`, `mcproc leases` shows the queue) and comes up by itself once memory frees.
+- `mcproc worktree ls` lists the checkouts with their slots; `mcproc worktree remove feat/x`
+  stops that checkout's apps, deletes the worktree and frees the slot (the branch stays).
