@@ -141,6 +141,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
+| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item` | the password typed keeps this rule |
 
 ## Codes
 
@@ -167,7 +168,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `link-invalid` | `user.verify-email.error` | the link is not one a verification mail carried, or its account is gone |
 | `link-expired` | `user.verify-email.error` | the link is older than a day; the same page sends a new one |
 | `invalid-credentials` | `user.sign-in.error` | the email or the password is wrong |
-| `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password is shorter than 8 or longer than 128 characters |
+| `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `passwords-differ` | `user.sign-in.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
 | `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |

@@ -9,7 +9,7 @@ actions:
         description: The email of the new account.
       password:
         type: string
-        description: The password of the new account, 8 to 128 characters.
+        description: "The password of the new account: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol. A password that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password."
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
