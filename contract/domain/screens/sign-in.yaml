@@ -38,6 +38,7 @@ anchors:
           email: user.sign-in.email-input
   user.sign-in.password-input:
     kind: input
+    secret: true
     description: The password of the account (type password).
     binding:
       - action: platform.sign-in
@@ -46,6 +47,7 @@ anchors:
       - action: platform.sign-up
         params:
           password: user.sign-in.password-input
+    derived: [ visibility-button ]
   user.sign-in.password-rule-list:
     kind: list
     description: "The rules a new password keeps, under the password; shown only in the mode sign-up, each rule marked once the password typed keeps it."
@@ -75,7 +77,9 @@ anchors:
     states: [ met ]
   user.sign-in.password-confirmation-input:
     kind: input
+    secret: true
     description: "The password typed again (type password); shown only in the mode sign-up, and never sent. As it is typed, the error says it differs once it stops being how the password begins, and the account is asked for only when the two are the same."
+    derived: [ visibility-button ]
   user.sign-in.name-input:
     kind: input
     description: The name of the new account; shown only in the mode sign-up.
@@ -101,6 +105,9 @@ anchors:
     kind: button
     description: Switches between signing in and creating an account; its value is the mode it switches to.
     dataValue: true
+  user.sign-in.forgot-link:
+    kind: link
+    description: "Leads to asking for a mail that sets a new password, carrying the email typed; shown in the mode sign-in."
   user.sign-in.resend-button:
     kind: button
     description: "Sends the mail that verifies the email typed again; shown after a sign-up, and after a sign-in refused with email-not-verified; disabled while it sends."
@@ -123,6 +130,11 @@ flow:
     sign-in:
       description: The form in the mode sign-in.
       on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          description: The app moves to /forgot-password with the email typed.
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
         user.sign-in.toggle-button:
           - target: password-weak
             guard: passwordBreaksRules
@@ -232,6 +244,11 @@ flow:
     check-mail:
       description: "The form in the mode sign-in with the email kept; the message asks to open the link of the verification mail, and the resend button sends it again."
       on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          description: The app moves to /forgot-password with the email typed.
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
         user.sign-in.resend-button: resending
         user.sign-in.submit-button:
           target: signing-in
@@ -255,6 +272,11 @@ flow:
     unverified:
       description: "The form in the mode sign-in; the error says why the last attempt failed, and the resend button sends the verification mail to the email typed."
       on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          description: The app moves to /forgot-password with the email typed.
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
         user.sign-in.resend-button: resending
         user.sign-in.submit-button: signing-in
         user.sign-in.toggle-button:
@@ -291,6 +313,9 @@ flow:
             - show: user.sign-in.error
     done:
       description: The app has moved to /me.
+      type: final
+    forgot-password:
+      description: The app has moved to /forgot-password, carrying the email typed.
       type: final
 wireframe: |-
   - heading "Sign in" [level=1]

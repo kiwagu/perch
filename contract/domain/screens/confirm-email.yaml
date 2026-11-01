@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: user.confirm-email
+title: Confirm the new email
+description: "What the link of an email confirmation mail opens: it changes the account's email to the new one, which every device of the account then shows; a link that does not work says why."
+flag: null
+bindings:
+  - path: /confirm-email
+    roles: [ guest, identity ]
+    history: push
+    search:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: The token the confirmation mail carries in its link.
+          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFubkBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJl ]
+      additionalProperties: false
+entry: [ user.confirm-email.status, user.confirm-email.message, user.confirm-email.error ]
+anchors:
+  user.confirm-email.status:
+    kind: status
+    description: Says the link is being checked; the message or the error replaces it once it is.
+    states: [ loading ]
+  user.confirm-email.message:
+    kind: message
+    description: Says the account's email is the new one, which signs it in from now on.
+    codes: [ email-changed ]
+  user.confirm-email.sign-in-link:
+    kind: link
+    description: Leads to the sign-in page; shown with email-changed to a device nobody is signed in on.
+    binding: { route: /sign-in }
+    roles: [ guest ]
+  user.confirm-email.profile-link:
+    kind: link
+    description: Leads to the profile, which shows the new email; shown with email-changed to a signed-in device.
+    binding: { route: /me }
+    roles: [ identity ]
+  user.confirm-email.error:
+    kind: error
+    description: "Why the link did not change the email: unknown or used before, too old, or the new email has got an account meanwhile."
+    codes: [ link-invalid, link-expired, rate-limited, failed ]
+states:
+  loading: "user.confirm-email.status in loading: the link is being checked."
+  ready: "The message with its link, or the error."
+flow:
+  initial: confirming
+  states:
+    confirming:
+      description: The token of the link is being exchanged.
+      invoke:
+        src: platform.confirm-email
+        input: { token: { search: token } }
+        onDone:
+          target: done
+          actions:
+            - show: { user.confirm-email.message: [ email-changed ] }
+        onError:
+          target: failed
+          actions:
+            - show: user.confirm-email.error
+    done:
+      description: The message says the email is the new one, beside the link to sign in or to the profile.
+      type: final
+    failed:
+      description: The error says why the link did not change the email; a new link is asked for from the settings.
+      type: final
+wireframe: |-
+  - heading "Confirm your new email" [level=1]
+  - status: Checking your link…

@@ -70,6 +70,97 @@ actions:
       to: email
       language: account
       link: { screen: user.verify-email, search: token }
+  request-password-reset:
+    description: Sends the mail whose link sets a new password for an account.
+    params:
+      email:
+        type: string
+        description: The email of the account.
+    result: "the mail below is on its way when the email has an account; an unknown email gets the same answer and no mail, so the answer tells nobody which emails have accounts; one email takes three requests within a quarter of an hour, and a fourth answers rate-limited and sends nothing"
+    codes:
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.reset-password, search: token }
+  reset-password:
+    description: Sets a new password for an account with the token its reset mail carries, and signs every device of the account out.
+    params:
+      token:
+        type: string
+        description: The token the link of the reset mail carries in the address of /reset-password.
+      password:
+        type: string
+        description: "The new password, kept to the rules of a new password: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol."
+    result: "the account's password is the new one and every device of the account is signed out; this device is not signed in by it; a link unknown or used before answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged"
+    codes:
+      - link-invalid
+      - link-expired
+      - password-rejected
+      - rate-limited
+      - failed
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.forgot-password }
+  change-password:
+    description: Changes the signed-in account's password, signing its other devices out.
+    params:
+      currentPassword:
+        type: string
+        description: The password the account has now.
+      password:
+        type: string
+        description: "The new password, kept to the rules of a new password: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol."
+    result: "the password is the new one; every other device of the account is signed out and this one stays signed in; a wrong current password answers invalid-credentials and a password that breaks the rules password-rejected, the password then unchanged"
+    codes:
+      - invalid-credentials
+      - password-rejected
+      - rate-limited
+      - failed
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.forgot-password }
+  change-email:
+    description: Asks to change the signed-in account's email; the mail below goes to the new email, and its link makes the change.
+    params:
+      email:
+        type: string
+        description: The new email.
+      password:
+        type: string
+        description: The password the account has now, which confirms the request.
+    result: "the mail below is on its way to the new email, and the account keeps its email until that mail's link is opened; a new email that has an account already gets the same answer and no mail; a wrong password answers invalid-credentials, and an email that is not an email email-invalid"
+    codes:
+      - invalid-credentials
+      - email-invalid
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.confirm-email, search: token }
+  confirm-email:
+    description: Changes an account's email to the new one, with the token the link of its confirmation mail carries.
+    params:
+      token:
+        type: string
+        description: The token the link of the confirmation mail carries in the address of /confirm-email.
+    result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; the device that opens the link is not signed in by it; a link unknown or used before, or whose new email has got an account meanwhile, answers link-invalid, one older than a day link-expired"
+    codes:
+      - link-invalid
+      - link-expired
+      - rate-limited
+      - failed
+    notices:
+      - name: email-changed
+        to: account
+        language: account
+        link: { screen: user.forgot-password }
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -210,6 +301,7 @@ toasts:
   organisations.invite: invited
   organisations.remove: member-removed
   devices.revoke: device-signed-out
+  change-password: password-changed
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere
