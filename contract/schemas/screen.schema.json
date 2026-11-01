@@ -530,9 +530,24 @@
                     ],
                     "additionalProperties": false,
                     "description": "The anchor navigates to a route."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "search": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                        "description": "The name of a search parameter every route of the screen declares."
+                      }
+                    },
+                    "required": [
+                      "search"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                   }
                 ],
-                "description": "What the anchor is bound to: a model field, an action or a route."
+                "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
               },
               {
                 "minItems": 1,
@@ -633,9 +648,24 @@
                       ],
                       "additionalProperties": false,
                       "description": "The anchor navigates to a route."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "search": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]*$",
+                          "description": "The name of a search parameter every route of the screen declares."
+                        }
+                      },
+                      "required": [
+                        "search"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                     }
                   ],
-                  "description": "What the anchor is bound to: a model field, an action or a route."
+                  "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
                 },
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
@@ -658,6 +688,11 @@
           "holdsInput": {
             "description": "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.",
             "type": "boolean"
+          },
+          "secret": {
+            "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+            "type": "boolean",
+            "const": true
           },
           "codes": {
             "description": "The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.",
@@ -1573,14 +1608,33 @@
                         "type": "string"
                       },
                       "additionalProperties": {
-                        "description": "A string, a number or a boolean.",
-                        "type": [
-                          "string",
-                          "number",
-                          "boolean"
+                        "anyOf": [
+                          {
+                            "description": "A string, a number or a boolean.",
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "anchor": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "A field of the screen, declared on it."
+                              }
+                            },
+                            "required": [
+                              "anchor"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                          }
                         ]
                       },
-                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                     }
                   },
                   "required": [
@@ -1684,14 +1738,33 @@
                         "type": "string"
                       },
                       "additionalProperties": {
-                        "description": "A string, a number or a boolean.",
-                        "type": [
-                          "string",
-                          "number",
-                          "boolean"
+                        "anyOf": [
+                          {
+                            "description": "A string, a number or a boolean.",
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "anchor": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "A field of the screen, declared on it."
+                              }
+                            },
+                            "required": [
+                              "anchor"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                          }
                         ]
                       },
-                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                     }
                   },
                   "required": [

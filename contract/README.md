@@ -120,6 +120,31 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen whose every route declares that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
+
+  A mail that only tells is a notice, and an action declares the ones it sends under
+  `notices`, a list. A `mail` carries a token the user acts on; a notice carries none, so
+  nothing in it acts: a password changed, an email changed. Each notice has a `name`,
+  kebab-case and unique within the action; `to` and `language`, as a mail's, where `account` is
+  the account the action acts on, its email as it was before the action changed anything (a
+  notice of a changed email goes to the old address); and, when it has one, a plain `link` to
+  a `screen`, never with a `search`. A password-changed notice links to the reset of a
+  password, for an owner who did not change it:
+
+  ```yaml
+  reset-password:
+    # description, params, result, codes
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.reset-password }
+  ```
+
+  `account` is reserved on an action that sends a notice too. The check holds `to` and
+  `language` as a mail's, wants the names unique within the action, and holds a link to a
+  screen with a route, every route of which needs no parameter, as the link carries none (no
+  `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
+  names a notice by its action and its name, `[notice:reset-password.password-changed]`.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -273,6 +298,15 @@ An anchor's `binding` says what the element does or shows:
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
 - `{ route: /path }`: the path of a binding of some screen.
+- `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
+  switch): the field starts with the value of that search parameter of the route the screen
+  was opened at, and the user may change it; every binding of the screen declares it under
+  `search`. It sits in a list beside the action the field gives its value to: the email a
+  link carried into `/forgot-password?email=...` fills the email input the request is sent
+  with, `[ { search: email }, { action: platform.request-password-reset, params: { email:
+  user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the
+  value there (`{ anchor: <field> }`, below). A `secret` field never takes it: a secret is
+  never filled from a URL.
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
@@ -280,11 +314,14 @@ values the element carries), `fields` (an error's codes, each with the field of 
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
-values), `derived` (the suffixes it renders; an `input` alone may render `visibility-button`,
-see "Anchors"), `roles` (who sees it; absent: every role of the
+values), `derived` (the suffixes it renders; a secret `input` alone may render
+`visibility-button`, see "Anchors"), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
-what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
-from).
+what is typed; derived, see "What a screen leaves out"), `secret` (`true` on a field that
+holds a secret: a password, its confirmation, a current password, anything that never leaves
+the page but in the request of the action that takes it; only a field has it, no navigate
+carries it into a search and no search parameter starts it), `source` (where a list's entries
+come from).
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -332,7 +369,13 @@ unchanged, as it carries a binding into the router.
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
   } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
   navigate, params: { to, search } }`, the app moves to that binding. The app implements
-  all three.
+  all three. Each value of a navigate's `search` is a search key of the binding it moves to,
+  given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
+  flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
+  radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
+  value would stay in the address, the browser's history and the logs). A link that carries
+  the email typed so far to the page that asks for a password reset:
+  `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
   anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
@@ -610,7 +653,8 @@ renders itself: `user.profile.sign-out-dialog.confirm-button`,
 
 One derived part is presentation only: `visibility-button`, the eye a password input renders
 beside itself, which shows what the input holds as typed or hides it again. The input
-declares it, `derived: [ visibility-button ]`, and only an `input` may. Its `data-value`
+declares it, `derived: [ visibility-button ]`, and only a secret `input` may (`secret: true`):
+on any other field there is nothing hidden for it to show. Its `data-value`
 names what a click does: `show` while the input hides its value, `hide` while it shows it;
 the two values are the suffix's own, never rows of "Choice values". Whether the field shows
 its value is held by the field itself, the one transient state a flow never holds, so the
@@ -819,7 +863,8 @@ Where: [/me] then [user.profile.save-button]
 Brackets reference the contract, and the contract check resolves each one: `[<anchor>]` (a
 declared anchor, or one derived from a declared base with a suffix it lists), `[/path]` (the
 path of a binding), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and
-`[mail:<action>]` (a platform action that declares the mail it sends).
+`[mail:<action>]` (a platform action that declares the mail it sends) and
+`[notice:<action>.<name>]` (a notice of that name the platform action declares).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: user/base/edit-profile-name`, with one `test.step` per step.
@@ -839,13 +884,17 @@ gap is fixed in the contract files first, never worked around in a test.
   and holds its shape, and each screen file is named by its first binding; every anchor
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
-  vocabulary is used; every binding points at a field, an action or a route that exists,
+  vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
+  every route of the screen declares, which only a field that holds no secret starts with;
+  `secret` is on a field alone, and a `visibility-button` on a secret input alone;
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
   constant or a search parameter,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist, reaches each of its states
+  actions, anchors with their codes and bindings that exist (a navigate's search keys of the
+  binding it moves to, each `{ anchor }` a field of the flow's own screen that holds no
+  secret), reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
   declared by the frame alone, once, reserved, with both answers and no action of its own,
@@ -854,7 +903,9 @@ gap is fixed in the contract files first, never worked around in a test.
   code and both answers that runs no action of its own; every mail a platform action declares
   goes to a parameter of the action or the account, takes its language from a parameter or
   the account, and links to a screen whose every route declares the search parameter that
-  carries its token; the versions agree; the generated schemas
+  carries its token; every notice it declares has a name no other notice of the action has,
+  goes and takes its language as a mail does, and links, when it does, to a screen whose
+  every route needs no parameter; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
@@ -972,7 +1023,8 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the derived parts, the codes and the error fields the anchors both sides hold gain or
-lose, and the
+lose, the
+notices of the platform actions added or removed, and the
 transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
@@ -1001,7 +1053,8 @@ takes an anchor removed and one added for a rename when they are the only ones o
 screen and kind. The derived parts of an anchor are listed by name,
 `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input). The codes and the
 error fields of an anchor are those the loader gives it,
-written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. The tests are in this repository, so the same change updates them, and
+written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. A notice is listed
+by its action and its name, `<action>.<name>`. The tests are in this repository, so the same change updates them, and
 the consumers check fails until it does.
 
 ## Asking for a missing anchor

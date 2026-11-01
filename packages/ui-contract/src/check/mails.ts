@@ -2,8 +2,8 @@
  * Rule 15: the mail a platform action declares goes to a parameter of the action or the signed-in
  * account, speaks the language a parameter of the action holds or the account's, and links to a
  * screen with a route, every route of which declares the search parameter that carries the token.
- * `account` is reserved: in a mail it names the signed-in account, so an action that sends one
- * has no parameter of that name.
+ * `account` is reserved: in a mail or a notice (rule 16, `notices.ts`) it names the account, so an
+ * action that sends either has no parameter of that name.
  */
 
 import { ACCOUNT, type Problem } from '../files'
@@ -16,9 +16,19 @@ export function mailsProblems(contract: Contract): Problem[] {
 
   return Object.entries(contract.screens.platform.actions).flatMap(([name, action]) => {
     const { mail } = action
+    const sends = mail !== undefined || (action.notices ?? []).length > 0
+    const reserved =
+      sends && Object.hasOwn(action.params, ACCOUNT)
+        ? [
+            inScreens(
+              ['platform', 'actions', name, 'params', ACCOUNT],
+              `"${ACCOUNT}" names the account in a mail or a notice, so an action that sends one gives no parameter that name`,
+            ),
+          ]
+        : []
 
     if (mail === undefined) {
-      return []
+      return reserved
     }
 
     const at = ['platform', 'actions', name, 'mail'] as const
@@ -29,14 +39,7 @@ export function mailsProblems(contract: Contract): Problem[] {
     )
 
     return [
-      ...(Object.hasOwn(action.params, ACCOUNT)
-        ? [
-            inScreens(
-              ['platform', 'actions', name, 'params', ACCOUNT],
-              `"${ACCOUNT}" names the signed-in account in a mail, so an action that sends one gives no parameter that name`,
-            ),
-          ]
-        : []),
+      ...reserved,
       ...(named(mail.to)
         ? []
         : [

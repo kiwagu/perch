@@ -23,6 +23,24 @@ describe('anchorDefSchema binding', () => {
   it('refuses an empty list of bindings', () => {
     expect(anchorDefSchema.safeParse(button([])).success).toBe(false)
   })
+  it('accepts a search parameter a field starts with, alone or beside its action', () => {
+    const input = (binding: unknown) => ({ kind: 'input', binding })
+
+    expect(anchorDefSchema.safeParse(input({ search: 'email' })).success).toBe(true)
+    expect(
+      anchorDefSchema.safeParse(
+        input([
+          { search: 'email' },
+          {
+            action: 'platform.request-password-reset',
+            params: { email: 'user.forgot.email-input' },
+          },
+        ]),
+      ).success,
+    ).toBe(true)
+    expect(anchorDefSchema.safeParse(input({ search: 'Email-1' })).success).toBe(false)
+    expect(anchorDefSchema.safeParse(input({ search: 'email', value: 'x' })).success).toBe(false)
+  })
 })
 
 describe('action params', () => {
@@ -67,5 +85,15 @@ describe('the question before a destructive action', () => {
     expect(authoredAnchorDefSchema.safeParse({ ...deleting, confirm: false }).success).toBe(true)
     expect(authoredAnchorDefSchema.safeParse({ ...deleting, confirm: true }).success).toBe(false)
     expect(authoredAnchorDefSchema.safeParse({ ...deleting, asks }).success).toBe(false)
+  })
+})
+
+describe('a secret field', () => {
+  it('says secret: true, and no other value', () => {
+    const password = { kind: 'input', derived: ['visibility-button'] }
+
+    expect(anchorDefSchema.safeParse({ ...password, secret: true }).success).toBe(true)
+    expect(authoredAnchorDefSchema.safeParse({ ...password, secret: true }).success).toBe(true)
+    expect(anchorDefSchema.safeParse({ ...password, secret: false }).success).toBe(false)
   })
 })

@@ -176,6 +176,70 @@ describe('flowProblems', () => {
       `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
+  it('carries into a search what a field of the screen holds', () => {
+    const contract = sampleContract()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.exit = [
+      {
+        type: 'navigate',
+        params: { to: '/sample/$key', search: { tab: { anchor: 'sample.title-input' } } },
+      },
+      {
+        type: 'navigate',
+        params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
+      },
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('carries into a search only what a field of its own screen holds, under a key of the binding', () => {
+    const contract = sampleContract()
+    const navigate = (search: Record<string, { anchor: string }>) =>
+      ({ type: 'navigate', params: { to: '/sample/$key', search } }) as const
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    flowStateIn(contract, 'editing').exit = [
+      navigate({ tab: { anchor: 'sample.gone-input' } }),
+      navigate({ tab: { anchor: 'sample.save-button' } }),
+      navigate({ tab: { anchor: 'sample.list' } }),
+      navigate({ tab: { anchor: 'sample.title-input.visibility-button' } }),
+      navigate({ tab: { anchor: 'app-shell.status' } }),
+      navigate({ page: { anchor: 'sample.title-input' } }),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
+      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
+      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
+      `${AT}.states.editing.exit[3].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
+      `${AT}.states.editing.exit[4].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
+      `${AT}.states.editing.exit[5].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+    ])
+  })
+  it('carries an email typed into a search, never a secret field', () => {
+    const contract = sampleContract()
+    const navigate = (anchor: string) =>
+      ({ type: 'navigate', params: { to: '/sample/$key', search: { tab: { anchor } } } }) as const
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.email-input': { kind: 'input' },
+      'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
+      'sample.password-confirmation-input': { kind: 'input', secret: true },
+    })
+    flowStateIn(contract, 'editing').exit = [
+      navigate('sample.email-input'),
+      navigate('sample.password-input'),
+      navigate('sample.password-confirmation-input'),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
+      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
+    ])
+  })
   it('holds a clear to a declared anchor that carries codes', () => {
     const contract = sampleContract()
     const editing = flowStateIn(contract, 'editing')

@@ -88,6 +88,9 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`contract.derivedParts`')
     expect(instructions.gaps).toContain('whether a password input shows what it holds')
   })
+  it('says a navigate may carry into a search what a field of the screen holds', () => {
+    expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')
