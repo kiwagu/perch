@@ -193,6 +193,23 @@ describe('SignInView', () => {
     expect(markedMet()).toEqual([CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
   })
 
+  it('shows a kept rule in the success tone and one not kept yet muted, never red', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    const tones = (testId: string) =>
+      ['text-success', 'text-muted-foreground', 'text-destructive'].filter((tone) =>
+        screen.getByTestId(testId).classList.contains(tone),
+      )
+
+    expect(tones(LENGTH)).toEqual(['text-success'])
+    expect(tones(SYMBOL)).toEqual(['text-muted-foreground'])
+
+    type('user.sign-in.password-input', 'abcdefghij!')
+
+    expect(tones(SYMBOL)).toEqual(['text-success'])
+  })
+
   it('reads each rule with whether it is met, the icons left out', () => {
     renderView({ mode: 'sign-up' })
     type('user.sign-in.password-input', 'abcdefghij')
