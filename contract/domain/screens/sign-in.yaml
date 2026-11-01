@@ -19,7 +19,10 @@ anchors:
     codes: [ check-your-mail ]
   user.sign-in.error:
     kind: error
-    description: Why the last attempt failed; the next attempt or a switch of mode clears it.
+    description: "Why the last attempt failed, under the password typed again when that one differs; the next attempt or a switch of mode clears it."
+    codes: [ invalid-credentials, email-not-verified, rate-limited, other-account, sign-up-rejected, passwords-differ, name-required, name-too-long, failed ]
+    fields:
+      passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
     kind: input
     description: The email of the account (type email).
@@ -43,6 +46,9 @@ anchors:
       - action: platform.sign-up
         params:
           password: user.sign-in.password-input
+  user.sign-in.password-confirmation-input:
+    kind: input
+    description: "The password typed again (type password); shown only in the mode sign-up, and never sent: the account is asked for only when it is the same as the password."
   user.sign-in.name-input:
     kind: input
     description: The name of the new account; shown only in the mode sign-up.
@@ -82,25 +88,31 @@ flow:
   meta:
     guards:
       emailNotVerified: the sign-in was refused because the account's email is not verified yet
+      passwordsDiffer: the password typed again is not the same as the password
   states:
     sign-in:
       description: The form in the mode sign-in.
       on:
         user.sign-in.toggle-button:
           target: sign-up
-          description: The name input appears; the error is cleared.
+          description: The password confirmation and the name input appear; the error is cleared.
           actions:
             - clear: user.sign-in.error
         user.sign-in.submit-button: signing-in
     sign-up:
-      description: The form in the mode sign-up, with the name input.
+      description: The form in the mode sign-up, with the password confirmation and the name input.
       on:
         user.sign-in.toggle-button:
           target: sign-in
-          description: The name input goes; the error is cleared.
+          description: The password confirmation and the name input go; the error is cleared.
           actions:
             - clear: user.sign-in.error
-        user.sign-in.submit-button: signing-up
+        user.sign-in.submit-button:
+          - guard: passwordsDiffer
+            description: Nothing is sent; the error says so under the password typed again.
+            actions:
+              - show: { user.sign-in.error: [ passwords-differ ] }
+          - target: signing-up
     signing-in:
       description: The sign-in runs; the error of the last attempt goes.
       entry:
@@ -148,7 +160,7 @@ flow:
             - clear: user.sign-in.mail-message
         user.sign-in.toggle-button:
           target: sign-up
-          description: The name input appears; the message goes.
+          description: The password confirmation and the name input appear; the message goes.
           actions:
             - clear: user.sign-in.mail-message
     unverified:
@@ -158,7 +170,7 @@ flow:
         user.sign-in.submit-button: signing-in
         user.sign-in.toggle-button:
           target: sign-up
-          description: The name input appears; the error is cleared.
+          description: The password confirmation and the name input appear; the error is cleared.
           actions:
             - clear: user.sign-in.error
     resending:

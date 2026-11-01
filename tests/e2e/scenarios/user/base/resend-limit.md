@@ -15,7 +15,7 @@ Where: [/sign-in] after a sign-up, then [user.sign-in.resend-button] four times 
 ## Scenario: One email takes three resends of its verification mail within a quarter of an hour; the fourth is refused and sends nothing
 
 ### Steps
-1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 2. Click [user.sign-in.resend-button] three times, each time once it is enabled again
 3. Click [user.sign-in.resend-button] once more
 

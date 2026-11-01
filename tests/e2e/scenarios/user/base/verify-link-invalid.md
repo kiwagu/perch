@@ -15,7 +15,7 @@ Where: [/verify-email] with a token no mail carried, then [user.verify-email.res
 ## Scenario: A broken link says so and sends a new one, whose link signs in
 
 ### Steps
-1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 2. Open [/verify-email] with a made-up token
 3. Enter the email into [user.verify-email.email-input] and click [user.verify-email.resend-button]
 4. Open the link of [mail:resend-verification]

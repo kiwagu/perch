@@ -18,7 +18,7 @@ Where: [/verify-email] with a token no mail carried, then [user.verify-email.res
 
 ### Steps
 1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and click [user.profile.sign-out-button]
-2. Click [user.sign-in.toggle-button], enter the other email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+2. Click [user.sign-in.toggle-button], enter the other email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 3. Open [/verify-email] with a made-up token
 4. Enter the other email into [user.verify-email.email-input] and click [user.verify-email.resend-button]
 5. Enter the unknown email into [user.verify-email.email-input] and click [user.verify-email.resend-button]

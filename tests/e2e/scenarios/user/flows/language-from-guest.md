@@ -18,7 +18,7 @@ Where: [/sign-in] on device A, [/verify-email] on device B, another browser, the
 ### Steps
 1. On device A, open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
 2. On device A, choose [value:es] in [app-shell.locale-select]
-3. On device A, click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+3. On device A, click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 4. On device B, open the link of [mail:sign-up]
 5. On device A, enter the password into [user.sign-in.password-input] and click [user.sign-in.submit-button]
 

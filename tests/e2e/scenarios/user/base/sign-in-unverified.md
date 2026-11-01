@@ -15,7 +15,7 @@ Where: [/sign-in] after a sign-up whose verification mail was not opened
 ## Scenario: An account whose email is not verified cannot sign in; the page sends the mail again, and its link signs in
 
 ### Steps
-1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 2. Reload the page, enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]
 3. Click [user.sign-in.resend-button]
 4. Open the link of [mail:resend-verification]

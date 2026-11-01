@@ -17,7 +17,7 @@ Where: [/sign-in] then [user.sign-in.toggle-button], for an email that has an ac
 
 ### Steps
 1. Sign up with the email, the password and the name, open the link of [mail:sign-up], and click [user.profile.sign-out-button]
-2. Click [user.sign-in.toggle-button], enter the email, the other password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
+2. Click [user.sign-in.toggle-button], enter the email, the other password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 3. Enter the other password into [user.sign-in.password-input] and click [user.sign-in.submit-button]
 4. Enter the password into [user.sign-in.password-input] and click [user.sign-in.submit-button]
 
