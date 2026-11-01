@@ -158,6 +158,34 @@ describe('SignInView', () => {
     expect(input('user.sign-in.submit-button').disabled).toBe(true)
   })
 
+  it('describes the password typed again by its error exactly while the passwords differ', () => {
+    const props: SignInViewProps = {
+      mode: 'sign-up',
+      showResend: false,
+      can: () => true,
+      onSubmit: () => Promise.resolve(true),
+      onToggleMode: () => {},
+      onTypePassword: () => {},
+      onResend: () => Promise.resolve(true),
+    }
+    const describedBy = () =>
+      input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
+    const { rerender } = renderWithProviders(<SignInView {...props} error={PASSWORDS_DIFFER} />)
+
+    expect(describedBy()).not.toBeNull()
+    expect(document.getElementById(describedBy() ?? '')).toBe(
+      screen.getByTestId('user.sign-in.error'),
+    )
+
+    rerender(<SignInView {...props} error={undefined} />)
+
+    expect(describedBy()).toBeNull()
+
+    rerender(<SignInView {...props} error="data:SIGN_UP_REJECTED" />)
+
+    expect(describedBy()).toBeNull()
+  })
+
   it('says it in Spanish', () => {
     renderView({ mode: 'sign-up', error: PASSWORDS_DIFFER }, 'es')
 

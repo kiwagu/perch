@@ -101,6 +101,8 @@ function noticeText(
 export function SignInView(props: SignInViewProps) {
   const t = useT()
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
+  // The error under the password typed again describes that field while it shows there.
+  const confirmationErrorId = useId()
   const [values, setValues] = useState<SignInValues>({
     email: '',
     password: '',
@@ -196,10 +198,15 @@ export function SignInView(props: SignInViewProps) {
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
+                  aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
                   data-testid="user.sign-in.password-confirmation-input"
                 />
                 {error && concerns === 'confirmation' ? (
-                  <FieldError data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
+                  <FieldError
+                    id={confirmationErrorId}
+                    data-testid={SIGN_IN_ERROR_TEST_ID}
+                    data-code={error.code}
+                  >
                     {error.text}
                   </FieldError>
                 ) : null}
