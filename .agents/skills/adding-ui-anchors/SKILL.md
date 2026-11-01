@@ -90,8 +90,9 @@ code and the tests follow; the checks hold them to the contract.
    lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
    words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
-   `holdsInput={false}` in the JSX, and the contract derives which. A password input that
-   shows what it holds on demand lists `derived: [ visibility-button ]`: the eye is
+   `holdsInput={false}` in the JSX, and the contract derives which. A field that holds a
+   secret says `secret: true`, and a password input that shows what it holds on demand lists
+   `derived: [ visibility-button ]` beside it: the eye is
    presentation only, never an event of the flow (`references/patterns.md`, "A password
    input's eye").
    A new screen follows the checklist in `references/checklists.md`.

@@ -5,7 +5,8 @@
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
  * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, a
  * `navigate` the path of a binding and search parameters of that binding, each a literal or the
- * value a field of the flow's own screen holds (`{ anchor }`, never a visibility-button); an
+ * value a field of the flow's own screen holds (`{ anchor }`, never a visibility-button nor a
+ * secret field, which would put a password into an address and its history); an
  * address is a binding of the flow's own screen (its first one when the path is left out) with
  * search parameters of that binding.
  */
@@ -73,14 +74,18 @@ const carriedProblems = (
       return [inScreens(where, `"${anchor}" is not a declared anchor of the screen`)]
     }
 
-    return FIELD_KINDS.has(def.kind)
-      ? []
-      : [
-          inScreens(
-            where,
-            `"${anchor}" is a ${def.kind}, not a field: a search takes the value a field holds`,
-          ),
-        ]
+    if (!FIELD_KINDS.has(def.kind)) {
+      return [
+        inScreens(
+          where,
+          `"${anchor}" is a ${def.kind}, not a field: a search takes the value a field holds`,
+        ),
+      ]
+    }
+
+    return def.secret === true
+      ? [inScreens(where, `"${anchor}" is a secret field: never a value a search carries`)]
+      : []
   })
 
 export function effectProblems(

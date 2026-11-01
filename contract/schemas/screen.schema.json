@@ -689,6 +689,11 @@
             "description": "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.",
             "type": "boolean"
           },
+          "secret": {
+            "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+            "type": "boolean",
+            "const": true
+          },
           "codes": {
             "description": "The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.",
             "type": "array",

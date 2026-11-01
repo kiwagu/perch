@@ -87,3 +87,13 @@ describe('the question before a destructive action', () => {
     expect(authoredAnchorDefSchema.safeParse({ ...deleting, asks }).success).toBe(false)
   })
 })
+
+describe('a secret field', () => {
+  it('says secret: true, and no other value', () => {
+    const password = { kind: 'input', derived: ['visibility-button'] }
+
+    expect(anchorDefSchema.safeParse({ ...password, secret: true }).success).toBe(true)
+    expect(authoredAnchorDefSchema.safeParse({ ...password, secret: true }).success).toBe(true)
+    expect(anchorDefSchema.safeParse({ ...password, secret: false }).success).toBe(false)
+  })
+})

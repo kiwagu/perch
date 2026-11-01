@@ -108,16 +108,17 @@ for Bun.
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
     screens is in the vocabulary, every code is used, no choice values for a
     `visibility-button`, whose values its suffix defines), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names, a `visibility-button` derived by an `input`
-    alone), `bindingsProblems` (model fields,
+    never named like a derived one, entry and names, `secret` on a field alone, a
+    `visibility-button` derived by a secret `input` alone), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
     input), a constant or a search parameter every route of the screen declares, routes,
     the search parameter a field starts with, one every route of the screen declares, never on
-    another kind, sources), `flowProblems` (a flow names states, events
+    another kind nor a secret field, sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
     that exist, a navigate's search keys of the binding it moves to, each value a literal or
-    `{ anchor }`, a field its own screen declares (never a `visibility-button`),
+    `{ anchor }`, a field its own screen declares (never a `visibility-button` nor a secret
+    field),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,

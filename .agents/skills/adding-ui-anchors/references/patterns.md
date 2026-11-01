@@ -485,11 +485,12 @@ its value is the one transient state a component keeps of its own, never a state
 the eye is no event of the flow, the machine does not enable it, and it is always enabled. Its
 `data-value` says what a click does, `show` or `hide`, the suffix's own values, never rows of
 "Choice values". This example is illustrative, not a file of the app. The screen file lists
-the suffix on the input:
+the suffix on the input, which says it holds a secret, as only a secret input renders an eye:
 
 ```yaml
 user.sign-in.password-input:
   kind: input
+  secret: true
   derived: [ visibility-button ]
 ```
 

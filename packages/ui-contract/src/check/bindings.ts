@@ -4,7 +4,8 @@
  * `params` keys are that action's parameters, each taking a declared anchor, a constant, or a
  * search parameter every route of the screen declares (a parameter left out is the view's to
  * compute, and `$id` is minted); `route` is the path of a binding; `search` starts a field (an
- * anchor of a field kind) with a search parameter every route of the screen declares; a
+ * anchor of a field kind, never a secret one) with a search parameter every route of the screen
+ * declares; a
  * `source` names an entity and its order field, or a platform action. What a flow names is rule
  * 8's (`flow/`).
  */
@@ -39,6 +40,14 @@ function bindingProblems(
               `a ${def.kind} starts with no search parameter: only a field holds a value to start with`,
             ),
           ]),
+      ...(def.secret === true
+        ? [
+            lookups.inScreens(
+              [...at, 'search'],
+              'a secret field starts with no search parameter: a secret never comes from a URL',
+            ),
+          ]
+        : []),
     ]
   }
 

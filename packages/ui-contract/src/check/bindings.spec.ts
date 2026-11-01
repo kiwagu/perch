@@ -115,6 +115,21 @@ describe('bindingsProblems', () => {
       `${AT}["sample.list"].binding.search: a list starts with no search parameter: only a field holds a value to start with`,
     ])
   })
+  it('never starts a secret field with a search parameter: a secret never comes from a URL', () => {
+    const contract = sampleContract()
+
+    Object.assign(anchorIn(contract, 'sample.title-input'), {
+      secret: true,
+      binding: [
+        { search: 'tab' },
+        { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+      ],
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.title-input"].binding[0].search: a secret field starts with no search parameter: a secret never comes from a URL`,
+    ])
+  })
   it('reports a name of the object prototype as unknown, never as found or thrown', () => {
     const contract = sampleContract()
 

@@ -194,6 +194,7 @@ describe('the visibility-button of a password input', () => {
     const base = fixtureContract()
 
     Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      secret: true,
       derived: ['visibility-button'],
     })
 
@@ -211,6 +212,8 @@ describe('the visibility-button of a password input', () => {
     })
 
     expect(built.ids['sample.title-input']?.derived).toEqual(['visibility-button'])
+    expect(built.ids['sample.title-input']?.secret).toBe(true)
+    expect(built.contract.instructions.screenMap).toContain('`secret`')
     expect(built.contract.derivedSuffixes['visibility-button']).toBe('the eye of a password input')
     expect(built.contract.derivedParts).toEqual({
       'confirm-button': { kind: 'button' },

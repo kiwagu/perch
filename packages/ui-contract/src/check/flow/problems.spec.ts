@@ -219,6 +219,27 @@ describe('flowProblems', () => {
       `${AT}.states.editing.exit[5].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
+  it('carries an email typed into a search, never a secret field', () => {
+    const contract = sampleContract()
+    const navigate = (anchor: string) =>
+      ({ type: 'navigate', params: { to: '/sample/$key', search: { tab: { anchor } } } }) as const
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.email-input': { kind: 'input' },
+      'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
+      'sample.password-confirmation-input': { kind: 'input', secret: true },
+    })
+    flowStateIn(contract, 'editing').exit = [
+      navigate('sample.email-input'),
+      navigate('sample.password-input'),
+      navigate('sample.password-confirmation-input'),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
+      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
+    ])
+  })
   it('holds a clear to a declared anchor that carries codes', () => {
     const contract = sampleContract()
     const editing = flowStateIn(contract, 'editing')

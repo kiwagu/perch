@@ -1049,6 +1049,11 @@
                   "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
                   "type": "boolean"
                 },
+                "secret": {
+                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "codes": {
                   "description": "The data-code values the element carries.",
                   "type": "array",
@@ -5449,6 +5454,11 @@
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
+          },
+          "secret": {
+            "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",
+            "type": "boolean",
+            "const": true
           }
         },
         "required": [

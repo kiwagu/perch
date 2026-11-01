@@ -126,6 +126,12 @@ export const anchorDefSchema = z
       .describe(
         'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
       ),
+    secret: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
+      ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
     fields: z
       .record(codeSchema, baseAnchorSchema)

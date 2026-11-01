@@ -71,6 +71,7 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             roles,
             own,
             holdsInput,
+            secret,
             asks,
           },
         ]) => [
@@ -88,6 +89,7 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
             ...(holdsInput === undefined ? {} : { holdsInput }),
+            ...(secret === undefined ? {} : { secret }),
             ...(asks === undefined ? {} : { asks }),
           },
         ],

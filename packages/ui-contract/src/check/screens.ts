@@ -167,21 +167,43 @@ const holdsInputProblems = ({ screens }: Contract): Problem[] =>
       : [],
   )
 
-/** The eye that shows or hides what a password input holds is derived by an input alone. */
+/** `secret` says a field holds a secret, which never leaves the page; only a field has it. */
+const secretProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.secret === true && !FIELD_KINDS.has(def.kind)
+      ? [locate(screens)([...at, 'secret'], 'only a field holds a secret')]
+      : [],
+  )
+
+/**
+ * The eye that shows or hides what a password input holds is derived by an input alone, and by a
+ * secret one: on any other field there is nothing hidden for it to show.
+ */
 const visibilityProblems = ({ screens }: Contract): Problem[] =>
   declaredAnchors(screens).flatMap(({ def, at }) =>
-    def.kind === VISIBILITY_BASE_KIND
-      ? []
-      : (def.derived ?? []).flatMap((suffix, index) =>
-          suffix === VISIBILITY_BUTTON
-            ? [
-                locate(screens)(
-                  [...at, 'derived', index],
-                  `only an ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}`,
-                ),
-              ]
-            : [],
-        ),
+    (def.derived ?? []).flatMap((suffix, index) => {
+      if (suffix !== VISIBILITY_BUTTON) {
+        return []
+      }
+
+      if (def.kind !== VISIBILITY_BASE_KIND) {
+        return [
+          locate(screens)(
+            [...at, 'derived', index],
+            `only an ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}`,
+          ),
+        ]
+      }
+
+      return def.secret === true
+        ? []
+        : [
+            locate(screens)(
+              [...at, 'derived', index],
+              `only a secret ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}: declare it secret: true`,
+            ),
+          ]
+    }),
   )
 
 export const screensProblems = (contract: Contract): Problem[] => [
@@ -193,5 +215,6 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...nameProblems(contract),
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
+  ...secretProblems(contract),
   ...visibilityProblems(contract),
 ]
