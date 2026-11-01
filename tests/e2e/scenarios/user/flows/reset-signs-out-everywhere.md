@@ -2,9 +2,12 @@
 tags:
   - full
 devices:
-  A: identity
+  A: guest
   B: guest
 data:
+  Email: generate
+  Password: generate
+  Name: generate
   New password: generate
 ---
 # Set a new password while another device is signed in
@@ -14,10 +17,10 @@ Where: [/me] on device A, and [/forgot-password] then [/reset-password] on devic
 ## Scenario: A new password set from the mail signs every device of the account out
 
 ### Steps
-1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]
-2. On device B, open [/forgot-password], enter the account's email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]
+1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]
+2. On device B, open [/forgot-password], enter the email into [user.forgot-password.email-input] and click [user.forgot-password.send-button]
 3. On device B, open the link of [mail:request-password-reset], enter the new password into [user.reset-password.password-input] and [user.reset-password.password-confirmation-input], and click [user.reset-password.submit-button]
 
 ### Expected result
 - After step 3 [user.reset-password.message] carries [code:password-reset] on device B
-- Device A is signed out: its URL is [/sign-in] and [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
+- Device A is signed out: its URL is [/sign-in] and [user.sign-in.notice-message] carries [code:password-changed-elsewhere]

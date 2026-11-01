@@ -120,7 +120,7 @@ The `data-state` of `app-shell.status`.
 | `opening` | the app starts: it checks the site storage and who is signed in, and no screen is rendered yet |
 | `opening-data` | the signed-in account's frame and the open screen are rendered while its local data is being opened |
 | `ready` | the frame and the screen are rendered, and a signed-in account's data is open, so a test may start |
-| `failed` | the saved account's data could not be opened, and the frame offers `app-shell.sign-out-here-button`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error` |
+| `failed` | the saved account's data could not be opened, and the frame offers `app-shell.sign-out-here-button` |
 | `storage-blocked` | the browser keeps no site data, so the app stops with a message and shows no sign-in form |
 
 ## Container states
@@ -164,12 +164,13 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
+| `password-changed-elsewhere` | `user.sign-in.notice-message` | the account's password changed on another device or through a reset link, which signed this device out; it signs in with the new password |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
-| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message` | a mail whose link verifies the email typed is on its way, if that email has an account waiting for it; the same words when it has none, so the page tells nobody which emails have accounts |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet); the same words when it has none, so the page tells nobody which emails have accounts |
 | `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
 | `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
-| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is not one a verification mail carried, or its account is gone |
-| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is older than a day; the same page sends a new one |
+| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
+| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is too old: a verification or confirmation link after a day, a reset link after an hour; a new one is asked for |
 | `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error` | the email or the password is wrong |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
@@ -182,7 +183,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |

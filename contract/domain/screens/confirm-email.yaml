@@ -29,12 +29,11 @@ anchors:
     codes: [ email-changed ]
   user.confirm-email.sign-in-link:
     kind: link
-    description: Leads to the sign-in page; shown with email-changed to a device nobody is signed in on.
+    description: Leads to the sign-in page; shown with email-changed unless this device is signed in to the account whose email changed.
     binding: { route: /sign-in }
-    roles: [ guest ]
   user.confirm-email.profile-link:
     kind: link
-    description: Leads to the profile, which shows the new email; shown with email-changed to a signed-in device.
+    description: Leads to the profile, which shows the new email; shown with email-changed when this device is signed in to the account whose email changed.
     binding: { route: /me }
     roles: [ identity ]
   user.confirm-email.error:
@@ -46,6 +45,9 @@ states:
   ready: "The message with its link, or the error."
 flow:
   initial: confirming
+  meta:
+    guards:
+      thisAccount: this device is signed in to the account whose email the link changed
   states:
     confirming:
       description: The token of the link is being exchanged.
@@ -53,15 +55,24 @@ flow:
         src: platform.confirm-email
         input: { token: { search: token } }
         onDone:
-          target: done
-          actions:
-            - show: { user.confirm-email.message: [ email-changed ] }
+          - target: done-here
+            guard: thisAccount
+            description: The message says the email is the new one, beside user.confirm-email.profile-link.
+            actions:
+              - show: { user.confirm-email.message: [ email-changed ] }
+          - target: done
+            description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
+            actions:
+              - show: { user.confirm-email.message: [ email-changed ] }
         onError:
           target: failed
           actions:
             - show: user.confirm-email.error
+    done-here:
+      description: The message says the email is the new one, beside user.confirm-email.profile-link.
+      type: final
     done:
-      description: The message says the email is the new one, beside the link to sign in or to the profile.
+      description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
       type: final
     failed:
       description: The error says why the link did not change the email; a new link is asked for from the settings.

@@ -24,6 +24,6 @@ Where: [/settings], the form [user.settings.email.form], then [/confirm-email] f
 
 ### Expected result
 - After step 2 [user.settings.email.message] carries [code:check-your-mail], and [mail:change-email] reaches the new email
-- After step 3 the link opens [/confirm-email], [user.confirm-email.message] carries [code:email-changed], and [notice:confirm-email.email-changed] reaches the email
+- After step 3 the link opens [/confirm-email], [user.confirm-email.message] carries [code:email-changed], and [notice:confirm-email.email-changed] reaches the email, naming neither the new email nor any part of it
 - After step 4 the URL is [/me] and [user.profile.email-input] holds the new email
 - After step 5 [app-shell.notice-message] carries [code:welcome] and the URL is [/me]

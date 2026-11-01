@@ -83,7 +83,7 @@ anchors:
     derived: [ visibility-button ]
   user.settings.password.save-button:
     kind: button
-    description: Changes the password; disabled while the new password breaks a rule, while the password typed again differs, and while it changes.
+    description: "Changes the password; disabled while the new password breaks a rule, once the password typed again has strayed from it, and while it changes; a click while only a part of it is typed again says it differs and sends nothing."
     binding:
       action: platform.change-password
       params:
@@ -244,7 +244,7 @@ flow:
                 input: { currentPassword: user.settings.password.current-password-input, password: user.settings.password.new-password-input }
                 onDone:
                   target: password-weak
-                  description: "The password is the new one: the toast says so, the form is emptied, and the account's other devices are signed out."
+                  description: "The password is the new one: the toast says so, and the account's other devices are signed out."
                 onError:
                   target: kept
                   description: The error says why the password did not change; the form stays as typed.
