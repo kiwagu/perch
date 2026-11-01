@@ -76,13 +76,18 @@ describe('collectFromSource', () => {
   })
   it('records the literal suffix of testIdFor(), its base when a literal, and refuses a suffix built at runtime', () => {
     const { derived, problems } = collected('derived.tsx')
+    const eye = { suffix: 'visibility-button', base: 'sample.title-input' }
 
     expect(derived).toEqual([
-      { suffix: 'option', line: 4 },
-      { suffix: 'confirm-button', line: 6 },
-      { suffix: 'visibility-button', base: 'sample.title-input', line: 10 },
+      { suffix: 'option', line: 5 },
+      { suffix: 'confirm-button', line: 7 },
+      { ...eye, line: 11 },
+      { ...eye, line: 13 },
+      { ...eye, line: 16 },
+      { ...eye, line: 19 },
+      { suffix: 'confirm-button', base: 'sample.gone-dialog', line: 21 },
     ])
-    expect(problems.map(formatProblem)).toEqual([`sources/derived.tsx:8: ${RUNTIME_SUFFIX}`])
+    expect(problems.map(formatProblem)).toEqual([`sources/derived.tsx:9: ${RUNTIME_SUFFIX}`])
     expect(collected('attributes.tsx').derived).toEqual([{ suffix: 'item', line: 18 }])
   })
   it('reads the codes: a data-code literal, a code key and the literals of a <NAME>_CODES map', () => {

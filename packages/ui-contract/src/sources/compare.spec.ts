@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import type { Collected } from './collect'
+import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -251,6 +254,24 @@ describe('compareWithContract', () => {
     ])
     expect(compared([...rendered, eye('sample.gone-input')])).toEqual([
       'eye.tsx:7: testIdFor("sample.gone-input", "visibility-button"): "sample.gone-input" is not in contract/domain/screens',
+    ])
+  })
+  it('holds a literal base, quoted, a template or wrapped, to the anchor that lists its suffix', () => {
+    const screens = structuredClone(SCREENS)
+
+    Object.assign(screens.screens[0]?.anchors ?? {}, {
+      'sample.title-input': { kind: 'input', derived: ['visibility-button'] },
+      'sample.leave-dialog': { kind: 'dialog', derived: ['confirm-button'] },
+    })
+
+    const file = join(import.meta.dirname, '../__fixtures__/sources/derived.tsx')
+    const derived = collectFromSource(readFileSync(file, 'utf8'), 'sources/derived.tsx')
+
+    expect(
+      compareWithContract([derived], screens, vocabulary, { ahead: true }).map(formatProblem),
+    ).toEqual([
+      `sources/derived.tsx:9: ${RUNTIME_SUFFIX}`,
+      'sources/derived.tsx:21: testIdFor("sample.gone-dialog", "confirm-button"): "sample.gone-dialog" is not in contract/domain/screens',
     ])
   })
   it('reports a code that is not in the vocabulary', () => {
