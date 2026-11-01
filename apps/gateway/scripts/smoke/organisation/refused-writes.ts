@@ -7,18 +7,10 @@
 import { noteIdFactory } from '@workspace/ids'
 import { RegionDoc } from '@workspace/replica'
 
-import { noteCreate, noteUpdate } from '../../src/sync/__fixtures__/note'
+import { noteCreate, noteUpdate } from '../../../src/sync/__fixtures__/note'
+import { check, step, takeUpdates, unwrap } from '../steps'
 
-import type { SmokeDevice } from './device'
-import type { SignedIn } from './http'
-import { check, step, takeUpdates, unwrap } from './steps'
-
-/** A member of the region as the smoke drives it: who signed in, its device and its document. */
-interface Member {
-  readonly signedIn: SignedIn
-  readonly device: SmokeDevice
-  readonly doc: RegionDoc
-}
+import type { Member } from './member'
 
 /** Where the refused writes run: the region, its owner (an admin), the invited member and the owner's note. */
 export interface RefusedWrites {
