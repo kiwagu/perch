@@ -3,9 +3,9 @@
  * one through its base's `derived`, never a visibility-button, which is presentation only), a
  * platform event of `platform.events`, or a data event
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
- * a declared anchor and codes it carries, a `clear` a field of the flow's own screen, which it
- * empties (a secret one included), or a declared anchor that carries codes, which then shows
- * none (never a visibility-button, nor any other anchor), a `navigate` the path of a binding
+ * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, of any
+ * kind and screen, which then shows none, else a field of the flow's own screen, which it
+ * empties (a secret one included; never a visibility-button), a `navigate` the path of a binding
  * and search parameters of that binding, each a literal or the value a field of the flow's own
  * screen holds (`{ anchor }`, never a visibility-button nor a secret field, which would put a
  * password into an address and its history); an address is a binding of the flow's own screen
@@ -94,8 +94,9 @@ const CLEAR_NAMES =
   'a clear names a field, which it empties, or an anchor that carries codes, which then shows none'
 
 /**
- * The anchor a clear names: a field of the flow's own screen, emptied (a secret one included),
- * or a declared anchor that carries codes, which shows none until one is shown again.
+ * The anchor a clear names: first a declared anchor that carries codes, whatever its kind and
+ * its screen, which shows none until one is shown again; else a field that carries none, of the
+ * flow's own screen, emptied (a secret one included). Never a visibility-button.
  */
 function clearProblems(
   { screen, defs, visibilityButtons, inScreens }: InFlow,
@@ -114,20 +115,22 @@ function clearProblems(
     return [inScreens(at, `"${anchor}" is not a declared anchor`)]
   }
 
-  if (FIELD_KINDS.has(def.kind)) {
-    return own(screen.anchors, anchor) === undefined
-      ? [
-          inScreens(
-            at,
-            `"${anchor}" is a field of another screen: a clear empties a field of the flow's own screen`,
-          ),
-        ]
-      : []
+  if ((def.codes ?? []).length > 0) {
+    return []
   }
 
-  return (def.codes ?? []).length > 0
-    ? []
-    : [inScreens(at, `"${anchor}" is no field and carries no code: ${CLEAR_NAMES}`)]
+  if (!FIELD_KINDS.has(def.kind)) {
+    return [inScreens(at, `"${anchor}" is no field and carries no code: ${CLEAR_NAMES}`)]
+  }
+
+  return own(screen.anchors, anchor) === undefined
+    ? [
+        inScreens(
+          at,
+          `"${anchor}" is a field of another screen that carries no code: a clear empties a field of the flow's own screen`,
+        ),
+      ]
+    : []
 }
 
 export function effectProblems(

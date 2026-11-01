@@ -371,12 +371,14 @@ as it holds its router to the bindings.
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
   } }`, an anchor that carries codes shows none until one is shown again; a field is emptied;
   and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app
-  implements all three. A `clear` names a field of the flow's own screen (an input, a
-  textarea, a select, a checkbox, a radio or a switch, a `secret` one included), which
-  returns to its empty or initial value and holds no input any more, as if nothing was typed,
-  or an anchor that carries codes; never a button, a list, a link, a `visibility-button` or
-  any other anchor: a form empties its passwords this way once the action that took them
-  succeeds. Each value of a navigate's `search` is a search key of the binding it moves to,
+  implements all three. The codes come first: a `clear` of an anchor that carries codes,
+  whatever its kind and its screen, a field included, means it shows none until one is shown
+  again. A field that carries none (an input, a textarea, a select, a checkbox, a radio or a
+  switch, a `secret` one included) is emptied, and only on the flow's own screen: it returns
+  to its empty or initial value and holds no input any more, as if nothing was typed; a form
+  empties its passwords this way once the action that took them succeeds. A `clear` never
+  names a `visibility-button`, nor a button, a list, a link or any other anchor unless it
+  carries codes. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
@@ -899,9 +901,10 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist (a clear's anchor a field of the
-  flow's own screen or an anchor that carries codes, a navigate's search keys of the binding
-  it moves to, each `{ anchor }` a field of the flow's own screen that holds no secret),
+  actions, anchors with their codes and bindings that exist (a clear's anchor one that carries
+  codes, else a field of the flow's own screen, never a `visibility-button`, a navigate's
+  search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
+  that holds no secret),
   reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is

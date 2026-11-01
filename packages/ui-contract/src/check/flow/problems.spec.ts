@@ -286,7 +286,7 @@ describe('flowProblems', () => {
       `${AT}.states.editing.entry[5].params.anchor: "sample.title-input.visibility-button" is a visibility-button, presentation only: ${may}`,
     ])
   })
-  it("refuses a clear of another screen's field: a flow empties a field of its own screen", () => {
+  it("refuses a clear of another screen's field that carries no code: a flow empties a field of its own screen", () => {
     const contract = sampleContract()
 
     Object.assign(screenIn(contract, 'app-shell').anchors, {
@@ -295,8 +295,24 @@ describe('flowProblems', () => {
     flowStateIn(contract, 'editing').exit = [clear('app-shell.search-input')]
 
     expect(printed(contract)).toEqual([
-      `${AT}.states.editing.exit[0].params.anchor: "app-shell.search-input" is a field of another screen: a clear empties a field of the flow's own screen`,
+      `${AT}.states.editing.exit[0].params.anchor: "app-shell.search-input" is a field of another screen that carries no code: a clear empties a field of the flow's own screen`,
     ])
+  })
+  it('keeps the code meaning first: a field that carries codes, on any screen, shows none', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.code-input': { kind: 'input', codes: ['failed'] },
+    })
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.code-input': { kind: 'input', codes: ['failed'] },
+    })
+    flowStateIn(contract, 'editing').exit = [
+      clear('sample.code-input'),
+      clear('app-shell.code-input'),
+    ]
+
+    expect(printed(contract)).toEqual([])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {
     const contract = sampleContract()
