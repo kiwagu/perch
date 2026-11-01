@@ -89,8 +89,73 @@ describe('ShellContainer', () => {
 
     expect(message.getAttribute('data-code')).toBe('screen-crashed')
     expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(false)
-    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+    // The guest's frame stays around it, with no navigation.
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     quiet.mockRestore()
+  })
+
+  it('shows a guest no navigation, and an account its navigation from its sign-in to its sign-out', async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const listeners = new Set<(user: typeof ann | undefined) => void>()
+    let current: typeof ann | undefined
+    const { session: guest } = fakeSession()
+    const session: SessionPort = {
+      ...guest,
+      current: () => current,
+      subscribe: (listener) => {
+        listeners.add(listener)
+
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    }
+    const account = (user: typeof ann | undefined) => {
+      current = user
+      for (const listener of listeners) {
+        listener(user)
+      }
+    }
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={fakeServices(session)}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+
+    act(() => account(ann))
+
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+
+    act(() => account(undefined))
+
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
   })
 
   it('tells the user of a change the gateway refused and this device undid', async () => {
@@ -447,7 +512,7 @@ describe('ShellContainer', () => {
         </ThemeContext.Provider>
       </I18nProvider>,
     )
-    await screen.findByTestId('app-shell.nav')
+    await screen.findByTestId('app-shell.locale-select')
 
     return { services, frame, reload, install }
   }

@@ -83,32 +83,25 @@ export function ShellView(props: ShellViewProps) {
   const t = useT()
   const locale = useLocale()
   const Link = props.link ?? PlainLink
-  const items = props.signedIn
-    ? [
-        { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
-        {
-          to: '/org',
-          label: t('app.shell.nav.organisation'),
-          testId: 'app-shell.nav.organisation-link',
-        },
-        {
-          to: '/devices',
-          label: t('app.shell.nav.devices'),
-          testId: 'app-shell.nav.devices-link',
-        },
-        {
-          to: '/settings',
-          label: t('app.shell.nav.settings'),
-          testId: 'app-shell.nav.settings-link',
-        },
-      ]
-    : [
-        {
-          to: '/sign-in',
-          label: t('app.shell.nav.sign-in'),
-          testId: 'app-shell.nav.sign-in-link',
-        },
-      ]
+  // A signed-in account's navigation; a guest sees none, and the page takes the frame's width.
+  const items = [
+    { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
+    {
+      to: '/org',
+      label: t('app.shell.nav.organisation'),
+      testId: 'app-shell.nav.organisation-link',
+    },
+    {
+      to: '/devices',
+      label: t('app.shell.nav.devices'),
+      testId: 'app-shell.nav.devices-link',
+    },
+    {
+      to: '/settings',
+      label: t('app.shell.nav.settings'),
+      testId: 'app-shell.nav.settings-link',
+    },
+  ]
   const themes = THEMES.map((theme) => ({
     value: theme,
     label:
@@ -190,17 +183,21 @@ export function ShellView(props: ShellViewProps) {
           )}
         </>
       }
-      navigation={items.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          data-testid={item.testId}
-          aria-current={props.activePath === item.to ? 'page' : undefined}
-          className={navItemVariants({ active: props.activePath === item.to })}
-        >
-          {item.label}
-        </Link>
-      ))}
+      navigation={
+        props.signedIn
+          ? items.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                data-testid={item.testId}
+                aria-current={props.activePath === item.to ? 'page' : undefined}
+                className={navItemVariants({ active: props.activePath === item.to })}
+              >
+                {item.label}
+              </Link>
+            ))
+          : undefined
+      }
       status={status}
     >
       {/* The notice's line is held, as tall as the longest notice (three lines on a phone, two
