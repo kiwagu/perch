@@ -29,6 +29,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-info: var(--info);
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-accent-foreground: var(--accent-foreground);
@@ -70,10 +71,14 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  /* The tones of an outcome, as --destructive is red: Tailwind's 600 here, its 400 in the dark. */
-  --warning: oklch(0.646 0.222 41.116);
-  --success: oklch(0.627 0.194 149.214);
+  /* The tones of a message: Tailwind's red-700, amber-700, green-700 and blue-700, so a text in
+     them reads at 4.5:1 or more on the card (the 600s of green, orange and amber do not, and
+     red-600 does not on the destructive button's tint). Warning takes amber, whose hue stays near
+     the dark theme's orange and away from the red. */
+  --destructive: oklch(0.505 0.213 27.518);
+  --warning: oklch(0.555 0.163 48.998);
+  --success: oklch(0.527 0.154 150.069);
+  --info: oklch(0.488 0.243 264.376);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -111,9 +116,12 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
+  /* The tones of a message: Tailwind's red-400, orange-400, green-400 and blue-400, so a text in
+     them reads at 6:1 or more on the dark card. */
   --destructive: oklch(0.704 0.191 22.216);
   --warning: oklch(0.75 0.183 55.934);
   --success: oklch(0.792 0.209 151.711);
+  --info: oklch(0.707 0.165 254.624);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
