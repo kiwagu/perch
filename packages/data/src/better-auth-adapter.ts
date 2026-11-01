@@ -8,7 +8,9 @@ import type { LocalDb } from './types'
  * connection's classes, so ids were sent as empty objects and came back as objects, not strings;
  * the repository patches it (`patches/`) to use the classes of its `surrealdb` dependency. The
  * patch also binds each transaction to an adapter of its own: the published adapter shared one
- * transaction handle across concurrent requests, so they ran inside each other's transactions. A
+ * transaction handle across concurrent requests, so they ran inside each other's transactions.
+ * And it leaves a failed join's error to the caller, which the published adapter also printed
+ * whole to stderr, where its message and cause could carry the query's bindings (an email). A
  * subpath of its own, since the adapter loads Node modules and the browser imports the root.
  */
 export function surrealAuthAdapter(local: LocalDb): ReturnType<typeof surrealAdapter> {

@@ -12,7 +12,7 @@ Where: [/me] after sign-up, reloaded while the page's database engines are held 
 ## Scenario: A signed-in device shows its frame and the open screen while its data opens, then the data
 
 ### Steps
-1. Sign up and wait for [app-shell.status] to reach [state:ready] on [/me]
+1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]
 2. Hold back the page's database engines, so that the account's data cannot open yet
 3. Reload the page
 4. Let the database engines load

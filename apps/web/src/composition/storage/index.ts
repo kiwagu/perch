@@ -1,5 +1,6 @@
 /** Small persistent key-value storage shared by the tabs of one browser, and what the session keeps in it. */
 
+export { ACCOUNT_START_KEY, keptAccountStart } from './account-start'
 export { deviceIdFrom } from './device'
 export {
   browserStorage,

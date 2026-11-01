@@ -35,7 +35,9 @@ the last change left them and its devices hear the lists in that order. This hol
 gateway process; gateways in several processes would need a durable revision of the memberships.
 `Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
 rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes
-one at a time.
+one at a time. The identity an invite names is found by its email, in any case, through the
+auth module's one lookup (`identityByEmail`, `src/auth/identity-by-email.ts`); an email no
+identity has is refused `no-such-identity` here.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the

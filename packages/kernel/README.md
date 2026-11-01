@@ -17,6 +17,12 @@ commands compile into and write paths interpret.
 - `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key (2 to 32
   lowercase letters, digits and underscores, starting with a letter), checked by the domain,
   the gateway and the replica.
+- `checkPasswordRules`, `keepsPasswordRules`, `PASSWORD_RULES`, `PASSWORD_LENGTH`,
+  `PASSWORD_SYMBOLS`: the one set of rules for a new password (10 to 35 characters, only Latin
+  letters, digits and the 32 printable ASCII symbols, with at least one digit, one uppercase
+  letter, one lowercase letter and one symbol), which rules a password keeps and whether it keeps
+  them all, checked by the sign-up form as it is typed and by the gateway's sign-up. A sign-in
+  checks none of them.
 - `defineAbilityFor(member, schema)`, `OWNER_ABILITY`, `NO_ABILITY`: see Abilities below.
 
 ## Abilities

@@ -19,8 +19,8 @@ Where: [/org] on device A (user A, administrator) and [/org] on device B (user B
 ## Scenario: A member changes only its own notes, an administrator any, and both see every change
 
 ### Steps
-1. On device B, sign up as user B and wait for [/me]
-2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 5. On device B, open [/org]

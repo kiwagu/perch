@@ -1,7 +1,14 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { EventBus } from '@workspace/cqrs'
-import { type DataError, dataError, type LocalDb, type ShapeRunnerPort } from '@workspace/data'
+import {
+  type AuthUser,
+  type DataError,
+  dataError,
+  type LocalDb,
+  type ShapeRunnerPort,
+  type SignUpInput,
+} from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
@@ -26,7 +33,7 @@ import type { TransportContext } from '../session'
 import { SessionService } from '../session'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
-import { fakeGatewayAuth } from './gateway-auth'
+import { type FakeGatewayAuth, fakeGatewayAuth } from './gateway-auth'
 import { QueryTracker } from './query-tracker'
 
 export interface TestWorldOptions {
@@ -55,7 +62,7 @@ export interface TestWorldOptions {
   readonly hints?: Set<FakeHintChannel>
   /** The organisations every account belongs to: the gateway signs in and welcomes with them. */
   readonly memberships?: readonly Membership[]
-  /** Signs devices up and in in place of the fake gateway's accounts. */
+  /** Signs accounts up and devices in in place of the fake gateway's accounts. */
   readonly auth?: GatewayAuth
   /**
    * Reads the signed-in identity's memberships after a sign-in; by default every account belongs
@@ -372,10 +379,28 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   }
 }
 
+/** Signs `input` up and opens its verification link on this service's device, as a person does. */
+export function signUpVerified(
+  service: Pick<SessionService, 'signUp' | 'verifyEmail'>,
+  auth: Pick<FakeGatewayAuth, 'linkFor'>,
+  input: SignUpInput,
+): ResultAsync<AuthUser, DataError> {
+  return service
+    .signUp(input)
+    .andThen(() => service.verifyEmail(auth.linkFor(input.email)))
+    .andThen((verified) =>
+      verified.kind === 'signed-in'
+        ? okAsync(verified.user)
+        : errAsync(dataError('data:AUTH_FAILED', 'the link was opened before')),
+    )
+}
+
 export interface TestSession {
   readonly session: SessionService
   readonly commands: CommandsPort
   readonly runner: ShapeRunnerPort
+  /** The gateway's accounts, whose verification links sign the session in (`signUpVerified`). */
+  readonly auth: FakeGatewayAuth
   /** Closes the session and its gateway; fails when the session reported an error. */
   close(): Promise<void>
 }
@@ -385,12 +410,14 @@ export interface TestSession {
  * gateway without a network, each identity's own embedded database, synced through the stub.
  */
 export async function openTestSession(logger: CommandLogger = silent): Promise<TestSession> {
-  const world = await openTestWorld({ logger })
+  const auth = fakeGatewayAuth()
+  const world = await openTestWorld({ logger, auth })
 
   return {
     session: world.session,
     commands: world.commands,
     runner: world.session.runner,
+    auth,
     close: async () => {
       await world.close()
 

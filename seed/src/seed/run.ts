@@ -27,7 +27,7 @@ export interface StandTarget extends StandOptions {
   readonly gatewayUrl: string
 }
 
-export interface SeedOptions extends StandTarget, Pick<ClientOptions, 'fetcher'> {
+export interface SeedOptions extends StandTarget, Pick<ClientOptions, 'fetcher' | 'inbox'> {
   readonly mode: SeedMode
   /** Sweep the stand's seed data first. */
   readonly reset?: boolean
@@ -118,12 +118,13 @@ function seedOrganisations(
 
 /**
  * Seeds the catalog's accounts through the gateway as a device would, one account at a time,
- * then its organisations, whose administrators invite the members (so every account exists
- * first). With `reset`, the stand's seed data is swept first. A catalog the run would not hold
- * (an organisation key the run's suffix makes too long, among others) is refused before anything.
+ * each new one verified through the mail `inbox` reads, then its organisations, whose
+ * administrators invite the members (so every account exists first). With `reset`, the stand's
+ * seed data is swept first. A catalog the run would not hold (an organisation key the run's
+ * suffix makes too long, among others) is refused before anything.
  */
 export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedError> {
-  const { mode, reset, gatewayUrl, fetcher, ...stand } = options
+  const { mode, reset, gatewayUrl, fetcher, inbox, ...stand } = options
   const checked = validateCatalog(catalog, mode)
 
   if (checked.isErr()) {
@@ -135,7 +136,7 @@ export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedErr
   const presets = checked.value
 
   return (reset ? sweep(stand).map(() => undefined) : okAsync(undefined))
-    .andThen(() => openClient(fetcher ? { gatewayUrl, fetcher } : { gatewayUrl }))
+    .andThen(() => openClient(fetcher ? { gatewayUrl, fetcher, inbox } : { gatewayUrl, inbox }))
     .andThen((client) =>
       closing(
         client,

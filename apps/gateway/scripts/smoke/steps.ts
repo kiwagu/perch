@@ -5,7 +5,6 @@
 
 import type { Result } from 'neverthrow'
 
-import type { DataError } from '@workspace/data'
 import type { RegionDoc } from '@workspace/replica'
 import { PROTOCOL_VERSION } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
@@ -31,7 +30,10 @@ export function check(condition: boolean, failure: string): void {
   }
 }
 
-export function unwrap<T>(result: Result<T, DataError>): T {
+/** The value of `result`; its failure, by its code and its fixed message, fails the step. */
+export function unwrap<T>(
+  result: Result<T, { readonly code: string; readonly message: string }>,
+): T {
   return result.match(
     (value) => value,
     (error) => {

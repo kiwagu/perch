@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index f050fc4..54d778c 100644
+index f050fc4..9546fea 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -1,4 +1,6 @@
@@ -9,7 +9,17 @@ index f050fc4..54d778c 100644
  var __create = Object.create;
  var __getProtoOf = Object.getPrototypeOf;
  var __defProp = Object.defineProperty;
-@@ -9687,9 +9689,9 @@ function isTableNotFoundError(err) {
+@@ -3062,7 +3064,8 @@ var createAdapterFactory = ({ adapter: customAdapter, config: cfg }) => (options
+         where,
+         limit: joinConfig.limit
+       });
+-      console.error(error);
++      // The failure goes back to the caller as it is; printed to stderr, its message and cause
++      // would carry the query's bindings, such as the email a sign-in looked an account up by.
+       throw error;
+     }
+     return result;
+@@ -9687,9 +9690,9 @@ function isTableNotFoundError(err) {
    return msg.includes("does not exist") || e.kind === "NotFound";
  }
  function deserializeValue(val) {
@@ -21,7 +31,7 @@ index f050fc4..54d778c 100644
      return val.toDate();
    return val;
  }
-@@ -9734,9 +9736,9 @@ function buildWhereClause(where, model) {
+@@ -9734,9 +9737,9 @@ function buildWhereClause(where, model) {
      const param = `pw${paramIdx++}`;
      if (field === "id") {
        if (operator === "in" || operator === "not_in") {
@@ -33,7 +43,7 @@ index f050fc4..54d778c 100644
        }
      } else if (isInsensitive) {
        if (typeof value === "string") {
-@@ -9820,11 +9822,14 @@ function mapFieldTypeToSurreal(type, required) {
+@@ -9820,11 +9823,14 @@ function mapFieldTypeToSurreal(type, required) {
  }
  var surrealAdapter = (config) => {
    let lazyOptions = null;
@@ -51,7 +61,7 @@ index f050fc4..54d778c 100644
      return result[0] ?? [];
    };
    const findManyRaw = async (model, where, limit) => {
-@@ -9876,34 +9881,26 @@ var surrealAdapter = (config) => {
+@@ -9876,34 +9882,26 @@ var surrealAdapter = (config) => {
        supportsArrays: true,
        supportsNumericIds: false,
        supportsUUIDs: false,
@@ -92,7 +102,7 @@ index f050fc4..54d778c 100644
          }
        }
      },
-@@ -9914,13 +9911,13 @@ var surrealAdapter = (config) => {
+@@ -9914,13 +9912,13 @@ var surrealAdapter = (config) => {
        }) => {
          const insertData = { ...data };
          if (insertData.id && typeof insertData.id === "string") {
@@ -109,7 +119,7 @@ index f050fc4..54d778c 100644
          }
          return record;
        },
-@@ -10017,7 +10014,7 @@ var surrealAdapter = (config) => {
+@@ -10017,7 +10015,7 @@ var surrealAdapter = (config) => {
        }) => {
          const { sql: whereSql, bindings } = buildWhereClause(where, model);
          try {
@@ -118,7 +128,7 @@ index f050fc4..54d778c 100644
          } catch (err) {
            if (!isTableNotFoundError(err))
              throw err;
-@@ -10170,6 +10167,9 @@ var surrealAdapter = (config) => {
+@@ -10170,6 +10168,9 @@ var surrealAdapter = (config) => {
        }
      })
    });

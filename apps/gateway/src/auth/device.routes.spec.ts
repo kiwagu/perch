@@ -6,12 +6,12 @@ import { device_sessionIdFactory, type IdentityId, idSchemas } from '@workspace/
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import { AUTH_SECRET, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
 import { AuthSessions } from './auth-sessions'
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
 
-const PASSWORD = 'pass-word-1'
+const PASSWORD = 'Pass-word-1'
 
 const laptop = { id: 'laptop', label: 'Firefox on Linux' }
 
@@ -119,7 +119,7 @@ async function harness() {
 
   cleanups.push(close)
 
-  const sessions = new AuthSessions({ auth, directory: local, clock })
+  const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
   const devices = new DeviceSessions({ directory: local, clock })
   /** Each close the routes asked for: the identity, the device (none for every one), the code. */
   const closed: Array<readonly [IdentityId, string | undefined, number]> = []

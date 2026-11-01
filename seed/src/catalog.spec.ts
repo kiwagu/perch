@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isTenantKey } from '@workspace/kernel'
+import { isTenantKey, keepsPasswordRules } from '@workspace/kernel'
 import { checkProfileName } from '@workspace/web/seeding'
 
 import { accountFor, catalog, organisationFor, validateCatalog } from './catalog'
@@ -39,9 +39,24 @@ describe('seed catalog', () => {
 
     for (const account of [demo, one, two]) {
       expect(account.email).toMatch(/^[a-z0-9.-]+@example\.test$/)
-      expect(account.password.length).toBeGreaterThanOrEqual(8)
+      expect(account.password).toBe(`Seed-${preset.ref}-password-1`)
+      expect(keepsPasswordRules(account.password)).toBe(true)
       expect(account.name).toBe(preset.name)
     }
+  })
+
+  it('refuses a ref whose password would break the rules of a new password', () => {
+    const preset = first ?? expect.unreachable('a preset')
+    const longest = 'a'.repeat(19)
+    const tooLong = 'a'.repeat(20)
+    const withOne = (ref: string) =>
+      validateCatalog({ ...catalog, accounts: [...catalog.accounts, { ...preset, ref }] })
+
+    expect(accountFor({ ...preset, ref: longest }, { kind: 'demo' }).password).toHaveLength(35)
+    expect(withOne(longest).isOk()).toBe(true)
+    expect(withOne(tooLong)._unsafeUnwrapErr()).toEqual([
+      `account ${tooLong}: its password breaks the rules of a new password`,
+    ])
   })
 
   it('describes an organisation of existing accounts, keyed for a demo and a fresh run', () => {

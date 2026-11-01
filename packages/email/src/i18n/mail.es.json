@@ -1,0 +1,14 @@
+{
+  "mail.layout.brand": "Perch",
+  "mail.layout.tagline": "Perch guarda tus datos en tus propios dispositivos y los mantiene sincronizados entre ellos.",
+  "mail.verify-email.subject": "Confirma tu correo para Perch",
+  "mail.verify-email.preview": "Solo falta un paso: confirma tu correo para entrar en Perch.",
+  "mail.verify-email.heading": "Confirma tu correo",
+  "mail.verify-email.greeting": "Hola, {name}:",
+  "mail.verify-email.body": "Abre este enlace para confirmar {email} y entrar en tu nueva cuenta de Perch:",
+  "mail.verify-email.action": "Confirmar mi correo",
+  "mail.verify-email.fallback": "Si el botón no se abre, copia este enlace en tu navegador:",
+  "mail.verify-email.expiry": "El enlace sirve durante 24 horas. Puedes pedir otro en la página de inicio de sesión.",
+  "mail.verify-email.ignore": "Si no creaste una cuenta de Perch, ignora este correo: sin el enlace no pasa nada.",
+  "mail.verify-email.reason": "Recibiste este correo porque esta dirección se usó para crear una cuenta de Perch."
+}

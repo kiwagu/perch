@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 
 import type { SignedInDevice } from '../gateway-auth'
 
+import { ACCOUNT_START_KEY } from './account-start'
 import type { KeyValueStorage } from './key-value'
 import { MEMBERSHIPS_KEY, saveMemberships, TENANT_KEY } from './memberships'
 
@@ -64,9 +65,11 @@ export function savedToken(storage: KeyValueStorage): string | undefined {
 /**
  * Forgets who is signed in and the token; the other tabs hear the identity go. The inventory of
  * the organisation databases stays: the databases may stay too. So do the tokens left to sign
- * out. A refresh key an older build kept goes too.
+ * out. A refresh key an older build kept goes too, and the start of the account this browser kept
+ * to finish: signed out, the browser no longer knows what the account has.
  */
 export function forgetDevice(storage: KeyValueStorage): void {
+  storage.remove(ACCOUNT_START_KEY)
   storage.remove(TOKEN_KEY)
   storage.remove(OLD_REFRESH_KEY)
   storage.remove(IDENTITY_KEY)

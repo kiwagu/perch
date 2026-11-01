@@ -22,6 +22,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import type { LockManagerLike, SyncHints, SyncTransport } from '@workspace/replica/sync'
 
+import { ACCOUNT_START_SERVICE } from '../features/user/application/account-start.service'
 import {
   settingsCommands,
   settingsShape,
@@ -38,6 +39,7 @@ import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.por
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { SYNC_STATUS } from '../platform/sync-status.port'
 
+import { accountStarts } from './account-starts'
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
 import type { BearerDeps } from './gateway-bearer'
@@ -61,7 +63,7 @@ export interface AppRootOptions {
   /** Deletes the database of one organisation of an identity while it is not open. */
   readonly deleteTenantLocal: (identity: IdentityId, key: string) => ResultAsync<void, DataError>
   readonly gatewayAuth: GatewayAuth
-  /** The label sign-ups and sign-ins give this browser, next to its own id: "Chrome on Linux". */
+  /** The label sign-ins and verifications give this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean
@@ -207,6 +209,21 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   })
   const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
+  // The account's settings, which the frame reads and stores as well as the account's pages.
+  const settings = new SettingsService(session.runner, commands, {
+    shape: settingsShape,
+    commands: settingsCommands,
+  })
+  // Listening before the session restores: the start of the page finishes a start kept here.
+  const starts = accountStarts({
+    session,
+    runner: session.runner,
+    commands,
+    settings,
+    storage: options.storage,
+    locks: options.locks,
+    logger: options.logger,
+  })
   // Reads and writes go to the space of whoever is signed in, and refuse while nobody is.
   const container = new Container()
     .singleton(SHAPE_RUNNER, () => session.runner)
@@ -214,15 +231,8 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(SESSION, () => session)
     .singleton(COMMANDS, () => commands)
     .singleton(EVENTS, () => events)
-    // The account's settings, which the frame reads and stores as well as the account's pages.
-    .singleton(
-      SETTINGS_SERVICE,
-      () =>
-        new SettingsService(session.runner, commands, {
-          shape: settingsShape,
-          commands: settingsCommands,
-        }),
-    )
+    .singleton(SETTINGS_SERVICE, () => settings)
+    .singleton(ACCOUNT_START_SERVICE, () => starts)
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)

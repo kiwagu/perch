@@ -10,12 +10,18 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
-import { deviceHeaders } from '../../auth/__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  deviceHeaders,
+  mailsOf,
+  signUpOn,
+} from '../../auth/__fixtures__/auth-instance'
 import { createGatewayRoot, type GatewayRoot } from '../../composition/root'
 import { RequestLimits } from '../../limits/request-limits'
+import { Outbox } from '../../mail/__fixtures__/outbox'
 import { organisationRoutes } from '../organisation.routes'
 
-const PASSWORD = 'pass-word-1'
+const PASSWORD = 'Pass-word-1'
 
 /** An identity signed up on its device: its id and email, and its raw session token. */
 export interface SignedUp {
@@ -107,16 +113,19 @@ export async function answer(
 }
 
 async function openRoot(): Promise<GatewayRoot> {
+  const outbox = new Outbox()
   const root = (
     await createGatewayRoot({
       engines: nodeEngines(),
       url: 'mem://',
       clock: manualClock(),
-      authSecret: 'test-secret-0123456789-0123456789-0123456789',
+      authSecret: AUTH_SECRET,
       publicUrl: 'http://localhost',
+      mail: outbox,
     })
   )._unsafeUnwrap()
 
+  mailsOf(root.auth, outbox)
   cleanups.push(() => root.close())
 
   return root
@@ -124,7 +133,8 @@ async function openRoot(): Promise<GatewayRoot> {
 
 /**
  * The routes over a gateway on embedded databases, the directory and one per organisation, with
- * three identities signed up through its Better Auth: ann, bob and cat; `signUp` signs up another.
+ * three identities signed up and verified through its Better Auth: ann, bob and cat; `signUp`
+ * signs up another.
  */
 export async function harness() {
   const root = await openRoot()
@@ -135,15 +145,12 @@ export async function harness() {
     routeOptions(new RequestLimits({ clock })),
   )
   const signUp = async (email: string): Promise<SignedUp> => {
-    const { token, user } = await root.auth.api.signUpEmail({
-      body: { name: email, email, password: PASSWORD },
-      headers: deviceHeaders(deviceOf(email)),
+    const { token, user } = await signUpOn(root.auth, email, deviceHeaders(deviceOf(email)), {
+      password: PASSWORD,
+      name: email,
     })
 
-    return {
-      identity: { id: idSchemas.identity.schema.parse(user.id), email: user.email },
-      token: token ?? expect.unreachable(`the sign-up of ${email} answered a session token`),
-    }
+    return { identity: { id: idSchemas.identity.schema.parse(user.id), email: user.email }, token }
   }
   const ann = await signUp('ann@example.test')
   const bob = await signUp('bob@example.test')

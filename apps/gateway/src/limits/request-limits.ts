@@ -44,6 +44,21 @@ export const IDENTITY_ORGANISATIONS = { limit: 10, windowMs: 60 * minute } as co
  */
 export const ADDRESS_ORGANISATIONS = { limit: 30, windowMs: 60 * minute } as const
 
+/**
+ * Verification mails per client address, 200 per 15 minutes, sign-ups and resends together, every
+ * attempt counted whatever the email: one client can make at most 200 such mails go out per quarter
+ * hour (the credential limit alone would allow 1,800 sign-ups). The e2e suite signs every account up
+ * from the front's one address, about 100 per run, on a gateway restarted for the run.
+ */
+export const ADDRESS_VERIFICATION_MAILS = { limit: 200, windowMs: 15 * minute } as const
+
+/**
+ * Resends of the verification mail per email, 3 per 15 minutes, whatever the email (an unknown or
+ * verified one too, so the limit tells nothing about accounts): a mailbox gets at most 12 resends
+ * an hour from everyone together.
+ */
+export const EMAIL_VERIFICATION_MAILS = { limit: 3, windowMs: 15 * minute } as const
+
 export interface RequestLimitsOptions {
   readonly clock: Clock
 }
@@ -65,12 +80,15 @@ export type SignInAttempt =
 /**
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
- * each email, the invitations of each inviting identity and each client address, and the
- * organisations each identity and each client address create.
+ * each email, the verification mails of each client address and the resends of each email, the
+ * invitations of each inviting identity and each client address, and the organisations each
+ * identity and each client address create.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
   private readonly failedSignIns: FixedWindow
+  private readonly addressVerificationMails: FixedWindow
+  private readonly emailVerificationMails: FixedWindow
   private readonly identityInvites: FixedWindow
   private readonly addressInvites: FixedWindow
   private readonly identityOrganisations: FixedWindow
@@ -79,6 +97,14 @@ export class RequestLimits {
   constructor(options: RequestLimitsOptions) {
     this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
     this.failedSignIns = new FixedWindow({ ...FAILED_SIGN_INS, clock: options.clock })
+    this.addressVerificationMails = new FixedWindow({
+      ...ADDRESS_VERIFICATION_MAILS,
+      clock: options.clock,
+    })
+    this.emailVerificationMails = new FixedWindow({
+      ...EMAIL_VERIFICATION_MAILS,
+      clock: options.clock,
+    })
     this.identityInvites = new FixedWindow({ ...IDENTITY_INVITES, clock: options.clock })
     this.addressInvites = new FixedWindow({ ...ADDRESS_INVITES, clock: options.clock })
     this.identityOrganisations = new FixedWindow({
@@ -127,6 +153,29 @@ export class RequestLimits {
         }
       },
     }
+  }
+
+  /**
+   * Takes one verification mail of the client at `address` before anything is asked: a sign-up
+   * (no `email`) or a resend to `email` (in lower case), which also takes one of that email's
+   * resends. The address's place is reserved first and given back when the email refuses, so a
+   * request the address refuses moves no email's counter, and one the email refuses costs the
+   * address nothing.
+   */
+  verificationMail(address: string, email?: string): Allowance {
+    const ofAddress = this.addressVerificationMails.reserve(addressKey(address))
+
+    if (!ofAddress.allowed || email === undefined) {
+      return ofAddress.allowed ? { allowed: true } : ofAddress
+    }
+
+    const ofEmail = this.emailVerificationMails.take(email)
+
+    if (!ofEmail.allowed) {
+      ofAddress.giveBack()
+    }
+
+    return ofEmail
   }
 
   /**

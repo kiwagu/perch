@@ -22,7 +22,9 @@ import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
+import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
@@ -30,8 +32,8 @@ import { TenantDatabases } from '../tenants/tenant-databases'
 
 export interface GatewayRoot {
   /**
-   * Better Auth over the directory: the server hands it the sign-up and the sign-in under
-   * `/auth`; the gateway reads sessions through its API.
+   * Better Auth over the directory: the server hands it the sign-up, the sign-in, the
+   * verification and the resend under `/auth`; the gateway reads sessions through its API.
    */
   readonly auth: AuthInstance
   /** The sessions of devices: read through Better Auth, ended by the gateway's own updates. */
@@ -61,6 +63,11 @@ export interface GatewayRoot {
    * the organisations created.
    */
   readonly limits: RequestLimits
+  /**
+   * One account's sign-ups and verifications run one at a time in this process, by its email in
+   * lower case.
+   */
+  readonly accountTurns: KeyedTurns<string>
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -86,6 +93,8 @@ export interface GatewayRootOptions {
    * and the one origin Better Auth trusts.
    */
   readonly publicUrl: string
+  /** Where the account mails go: the SMTP server of `GATEWAY_SMTP_URL`, or a spec's outbox. */
+  readonly mail: MailPort
   readonly clock: Clock
 }
 
@@ -95,6 +104,7 @@ export function createGatewayRoot(
   const hubLog = createLogger('region-hub')
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
+  const authLog = createLogger('auth')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -149,11 +159,19 @@ export function createGatewayRoot(
       baseURL: `${options.publicUrl}${FRONT_PREFIX}/auth`,
       trustedOrigins: [options.publicUrl],
       clock: options.clock,
+      publicUrl: options.publicUrl,
+      mail: options.mail,
+      log: authLog,
     })
 
     return {
       auth,
-      sessions: new AuthSessions({ auth, directory: local, clock: options.clock }),
+      sessions: new AuthSessions({
+        auth,
+        directory: local,
+        clock: options.clock,
+        secret: options.authSecret,
+      }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       organisations,
       databases,
@@ -162,6 +180,7 @@ export function createGatewayRoot(
       connections,
       local,
       limits: new RequestLimits({ clock: options.clock }),
+      accountTurns: new KeyedTurns<string>(),
       clock: options.clock,
       close: async () => {
         await hub.close()

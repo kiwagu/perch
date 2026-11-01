@@ -9,7 +9,7 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
     page,
   }) => {
     const account =
-      await test.step('1. Sign up and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
+      await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
         const signedUp = await signUp(page)
 
         await appReady(page)

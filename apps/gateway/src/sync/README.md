@@ -64,9 +64,10 @@ when none is named), and each close moves the registry's revocation epoch, recor
 what it names. A hello reads the epoch before it reads its session, and registers with it: a
 close of the device or of its identity that lands meanwhile refuses the registration (4001), and
 one before is seen by the read, since the routes end the session before they close the sockets.
-A new sign-up or sign-in of the device, once Better Auth accepted it, closes the identity's
-sockets on that device the same way, with 1000 (`another connection of this device took over`):
-its session ended the earlier one, and the device connects again with the new token. A
+A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
+of an email opened on it, closes the identity's sockets on that device the same way, with 1000
+(`another connection of this device took over`): its session ended the earlier one, and the
+device connects again with the new token. A
 connection that fails to close is reported and the others are closed all the same. No token
 reaches its logs.
 

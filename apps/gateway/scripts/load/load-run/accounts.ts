@@ -1,15 +1,18 @@
 /** The accounts and organisations a load run signs up; they stay on the stand. */
 
-import { callAs, postCredentials, type SignedIn } from '../../smoke'
+import { callAs, type SignedIn, signUp as smokeSignUp } from '../../smoke'
 
 import { inParallel } from './pacing'
 import { fail, type Run } from './state'
 
-/** Signs up `count` new accounts, numbered from `run.accounts`. */
+/**
+ * Signs up `count` new accounts, numbered from `run.accounts`, each verified through its mail in
+ * the stand's mailbox, which signs its device in.
+ */
 export async function signUp(run: Run, count: number): Promise<SignedIn[]> {
   const first = run.accounts
   const signedUp = await inParallel(Array.from({ length: count }), (_, i) =>
-    postCredentials(run.base, '/auth/sign-up/email', {
+    smokeSignUp(run.base, run.mailbox, {
       name: 'Load test',
       email: `load-${run.id}-${first + i}@example.test`,
       password: run.password,

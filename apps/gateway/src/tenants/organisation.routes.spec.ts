@@ -360,7 +360,7 @@ describe('organisationRoutes', () => {
 
     for (const authorization of [
       undefined,
-      `Basic ${btoa('ann@example.test:pass-word-1')}`,
+      `Basic ${btoa('ann@example.test:Pass-word-1')}`,
       'Bearer',
       'Bearer not-a-session-token',
       // The signed form of a token names no session here: a session ends by its raw token.
