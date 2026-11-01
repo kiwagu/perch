@@ -280,7 +280,8 @@ values the element carries), `fields` (an error's codes, each with the field of 
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
-values), `derived` (the suffixes it renders), `roles` (who sees it; absent: every role of the
+values), `derived` (the suffixes it renders; an `input` alone may render `visibility-button`,
+see "Anchors"), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
 what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
 from).
@@ -325,7 +326,8 @@ unchanged, as it carries a binding into the router.
   exactly while a state the machine is in handles that event (`snapshot.can` in XState), and
   disabled otherwise: the profile's Save is disabled while it saves because neither
   `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no
-  flag of its own.
+  flag of its own. A password input's `visibility-button` is never an event of a flow, so
+  the machine does not enable it: it is always enabled.
 - The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
   } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
@@ -341,8 +343,10 @@ unchanged, as it carries a binding into the router.
   `saving-name`, `deleting`), or `running` in the region of a button.
 - A state that a route reaches says so in `meta.address`: its `path`, a binding of the
   screen, and its `search`. The route owns the addressable state, what a link or a reload
-  restores; the machine owns the transient one (signing in, confirming, failed). No state
-  declares an address yet.
+  restores; the machine owns the transient one (signing in, confirming, failed). One
+  transient state is exempt and no flow holds it: whether a password input shows what it
+  holds, which the input keeps itself and its `visibility-button` toggles (see "Anchors").
+  No state declares an address yet.
 
 A screen file may write its flow shorter, and leave out what the contract says elsewhere
 (below); the loader expands it into the config above before anything reads it, so the
@@ -604,6 +608,17 @@ renders itself: `user.profile.sign-out-dialog.confirm-button`,
 `app-shell.locale-select.option`. Code builds it only with `testIdFor(base, suffix)` from
 `@workspace/ui-contract/anchors`, and the base lists the suffix in its `derived`.
 
+One derived part is presentation only: `visibility-button`, the eye a password input renders
+beside itself, which shows what the input holds as typed or hides it again. The input
+declares it, `derived: [ visibility-button ]`, and only an `input` may. Its `data-value`
+names what a click does: `show` while the input hides its value, `hide` while it shows it;
+the two values are the suffix's own, never rows of "Choice values". Whether the field shows
+its value is held by the field itself, the one transient state a flow never holds, so the
+button is never an event of a flow or an activity (`contract:check` refuses one), it is not
+one of the controls the machine enables, it is always enabled, and it holds no input. A test
+locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest
+lists it in `contract.derivedParts` with its kind and its values.
+
 One literal per rendered name:
 
 - every anchor is declared once, in one screen file, and written once in the sources;
@@ -650,7 +665,8 @@ literals, pass a prop, or derive the part.
 - `data-id` on an `item` or `row`: the id of the entity the entry shows.
 - `data-value` on an `option`, a `badge` or a `button` that switches a mode: the stable key
   of a choice that is not an entity, the key the code already uses and never its label. Each
-  fixed value is a row of "Choice values" with its meaning.
+  fixed value is a row of "Choice values" with its meaning. On a `visibility-button` it is
+  `show` or `hide`, the values of its suffix.
 - `data-state` on a `status`, `list`, `section` or `item`: an app, container or row state.
 - `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says.
 
@@ -824,7 +840,8 @@ gap is fixed in the contract files first, never worked around in a test.
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists,
   every path parses in the router's syntax, every example of a route parameter matches
-  that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events, guards,
+  that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
+  `visibility-button`), guards,
   actions, anchors with their codes and bindings that exist, reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
@@ -842,7 +859,9 @@ gap is fixed in the contract files first, never worked around in a test.
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
   problem too), no literal equal to another plus a derived suffix, every `testIdFor()`
-  suffix in the vocabulary, and every code a code of the contract: a row of the vocabulary, or
+  suffix in the vocabulary and listed in the `derived` of an anchor of the contract (of the
+  base itself, when the call writes it as a literal), so a part no anchor declares, a
+  `visibility-button` no input lists, is never rendered, and every code a code of the contract: a row of the vocabulary, or
   a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself). An
   anchor built at runtime is a problem. A field
   the contract says holds no input (a choice that applies at once) carries
@@ -869,7 +888,7 @@ gap is fixed in the contract files first, never worked around in a test.
   `data-state` or `data-value`, `.not` included. Every anchor must be declared, or derived
   from a declared base with a suffix it lists; every code must be a code of the contract (a
   row of the vocabulary or a derived toast code), and every state and value in the
-  vocabulary. A plain string or a template without `${}` is a literal; an anchor built with
+  vocabulary, or `show` and `hide` once an input renders a `visibility-button`. A plain string or a template without `${}` is a literal; an anchor built with
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
@@ -890,7 +909,8 @@ stands serve it at `/ui-manifest/manifest.json`, with
 `PERCH_UI_MANIFEST=0` on a stand answers 404 there.
 
 It is what a tool outside the repository reads: the vocabulary as tables with prose
-instructions for an agent, the screens (each binding with its `example` link), the platform
+instructions for an agent (`derivedParts` gives each derived suffix the kind of its part and,
+for a `visibility-button`, its values), the screens (each binding with its `example` link), the platform
 section and the activities verbatim,
 the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
 its kind, its screen and its attributes, one entry per line, so a search for an anchor in
@@ -948,7 +968,8 @@ inside it, holds none) makes the command fail and write nothing.
 This is the delivery of a finished change; the review before the code is described in "The
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
-renamed, the codes and the error fields the anchors both sides hold gain or lose, and the
+renamed, the derived parts, the codes and the error fields the anchors both sides hold gain or
+lose, and the
 transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
@@ -974,7 +995,9 @@ Scenarios and tests changed with it: device/base/my-devices
 
 The diff lists the screens, anchors, codes, entities and fields added and removed, and
 takes an anchor removed and one added for a rename when they are the only ones of their
-screen and kind. The codes and the error fields of an anchor are those the loader gives it,
+screen and kind. The derived parts of an anchor are listed by name,
+`<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input). The codes and the
+error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. The tests are in this repository, so the same change updates them, and
 the consumers check fails until it does.
 
