@@ -231,6 +231,36 @@ describe('AuthSessions', () => {
     expect(ends.get(tablet.token)).toEqual(tabletEnd)
   })
 
+  it('ends every live session of the identity but one, answering the devices it ended', async () => {
+    const { auth, local, clock, sessions } = await harness()
+    const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const phone = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('phone'),
+    })
+    const tablet = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('tablet'),
+    })
+    const bob = await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
+    const ann = identityOf(laptop.user.id)
+    const kept = callerOf(await sessions.read(laptop.token)).session
+
+    await clock.advance(MINUTE_MS)
+    ;(await sessions.signOut(tablet.token))._unsafeUnwrap()
+    await clock.advance(MINUTE_MS)
+
+    const endedAt = new Date(clock.now())
+
+    expect((await sessions.revokeOthers(ann, kept))._unsafeUnwrap()).toEqual(['phone'])
+    expect(callerOf(await sessions.read(laptop.token)).device).toBe('laptop')
+    expect(await sessions.read(phone.token)).toEqual(NONE)
+    expect(callerOf(await sessions.read(bob.token)).device).toBe('desk')
+    expect((await expiries(local)).get(phone.token)).toEqual(endedAt)
+    // Asked again, nothing was live to end.
+    expect((await sessions.revokeOthers(ann, kept))._unsafeUnwrap()).toEqual([])
+  })
+
   it('fails to read or end a session once the directory is closed', async () => {
     const { auth, local, sessions } = await harness()
     const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
@@ -246,6 +276,9 @@ describe('AuthSessions', () => {
     expect((await sessions.signOut(token))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect((await sessions.revoke(ann, row))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect((await sessions.revokeAll(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect((await sessions.revokeOthers(ann, row))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_FAILED',
+    )
   })
 })
 

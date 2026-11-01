@@ -64,6 +64,11 @@ when none is named), and each close moves the registry's revocation epoch, recor
 what it names. A hello reads the epoch before it reads its session, and registers with it: a
 close of the device or of its identity that lands meanwhile refuses the registration (4001), and
 one before is seen by the read, since the routes end the session before they close the sockets.
+A device whose session a change of the account's password ended (a reset link, which ends every
+session of the account, or a change on another device, which ends every other one) is closed the
+same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
+tell its person why; a hello whose registration such a close refuses, while it is under way, is
+closed with 4001 as for any other close.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
 of an email opened on it, closes the identity's sockets on that device the same way, with 1000
 (`another connection of this device took over`): its session ended the earlier one, and the

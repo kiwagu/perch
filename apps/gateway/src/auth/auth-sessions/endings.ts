@@ -27,6 +27,20 @@ const revokeAnswer = z.object({ ended: z.boolean(), row: z.unknown() })
 /** What a sign-out by token answers: whether the row it marked was live, for each row marked. */
 const signOutAnswer = z.array(z.boolean())
 
+/** What an ending of several sessions answers: the device of each session marked, and whether it was live. */
+const endedSessions = z.array(z.object({ device: z.string(), live: z.boolean() }))
+
+/** The devices whose session an ending of several sessions ended while it was live, each once. */
+export function toEndedDevices(value: unknown): Result<readonly string[], DataError> {
+  const answer = endedSessions.safeParse(value)
+
+  if (!answer.success) {
+    return err(dataError('data:QUERY_FAILED', 'the ending of sessions has an unknown shape'))
+  }
+
+  return ok([...new Set(answer.data.filter(({ live }) => live).map(({ device }) => device))])
+}
+
 /** A sign-out as the directory answered it. */
 export function toSignOutEnding(value: unknown): Result<SignOutEnding, DataError> {
   const answer = signOutAnswer.safeParse(value)

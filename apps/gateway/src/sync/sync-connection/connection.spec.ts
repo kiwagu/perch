@@ -715,6 +715,20 @@ describe('SyncConnection', () => {
     expect(types(socket.sent)).toEqual(['welcome'])
   })
 
+  it('closes with 4002 a device signed out because its password changed, saying why', async () => {
+    const gateway = await openGateway()
+    const signedUp = await gateway.signUp(ann)
+    const { socket, connection } = openHolding(gateway, holding())
+
+    await hello(connection, signedUp.token)
+    await gateway.connections.close(signedUp.identity.id, undefined, CLOSE.passwordChanged)
+
+    expect(socket.closes).toEqual([
+      [CLOSE.passwordChanged, 'signed out because the password changed'],
+    ])
+    expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
+  })
+
   it('closes with 4001 a device signed out while its hello is under way, before its welcome', async () => {
     const gateway = await openGateway()
     const signedUp = await gateway.signUp(ann)

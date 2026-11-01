@@ -72,9 +72,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `memberships` message tells each later change of them. `CLOSE` names the gateway's close
   codes: `protocol` 4400, `unauthorized` 4401 (a token that holds no live session, or a session
   opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
-  `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the device's session was
+  `signedOut` 4000 (the device's own sign-out), `revoked` 4001 (the device's session was
   signed out from another device, alone or with every device of its identity, also while its
-  hello is under way). And the membership contract the gateway
+  hello is under way) and `passwordChanged` 4002 (the device's session ended because the
+  account's password changed: through a reset link, every device; on another device, every
+  device but that one). And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
