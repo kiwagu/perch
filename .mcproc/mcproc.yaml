@@ -8,6 +8,9 @@
 # per slot and its containers and pm2 names carry the slug (perch-w1-...). The stands of two
 # checkouts then run side by side, and `mcproc ls` in each shows only its own.
 version: 1
+# the mcproc release this manifest is written for: `mcproc describe` shows it beside the
+# running one, and an mcproc older than 0.13.0 refuses the field
+mcproc: 0.17.0
 project: perch
 vars:
   slot: 0                                   # the main checkout; a worktree gets its own

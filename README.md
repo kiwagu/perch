@@ -8,7 +8,7 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 - Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
   containers.
-- mcproc 0.11.0 or later (`npm i -g mcproc`): it starts and stops the stands from
+- mcproc 0.13.0 or later (`npm i -g mcproc`): it starts and stops the stands from
   `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. The
   mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
   and the gateway without the gateway's environment, its database or the front.
