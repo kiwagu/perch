@@ -61,9 +61,9 @@ than its portal or overlay. A control that is not a test target carries a
   layer also hides the native scrollbar of a Base UI list (`.base-ui-disable-scrollbar`): the
   kit's components render no inline `<style>`, which a strict style policy refuses (`Select`
   keeps its popup under Base UI's `CSPProvider` with `disableStyleElements`). A text in a tone
-  reads at 4.5:1 or more on the card in both themes (light: Tailwind's green-700, amber-700,
-  blue-700 and red-600; dark: green-400, orange-400, blue-400 and red-400). Which tone a
-  message takes:
+  reads at 4.5:1 or more on the card and the background in both themes, which
+  `src/styles/global.spec.ts` holds (light: Tailwind's green-700, amber-700, blue-700 and
+  red-700; dark: green-400, orange-400, blue-400 and red-400). Which tone a message takes:
   - `success`: an outcome that went through (saved, sent, removed).
   - `warning`: a caution or a degraded state (offline, slow, about to expire).
   - `info`: neutral information worth noticing (a new version, a link on its way).

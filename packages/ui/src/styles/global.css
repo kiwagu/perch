@@ -71,10 +71,11 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  /* The tones of a message: Tailwind's red-600, amber-700, green-700 and blue-700, so a text in
-     them reads at 4.5:1 or more on the card (the 600s of green, orange and amber do not). Warning
-     takes amber, whose hue stays near the dark theme's orange and away from the red. */
-  --destructive: oklch(0.577 0.245 27.325);
+  /* The tones of a message: Tailwind's red-700, amber-700, green-700 and blue-700, so a text in
+     them reads at 4.5:1 or more on the card (the 600s of green, orange and amber do not, and
+     red-600 does not on the destructive button's tint). Warning takes amber, whose hue stays near
+     the dark theme's orange and away from the red. */
+  --destructive: oklch(0.505 0.213 27.518);
   --warning: oklch(0.555 0.163 48.998);
   --success: oklch(0.527 0.154 150.069);
   --info: oklch(0.488 0.243 264.376);
