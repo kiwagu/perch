@@ -64,7 +64,7 @@ export function PasswordRuleList(props: PasswordRuleListProps) {
       {rules.map(({ rule, testId, text }) => (
         <li
           key={rule}
-          className={`flex items-start gap-1.5 ${kept[rule] ? 'text-success' : 'text-muted-foreground'}`}
+          className="flex items-start gap-1.5 text-muted-foreground data-[state=met]:text-success"
           data-testid={testId}
           data-state={kept[rule] ? 'met' : undefined}
         >
