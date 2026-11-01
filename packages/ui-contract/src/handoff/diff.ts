@@ -1,8 +1,9 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
- * it renames, the codes and the error fields it adds or removes on the anchors both hold
- * (written or derived, so a constraint added to the model shows as the code it gives), the
+ * it renames, the derived parts (a password input's visibility-button among them), the codes and
+ * the error fields it adds or removes on the anchors both hold (written or derived, so a
+ * constraint added to the model shows as the code it gives), the
  * fields that start or stop holding input, the actions that leave what the user typed behind
  * and how each leave that would lose it asks, and the transitions it adds or removes in each
  * activity both contracts hold.
@@ -20,6 +21,8 @@ export interface Change {
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
+  /** As `<anchor>.<suffix>`, the derived parts the anchors both contracts hold render. */
+  derived: Change
   codes: Change
   /** As `<anchor> <code>`, on the anchors both contracts hold (a renamed one by its new name). */
   anchorCodes: Change
@@ -122,21 +125,22 @@ const defsOf = (contract: Contract | undefined): Map<string, AnchorDef> =>
   )
 
 /**
- * What `entriesOf` lists of each anchor both contracts hold, as `<anchor> <entry>`, added and
- * removed; an anchor renamed is held by both under its new name.
+ * What `entriesOf` lists of each anchor both contracts hold, as `<anchor> <entry>` (or with
+ * another separator), added and removed; an anchor renamed is held by both under its new name.
  */
 function carriedChanges(
   before: Contract | undefined,
   after: Contract | undefined,
   renamed: ReadonlyArray<{ from: string; to: string }>,
   entriesOf: (def: AnchorDef) => readonly string[],
+  separator = ' ',
 ): Change {
   const to = new Map(renamed.map(({ from, to: name }) => [from, name]))
   const was = new Map([...defsOf(before)].map(([anchor, def]) => [to.get(anchor) ?? anchor, def]))
   const is = defsOf(after)
   const listed = (defs: Map<string, AnchorDef>, other: Map<string, AnchorDef>) =>
     [...defs].flatMap(([anchor, def]) =>
-      other.has(anchor) ? entriesOf(def).map((entry) => `${anchor} ${entry}`) : [],
+      other.has(anchor) ? entriesOf(def).map((entry) => `${anchor}${separator}${entry}`) : [],
     )
 
   return changeOf(listed(was, is), listed(is, was))
@@ -180,6 +184,7 @@ export function diffContracts(
 
   return {
     anchors,
+    derived: carriedChanges(before, after, anchors.renamed, (def) => def.derived ?? [], '.'),
     codes: changeOf(
       before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
       after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],

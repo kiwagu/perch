@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { VISIBILITY_VALUES } from '../anchors'
 import { manifestSchema } from '../schemas'
 
 import { buildManifest } from './build'
@@ -185,5 +186,38 @@ describe('the questions before destructive actions', () => {
     expect(derived.contract.codes).not.toHaveProperty('<object>-<verb>')
     expect(derived.ids['sample.save-button']?.asks).toEqual(asks)
     expect(manifestSchema.safeParse(derived).success).toBe(true)
+  })
+})
+
+describe('the visibility-button of a password input', () => {
+  it('lists each derived part with its kind, the visibility-button with its values too', () => {
+    const base = fixtureContract()
+
+    Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    const built = buildManifest({
+      ...base,
+      vocabulary: {
+        ...base.vocabulary,
+        suffixes: {
+          ...base.vocabulary.suffixes,
+          'visibility-button': 'the eye of a password input',
+        },
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(built.ids['sample.title-input']?.derived).toEqual(['visibility-button'])
+    expect(built.contract.derivedSuffixes['visibility-button']).toBe('the eye of a password input')
+    expect(built.contract.derivedParts).toEqual({
+      'confirm-button': { kind: 'button' },
+      option: { kind: 'option' },
+      'visibility-button': { kind: 'button', values: VISIBILITY_VALUES },
+    })
+    expect(Object.keys(VISIBILITY_VALUES)).toEqual(['show', 'hide'])
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
 })

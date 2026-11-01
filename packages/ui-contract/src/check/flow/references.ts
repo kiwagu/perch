@@ -1,6 +1,7 @@
 /**
  * What a state of a flow names of the contract: each event is a declared anchor (a derived
- * one through its base's `derived`), a platform event of `platform.events`, or a data event
+ * one through its base's `derived`, never a visibility-button, which is presentation only), a
+ * platform event of `platform.events`, or a data event
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
  * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, a
  * `navigate` the path of a binding and search
@@ -9,7 +10,7 @@
  */
 
 import type { Binding, Effect, FlowState, Problem } from '../../files'
-import { bindingRefsOf, fieldProblem, has, PLATFORM_ACTION } from '../contract'
+import { bindingRefsOf, fieldProblem, has, PLATFORM_ACTION, presentationOnly } from '../contract'
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
@@ -79,7 +80,11 @@ export function effectProblems(
 }
 
 export function eventProblems(inFlow: InFlow, event: string, at: At): Problem[] {
-  const { contract, known, inScreens } = inFlow
+  const { contract, known, visibilityButtons, inScreens } = inFlow
+
+  if (visibilityButtons.has(event)) {
+    return [inScreens(at, presentationOnly(event, 'a flow'))]
+  }
 
   if (event.startsWith(MODEL_EVENT)) {
     const path = event.slice(MODEL_EVENT.length)

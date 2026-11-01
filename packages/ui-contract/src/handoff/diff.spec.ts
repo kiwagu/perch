@@ -91,6 +91,7 @@ describe('diffContracts', () => {
         removed: [],
         renamed: [{ from: 'sample.save-button', to: 'sample.store-button' }],
       },
+      derived: { added: [], removed: [] },
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
@@ -149,6 +150,26 @@ describe('diffContracts', () => {
       removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists the derived parts the anchors both contracts hold start or stop rendering', () => {
+    const eye = structuredClone(after)
+
+    Object.assign(eye.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    expect(diffContracts(after, eye).derived).toEqual({
+      added: ['sample.title-input.visibility-button'],
+      removed: [],
+    })
+    expect(diffContracts(eye, after).derived).toEqual({
+      added: [],
+      removed: ['sample.title-input.visibility-button'],
+    })
+    expect(formatChanges(diffContracts(after, eye)).split('\n')).toEqual([
+      'contract changes: 1 derived anchor added',
+      'derived anchors added: sample.title-input.visibility-button',
+    ])
   })
   it('lists a toast code a new model action derives as an anchor code added', () => {
     const withToast = (codes: readonly string[]): Contract => {

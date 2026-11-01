@@ -18,11 +18,14 @@ import {
   locate,
   own,
   PLATFORM_ACTION,
+  visibilityButtonsOf,
 } from './contract'
 
 export interface Lookups {
   readonly contract: Contract
   readonly known: (anchor: string) => boolean
+  /** The visibility-buttons the inputs render, presentation only. */
+  readonly visibilityButtons: ReadonlySet<string>
   readonly paths: ReadonlySet<string>
   readonly inScreens: InScreens
 }
@@ -30,6 +33,7 @@ export interface Lookups {
 export const lookupsOf = (contract: Contract): Lookups => ({
   contract,
   known: knownAnchors(contract),
+  visibilityButtons: visibilityButtonsOf(contract.screens),
   paths: bindingPaths(contract.screens),
   inScreens: locate(contract.screens),
 })

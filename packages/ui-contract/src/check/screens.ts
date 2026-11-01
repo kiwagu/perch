@@ -3,10 +3,11 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen; only a field says whether it holds input.
+ * fields of its own screen; only a field says whether it holds input; only an input renders a
+ * visibility-button.
  */
 
-import { FIELD_KINDS, kindOf, screenOf } from '../anchors'
+import { FIELD_KINDS, kindOf, screenOf, VISIBILITY_BASE_KIND, VISIBILITY_BUTTON } from '../anchors'
 import type { Problem } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
@@ -166,6 +167,23 @@ const holdsInputProblems = ({ screens }: Contract): Problem[] =>
       : [],
   )
 
+/** The eye that shows or hides what a password input holds is derived by an input alone. */
+const visibilityProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.kind === VISIBILITY_BASE_KIND
+      ? []
+      : (def.derived ?? []).flatMap((suffix, index) =>
+          suffix === VISIBILITY_BUTTON
+            ? [
+                locate(screens)(
+                  [...at, 'derived', index],
+                  `only an ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}`,
+                ),
+              ]
+            : [],
+        ),
+  )
+
 export const screensProblems = (contract: Contract): Problem[] => [
   ...screenIdProblems(contract),
   ...duplicateProblems(contract),
@@ -175,4 +193,5 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...nameProblems(contract),
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
+  ...visibilityProblems(contract),
 ]

@@ -74,12 +74,13 @@ describe('collectFromSource', () => {
     ])
     expect(literals.map(({ anchor }) => anchor)).not.toContain('not.a-constant')
   })
-  it('records the literal suffix of testIdFor() and refuses a suffix built at runtime', () => {
+  it('records the literal suffix of testIdFor(), its base when a literal, and refuses a suffix built at runtime', () => {
     const { derived, problems } = collected('derived.tsx')
 
     expect(derived).toEqual([
       { suffix: 'option', line: 4 },
       { suffix: 'confirm-button', line: 6 },
+      { suffix: 'visibility-button', base: 'sample.title-input', line: 10 },
     ])
     expect(problems.map(formatProblem)).toEqual([`sources/derived.tsx:8: ${RUNTIME_SUFFIX}`])
     expect(collected('attributes.tsx').derived).toEqual([{ suffix: 'item', line: 18 }])

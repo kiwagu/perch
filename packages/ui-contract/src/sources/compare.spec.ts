@@ -20,7 +20,10 @@ const SCREENS: ScreensFile = {
       bindings: [],
       flag: null,
       entry: ['sample.page'],
-      anchors: { 'sample.page': { kind: 'page' }, 'sample.mode-select': { kind: 'select' } },
+      anchors: {
+        'sample.page': { kind: 'page' },
+        'sample.mode-select': { kind: 'select', derived: ['option'] },
+      },
     },
   ],
   files: ['contract/domain/screens/__root.yaml'],
@@ -217,6 +220,37 @@ describe('compareWithContract', () => {
 
     expect(printed(collected)).toEqual([
       'b.tsx:8: "thing" is not a derived suffix of contract/vocabulary.md',
+    ])
+  })
+  it('takes a derived part only where an anchor lists its suffix: a visibility-button on an input', () => {
+    const eye = (base?: string): Collected =>
+      source('eye.tsx', {
+        derived: [
+          { suffix: 'visibility-button', ...(base === undefined ? {} : { base }), line: 7 },
+        ],
+      })
+
+    expect(printed([...agreeing(), eye()])).toEqual([
+      'eye.tsx:7: "visibility-button": no anchor of contract/domain/screens lists it in its derived',
+    ])
+
+    const screens = structuredClone(WITH_FIELDS)
+
+    Object.assign(screens.screens[0]?.anchors['sample.form.name-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
+    const compared = (collected: readonly Collected[]): string[] =>
+      compareWithContract(collected, screens, vocabulary).map(formatProblem)
+
+    expect(compared([...rendered, eye()])).toEqual([])
+    expect(compared([...rendered, eye('sample.form.name-input')])).toEqual([])
+    expect(compared([...rendered, eye('sample.page')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.page", "visibility-button"): "sample.page" does not list "visibility-button" in its derived',
+    ])
+    expect(compared([...rendered, eye('sample.gone-input')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.gone-input", "visibility-button"): "sample.gone-input" is not in contract/domain/screens',
     ])
   })
   it('reports a code that is not in the vocabulary', () => {

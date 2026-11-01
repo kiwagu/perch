@@ -5,6 +5,7 @@ export {
   bindingRefsOf,
   type Contract,
   codesOf,
+  type DeclaredAnchor,
   declaredAnchors,
   locate,
   modelTargetOf,
