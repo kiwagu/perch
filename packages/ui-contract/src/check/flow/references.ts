@@ -83,7 +83,7 @@ export function eventProblems(inFlow: InFlow, event: string, at: At): Problem[] 
   const { contract, known, visibilityButtons, inScreens } = inFlow
 
   if (visibilityButtons.has(event)) {
-    return [inScreens(at, presentationOnly(event, 'a flow'))]
+    return [inScreens(at, presentationOnly(event, 'an event of a flow'))]
   }
 
   if (event.startsWith(MODEL_EVENT)) {

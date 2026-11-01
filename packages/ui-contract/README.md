@@ -103,10 +103,12 @@ for Bun.
     `visibility-button`, whose values its suffix defines), `screensProblems` (anchors unique and
     never named like a derived one, entry and names, a `visibility-button` derived by an `input`
     alone), `bindingsProblems` (model fields,
-    actions and their params, each an anchor, a constant or a search parameter every route of
-    the screen declares, routes, sources), `flowProblems` (a flow names states, events
+    actions and their params, each an anchor (never a `visibility-button`, which holds no
+    input), a constant or a search parameter every route of the screen declares, routes,
+    sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
-    `input`, anchors with their codes and bindings that exist,
+    `input` (taken from no `visibility-button` either), anchors with their codes and bindings
+    that exist,
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,

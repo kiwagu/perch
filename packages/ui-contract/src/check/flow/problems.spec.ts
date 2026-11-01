@@ -106,6 +106,23 @@ describe('flowProblems', () => {
       ])
     }
   })
+  it("refuses a visibility-button as an invoke input's anchor, and keeps its input", () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    invoke.input = { title: 'sample.title-input.visibility-button' }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.input.title: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value an action takes`,
+    ])
+
+    invoke.input = { title: 'sample.title-input' }
+
+    expect(printed(contract)).toEqual([])
+  })
   it('takes an invoke input from a search parameter of every route of the screen', () => {
     const contract = sampleContract()
     const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')

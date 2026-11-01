@@ -3,7 +3,8 @@
  * `<input>.visibility-button`, which shows what the input holds as typed or hides it again.
  * Presentation only: whether the input shows its value is held by the input itself, the one
  * transient state a flow never holds, so the button is never an event of a flow or an activity,
- * is not one of the controls the machine enables, and is always enabled. Its `data-value` names
+ * is not one of the controls the machine enables, is always enabled, and gives no action a value:
+ * it holds no input. Its `data-value` names
  * what a click does, from the values the suffix defines, never rows of "Choice values".
  */
 

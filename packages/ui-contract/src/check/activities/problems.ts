@@ -64,7 +64,7 @@ function screenOf({ contract, declared }: InActivity, anchor: string): Screen | 
 
 function eventProblems(inActivity: InActivity, screen: Screen, anchor: string, at: At): Problem[] {
   if (inActivity.visibilityButtons.has(anchor)) {
-    return [inActivity.problem(at, presentationOnly(anchor, 'an activity'))]
+    return [inActivity.problem(at, presentationOnly(anchor, 'an event of an activity'))]
   }
 
   if (!inActivity.known(anchor)) {

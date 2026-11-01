@@ -96,7 +96,7 @@ state of one anchor, never a second anchor.
 | `option` | one entry of a select, with `data-value` |
 | `item` | one entry a composite renders, with `data-id` |
 | `error-message` | the error text of a field |
-| `visibility-button` | the eye beside a password `input` that shows what the input holds as typed, or hides it again: it carries `data-value` `show` while the input hides its value (a click shows it) and `hide` while it shows it, so the value names what the click does; only an `input` renders it, and it is presentation only, never an event of a flow or an activity and always enabled |
+| `visibility-button` | the eye beside a password `input` that shows what the input holds as typed, or hides it again: it carries `data-value` `show` while the input hides its value (a click shows it) and `hide` while it shows it, so the value names what the click does; only an `input` renders it, and it is presentation only, never an event of a flow or an activity, never a value an action takes, and always enabled |
 
 ## Attributes
 

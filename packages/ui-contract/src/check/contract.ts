@@ -173,7 +173,8 @@ export function knownAnchors(contract: Contract): (anchor: string) => boolean {
 
 /**
  * The visibility-buttons the contract declares: `<anchor>.visibility-button` for each anchor
- * that lists the suffix in `derived`. Presentation only: never an event of a flow or an activity.
+ * that lists the suffix in `derived`. Presentation only: never an event of a flow or an activity,
+ * and never a value an action takes.
  */
 export const visibilityButtonsOf = (screens: ScreensFile): Set<string> =>
   new Set(
@@ -182,9 +183,11 @@ export const visibilityButtonsOf = (screens: ScreensFile): Set<string> =>
       .map(({ anchor }) => testIdFor(anchor, VISIBILITY_BUTTON)),
   )
 
-/** The problem of a visibility-button named as an event of a flow or an activity. */
-export const presentationOnly = (anchor: string, of: 'a flow' | 'an activity'): string =>
-  `"${anchor}" is a ${VISIBILITY_BUTTON}: presentation only, never an event of ${of}`
+/** The problem of a visibility-button named as more than presentation: `never` says as what. */
+export const presentationOnly = (
+  anchor: string,
+  never: 'an event of a flow' | 'an event of an activity' | 'a value an action takes',
+): string => `"${anchor}" is a ${VISIBILITY_BUTTON}: presentation only, never ${never}`
 
 /**
  * The codes of the contract: the vocabulary's rows, the rule rows aside (they are no codes), and

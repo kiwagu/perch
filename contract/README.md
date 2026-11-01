@@ -614,8 +614,9 @@ declares it, `derived: [ visibility-button ]`, and only an `input` may. Its `dat
 names what a click does: `show` while the input hides its value, `hide` while it shows it;
 the two values are the suffix's own, never rows of "Choice values". Whether the field shows
 its value is held by the field itself, the one transient state a flow never holds, so the
-button is never an event of a flow or an activity (`contract:check` refuses one), it is not
-one of the controls the machine enables, it is always enabled, and it holds no input. A test
+button is never an event of a flow or an activity, it is not one of the controls the machine
+enables, it is always enabled, and it holds no input, so no binding's `params` and no invoke's
+`input` takes it (`contract:check` refuses each of these). A test
 locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest
 lists it in `contract.derivedParts` with its kind and its values.
 
@@ -839,6 +840,8 @@ gap is fixed in the contract files first, never worked around in a test.
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists,
+  each parameter of an action taking a declared anchor (never a `visibility-button`), a
+  constant or a search parameter,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,

@@ -2,9 +2,9 @@
  * The lookups the bindings rule and the flow rule share, built once per contract, and what
  * both hold an action and a route to: an action is an entity action or a platform action,
  * each key of its params (a binding's `params`, an invoke's `input`) one of its parameters
- * taking a declared anchor, a constant, or a search parameter every route of the screen
- * declares (a parameter left out is the implementation's to compute, and `$id` is minted); a
- * route is the path of a binding.
+ * taking a declared anchor (never a visibility-button, which holds no input), a constant, or a
+ * search parameter every route of the screen declares (a parameter left out is the
+ * implementation's to compute, and `$id` is minted); a route is the path of a binding.
  */
 
 import type { ParamValue, Problem, Screen } from '../files'
@@ -18,6 +18,7 @@ import {
   locate,
   own,
   PLATFORM_ACTION,
+  presentationOnly,
   visibilityButtonsOf,
 } from './contract'
 
@@ -76,11 +77,12 @@ export function searchOf(screen: Pick<Screen, 'bindings'>): ReadonlySet<string> 
 
 /**
  * The problems of an action and its params, the action at `at.action` and each param at
- * `at.params` and its key: each param a parameter of the action, taking a declared anchor, a
- * constant, or a search parameter of `search`.
+ * `at.params` and its key: each param a parameter of the action, taking a declared anchor (a
+ * visibility-button is presentation only and gives no value), a constant, or a search parameter
+ * of `search`.
  */
 export function actionProblems(
-  { contract, known, inScreens }: Lookups,
+  { contract, known, visibilityButtons, inScreens }: Lookups,
   action: string,
   params: Readonly<Record<string, ParamValue>> | undefined,
   at: { readonly action: readonly PropertyKey[]; readonly params: readonly PropertyKey[] },
@@ -99,6 +101,9 @@ export function actionProblems(
     ...(typeof value !== 'string' || known(value)
       ? []
       : [inScreens([...at.params, key], `"${value}" is not a declared anchor`)]),
+    ...(typeof value === 'string' && visibilityButtons.has(value)
+      ? [inScreens([...at.params, key], presentationOnly(value, 'a value an action takes'))]
+      : []),
     ...(typeof value === 'object' && 'search' in value && !search.has(value.search)
       ? [
           inScreens(
