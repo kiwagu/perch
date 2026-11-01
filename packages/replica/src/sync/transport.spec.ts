@@ -10,7 +10,7 @@ import {
   type ServerMessage,
   serverMessage,
 } from '../protocol'
-import { manualClock } from '../testing/manual-clock'
+import { manualClock } from '../testing'
 
 import { type DeviceCredentials, RECONNECT_DELAYS_MS, WebSocketTransport } from './transport'
 
@@ -48,7 +48,7 @@ class FakeSocket extends EventTarget {
   }
 }
 
-const keys: DeviceCredentials = { access: 'access-key', refresh: 'refresh-key' }
+const keys: DeviceCredentials = { token: 'session-token' }
 
 const welcome: ServerMessage = {
   type: 'welcome',
@@ -68,15 +68,14 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
   const sockets: FakeSocket[] = []
   const events: string[] = []
   const received: ServerMessage[] = []
-  const tokens: Array<{ readonly access: string; readonly refresh: string }> = []
   const memberships: Array<readonly Membership[]> = []
   const transport = new WebSocketTransport({
     url: 'wss://gateway.example.test/sync',
     credentials,
-    onTokens: (pair) => tokens.push(pair),
     onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
+    device: 'device-1',
     socket: (url) => {
       const socket = new FakeSocket(url)
 
@@ -108,11 +107,20 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     return socket()
   }
 
-  return { clock, sockets, events, received, tokens, memberships, transport, socket, connect }
+  return {
+    clock,
+    sockets,
+    events,
+    received,
+    memberships,
+    transport,
+    socket,
+    connect,
+  }
 }
 
 describe('WebSocket transport', () => {
-  it('says hello with the stored keys when the socket opens', () => {
+  it('says hello with the stored token and the device when the socket opens', () => {
     const { transport, socket } = harness()
 
     transport.start()
@@ -123,17 +131,24 @@ describe('WebSocket transport', () => {
     socket().open()
 
     expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
+      {
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        token: 'session-token',
+        device: 'device-1',
+      },
     ])
   })
 
-  it('says hello with protocol 2', () => {
-    const { transport, socket } = harness(() => ({ access: 'access-key' }))
+  it('says hello with the current protocol', () => {
+    const { transport, socket } = harness(() => ({ token: 'other-token' }))
 
     transport.start()
     socket().open()
 
-    expect(socket().sent).toEqual([{ type: 'hello', protocol: 2, access: 'access-key' }])
+    expect(socket().sent).toEqual([
+      { type: 'hello', protocol: PROTOCOL_VERSION, token: 'other-token', device: 'device-1' },
+    ])
   })
 
   it('reports up only after welcome', () => {
@@ -183,14 +198,6 @@ describe('WebSocket transport', () => {
     expect(events).toEqual(['up', 'down'])
   })
 
-  it('hands renewed keys to onTokens', () => {
-    const { connect, tokens } = harness()
-
-    connect().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
-
-    expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
-  })
-
   it("hands the welcome's memberships and a later memberships message to onMemberships", () => {
     const { transport, socket, memberships, received } = harness()
     const update: ServerMessage = { type: 'memberships', memberships: [] }
@@ -230,6 +237,19 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
+  it('stops on 4001 and reports revoked: the device was signed out from another one', async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4001)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: revoked', 'down'])
+    expect(ended).toEqual(['revoked'])
+    expect(sockets.length).toBe(1)
+  })
+
   it('connects again after 4408, a hello the gateway stopped waiting for', async () => {
     const { clock, sockets, transport, socket, events } = harness()
 
@@ -262,7 +282,7 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
-  it('ends as unauthorized when it holds no keys to say hello with', async () => {
+  it('ends as unauthorized when it holds no token to say hello with', async () => {
     const { clock, sockets, transport, socket, events } = harness(() => undefined)
 
     transport.start()
@@ -377,27 +397,30 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(5)
   })
 
-  it('leaves a socket whose hello is under way alone on reconnect(): its hello renews the keys', async () => {
-    const { clock, sockets, transport, socket, events, tokens } = harness()
+  it('leaves a socket whose hello is under way alone on reconnect(): its hello is out', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
 
     transport.start()
-    // Still opening: the hello goes once it opens, with the keys held then.
+    // Still opening: the hello goes once it opens, with the token held then.
     transport.reconnect()
     socket().open()
-    // The hello is out: closing the socket now would spend the refresh key with no pair to show.
+    // The hello is out: closing the socket now would only send another one.
     transport.reconnect()
 
     expect(sockets).toHaveLength(1)
     expect(socket().closedWith).toBeUndefined()
     expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', refresh: 'refresh-key' },
+      {
+        type: 'hello',
+        protocol: PROTOCOL_VERSION,
+        token: 'session-token',
+        device: 'device-1',
+      },
     ])
 
-    socket().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
     socket().receive(welcome)
     await clock.advance(60_000)
 
-    expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
     expect(events).toEqual(['up'])
     expect(sockets).toHaveLength(1)
   })

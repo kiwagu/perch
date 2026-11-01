@@ -5,10 +5,12 @@ import { interceptQueries, openTestDb } from '@workspace/data/testing'
 
 import {
   acceptEdits,
+  boundIdentity,
   countRows,
   deletionOf,
   forgedHistory,
   nameIn,
+  ownerWriter,
   planFor,
   region,
   shallowSnapshotAt,
@@ -35,7 +37,9 @@ describe('server region log', () => {
     const two = (await RegionLog.load(local, region))._unsafeUnwrap().log
 
     const seqs = await Promise.all(
-      Array.from({ length: 20 }, (_, n) => (n % 2 ? one : two).accept(planFor(`Ann ${n}`))),
+      Array.from({ length: 20 }, (_, n) =>
+        (n % 2 ? one : two).accept(planFor(`Ann ${n}`), ownerWriter),
+      ),
     )
 
     expect(seqs.map((seq) => seq._unsafeUnwrap()).sort((a, b) => a - b)).toEqual(
@@ -46,7 +50,7 @@ describe('server region log', () => {
   it('accepts nothing when the projection breaks a schema rule', async () => {
     const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
-    const outcome = await log.accept(planFor('')) // profile.name ASSERT string::len($value) > 0
+    const outcome = await log.accept(planFor(''), ownerWriter) // profile.name ASSERT string::len($value) > 0
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.head()).toBe(0)
@@ -57,9 +61,9 @@ describe('server region log', () => {
   it('accepts nothing when the projection takes a unique value of another record', async () => {
     const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
-    expect((await log.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await log.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
-    const outcome = await log.accept(planFor('Ann', 'prf_2')) // one profile per identity
+    const outcome = await log.accept(planFor('Ann', 'prf_2'), ownerWriter) // one profile per identity
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.head()).toBe(1)
@@ -70,11 +74,11 @@ describe('server region log', () => {
   it('deletes before it upserts, so a batch can move a unique value to a new record', async () => {
     const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
-    expect((await log.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await log.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
     const moved = planFor('Ann', 'prf_2') // the same identity under a new key
     const deletes = [{ table: 'profile', key: 'prf_1', entry: 'profile/prf_1' }]
-    const outcome = await log.accept({ ...moved, deletes })
+    const outcome = await log.accept({ ...moved, deletes }, ownerWriter)
 
     expect(outcome._unsafeUnwrap()).toBe(2)
     expect(await countRows(local, 'profile')).toBe(1)
@@ -86,7 +90,7 @@ describe('server region log', () => {
     const plan = planFor('Ann')
     const upserts = plan.upserts.map((row) => ({ ...row, data: { ...row.data, email: 42 } }))
 
-    const outcome = await log.accept({ ...plan, upserts })
+    const outcome = await log.accept({ ...plan, upserts }, ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.head()).toBe(0)
@@ -96,14 +100,14 @@ describe('server region log', () => {
   it('accepts nothing when the projection changes a read-only field', async () => {
     const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
 
-    expect((await log.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await log.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
     const plan = planFor('Ana')
     const upserts = plan.upserts.map((row) => ({
       ...row,
       data: { ...row.data, created_at: new Date(0) },
     }))
-    const outcome = await log.accept({ ...plan, upserts })
+    const outcome = await log.accept({ ...plan, upserts }, ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.head()).toBe(1)
@@ -118,7 +122,7 @@ describe('server region log', () => {
       data: { ...row.data, nickname: 'Annie' },
     }))
 
-    const outcome = await log.accept({ ...plan, upserts })
+    const outcome = await log.accept({ ...plan, upserts }, ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(log.head()).toBe(0)
@@ -130,7 +134,7 @@ describe('server region log', () => {
     const plan = planFor('Ann')
     const upserts = [...plan.upserts, ...planFor('', 'prf_2').upserts]
 
-    const outcome = await log.accept({ ...plan, upserts })
+    const outcome = await log.accept({ ...plan, upserts }, ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(await countRows(local, 'profile')).toBe(0)
@@ -275,10 +279,10 @@ describe('record ownership across regions on one database', () => {
     const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
     const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
 
-    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await mine.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
     // The other region's own profile goes first, so no unique value stands in the way.
-    const outcome = await theirs.accept(planFor('Taken', 'prf_1', other))
+    const outcome = await theirs.accept(planFor('Taken', 'prf_1', other), ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(outcome._unsafeUnwrapErr().message).toMatch(/^ownership: profile\/prf_1 /)
@@ -291,9 +295,9 @@ describe('record ownership across regions on one database', () => {
     const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
     const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
 
-    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
+    expect((await mine.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
-    const outcome = await theirs.accept(deletionOf('prf_1', other))
+    const outcome = await theirs.accept(deletionOf('prf_1', other), ownerWriter)
 
     expect(outcome._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
     expect(outcome._unsafeUnwrapErr().message).toMatch(/^ownership: profile\/prf_1 /)
@@ -304,10 +308,10 @@ describe('record ownership across regions on one database', () => {
   it('labels a unique-index refusal on a record key that looks like an ownership refusal as the index one', async () => {
     const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
 
-    expect((await mine.accept(planFor('Ann', 'ownership:x')))._unsafeUnwrap()).toBe(1)
+    expect((await mine.accept(planFor('Ann', 'ownership:x'), ownerWriter))._unsafeUnwrap()).toBe(1)
 
     // One profile per identity: the second breaks the index, whose message ends with the record `ownership:x`.
-    const outcome = await mine.accept(planFor('Ann'))
+    const outcome = await mine.accept(planFor('Ann'), ownerWriter)
     const error = outcome._unsafeUnwrapErr()
 
     expect(error.code).toBe('data:WRITE_REJECTED')
@@ -320,11 +324,87 @@ describe('record ownership across regions on one database', () => {
     const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
     const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
 
-    expect((await mine.accept(planFor('Ann')))._unsafeUnwrap()).toBe(1)
-    expect((await theirs.accept(planFor('Bea', 'prf_2', other)))._unsafeUnwrap()).toBe(1)
-    expect((await theirs.accept(planFor('Bee', 'prf_2', other)))._unsafeUnwrap()).toBe(2)
+    expect((await mine.accept(planFor('Ann'), ownerWriter))._unsafeUnwrap()).toBe(1)
+    expect((await theirs.accept(planFor('Bea', 'prf_2', other), ownerWriter))._unsafeUnwrap()).toBe(
+      1,
+    )
+    expect((await theirs.accept(planFor('Bee', 'prf_2', other), ownerWriter))._unsafeUnwrap()).toBe(
+      2,
+    )
 
     expect(await storedProfile(local, 'prf_1')).toEqual({ name: 'Ann', identity: region })
     expect(await storedProfile(local, 'prf_2')).toEqual({ name: 'Bee', identity: other })
+  })
+})
+
+describe('peer bindings', () => {
+  const ann = { identity: 'idn_a', peers: ['42'] }
+
+  it('binds each peer of an accepted batch to the identity that pushed it', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+    expect(await boundIdentity(local, region, '42')).toBe('idn_a')
+  })
+
+  it('accepts later batches of the same identity under its peer', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+    expect((await log.accept(planFor('Ana'), ann))._unsafeUnwrap()).toBe(2)
+  })
+
+  it('refuses a batch of another identity under a bound peer whole: no log row, no projection, none of its peers bound', async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+
+    const refused = await log.accept(planFor('Bob'), { identity: 'idn_b', peers: ['42', '7'] })
+
+    expect(refused._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: `peer: 42 writes as another identity in ${region}`,
+    })
+    expect(log.head()).toBe(1)
+    expect(await countRows(local, '_replica_update')).toBe(1)
+    expect((await storedProfile(local, 'prf_1'))?.name).toBe('Ann')
+    expect(await boundIdentity(local, region, '7')).toBeUndefined()
+  })
+
+  it('keeps the bindings in the region database: a log loaded again refuses the same batch', async () => {
+    const first = (await RegionLog.load(local, region))._unsafeUnwrap().log
+
+    expect((await first.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+
+    const again = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const refused = await again.accept(planFor('Bob'), { identity: 'idn_b', peers: ['42'] })
+
+    expect(refused._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(again.head()).toBe(1)
+  })
+
+  it('binds a peer per region', async () => {
+    const other = 'identity:idn_b'
+    const mine = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const theirs = (await RegionLog.load(local, other))._unsafeUnwrap().log
+
+    expect((await mine.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+    expect(
+      (
+        await theirs.accept(planFor('Bob', 'prf_9', other), { identity: 'idn_b', peers: ['42'] })
+      )._unsafeUnwrap(),
+    ).toBe(1)
+    expect(await boundIdentity(local, other, '42')).toBe('idn_b')
+  })
+
+  it('a binding made through one log holds for another log of the same region', async () => {
+    const one = (await RegionLog.load(local, region))._unsafeUnwrap().log
+    const two = (await RegionLog.load(local, region))._unsafeUnwrap().log
+
+    expect((await one.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+
+    const refused = await two.accept(planFor('Bob'), { identity: 'idn_b', peers: ['42'] })
+
+    expect(refused._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
   })
 })

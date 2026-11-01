@@ -1,0 +1,130 @@
+diff --git a/dist/index.js b/dist/index.js
+index f050fc4..54d778c 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,4 +1,6 @@
+ import { createRequire } from "node:module";
++// The adapter below uses the classes of its surrealdb dependency, the ones the connection decodes into.
++import { DateTime as SurrealDateTime, RecordId as SurrealRecordId } from "surrealdb";
+ var __create = Object.create;
+ var __getProtoOf = Object.getPrototypeOf;
+ var __defProp = Object.defineProperty;
+@@ -9687,9 +9689,9 @@ function isTableNotFoundError(err) {
+   return msg.includes("does not exist") || e.kind === "NotFound";
+ }
+ function deserializeValue(val) {
+-  if (val instanceof _RecordId)
++  if (val instanceof SurrealRecordId)
+     return String(val.id);
+-  if (val instanceof DateTime)
++  if (val instanceof SurrealDateTime)
+     return val.toDate();
+   return val;
+ }
+@@ -9734,9 +9736,9 @@ function buildWhereClause(where, model) {
+     const param = `pw${paramIdx++}`;
+     if (field === "id") {
+       if (operator === "in" || operator === "not_in") {
+-        bindings[param] = value.map((v) => new _RecordId(model, v));
++        bindings[param] = value.map((v) => new SurrealRecordId(model, v));
+       } else {
+-        bindings[param] = new _RecordId(model, String(value));
++        bindings[param] = new SurrealRecordId(model, String(value));
+       }
+     } else if (isInsensitive) {
+       if (typeof value === "string") {
+@@ -9820,11 +9822,14 @@ function mapFieldTypeToSurreal(type, required) {
+ }
+ var surrealAdapter = (config) => {
+   let lazyOptions = null;
+-  let activeDb = config.db;
+-  let txCreated = null;
+   const tbl = (model) => `\`${model}\``;
++  // An adapter bound to one database handle: the connection (`created` null), or one transaction
++  // with the list of the rows it created. No handle is shared between requests, so a request never
++  // runs its queries in another's transaction, and overlapping transactions cannot restore a
++  // finished one as the connection. (The body keeps its original indentation.)
++  const forDb = (db, created) => {
+   const runQuery = async (sql, bindings) => {
+-    const result = await activeDb.query(sql, bindings);
++    const result = await db.query(sql, bindings);
+     return result[0] ?? [];
+   };
+   const findManyRaw = async (model, where, limit) => {
+@@ -9876,34 +9881,26 @@ var surrealAdapter = (config) => {
+       supportsArrays: true,
+       supportsNumericIds: false,
+       supportsUUIDs: false,
+-      transaction: async (cb) => {
++      // Inside a transaction, a nested one (Better Auth asks for none) joins it on the same handle.
++      transaction: created !== null ? async (cb) => cb(adapterCreator(lazyOptions)) : async (cb) => {
+         const trx = await config.db.beginTransaction();
+-        const previousDb = activeDb;
+-        activeDb = trx;
+-        txCreated = [];
++        const toRollback = [];
+         try {
+-          const result = await cb(adapterCreator(lazyOptions));
++          const result = await cb(forDb(trx, toRollback)(lazyOptions));
+           await trx.commit();
+-          txCreated = null;
+           return result;
+         } catch (err) {
+-          const toRollback = txCreated ?? [];
+-          txCreated = null;
+           try {
+             await trx.cancel();
+           } catch {}
+-          activeDb = previousDb;
+           for (const { model, id: id2 } of toRollback) {
+             try {
+-              await activeDb.query("DELETE $rid", {
+-                rid: new _RecordId(model, id2)
++              await config.db.query("DELETE $rid", {
++                rid: new SurrealRecordId(model, id2)
+               });
+             } catch {}
+           }
+           throw err;
+-        } finally {
+-          txCreated = null;
+-          activeDb = previousDb;
+         }
+       }
+     },
+@@ -9914,13 +9911,13 @@ var surrealAdapter = (config) => {
+       }) => {
+         const insertData = { ...data };
+         if (insertData.id && typeof insertData.id === "string") {
+-          insertData.id = new _RecordId(model, insertData.id);
++          insertData.id = new SurrealRecordId(model, insertData.id);
+         }
+         const { expr: expr2, bindings } = buildObjectBindings(insertData, "fi");
+         const rows = await runQuery(`INSERT INTO ${tbl(model)} ${expr2} RETURN AFTER`, bindings);
+         const record = deserializeRecord(rows[0]);
+-        if (txCreated !== null && record?.id) {
+-          txCreated.push({ model, id: record.id });
++        if (created !== null && record?.id) {
++          created.push({ model, id: record.id });
+         }
+         return record;
+       },
+@@ -10017,7 +10014,7 @@ var surrealAdapter = (config) => {
+       }) => {
+         const { sql: whereSql, bindings } = buildWhereClause(where, model);
+         try {
+-          await activeDb.query(`DELETE ${tbl(model)} ${whereSql}`, bindings);
++          await db.query(`DELETE ${tbl(model)} ${whereSql}`, bindings);
+         } catch (err) {
+           if (!isTableNotFoundError(err))
+             throw err;
+@@ -10170,6 +10167,9 @@ var surrealAdapter = (config) => {
+       }
+     })
+   });
++  return adapterCreator;
++  };
++  const adapterCreator = forDb(config.db, null);
+   return (options) => {
+     lazyOptions = options;
+     const a = adapterCreator(options);

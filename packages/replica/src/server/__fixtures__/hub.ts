@@ -2,21 +2,40 @@ import { LoroDoc, LoroMap, type VersionVector } from 'loro-crdt'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
+import { defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
 
 import { replicaSchema } from '../../__fixtures__/note'
 import type { ServerMessage } from '../../protocol'
 import type { RegionRef } from '../../region-doc'
 import { type ManualClock, manualClock } from '../../testing/manual-clock'
 import { type RegionDatabases, singleDatabase } from '../region-databases'
-import { RegionHub, type Subscriber } from '../region-hub'
+import { type Actor, RegionHub, type Subscriber } from '../region-hub'
 
 import { nameIn } from './log'
 
 /** The identity id of the owner of the private region the hub tests use. */
-export const actor = 'idn_a'
+export const actor: Actor = { id: 'idn_a', ability: OWNER_ABILITY }
+
+/** What a member of the organisation does through a subscription: the abilities its role gives. */
+export function memberOf(id: string, role: 'member' | 'admin' = 'member'): Actor {
+  return { id, ability: defineAbilityFor({ id, role }, replicaSchema) }
+}
+
+/**
+ * A document that holds what `holding` holds and writes as `owner`'s Loro peer: its next change
+ * takes the counters `owner`'s next change takes, as a device that borrowed the peer would.
+ */
+export function underPeerOf(owner: LoroDoc, holding: LoroDoc): LoroDoc {
+  const doc = new LoroDoc()
+
+  doc.import(holding.export({ mode: 'snapshot' }))
+  doc.setPeerId(owner.peerIdStr)
+
+  return doc
+}
 
 /** The record id of that identity, which is also the id of its private region. */
-export const owner = `identity:${actor}`
+export const owner = `identity:${actor.id}`
 
 export const region: RegionRef = { kind: 'private', id: owner }
 

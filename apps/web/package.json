@@ -10,8 +10,8 @@
     }
   },
   "scripts": {
-    "dev": "vite build --watch --mode development",
-    "build": "vite build",
+    "dev": "vite build --watch --mode development --outDir dist-dev",
+    "build": "vite build && ui-contract manifest --out dist/ui-manifest",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
@@ -31,13 +31,16 @@
     "@workspace/logger": "workspace:*",
     "@workspace/replica": "workspace:*",
     "@workspace/ui": "workspace:*",
+    "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",
     "@xstate/react": "catalog:",
+    "better-auth": "catalog:",
     "entity-id": "catalog:",
     "neverthrow": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "ts-pattern": "catalog:",
+    "workbox-window": "catalog:",
     "xstate": "catalog:"
   },
   "devDependencies": {
@@ -53,6 +56,7 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plugin-pwa": "catalog:",
     "vite-plugin-wasm": "catalog:",
     "vitest": "catalog:"
   }

@@ -1,3 +1,4 @@
+import type { ResultAsync } from 'neverthrow'
 import { match, P } from 'ts-pattern'
 
 import { type DataError, dataError } from '@workspace/data'
@@ -5,10 +6,14 @@ import { type DataError, dataError } from '@workspace/data'
 import type { Clock } from '../clock'
 import type { ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
+import type { RegionReplacement } from '../region-replacement'
 
-import { type CadencePort, createCadence, type PassKind } from './cadence'
+import { type CadencePort, createCadence } from './cadence'
+import { EnginePasses } from './engine-passes'
+import { EngineRegions } from './engine-regions'
+import { EngineSettling } from './engine-settling'
+import { EngineSignOut } from './engine-sign-out'
 import { createOutboxDrain, type OutboxDrainPort } from './outbox-drain'
-import { ANSWER_TIMEOUT_MS, RegionSync } from './region-sync'
 import type { ChannelState, EndReason, SyncTransport } from './transport'
 
 export interface SyncEngineOptions {
@@ -21,6 +26,22 @@ export interface SyncEngineOptions {
   /** Imported something from the server. */
   readonly onSettled: () => void
   readonly onError: (error: DataError) => void
+  /** How many outbox rows one push of a region carries at most; 256 by default, the protocol's limit. */
+  readonly batchRows?: number
+  /**
+   * How many rows past its snapshot a region's local log holds before a full pass compacts it;
+   * 200 by default, as on the server.
+   */
+  readonly localCompactionRows?: number
+  /**
+   * The document that takes a region's place: `reset` when the gateway refused its batch again
+   * after the rollback (the engine then loads the region from the server), `reopen` when another
+   * tab reset it. A failure stops that region's sync and is reported.
+   */
+  readonly replaceRegion: (
+    region: RegionDoc,
+    how: RegionReplacement,
+  ) => ResultAsync<RegionDoc, DataError>
 }
 
 export interface SyncEngine {
@@ -34,105 +55,72 @@ export interface SyncEngine {
    * the outbox is empty and every local update is durable, nothing waits for an answer (a push,
    * a pull, a probe, a compaction), no pass runs and no message is being handled; rejects after
    * `timeoutMs` on the clock. A region that stopped syncing counts as settled: its failure was
-   * reported. An update that cannot be made durable is reported once, and is never settled.
+   * reported. So does a region the welcome did not name, without a report: its unsent rows are not
+   * waited for, and a sign-out answers `offline` while it holds any. An update that cannot be made
+   * durable is reported once, and is never settled.
    */
   settled(timeoutMs: number): Promise<void>
   /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
    * sign this device out; resolves `signed-out` only when the gateway ended the channel with the
-   * sign-out close, which means the grant is revoked. Any other close after the sign-out was
-   * asked for (a gateway that could not revoke the grant closes as failed), or no close within
+   * sign-out close, which means the session ended. Any other close after the sign-out was
+   * asked for (a gateway that could not end the session closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
-   * Resolves `offline`, without asking the gateway, when the channel stayed down, fell, the
-   * outbox did not drain in time, or a region that stopped syncing still holds what it has not
-   * sent. Never rejects.
+   * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
+   * the platform says there is no network, `network.online`), fell, the outbox did not drain in
+   * time, or a region that stopped syncing still holds what it has not sent. Never rejects.
    */
-  signOut(): Promise<'signed-out' | 'offline'>
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'>
   /**
    * Whether a sign-out stopped this engine's channel: it asked the gateway, which then did not
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
    */
   channelStopped(): boolean
-  /**
-   * Connects again at once: the gateway welcomes the device anew and hands it fresh keys. A
-   * connection the gateway has not welcomed yet is left to the hello it says.
-   */
-  reconnect(): void
-}
-
-/** How long a sign-out waits for the channel to come up. */
-const SIGN_OUT_CHANNEL_MS = 5_000
-
-/** How long a sign-out waits for the outbox to drain. */
-const SIGN_OUT_SETTLE_MS = 10_000
-
-/** How long a sign-out waits for the gateway to close the channel. */
-const SIGN_OUT_CLOSE_MS = 10_000
-
-interface SyncedRegion {
-  readonly region: RegionDoc
-  readonly sync: RegionSync
-}
-
-/** A promise that the next `fire` resolves, renewed each time. */
-function changeSignal() {
-  let resolve: () => void = () => {}
-  let next = new Promise<void>((settle) => {
-    resolve = settle
-  })
-
-  return {
-    next: () => next,
-    fire() {
-      resolve()
-      next = new Promise<void>((settle) => {
-        resolve = settle
-      })
-    },
-  }
 }
 
 class Engine implements SyncEngine {
   readonly #options: SyncEngineOptions
-  readonly #regions: ReadonlyMap<string, SyncedRegion>
+  readonly #regions: EngineRegions
   readonly #drain: OutboxDrainPort
   readonly #cadence: CadencePort
-  readonly #change = changeSignal()
+  readonly #settling: EngineSettling
+  readonly #passes: EnginePasses
+  readonly #signOutFlow: EngineSignOut
   #listening: Array<() => void> = []
   #channel: ChannelState = 'down'
-  /** Server messages handed to a region and not yet handled. */
-  #handling = 0
-  /**
-   * Probes sent on this connection whose heads have not arrived, oldest first, each as the
-   * cancel of its answer timeout. Heads name no probe, so each answer settles the oldest.
-   */
-  #probes: Array<() => void> = []
-  #passing = false
-  /** A sign-out the gateway did not carry out stopped the channel. */
-  #channelStopped = false
-  /** Regions whose last flush failed, reported once until a flush succeeds again. */
-  readonly #failingFlush = new Set<string>()
 
   constructor(options: SyncEngineOptions) {
     this.#options = options
-    this.#regions = new Map(
-      options.regions.map((region) => [
-        region.ref.id,
-        {
-          region,
-          sync: new RegionSync({
-            region,
-            transport: options.transport,
-            clock: options.clock,
-            actor: options.actor,
-            onSettled: options.onSettled,
-            onError: options.onError,
-          }),
-        },
-      ]),
-    )
-    this.#drain = createOutboxDrain({ pushNext: () => this.#pushNext() })
-    this.#cadence = createCadence(options.clock, (kind) => this.#pass(kind))
+    this.#regions = new EngineRegions({
+      ...options,
+      track: (replaced) => this.#settling.track(replaced),
+      drain: () => this.#drain.request(),
+      changed: () => this.#settling.changed(),
+    })
+    this.#drain = createOutboxDrain({ pushNext: () => this.#regions.pushNext() })
+    this.#settling = new EngineSettling({
+      regions: this.#regions.map,
+      clock: options.clock,
+      drain: this.#drain,
+      onError: options.onError,
+      ready: () => this.#channel === 'up' && this.#passes.idle(),
+    })
+    this.#passes = new EnginePasses({
+      regions: this.#regions.map,
+      transport: options.transport,
+      clock: options.clock,
+      drain: this.#drain,
+      onError: options.onError,
+      changed: () => this.#settling.changed(),
+    })
+    this.#cadence = createCadence(options.clock, (kind) => this.#passes.run(kind))
+    this.#signOutFlow = new EngineSignOut({
+      transport: options.transport,
+      clock: options.clock,
+      drain: this.#drain,
+      settling: this.#settling,
+      up: () => this.#channel === 'up',
+    })
   }
 
   start(): void {
@@ -152,6 +140,7 @@ class Engine implements SyncEngine {
   }
 
   stop(): void {
+    this.#regions.stop()
     this.#cadence.stop()
     this.#drain.stop()
     this.#options.transport.stop()
@@ -160,13 +149,13 @@ class Engine implements SyncEngine {
       unlisten()
     }
 
-    for (const { sync } of this.#regions.values()) {
+    for (const { sync } of this.#regions.map.values()) {
       sync.channelDown()
     }
 
     this.#channel = 'down'
-    this.#forgetProbes()
-    this.#change.fire()
+    this.#passes.forgetProbes()
+    this.#settling.changed()
   }
 
   visibility(state: 'visible' | 'hidden'): void {
@@ -178,93 +167,37 @@ class Engine implements SyncEngine {
   }
 
   settled(timeoutMs: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let waiting = true
-      const cancel = this.#options.clock.schedule(timeoutMs, () => {
-        waiting = false
-        reject(new Error(`the sync did not settle within ${timeoutMs} ms`))
-      })
-      const watch = async (): Promise<void> => {
-        while (waiting) {
-          const change = this.#change.next()
-
-          if (await this.#isSettled()) {
-            if (waiting) {
-              waiting = false
-              cancel()
-              resolve()
-            }
-
-            return
-          }
-
-          await change
-        }
-      }
-
-      void watch()
-    })
+    return this.#settling.settled(timeoutMs)
   }
 
   channelStopped(): boolean {
-    return this.#channelStopped
+    return this.#signOutFlow.channelStopped()
   }
 
-  reconnect(): void {
-    this.#options.transport.reconnect()
-  }
-
-  async signOut(): Promise<'signed-out' | 'offline'> {
-    if (!(await this.#untilUp(SIGN_OUT_CHANNEL_MS))) {
-      return 'offline'
-    }
-
-    this.#drain.request()
-
-    // What did not drain in time stays on the device, as when it is offline.
-    const drained = await this.settled(SIGN_OUT_SETTLE_MS).then(
-      () => true,
-      () => false,
-    )
-
-    if (!drained) {
-      return 'offline'
-    }
-
-    // A region that stopped syncing counts as settled, yet what its outbox holds never reaches
-    // the gateway: the device stays signed in, as when it is offline.
-    if (await this.#stoppedWithUnsent()) {
-      return 'offline'
-    }
-
-    const ended = this.#untilEnded()
-
-    if (!this.#options.transport.send({ type: 'sign-out', scope: 'device' })) {
-      ended.cancel()
-
-      return 'offline'
-    }
-
-    return ended.outcome
+  signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
+    return this.#signOutFlow.run(network.online)
   }
 
   #receive(message: ServerMessage): void {
     match(message)
-      .with({ type: 'welcome' }, () => {
-        for (const { sync } of this.#regions.values()) {
-          sync.subscribe()
+      // Only the regions the welcome names may be named on this connection.
+      .with({ type: 'welcome' }, ({ regions }) => {
+        const named = new Set(regions.map(({ region }) => region))
+
+        for (const [id, { sync }] of this.#regions.map) {
+          sync.welcome(named.has(id))
         }
       })
-      // The transport hands renewed keys and memberships to the app.
-      .with({ type: P.union('tokens', 'memberships') }, () => {})
+      // The transport hands the memberships to the app.
+      .with({ type: 'memberships' }, () => {})
       .with({ type: 'heads' }, ({ regions }) => {
-        this.#probes.shift()?.()
+        this.#passes.answered()
 
         for (const { region, head } of regions) {
-          this.#regions.get(region)?.sync.catchUp(head)
+          this.#regions.map.get(region)?.sync.catchUp(head)
         }
 
-        this.#change.fire()
+        this.#settling.changed()
       })
       .with({ type: 'error' }, (error) => {
         this.#options.onError(
@@ -275,15 +208,15 @@ class Engine implements SyncEngine {
         )
 
         // An error names no request: each region gives up what waits for an answer.
-        for (const { sync } of this.#regions.values()) {
-          this.#track(sync.handle(error))
+        for (const { sync } of this.#regions.map.values()) {
+          this.#settling.track(sync.handle(error))
         }
       })
       .with({ type: P.union('updates', 'ack', 'reject', 'compaction') }, (regional) => {
-        const synced = this.#regions.get(regional.region)
+        const synced = this.#regions.map.get(regional.region)
 
         if (synced) {
-          this.#track(synced.sync.handle(regional))
+          this.#settling.track(synced.sync.handle(regional))
         } else {
           this.#options.onError(
             dataError(
@@ -299,13 +232,14 @@ class Engine implements SyncEngine {
   /**
    * The channel ended for good. A refused protocol stops syncing and is reported: this
    * application is older than the gateway, and only a reload brings one that speaks its
-   * protocol; nothing on the device changes. Refused keys and a sign-out are the app's to act on.
+   * protocol; nothing on the device changes. A device signed out from another one stops syncing
+   * without a report: the transport tells the app, whose token no longer works. A refused token
+   * and a sign-out are the app's to act on.
    */
   #ended(reason: EndReason): void {
     match(reason)
       .with('protocol', () => {
-        this.#cadence.stop()
-        this.#drain.stop()
+        this.#stopPasses()
         this.#options.onError(
           dataError(
             'data:SYNC_STOPPED',
@@ -313,224 +247,31 @@ class Engine implements SyncEngine {
           ),
         )
       })
+      .with('revoked', () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
+  }
+
+  /** No pass and no drain runs any more: the channel will not come back. */
+  #stopPasses(): void {
+    this.#cadence.stop()
+    this.#drain.stop()
   }
 
   #channelChanged(state: ChannelState): void {
     this.#channel = state
 
     if (state === 'down') {
-      this.#forgetProbes()
+      this.#passes.forgetProbes()
 
-      for (const { sync } of this.#regions.values()) {
+      for (const { sync } of this.#regions.map.values()) {
         sync.channelDown()
       }
     }
 
     this.#cadence.channel(state)
     this.#options.onState({ channel: state })
-    this.#change.fire()
-  }
-
-  async #pass(kind: PassKind): Promise<void> {
-    this.#passing = true
-
-    try {
-      if (this.#options.transport.send({ type: 'probe', regions: [...this.#regions.keys()] })) {
-        this.#awaitHeads()
-      }
-
-      if (kind === 'full') {
-        for (const { sync } of this.#regions.values()) {
-          sync.resubscribe()
-          sync.retryPull()
-        }
-
-        // What other tabs wrote reaches this document even while the channel is down.
-        await Promise.all([...this.#regions.values()].map(({ sync }) => sync.catchUpLocal()))
-        this.#drain.request()
-        await this.#drain.idle()
-      }
-    } finally {
-      this.#passing = false
-      this.#change.fire()
-    }
-  }
-
-  /** The next batch of the first region that has one. */
-  async #pushNext(): Promise<'sent' | 'empty' | 'down'> {
-    try {
-      for (const { sync } of this.#regions.values()) {
-        const outcome = await sync.pushNext()
-
-        if (outcome !== 'empty') {
-          return outcome
-        }
-      }
-
-      return 'empty'
-    } finally {
-      this.#change.fire()
-    }
-  }
-
-  /**
-   * Waits for the heads of a probe just sent; when none come within 30 seconds the probe is
-   * given up, reported, and the connection, which stopped answering, is made again.
-   */
-  #awaitHeads(): void {
-    const cancel = this.#options.clock.schedule(ANSWER_TIMEOUT_MS, () => {
-      this.#probes = this.#probes.filter((pending) => pending !== cancel)
-      this.#options.onError(
-        dataError(
-          'data:QUERY_FAILED',
-          `the gateway did not answer a probe within ${ANSWER_TIMEOUT_MS} ms`,
-        ),
-      )
-      this.#options.transport.reconnect()
-      this.#change.fire()
-    })
-
-    this.#probes.push(cancel)
-  }
-
-  /** The probes out will not be answered on this connection. */
-  #forgetProbes(): void {
-    for (const cancel of this.#probes.splice(0)) {
-      cancel()
-    }
-  }
-
-  #track(handled: Promise<void>): void {
-    this.#handling += 1
-    void handled.finally(() => {
-      this.#handling -= 1
-      this.#change.fire()
-    })
-  }
-
-  async #isSettled(): Promise<boolean> {
-    await this.#drain.idle()
-
-    const syncing = [...this.#regions.values()].filter(({ sync }) => !sync.stopped())
-    const unsent = await Promise.all(syncing.map(({ region }) => this.#holdsUnsent(region)))
-
-    return (
-      this.#channel === 'up' &&
-      !this.#passing &&
-      this.#probes.length === 0 &&
-      this.#handling === 0 &&
-      !unsent.some(Boolean) &&
-      [...this.#regions.values()].every(({ sync }) => sync.quiet())
-    )
-  }
-
-  /** Whether a region that stopped syncing still holds what it has not sent. */
-  async #stoppedWithUnsent(): Promise<boolean> {
-    const stopped = [...this.#regions.values()].filter(({ sync }) => sync.stopped())
-    const unsent = await Promise.all(stopped.map(({ region }) => this.#holdsUnsent(region)))
-
-    return unsent.some(Boolean)
-  }
-
-  /**
-   * Whether the region holds local updates the gateway has not acknowledged: outbox rows, or
-   * an update whose append failed and so lives in memory only, which the outbox does not show
-   * (reported once, until a flush succeeds again). An outbox that cannot be read counts.
-   */
-  #holdsUnsent(region: RegionDoc): Promise<boolean> {
-    const id = region.ref.id
-
-    return region
-      .flush()
-      .andTee(() => this.#failingFlush.delete(id))
-      .orTee((error) => {
-        if (!this.#failingFlush.has(id)) {
-          this.#failingFlush.add(id)
-          this.#options.onError(error)
-        }
-      })
-      .andThen(() => region.outbox(1))
-      .match(
-        (rows) => rows.length > 0,
-        () => true,
-      )
-  }
-
-  /** A sign-out asked for in vain: the channel stops, and no reconnect follows. */
-  #stopChannel(): void {
-    this.#channelStopped = true
-    this.#options.transport.stop()
-  }
-
-  /** Resolves true once the channel is up, or false after `ms` on the clock. */
-  #untilUp(ms: number): Promise<boolean> {
-    if (this.#channel === 'up') {
-      return Promise.resolve(true)
-    }
-
-    return new Promise((resolve) => {
-      const finish = (up: boolean) => {
-        unlisten()
-        cancel()
-        resolve(up)
-      }
-      const unlisten = this.#options.transport.onChannel((state) => {
-        if (state === 'up') {
-          finish(true)
-        }
-      })
-      const cancel = this.#options.clock.schedule(ms, () => finish(false))
-    })
-  }
-
-  /**
-   * Resolves `signed-out` once the transport reports the channel ended with the sign-out (the
-   * gateway revoked the grant and closed it). Anything else signed nothing out for sure and
-   * resolves `offline`, the transport stopped so that it does not connect again: a channel
-   * that ends otherwise (refused keys or protocol), falls without ending (a gateway that failed
-   * to revoke the grant closes so), or is not closed within 10 seconds on the clock.
-   */
-  #untilEnded(): { readonly outcome: Promise<'signed-out' | 'offline'>; cancel(): void } {
-    const transport = this.#options.transport
-    let release: Array<() => void> = []
-    const cancel = () => {
-      for (const stop of release.splice(0)) {
-        stop()
-      }
-    }
-    const outcome = new Promise<'signed-out' | 'offline'>((resolve) => {
-      const finish = (result: 'signed-out' | 'offline') => {
-        cancel()
-        resolve(result)
-      }
-
-      release = [
-        transport.onEnded((reason) =>
-          finish(
-            match(reason)
-              .with('signed-out', () => 'signed-out' as const)
-              .with(P.union('unauthorized', 'protocol'), () => 'offline' as const)
-              .exhaustive(),
-          ),
-        ),
-        transport.onChannel((state) => {
-          if (state === 'down') {
-            this.#stopChannel()
-            finish('offline')
-          }
-        }),
-        // A gateway that never closes the channel may never have taken the sign-out in: the
-        // grant may stand, so the device leaves as when it is offline.
-        this.#options.clock.schedule(SIGN_OUT_CLOSE_MS, () => {
-          finish('offline')
-          this.#stopChannel()
-        }),
-      ]
-    })
-
-    return { outcome, cancel }
+    this.#settling.changed()
   }
 }
 

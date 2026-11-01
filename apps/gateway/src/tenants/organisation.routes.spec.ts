@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { DataError } from '@workspace/data'
-import { nodeEngines } from '@workspace/data/engines/node'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { profileIdFactory } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
@@ -9,134 +7,35 @@ import { membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
-import type { SignedIn } from '../auth/identity-sessions'
-import { createGatewayRoot, type GatewayRoot } from '../composition/root'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { RequestLimits } from '../limits/request-limits'
 
+import {
+  ADDRESS,
+  answer,
+  closeHarness,
+  deviceOf,
+  failures,
+  harness,
+  request,
+  routeOptions,
+  type SignedUp,
+} from './__fixtures__/organisation-routes'
 import { organisationRoutes } from './organisation.routes'
 import { Organisations } from './organisations'
-
-const PASSWORD = 'pass-word-1'
 
 /** What a creation answers. */
 const created = z.object({ membership })
 
-/** Closes what a test opened. */
-const cleanups: Array<() => Promise<void>> = []
-
-/** Failures the routes answered 500 for; a test that expects one takes it. */
-const failures: DataError[] = []
-
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) {
-    await cleanup()
-  }
-
-  expect(failures.splice(0)).toEqual([])
-})
-
-/** What the routes are given besides the services: they hand each failure to `failures`. */
-const routeOptions = { onFailure: (error: DataError) => failures.push(error) }
-
-interface Ask {
-  /** The identity whose access token goes as `Authorization: Bearer <access>`. */
-  readonly as?: SignedIn
-  /** The `Authorization` header exactly as sent, for one a device should not send. */
-  readonly authorization?: string
-  /** The JSON body, or a text sent as it is. */
-  readonly body?: unknown
-}
-
-function request(method: string, path: string, ask: Ask = {}): Request {
-  const headers = new Headers()
-  const authorization = ask.as ? `Bearer ${ask.as.tokens.access}` : ask.authorization
-
-  if (authorization !== undefined) {
-    headers.set('Authorization', authorization)
-  }
-
-  if (ask.body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  return new Request(`http://gateway.test${path}`, {
-    method,
-    headers,
-    ...(ask.body === undefined
-      ? {}
-      : { body: typeof ask.body === 'string' ? ask.body : JSON.stringify(ask.body) }),
-  })
-}
-
-async function answer(response: Response | undefined): Promise<{ status: number; body: unknown }> {
-  if (!response) {
-    return expect.unreachable('the route answered nothing')
-  }
-
-  const text = await response.text()
-  const body: unknown = text === '' ? undefined : (JSON.parse(text) as unknown)
-
-  return { status: response.status, body }
-}
-
-async function openRoot(): Promise<GatewayRoot> {
-  const root = (
-    await createGatewayRoot({
-      engines: nodeEngines(),
-      url: 'mem://',
-      rpcUrl: 'http://127.0.0.1:8000/rpc',
-      clock: manualClock(),
-    })
-  )._unsafeUnwrap()
-
-  cleanups.push(() => root.close())
-
-  return root
-}
-
-/**
- * The routes over a gateway on embedded databases, the directory and one per organisation, with
- * three identities signed up through its sessions: ann, bob and cat.
- */
-async function harness() {
-  const root = await openRoot()
-  const routes = organisationRoutes(root.sessions, root.organisations, routeOptions)
-  const signUp = async (email: string) =>
-    (await root.sessions.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
-  const ann = await signUp('ann@example.test')
-  const bob = await signUp('bob@example.test')
-  const cat = await signUp('cat@example.test')
-
-  /** Sends the request to the routes and reads their answer. */
-  const ask = async (method: string, path: string, options: Ask = {}) =>
-    answer(await routes(request(method, path, options)))
-
-  /** Ann creates acme, for a test to start from. */
-  const founded = async () =>
-    (
-      await root.organisations.create({ identity: ann.identity.id, key: 'acme', name: 'Acme' })
-    )._unsafeUnwrap()
-
-  /** Ann invites bob into acme, for a test to start from. */
-  const invited = async () =>
-    (
-      await root.organisations.invite({
-        actor: ann.identity.id,
-        key: 'acme',
-        email: 'bob@example.test',
-      })
-    )._unsafeUnwrap()
-
-  return { root, routes, ann, bob, cat, ask, founded, invited }
-}
+afterEach(closeHarness)
 
 /** A member as the member list answers it. */
-function memberOf(signedIn: SignedIn, role: 'admin' | 'member') {
-  return { identity: signedIn.identity, role }
+function memberOf(signedUp: SignedUp, role: 'admin' | 'member') {
+  return { identity: signedUp.identity, role }
 }
 
 describe('organisationRoutes', () => {
-  it('lists the memberships of the identity its access token signs in', async () => {
+  it('lists the memberships of the identity whose session the token holds', async () => {
     const { ann, bob, ask, founded } = await harness()
     const acme = await founded()
 
@@ -223,15 +122,27 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 409, body: { code: 'key-taken' } })
   })
 
-  it('lists the members with their emails to a member', async () => {
+  it('lists the members with their emails to an admin', async () => {
     const { ann, bob, ask, founded, invited } = await harness()
 
     await founded()
     await invited()
 
-    expect(await ask('GET', '/organisations/acme/members', { as: bob })).toEqual({
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
       body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+    })
+  })
+
+  it('answers 403 to a member asking for the members', async () => {
+    const { bob, ask, founded, invited } = await harness()
+
+    await founded()
+    await invited()
+
+    expect(await ask('GET', '/organisations/acme/members', { as: bob })).toEqual({
+      status: 403,
+      body: { code: 'not-admin' },
     })
   })
 
@@ -382,6 +293,39 @@ describe('organisationRoutes', () => {
     }
   })
 
+  it('answers 403 to a removal by an outsider, and removes nobody', async () => {
+    const { ann, bob, cat, ask, founded, invited } = await harness()
+
+    await founded()
+    await invited()
+
+    expect(
+      await ask('DELETE', `/organisations/acme/members/${bob.identity.id}`, { as: cat }),
+    ).toEqual({ status: 403, body: { code: 'not-a-member' } })
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
+      status: 200,
+      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+    })
+  })
+
+  it('answers 204 to the removal of an identity that is not a member, and changes nothing', async () => {
+    const { ann, cat, ask, founded } = await harness()
+
+    await founded()
+
+    expect(
+      await ask('DELETE', `/organisations/acme/members/${cat.identity.id}`, { as: ann }),
+    ).toEqual({ status: 204, body: undefined })
+    expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
+      status: 200,
+      body: { members: [memberOf(ann, 'admin')] },
+    })
+    expect(await ask('GET', '/organisations', { as: cat })).toEqual({
+      status: 200,
+      body: { memberships: [] },
+    })
+  })
+
   it('answers 403 to a removal by a member who is not admin', async () => {
     const { ann, bob, ask, founded, invited } = await harness()
 
@@ -411,18 +355,20 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 409, body: { code: 'self' } })
   })
 
-  it('answers 401 to a request without an access token that signs an identity in, and does nothing', async () => {
+  it('answers 401 to a request without a token that holds a live session, and does nothing', async () => {
     const { ann, ask } = await harness()
 
     for (const authorization of [
       undefined,
       `Basic ${btoa('ann@example.test:pass-word-1')}`,
       'Bearer',
-      'Bearer not.an.access.token',
-      // A refresh key is not taken in place of the access token it renews.
-      `Bearer ${ann.tokens.refresh}`,
+      'Bearer not-a-session-token',
+      // The signed form of a token names no session here: a session ends by its raw token.
+      `Bearer ${ann.token}.signature`,
     ]) {
-      const as = authorization === undefined ? {} : { authorization }
+      // From a device of Ann's: only the token is wrong.
+      const device = deviceOf(ann.identity.email)
+      const as = authorization === undefined ? { device } : { authorization, device }
 
       expect(await ask('GET', '/organisations', as)).toEqual({
         status: 401,
@@ -439,6 +385,48 @@ describe('organisationRoutes', () => {
     })
   })
 
+  it('names the Bearer scheme in WWW-Authenticate when it answers 401', async () => {
+    const { ann, routes } = await harness()
+    const refused = await routes(
+      request('GET', '/organisations', { device: deviceOf(ann.identity.email) }),
+      ADDRESS,
+    )
+
+    expect(refused?.status).toBe(401)
+    expect(refused?.headers.get('WWW-Authenticate')).toBe('Bearer')
+  })
+
+  it('answers 400 to a call that names no device, and 401 to a call of a device signed out', async () => {
+    const { root, ann, ask } = await harness()
+
+    for (const device of [null, '']) {
+      expect(await ask('GET', '/organisations', { as: ann, device })).toEqual({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+    }
+
+    expect(await ask('GET', '/organisations', { as: ann, device: 'device-unlisted' })).toEqual({
+      status: 401,
+      body: { code: 'unauthorized' },
+    })
+
+    const [row] = (await root.deviceSessions.list(ann.identity.id))._unsafeUnwrap()
+
+    ;(
+      await root.sessions.revoke(
+        ann.identity.id,
+        row?.id ?? expect.unreachable("Ann's device listed"),
+      )
+    )._unsafeUnwrap()
+
+    // The device was signed out from another one: its token holds no live session any more.
+    expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+      status: 401,
+      body: { code: 'unauthorized' },
+    })
+  })
+
   it("answers 500 to a failure that is not the caller's fault, and hands the failure to onFailure", async () => {
     const { root, ann } = await harness()
     const directory = (
@@ -451,7 +439,7 @@ describe('organisationRoutes', () => {
 
     await directory.close()
 
-    // Organisations over a directory that is gone: the identity still signs in on the root's.
+    // Organisations over a directory that is gone: the session is still read on the root's.
     const routes = organisationRoutes(
       root.sessions,
       new Organisations({
@@ -459,13 +447,12 @@ describe('organisationRoutes', () => {
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
       }),
-      routeOptions,
+      routeOptions(new RequestLimits({ clock: manualClock() })),
     )
 
-    expect(await answer(await routes(request('GET', '/organisations', { as: ann })))).toEqual({
-      status: 500,
-      body: { code: 'internal' },
-    })
+    expect(
+      await answer(await routes(request('GET', '/organisations', { as: ann }), ADDRESS)),
+    ).toEqual({ status: 500, body: { code: 'internal' } })
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
   })
 
@@ -479,7 +466,7 @@ describe('organisationRoutes', () => {
       ['GET', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
       ['POST', `/organisations/acme/members/${bob.identity.id}`, 'DELETE'],
     ] as const) {
-      const response = await routes(request(method, path, { as: ann }))
+      const response = await routes(request(method, path, { as: ann }), ADDRESS)
 
       expect(await answer(response)).toEqual({
         status: 405,
@@ -494,7 +481,10 @@ describe('organisationRoutes', () => {
     const keys = ['ab', 'acme_2026', 'a'.repeat(32), 'a', '1acme', 'Acme', 'acme-corp']
 
     for (const key of [...keys, 'a'.repeat(33), 'a'.repeat(40), 'a'.repeat(41)]) {
-      const response = await routes(request('GET', `/organisations/${key}/members`, { as: ann }))
+      const response = await routes(
+        request('GET', `/organisations/${key}/members`, { as: ann }),
+        ADDRESS,
+      )
 
       expect({ key, matched: response !== undefined }).toEqual({ key, matched: isTenantKey(key) })
     }
@@ -514,7 +504,7 @@ describe('organisationRoutes', () => {
       '/organisationsx',
       '/auth/sign-in',
     ]) {
-      expect(await routes(request('GET', path, { as: ann }))).toBeUndefined()
+      expect(await routes(request('GET', path, { as: ann }), ADDRESS)).toBeUndefined()
     }
   })
 })

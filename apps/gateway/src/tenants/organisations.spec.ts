@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AuthUser,
-  createAuth,
   type DataError,
   type LocalDb,
   openLocalDb,
@@ -12,13 +11,16 @@ import {
 } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
-import type { IdentityId } from '@workspace/ids'
+import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
+import { AUTH_URL, deviceHeaders, signUpOn } from '../auth/__fixtures__/auth-instance'
+import { createAuthInstance } from '../auth/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
 
 import directoryRows from './__fixtures__/directory-rows.surql'
+import identityForget from './__fixtures__/identity-forget.surql'
 import memberClear from './__fixtures__/member-clear.surql'
 import memberForget from './__fixtures__/member-forget.surql'
 import memberRows from './__fixtures__/member-rows.surql'
@@ -27,15 +29,14 @@ import namespaceInfo from './__fixtures__/namespace-info.surql'
 import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import tenantRows from './__fixtures__/tenant-rows.surql'
 import tenantSweep from './__fixtures__/tenant-sweep.surql'
-import { type OrganisationRefusalCode, Organisations } from './organisations'
+import type { OrganisationRefusalCode } from './organisation-refusal'
+import { Organisations } from './organisations'
 import identityByEmailStatement from './surql/identity-by-email.surql'
 import memberRemoveStatement from './surql/member-remove.surql'
 import membershipAddStatement from './surql/membership-add.surql'
 import membershipRemoveStatement from './surql/membership-remove.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import { TenantDatabases } from './tenant-databases'
-
-const PASSWORD = 'pass-word-1'
 
 /** Closes what a test opened, the organisations' databases before the directory. */
 const cleanups: Array<() => Promise<void>> = []
@@ -55,19 +56,18 @@ function refused(code: OrganisationRefusalCode) {
   return { kind: 'refused', code }
 }
 
-/** Signs an identity up through the directory's access method, as the gateway does. */
+/** Signs an identity up through Better Auth over the directory, as the gateway does. */
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
-  const auth = createAuth(directory, {
-    access: 'identity',
-    namespace: NAMESPACE,
-    database: DIRECTORY,
+  const auth = createAuthInstance({
+    local: directory,
+    secret: 'test-secret-0123456789-0123456789-0123456789',
+    baseURL: AUTH_URL,
+    trustedOrigins: [new URL(AUTH_URL).origin],
+    clock: manualClock(),
   })
+  const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
 
-  try {
-    return (await auth.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
-  } finally {
-    await auth.close()
-  }
+  return { id: idSchemas.identity.schema.parse(user.id), email: user.email }
 }
 
 /** A statement the organisations' databases hold until it is let go. */
@@ -336,6 +336,49 @@ describe('Organisations', () => {
     expect(heard).toEqual([[ann.id, [created]]])
   })
 
+  it('completes a creation whose listeners failed to hear it when its creator asks again, answering the stored name', async () => {
+    const { organisations, ann, bob, directory, heard, membersIn } = await harness()
+    let deaf = true
+
+    organisations.onChange(async () => {
+      if (deaf) {
+        deaf = false
+        throw new Error('the registry is down')
+      }
+    })
+
+    expect(
+      (
+        await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    heard.splice(0)
+
+    const created = (
+      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme again' })
+    )._unsafeUnwrap()
+
+    expect(created).toMatchObject({ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' })
+    expect(heard).toEqual([[ann.id, [created]]])
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(
+      (
+        await organisations.create({ identity: bob.id, key: 'acme', name: 'Acme' })
+      )._unsafeUnwrapErr(),
+    ).toEqual(refused('key-taken'))
+
+    // A creator no longer in the organisation finds the key taken like anybody else.
+    await directory.db.query(membershipRemoveStatement, {
+      identity: recordId('identity', ann.id),
+      tenant: recordId('tenant', created.tenant.id),
+    })
+    expect(
+      (
+        await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
+      )._unsafeUnwrapErr(),
+    ).toEqual(refused('key-taken'))
+  })
+
   it('refuses a key outside the pattern and a name outside 1..80 characters', async () => {
     const { organisations, ann, directory, heard } = await harness()
     const create = async (key: string, name: string) =>
@@ -371,6 +414,16 @@ describe('Organisations', () => {
       { identity: ann.id, role: 'admin' },
       { identity: bob.id, role: 'member' },
     ])
+  })
+
+  it('finds the identity to invite by its email in any case', async () => {
+    const { organisations, ann, bob, founded } = await harness()
+
+    await founded()
+
+    expect(
+      await organisations.invite({ actor: ann.id, key: 'acme', email: 'Bob@EXAMPLE.test' }),
+    ).toEqual(ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }))
   })
 
   it('refuses an invite from a member who is not admin', async () => {
@@ -644,7 +697,7 @@ describe('Organisations', () => {
     expect(await membersIn('acme')).toHaveLength(2)
   })
 
-  it('lists the members with their emails for an admin and for a member, not for an outsider', async () => {
+  it('lists the members with their emails for an admin, not for a member nor an outsider', async () => {
     const { organisations, ann, bob, cat, founded, invited } = await harness()
 
     await founded()
@@ -655,10 +708,24 @@ describe('Organisations', () => {
     ]
 
     expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(ok(members))
-    expect(await organisations.membersOf({ actor: bob.id, key: 'acme' })).toEqual(ok(members))
+    expect(
+      (await organisations.membersOf({ actor: bob.id, key: 'acme' }))._unsafeUnwrapErr(),
+    ).toEqual(refused('not-admin'))
     expect(
       (await organisations.membersOf({ actor: cat.id, key: 'acme' }))._unsafeUnwrapErr(),
     ).toEqual(refused('not-a-member'))
+  })
+
+  it('leaves out of the members the rows of identities that are gone', async () => {
+    const { organisations, ann, bob, directory, founded, invited } = await harness()
+
+    await founded()
+    await invited('bob@example.test')
+    await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
+
+    expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(
+      ok([{ identity: { id: ann.id, email: 'ann@example.test' }, role: 'admin' }]),
+    )
   })
 
   it('lists memberships ordered by key, only of ready tenants', async () => {

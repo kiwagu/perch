@@ -5,7 +5,12 @@
  *   - hexagonal layer boundaries (eslint-plugin-boundaries),
  *   - type-aware promise rules and the must-use-Result rule (typescript-eslint),
  *   - immutability and no-throw discipline in domain and application code
- *     (eslint-plugin-functional).
+ *     (eslint-plugin-functional),
+ *   - one class per file everywhere, and one exported function or class per file in
+ *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file),
+ *   - a folder with an index.ts, or a module, entered only through its index
+ *     (workspace/import-through-index),
+ *   - raw fields out of views, so every field tracks unsaved input (react/forbid-elements).
  * No rule here may format tokens.
  */
 
@@ -15,9 +20,20 @@ import functional from 'eslint-plugin-functional'
 import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 
+import { importThroughIndex } from './rules/import-through-index.js'
 import { mustUseResult } from './rules/must-use-result.js'
+import { oneUnitPerFile } from './rules/one-unit-per-file.js'
 
-const workspace = { rules: { 'must-use-result': mustUseResult } }
+/** The raw fields a view renders through the kit's component instead. */
+const KIT_FIELDS = { input: 'Input', textarea: 'Textarea', select: 'Select' }
+
+const workspace = {
+  rules: {
+    'import-through-index': importThroughIndex,
+    'must-use-result': mustUseResult,
+    'one-unit-per-file': oneUnitPerFile,
+  },
+}
 
 const paddingRules = [
   'error',
@@ -49,6 +65,7 @@ const UI_MODULES = [
   '@workspace/ui/*',
 ]
 const TESTS = '**/*.spec.{ts,tsx}'
+const TYPED = { files: ['**/*.{ts,tsx}'], ignores: ['**/*.config.ts'] }
 
 const RAW_DRIVERS = ['surrealdb', '@surrealdb/*', 'loro-crdt']
 const DATA_PACKAGES = [
@@ -103,6 +120,7 @@ const literalTranslationKeys = {
 export const ignores = {
   ignores: [
     '**/dist/**',
+    '**/dist-dev/**',
     '**/node_modules/**',
     '**/coverage/**',
     '**/playwright-report/**',
@@ -128,8 +146,7 @@ export const base = [
     },
   },
   {
-    files: ['**/*.{ts,tsx}'],
-    ignores: ['**/*.config.ts'],
+    ...TYPED,
     languageOptions: {
       parserOptions: { projectService: true },
     },
@@ -152,6 +169,7 @@ export const base = [
       '@typescript-eslint/no-unsafe-member-access': 'error',
       '@typescript-eslint/no-unsafe-return': 'error',
       'workspace/must-use-result': 'error',
+      'workspace/import-through-index': 'error',
     },
   },
   {
@@ -220,6 +238,15 @@ export const base = [
     rules: {
       'react/jsx-no-literals': 'error',
       'no-restricted-syntax': ['error', literalTranslationKeys],
+      'react/forbid-elements': [
+        'error',
+        {
+          forbid: Object.entries(KIT_FIELDS).map(([element, component]) => ({
+            element,
+            message: `Use the kit's ${component} from @workspace/ui: it tracks unsaved input.`,
+          })),
+        },
+      ],
     },
   },
   {
@@ -233,6 +260,37 @@ export const base = [
       'no-restricted-syntax': ['error', throwOnlyExceptions],
     },
   },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    ignores: [TESTS],
+    rules: {
+      // A file is named after the one class it holds; class expressions count too.
+      'max-classes-per-file': ['error', { max: 1 }],
+    },
+  },
+  {
+    files: ['**/domain/**/*.{ts,tsx}', '**/application/**/*.{ts,tsx}'],
+    ignores: [TESTS],
+    plugins: { workspace },
+    rules: {
+      // A business function or a class per file; small related helpers stay private to it.
+      'workspace/one-unit-per-file': 'error',
+    },
+  },
 ]
+
+/**
+ * The import-through-index rule with the repository's own layout, by absolute paths:
+ * `modules` lists folders of modules (`{ root, flat, outside }`: the modules that predate the
+ * rule and the folders that are not modules), `reachIn` the folders or files that may still
+ * import inside another folder (`{ folder, from }`). See the rule for the details.
+ */
+export function importBoundaries({ modules = [], reachIn = [] }) {
+  return {
+    ...TYPED,
+    plugins: { workspace },
+    rules: { 'workspace/import-through-index': ['error', { modules, reachIn }] },
+  }
+}
 
 export default base

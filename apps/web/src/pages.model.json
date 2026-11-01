@@ -72,6 +72,18 @@
       "dir": "features/user",
       "shapes": [
         {
+          "id": "user.settings",
+          "file": "features/user/application/settings/settings.shape.surql",
+          "tables": [
+            "settings"
+          ],
+          "region": "private",
+          "fields": [
+            "id",
+            "locale"
+          ]
+        },
+        {
           "id": "user.profile",
           "file": "features/user/presentation/pages/profile/profile.shape.surql",
           "tables": [
@@ -83,12 +95,41 @@
             "name",
             "email",
             "bio",
-            "locale",
             "created_at"
           ]
         }
       ],
       "commands": [
+        {
+          "id": "user.settings.createSettings",
+          "file": "features/user/application/settings/settings.commands.surql",
+          "tables": [
+            "settings"
+          ],
+          "region": "private",
+          "ops": [
+            "create"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "user.settings.updateLocale",
+          "file": "features/user/application/settings/settings.commands.surql",
+          "tables": [
+            "settings"
+          ],
+          "region": "private",
+          "ops": [
+            "set"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
         {
           "id": "user.profile.createProfile",
           "file": "features/user/presentation/pages/profile/profile.commands.surql",
@@ -128,21 +169,6 @@
           "region": "private",
           "ops": [
             "text.update"
-          ],
-          "allow": [
-            "record"
-          ],
-          "deny": []
-        },
-        {
-          "id": "user.profile.updateLocale",
-          "file": "features/user/presentation/pages/profile/profile.commands.surql",
-          "tables": [
-            "profile"
-          ],
-          "region": "private",
-          "ops": [
-            "set"
           ],
           "allow": [
             "record"

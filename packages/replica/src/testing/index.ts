@@ -1,7 +1,8 @@
 /**
  * Test doubles for code that uses the replica: a clock that moves only when a test says so,
- * a gateway without a network for the sync engine, and the browser's Web Locks and
- * BroadcastChannel as the leader and the hints between tabs use them.
+ * a gateway without a network for the sync engine, the browser's Web Locks and
+ * BroadcastChannel as the leader and the hints between tabs use them, and a device database
+ * whose region resets a test can fail or hold.
  */
 
 export { FakeHintChannel } from './fake-hint-channel'
@@ -11,6 +12,8 @@ export {
   type GatewayStub,
   type GatewayStubOptions,
   gatewayStub,
+  STUB_DEVICE,
   type StubTransport,
 } from './gateway-stub'
+export { interceptRegionResets } from './intercept-region-resets'
 export { type ManualClock, manualClock } from './manual-clock'

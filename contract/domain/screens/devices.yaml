@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: device
+title: My devices
+description: "The devices of the account: every device signed in and those signed out within 30 days, this one marked, when each was last seen; any other active device is signed out from here, or all of them at once."
+flag: null
+bindings: [ { path: /devices, guard: authenticated, roles: [ identity ], history: push } ]
+entry: [ device.page.status, device.list, device.everywhere.open-button ]
+anchors:
+  device.page.status:
+    kind: status
+    description: Says the devices are being read; replaced by the list once read.
+    states: [ loading ]
+  device.list:
+    kind: list
+    description: "The devices of the account, the earliest signed in first: every device signed in, and those signed out within 30 days."
+    source:
+      platform: devices.list
+  device.list.session-item:
+    kind: item
+    description: "One device: its label, when it was last seen and signed out, and its sign-out button."
+    dataId: device_session
+    states: [ current, revoked ]
+  device.list.label-cell:
+    kind: cell
+    description: The label the device gave itself.
+  device.list.current-badge:
+    kind: badge
+    description: Marks this device.
+  device.list.seen-cell:
+    kind: cell
+    description: When the device was last seen.
+  device.list.revoked-cell:
+    kind: cell
+    description: When the device was signed out; shown once it is.
+  device.list.revoke-button:
+    kind: button
+    description: Signs that device out; not on this device nor on a device signed out already; disabled while a sign-out runs.
+    binding:
+      action: platform.devices.revoke
+      params:
+        device: device.list.session-item
+  device.everywhere.open-button:
+    kind: button
+    description: Opens the dialog that signs every device out; disabled while a sign-out runs.
+  device.everywhere.dialog:
+    kind: dialog
+    description: Asks whether to sign every device out, this one included; its confirm-button does, its cancel-button closes it.
+    binding: { action: platform.sign-out-everywhere }
+    codes: [ sign-out-everywhere ]
+    derived: [ confirm-button, cancel-button ]
+states:
+  loading: "device.page.status in loading: the devices are being read; when the read fails, app-shell.notice-message says devices-read-failed and the status stays."
+  ready: device.list with an item per device, this device marked, and the sign-out everywhere button.
+flow:
+  initial: viewing
+  states:
+    viewing:
+      description: The devices of the account.
+      on:
+        device.list.revoke-button: signing-out
+        device.everywhere.open-button:
+          target: confirming
+          actions:
+            - show: device.everywhere.dialog
+    signing-out:
+      invoke:
+        src: platform.devices.revoke
+        input: { device: device.list.session-item }
+        onDone:
+          target: viewing
+          description: That device signs out; the list is read again and shows it signed out.
+        onError:
+          target: viewing
+          description: The list is read again, unless the gateway is out of reach.
+          actions:
+            - show: app-shell.notice-message
+    confirming:
+      description: device.everywhere.dialog asks whether to sign every device out, this one included.
+      on:
+        device.everywhere.dialog.confirm-button: signing-out-everywhere
+        device.everywhere.dialog.cancel-button:
+          target: viewing
+          description: The dialog closes.
+    signing-out-everywhere:
+      invoke:
+        src: platform.sign-out-everywhere
+        onDone:
+          target: signed-out
+          description: Every device of the account signs out, this one included; the sign-in page says resend-after-sign-in instead when this device held changes not sent yet.
+          actions:
+            - show: { user.sign-in.notice-message: [ signed-out-elsewhere ] }
+            - navigate: /sign-in
+        onError:
+          target: viewing
+          actions:
+            - show: app-shell.notice-message
+    signed-out:
+      description: The app has moved to /sign-in.
+      type: final
+wireframe: |-
+  - heading "My devices" [level=1]
+  - list:
+    - listitem:
+      - text: /.+/
+      - text: This device
+      - text: /Last seen .+/
+    - listitem:
+      - text: /.+/
+      - text: /Last seen .+/
+      - button "Sign out"
+  - button "Sign out everywhere"

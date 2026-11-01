@@ -5,7 +5,6 @@ SELECT
   name,
   email,
   bio,
-  locale,
   created_at
 FROM profile
 WHERE identity = $identity

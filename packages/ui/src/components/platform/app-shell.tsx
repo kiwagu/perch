@@ -8,6 +8,8 @@ export interface AppShellProps {
   /** Navigation items: a bottom bar on small screens, a side rail from `lg`. */
   readonly navigation: ReactNode
   readonly navigationLabel: string
+  /** The anchor of the `<nav>`. */
+  readonly navigationTestId?: string
   readonly status?: ReactNode
   readonly children?: ReactNode
   readonly className?: string
@@ -37,6 +39,7 @@ export function AppShell(props: AppShellProps) {
       </div>
       <nav
         aria-label={props.navigationLabel}
+        data-testid={props.navigationTestId}
         className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-background pb-[env(safe-area-inset-bottom)] lg:static lg:w-60 lg:flex-col lg:gap-1 lg:border-t-0 lg:border-r lg:p-3"
       >
         {props.navigation}

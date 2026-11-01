@@ -51,3 +51,37 @@ DEFINE FIELD OVERWRITE hash ON __seed TYPE string;
 DEFINE FIELD OVERWRITE applied_at ON __seed TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX OVERWRITE by_seed_key ON __seed FIELDS key UNIQUE;
+
+-- For SurrealKit's test databases only: the suites' record actors sign up and in through this
+-- access method, which creates the identity row and its credential row as the product does.
+-- The product's accounts are signed in by the gateway, which never defines this method.
+DEFINE ACCESS OVERWRITE identity ON DATABASE TYPE RECORD
+  SIGNUP {
+    LET $identity = (
+      CREATE ONLY type::record('identity', fn::entity_id('idn')) SET
+        email = $email,
+        email_verified = true,
+        name = $email
+    );
+    CREATE type::record('account', fn::entity_id('acc')) SET
+      identity = record::id($identity.id),
+      account_id = record::id($identity.id),
+      provider_id = 'credential',
+      password = crypto::argon2::generate($password);
+    RETURN $identity;
+  }
+  SIGNIN (
+    SELECT *
+    FROM ONLY identity
+    WHERE
+      email = string::lowercase($email)
+      AND count(
+        SELECT id
+        FROM account
+        WHERE
+          provider_id = 'credential'
+          AND identity = record::id($parent.id)
+          AND crypto::argon2::compare(password, $password)
+      ) > 0
+    LIMIT 1
+  ) DURATION FOR TOKEN 15m, FOR SESSION 12h;

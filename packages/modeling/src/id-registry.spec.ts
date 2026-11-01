@@ -15,7 +15,11 @@ describe('checkIdRegistry', () => {
         profile: table('prf'),
         tenant: table('tnt'),
         membership: table('mbr'),
+        device_session: table('dvs'),
         note: table('nte'),
+        settings: table('stg'),
+        account: table('acc'),
+        verification: table('vrf'),
         member: table(),
         _replica_update: table(),
       },
@@ -31,7 +35,11 @@ describe('checkIdRegistry', () => {
         profile: table('prf'),
         tenant: table('tnt'),
         membership: table('mbr'),
+        device_session: table('dvs'),
         note: table('nte'),
+        settings: table('stg'),
+        account: table('acc'),
+        verification: table('vrf'),
         team: table('tem'),
       },
     }
@@ -50,7 +58,11 @@ describe('checkIdRegistry', () => {
       'the id registry declares profile = prf but the schema has no table profile',
       'the id registry declares tenant = tnt but the schema has no table tenant',
       'the id registry declares membership = mbr but the schema has no table membership',
+      'the id registry declares device_session = dvs but the schema has no table device_session',
       'the id registry declares note = nte but table note has no -- @id nte',
+      'the id registry declares settings = stg but the schema has no table settings',
+      'the id registry declares account = acc but the schema has no table account',
+      'the id registry declares verification = vrf but the schema has no table verification',
     ])
   })
 })

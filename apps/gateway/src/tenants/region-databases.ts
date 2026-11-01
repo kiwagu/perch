@@ -1,8 +1,10 @@
 import { errAsync, okAsync } from 'neverthrow'
 
-import { dataError, type LocalDb } from '@workspace/data'
+import { dataError, type LocalDb, tenantDatabase } from '@workspace/data'
 import { tenantKeyOf } from '@workspace/replica'
 import type { RegionDatabases } from '@workspace/replica/server'
+
+import { DIRECTORY } from '../config'
 
 import type { TenantDatabases } from './tenant-databases'
 
@@ -16,6 +18,11 @@ export function regionDatabases(
   tenants: Pick<TenantDatabases, 'acquire'>,
 ): RegionDatabases {
   return {
+    databaseOf: (region) => {
+      const key = tenantKeyOf(region)
+
+      return region.kind === 'private' || key === undefined ? DIRECTORY : tenantDatabase(key)
+    },
     acquire: (region) => {
       if (region.kind === 'private') {
         return okAsync({ local: directory, release: () => {} })

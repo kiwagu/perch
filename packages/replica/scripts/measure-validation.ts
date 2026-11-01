@@ -18,8 +18,8 @@
 import { LoroDoc, LoroMap, LoroText } from 'loro-crdt'
 
 import { recordKey } from '../src/keys'
+import { validateBatch } from '../src/server'
 import { input, owner } from '../src/server/__fixtures__/batch'
-import { validateBatch } from '../src/server/batch-validator'
 
 const RECORD_COUNTS = [10, 100, 1000] as const
 const CHANGES_PER_BATCH = [1, 20] as const
@@ -70,7 +70,7 @@ function authoritativeDocument(count: number): LoroDoc {
     profile.set('identity', owner)
     profile.set('name', `Person ${index}`)
     profile.set('created_at', '2026-10-16T09:00:00.000Z')
-    profile.setContainer('bio', new LoroText()).insert(0, `Bio of person ${index}`)
+    profile.ensureMergeableText('bio').insert(0, `Bio of person ${index}`)
     doc.commit()
   }
 

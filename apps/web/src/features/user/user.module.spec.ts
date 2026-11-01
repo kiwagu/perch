@@ -9,6 +9,8 @@ import { COMMANDS } from '../../platform/commands.port'
 import { SESSION } from '../../platform/session.port'
 
 import { PROFILE_SERVICE } from './application/profile.service'
+import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
+import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
 import { UserModule } from './user.module'
 
@@ -24,6 +26,15 @@ beforeEach(async () => {
     .singleton(SHAPE_RUNNER, () => opened.runner)
     .singleton(COMMANDS, () => opened.commands)
     .singleton(SESSION, () => session)
+    // The composition root provides the settings to the frame and to every module.
+    .singleton(
+      SETTINGS_SERVICE,
+      () =>
+        new SettingsService(opened.runner, opened.commands, {
+          shape: settingsShape,
+          commands: settingsCommands,
+        }),
+    )
 
   container = root.child()
 
@@ -37,11 +48,11 @@ afterEach(async () => {
 })
 
 describe('UserModule', () => {
-  it('provides sign-in and profile services over the application ports', async () => {
+  it('provides sign-in, profile and settings services over the application ports', async () => {
     const user = (
       await container
         .get(SIGN_IN_SERVICE)
-        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
+        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann', locale: 'en' })
     )._unsafeUnwrap()
 
     expect((await session.flush()).isOk()).toBe(true)
@@ -49,13 +60,21 @@ describe('UserModule', () => {
     expect(
       (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
     ).toMatchObject([{ name: 'Ann' }])
+    expect(
+      (await container.get(SETTINGS_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
+    ).toMatchObject([{ locale: 'en' }])
   })
 
-  it('routes guests to sign-in and signed-in users to their profile', () => {
+  it('routes guests to sign-in and signed-in users to their profile and their settings', () => {
     expect(UserModule.routes).toEqual([
       { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
       { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
+      { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },
     ])
-    expect(Object.keys(UserModule.declarations).sort()).toEqual(['ProfilePage', 'SignInPage'])
+    expect(Object.keys(UserModule.declarations).sort()).toEqual([
+      'ProfilePage',
+      'SettingsPage',
+      'SignInPage',
+    ])
   })
 })

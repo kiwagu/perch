@@ -1,4 +1,4 @@
--- Public face of an account: name, contact email, biography and language. Replicated
+-- Public face of an account: name, contact email and biography. Replicated
 -- into the owner's private region, so clients read and edit it offline. On the server
 -- only the owner may read it, and nobody writes it directly: rows arrive only through
 -- replication, which the gateway checks before it stores them.
@@ -18,9 +18,6 @@ DEFINE FIELD OVERWRITE email ON profile TYPE string;
 DEFINE FIELD OVERWRITE bio ON profile TYPE option<string>
   ASSERT $value = NONE
   OR string::len($value) <= 2000;
-DEFINE FIELD OVERWRITE locale ON profile TYPE option<string>
-  ASSERT $value = NONE
-  OR $value IN ['en', 'es'];
 DEFINE FIELD OVERWRITE created_at ON profile TYPE datetime
   DEFAULT time::now()
   READONLY;

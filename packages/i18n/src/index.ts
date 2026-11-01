@@ -1,4 +1,5 @@
-export { I18nProvider, type I18nProviderProps, useLocale, useT } from './provider'
+export { createFormats, type Formats } from './formats'
+export { I18nProvider, type I18nProviderProps, useFormats, useLocale, useT } from './provider'
 export {
   type Catalog,
   type Catalogs,

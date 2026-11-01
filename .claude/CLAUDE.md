@@ -10,15 +10,19 @@ that applies to the task, starting with the router.
 @.cursor/rules/reuse-first-discovery.mdc
 @.cursor/rules/security-review-before-commit.mdc
 @.cursor/rules/verify-before-commit-and-landing.mdc
+@.cursor/rules/branch-reuse-first.mdc
 
 ## Always-on conventions
 
 @.cursor/rules/static-imports-only.mdc
 @.cursor/rules/no-any.mdc
 @.cursor/rules/poc-no-fallbacks.mdc
+@.cursor/rules/contract-gap-no-emulation.mdc
 @.cursor/rules/reset-mode-default.mdc
 @.cursor/rules/entity-first-module-naming.mdc
 @.cursor/rules/package-readme.mdc
+@.cursor/rules/file-size-tiers.mdc
+@.cursor/rules/one-unit-per-file.mdc
 
 ## Architecture and contracts
 
@@ -30,9 +34,17 @@ that applies to the task, starting with the router.
 
 @.cursor/rules/ui-primitive-hygiene.mdc
 @.cursor/rules/ui-i18n-direct-keys.mdc
+@.cursor/rules/ui-contract.mdc
 
 ## Vendor skills
 
 Pinned in `skills-lock.json`, installed under `.agents/skills/`: `shadcn`,
 `surrealql`, `surrealql-functions`, `surrealkit`, `surrealdb-js`, `surrealdb-cli`.
 Restore them with `bunx skills experimental_install`.
+
+## Project skills
+
+`adding-ui-anchors` (`.agents/skills/adding-ui-anchors/SKILL.md`, linked from
+`.claude/skills/`): adding, renaming or removing an anchor, or describing a new screen, contract
+first. It lives beside the vendor skills but belongs to this repository, so it is not in
+`skills-lock.json`.

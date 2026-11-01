@@ -58,7 +58,11 @@ afterEach(async () => {
 describe('OrganisationModule', () => {
   it("writes and reads the current organisation's notes over the application ports", async () => {
     const ann = (
-      await world.session.signUp({ email: 'ann@example.test', password: 'secret-ann' })
+      await world.session.signUp({
+        email: 'ann@example.test',
+        password: 'secret-ann',
+        name: 'Ann',
+      })
     )._unsafeUnwrap()
 
     expect(container.get(ORGANISATION_SERVICE).current()).toEqual(acme)

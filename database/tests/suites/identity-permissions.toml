@@ -2,10 +2,12 @@ name = "identity-permissions"
 tags = ["permissions", "identity"]
 
 # The server contract of the server-only identity table: a signed-in identity reads only
-# its own record, never a password hash, and nobody writes the table except the access
-# method's sign-up. Cases run in order against one database; every actor signs up before
-# the first case. The guest (unauthenticated) stance is checked over raw HTTP in
-# tests/anonymous.
+# its own record, and no record user writes the table. The password hash is not on it: it
+# lives on the identity's credential row of `account`, which no record user reads. The
+# gateway creates identities; in these test databases only, the test-only access method's
+# sign-up (`setup.surql`) creates them too, and root writes rows as the gateway would. Cases
+# run in order against one database; every actor signs up before the first case. The guest
+# (unauthenticated) stance is checked over raw HTTP in tests/anonymous.
 
 [[cases]]
 name = "bob sees only himself"
@@ -52,15 +54,26 @@ path = "0"
 equals = true
 
 [[cases]]
-name = "alice cannot read password hashes"
+name = "alice cannot read credential rows"
 kind = "sql_expect"
 actor = "alice"
-sql = "SELECT VALUE password != NONE FROM identity;"
+sql = "SELECT * FROM account;"
 allow = true
 
 [[cases.assertions]]
 path = "0"
-equals = false
+exists = false
+
+[[cases]]
+name = "the credential row holds an argon2id hash"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE string::starts_with(password, '$argon2id$') FROM account WHERE provider_id = 'credential' AND identity = record::id((SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]);"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
 
 [[cases]]
 name = "alice cannot change her own email"
@@ -88,7 +101,7 @@ exists = false
 name = "alice cannot create an identity"
 kind = "sql_expect"
 actor = "alice"
-sql = "CREATE identity SET email = 'extra@example.test', password = 'x';"
+sql = "CREATE identity SET email = 'extra@example.test', name = 'x';"
 allow = true
 
 [[cases.assertions]]
@@ -124,3 +137,33 @@ equals = "bob@example.test"
 [[cases.assertions]]
 path = "2"
 exists = false
+
+[[cases]]
+name = "alice cannot unverify her email"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE identity SET email_verified = false RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "an email is kept in lower case, however it was written"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE identity SET email = 'Carol@Example.Test', name = 'x' RETURN VALUE email;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "carol@example.test"
+
+[[cases]]
+name = "an email held already, written in other case, is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE identity SET email = 'ALICE@Example.test', name = 'x';"
+allow = false
+error_contains = "identity_email"

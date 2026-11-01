@@ -13,6 +13,7 @@ export {
 } from './catalog'
 export {
   openStand,
+  openStandTenant,
   runSeed,
   type SeededEntry,
   type SeededOrganisation,

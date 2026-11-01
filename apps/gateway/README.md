@@ -4,80 +4,57 @@
 
 The server process in front of the central SurrealDB database (namespace `app`, database
 `directory`), and that database's only client: it connects as its own namespace user
-and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP
-routes sign devices up and in (`POST /auth/sign-up`, `POST /auth/sign-in`, answering
-`{ identity, tokens, memberships }`, the memberships being the organisations the identity
-belongs to), each call on a database session of its own that is closed when the call ends;
-`GET /health` answers `ok`. Devices sync over a WebSocket at `/sync`: a
-device says hello with its keys at protocol 2 (the pair is renewed with the refresh key when
-the access token no longer works, and the new pair is sent first), is welcomed with its
-identity's private region, the region `tenant:<key>` of each organisation the identity belongs
-to and those memberships, the only regions it may name, and subscribes, pulls, pushes, probes
-and compacts there through the region hub, the server's copy of the replicated regions, which
-answers it and sends each accepted batch to the region's other devices. The hub keeps a private
-region in the directory and a tenant region in its organisation's database
-(`src/tenants/region-databases.ts`), and checks each batch against the device's identity: a
-note names its own member as its author, and nobody changes the author of a note. A
-connection registers in the `ConnectionRegistry` (`src/sync/connections.ts`) once the keys are
-accepted; when an identity's memberships change, each of its connections leaves the regions it
-may no longer name at once, without waiting for the device's messages under way (one handled
-from then on that names such a region closes the socket with 4403, and the hub sends it nothing
-more there), and is sent a `memberships` message; it subscribes to a new organisation's region
-itself. A change told while a connection's hello is under way applies right after its welcome.
-Text the protocol refuses (4400, a hello of protocol 1
-included), refused keys (4401), a region the device may not name (4403) and a hello that did
-not come within 10 seconds (4408, after which the device connects again) close the socket
-with the protocol's close codes; a device's sign-out leaves its regions, revokes its refresh
-grant through the database's RPC and closes the socket with 4000, which means the grant is
-revoked; a revoke that fails is tried once more, and a grant that still cannot be revoked
-closes the socket with 1011 (`revoke failed`) instead. A renewed pair the socket closed
-before it could take is logged at warn as `renewed pair not delivered`. Keys, tokens and
-grant ids never reach its logs.
+and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
+sign devices up, in and out, list and sign out an identity's devices, and serve organisations
+and their members; devices sync over a WebSocket at `/sync`; `GET /health` answers `ok`.
 
-Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
-the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
-(`membership`), and the organisation's database holds its `member` rows. Two services in
-`src/tenants`, built by the composition root over the directory, serve them; on shutdown the
-organisations' databases close after the region hub and before the directory. `TenantDatabases`
-keeps one connection per organisation database in use, shared by every holder and closed once
-nobody has held it for five minutes. `Organisations` creates an organisation (its directory
-rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished is completed when the creator asks again), lists an identity's memberships in ready
-organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to any member, answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
-and tells its listeners an identity's new memberships whenever they change, answering once they
-heard them: the composition root has the registry tell the identity's devices. A removal takes
-the organisation's region from the removed identity's open connections as soon as the
-directory's membership is gone, before the member row is deleted and before the memberships are
-read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it. The changes of one identity's memberships (its
-creations, the invites of it, its removals) run one after the other, each once the one before
-it and its notification have settled, so the directory and the organisation's database end as
-the last change left them and its devices hear the lists in that order. This holds within one
-gateway process; gateways in several processes would need a durable revision of the memberships.
+The source is one module per mechanism of the platform under `src/`, each with its own README
+for its role, surface and commands. `src/server.ts` routes each request to its module and
+`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
+time (one identity's membership changes). The modules that predate the index rule have no
+`index.ts` yet and are imported file by file.
 
-The organisation routes act for the identity a device's access token signs in, sent as
-`Authorization: Bearer <access>`. A refresh key is not taken over HTTP: a request without an
-access token that works answers 401 (`unauthorized`). `GET /organisations` lists the caller's
-memberships; `POST /organisations` with `{ key, name }` creates an organisation with the caller
-as its admin (201); `GET /organisations/:key/members` lists the members to a member;
-`POST /organisations/:key/members` with `{ email }` lets an admin invite an identity; and
-`DELETE /organisations/:key/members/:identity` lets an admin remove a member (204). A body or
-an identity that does not follow its schema answers 400 (`bad-request`); a refusal answers its
-code, with 400 for `invalid-key` and `invalid-name`, 403 for `not-a-member` and `not-admin`, 404
-for `no-such-tenant` and `no-such-identity`, and 409 for `key-taken`, `already-member` and
-`self`; a failure of the gateway answers 500 (`internal`).
+- [auth](src/auth/README.md): accounts on Better Auth: sign-up and sign-in behind the gateway's
+  limits, device sessions and their session tokens, the sign-outs and the Bearer caller.
+- [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
+  connections.
+- [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
+  and their routes.
+- [limits](src/limits/README.md): the request limits and the 429 they answer.
 
 ## Key exports
 
 None: this is an application. Its entry point is `src/index.ts`, which registers the
 `.surql` loader and runs `src/main.ts`; `SIGINT` and `SIGTERM` stop the server and close
 the database. The environment it reads is `GATEWAY_PORT`, `SURREAL_URL` (the database's
-WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`),
-`GATEWAY_SURREAL_USER`, `GATEWAY_SURREAL_PASS`, and optionally the logger's `LOG_LEVEL`
-and `LOG_FORMAT`. `scripts/smoke.ts` is the entry point of the smoke test against a
-stand.
+WebSocket endpoint, `ws://` or `wss://`, such as `ws://127.0.0.1:8000/rpc`: the gateway keeps
+one long-lived connection to the directory there), `GATEWAY_SURREAL_USER`,
+`GATEWAY_SURREAL_PASS`, `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL` (below), and optionally
+the logger's `LOG_LEVEL` and `LOG_FORMAT`; an invalid variable stops the gateway with an issue
+that names it, never its value. `scripts/smoke/cli.ts` is the entry point of the smoke
+test against a stand (the folder `scripts/smoke/`: the run, one module per path of steps, the
+HTTP helpers the load test reuses).
+
+Auth secret and public origin: `GATEWAY_AUTH_SECRET` is the secret Better Auth signs and
+encrypts with, required, with no default and at least 32 characters: generate one with
+`openssl rand -hex 32`. `GATEWAY_PUBLIC_URL` is the front's public origin, such as
+`https://localhost:5443` (a trailing slash is dropped): Better Auth serves its routes under
+`<origin>/backend/auth` and trusts requests from that origin only.
+The local stands use a literal of the mcproc manifest (`stand_auth_secret`) and their own
+front's origin, for those stands only; the smoke and the load test, which run a gateway of their
+own on the e2e stand, take the same two values from `mcproc exec`.
+
+Rotating the auth secret signs nobody out. A session is a bearer token stored in
+`device_session`, which the secret does not sign: the gateway looks a session up by its raw
+token, so every session open before a new secret stays live after it
+(`src/composition/root.spec.ts` holds this). After a leak, a new secret is not enough: end the
+sessions themselves. An account ends its own with "Sign out everywhere" on My devices
+(`POST /auth/sign-out-everywhere`), which also closes its sockets. To end every session at once,
+run `LET $now = time::now(); UPDATE device_session SET ended_at = ended_at ?? time::min([expires_at,
+$now]), expires_at = time::min([expires_at, $now]) WHERE ended_at = NONE;` in the directory as the
+gateway's namespace user (`ended_at` keeps a late mark of a device seen from extending a session
+again, an expired one included), then restart the gateway, which closes the sockets opened before
+the update; each device's next hello is then refused with 4401.
 
 ## Commands
 
@@ -89,10 +66,94 @@ stand.
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
   from the mcproc manifest: the e2e stand, `ws://127.0.0.1:8010/rpc` in the main checkout) as
   `GATEWAY_SURREAL_USER` with `GATEWAY_SURREAL_PASS` (by default the user the stand
-  operator defines, `scripts/stand-operator.ts` at the repository root), signs up a new
-  `@example.test` identity and drives two of its devices through sync and sign-out, then
-  the organisation path (an organisation `smoke_<time>` created, a second identity invited,
-  its device writing a note into the organisation's region that the owner's device receives, a
-  note in the owner's name rejected as `foreign-owner`, the removal that closes the region with
-  4403), one line per step.
+  operator defines, `scripts/stand-operator.ts` at the repository root) and with
+  `GATEWAY_AUTH_SECRET` and `GATEWAY_PUBLIC_URL`, those the stand's gateway runs with (required,
+  no defaults; the root `bun run test:db` sets them from the manifest), signs up a new
+  `@example.test` identity and drives two of its devices through sync and sign-out (the
+  signed-out device's token then refused at hello with 4401); then the credential limits, each
+  from a device, so a simulated client address, of its own (21 sign-ins of unknown emails
+  within 10 s, the 21st answered 429 with `Retry-After` by the gateway's limit per address; 11
+  wrong passwords for a further identity, the 11th answered 429 by its limit per email) and a
+  sign-up of a taken email answered 422; then on another identity its device sessions: a hello
+  under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
+  400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone
+  signed out from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row
+  showing `revokedAt`, its token's hello closed with 4401) and signed in again (the old token
+  refused at hello with 4401 and by `GET /devices` with 401, the new one welcomed), a tablet
+  signed in twice (the first session ended by the second), then every device signed out from
+  the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
+  refused), a sign-in right after it answered 200 with a working token, the laptop's old token
+  refused at hello (4401), and a device signing itself out with `POST /auth/sign-out` (204 with
+  its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
+  identity, the organisation path (an organisation `smoke_<time>` created, a second identity
+  invited, each device welcomed with its membership and role, the invited device writing a note
+  into the organisation's region that the owner's device receives, the owner editing that note
+  as an admin, the invited device deleting its own note, a late device of the owner subscribing
+  to a snapshot that holds the admin's note and not the deleted one, the invited device's edit
+  of the owner's note rejected as `forbidden-action`, a note in the owner's name rejected as
+  `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
+  owner's next note still acknowledged and delivered, the member list refused to it with 403,
+  the removal that closes the region with 4403, and the removed identity's sign-out, after
+  which its token is refused at hello with 4401); one line per step.
+- `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
+  root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
+
+## Load test
+
+`bun run load -- [arguments]` at the repository root drives simulated devices against a
+gateway of its own: it starts `src/index.ts` as a child process on port 5197, in front of the
+e2e stand's SurrealDB (`SURREAL_URL` from `mcproc exec`), and waits for its `/health`. Each step
+signs up the devices it adds (`load-<run>-<n>@example.test`, each device from a simulated client
+address of its own, as in the smoke), groups every `--members` of them
+into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
+devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
+`--writers` of the new devices are writers, spread over the step's organisations: each appends
+a note every `1 / --rate` seconds, at a random phase, and proposes a compaction when an ack asks
+for one. Writers are cumulative: those of earlier steps keep writing, so a row's `writers` is a
+total. One table row is printed per step; a step's devices stay open for the next one.
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `--devices` | `100,500,1000,2000` | device totals of the steps, growing |
+| `--members` | `20` | devices per organisation |
+| `--writers` | `0.3` | share of the new devices that write |
+| `--rate` | `0.1` | notes per second of one writer |
+| `--hold` | `60` | seconds each step holds its load |
+| `--gateway-port` | `5197` | port of the gateway the test starts; it must be free |
+| `--surreal-container` | by the stand's port | container `docker stats` reads for the surreal columns; the default is `perch-surrealdb-e2e` for port 8010 of `SURREAL_URL`, `perch-w<slot>-surrealdb-e2e` for port 8010 + 100 x slot, none (the columns show `-`) for any other port |
+| `--json <path>` | none | also writes the steps with the run id, arguments, host and start time |
+| `--stop-on-degrade` | off | stops after the first degraded step |
+
+Columns:
+
+- `devices`, `writers`: live devices and writers in all (a device whose socket closed is
+  retired and no longer counted). `ops/s` is nominal, writers times `--rate`; `pushes` is the
+  number of pushes made during the hold.
+- `ack p50/p95 ms`: from a push to its ack. `fanout p50/p95 ms (n)`: from a push to the arrival
+  of its update at another device of the organisation, before that device imports it; `n` is
+  the number of fan-out samples.
+- `gw RSS MiB`, `gw CPU %`: the child gateway's resident memory at the step's end and its CPU
+  time over the hold. `surreal CPU % / MiB`: the stand container from `docker stats` (`-` when
+  docker cannot say).
+- `compactions asked/accepted`: compactions the devices proposed after an ack asked for one,
+  and those the server accepted.
+- `errors`: server errors, rejected batches, failed imports, protocol problems and devices that
+  could not open or get their snapshot; `closes`: sockets closed during the hold.
+- `unacked`, `undelivered`: after the hold the step drains for up to 5 s (polling every
+  100 ms) until every push has its ack and every acked push has reached the other live devices
+  of its region; `unacked` counts the pushes still without an ack, `undelivered` the deliveries
+  still missing. Each push, ack and delivery counts in the step of its push, however late.
+- `degraded`: `yes` when ack p95 is over 1 s, fanout p95 over 2 s, errors, closes, `unacked` or
+  `undelivered` are not zero, pushes were made and no ack came, or no fan-out sample came
+  though other devices were due one.
+
+A device has 30 s to open its socket, say hello and be welcomed, and 30 s more to get its
+snapshot; one that fails is counted as an error and dropped. The arguments are checked: devices
+positive integers that grow, members a positive integer, writers from 0 to 1, rate and hold
+above 0, the port 1-65535; a violation names the flag.
+
+The run exits 0, or 1 when the setup or a step failed; SIGINT and SIGTERM stop the devices and
+the child gateway and exit 130. The load accounts live on the in-memory e2e stand and vanish
+when it restarts: afterwards `mcproc restart surrealdb-e2e`, then `mcproc restart gateway-e2e`.
+The seed sweep (`bun run seed:sweep`) targets the dev stand, not this one.

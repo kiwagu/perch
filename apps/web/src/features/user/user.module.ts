@@ -5,12 +5,14 @@ import { defineModule } from '../../platform/module'
 import { SESSION } from '../../platform/session.port'
 
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
+import { SETTINGS_SERVICE } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
+import { SettingsContainer } from './presentation/pages/settings/settings.container'
 import { SignInContainer } from './presentation/pages/sign-in/sign-in.container'
 
-/** Accounts and profiles: signing in or up, and the signed-in user's own profile page. */
+/** Accounts, profiles and settings: signing in or up, and the signed-in user's own profile page. */
 export const UserModule = defineModule({
   id: 'user',
   providers: [
@@ -25,12 +27,21 @@ export const UserModule = defineModule({
     {
       provide: SIGN_IN_SERVICE,
       useFactory: (container) =>
-        new SignInService(container.get(SESSION), container.get(PROFILE_SERVICE)),
+        new SignInService(
+          container.get(SESSION),
+          container.get(PROFILE_SERVICE),
+          container.get(SETTINGS_SERVICE),
+        ),
     },
   ],
-  declarations: { SignInPage: SignInContainer, ProfilePage: ProfileContainer },
+  declarations: {
+    SignInPage: SignInContainer,
+    ProfilePage: ProfileContainer,
+    SettingsPage: SettingsContainer,
+  },
   routes: [
     { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
     { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
+    { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },
   ],
 })

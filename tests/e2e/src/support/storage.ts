@@ -1,7 +1,8 @@
 /**
  * What the app keeps in a page's browser: its IndexedDB databases, by the names the app gives
  * them (`app-identity-<identity>` for the signed-in identity, `app-identity-<identity>-t_<key>`
- * for each of its organisations).
+ * for each of its organisations), and who is signed in, with the device's session token, in its
+ * localStorage.
  */
 
 import { expect, type Page } from '@playwright/test'

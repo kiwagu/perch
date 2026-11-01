@@ -16,12 +16,12 @@ alwaysApply: true
 
 ## Stop Here If
 
-- The pre-commit hook ran to completion and the commit was accepted.
+- The pre-commit hook (for an automatic merge, the pre-merge-commit hook that runs it) ran to completion and the commit was accepted.
 
 ## Core rule
 
-- Every commit is formatted, lint-clean and unit-tested. The pre-commit hook formats the staged files with Biome, validates staged SurrealQL, regenerates models, then runs typecheck, `bun run lint` and `bun run test`. Run the same commands yourself before committing, so the hook confirms rather than discovers.
-- A commit on `main` is a landing. It is accepted only when `bun run test:db` and `CI=1 bun run test:e2e` have passed on exactly the tree being committed. Both commands record a receipt under `.gates/` keyed by the tree id, and the hook checks for it. Any change to a tracked file after the suites ran needs a fresh run.
+- Every commit is formatted, lint-clean and unit-tested. The pre-commit hook formats the staged files with Biome, validates staged SurrealQL, regenerates models, then runs typecheck, `bun run lint` and `bun run test`. A merge commit `git merge` makes itself runs the pre-merge-commit hook, which runs the pre-commit hook as a whole, so a merge of `main` into a branch is checked like any commit, and a merge into `main` needs the receipts below like a squash. A fast-forward, a cherry-pick, a revert and a rebase run neither: land only by a squash commit. Run the same commands yourself before committing, so the hook confirms rather than discovers.
+- A commit on `main` is a landing. It is accepted only when `bun run test:db` and `CI=1 bun run test:e2e` have passed in full on exactly the tree being committed. Both commands, run without arguments, record a receipt under `.gates/` keyed by the tree id, and the hook checks for it; a run given a spec, a filter or any other argument passes or fails as usual and records none. Any change to a tracked file after the suites ran needs a fresh run, and none is made while they run: a run during which a file was written, even put back to the same bytes, fails and records no receipt. What the check cannot see stays on this rule: a file created and removed again during the run, or a modification time set back on purpose.
 - Hooks are the mechanism, not a reminder. Never bypass them: no `--no-verify`, no `-n` on `git commit`, no `LEFTHOOK=0`, no `LEFTHOOK_EXCLUDE`, no change to `core.hooksPath`. A failing hook is fixed, never skipped.
 - Missing hooks are a broken checkout: run `bun install`, whose `prepare` step installs them.
 

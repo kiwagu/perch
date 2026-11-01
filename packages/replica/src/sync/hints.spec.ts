@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { FakeHintChannel } from '../testing/fake-hint-channel'
+import { FakeHintChannel } from '../testing'
 
 import { type SyncHint, syncHints } from './hints'
 
@@ -31,15 +31,15 @@ describe('syncHints', () => {
     expect(received).toEqual(['sign-out', 'kick'])
   })
 
-  it('a renew hint reaches the other tabs', () => {
+  it('a reset hint reaches the other tabs', () => {
     const bus = new Set<FakeHintChannel>()
     const sender = syncHints(new FakeHintChannel(bus))
     const receiver = syncHints(new FakeHintChannel(bus))
     const received: SyncHint[] = []
 
     receiver.on((hint) => received.push(hint))
-    sender.post('renew')
-    expect(received).toEqual(['renew'])
+    sender.post('reset')
+    expect(received).toEqual(['reset'])
   })
 
   it('an unknown message on the channel is ignored', () => {
@@ -52,6 +52,8 @@ describe('syncHints', () => {
     raw.postMessage('journal')
     raw.postMessage({ kind: 'other', hint: 'journal' })
     raw.postMessage({ kind: 'perch-sync-hint', hint: 'reboot' })
+    // A tab of an older build asking the leader to renew its keys: nothing renews them now.
+    raw.postMessage({ kind: 'perch-sync-hint', hint: 'renew' })
     raw.postMessage({ kind: 'perch-sync-hint', hint: 'kick' })
     expect(received).toEqual(['kick'])
   })

@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { BusError } from '@workspace/cqrs'
 import type { Command } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
-import { identityIdFactory, idSchemas, type NoteId, noteIdFactory } from '@workspace/ids'
+import { replicaSchema } from '@workspace/database/replica-schema'
+import { identityIdFactory, idSchemas, noteIdFactory } from '@workspace/ids'
+import { type Ability, defineAbilityFor, NO_ABILITY } from '@workspace/kernel'
 
 import type { CommandsPort } from '../../../platform/commands.port'
 import {
@@ -27,27 +29,39 @@ class RecordingCommands implements CommandsPort {
 }
 
 const ann = identityIdFactory.create()
+const bob = identityIdFactory.create()
 
-const tree: OrganisationResult = [
-  {
-    id: noteIdFactory.create(),
-    author: ann,
-    text: 'Hello',
-    created_at: new Date('2026-10-17T12:00:00Z'),
-  },
-]
+const annsNote = {
+  id: noteIdFactory.create(),
+  author: ann,
+  text: 'Hello',
+  created_at: new Date('2026-10-17T12:00:00Z'),
+}
+const bobsNote = {
+  id: noteIdFactory.create(),
+  author: bob,
+  text: 'Plans',
+  created_at: new Date('2026-10-17T12:05:00Z'),
+}
+
+const tree: OrganisationResult = [annsNote, bobsNote]
 
 let runner: FakeShapeRunner
 let commands: RecordingCommands
 let notes: NotesService
+let ability: Ability
 
 beforeEach(() => {
   runner = new FakeShapeRunner()
   commands = new RecordingCommands()
-  notes = new NotesService(runner, commands, {
-    shape: organisationShape,
-    commands: organisationCommands,
-  })
+  ability = defineAbilityFor({ id: ann, role: 'member' }, replicaSchema)
+  runner.set(organisationShape, tree)
+  notes = new NotesService(
+    runner,
+    commands,
+    { shape: organisationShape, commands: organisationCommands },
+    () => ability,
+  )
 })
 
 describe('NotesService', () => {
@@ -60,7 +74,7 @@ describe('NotesService', () => {
 
     const stop = notes.watch((notesTree) => seen.push(notesTree.map(({ text }) => text)))
 
-    expect(seen).toEqual([['Hello']])
+    expect(seen).toEqual([['Hello', 'Plans']])
     expect(runner.lastParams(organisationShape)).toEqual({})
 
     stop()
@@ -92,7 +106,7 @@ describe('NotesService', () => {
   })
 
   it('edits the text of a note, trimmed, and refuses a blank one', async () => {
-    const id: NoteId = noteIdFactory.create()
+    const { id } = annsNote
 
     expect((await notes.edit({ id, text: ' Changed ' })).isOk()).toBe(true)
     expect((await notes.edit({ id, text: ' ' }))._unsafeUnwrapErr().code).toBe('note:TEXT_REQUIRED')
@@ -102,9 +116,36 @@ describe('NotesService', () => {
   })
 
   it('removes a note', async () => {
-    const id: NoteId = noteIdFactory.create()
+    const { id } = annsNote
 
     expect((await notes.remove({ id })).isOk()).toBe(true)
     expect(commands.calls).toEqual([{ id: 'organisation.organisation.deleteNote', params: { id } }])
+  })
+
+  it("refuses editing or removing another member's note before any command runs", async () => {
+    expect((await notes.edit({ id: bobsNote.id, text: 'mine' }))._unsafeUnwrapErr().code).toBe(
+      'note:FORBIDDEN',
+    )
+    expect((await notes.remove({ id: bobsNote.id }))._unsafeUnwrapErr().code).toBe('note:FORBIDDEN')
+    expect(commands.calls).toEqual([])
+  })
+
+  it('lets an admin edit and remove any note, and refuses a note that is not there', async () => {
+    ability = defineAbilityFor({ id: ann, role: 'admin' }, replicaSchema)
+
+    expect((await notes.edit({ id: bobsNote.id, text: 'edited' })).isOk()).toBe(true)
+    expect((await notes.remove({ id: bobsNote.id })).isOk()).toBe(true)
+    expect(
+      (await notes.edit({ id: noteIdFactory.create(), text: 'x' }))._unsafeUnwrapErr().code,
+    ).toBe('note:NOT_FOUND')
+  })
+
+  it('refuses adding a note when nothing is allowed', async () => {
+    ability = NO_ABILITY
+
+    expect((await notes.add({ author: ann, text: 'x' }))._unsafeUnwrapErr().code).toBe(
+      'note:FORBIDDEN',
+    )
+    expect(commands.calls).toEqual([])
   })
 })

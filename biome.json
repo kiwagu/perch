@@ -10,9 +10,11 @@
       "**",
       "!.agents",
       "!**/dist",
+      "!**/dist-dev",
       "!**/*.gen.ts",
       "!**/*.surql.d.ts",
-      "!**/pages.model.json"
+      "!**/pages.model.json",
+      "!contract/schemas"
     ]
   },
   "formatter": {

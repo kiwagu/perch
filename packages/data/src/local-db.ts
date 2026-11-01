@@ -96,10 +96,26 @@ export function deleteLocalDb(url: string): ResultAsync<void, DataError> {
   )
 }
 
+/** Runs the schema text, then remembers it as what the database applied. */
+async function apply(db: Surreal, schema: string): Promise<void> {
+  await db.query(schema)
+  await db.query(rememberSchemaStatement, { schema })
+}
+
+/**
+ * Applies the schema text to an open database and remembers it, as `openLocalDb` does when the
+ * schema changed.
+ */
+export function applySchema(local: LocalDb, schema: string): ResultAsync<void, DataError> {
+  return ResultAsync.fromPromise(apply(local.db, schema), (cause) =>
+    dataError('data:QUERY_FAILED', 'could not apply the schema', cause),
+  )
+}
+
 /**
  * Connects to a local database and brings its schema up to date before anything
- * reads from it. A schema the database already applied is left alone: defining
- * the access method again would give it a new signing key and sign everyone out.
+ * reads from it. A schema the database already applied, the same text, is left alone, so an
+ * opening does not run every definition again.
  */
 export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, DataError> {
   const db = new Surreal({ engines: options.engines })
@@ -113,8 +129,7 @@ export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, D
     const [applied] = await db.query<[string | undefined]>(appliedSchemaStatement)
 
     if (applied !== options.schema) {
-      await db.query(options.schema)
-      await db.query(rememberSchemaStatement, { schema: options.schema })
+      await apply(db, options.schema)
     }
 
     let closing: Promise<void> | undefined

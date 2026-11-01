@@ -5,10 +5,15 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { readBody } from '../auth/auth.routes'
-import type { IdentitySessions } from '../auth/identity-sessions'
+import { accountEmail } from '../auth/account-email'
+import type { AuthSessions } from '../auth/auth-sessions'
+import { bearerCaller, bearerRefused } from '../auth/bearer-caller'
+import type { RequestLimits } from '../limits/request-limits'
+import { tooMany } from '../limits/too-many'
+import { readBody } from '../read-body'
 
-import type { OrganisationError, OrganisationRefusalCode, Organisations } from './organisations'
+import type { OrganisationError, OrganisationRefusalCode } from './organisation-refusal'
+import type { Organisations } from './organisations'
 
 /** What a device sends to create an organisation. */
 const createBody = z.object({
@@ -17,7 +22,7 @@ const createBody = z.object({
 })
 
 /** What an admin sends to invite an identity into an organisation. */
-const inviteBody = z.object({ email: z.email() })
+const inviteBody = z.object({ email: accountEmail })
 
 /** An organisation's key in a path: the kernel's key rule without its anchors. */
 const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
@@ -28,17 +33,14 @@ const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
  */
 const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/members(?:/([^/]+))?)?)?$`)
 
-/** The access token in an `Authorization` header. */
-const BEARER = /^Bearer +(\S+)$/i
-
 /** What a path names. */
 type Target =
   | { readonly kind: 'organisations' }
   | { readonly kind: 'members'; readonly key: string }
   | { readonly kind: 'member'; readonly key: string; readonly identity: string }
 
-/** Answers a request of the identity its access token signs in. */
-type Handler = (identity: IdentityId, request: Request) => Promise<Response>
+/** Answers a request of the identity whose session it carries, from the client address `from`. */
+type Handler = (identity: IdentityId, request: Request, from: string) => Promise<Response>
 
 /** What `pathname` names; an organisation's own path (`/organisations/:key`) is not served. */
 function targetOf(pathname: string): Target | undefined {
@@ -80,30 +82,37 @@ export interface OrganisationRoutesOptions {
    * failure out, so this is where it is told.
    */
   readonly onFailure: (error: DataError) => void
+  /** The invitation and organisation creation limits. */
+  readonly limits: Pick<RequestLimits, 'invite' | 'createOrganisation'>
 }
 
 /**
- * The organisation routes over HTTP, for the identity the device's access token signs in
- * (`Authorization: Bearer <access>`). A refresh key is not taken here: a device whose access
- * token no longer works renews its pair first.
+ * The organisation routes over HTTP, for the identity whose live session the device's token holds
+ * (`Authorization: Bearer <token>`, the raw session token) on the device it names in
+ * `X-Perch-Device`, which must be the device the session was opened on.
  *
  * - `GET /organisations`: 200 `{ memberships }`.
- * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin.
- * - `GET /organisations/:key/members`: 200 `{ members }`, for a member.
- * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin.
+ * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
+ *   hour per identity and 30 per client address.
+ * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
+ *   `not-admin`).
+ * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
+ *   per 10 minutes per inviting identity and 60 per client address, whatever the answer.
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
  *
  * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
- * token signs nobody in, 401 `unauthorized`; a body or an identity that does not follow its
- * schema, 400 `bad-request`; a refusal, its code with 400, 403, 404 or 409; a failure of the
+ * token holds no live session, or one of another device, 401 `unauthorized`; a request that
+ * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
+ * a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited` with `Retry-After`,
+ * before the service is asked and counted only once the body follows its schema; a failure of the
  * gateway, 500 `internal`, the failure itself handed to `onFailure`. A request for another path
  * is not answered here (`undefined`), so the server can try its other routes.
  */
 export function organisationRoutes(
-  sessions: Pick<IdentitySessions, 'authenticate'>,
+  sessions: Pick<AuthSessions, 'read'>,
   organisations: Organisations,
   options: OrganisationRoutesOptions,
-): (request: Request) => Promise<Response | undefined> {
+): (request: Request, from: string) => Promise<Response | undefined> {
   /** A refusal answers its code; a failure of the gateway answers without its cause, which `onFailure` hears. */
   function errorResponse(error: OrganisationError): Response {
     if ('kind' in error) {
@@ -115,33 +124,26 @@ export function organisationRoutes(
     return Response.json({ code: 'internal' }, { status: 500 })
   }
 
-  /** The identity the request's access token signs in, if it does. */
-  async function bearerIdentity(request: Request): Promise<IdentityId | undefined> {
-    const access = BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
-
-    if (access === undefined) {
-      return undefined
-    }
-
-    const device = await sessions.authenticate({ access })
-
-    return device.isOk() ? device.value.identity.id : undefined
-  }
-
   const list: Handler = async (identity) =>
     (await organisations.membershipsOf(identity)).match(
       (memberships) => Response.json({ memberships }),
       errorResponse,
     )
 
-  const create: Handler = async (identity, request) => {
+  const create: Handler = async (identity, request, from) => {
     const body = createBody.safeParse(await readBody(request))
 
     if (!body.success) {
       return badRequest()
     }
 
-    // The identity goes last: it is the one the access token signs in, whatever the body holds.
+    const allowance = options.limits.createOrganisation(identity, from)
+
+    if (!allowance.allowed) {
+      return tooMany(allowance)
+    }
+
+    // The identity goes last: it is the one whose session the token holds, whatever the body holds.
     return (await organisations.create({ ...body.data, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
       errorResponse,
@@ -158,11 +160,17 @@ export function organisationRoutes(
 
   const invite =
     (key: string): Handler =>
-    async (actor, request) => {
+    async (actor, request, from) => {
       const body = inviteBody.safeParse(await readBody(request))
 
       if (!body.success) {
         return badRequest()
+      }
+
+      const allowance = options.limits.invite(actor, from)
+
+      if (!allowance.allowed) {
+        return tooMany(allowance)
       }
 
       return (await organisations.invite({ actor, key, email: body.data.email })).match(
@@ -209,7 +217,7 @@ export function organisationRoutes(
       .exhaustive()
   }
 
-  return async (request) => {
+  return async (request, from) => {
     const target = targetOf(new URL(request.url).pathname)
 
     if (!target) {
@@ -226,12 +234,13 @@ export function organisationRoutes(
       )
     }
 
-    const identity = await bearerIdentity(request)
+    const caller = await bearerCaller(sessions, request)
 
-    if (identity === undefined) {
-      return Response.json({ code: 'unauthorized' }, { status: 401 })
-    }
-
-    return handler(identity, request)
+    return match(caller)
+      .with({ kind: 'caller' }, ({ identity }) => handler(identity, request, from))
+      .with({ kind: 'unauthorized' }, async () => bearerRefused())
+      .with({ kind: 'bad-request' }, async () => badRequest())
+      .with({ kind: 'failed' }, async ({ error }) => errorResponse(error))
+      .exhaustive()
   }
 }

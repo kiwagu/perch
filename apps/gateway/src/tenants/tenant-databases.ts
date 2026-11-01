@@ -1,4 +1,4 @@
-import type { ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import type { Clock } from '@workspace/replica'
@@ -29,23 +29,37 @@ interface Entry {
   cancelClose: (() => void) | undefined
   /** Taken out of the map by `evict`: closes once its last holder releases it. */
   evicted: boolean
+  /** Settles once the database closed; set when its close began, so it closes once. */
+  closing: Promise<void> | undefined
 }
 
 const FIVE_MINUTES = 5 * 60_000
 
+/** The answer to an acquire once the databases are closed: the gateway is shutting down. */
+function closedError(key: string): DataError {
+  return dataError(
+    'data:OPEN_FAILED',
+    `the database of organisation ${key} is not served: the gateway is shutting down`,
+  )
+}
+
 /**
  * The databases of the organisations the gateway serves: one connection per organisation,
  * opened on first use, shared by every holder and closed once nobody has held it for the idle
- * time. An acquire that comes while the close is under way opens a new connection.
+ * time. An acquire that comes while the close is under way opens a new connection. Once `close`
+ * was called it hands out no database, not even one whose open was under way.
  */
 export class TenantDatabases {
   readonly #entries = new Map<string, Entry>()
+  /** The entries `evict` took out of the map that have not closed yet, with their keys. */
+  readonly #evicted = new Map<Entry, string>()
   /** Closes under way, so `close` waits for them. */
   readonly #closing = new Set<Promise<void>>()
   readonly #open: (key: string) => ResultAsync<LocalDb, DataError>
   readonly #clock: Clock
   readonly #idleCloseMs: number
   readonly #onError: (error: DataError) => void
+  #closed = false
 
   constructor(options: TenantDatabasesOptions) {
     this.#open = options.open
@@ -56,6 +70,10 @@ export class TenantDatabases {
 
   /** The organisation's database, opened on first use; the handle must be released. */
   acquire(key: string): ResultAsync<TenantHandle, DataError> {
+    if (this.#closed) {
+      return errAsync(closedError(key))
+    }
+
     const entry = this.#entries.get(key) ?? this.#start(key)
 
     entry.holders += 1
@@ -63,9 +81,13 @@ export class TenantDatabases {
     entry.cancelClose = undefined
 
     return entry.opening
-      .map((local) => this.#handle(key, entry, local))
+      .andThen((local) =>
+        this.#closed ? err(closedError(key)) : ok(this.#handle(key, entry, local)),
+      )
       .mapErr((error) => {
         entry.holders -= 1
+        // An evicted database no holder took is left to nobody: it closes now.
+        this.#closeEvicted(key, entry)
 
         return error
       })
@@ -84,15 +106,24 @@ export class TenantDatabases {
     }
 
     this.#entries.delete(key)
+    this.#evicted.set(entry, key)
     entry.cancelClose?.()
     entry.cancelClose = undefined
     entry.evicted = true
     this.#closeEvicted(key, entry)
   }
 
-  /** Closes every database and waits for it. */
+  /**
+   * Closes every database, held or not, evicted ones included, also one whose open is under way,
+   * and waits for it; no database is handed out from then on.
+   */
   async close(): Promise<void> {
-    const entries = [...this.#entries.entries()]
+    this.#closed = true
+
+    const entries = [
+      ...this.#entries.entries(),
+      ...[...this.#evicted].map(([entry, key]) => [key, entry] as const),
+    ]
 
     this.#entries.clear()
 
@@ -102,7 +133,7 @@ export class TenantDatabases {
     }
 
     await Promise.all([
-      ...entries.map(([key, entry]) => this.#closeOpened(key, entry)),
+      ...entries.map(([key, entry]) => this.#closeEntry(key, entry)),
       ...this.#closing,
     ])
   }
@@ -122,6 +153,7 @@ export class TenantDatabases {
       holders: 0,
       cancelClose: undefined,
       evicted: false,
+      closing: undefined,
     }
 
     this.#entries.set(key, entry)
@@ -153,12 +185,7 @@ export class TenantDatabases {
       return
     }
 
-    entry.evicted = false
-
-    const closing = this.#closeOpened(key, entry)
-
-    this.#closing.add(closing)
-    void closing.finally(() => this.#closing.delete(closing))
+    void this.#closeEntry(key, entry)
   }
 
   /** Schedules the close once nobody holds the database, unless `close` already took it. */
@@ -172,13 +199,26 @@ export class TenantDatabases {
 
       if (entry.holders === 0 && this.#entries.get(key) === entry) {
         this.#entries.delete(key)
-
-        const closing = this.#closeOpened(key, entry)
-
-        this.#closing.add(closing)
-        void closing.finally(() => this.#closing.delete(closing))
+        void this.#closeEntry(key, entry)
       }
     })
+  }
+
+  /** Closes the entry's database once, whoever asks first; `close` waits for it meanwhile. */
+  #closeEntry(key: string, entry: Entry): Promise<void> {
+    if (entry.closing) {
+      return entry.closing
+    }
+
+    const closing = this.#closeOpened(key, entry).finally(() => {
+      this.#closing.delete(closing)
+      this.#evicted.delete(entry)
+    })
+
+    entry.closing = closing
+    this.#closing.add(closing)
+
+    return closing
   }
 
   /** Closes the entry's database once it has opened; a failure to open was reported already. */

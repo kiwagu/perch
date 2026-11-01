@@ -5,11 +5,10 @@ import { join } from 'node:path'
 import { ok } from 'neverthrow'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { createAuth } from './auth'
 import { onChange } from './changes'
 import { runCommand } from './commands'
 import { nodeEngines } from './engines/node'
-import { deleteLocalDb, openLocalDb } from './local-db'
+import { applySchema, deleteLocalDb, openLocalDb } from './local-db'
 import { ShapeRunner } from './shape-runner'
 import { readSchema } from './testing'
 import type { Command, LocalDb, Shape } from './types'
@@ -109,6 +108,30 @@ describe('local db, shape runner and commands', () => {
     expect(written.isOk()).toBe(true)
     expect(tree.created_at).toBeInstanceOf(Date)
     expect(tree).toEqual({ id, email: 'c@example.test', created_at: tree.created_at })
+  })
+
+  it('applies a schema to a database that is open', async () => {
+    const memory = (
+      await openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: 'app',
+        database: 'app',
+        schema,
+      })
+    )._unsafeUnwrap()
+
+    try {
+      const longer = `${schema}\n${read('./__fixtures__/longer-identity-emails.surql')}`
+
+      expect(await applySchema(memory, longer)).toEqual(ok(undefined))
+      expect(
+        (await runCommand(memory, createIdentity, { email: 'l@example.test' }))._unsafeUnwrapErr()
+          .code,
+      ).toBe('data:COMMAND_FAILED')
+    } finally {
+      await memory.close()
+    }
   })
 
   it('fails to open when the schema does not parse', async () => {
@@ -216,9 +239,11 @@ describe('a device database that is closed and opened again', () => {
 
     return opened.value
   }
-  const auth = (db: LocalDb) =>
-    createAuth(db, { access: 'identity', namespace: 'app', database: 'app' })
   const full = readSchema('directory')
+  const closeFirst = async (db: LocalDb): Promise<void> => {
+    await db.close()
+    open.splice(open.indexOf(db), 1)
+  }
 
   // A file database stays locked until it is closed, also when a test fails.
   afterEach(async () => {
@@ -227,50 +252,24 @@ describe('a device database that is closed and opened again', () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('keeps earlier sessions valid when its schema has not changed', async () => {
+  it('leaves a schema it already applied alone', async () => {
     const first = await reopen(full)
-    const signedUp = auth(first)
-    const user = (
-      await signedUp.signUp({ email: 'd@example.test', password: 'secret-d' })
-    )._unsafeUnwrap()
-    const access = signedUp.tokens()?.access ?? ''
 
-    await first.close()
-    open.splice(open.indexOf(first), 1)
+    // A change behind the schema's back, which applying the schema again would undo.
+    await first.db.query(read('./__fixtures__/longer-identity-emails.surql'))
+    await closeFirst(first)
 
     const second = await reopen(full)
+    const written = await runCommand(second, createIdentity, { email: 'k@example.test' })
 
-    expect((await auth(second).resume({ access }))._unsafeUnwrap()).toEqual(user)
-  })
-
-  it('keeps a user signed in past the access token, through the refresh key', async () => {
-    const shortTokens = `${full}\n${read('./__fixtures__/short-tokens.surql')}`
-    const first = await reopen(shortTokens)
-    const signedUp = auth(first)
-    const user = (
-      await signedUp.signUp({ email: 'f@example.test', password: 'secret-f' })
-    )._unsafeUnwrap()
-    const saved = signedUp.tokens() ?? expect.unreachable('tokens after sign-up')
-
-    await first.close()
-    open.splice(open.indexOf(first), 1)
-    // Token times are whole seconds and a token is valid through its last second.
-    await new Promise((resolve) => setTimeout(resolve, 2100))
-
-    const second = await reopen(shortTokens)
-
-    expect((await auth(second).resume({ access: saved.access }))._unsafeUnwrapErr().code).toBe(
-      'data:AUTH_FAILED',
-    )
-    expect((await auth(second).resume(saved))._unsafeUnwrap()).toEqual(user)
+    expect(written._unsafeUnwrapErr().code).toBe('data:COMMAND_FAILED')
   })
 
   it('connects as a namespace user when the credentials name the namespace', async () => {
     const first = await reopen(full)
 
     await first.db.query(read('./__fixtures__/namespace-user.surql'))
-    await first.close()
-    open.splice(open.indexOf(first), 1)
+    await closeFirst(first)
 
     const asUser = (credentials: { username: string; password: string; namespace?: string }) =>
       openLocalDb({

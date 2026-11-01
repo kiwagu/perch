@@ -1,0 +1,6 @@
+export { buildManifest, type ManifestInput } from './build'
+export { emitManifest } from './emit'
+export { instructionsOf } from './instructions'
+export type { Instructions, Manifest, Product } from './manifest.types'
+export { productInfo } from './product'
+export { MANIFEST_DIR, writeManifest } from './write'

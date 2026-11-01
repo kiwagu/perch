@@ -11,6 +11,7 @@ import {
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { generate } from './data'
+import { type SecurityWatch, watchSecurity } from './security'
 
 export { expect }
 
@@ -45,18 +46,44 @@ interface Fixtures {
   readonly anotherAccount: AnotherAccount
 }
 
-/** Waits until the shell says the local database is open. */
+/** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
+export const APP_READY = '[data-testid="app-shell.status"][data-state="ready"]'
+
+/** Waits until the shell says the app is ready (the local database is open). */
 export async function appReady(page: Page): Promise<void> {
-  await page.getByTestId('app-shell.ready').waitFor({ state: 'attached' })
+  await page.locator(APP_READY).waitFor({ state: 'attached' })
 }
 
-/** Signs in with an existing account through the sign-in page and waits for `/me`. */
+/** The shell's notice, located by its anchor and its contract code together. */
+export const notice = (page: Page, code: string) =>
+  page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
+
+/** One toast of the frame, located by its anchor and its contract code together. */
+export const toast = (page: Page, code: string) =>
+  page.locator(`[data-testid="app-shell.toast"][data-code="${code}"]`)
+
+/** The sign-in page's word on how the last session ended, by its anchor and its code. */
+export const signInNotice = (page: Page, code: string) =>
+  page.locator(`[data-testid="user.sign-in.notice-message"][data-code="${code}"]`)
+
+/**
+ * Signs in with an existing account through the sign-in page and waits for `/me`; fails at once
+ * when the page shows its error instead.
+ */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
   await appReady(page)
-  await page.getByTestId('user.sign-in.email').fill(account.email)
-  await page.getByTestId('user.sign-in.password').fill(account.password)
-  await page.getByTestId('user.sign-in.submit').click()
+  await page.getByTestId('user.sign-in.email-input').fill(account.email)
+  await page.getByTestId('user.sign-in.password-input').fill(account.password)
+  await page.getByTestId('user.sign-in.submit-button').click()
+
+  const outcome = await page.waitForFunction(
+    () =>
+      window.location.pathname === '/me' ||
+      document.querySelector('[data-testid="user.sign-in.error"]')?.getAttribute('data-code'),
+  )
+
+  expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
   await page.waitForURL('**/me')
 }
 
@@ -67,11 +94,11 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
 export async function signUp(page: Page, account = freshAccount()): Promise<SeedAccount> {
   await page.goto('/sign-in')
   await appReady(page)
-  await page.getByTestId('user.sign-in.toggle').click()
-  await page.getByTestId('user.sign-in.email').fill(account.email)
-  await page.getByTestId('user.sign-in.password').fill(account.password)
-  await page.getByTestId('user.sign-in.name').fill(account.name)
-  await page.getByTestId('user.sign-in.submit').click()
+  await page.getByTestId('user.sign-in.toggle-button').click()
+  await page.getByTestId('user.sign-in.email-input').fill(account.email)
+  await page.getByTestId('user.sign-in.password-input').fill(account.password)
+  await page.getByTestId('user.sign-in.name-input').fill(account.name)
+  await page.getByTestId('user.sign-in.submit-button').click()
   await page.waitForURL('**/me')
 
   return account
@@ -94,47 +121,76 @@ export function pageLoads(page: Page): () => number {
 /** The browsers of the running test: the step check looks at every page they have open. */
 const browsers = new Set<BrowserContext>()
 
-/** A browser context of the test's own, opened on first use; `close` closes it if it opened. */
+/** The front every stand serves the app from, the origin the security check holds to its headers. */
+function frontOf(baseURL: string | undefined): string {
+  if (baseURL === undefined) {
+    throw new Error('the e2e projects give every browser the base URL of the front')
+  }
+
+  return new URL(baseURL).origin
+}
+
+/** Fails the test with every problem a browser reported against the front's security policy. */
+function expectSecure(problems: readonly string[]): void {
+  expect(
+    problems,
+    'the front sends its security headers and no page or worker breaks its policy',
+  ).toEqual([])
+}
+
+/**
+ * A browser context of the test's own, opened on first use and watched by the security check
+ * from before its first page; `close` closes it if it opened, then fails the test with the
+ * problems it reported until then.
+ */
 function ownBrowser(
   browser: Browser,
   options: BrowserContextOptions,
+  front: string,
 ): { open(): Promise<Page>; close(): Promise<void> } {
-  let opened: Promise<Page> | undefined
+  let opened: Promise<{ page: Page; security: SecurityWatch }> | undefined
 
   return {
-    open: () => {
-      opened ??= browser.newContext(options).then((context) => {
+    open: async () => {
+      opened ??= browser.newContext(options).then(async (context) => {
         browsers.add(context)
+        const security = await watchSecurity(context, front)
 
-        return context.newPage()
+        return { page: await context.newPage(), security }
       })
 
-      return opened
+      return (await opened).page
     },
     close: async () => {
       if (opened) {
-        const context = (await opened).context()
+        const { page, security } = await opened
+        const context = page.context()
+        const problems = security.problems()
 
         browsers.delete(context)
         await context.close()
+        expectSecure(problems)
       }
     },
   }
 }
 
 const extended = base.extend<Fixtures>({
-  page: async ({ page }, use) => {
+  page: async ({ page, baseURL }, use) => {
+    const security = await watchSecurity(page.context(), frontOf(baseURL))
+
     browsers.add(page.context())
     await use(page)
     browsers.clear()
+    expectSecure(security.problems())
   },
   signedIn: async ({ page }, use) => {
     await use(await signUp(page))
   },
   // Playwright Test gives every context of a test the project's options (the device emulated,
   // the base URL, the front's certificate) on top of `contextOptions`.
-  secondDevice: async ({ browser, contextOptions, signedIn }, use) => {
-    const device = ownBrowser(browser, contextOptions)
+  secondDevice: async ({ browser, contextOptions, baseURL, signedIn }, use) => {
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
 
     await use({
       open: device.open,
@@ -148,9 +204,9 @@ const extended = base.extend<Fixtures>({
     })
     await device.close()
   },
-  anotherAccount: async ({ browser, contextOptions }, use) => {
+  anotherAccount: async ({ browser, contextOptions, baseURL }, use) => {
     const account = freshAccount()
-    const device = ownBrowser(browser, contextOptions)
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
 
     await use({
       account,
@@ -169,12 +225,38 @@ const extended = base.extend<Fixtures>({
 
 const originalStep = extended.step
 
+/** A read of a page that a navigation interrupted: the document it read went with it. */
+const navigatedAway = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('Execution context was destroyed')
+
+/**
+ * How wide a page is and how wide it shows. A step's last action may start a navigation (a
+ * sign-out moves to /sign-in), which can replace the document while it is read: the new one is
+ * measured once it has loaded, up to three times; any other failure fails at once.
+ */
+async function pageWidths(
+  page: Page,
+  attempt = 1,
+): Promise<{ readonly scrollWidth: number; readonly clientWidth: number }> {
+  try {
+    return await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+  } catch (error: unknown) {
+    if (!navigatedAway(error) || attempt === 3) {
+      throw error
+    }
+
+    await page.waitForLoadState('load')
+
+    return pageWidths(page, attempt + 1)
+  }
+}
+
 /** No page may scroll sideways: checked after every step, on phones and desktops. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }))
+  const { scrollWidth, clientWidth } = await pageWidths(page)
 
   expect(scrollWidth, `${page.url()} scrolls sideways`).toBeLessThanOrEqual(clientWidth)
 }
