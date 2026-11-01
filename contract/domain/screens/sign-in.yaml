@@ -48,7 +48,7 @@ anchors:
           password: user.sign-in.password-input
   user.sign-in.password-confirmation-input:
     kind: input
-    description: "The password typed again (type password); shown only in the mode sign-up, and never sent: the account is asked for only when it is the same as the password."
+    description: "The password typed again (type password); shown only in the mode sign-up, and never sent. As it is typed, the error says it differs once it stops being how the password begins, and the account is asked for only when the two are the same."
   user.sign-in.name-input:
     kind: input
     description: The name of the new account; shown only in the mode sign-up.
@@ -58,7 +58,7 @@ anchors:
         name: user.sign-in.name-input
   user.sign-in.submit-button:
     kind: button
-    description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs.
+    description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs, and while the password typed again differs.
     binding:
       - action: platform.sign-in
         params:
@@ -89,6 +89,8 @@ flow:
     guards:
       emailNotVerified: the sign-in was refused because the account's email is not verified yet
       passwordsDiffer: the password typed again is not the same as the password
+      confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
+      confirmationFollows: the password typed again is how the password begins, all of it or a part, or is empty
   states:
     sign-in:
       description: The form in the mode sign-in.
@@ -107,12 +109,33 @@ flow:
           description: The password confirmation and the name input go; the error is cleared.
           actions:
             - clear: user.sign-in.error
+        user.sign-in.password-confirmation-input:
+          target: passwords-differ
+          guard: confirmationStrays
+        user.sign-in.password-input:
+          target: passwords-differ
+          guard: confirmationStrays
         user.sign-in.submit-button:
-          - guard: passwordsDiffer
-            description: Nothing is sent; the error says so under the password typed again.
-            actions:
-              - show: { user.sign-in.error: [ passwords-differ ] }
+          - target: passwords-differ
+            guard: passwordsDiffer
+            description: Only a part of the password was typed again, so nothing is sent.
           - target: signing-up
+    passwords-differ:
+      description: "The form in the mode sign-up; the error says the password typed again differs, under it, and the submit button is disabled until the two agree again."
+      entry:
+        - show: { user.sign-in.error: [ passwords-differ ] }
+      exit:
+        - clear: user.sign-in.error
+      on:
+        user.sign-in.password-confirmation-input:
+          target: sign-up
+          guard: confirmationFollows
+        user.sign-in.password-input:
+          target: sign-up
+          guard: confirmationFollows
+        user.sign-in.toggle-button:
+          target: sign-in
+          description: The password confirmation and the name input go; the error is cleared.
     signing-in:
       description: The sign-in runs; the error of the last attempt goes.
       entry:
