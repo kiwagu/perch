@@ -51,9 +51,9 @@ describe('renderVerificationMail', () => {
   it('puts the link behind the button and once more as the raw link, and into the text', async () => {
     const mail = (await written())._unsafeUnwrap()
 
-    expect(anchorsOf(mail.html)).toEqual([
-      { href: LINK, text: 'Confirm my email' },
-      { href: LINK, text: LINK },
+    expect(anchorsOf(mail.html)).toStrictEqual([
+      { href: LINK, text: 'Confirm my email', action: 'primary' },
+      { href: LINK, text: LINK, action: undefined },
     ])
     expect(mail.text).toContain(LINK)
   })

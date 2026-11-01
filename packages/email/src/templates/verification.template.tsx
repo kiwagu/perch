@@ -1,5 +1,6 @@
 import { Button, Heading, Link, Section, Text } from '@react-email/components'
 
+import { primaryAction } from '../mail.action'
 import { MailLayout, type MailLayoutProps } from '../mail.layout'
 import { mailTheme } from '../mail.theme'
 
@@ -96,7 +97,7 @@ export function VerificationMail(props: VerificationMailProps) {
         {props.body}
       </Text>
       <Section>
-        <Button href={props.link} style={button}>
+        <Button {...primaryAction} href={props.link} style={button}>
           {props.action}
         </Button>
       </Section>

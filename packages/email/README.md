@@ -15,9 +15,12 @@ template writes, in text and in attributes.
 
 A mail asked in a language the mails are not written in (`mail:LOCALE_UNSUPPORTED`), or whose link
 is not an `http:` or `https:` address (`mail:LINK_INVALID`), is not written. Neither is a render
-whose HTML has no anchor leading to the link exactly as it was given, or whose text no longer
-spells it out (`mail:LINK_LOST`): a template edit that swallows the link fails here instead of
-mailing a dead button. A render that fails answers `mail:RENDER_FAILED`. Every error is a fixed
+that lost its link (`mail:LINK_LOST`): a template marks its button as the mail's primary action
+(`primaryAction`, the attribute `data-mail-action="primary"`), and the render must hold exactly
+one such anchor whose href, as a parser decodes it, is the link exactly as it was given, another
+anchor leading to the link (the raw link for clients that strip buttons), and the link in its
+text. A template edit that breaks the button fails here instead of mailing a dead button above a
+working raw link. A render that fails answers `mail:RENDER_FAILED`. Every error is a fixed
 text that names no address, name or link.
 
 ## Key exports
@@ -28,12 +31,14 @@ text that names no address, name or link.
   `MailWriteError`.
 - Inside the package: `MailLayout` (`mail.layout.tsx`), `mailTheme` (`mail.theme.ts`),
   `VerificationMail` (`templates/verification.template.tsx`), the render boundary
-  `renderMail(element, link)` (`mail.render.ts`), `checkMailInput` (`mail-input.ts`) and the
+  `renderMail(element, link)` (`mail.render.ts`), `primaryAction` (`mail.action.ts`),
+  `checkMailInput` (`mail-input.ts`), the HTML reader `anchorsOf` (`html.ts`) and the
   catalogs `src/i18n/mail.en.json`, `src/i18n/mail.es.json` (namespace `mail.*`).
 
 ## Commands
 
 - `bun run test`: the verification mail in each language, its escaping, its minified HTML and its
-  refusals, and the render boundary's guard against template stand-ins that drop the link.
+  refusals, and the render boundary's guard against template stand-ins whose button lost or
+  changed its link while the raw link stays right, or that drop the raw link or the text's link.
 - `bun run i18n:check`: the catalogs' keys against the code.
 - `bun run typecheck`, `bun run lint`.
