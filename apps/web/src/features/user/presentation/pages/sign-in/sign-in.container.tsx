@@ -61,6 +61,7 @@ export function SignInContainer() {
       error={state.context.error}
       notice={notice}
       mail={state.context.mail}
+      sentTo={state.context.sentTo}
       showResend={showResend}
       canResend={canResend}
       onSubmit={(form) => submit({ type: 'user.sign-in.submit-button', form: { ...form, locale } })}

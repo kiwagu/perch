@@ -137,9 +137,9 @@ describe('SignInView', () => {
     )
   })
 
-  it('asks to open the link of the mail sent to the email typed', () => {
-    renderView({ mail: 'check-your-mail' })
-    type('user.sign-in.email-input', 'ann@example.test')
+  it('asks to open the link of the mail sent to the address it went to, whatever the field holds', () => {
+    renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' })
+    type('user.sign-in.email-input', 'bob@example.test')
 
     const message = screen.getByTestId('user.sign-in.mail-message')
 
@@ -150,8 +150,7 @@ describe('SignInView', () => {
   })
 
   it('asks it in Spanish', () => {
-    renderView({ mail: 'check-your-mail' }, 'es')
-    type('user.sign-in.email-input', 'ann@example.test')
+    renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' }, 'es')
 
     expect(screen.getByTestId('user.sign-in.mail-message').textContent).toBe(
       es['user.sign-in.mail.check-your-mail'].replace('{email}', 'ann@example.test'),

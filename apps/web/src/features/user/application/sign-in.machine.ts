@@ -1,5 +1,5 @@
 import type { ResultAsync } from 'neverthrow'
-import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
+import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { SignInError, SignInForm, SignInService } from './sign-in.service'
 
@@ -20,6 +20,8 @@ export interface SignInContext {
   readonly error: string | undefined
   /** The code of the mail message, shown once a sign-up or a resend went through. */
   readonly mail: typeof CHECK_YOUR_MAIL | undefined
+  /** The address the last sign-up or resend that went through mailed, which the message names. */
+  readonly sentTo: string | undefined
 }
 
 /** The events of the screen's flow: the user acts on these anchors. */
@@ -111,11 +113,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       'platform.sign-in': attempt((input: { readonly form: SignInForm }) =>
         service.signIn(input.form),
       ),
+      // A sign-up and a resend end with the address they mailed: the message names that one, not
+      // the field's, which can change after.
       'platform.sign-up': attempt((input: { readonly form: SignInForm }) =>
-        service.signUp(input.form),
+        service.signUp(input.form).map(() => input.form.email),
       ),
       'platform.resend-verification': attempt((input: { readonly email: string }) =>
-        service.resend(input.email),
+        service.resend(input.email).map(() => input.email),
       ),
     },
     actions: {
@@ -134,7 +138,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         if (params.anchor === SIGN_IN_ERROR) {
           enqueue.assign({ error: undefined })
         } else if (params.anchor === MAIL_MESSAGE) {
-          enqueue.assign({ mail: undefined })
+          enqueue.assign({ mail: undefined, sentTo: undefined })
         } else {
           enqueue.emit({ type: 'clear', ...params })
         }
@@ -144,7 +148,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
   }).createMachine({
     id: 'user.sign-in',
     initial: 'sign-in',
-    context: { error: undefined, mail: undefined },
+    context: { error: undefined, mail: undefined, sentTo: undefined },
     states: {
       'sign-in': {
         on: {
@@ -198,7 +202,10 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         invoke: {
           src: 'platform.sign-up',
           input: formInput,
-          onDone: { target: 'check-mail', actions: [showMail] },
+          onDone: {
+            target: 'check-mail',
+            actions: [showMail, assign({ sentTo: ({ event }) => event.output })],
+          },
           onError: {
             target: 'sign-up',
             actions: [
@@ -238,7 +245,10 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         invoke: {
           src: 'platform.resend-verification',
           input: emailInput,
-          onDone: { target: 'check-mail', actions: [showMail] },
+          onDone: {
+            target: 'check-mail',
+            actions: [showMail, assign({ sentTo: ({ event }) => event.output })],
+          },
           onError: {
             target: 'unverified',
             actions: [

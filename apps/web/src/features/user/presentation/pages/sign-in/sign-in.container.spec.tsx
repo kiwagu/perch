@@ -180,6 +180,43 @@ describe('SignInContainer', () => {
     )
   })
 
+  it('names the address the mail went to, whatever the email field holds afterwards', async () => {
+    const bob = 'bob@example.test'
+    const carol = 'carol@example.test'
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signUp: () => okAsync(undefined),
+      resendVerification: () => okAsync(undefined),
+    }
+    const messageText = () => screen.getByTestId('user.sign-in.mail-message').textContent
+    const typeEmail = (value: string) =>
+      fireEvent.change(screen.getByTestId('user.sign-in.email-input'), { target: { value } })
+
+    renderSignIn(session)
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+    typeEmail(ann.email)
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'pass-word-1' },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    await screen.findByTestId('user.sign-in.mail-message')
+
+    // Typing another address after the sign-up keeps the message on the address the mail went to.
+    typeEmail(bob)
+
+    expect(messageText()).toContain(ann.email)
+    expect(messageText()).not.toContain(bob)
+
+    // A resend goes to the address typed, and the message names that one from then on.
+    fireEvent.click(screen.getByTestId('user.sign-in.resend-button'))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    typeEmail(carol)
+
+    expect(messageText()).toContain(bob)
+    expect(messageText()).not.toContain(carol)
+  })
+
   it('offers the resend when a sign-in is refused because the email is not verified yet', async () => {
     const session: SessionPort = {
       ...fakeSession().session,

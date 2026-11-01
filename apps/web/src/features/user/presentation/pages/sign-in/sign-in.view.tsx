@@ -27,6 +27,8 @@ export interface SignInViewProps {
   readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
   /** The code of the message asking to open the verification mail, once a sign-up or a resend went through. */
   readonly mail?: 'check-your-mail' | undefined
+  /** The address that mail went to, which `check-your-mail` names. */
+  readonly sentTo?: string | undefined
   /** Whether the button that sends the verification mail again shows. */
   readonly showResend: boolean
   /** Whether that button can send now. */
@@ -112,7 +114,7 @@ export function SignInView(props: SignInViewProps) {
             {props.mail ? (
               <Alert>
                 <AlertDescription data-testid="user.sign-in.mail-message" data-code={props.mail}>
-                  {t('user.sign-in.mail.check-your-mail', { email: values.email })}
+                  {t('user.sign-in.mail.check-your-mail', { email: props.sentTo ?? '' })}
                 </AlertDescription>
               </Alert>
             ) : null}

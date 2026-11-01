@@ -25,7 +25,8 @@ over the shape runner and the command bus, the
 and commands beside it), the sign-in
 machine (the flow of `contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt
 invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, it keeps the
-codes of the form's error and mail message, and emits `show` and `navigate` for the page), the
+codes of the form's error and mail message, and the address the last sign-up or resend mailed,
+and emits `show` and `navigate` for the page), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -84,7 +85,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
   stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again
-  (`user.sign-in.resend-button`); a sign-in of an account whose email is not verified yet says so
+  (`user.sign-in.resend-button`), the message naming the address the last sign-up or resend
+  mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with; the verify page says the link is being checked

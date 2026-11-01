@@ -148,7 +148,12 @@ describe('the sign-in form', () => {
     const asked = await settled(actor)
 
     expect(asked.value).toBe('check-mail')
-    expect(asked.context).toEqual({ error: undefined, mail: 'check-your-mail' })
+    // The address the mail went to stays with the message, whatever the field holds later.
+    expect(asked.context).toStrictEqual({
+      error: undefined,
+      mail: 'check-your-mail',
+      sentTo: ann.email,
+    })
     expect(emitted).toEqual([])
     expect(session.current()).toBeUndefined()
   })
@@ -181,7 +186,11 @@ describe('the sign-in form', () => {
     const refused = await settled(actor)
 
     expect(refused.value).toBe('unverified')
-    expect(refused.context).toEqual({ error: 'data:EMAIL_NOT_VERIFIED', mail: undefined })
+    expect(refused.context).toStrictEqual({
+      error: 'data:EMAIL_NOT_VERIFIED',
+      mail: undefined,
+      sentTo: undefined,
+    })
     expect(session.current()).toBeUndefined()
   })
 
@@ -206,7 +215,11 @@ describe('the sign-in form', () => {
 
       const resent = await waitFor(actor, (state) => state.matches('check-mail'))
 
-      expect(resent.context).toEqual({ error: undefined, mail: 'check-your-mail' })
+      expect(resent.context).toStrictEqual({
+        error: undefined,
+        mail: 'check-your-mail',
+        sentTo: 'Ann@Example.Test',
+      })
       expect(opened.auth.requests).toEqual([{ kind: 'resend', email: 'Ann@Example.Test' }])
     },
   )
@@ -225,7 +238,11 @@ describe('the sign-in form', () => {
 
     const failed = await waitFor(actor, (state) => state.matches('unverified'))
 
-    expect(failed.context).toEqual({ error: 'data:RATE_LIMITED', mail: undefined })
+    expect(failed.context).toStrictEqual({
+      error: 'data:RATE_LIMITED',
+      mail: undefined,
+      sentTo: undefined,
+    })
   })
 
   it('lets the mail message go when a sign-in starts from it', async () => {
@@ -239,7 +256,7 @@ describe('the sign-in form', () => {
 
     expect(actor.getSnapshot()).toMatchObject({
       value: 'signing-in',
-      context: { error: undefined, mail: undefined },
+      context: { error: undefined, mail: undefined, sentTo: undefined },
     })
   })
 
@@ -254,7 +271,7 @@ describe('the sign-in form', () => {
 
     expect(actor.getSnapshot()).toMatchObject({
       value: 'sign-up',
-      context: { error: undefined, mail: undefined },
+      context: { error: undefined, mail: undefined, sentTo: undefined },
     })
   })
 
