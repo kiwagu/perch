@@ -327,8 +327,10 @@ A screen's `states` say what is visible in each container state. The `wireframe`
 default state in Playwright's aria snapshot grammar.
 
 A screen's `flow` is an XState v5 machine config, in the subset `createMachine` takes as
-written: the app carries it into `setup({ guards, actions, actors }).createMachine(flow)`
-unchanged, as it carries a binding into the router.
+written: `contract:check` runs it in `setup({ guards, actions, actors }).createMachine(flow)`,
+with a stub per guard, effect and invoked actor, and an app that builds its own machine for the
+screen holds it to the flow with the engine's comparison (`@workspace/ui-contract/machines`),
+as it holds its router to the bindings.
 
 - `initial` and `states`. A state has a `description`, `type: final` where the flow ends
   (the app has left the screen, or stops), `entry` and `exit` effects, `on` and `invoke`.
@@ -571,8 +573,8 @@ state is a visit to a screen:
   list of guarded ones in XState's order.
 
 An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the task leads,
-and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
-written, as the flows do. The file follows the layout of a screen file, with keys in the
+and the screens do the work. `contract:check` runs it in
+`setup({ guards }).createMachine(activity)` as written, as it runs the flows. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
 state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
