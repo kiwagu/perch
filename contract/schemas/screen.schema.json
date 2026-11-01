@@ -1573,14 +1573,33 @@
                         "type": "string"
                       },
                       "additionalProperties": {
-                        "description": "A string, a number or a boolean.",
-                        "type": [
-                          "string",
-                          "number",
-                          "boolean"
+                        "anyOf": [
+                          {
+                            "description": "A string, a number or a boolean.",
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "anchor": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "A field of the screen, declared on it."
+                              }
+                            },
+                            "required": [
+                              "anchor"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                          }
                         ]
                       },
-                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                     }
                   },
                   "required": [
@@ -1684,14 +1703,33 @@
                         "type": "string"
                       },
                       "additionalProperties": {
-                        "description": "A string, a number or a boolean.",
-                        "type": [
-                          "string",
-                          "number",
-                          "boolean"
+                        "anyOf": [
+                          {
+                            "description": "A string, a number or a boolean.",
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "anchor": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "A field of the screen, declared on it."
+                              }
+                            },
+                            "required": [
+                              "anchor"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                          }
                         ]
                       },
-                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                     }
                   },
                   "required": [

@@ -357,7 +357,12 @@ unchanged, as it carries a binding into the router.
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
   } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
   navigate, params: { to, search } }`, the app moves to that binding. The app implements
-  all three.
+  all three. Each value of a navigate's `search` is a search key of the binding it moves to,
+  given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
+  flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
+  radio or a switch; never a button, a list or a `visibility-button`). A link that carries
+  the email typed so far to the page that asks for a password reset:
+  `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
   anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
@@ -871,7 +876,8 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist, reaches each of its states
+  actions, anchors with their codes and bindings that exist (a navigate's search keys of the
+  binding it moves to, each `{ anchor }` a field of the flow's own screen), reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
   declared by the frame alone, once, reserved, with both answers and no action of its own,

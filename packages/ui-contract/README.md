@@ -79,7 +79,8 @@ for Bun.
     optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
-    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
+    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema` (a navigate's
+    search value a literal or `{ anchor }`, the value a field of the screen holds)
     and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
     `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
@@ -112,7 +113,8 @@ for Bun.
     sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
-    that exist,
+    that exist, a navigate's search keys of the binding it moves to, each value a literal or
+    `{ anchor }`, a field its own screen declares (never a `visibility-button`),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
