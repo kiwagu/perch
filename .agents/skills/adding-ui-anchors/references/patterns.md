@@ -263,13 +263,16 @@ inside. Among JSX children the marker is the only content of a comment container
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
 that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
-83-95), the state that signs in, written in the shorter forms (a transition as its target,
-an effect by its name, the codes of the failure left to the platform's `sign-in`; `bun run
+139-159, the descriptions left out), the state that signs in, written in the shorter forms (a
+transition as its target, an effect by its name with the codes it shows; `signing-up` writes
+only `show: user.sign-in.error` and leaves its codes to the platform's `sign-up`; `bun run
 contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
 anchor, codes } }` and `{ target }`):
 
 ```yaml
 signing-in:
+  entry:
+    - clear: user.sign-in.error
   invoke:
     src: platform.sign-in
     input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
@@ -279,38 +282,62 @@ signing-in:
         - show: { app-shell.notice-message: [ welcome ] }
         - navigate: /me
     onError:
-      target: sign-in
-      actions:
-        - show: user.sign-in.error
+      - target: unverified
+        guard: emailNotVerified
+        actions:
+          - show: { user.sign-in.error: [ email-not-verified ] }
+      - target: sign-in
+        actions:
+          - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
 ```
 
-And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 72-121): an actor
-per `invoke.src`, the effects, the same states, events, targets and effects; what the
-app adds is its own (the `error` in context, `clearError`, the `input` built from the
-submit event):
+And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 120-298): an actor
+per `invoke.src`, a guard per name of `meta.guards`, the same states, events, targets and
+effects; what the app adds is its own (the `error` in context, which its `show` and `clear`
+keep for the form's error, the guards' code, the `input` built from the submit event), and
+`clearError` and `showError(...codes)` are the flow's effects on that error, written once:
 
 ```ts
 return setup({
-  types: { context: {} as SignInContext, events: {} as SignInEvent, emitted: {} as SignInEmitted },
+  types: {
+    context: {} as SignInContext,
+    events: {} as SignInEvent,
+    emitted: {} as SignInEmitted,
+  },
+  guards: {
+    emailNotVerified: ({ event }) =>
+      failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
+    // passwordsDiffer, confirmationStrays, confirmationFollows: the password typed again
+  },
   actors: {
-    'platform.sign-in': attempt(service, 'sign-in'),
-    'platform.sign-up': attempt(service, 'sign-up'),
+    'platform.sign-in': fromPromise(
+      ({ input }: { readonly input: { readonly form: SignInForm } }) =>
+        settled(service.signIn(input.form)),
+    ),
+    // 'platform.sign-up', 'platform.resend-verification'
   },
   actions: {
     show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
       if (params.anchor === SIGN_IN_ERROR) {
-        enqueue.assign({ error: failureOf(event) })
+        // The form finds the passwords differ itself; any other code is the failure's.
+        enqueue.assign({
+          error: params.codes.includes('passwords-differ')
+            ? PASSWORDS_DIFFER
+            : failureOf(event, UNKNOWN_FAILURE),
+        })
+      } else if (params.anchor === MAIL_MESSAGE) {
+        // ... the mail message's code
       } else {
         enqueue.emit({ type: 'show', ...params })
       }
     }),
+    // clear: the same, anchor by anchor
     navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
-    clearError: assign({ error: undefined }),
   },
 }).createMachine({
   // ...
   'signing-in': {
-    entry: 'clearError',
+    entry: [clearError],
     invoke: {
       src: 'platform.sign-in',
       input: formInput,
@@ -321,20 +348,38 @@ return setup({
           { type: 'navigate', params: { to: '/me' } },
         ],
       },
-      // onError: back to 'sign-in', showing the codes on user.sign-in.error
+      onError: [
+        {
+          target: 'unverified',
+          guard: 'emailNotVerified',
+          actions: [showError('email-not-verified')],
+        },
+        {
+          target: 'sign-in',
+          actions: [
+            showError('invalid-credentials', 'rate-limited', 'other-account', 'failed'),
+          ],
+        },
+      ],
     },
   },
 })
 ```
 
-The events are the anchors the user acts on (`{ type: 'user.sign-in.submit-button', form }`),
-and the mode is the state (`sign-in`, `sign-up`), not context. An actor resolves with its
-result and rejects with the failure, so `onDone` and `onError` are the action's success and
-failure. The page sends the events and does what the machine emits: the sign-in container
-(`presentation/pages/sign-in/sign-in.container.tsx`, lines 50-62) notifies the welcome on
-`show` and moves on `navigate`. `apps/web/src/platform/machines.spec.ts` holds the
-machine's config to the flow through the engine's comparison
-(`@workspace/ui-contract/machines`); a new app machine for a screen joins its `APP_MACHINES`.
+The events are the anchors the user acts on (`{ type: 'user.sign-in.submit-button', form,
+confirmation }`, the password typed again beside the form the actors take; `{ type:
+'user.sign-in.password-input', password, confirmation }` for a keystroke), and the mode is the
+state (`sign-up` and `passwords-differ` are the mode sign-up), not context. An actor resolves
+with its result and rejects with the failure (`settled` and `failureOf` of
+`apps/web/src/platform/actor-outcome.ts`), so `onDone` and `onError` are the action's success
+and failure. The page sends the events and reads what the machine keeps: the sign-in container
+(`presentation/pages/sign-in/sign-in.container.tsx`, lines 73-95) renders the view from the
+state and its context and sends each event, and `useScreenMachine`
+(`apps/web/src/platform/screen-machine.ts`) does what the machine emits, the welcome on the
+frame's notice through `useFrameEffects` and the move on `navigate`.
+`apps/web/src/platform/machines.spec.ts` holds the machine's config to the flow through the
+engine's comparison (`@workspace/ui-contract/machines`); a new app machine for a screen joins
+its `APP_MACHINES`.
 
 A screen whose areas are independent runs them at once as the regions of a parallel state.
 From `contract/domain/screens/org.yaml` (lines 195-277, the descriptions, the notes' items and the
