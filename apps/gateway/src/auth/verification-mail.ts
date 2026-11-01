@@ -1,9 +1,10 @@
 import type { LocalDb } from '@workspace/data'
+import { renderVerificationMail } from '@workspace/email'
 import { SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
-import { type MailPort, verificationMail } from '../mail'
+import type { MailPort } from '../mail'
 
 import { accountLocale } from './account-locale'
 import type { AuthLog } from './auth-log'
@@ -66,12 +67,12 @@ async function deliver(
     return
   }
 
-  const sent = await verificationMail({
+  const sent = await renderVerificationMail({
     to: email,
     name,
     link: verificationLink(options.publicUrl, token),
     locale: settings.value ?? locale,
-  }).asyncAndThen((message) => options.mail.send(message))
+  }).andThen((message) => options.mail.send(message))
 
   if (sent.isErr()) {
     options.log.error({ code: sent.error.code }, 'a verification mail did not go out')

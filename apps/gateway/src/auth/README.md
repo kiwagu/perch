@@ -124,11 +124,13 @@ email) and hands it to `verificationMailer` (`verification-mail.ts`), its `sendV
 which starts the mail and returns at once: the request that asked for a mail never waits for it. The
 mail links to the front's own screen, `<GATEWAY_PUBLIC_URL>/verify-email?token=…`
 (`verificationLink`, `VERIFY_EMAIL_PATH`), never to Better Auth's own verifying URL, and its token
-lives a day (`VERIFICATION_LINK_LIFETIME_S`). It speaks the account's language: the one its settings
+lives a day (`VERIFICATION_LINK_LIFETIME_S`). The mail is written by `@workspace/email`
+(`renderVerificationMail`) and sent through the mail port. It speaks the account's language: the one its settings
 name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before.
 Settings that could not be read, or name a language the gateway does not speak, send no mail and are
 logged as `mail:LOCALE_UNREADABLE`, never a mail in a guessed language; a mail that could not be
-written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`), never with its
+written or sent is logged by its code (`mail:SEND_FAILED`, `mail:LINK_INVALID`, or the email
+package's `mail:LINK_LOST` and `mail:RENDER_FAILED`), never with its
 address or token, and so is an account that reads without a language (a row written before the
 column had its default): no mail, `mail:SEND_FAILED`. The first verification of an account signs the
 device that opened the link in, through the session hooks like a sign-in, so it names the device in

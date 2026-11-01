@@ -22,8 +22,8 @@ time (one identity's membership changes, one account's sign-ups and verification
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
   and their routes.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
-- [mail](src/mail/README.md): the mail port and its SMTP adapter, and the mails the gateway
-  writes.
+- [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
+  written by `@workspace/email`.
 
 ## Key exports
 

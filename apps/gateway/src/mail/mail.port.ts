@@ -23,12 +23,6 @@ export interface MailSetupError {
   readonly message: string
 }
 
-/** Why a mail could not be written: its input lies outside what the mails support; never with that input. */
-export interface MailWriteError {
-  readonly code: 'mail:LOCALE_UNSUPPORTED' | 'mail:LINK_INVALID'
-  readonly message: string
-}
-
 /** Where the gateway's mails go out: `send` resolves once the mail server took the mail. */
 export interface MailPort {
   send(message: MailMessage): ResultAsync<void, MailError>

@@ -24,6 +24,7 @@
       "dependencies": {
         "@workspace/data": "workspace:*",
         "@workspace/database": "workspace:*",
+        "@workspace/email": "workspace:*",
         "@workspace/i18n": "workspace:*",
         "@workspace/ids": "workspace:*",
         "@workspace/kernel": "workspace:*",
