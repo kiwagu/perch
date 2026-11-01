@@ -62,6 +62,23 @@ const contractSchema = z
       'The part of a composite the suffix marks.',
       'The suffixes of derived anchors: `<anchor>.<suffix>`.',
     ),
+    derivedParts: z
+      .record(
+        kebabNameSchema,
+        z
+          .strictObject({
+            kind: kebabNameSchema.describe('The kind of the part: the last word of its suffix.'),
+            values: tableOf(
+              z.string(),
+              'What the part says while it carries the value.',
+              'The data-value values the suffix itself defines, never rows of `choiceValues`.',
+            ).optional(),
+          })
+          .describe('The part a derived suffix marks.'),
+      )
+      .describe(
+        'Each derived suffix with the part it marks: its kind and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`).',
+      ),
     attributes: tableOf(
       z.string(),
       '`<on>: <meaning>`: the elements that carry it, then what it holds.',

@@ -8,3 +8,4 @@ export {
   type RenderedPage,
 } from './page-helper'
 export { CONTRACT_VERSION } from './version'
+export { VISIBILITY_BASE_KIND, VISIBILITY_BUTTON, VISIBILITY_VALUES } from './visibility'

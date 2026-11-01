@@ -59,6 +59,26 @@ describe('scenariosProblems', () => {
 
     expect(printed(contract)).toEqual([])
   })
+  it('names a visibility-button and its values, show and hide, once an input renders one', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).steps = [
+      'Click [sample.title-input.visibility-button] while it carries [value:show]',
+      'Then it carries [value:hide]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [sample.title-input.visibility-button] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [value:show] is not a choice value of the vocabulary',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:hide] is not a choice value of the vocabulary',
+    ])
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
   it('resolves a mail by the platform action that declares it', () => {
     const contract = sampleContract()
     const scenario = firstScenario(contract)

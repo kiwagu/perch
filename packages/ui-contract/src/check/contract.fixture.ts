@@ -157,7 +157,7 @@ export function sampleContract(): Contract {
     vocabulary: {
       version: 1,
       kinds: meaning(['button', 'link', 'input', 'list', 'item', 'select', 'page', 'status']),
-      suffixes: meaning(['option', 'item', 'confirm-button']),
+      suffixes: meaning(['option', 'item', 'confirm-button', 'visibility-button']),
       attributes: {},
       appStates: meaning(['opening', 'ready']),
       containerStates: meaning(['loading', 'ready', 'empty']),

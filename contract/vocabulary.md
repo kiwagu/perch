@@ -44,8 +44,10 @@ Tests and agents assert codes, never text. A `message`, `error`, `toast` or `dia
 changes with the language. A `status`, a `list`, a `section` and an `item` carry
 `data-state` with a state from "App states", "Container states" or "Row states". A choice
 that is not an entity (an `option`, a `badge`, a `button` that switches a mode) carries
-`data-value` with a value from "Choice values". A behaviour that differs from one case to
-another is a code or a state of one anchor, never a second anchor.
+`data-value` with a value from "Choice values". A `visibility-button`, the eye a password
+`input` renders, carries `data-value` `show` or `hide`, the values its suffix defines, never
+rows of "Choice values". A behaviour that differs from one case to another is a code or a
+state of one anchor, never a second anchor.
 
 ## Kinds
 
@@ -94,6 +96,7 @@ another is a code or a state of one anchor, never a second anchor.
 | `option` | one entry of a select, with `data-value` |
 | `item` | one entry a composite renders, with `data-id` |
 | `error-message` | the error text of a field |
+| `visibility-button` | the eye beside a password `input` that shows what the input holds as typed, or hides it again: it carries `data-value` `show` while the input hides its value (a click shows it) and `hide` while it shows it, so the value names what the click does; only an `input` renders it, and it is presentation only, never an event of a flow or an activity, never a value an action takes, and always enabled |
 
 ## Attributes
 
@@ -101,7 +104,7 @@ another is a code or a state of one anchor, never a second anchor.
 |---|---|---|
 | `data-testid` | the element | the anchor of the element |
 | `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's identity, a device session) |
-| `data-value` | an `option`, a `badge`, a `button` that switches a mode | the stable key of a choice that is not an entity, one of the rows of "Choice values" |
+| `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix |
 | `data-state` | a `status`, a `list`, a `section`, an `item` | an app, container or row state from the tables below |
 | `data-code` | a `message`, `error`, `toast` or `dialog` | the stable code of what the element says, which tests assert instead of the wording |
 | `data-boot-step` | `<html>` | the step the start of the app has reached, set by the composition root |

@@ -51,6 +51,19 @@ describe('flowProblems', () => {
       `${AT}.states.editing.on["platform.closed"]: "platform.closed" is not an event of platform.events`,
     ])
   })
+  it('refuses a visibility-button as an event: it is presentation only', () => {
+    const contract = sampleContract()
+    const title = screenIn(contract, 'sample').anchors['sample.title-input']
+
+    Object.assign(title ?? {}, { derived: ['visibility-button'] })
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'sample.title-input.visibility-button': { target: 'saving' },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.title-input.visibility-button"]: "sample.title-input.visibility-button" is a visibility-button: presentation only, never an event of a flow`,
+    ])
+  })
   it('takes a data event for a field of the model the screen shows, and no other', () => {
     const contract = sampleContract()
 
@@ -92,6 +105,23 @@ describe('flowProblems', () => {
         }`,
       ])
     }
+  })
+  it("refuses a visibility-button as an invoke input's anchor, and keeps its input", () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    invoke.input = { title: 'sample.title-input.visibility-button' }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.input.title: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value an action takes`,
+    ])
+
+    invoke.input = { title: 'sample.title-input' }
+
+    expect(printed(contract)).toEqual([])
   })
   it('takes an invoke input from a search parameter of every route of the screen', () => {
     const contract = sampleContract()

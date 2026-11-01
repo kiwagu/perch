@@ -133,7 +133,9 @@ export const anchorDefSchema = z
     derived: z
       .array(kebabNameSchema)
       .optional()
-      .describe('The derived suffixes the element renders: `confirm-button`, `option`.'),
+      .describe(
+        'The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.',
+      ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
   })
