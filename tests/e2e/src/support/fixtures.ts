@@ -117,8 +117,8 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
 const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate.name() })
 
 /**
- * Opens the sign-in page, switches it to sign-up and submits `account`; waits until the page asks
- * to check the mail, the sign-up's mail on its way and nothing signed in.
+ * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
+ * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
  */
 export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
@@ -126,6 +126,7 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
   await page.getByTestId('user.sign-in.toggle-button').click()
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
+  await page.getByTestId('user.sign-in.password-confirmation-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
   await expect(checkYourMail(page)).toBeVisible()

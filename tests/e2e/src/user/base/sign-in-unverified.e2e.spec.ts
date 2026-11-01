@@ -23,7 +23,7 @@ test.describe('Sign in before the email is verified', { tag: '@smoke' }, () => {
       account: { email: data.email, language: 'en' },
     }
 
-    await test.step('1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('1. Open [/sign-in], click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await startSignUp(page, data)
     })
 

@@ -65,10 +65,11 @@ test.describe('Ask for a new verification link for any email', { tag: '@full' },
       await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
     })
 
-    await test.step('2. Click [user.sign-in.toggle-button], enter the other email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('2. Click [user.sign-in.toggle-button], enter the other email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.toggle-button').click()
       await page.getByTestId('user.sign-in.email-input').fill(data.otherEmail)
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
+      await page.getByTestId('user.sign-in.password-confirmation-input').fill(data.password)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
       await expect(checkYourMail(page)).toBeVisible()

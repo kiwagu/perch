@@ -23,10 +23,11 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       await page.locator('[data-testid="app-shell.locale-select.option"][data-value="es"]').click()
     })
 
-    await test.step('3. On device A, click [user.sign-in.toggle-button], enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('3. On device A, click [user.sign-in.toggle-button], enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.toggle-button').click()
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
+      await page.getByTestId('user.sign-in.password-confirmation-input').fill(data.password)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 3 device A stays on [/sign-in] with [user.sign-in.mail-message]

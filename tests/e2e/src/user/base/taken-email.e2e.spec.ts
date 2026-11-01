@@ -23,10 +23,11 @@ test.describe('Sign up again with an email that has an account', { tag: '@smoke'
       await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
     })
 
-    await test.step('2. Click [user.sign-in.toggle-button], enter the email, the other password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
+    await test.step('2. Click [user.sign-in.toggle-button], enter the email, the other password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.toggle-button').click()
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.otherPassword)
+      await page.getByTestId('user.sign-in.password-confirmation-input').fill(data.otherPassword)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 2 [user.sign-in.mail-message] carries [code:check-your-mail], as after

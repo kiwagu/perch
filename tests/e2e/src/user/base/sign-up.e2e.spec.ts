@@ -38,19 +38,22 @@ test.describe('Sign up, verify the email and see the profile', { tag: '@smoke' }
       await page.getByTestId('user.sign-in.toggle-button').click()
     })
 
-    await test.step('3. Enter the email, the password and the name into [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.name-input]', async () => {
+    await test.step('3. Enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input]', async () => {
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.password)
+      await page.getByTestId('user.sign-in.password-confirmation-input').fill(data.password)
       await page.getByTestId('user.sign-in.name-input').fill(data.name)
     })
 
     await test.step('4. Click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [user.sign-in.mail-message] carries [code:check-your-mail],
-      //   [user.sign-in.resend-button] shows, no [user.sign-in.name-input] shows, the URL stays
-      //   [/sign-in], and [mail:sign-up] reaches the email (step 5 waits for it)
+      //   [user.sign-in.resend-button] shows, no [user.sign-in.password-confirmation-input] or
+      //   [user.sign-in.name-input] shows, the URL stays [/sign-in], and [mail:sign-up] reaches the
+      //   email (step 5 waits for it)
       await expect(checkYourMail(page)).toBeVisible()
       await expect(page.getByTestId('user.sign-in.resend-button')).toBeVisible()
+      await expect(page.getByTestId('user.sign-in.password-confirmation-input')).toHaveCount(0)
       await expect(page.getByTestId('user.sign-in.name-input')).toHaveCount(0)
       await expect(page).toHaveURL(/\/sign-in$/)
     })
