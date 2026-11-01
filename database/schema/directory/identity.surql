@@ -4,7 +4,8 @@
 -- user reaches the server). The password hash lives on the credential row of `account`. The
 -- name people see lives in the replicated profile; `name` here is the account's own, taken at
 -- sign-up and never shown. An email is kept and matched in lower case: an address in any case is
--- one account.
+-- one account. `locale` is the language the account signed up in: its mails speak it until its
+-- settings name one; `en` when nothing named one.
 
 -- @replicate none
 -- @id idn
@@ -19,6 +20,9 @@ DEFINE FIELD OVERWRITE email ON identity TYPE string
 DEFINE FIELD OVERWRITE email_verified ON identity TYPE bool DEFAULT false;
 DEFINE FIELD OVERWRITE name ON identity TYPE string;
 DEFINE FIELD OVERWRITE image ON identity TYPE option<string>;
+DEFINE FIELD OVERWRITE locale ON identity TYPE string
+  DEFAULT 'en'
+  ASSERT $value IN ['en', 'es'];
 DEFINE FIELD OVERWRITE created_at ON identity TYPE datetime
   DEFAULT time::now()
   READONLY;

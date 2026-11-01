@@ -24,11 +24,12 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   reset of its local copy moves), closed to every record user and never replicated.
 - `schema/directory/`: the four account tables, Better Auth's models, written only by the
   gateway as its namespace user and never replicated: `identity` (an account: its email, kept
-  and matched in lower case, so an address in any case is one account, and the account's own
-  name; an identity reads only its own row), `account` (how an identity signs in: the
-  credential row holds the argon2id hash of the password), `device_session` (one row per
-  sign-in of a device of an identity, with the device's own id, its label and the session token
-  it holds; a sign-out ends the row, which stays listed for 30 days) and `verification`
+  and matched in lower case, so an address in any case is one account, the account's own name
+  and `locale`, the language it signed up in, which its mails speak until its settings name one,
+  `en` when nothing named one; an identity reads only its own row), `account` (how an identity
+  signs in: the credential row holds the argon2id hash of the password), `device_session` (one
+  row per sign-in of a device of an identity, with the device's own id, its label and the session
+  token it holds; a sign-out ends the row, which stays listed for 30 days) and `verification`
   (one-time tokens with an expiry), the last three closed to every record user; their reference
   columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
   schema defines no access method, so no record user signs in to a server. Then `profile` (its

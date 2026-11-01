@@ -1,10 +1,13 @@
-# Local front
+# Local front and mailbox
 
 Caddy in front of a local stand, so the browser sees one https origin: the web app's build at
 `/`, the gateway under `/backend/` (the prefix is stripped, WebSocket upgrades pass through for
-the gateway's `/sync`). No dev server runs behind it.
+the gateway's `/sync`). No dev server runs behind it. Beside it, MailDev is the stand's mailbox:
+every mail the stand's gateway sends lands there, for people and the suites to read.
 
-- `compose.yaml`: one service, `caddy`, which the mcproc apps `caddy-dev` and `caddy-e2e` run as
+- `compose.yaml`: two services, `caddy` and `maildev`, each run by two mcproc apps per checkout
+  (one per stand) under the checkout's compose project, with a container name of its own.
+- `caddy`: the mcproc apps `caddy-dev` and `caddy-e2e` run it as
   `docker compose -p <project> run --rm --name <project>-caddy-<stand> caddy` with the stand's
   ports in `FRONT_PORT` and `GATEWAY_PORT` (the main checkout: https://localhost:5443 with the
   gateway on 5181, https://localhost:5493 with gateway-e2e on 5191; a worktree's slot shifts
@@ -14,6 +17,20 @@ the gateway's `/sync`). No dev server runs behind it.
   dev stand passes `dist-dev`, which the `web` watcher keeps current; the e2e stand keeps
   `dist`, where the launcher writes the production build before each run. Host networking lets Caddy reach the
   gateways; the site binds 127.0.0.1 only.
+- `maildev`: `maildev/maildev:2.2.1`, pinned by its digest: the last release of the 2.x line,
+  whose REST API the suites are written against. The mcproc apps `maildev-dev` and
+  `maildev-e2e` run it as `docker compose -p <project> run --rm --name <project>-maildev-<stand>
+  maildev` with the stand's ports in `MAILDEV_SMTP_PORT` and `MAILDEV_WEB_PORT` (the main
+  checkout: SMTP 1025 and web 1080 for the dev stand, SMTP 1035 and web 1090 for the e2e stand;
+  a worktree's slot shifts each by 100). Host networking, with both the SMTP server and the web
+  server bound to 127.0.0.1 only (`MAILDEV_IP`, `MAILDEV_WEB_IP`). The stand's gateway sends to
+  its SMTP port; its web port serves the web UI, where a person opens the stand's mails, and the
+  REST API the suites read through `@workspace/mailbox`: `GET /email` (filtered by
+  `?to.address=<address>`), `GET /email/:id`, `GET /email/:id/html`, `DELETE /email/all` and
+  `GET /healthz`, which the apps' readiness checks; the container's own health check asks it on
+  127.0.0.1 too (the image's asks `localhost`, which resolves to `::1` first, where MailDev does
+  not listen). Mails live in the container only: a restart of the app empties the mailbox, and
+  the two stands never share one.
 - `Caddyfile`: one site, `https://localhost:{$FRONT_PORT}`, with `/backend/*` proxied to
   `127.0.0.1:{$GATEWAY_PORT}`, both read from the container's environment; a file server for a
   single-page app over `/srv/web`, with zstd or gzip encoding. A path that is not a file gets
@@ -50,3 +67,7 @@ the gateway's `/sync`). No dev server runs behind it.
   given to both gateway apps and to `mcproc exec`, for the local stands only; a real deployment
   sets a secret of its own (`openssl rand -hex 32`, at least 32 characters). Each gateway app
   also gets its own front's origin as `GATEWAY_PUBLIC_URL`, and `mcproc exec` the e2e front's.
+  Each gateway app's `GATEWAY_SMTP_URL` points at its own stand's MailDev
+  (`smtp://127.0.0.1:1025` for the dev stand, `smtp://127.0.0.1:1035` for the e2e stand), and
+  `GATEWAY_MAIL_FROM` is the manifest's `stand_mail_from` (`Perch <no-reply@example.test>`), a
+  literal for the local stands only; a real deployment sets its own mail server and From.

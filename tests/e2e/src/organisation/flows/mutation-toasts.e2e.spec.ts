@@ -17,7 +17,7 @@ test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
       bio: generate.bio(),
     }
 
-    await test.step('1. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+    await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       // Expected: After step 1 device A shows [app-shell.toast] carrying

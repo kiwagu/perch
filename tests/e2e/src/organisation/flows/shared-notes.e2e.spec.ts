@@ -20,7 +20,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -31,7 +31,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const loadsOfB = pageLoads(deviceB)
 
     const { userA, loadsOfA } =
-      await test.step('2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
         // Full page loads of device A from here: B's note must reach it without one.
         const loads = pageLoads(page)

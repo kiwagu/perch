@@ -3,11 +3,11 @@
  * measurement's: the build of what the tests depend on, through turbo, the web app's
  * production build into apps/web/dist included (a run never meets a stale build), with the page
  * helper `window.__perch.ui` in it (PERCH_UI_HOOKS=1) and the UI manifest beside it, then the
- * mcproc `e2e` profile (the SurrealDB stand, the `gateway-e2e` gateway and the `caddy-e2e` front,
- * which serves that build) started with `--reload`, so the apps already online restart too (a
- * run never meets a stale stand either: the database starts empty, the gateway and the front
- * load the current code and configuration), each waited for in that order. The stand stays up
- * after the run (`mcproc stop e2e` stops it).
+ * mcproc `e2e` profile (the SurrealDB stand, the `maildev-e2e` mailbox, the `gateway-e2e` gateway
+ * and the `caddy-e2e` front, which serves that build) started with `--reload`, so the apps
+ * already online restart too (a run never meets a stale stand either: the database and the
+ * mailbox start empty, the gateway and the front load the current code and configuration), each
+ * waited for in that order. The stand stays up after the run (`mcproc stop e2e` stops it).
  */
 
 import { spawnSync } from 'node:child_process'
@@ -74,6 +74,7 @@ export function prepareStand(who: string): boolean {
   const ready =
     mcproc('start', 'e2e', '--reload') === 0 &&
     waitFor('surrealdb-e2e', 'url-ok', 600) &&
+    waitFor('maildev-e2e', 'url-ok', 120) &&
     waitFor('gateway-e2e', 'url-ok', 120) &&
     waitFor('caddy-e2e', 'url-ok', 120)
 

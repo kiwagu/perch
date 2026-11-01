@@ -3,10 +3,13 @@
  * from another device and everywhere, and signing itself out with its own token.
  */
 
+import type { Mailbox } from '@workspace/mailbox'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { type Answer, call, callAs, postCredentials, type SignedIn } from './http'
+import { freshPassword } from './fresh-password'
+import { type Answer, call, callAs, postCredentials, type SignedIn, signUp } from './http'
+import { reported } from './reported-answer'
 import { check, hello, type Opened, refusal, refusedHello, step } from './steps'
 
 /**
@@ -33,7 +36,7 @@ const listedDevices = z.strictObject({
 async function listOf(base: string, signedIn: SignedIn) {
   const answer = await callAs(base, 'GET', '/devices', signedIn)
 
-  check(answer.status === 200, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+  check(answer.status === 200, `answered ${reported(answer)}`)
 
   return { devices: listedDevices.parse(answer.body).devices, raw: JSON.stringify(answer.body) }
 }
@@ -54,7 +57,7 @@ function signOut(base: string, token: string, device: string): Promise<Answer> {
 }
 
 /**
- * Device sessions, on a fresh identity with a laptop and a phone: a hello under a device with no
+ * Device sessions, on a fresh identity verified on a laptop and signed in on a phone: a hello under a device with no
  * session refused (4401) and a call that names no device refused (400); both devices listed, the
  * laptop as the current one; the phone signed out from the laptop (its socket closed with 4001,
  * its row showing when its session ended, its token's hello closed with 4401), then signed in
@@ -64,17 +67,21 @@ function signOut(base: string, token: string, device: string): Promise<Answer> {
  * laptop's old token is refused at hello, and a device signs itself out with its own token
  * (204, again 204, a made-up token 401).
  */
-export async function deviceSessionSteps(base: string, opened: Opened): Promise<void> {
+export async function deviceSessionSteps(
+  base: string,
+  mailbox: Mailbox,
+  opened: Opened,
+): Promise<void> {
   const credentials = {
     email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
+    password: freshPassword(),
   }
   const signIn = (id: string, label: string) =>
     postCredentials(base, '/auth/sign-in/email', { ...credentials, device: { id, label } })
   const { laptop, phone } = await step(
-    'devices: signed up on a laptop, signed in on a phone',
+    'devices: signed up and verified on a laptop, signed in on a phone',
     async () => ({
-      laptop: await postCredentials(base, '/auth/sign-up/email', {
+      laptop: await signUp(base, mailbox, {
         ...credentials,
         device: { id: 'smoke-laptop', label: 'Smoke laptop' },
       }),
@@ -100,7 +107,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
 
     check(
       answer.status === 400 && refusal.safeParse(answer.body).data?.code === 'bad-request',
-      `answered ${answer.status} ${JSON.stringify(answer.body)}`,
+      `answered ${reported(answer)}`,
     )
   })
 
@@ -131,7 +138,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
     async () => {
       const answer = await callAs(base, 'DELETE', `/devices/${phoneRow.id}`, laptop)
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
 
       const { code } = await sockets.phone.closed
       const ended = (await devicesOf(base, laptop)).find((device) => device.id === phoneRow.id)
@@ -159,7 +166,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       const old = await callAs(base, 'GET', '/devices', phone)
 
       check(code === CLOSE.unauthorized, `the old token's hello closed with ${code}`)
-      check(refused(old), `the old token answered ${old.status} ${JSON.stringify(old.body)}`)
+      check(refused(old), `the old token answered ${reported(old)}`)
 
       const { device } = await hello(base, opened, again)
       const fresh = await callAs(base, 'GET', '/devices', again)
@@ -177,10 +184,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       const second = await signIn('smoke-tablet', 'Smoke tablet')
       const stale = await callAs(base, 'GET', '/devices', first)
 
-      check(
-        refused(stale),
-        `the first token answered ${stale.status} ${JSON.stringify(stale.body)}`,
-      )
+      check(refused(stale), `the first token answered ${reported(stale)}`)
 
       return { signedIn: second, socket: (await hello(base, opened, second)).device }
     },
@@ -191,7 +195,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
     async () => {
       const answer = await callAs(base, 'POST', '/auth/sign-out-everywhere', laptop)
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
 
       const codes = await Promise.all(
         [sockets.laptop, phoneAgain.socket, tablet.socket].map(
@@ -237,7 +241,7 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
       const answer = await signOut(base, desktop.token, desktop.device)
       const { code } = await device.closed
 
-      check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+      check(answer.status === 204, `answered ${reported(answer)}`)
       check(code === CLOSE.revoked, `closed with ${code}`)
     },
   )
@@ -245,12 +249,12 @@ export async function deviceSessionSteps(base: string, opened: Opened): Promise<
   await step('POST /auth/sign-out with the same token again: 204', async () => {
     const answer = await signOut(base, desktop.token, desktop.device)
 
-    check(answer.status === 204, `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(answer.status === 204, `answered ${reported(answer)}`)
   })
 
   await step('POST /auth/sign-out with a made-up token: 401', async () => {
     const answer = await signOut(base, crypto.randomUUID(), desktop.device)
 
-    check(refused(answer), `answered ${answer.status} ${JSON.stringify(answer.body)}`)
+    check(refused(answer), `answered ${reported(answer)}`)
   })
 }

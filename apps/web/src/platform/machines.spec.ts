@@ -28,8 +28,9 @@ import { createDevicesMachine } from '../features/device/application/devices.mac
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
-import { createSignInMachine } from '../features/user/application/sign-in.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
+import { createSignInMachine } from '../features/user/application/sign-in-machine'
+import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
 
 import { fakeSession } from './__fixtures__/session'
 
@@ -106,14 +107,13 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       remove: () => okAsync(undefined),
       current: () => undefined,
     }),
-  'user.sign-in': () =>
-    createSignInMachine(
-      new SignInService(
-        fakeSession().session,
-        { createProfile: () => okAsync(undefined) },
-        { createSettings: () => okAsync(undefined) },
-      ),
-    ),
+  'user.sign-in': () => createSignInMachine(new SignInService(fakeSession().session)),
+  'user.verify-email': () =>
+    createVerifyEmailMachine({
+      token: 't',
+      verify: () => okAsync({ kind: 'verified-before' }),
+      resend: () => okAsync(undefined),
+    }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),

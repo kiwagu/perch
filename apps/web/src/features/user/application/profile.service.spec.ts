@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthUser } from '@workspace/data'
 import { type ProfileId, profileIdFactory } from '@workspace/ids'
 
-import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
+import {
+  openTestSession,
+  signUpVerified,
+  type TestSession,
+} from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
@@ -23,7 +27,12 @@ beforeEach(async () => {
     commands: profileCommands,
   })
   me = (
-    await session.signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann' })
+    await signUpVerified(session, opened.auth, {
+      email: 'ann@example.test',
+      password: 'Secret-ann1',
+      name: 'Ann',
+      locale: 'en',
+    })
   )._unsafeUnwrap()
   profileId = profileIdFactory.create()
 

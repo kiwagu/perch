@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { getAuthTables } from 'better-auth/db'
+import { okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { authOptions } from './auth-instance'
@@ -45,6 +46,9 @@ describe("the committed schema matches Better Auth's for our options", () => {
       baseURL: 'http://localhost/backend/auth',
       trustedOrigins: [],
       clock: { now: () => 0, schedule: () => () => {} },
+      publicUrl: 'http://localhost',
+      mail: { send: () => okAsync(undefined) },
+      log: { error: () => {}, warn: () => {} },
     }),
   )
 

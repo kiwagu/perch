@@ -15,7 +15,7 @@ Where: [/sign-in] for a guest, then [/settings] after sign-up
 1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]
 2. Choose [value:dark] in [app-shell.theme-select]
 3. Reload the page and wait for [app-shell.status] to reach [state:ready]
-4. Sign up, click [app-shell.nav.settings-link] and wait for [user.settings.heading]
+4. Sign up, open the link of [mail:sign-up], click [app-shell.nav.settings-link] and wait for [user.settings.heading]
 5. Choose [value:light] in [app-shell.theme-select]
 
 ### Expected result

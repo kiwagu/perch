@@ -14,6 +14,8 @@
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/email": "workspace:*",
+    "@workspace/i18n": "workspace:*",
     "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",
     "@workspace/logger": "workspace:*",
@@ -21,10 +23,12 @@
     "@workspace/zod": "workspace:*",
     "better-auth": "catalog:",
     "neverthrow": "catalog:",
+    "nodemailer": "catalog:",
     "ts-pattern": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
+    "@workspace/mailbox": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

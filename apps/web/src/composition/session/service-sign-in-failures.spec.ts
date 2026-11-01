@@ -5,7 +5,7 @@ import { type DataError, dataError } from '@workspace/data'
 import { tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { fakeFetch, respond } from '../__fixtures__/gateway-fetch'
 import {
   type BrowserDatabases,
@@ -25,15 +25,18 @@ import {
   savedToken,
 } from '../storage'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann' }
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
   role: 'member',
 }
 
-/** The session token the fake gateway issues first: the one these sign-ins are given. */
-const ISSUED = 'token-1'
+/**
+ * The session token these sign-ins are given: the fake gateway issues the first to the device
+ * that opened the account's link elsewhere, the second to the sign-in.
+ */
+const ISSUED = 'token-2'
 
 const worlds: TestWorld[] = []
 
@@ -158,12 +161,14 @@ describe('a sign-in whose memberships cannot be read', () => {
       const storage = memoryStorage()
       const auth = fakeGatewayAuth()
 
+      expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+      auth.requests.splice(0)
       // The sign-out cannot reach the gateway either: the token waits in the queue.
       auth.answerSignOut(() => errAsync(unreachable()))
 
       const { fetcher, sent } = fakeFetch(answer)
       const tab = await world({ storage, auth, listMemberships: readThrough(fetcher) })
-      const failed = (await tab.session.signUp(annSignUp))._unsafeUnwrapErr()
+      const failed = (await tab.session.signIn(annSignUp))._unsafeUnwrapErr()
       const device = deviceIdFrom(storage)
 
       expect(failed.code).toBe(code)
@@ -191,12 +196,16 @@ describe('a sign-in whose memberships cannot be read', () => {
   it('forgets the token once the gateway signed it out', async () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
     const { fetcher } = fakeFetch(respond(500, { code: 'internal' }))
     const tab = await world({ storage, auth, listMemberships: readThrough(fetcher) })
 
-    expect((await tab.session.signUp(annSignUp))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect((await tab.session.signIn(annSignUp))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     await vi.waitFor(() => expect(pendingRevokes(storage)).toEqual([]))
-    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-up', 'sign-out'])
+    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-in', 'sign-out'])
     expectNobodySaved(storage)
     expect(tab.failures).toEqual([])
   })
@@ -206,12 +215,13 @@ describe('a sign-in whose memberships cannot be read', () => {
     const auth = fakeGatewayAuth()
     const failure = dataError('data:WRITE_FAILED', 'the gateway could not sign the token out (500)')
 
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.answerSignOut(() => errAsync(failure))
 
     const { fetcher } = fakeFetch(respond(401, { code: 'unauthorized' }))
     const tab = await world({ storage, auth, listMemberships: readThrough(fetcher) })
 
-    expect((await tab.session.signUp(annSignUp)).isErr()).toBe(true)
+    expect((await tab.session.signIn(annSignUp)).isErr()).toBe(true)
     await vi.waitFor(() => expect(tab.failures.splice(0)).toEqual([failure]))
     expect(pendingRevokes(storage)).toEqual([{ token: ISSUED, device: deviceIdFrom(storage) }])
     expect(JSON.stringify(failure)).not.toContain(ISSUED)
@@ -228,10 +238,8 @@ describe('a sign-in whose memberships cannot be read', () => {
       listMemberships: readThrough(fetcher),
     })
 
-    // Ann's account, made on another device: it was given the first token.
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    // Ann's account, verified on another device: it was given the first token.
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
 
     expect((await tab.session.signIn(annSignUp))._unsafeUnwrapErr().code).toBe('data:OFFLINE')
@@ -242,13 +250,18 @@ describe('a sign-in whose memberships cannot be read', () => {
 
   it('saves the memberships it read, then opens the space with them', async () => {
     const storage = memoryStorage()
+    const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+
     const { fetcher, sent } = fakeFetch(respond(200, { memberships: [acme] }))
     const tab = await world({
       storage,
+      auth,
       online: false,
       listMemberships: readThrough(fetcher),
     })
-    const user = (await tab.session.signUp(annSignUp))._unsafeUnwrap()
+    const user = (await tab.session.signIn(annSignUp))._unsafeUnwrap()
 
     expect(sent).toHaveLength(1)
     expect(savedToken(storage)).toBe(ISSUED)
@@ -262,15 +275,13 @@ describe('a sign-in whose space does not open', () => {
   it("fails with the open's error, keeps nobody signed in and has the new token signed out", async () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
-    // Ann's account, made on another device: it was given the first token.
-    const made = (
-      await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })
-    )._unsafeUnwrap()
+    // Ann's account, verified on another device: it was given the first token.
+    const made = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
     auth.requests.splice(0)
     auth.answerSignOut(() => errAsync(unreachable()))
 
-    const tab = await world({ storage, auth, refusedIdentities: [made.identity.id] })
+    const tab = await world({ storage, auth, refusedIdentities: [made.id] })
     const failed = (await tab.session.signIn(annSignUp))._unsafeUnwrapErr()
     const device = deviceIdFrom(storage)
 
@@ -289,9 +300,7 @@ describe('a sign-in whose space does not open', () => {
     const { storage, ops } = brokenStorage({ remove: ['perch.session.identity'] })
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -333,9 +342,7 @@ describe('a sign-in whose space does not open', () => {
     }
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -358,6 +365,10 @@ describe('a sign-in whose space does not open', () => {
   it('an open that throws once the space opened: keeps the device with the token its space uses, and signs nothing out', async () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
     const tab = await world({ storage, auth, online: false })
 
     // A subscriber breaks as it hears the identity, its text naming the token.
@@ -367,7 +378,7 @@ describe('a sign-in whose space does not open', () => {
       }
     })
 
-    const failed = (await tab.session.signUp(annSignUp))._unsafeUnwrapErr()
+    const failed = (await tab.session.signIn(annSignUp))._unsafeUnwrapErr()
 
     // The identity's lock turns the throw into the open's own failure.
     expect(failed.code).toBe('data:OPEN_FAILED')
@@ -377,7 +388,7 @@ describe('a sign-in whose space does not open', () => {
     expect(tab.session.current()?.email).toBe(annSignUp.email)
     expect(savedToken(storage)).toBe(ISSUED)
     expect(pendingRevokes(storage)).toEqual([])
-    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-up'])
+    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-in'])
   })
 
   it.each([
@@ -388,9 +399,7 @@ describe('a sign-in whose space does not open', () => {
     async (outcome, code) => {
       const storage = memoryStorage()
       const auth = fakeGatewayAuth()
-      const made = (
-        await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })
-      )._unsafeUnwrap()
+      const made = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
       auth.requests.splice(0)
 
@@ -425,7 +434,7 @@ describe('a sign-in whose space does not open', () => {
 
       expect((await signingIn)._unsafeUnwrapErr().code).toBe(code)
       expect(savedToken(storage)).toBe('token-2')
-      expect(savedIdentity(storage)?.id).toBe(made.identity.id)
+      expect(savedIdentity(storage)?.id).toBe(made.id)
       expect(pendingRevokes(storage)).toEqual([])
       expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-in'])
     },
@@ -480,9 +489,7 @@ describe('a sign-in that throws while it holds its token', () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -496,9 +503,7 @@ describe('a sign-in that throws while it holds its token', () => {
     const { storage } = brokenStorage({ set: ['perch.session.identity'] })
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -515,9 +520,7 @@ describe('a sign-in that throws while it holds its token', () => {
   it("a save that throws before its token landed: leaves another tab's token of the account alone", async () => {
     const { storage } = brokenStorage({ set: ['perch.session.token'] })
     const auth = fakeGatewayAuth()
-    const made = (
-      await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })
-    )._unsafeUnwrap()
+    const made = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
     auth.requests.splice(0)
     unreachableSignOuts(auth)
@@ -525,14 +528,14 @@ describe('a sign-in that throws while it holds its token', () => {
     storage.changeElsewhere('perch.session.token', 'token-of-the-other-tab')
     storage.changeElsewhere(
       'perch.session.identity',
-      JSON.stringify({ id: made.identity.id, email: made.identity.email }),
+      JSON.stringify({ id: made.id, email: made.email }),
     )
 
     const tab = await world({ storage, auth, online: false })
 
     expect((await tab.session.signIn(annSignUp))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
     expect(savedToken(storage)).toBe('token-of-the-other-tab')
-    expect(savedIdentity(storage)?.id).toBe(made.identity.id)
+    expect(savedIdentity(storage)?.id).toBe(made.id)
     expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
   })
 
@@ -545,9 +548,7 @@ describe('a sign-in that throws while it holds its token', () => {
     })
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -580,9 +581,7 @@ describe('a sign-in that throws while it holds its token', () => {
     })
     const auth = fakeGatewayAuth()
 
-    expect(
-      (await auth.signUp(annSignUp, { id: 'elsewhere', label: 'Edge on Windows' })).isOk(),
-    ).toBe(true)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 

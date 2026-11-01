@@ -47,7 +47,7 @@ export interface SessionOptions {
     token: string,
     device: string,
   ) => ResultAsync<readonly Membership[], DataError>
-  /** The label a sign-up or sign-in gives this browser, next to its own id: "Chrome on Linux". */
+  /** The label a sign-in or verification gives this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
   /** Whether the browser says it has a network: only then is a token left to sign out sent unasked. */
   readonly online: () => boolean

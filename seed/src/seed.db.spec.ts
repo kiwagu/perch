@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { Mailbox } from '@workspace/mailbox'
 import type { ClientOptions, Fetcher } from '@workspace/web/seeding'
 import { z } from '@workspace/zod'
 
@@ -14,11 +15,11 @@ import { leftOnStand, membersIn } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
 import { openStand, runSeed, type StandTarget, sweep } from './seed'
 
-// The e2e stand: its gateway creates the accounts, and its SurrealDB, reached as root, is
-// where the sweep runs. The spec sweeps only the demo accounts it seeds, so the suites that
-// share the stand (the gateway's smoke test, the e2e specs) keep their own accounts.
-// `bun run test:db` runs the suite through `mcproc exec`, which sets both addresses and the
-// origin of the stand's front from the manifest's vars.
+// The e2e stand: its gateway creates the accounts, its mailbox receives their verification
+// mails, and its SurrealDB, reached as root, is where the sweep runs. The spec sweeps only the
+// demo accounts it seeds, so the suites that share the stand (the gateway's smoke test, the e2e
+// specs) keep their own accounts. `bun run test:db` runs the suite through `mcproc exec`, which
+// sets the addresses and the origin of the stand's front from the manifest's vars.
 const stand = z
   .object({
     GATEWAY_URL: z.url({
@@ -36,6 +37,11 @@ const stand = z
       error:
         "must be the http(s):// origin of the e2e stand's front; run the suite with bun run test:db",
     }),
+    MAILBOX_URL: z.url({
+      protocol: /^https?$/,
+      error:
+        "must be the http(s):// address of the e2e stand's mailbox; run the suite with bun run test:db",
+    }),
   })
   .parse(process.env)
 const target: StandTarget = {
@@ -48,6 +54,9 @@ const target: StandTarget = {
 
 const demo: SeedMode = { kind: 'demo' }
 
+/** The stand's mailbox, where the seed reads each new account's verification link. */
+const mailbox = new Mailbox(stand.MAILBOX_URL)
+
 const emails = catalog.accounts.map((preset) => accountFor(preset, demo).email)
 
 // An account that is no seed account of the demo, and the organisation it creates: swept at the end.
@@ -55,23 +64,23 @@ const run = Date.now().toString(36)
 const outsider = {
   run,
   email: `outsider.${run}@example.test`,
-  password: 'outsider-seed-password',
+  password: 'Seed-outsider-password-1',
   name: 'Outsider Example',
   bio: 'Creates an organisation that the seed does not.',
   locale: 'en',
 } as const
 
-// An account that keeps the session token it signed up with while the stand is opened as its
-// operator.
+// An account that keeps the session token its first verification gave while the stand is opened
+// as its operator.
 const keyholder = {
   name: 'Keyholder Example',
   email: `keyholder.${run}@example.test`,
-  password: 'keyholder-seed-password',
+  password: 'Seed-keyholder-password-1',
   device: { id: `seed-keyholder-${run}`, label: 'Seed spec' },
 } as const
 
-/** What a sign-up answers, as far as this spec reads it: the session token the device keeps. */
-const signedUp = z.object({ token: z.string() })
+/** What a first verification answers, as far as this spec reads it: the session token the device keeps. */
+const verified = z.object({ token: z.string() })
 
 /**
  * The running test's client of the stand's gateway: each test is a simulated client with a
@@ -84,6 +93,7 @@ beforeEach(({ task }) => {
   client = {
     gatewayUrl: target.gatewayUrl,
     fetcher: simulatedFront(task.name, stand.GATEWAY_PUBLIC_URL),
+    inbox: mailbox,
   }
 })
 
@@ -94,24 +104,36 @@ afterAll(async () => {
 
 describe("the stand's operator", () => {
   it('leaves the sessions the gateway opened live when it opens the stand', async () => {
-    const answer = await client.fetcher(`${target.gatewayUrl}/auth/sign-up/email`, {
+    const seen = await mailbox.count(keyholder.email)
+    const signUp = await client.fetcher(`${target.gatewayUrl}/auth/sign-up/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: keyholder.name,
+        email: keyholder.email,
+        password: keyholder.password,
+        locale: 'en',
+      }),
+    })
+
+    // The status first, so a refusal (a limit's 429 among them) fails with its status, not a parse.
+    expect(signUp.status).toBe(202)
+
+    // The link of its verification mail signs this device in, the first time.
+    const link = await mailbox.verificationToken(keyholder.email, seen)
+    const answer = await client.fetcher(`${target.gatewayUrl}/auth/verify-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Perch-Device': keyholder.device.id,
         'X-Perch-Device-Label': keyholder.device.label,
       },
-      body: JSON.stringify({
-        name: keyholder.name,
-        email: keyholder.email,
-        password: keyholder.password,
-      }),
+      body: JSON.stringify({ token: link }),
     })
 
-    // The status first, so a refusal (a limit's 429 among them) fails with its status, not a parse.
     expect(answer.status).toBe(200)
 
-    const { token } = signedUp.parse(await answer.json())
+    const { token } = verified.parse(await answer.json())
     const opened = (await openStand(target))._unsafeUnwrap()
 
     await opened.close()
@@ -129,7 +151,7 @@ describe('seeding through the gateway', () => {
   it('seeds the accounts through the gateway, and a second device sees them', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
+    const manifest = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
 
     for (const preset of catalog.accounts) {
       const account = accountFor(preset, mode)
@@ -149,7 +171,7 @@ describe('seeding through the gateway', () => {
   it('seeds acme with its administrator and member, and a second device of the member sees it', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
+    const manifest = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
     const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
     const [ann, beto] = ['ann', 'beto'].map((ref) => {
       const preset = catalog.accounts.find((account) => account.ref === ref)
@@ -180,9 +202,9 @@ describe('seeding through the gateway', () => {
   it('runs twice without duplicating anything', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const first = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
+    const first = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
     const before = await leftOnStand(target, first)
-    const second = (await runSeed({ ...target, mode, fetcher: client.fetcher }))._unsafeUnwrap()
+    const second = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
 
     expect(second).toEqual(first)
     expect(before).toMatchObject({
@@ -200,7 +222,7 @@ describe('seeding through the gateway', () => {
 
   it('finds an organisation of its key only as its administrator', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    expect((await runSeed({ ...target, mode: demo, fetcher: client.fetcher })).isOk()).toBe(true)
+    expect((await runSeed({ ...target, mode: demo, ...client })).isOk()).toBe(true)
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
     const account = accountFor(ann ?? expect.unreachable('a preset ann'), demo)
     const organisation = { key: `mbr_${outsider.run}`, name: 'Outside member' }
@@ -214,9 +236,7 @@ describe('seeding through the gateway', () => {
 
   it('sweeps seeded identities with their profiles, settings, region rows, memberships and organisation databases', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    const manifest = (
-      await runSeed({ ...target, mode: demo, fetcher: client.fetcher })
-    )._unsafeUnwrap()
+    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
     const annId = manifest.accounts['ann']?.id ?? expect.unreachable('the account ann')
     const outside = `out_${outsider.run}`

@@ -31,7 +31,7 @@ test.describe('Choose the theme of this device from the frame, as a guest and si
       await expect(theme).toHaveAttribute('data-value', 'dark')
     })
 
-    await test.step('4. Sign up, click [app-shell.nav.settings-link] and wait for [user.settings.heading]', async () => {
+    await test.step('4. Sign up, open the link of [mail:sign-up], click [app-shell.nav.settings-link] and wait for [user.settings.heading]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.settings-link').click()
       await expect(page.getByTestId('user.settings.heading')).toBeVisible()

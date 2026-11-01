@@ -3,17 +3,27 @@ import { bearer } from 'better-auth/plugins'
 
 import type { LocalDb } from '@workspace/data'
 import { surrealAuthAdapter } from '@workspace/data/better-auth-adapter'
+import { SUPPORTED_LOCALES } from '@workspace/i18n/translator'
+import { PASSWORD_LENGTH } from '@workspace/kernel'
 import type { Clock } from '@workspace/replica'
+import { z } from '@workspace/zod'
 
+import type { MailPort } from '../mail'
+
+import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
 import { hashPassword, verifyPassword } from './password-hash'
 import { sessionHooks } from './session-hooks'
+import { verificationMailer } from './verification-mail'
 
 /**
  * How long a session lives after its sign-in, and again after each time its device is seen: the
  * instance and the gateway's own extension of a session (`DeviceSessions.seen`) both use it.
  */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
+
+/** How long a verification link verifies, in seconds: a day. */
+export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60
 
 export interface AuthInstanceOptions {
   /** The directory database. */
@@ -28,6 +38,12 @@ export interface AuthInstanceOptions {
   readonly baseURL: string
   readonly trustedOrigins: readonly string[]
   readonly clock: Clock
+  /** The front's origin, with no trailing slash: the base of the links the mails carry. */
+  readonly publicUrl: string
+  /** Where the account mails go. */
+  readonly mail: MailPort
+  /** Where Better Auth's errors, and the mails that did not go out, are reported by their codes. */
+  readonly log: AuthLog
 }
 
 /** The options Better Auth runs with; also what the schema check reads. */
@@ -41,8 +57,43 @@ export function authOptions(options: AuthInstanceOptions) {
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
+      // A new password's length, as the rules of a new password set it (the auth mount checks
+      // the rest at sign-up). Better Auth checks it on a new password only, never at a sign-in, so
+      // an account whose password was set before the rules still signs in.
+      minPasswordLength: PASSWORD_LENGTH.min,
+      maxPasswordLength: PASSWORD_LENGTH.max,
+      // No session before the email is verified: a sign-up answers with no token, a taken email
+      // as a new one, and a sign-in of an unverified account is refused after its password.
+      requireEmailVerification: true,
     },
-    user: AUTH_MODELS.user,
+    emailVerification: {
+      // Every sign-up sends the mail; a taken email's sends none.
+      sendOnSignUp: true,
+      // A sign-in of an unverified account sends nothing; the person asks for the mail again.
+      sendOnSignIn: false,
+      // The first verification signs the device that opened the link in; a link opened again
+      // verifies nothing and signs nothing in.
+      autoSignInAfterVerification: true,
+      expiresIn: VERIFICATION_LINK_LIFETIME_S,
+      sendVerificationEmail: verificationMailer({
+        mail: options.mail,
+        directory: options.local,
+        publicUrl: options.publicUrl,
+        log: options.log,
+      }),
+    },
+    user: {
+      ...AUTH_MODELS.user,
+      additionalFields: {
+        // The language the account signed up in: its mails speak it until its settings name one.
+        locale: {
+          type: 'string',
+          required: false,
+          input: true,
+          validator: { input: z.enum(SUPPORTED_LOCALES) },
+        },
+      },
+    },
     session: {
       ...AUTH_MODELS.session,
       additionalFields: {
@@ -74,6 +125,10 @@ export function authOptions(options: AuthInstanceOptions) {
     // refuses an address's 21st request however slowly the 20 before it came; the auth mount
     // applies the gateway's fixed windows instead.
     rateLimit: { enabled: false },
+    // Better Auth's own words and arguments never reach the log: an error is a code and a fixed
+    // message, and a failure that is not its own answer is answered an empty 500.
+    logger: authLogger(options.log),
+    onAPIError: { onError: authErrorReporter(options.log) },
     databaseHooks: { session: sessionHooks(options.clock, options.local) },
   } satisfies Parameters<typeof betterAuth>[0]
 }

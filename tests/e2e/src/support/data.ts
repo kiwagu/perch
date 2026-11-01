@@ -20,6 +20,8 @@ export const generate = {
     }),
   email: (): string => generate.account().email,
   password: (): string => generate.account().password,
+  /** A password of its own for every call, unlike `password`, which every account shares. */
+  otherPassword: (): string => `Other-password-1-${run()}`,
   name: (): string => `${preset?.name ?? 'E2E User'} ${run()}`,
   newName: (): string => `Renamed ${run()}`,
   bio: (): string => `Bio written in run ${run()}`,

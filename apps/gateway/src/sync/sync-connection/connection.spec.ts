@@ -22,10 +22,16 @@ import {
 import { RegionHub } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
 
-import { deviceHeaders, openAuth, signUpOn } from '../../auth/__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  deviceHeaders,
+  openAuth,
+  signUpOn,
+} from '../../auth/__fixtures__/auth-instance'
 import { authHandler } from '../../auth/auth-handler'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { NAMESPACE } from '../../config'
+import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
@@ -160,7 +166,12 @@ async function openGateway(options: GatewayOptions = {}) {
   })
 
   // Sessions end on the clock of Better Auth's hooks, which lies behind the system clock.
-  const sessions = new AuthSessions({ auth: opened.auth, directory: local, clock: opened.clock })
+  const sessions = new AuthSessions({
+    auth: opened.auth,
+    directory: local,
+    clock: opened.clock,
+    secret: AUTH_SECRET,
+  })
   const connections = new ConnectionRegistry({ onFailure: (error) => reported.push(error) })
   const organisations = new Organisations({
     directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,
@@ -170,12 +181,15 @@ async function openGateway(options: GatewayOptions = {}) {
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
-  /** The gateway's mount of Better Auth's sign-up and sign-in, over the same registry. */
-  const authRoute = authHandler(
-    opened.auth,
-    new RequestLimits({ clock: opened.clock }),
+  /** The gateway's mount of Better Auth's sign-in, over the same registry. */
+  const authRoute = authHandler({
+    auth: opened.auth,
+    sessions,
+    limits: new RequestLimits({ clock: opened.clock }),
     connections,
-  )
+    clock: opened.clock,
+    accounts: new KeyedTurns<string>(),
+  })
 
   return {
     clock,
@@ -193,14 +207,17 @@ async function openGateway(options: GatewayOptions = {}) {
         new Request('http://127.0.0.1:4000/auth/sign-in/email', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ email, password: 'pass-word-1' }),
+          body: JSON.stringify({ email, password: 'Pass-word-1' }),
         }),
         '203.0.113.7',
       )
 
       return response?.status
     },
-    /** Signs `email` up on `device`: the identity, and the raw session token the sign-up gave. */
+    /**
+     * Signs `email` up and verifies it on `device`: the identity, and the raw token of the session
+     * the verification signed in.
+     */
     signUp: async ({ email }: { readonly email: string }, device: string = DEVICE) => {
       const { token, user } = await signUpOn(opened.auth, email, deviceHeaders(device))
 

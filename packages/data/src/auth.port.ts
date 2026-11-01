@@ -6,11 +6,16 @@ export interface AuthUser {
   readonly email: string
 }
 
-/** What an account is signed up with: its email, its password and the account's own name. */
+/**
+ * What an account is signed up with: its email, its password, the account's own name, and its
+ * language.
+ */
 export interface SignUpInput {
   readonly email: string
   readonly password: string
   readonly name: string
+  /** The language the account's mails speak and its settings start with: one of the app's languages. */
+  readonly locale: string
 }
 
 export interface SignInInput {

@@ -12,7 +12,7 @@ Where: [/settings] by [app-shell.nav.settings-link]
 ## Scenario: A signed-in user chooses the dark theme and Spanish, and both stay after a reload
 
 ### Steps
-1. Sign up, click [app-shell.nav.settings-link] and wait for [user.settings.heading]
+1. Sign up, open the link of [mail:sign-up], click [app-shell.nav.settings-link] and wait for [user.settings.heading]
 2. Choose [value:dark] in [user.settings.theme-select]
 3. Choose [value:es] in [user.settings.locale-select]
 4. Reload the page and wait for [app-shell.status] to reach [state:ready]

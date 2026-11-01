@@ -15,7 +15,7 @@ Where: [/$] for a guest, then for a signed-in account
 ### Steps
 1. Open the unknown address and wait for [app-shell.status] to reach [state:ready]
 2. Click [not-found.page.sign-in-link]
-3. Sign up and wait for [/me], then open the unknown address again
+3. Sign up, open the link of [mail:sign-up] and wait for [/me], then open the unknown address again
 4. Click [not-found.page.profile-link]
 
 ### Expected result
