@@ -120,6 +120,31 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen whose every route declares that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
+
+  A mail that only tells is a notice, and an action declares the ones it sends under
+  `notices`, a list. A `mail` carries a token the user acts on; a notice carries none, so
+  nothing in it acts: a password changed, an email changed. Each notice has a `name`,
+  kebab-case and unique within the action; `to` and `language`, as a mail's, where `account` is
+  the account the action acts on, its email as it was before the action changed anything (a
+  notice of a changed email goes to the old address); and, when it has one, a plain `link` to
+  a `screen`, never with a `search`. A password-changed notice links to the reset of a
+  password, for an owner who did not change it:
+
+  ```yaml
+  reset-password:
+    # description, params, result, codes
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.reset-password }
+  ```
+
+  `account` is reserved on an action that sends a notice too. The check holds `to` and
+  `language` as a mail's, wants the names unique within the action, and holds a link to a
+  screen with a route, every route of which needs no parameter, as the link carries none (no
+  `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
+  names a notice by its action and its name, `[notice:reset-password.password-changed]`.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -819,7 +844,8 @@ Where: [/me] then [user.profile.save-button]
 Brackets reference the contract, and the contract check resolves each one: `[<anchor>]` (a
 declared anchor, or one derived from a declared base with a suffix it lists), `[/path]` (the
 path of a binding), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and
-`[mail:<action>]` (a platform action that declares the mail it sends).
+`[mail:<action>]` (a platform action that declares the mail it sends) and
+`[notice:<action>.<name>]` (a notice of that name the platform action declares).
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: user/base/edit-profile-name`, with one `test.step` per step.
@@ -854,7 +880,9 @@ gap is fixed in the contract files first, never worked around in a test.
   code and both answers that runs no action of its own; every mail a platform action declares
   goes to a parameter of the action or the account, takes its language from a parameter or
   the account, and links to a screen whose every route declares the search parameter that
-  carries its token; the versions agree; the generated schemas
+  carries its token; every notice it declares has a name no other notice of the action has,
+  goes and takes its language as a mail does, and links, when it does, to a screen whose
+  every route needs no parameter; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, the activity it names
   exists, and every device acts as a role of the vocabulary.
@@ -972,7 +1000,8 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the derived parts, the codes and the error fields the anchors both sides hold gain or
-lose, and the
+lose, the
+notices of the platform actions added or removed, and the
 transitions added or removed in each activity both sides hold), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
@@ -1001,7 +1030,8 @@ takes an anchor removed and one added for a rename when they are the only ones o
 screen and kind. The derived parts of an anchor are listed by name,
 `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input). The codes and the
 error fields of an anchor are those the loader gives it,
-written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. The tests are in this repository, so the same change updates them, and
+written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. A notice is listed
+by its action and its name, `<action>.<name>`. The tests are in this repository, so the same change updates them, and
 the consumers check fails until it does.
 
 ## Asking for a missing anchor

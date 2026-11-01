@@ -519,3 +519,29 @@ const eye = page.getByTestId('user.sign-in.password-input.visibility-button')
 await eye.click()
 await expect(eye).toHaveAttribute('data-value', 'hide')
 ```
+
+## 14. A notice mail
+
+A platform action that changes what protects an account tells its owner, by a mail that
+carries no token: a notice. A `mail` is something to act on (a link with a token); a notice
+only tells, and at most links plainly to a screen. The action lists its notices by name
+under `notices`, beside its `mail` when it has one. `to: account` is the account's email as
+it was before the action changed anything, so the confirmed change of an email tells the old
+address. This example is illustrative, not a file of the app:
+
+```yaml
+confirm-email-change:
+  # description, params (token), result, codes
+  notices:
+    - name: email-changed
+      to: account
+      language: account
+      link: { screen: user.reset-password }
+```
+
+The link of a notice opens a screen whose every route needs no parameter, and never carries a
+`search`. A scenario names the notice by its action and its name:
+
+```markdown
+- [notice:confirm-email-change.email-changed] reaches the old address
+```
