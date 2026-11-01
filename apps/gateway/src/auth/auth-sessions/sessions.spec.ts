@@ -53,7 +53,7 @@ function callerOf(read: SessionRead): SessionCaller {
  */
 async function annsLinkToken(opened: Awaited<ReturnType<typeof harness>>): Promise<string> {
   await opened.auth.api.signUpEmail({
-    body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+    body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
     headers: deviceHeaders('laptop'),
   })
 
@@ -102,7 +102,7 @@ describe('AuthSessions', () => {
     await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
 
     const { headers, response } = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
       returnHeaders: true,
     })
@@ -159,7 +159,7 @@ describe('AuthSessions', () => {
     const { auth, clock, sessions } = await harness()
     const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone'),
     })
     const bob = await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
@@ -200,11 +200,11 @@ describe('AuthSessions', () => {
     const { auth, local, clock, sessions } = await harness()
     const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone'),
     })
     const tablet = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('tablet'),
     })
     const bob = await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))

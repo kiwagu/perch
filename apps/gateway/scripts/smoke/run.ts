@@ -23,6 +23,7 @@ import { profileCreate, profileRename } from '../../src/sync/__fixtures__/profil
 import { accessSteps } from './access'
 import type { SmokeDevice } from './device'
 import { deviceSessionSteps } from './device-sessions'
+import { freshPassword } from './fresh-password'
 import { postCredentials, type SignedIn, signUp } from './http'
 import { organisationSteps } from './organisation'
 import { check, hello, type Opened, refusedHello, step, takeUpdates, unwrap } from './steps'
@@ -111,7 +112,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   const mailbox = new Mailbox(config.MAILBOX_URL)
   const credentials = {
     email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
+    password: freshPassword(),
   }
   const first = await step('signed up, verified through the mail on device 1', () =>
     signUp(base, mailbox, {

@@ -5,6 +5,7 @@ import { type Membership, membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { noteCreate, noteDelete, noteUpdate } from '../../../src/sync/__fixtures__/note'
+import { freshPassword } from '../fresh-password'
 import { callAs, postCredentials, type SignedIn, signUp } from '../http'
 import { reported } from '../reported-answer'
 import { check, hello, type Opened, step, takeUpdates, unwrap } from '../steps'
@@ -56,7 +57,7 @@ export async function organisationSteps(
   const guest: SignedIn = await step('signed up a second identity: no memberships', async () => {
     const signedUp = await signUp(base, mailbox, {
       email: `smoke-${crypto.randomUUID()}@example.test`,
-      password: crypto.randomUUID(),
+      password: freshPassword(),
       device: { id: 'smoke-guest-device', label: 'Smoke guest' },
     })
     const answer = await callAs(base, 'GET', '/organisations', signedUp)

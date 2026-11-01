@@ -207,7 +207,7 @@ async function openGateway(options: GatewayOptions = {}) {
         new Request('http://127.0.0.1:4000/auth/sign-in/email', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ email, password: 'pass-word-1' }),
+          body: JSON.stringify({ email, password: 'Pass-word-1' }),
         }),
         '203.0.113.7',
       )

@@ -11,7 +11,7 @@ import { AuthSessions } from './auth-sessions'
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
 
-const PASSWORD = 'pass-word-1'
+const PASSWORD = 'Pass-word-1'
 
 const laptop = { id: 'laptop', label: 'Firefox on Linux' }
 

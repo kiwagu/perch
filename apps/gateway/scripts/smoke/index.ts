@@ -1,3 +1,4 @@
+export { freshPassword } from './fresh-password'
 export {
   type Answer,
   type Credentials,

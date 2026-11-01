@@ -1,9 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { interceptQueries } from '@workspace/data/testing'
+
+import { linkToken } from '../../mail/__fixtures__/outbox'
+import { deviceHeaders } from '../__fixtures__/auth-instance'
+import { hashPassword } from '../password-hash'
+
 import {
+  ANN,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   resendRequest,
+  signInRequest,
   signUpRequest,
 } from './__fixtures__/mount'
 import { SIGN_UP_FLOOR_MS } from './sign-up'
@@ -111,4 +119,167 @@ describe('authHandler, the sign-up', () => {
     ).toBe(400)
     expect(closes).toEqual([])
   })
+})
+
+/** Passwords that break the rules of a new password, each by what it lacks or holds. */
+const BREAKING = [
+  ['nothing typed', ''],
+  ['9 characters', 'Abcdefg1!'],
+  ['36 characters', `Abcdefghij1!${'k'.repeat(24)}`],
+  ['a space', 'Abcdefg hij1!'],
+  ['an accented letter', 'Abcdefg\u00e9hij1!'],
+  ['no digit', 'Abcdefghij!!'],
+  ['no uppercase letter', 'abcdefghij1!'],
+  ['no lowercase letter', 'ABCDEFGHIJ1!'],
+  ['no symbol', 'Abcdefghij12'],
+] as const
+
+/** How long a test waits for real sign-ups to reach the floor: argon2 is slow on a busy host. */
+const ARGON2_WAIT = { timeout: 10_000 }
+
+describe('authHandler, the rules of a new password', () => {
+  it.each(BREAKING)(
+    'refuses a password with %s at once, 400 weak-password, Better Auth not asked',
+    async (_, password) => {
+      const { route, clock, received } = mountedOnFakeAuth(accepted)
+      const answer = await route(signUpRequest(ANN, password), FROM)
+
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code: 'weak-password' })
+      expect(received).toEqual([])
+      // No floor holds a refusal back.
+      expect(clock.pending()).toBe(0)
+    },
+  )
+
+  it("refuses it without waiting for the email's turn", async () => {
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { route, clock, received } = mountedOnFakeAuth(async () => {
+      await held
+
+      return accepted()
+    })
+    // A sign-up of the email is under way, holding its turn.
+    const first = route(signUpRequest(ANN), FROM)
+
+    await vi.waitFor(() => expect(received).toHaveLength(1))
+
+    const weak = await route(signUpRequest(ANN, 'pass-word-1'), FROM)
+
+    expect(weak?.status).toBe(400)
+    expect(received).toHaveLength(1)
+
+    release()
+    await vi.waitFor(() => expect(clock.pending()).toBe(1))
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await first)?.status).toBe(202)
+  })
+
+  it('asks the directory nothing for a password that breaks a rule, and leaves the email free', async () => {
+    const queries: string[] = []
+    const { route, clock, outbox, sessions } = await mountedOnRealAuth({
+      directory: (local) =>
+        interceptQueries(local, (text) => {
+          queries.push(text)
+        }),
+    })
+
+    queries.splice(0)
+
+    expect((await route(signUpRequest(ANN, 'abcdefghij'), FROM))?.status).toBe(400)
+    expect(queries).toEqual([])
+    expect(outbox.to(ANN)).toEqual([])
+    expect((await sessions.identityOf(ANN))._unsafeUnwrap()).toBeUndefined()
+
+    // The same email signs up once its password keeps the rules.
+    const up = route(signUpRequest(ANN, 'Abcdefghij1!'), FROM)
+
+    await vi.waitFor(() => expect(clock.pending()).toBe(1), ARGON2_WAIT)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
+    await outbox.next(ANN)
+  })
+
+  it.each([
+    ['10', 'Abcdefgh1!'],
+    ['35', `Ab1!${'c'.repeat(31)}`],
+  ])(
+    'accepts a password of %s characters that keeps every rule, Better Auth agreeing',
+    async (_, password) => {
+      const { route, clock, outbox } = await mountedOnRealAuth()
+      const up = route(signUpRequest(ANN, password), FROM)
+
+      await vi.waitFor(() => expect(clock.pending()).toBe(1), ARGON2_WAIT)
+      await clock.advance(SIGN_UP_FLOOR_MS)
+      expect((await up)?.status).toBe(202)
+      await outbox.next(ANN)
+    },
+  )
+
+  it('signs up, verifies and signs in with a password of quotes, slashes and braces, exactly as typed', async () => {
+    // Each symbol a runtime could read as syntax: a backslash, a slash, both quotes, angle
+    // brackets, a backtick, a dollar sign, braces and a semicolon. A password is data all the way:
+    // JSON on the wire, an argon2id hash at once.
+    const password = ['Ab1', '\\', '/', '"', "'", '<', '>', '`', '$', '{', '}', ';', 'x'].join('')
+    const { auth, route, clock, outbox } = await mountedOnRealAuth()
+
+    expect(password).toHaveLength(15)
+
+    const up = route(signUpRequest(ANN, password), FROM)
+
+    await vi.waitFor(() => expect(clock.pending()).toBe(1), ARGON2_WAIT)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
+    await auth.api.verifyEmail({
+      query: { token: linkToken(await outbox.next(ANN)) },
+      headers: deviceHeaders('laptop'),
+    })
+
+    expect((await route(signInRequest(ANN, password, 'laptop'), FROM))?.status).toBe(200)
+
+    // The same password with one symbol swapped for another is another password.
+    for (const [symbol, swapped] of [
+      ['\\', '/'],
+      ['"', "'"],
+      ['<', '>'],
+      ['$', ';'],
+    ] as const) {
+      const other = password.replace(symbol, swapped)
+
+      expect(other).not.toBe(password)
+      expect((await route(signInRequest(ANN, other, 'laptop'), FROM))?.status).toBe(401)
+    }
+  })
+
+  it.each([
+    ['8 characters', 'old-pass'],
+    ['128 characters', 'p'.repeat(128)],
+  ])(
+    'signs an account whose password was set before the rules in, its password of %s',
+    async (_, password) => {
+      const { auth, route } = await mountedOnRealAuth()
+      const context = await auth.$context
+      const user = await context.internalAdapter.createUser<{ readonly locale: string }>({
+        email: ANN,
+        name: 'Ann',
+        emailVerified: true,
+        locale: 'en',
+      })
+
+      await context.internalAdapter.linkAccount({
+        userId: user.id,
+        providerId: 'credential',
+        accountId: user.id,
+        password: await hashPassword(password),
+      })
+
+      const answer = await route(signInRequest(ANN, password, 'laptop'), FROM)
+
+      expect(answer?.status).toBe(200)
+      expect(await answer?.json()).toMatchObject({ user: { id: user.id, email: ANN } })
+    },
+  )
 })

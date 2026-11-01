@@ -4,6 +4,7 @@ import { bearer } from 'better-auth/plugins'
 import type { LocalDb } from '@workspace/data'
 import { surrealAuthAdapter } from '@workspace/data/better-auth-adapter'
 import { SUPPORTED_LOCALES } from '@workspace/i18n/translator'
+import { PASSWORD_LENGTH } from '@workspace/kernel'
 import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -56,6 +57,11 @@ export function authOptions(options: AuthInstanceOptions) {
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
+      // A new password's length, as the rules of a new password set it (the auth mount checks
+      // the rest at sign-up). Better Auth checks it on a new password only, never at a sign-in, so
+      // an account whose password was set before the rules still signs in.
+      minPasswordLength: PASSWORD_LENGTH.min,
+      maxPasswordLength: PASSWORD_LENGTH.max,
       // No session before the email is verified: a sign-up answers with no token, a taken email
       // as a new one, and a sign-in of an unverified account is refused after its password.
       requireEmailVerification: true,

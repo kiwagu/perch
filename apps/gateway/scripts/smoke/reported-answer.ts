@@ -26,6 +26,7 @@ const REPORTED_CODES: ReadonlySet<string> = new Set([
   'rate-limited',
   'self',
   'unauthorized',
+  'weak-password',
   // Better Auth's, passed on by the auth mount.
   'EMAIL_NOT_VERIFIED',
   'FAILED_TO_CREATE_SESSION',

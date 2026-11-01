@@ -7,6 +7,7 @@ import type { Mailbox } from '@workspace/mailbox'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { freshPassword } from './fresh-password'
 import { type Answer, call, callAs, postCredentials, type SignedIn, signUp } from './http'
 import { reported } from './reported-answer'
 import { check, hello, type Opened, refusal, refusedHello, step } from './steps'
@@ -73,7 +74,7 @@ export async function deviceSessionSteps(
 ): Promise<void> {
   const credentials = {
     email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
+    password: freshPassword(),
   }
   const signIn = (id: string, label: string) =>
     postCredentials(base, '/auth/sign-in/email', { ...credentials, device: { id, label } })

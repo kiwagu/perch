@@ -160,7 +160,7 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
    * laptop and on her phone: each device's token, and the mount's answers.
    */
   const annOnTwoDevices = async () => {
-    const credentials = { email: ANN, password: 'pass-word-1' }
+    const credentials = { email: ANN, password: 'Pass-word-1' }
 
     await signUpOn(opened.auth, ANN, deviceHeaders('laptop'))
 
@@ -200,7 +200,7 @@ describe('authHandler', () => {
     const { route, received, clock } = mountedOnFakeAuth(() =>
       Response.json({ token: null, user: {} }),
     )
-    const body = JSON.stringify({ name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' })
+    const body = JSON.stringify({ name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' })
     const sent = new Request('http://gateway.test/auth/sign-up/email?callbackURL=%2F', {
       method: 'POST',
       headers: {
@@ -522,7 +522,7 @@ describe('authHandler', () => {
 
   it("reaches Better Auth's sign-up and sign-in from the path the gateway receives", async () => {
     const { auth, clock, outbox, send } = await overBetterAuth()
-    const credentials = { email: ANN, password: 'pass-word-1' }
+    const credentials = { email: ANN, password: 'Pass-word-1' }
     const up = send('POST', '/auth/sign-up/email', 'laptop', {
       body: { name: 'Ann', ...credentials },
     })
@@ -561,7 +561,7 @@ describe('authHandler', () => {
 
   it('keeps a locked email locked when a sign-in body names it only when read as a form', async () => {
     const { auth, send } = await overBetterAuth()
-    const credentials = { email: ANN, password: 'pass-word-1' }
+    const credentials = { email: ANN, password: 'Pass-word-1' }
     const signIn = (body: object | string, contentType?: string, from = FROM) =>
       send('POST', '/auth/sign-in/email', 'laptop', {
         body,
@@ -701,7 +701,7 @@ describe('authHandler', () => {
     const unnamed = new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: ANN, password: 'pass-word-1' }),
+      body: JSON.stringify({ email: ANN, password: 'Pass-word-1' }),
     })
 
     expect((await route(unnamed, FROM))?.status).toBe(200)
@@ -710,7 +710,7 @@ describe('authHandler', () => {
 
   it('closes the sockets of the device each sign-in Better Auth accepts, and none for a sign-up or wrong credentials', async () => {
     const { auth, clock, outbox, send, closes } = await overBetterAuth()
-    const credentials = { email: ANN, password: 'pass-word-1' }
+    const credentials = { email: ANN, password: 'Pass-word-1' }
     const up = send('POST', '/auth/sign-up/email', 'laptop', {
       body: { name: 'Ann', ...credentials },
     })
@@ -754,7 +754,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
   const EMAIL = 'marker-ann@example.test'
   const FAILURE = `MARKER the directory failed for ${EMAIL} with tok_MARKER_0123`
   const MARKED = /MARKER|marker-ann/i
-  const credentials = { email: EMAIL, password: 'pass-word-1' }
+  const credentials = { email: EMAIL, password: 'Pass-word-1' }
 
   /** The mount over Better Auth, whose queries matching `failing.pattern` fail with `FAILURE`. */
   async function failing() {

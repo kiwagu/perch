@@ -108,7 +108,7 @@ export function deviceHeaders(id: string, label = 'Firefox on Linux'): Headers {
 }
 
 /**
- * Signs `email` up (the password `pass-word-1` unless `options` names one) and verifies it through
+ * Signs `email` up (the password `Pass-word-1` unless `options` names one) and verifies it through
  * the mail the sign-up sent, which signs in the device the headers name, as a person opening the
  * link on it does.
  */
@@ -129,7 +129,7 @@ export async function signUpOn(
     body: {
       name: options.name ?? 'Ann',
       email,
-      password: options.password ?? 'pass-word-1',
+      password: options.password ?? 'Pass-word-1',
       locale: options.locale ?? 'en',
     },
     headers,

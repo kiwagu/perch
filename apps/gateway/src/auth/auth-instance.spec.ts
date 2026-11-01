@@ -118,6 +118,30 @@ describe('createAuthInstance', () => {
     expect(accounts[0]?.identity).toBe(user.id)
   })
 
+  it("holds a new password to the length of the password rules, 10 to 35 characters, as Better Auth's own limits", async () => {
+    const { auth, outbox } = await instance()
+    const signUp = (email: string, password: string) =>
+      auth.api.signUpEmail({
+        body: { name: 'Ann', email, password },
+        headers: deviceHeaders('laptop'),
+      })
+
+    await expect(signUp('short@example.test', 'Abcdefg1!')).rejects.toMatchObject({
+      status: 'BAD_REQUEST',
+      body: { code: 'PASSWORD_TOO_SHORT' },
+    })
+    await expect(signUp('long@example.test', `Ab1!${'c'.repeat(32)}`)).rejects.toMatchObject({
+      status: 'BAD_REQUEST',
+      body: { code: 'PASSWORD_TOO_LONG' },
+    })
+    await signUp('shortest@example.test', 'Abcdefgh1!')
+    await signUp('longest@example.test', `Ab1!${'c'.repeat(31)}`)
+    await outbox.next('shortest@example.test')
+    await outbox.next('longest@example.test')
+    expect(outbox.to('short@example.test')).toEqual([])
+    expect(outbox.to('long@example.test')).toEqual([])
+  })
+
   it('binds the device and its label to the session row at sign-up', async () => {
     const { auth, local } = await instance()
 
@@ -137,7 +161,7 @@ describe('createAuthInstance', () => {
 
     await expect(
       auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: new Headers({ origin: 'http://localhost' }),
       }),
     ).rejects.toMatchObject({ status: 'BAD_REQUEST' })
@@ -151,7 +175,7 @@ describe('createAuthInstance', () => {
 
     const endedAt = new Date(clock.now())
     const again = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -170,7 +194,7 @@ describe('createAuthInstance', () => {
     const first = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const signIn = () =>
       auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders('laptop'),
       })
 
@@ -207,7 +231,7 @@ describe('createAuthInstance', () => {
     const first = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const signIn = () =>
       auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders('laptop'),
       })
 
@@ -312,13 +336,13 @@ describe('createAuthInstance', () => {
     const { auth } = await instance()
     const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone'),
     })
     // Another identity on a device of the same id.
     const bobs = await signUpOn(auth, 'bob@example.test', deviceHeaders('laptop'))
     const again = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -390,11 +414,11 @@ describe('createAuthInstance', () => {
 
     const firstEnd = new Date(clock.now())
     const laptopAgain = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone'),
     })
 
@@ -452,8 +476,8 @@ describe('createAuthInstance', () => {
     expect(
       (
         await ask('/change-password', {
-          currentPassword: 'pass-word-1',
-          newPassword: 'pass-word-2',
+          currentPassword: 'Pass-word-1',
+          newPassword: 'Pass-word-2',
           revokeOtherSessions: true,
         })
       ).status,
@@ -466,7 +490,7 @@ describe('createAuthInstance', () => {
     const { auth, outbox, local } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -497,11 +521,11 @@ describe('createAuthInstance', () => {
     await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
 
     const taken = await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'Ann@Example.test', password: 'pass-word-2' },
+      body: { name: 'Ann', email: 'Ann@Example.test', password: 'Pass-word-2' },
       headers: deviceHeaders('phone'),
     })
     const fresh = await auth.api.signUpEmail({
-      body: { name: 'Bob', email: 'bob@example.test', password: 'pass-word-1' },
+      body: { name: 'Bob', email: 'bob@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('desk'),
     })
 
@@ -539,7 +563,7 @@ describe('createAuthInstance', () => {
     expect(new Set(signedUp.map(({ user }) => user.id)).size).toBe(people.length)
 
     const again = await auth.api.signInEmail({
-      body: { email: 'user-3@example.test', password: 'pass-word-1' },
+      body: { email: 'user-3@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('device-3-again'),
     })
 
@@ -565,7 +589,7 @@ describe('createAuthInstance', () => {
 
     const refused = (email: string) =>
       auth.api.signUpEmail({
-        body: { name: 'Ann', email, password: 'pass-word-1' },
+        body: { name: 'Ann', email, password: 'Pass-word-1' },
         headers: deviceHeaders('desk'),
       })
     const settled = await Promise.allSettled([
@@ -607,7 +631,7 @@ describe('createAuthInstance, the verification of an email', () => {
   it('signs nothing in at sign-up and sends one mail, in the language signed up in', async () => {
     const { auth, outbox, local } = await instance()
     const answer = await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1', locale: 'es' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1', locale: 'es' },
       headers: deviceHeaders('laptop'),
     })
     const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
@@ -621,14 +645,14 @@ describe('createAuthInstance, the verification of an email', () => {
     const { auth, outbox } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
     await outbox.next('ann@example.test')
 
     await expect(
       auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders('laptop'),
       }),
     ).rejects.toMatchObject({ status: 'FORBIDDEN', body: { code: 'EMAIL_NOT_VERIFIED' } })
@@ -639,7 +663,7 @@ describe('createAuthInstance, the verification of an email', () => {
     const { auth, outbox } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1', locale: 'es' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1', locale: 'es' },
       headers: deviceHeaders('laptop'),
     })
     await outbox.next('ann@example.test')
@@ -662,14 +686,14 @@ describe('createAuthInstance, the verification of an email', () => {
     const { auth, outbox } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 
     expect((await outbox.next('ann@example.test')).subject).toBe('Confirm your email for Perch')
     await expect(
       auth.api.signUpEmail({
-        body: { name: 'Bob', email: 'bob@example.test', password: 'pass-word-1', locale: 'fr' },
+        body: { name: 'Bob', email: 'bob@example.test', password: 'Pass-word-1', locale: 'fr' },
         headers: deviceHeaders('desk'),
       }),
     ).rejects.toMatchObject({ status: 'BAD_REQUEST' })
@@ -679,7 +703,7 @@ describe('createAuthInstance, the verification of an email', () => {
     const { auth, outbox, local } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 
@@ -717,7 +741,7 @@ describe('createAuthInstance, the verification of an email', () => {
     const { auth, outbox } = await instance()
 
     await auth.api.signUpEmail({
-      body: { name: 'Ann', email: 'ann@example.test', password: 'pass-word-1' },
+      body: { name: 'Ann', email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
 

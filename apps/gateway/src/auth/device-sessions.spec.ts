@@ -94,7 +94,7 @@ const ENDINGS: ReadonlyArray<readonly [string, (ending: Ending) => Promise<void>
     'a new sign-in of its device',
     async ({ auth }) => {
       await auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders('laptop'),
       })
     },
@@ -174,7 +174,7 @@ describe('DeviceSessions', () => {
     const { auth, clock, devices } = await harness()
     const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop', 'Laptop'))
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone', 'Phone'),
     })
     const ann = identityOf(laptop.user.id)
@@ -197,7 +197,7 @@ describe('DeviceSessions', () => {
     const { auth, local, clock, devices } = await harness()
     const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const phone = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('phone'),
     })
     const bob = await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
@@ -238,7 +238,7 @@ describe('DeviceSessions', () => {
     const first = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
     const signIn = (device: string) =>
       auth.api.signInEmail({
-        body: { email: 'ann@example.test', password: 'pass-word-1' },
+        body: { email: 'ann@example.test', password: 'Pass-word-1' },
         headers: deviceHeaders(device),
       })
     const phone = await signIn('phone')
@@ -292,7 +292,7 @@ describe('DeviceSessions', () => {
 
     // Signing the laptop in again ends its first session now.
     const again = await auth.api.signInEmail({
-      body: { email: 'ann@example.test', password: 'pass-word-1' },
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
       headers: deviceHeaders('laptop'),
     })
     const ended = (await devices.byToken(first.token))._unsafeUnwrap()

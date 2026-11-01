@@ -20,7 +20,7 @@ import { createGatewayRoot, type GatewayRoot } from './root'
 /** The device Ann signs up on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
 
-const ann = { email: 'ann@example.test', password: 'pass-word-1' }
+const ann = { email: 'ann@example.test', password: 'Pass-word-1' }
 
 /** The auth secret of these tests. Test-only. */
 const AUTH_SECRET = 'test-secret-0123456789-0123456789-0123456789'

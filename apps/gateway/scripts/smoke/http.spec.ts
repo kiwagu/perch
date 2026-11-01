@@ -109,7 +109,7 @@ describe('call', () => {
 describe('the sign-up and sign-in of the smoke: nothing of an answer they did not expect is printed', () => {
   const credentials = {
     email: EMAIL,
-    password: 'pass-word-1',
+    password: 'Pass-word-1',
     device: { id: 'smoke-device', label: 'Smoke' },
   }
 

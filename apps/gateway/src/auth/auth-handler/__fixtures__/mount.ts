@@ -31,6 +31,9 @@ import { type AuthMountDeps, authHandler } from '../mount'
 /** The account most specs sign up and verify. */
 export const ANN = 'ann@example.test'
 
+/** The password most specs sign up with, which keeps the rules of a new password. */
+export const PASSWORD = 'Pass-word-1'
+
 /** The front's origin, which the browser names on every request. */
 export const ORIGIN = 'http://localhost'
 
@@ -39,9 +42,9 @@ export type Close = readonly [IdentityId, string | undefined, number]
 
 /**
  * A stand-in for Better Auth's handler: it keeps every request it is handed and answers each
- * with what `answer` makes of it.
+ * with what `answer` makes of it, once that settles.
  */
-export function fakeAuth(answer: (request: Request) => Response) {
+export function fakeAuth(answer: (request: Request) => Response | Promise<Response>) {
   const received: Request[] = []
 
   return {
@@ -89,7 +92,10 @@ export const noSessions: AuthMountDeps['sessions'] = {
  * The mount over a stand-in answering `answer`, with real limits on a manual clock and a stand-in
  * registry whose closes resolve once `closing` does.
  */
-export function mountedOnFakeAuth(answer: (request: Request) => Response, closing?: Promise<void>) {
+export function mountedOnFakeAuth(
+  answer: (request: Request) => Response | Promise<Response>,
+  closing?: Promise<void>,
+) {
   const clock = manualClock(1_000)
   const fake = fakeAuth(answer)
   const { closes, connections } = fakeConnections(closing)
@@ -192,19 +198,32 @@ export async function annsLink(outbox: Outbox, email = ANN): Promise<string> {
   const seen = outbox.to(email).length
 
   await auth.api.signUpEmail({
-    body: { name: 'Ann', email, password: 'pass-word-1', locale: 'en' },
+    body: { name: 'Ann', email, password: PASSWORD, locale: 'en' },
     headers: deviceHeaders('laptop'),
   })
 
   return linkToken(await outbox.next(email, seen))
 }
 
-/** A sign-up of `email`, as the web sends it from the front's origin. */
-export function signUpRequest(email: string): Request {
+/** A sign-up of `email` with `password`, as the web sends it from the front's origin. */
+export function signUpRequest(email: string, password = PASSWORD): Request {
   return new Request('http://gateway.test/auth/sign-up/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: ORIGIN },
-    body: JSON.stringify({ name: 'Ann', email, password: 'pass-word-1', locale: 'en' }),
+    body: JSON.stringify({ name: 'Ann', email, password, locale: 'en' }),
+  })
+}
+
+/** A sign-in of `email` with `password` from `device`, as the web sends it from the front's origin. */
+export function signInRequest(email: string, password: string, device: string): Request {
+  const headers = deviceHeaders(device)
+
+  headers.set('content-type', 'application/json')
+
+  return new Request('http://gateway.test/auth/sign-in/email', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ email, password }),
   })
 }
 

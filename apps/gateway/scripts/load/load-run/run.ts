@@ -16,6 +16,7 @@ import { hostname } from 'node:os'
 import { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
+import { freshPassword } from '../../smoke'
 import { LatencyBook, parseArgs, type StepReport } from '../metrics'
 
 import { closeDevices } from './devices'
@@ -62,7 +63,7 @@ export async function runLoadTest(
     args,
     base: `http://127.0.0.1:${args.gatewayPort}`,
     mailbox: new Mailbox(mailbox.data),
-    password: crypto.randomUUID(),
+    password: freshPassword(),
     book: new LatencyBook(),
     counters: { errors: 0, closes: 0, asked: 0, accepted: 0, other: 0, firstReject: undefined },
     sims: [],

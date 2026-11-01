@@ -346,12 +346,12 @@ describe("authHandler, Better Auth's refusals", () => {
     new Request('http://gateway.test/auth/sign-up/email', {
       method: 'POST',
       headers: deviceHeaders('laptop'),
-      body: JSON.stringify({ name: 'Ann', email: ANN, password: 'pass-word-1' }),
+      body: JSON.stringify({ name: 'Ann', email: ANN, password: 'Pass-word-1' }),
     }),
     new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
       headers: deviceHeaders('laptop'),
-      body: JSON.stringify({ email: ANN, password: 'pass-word-1' }),
+      body: JSON.stringify({ email: ANN, password: 'Pass-word-1' }),
     }),
     verify('a.link.token', 'phone'),
     resendRequest(ANN),

@@ -21,7 +21,7 @@ import { RequestLimits } from '../../limits/request-limits'
 import { Outbox } from '../../mail/__fixtures__/outbox'
 import { organisationRoutes } from '../organisation.routes'
 
-const PASSWORD = 'pass-word-1'
+const PASSWORD = 'Pass-word-1'
 
 /** An identity signed up on its device: its id and email, and its raw session token. */
 export interface SignedUp {

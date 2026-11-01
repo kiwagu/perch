@@ -99,7 +99,8 @@ the update; each device's next hello is then refused with 4401.
   simulated client address, of its own (21 sign-ins of unknown emails within 10 s, the 21st
   answered 429 with `Retry-After` by the gateway's limit per address; 11 wrong passwords for a
   further identity, the 11th answered 429 by its limit per email; a sign-up of a taken email
-  answered 202 with no body and the same headers as a new one's, and mailed nothing; an
+  answered 202 with no body and the same headers as a new one's, and mailed nothing; a sign-up
+  whose password breaks the rules of a new password answered 400 `weak-password`; an
   unverified account's sign-in answered 403 `EMAIL_NOT_VERIFIED`; a resend answered 202 for an
   unverified, a verified and an unknown email, mailing the unverified one only; a fourth resend
   of one email within 15 minutes answered 429 with `Retry-After`; a verification with a made-up

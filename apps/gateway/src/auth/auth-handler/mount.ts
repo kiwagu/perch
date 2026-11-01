@@ -62,8 +62,9 @@ const SERVED_PATHS: ReadonlySet<string> = new Set([
  *   resolved). A sign-up then takes one of the address's verification mails, whatever its email,
  *   and runs one email at a time (`signUp`): 202 with no body for every sign-up Better Auth
  *   accepts, a new, a taken or a concurrently taken email alike, no sooner than
- *   `SIGN_UP_FLOOR_MS` after the request began; 400 `bad-request` for a body that names no email;
- *   it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
+ *   `SIGN_UP_FLOOR_MS` after the request began; 400 `bad-request` for a body that names no email
+ *   or no password; 400 `weak-password` at once for a password that breaks the rules of a new
+ *   password, before its email's turn and Better Auth; it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
  *   the account, as Better Auth answers it without its cookies. It must first find a place among
  *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
  *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a

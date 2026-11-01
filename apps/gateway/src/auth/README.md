@@ -95,7 +95,7 @@ more) as `{ code: 'internal' }`: nothing of its message or the rest of its body,
 what was sent or what failed.
 
 No account signs in before its email is verified (`requireEmailVerification`). A sign-up takes
-`{ name, email, password }` (a password of 8 to 128 characters) and, optionally, `locale`, the
+`{ name, email, password }` and, optionally, `locale`, the
 language the person signs up in (`en` or `es`, any other answered 400; `en` when it names none),
 which the identity keeps. It signs nothing in: Better Auth writes the identity and its credential
 row in one transaction and mails the account its verification link (`sendOnSignUp`), and for an
@@ -110,9 +110,16 @@ whether the email has an account. One email's sign-ups run one at a time (the ac
 otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
 sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
 address's verification mails, whatever its email (429 when they are spent); a body that names no
-email answers 400 `bad-request`. Better Auth's refusals (a short password, a malformed email, a
-language the gateway does not speak) pass as their status and code alone; they do not depend on
-the email having an account. A sign-in takes `{ email, password }` with the device's headers and
+email or no password answers 400 `bad-request`. The password must keep the rules of a new
+password (`keepsPasswordRules` of `@workspace/kernel`: 10 to 35 characters, only Latin letters,
+digits and the 32 printable ASCII symbols, with at least one digit, one uppercase letter, one
+lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at once,
+before the email's turn, Better Auth and the directory, so the refusal reads nothing of the email.
+Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
+which it checks on a new password only: a sign-in checks no rule, so an account whose password was
+set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
+email, a language the gateway does not speak) pass as their status and code alone; they do not
+depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`, its `id` the
 identity's). An email is kept and matched in lower case, so an address in any case is one
 account. Wrong credentials answer 401; the right password of an account not verified yet answers

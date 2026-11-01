@@ -1,19 +1,24 @@
 /**
  * The credential steps of the smoke test, each from a device, so a simulated client address, of
  * its own: the limit of sign-ins per client address, the limit of failed sign-ins per email, a
- * sign-up of an email that already has an account, an unverified account's sign-in, the resend
+ * sign-up of an email that already has an account, a sign-up whose password breaks the rules of a
+ * new password, an unverified account's sign-in, the resend
  * of the verification mail and its limit per email, and the verification of a link.
  */
 
 import type { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
+import { freshPassword } from './fresh-password'
 import { type Answer, type Credentials, call, signUp } from './http'
 import { reported } from './reported-answer'
 import { check, step } from './steps'
 
 /** The answer of the gateway's limit that refused a request. */
 const rateLimited = z.object({ code: z.literal('rate-limited') })
+
+/** The answer to a sign-up whose password breaks the rules of a new password. */
+const weakPassword = z.object({ code: z.literal('weak-password') })
 
 /** What a first verification answers, as far as these steps read it. */
 const verifiedFirst = z.object({ token: z.string().min(1) })
@@ -55,7 +60,7 @@ function checkLimited(answers: readonly Answer[], status: number): Answer | unde
 
 /** A fresh account on the stand, as a device signs it up. */
 function freshAccount(): Pick<Credentials, 'email' | 'password'> {
-  return { email: `smoke-${crypto.randomUUID()}@example.test`, password: crypto.randomUUID() }
+  return { email: `smoke-${crypto.randomUUID()}@example.test`, password: freshPassword() }
 }
 
 /** A device of its own, so a simulated client address of its own, for one step. */
@@ -161,6 +166,19 @@ export async function accessSteps(base: string, mailbox: Mailbox): Promise<void>
       check((await mailbox.count(taken.email)) === mailed, 'the taken email was mailed')
     },
   )
+
+  await step('a sign-up whose password breaks the rules answers 400 weak-password', async () => {
+    const answer = await signUpOnly(
+      base,
+      { ...freshAccount(), password: 'abcdefghij' },
+      deviceNamed('weak-password'),
+    )
+
+    check(
+      answer.status === 400 && weakPassword.safeParse(answer.body).success,
+      `answered ${reported(answer)}`,
+    )
+  })
 
   await step("an unverified account's sign-in answers 403 EMAIL_NOT_VERIFIED", async () => {
     const account = freshAccount()
