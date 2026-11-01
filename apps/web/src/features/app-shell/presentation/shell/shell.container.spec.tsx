@@ -9,10 +9,12 @@ import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
 import { Input } from '@workspace/ui/components/ui/input'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { memoryInstall } from '../../../../platform/__fixtures__/install'
 import { fakeServices, fakeSession } from '../../../../platform/__fixtures__/session'
 import { memoryTheme } from '../../../../platform/__fixtures__/theme'
 import en from '../../../../platform/i18n/app.en.json'
 import es from '../../../../platform/i18n/app.es.json'
+import { InstallContext } from '../../../../platform/install'
 import { defineModule } from '../../../../platform/module'
 import { NoticeProvider } from '../../../../platform/notices'
 import { createAppRouter } from '../../../../platform/router'
@@ -23,7 +25,7 @@ import { settingsShape } from '../../../user/application/settings/settings.model
 import { CrashSignal } from '../crash/crash-signal'
 import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
-import { openedFrame } from './__fixtures__/frame'
+import { openedFrame, openingFrame } from './__fixtures__/frame'
 import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
@@ -72,11 +74,13 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={openedFrame()}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
@@ -109,11 +113,13 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={openedFrame()}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
@@ -177,11 +183,13 @@ describe('ShellContainer', () => {
     const app = (locale: Locale) => (
       <I18nProvider locale={locale} catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={frame}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>
     )
@@ -232,11 +240,13 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={openedFrame()}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
@@ -271,11 +281,13 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={theme}>
-          <ShellFrameContext.Provider value={openedFrame({ setTheme: theme.set })}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame({ setTheme: theme.set })}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
@@ -337,11 +349,13 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={frame}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
@@ -393,10 +407,11 @@ describe('ShellContainer', () => {
     options: { readonly guarded?: boolean; readonly refusedBefore?: boolean } = {},
   ) {
     const reload = vi.fn()
+    const install = memoryInstall()
     const { session: guest } = fakeSession()
     const session: SessionPort = { ...guest, protocolRefused: () => options.refusedBefore === true }
     const services = fakeServices(session)
-    const frame = openedFrame({ reload })
+    const frame = openedFrame({ reload, install })
     const shell = (
       <ShellContainer>
         <Outlet />
@@ -422,17 +437,19 @@ describe('ShellContainer', () => {
     render(
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <ShellFrameContext.Provider value={frame}>
-            <ServicesProvider services={services}>
-              <RouterProvider router={router} />
-            </ServicesProvider>
-          </ShellFrameContext.Provider>
+          <InstallContext.Provider value={install}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
         </ThemeContext.Provider>
       </I18nProvider>,
     )
     await screen.findByTestId('app-shell.nav')
 
-    return { services, frame, reload }
+    return { services, frame, reload, install }
   }
 
   /** The browser sends the tab to the background, or back to the front. */
@@ -547,5 +564,93 @@ describe('ShellContainer', () => {
     })
 
     await waitFor(() => expect(screen.queryByTestId('app-shell.sync-message')).toBeNull())
+  })
+
+  it("shows a signed-in account's screen while its data opens, and the platform's messages once open", async () => {
+    const install = memoryInstall()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const frame = openingFrame(ann.id, { install })
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={install}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    expect(screen.getByTestId('app-shell.status').getAttribute('data-state')).toBe('opening-data')
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+
+    act(() => {
+      install.offer('install-offered')
+      services.sync('synced')
+    })
+
+    expect(screen.queryByTestId('app-shell.install-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+
+    act(() => {
+      frame.actor.send({ type: 'platform.opened' })
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.status').getAttribute('data-state')).toBe('ready'),
+    )
+    expect((await screen.findByTestId('app-shell.install-message')).getAttribute('data-code')).toBe(
+      'install-available',
+    )
+    expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe('synced')
+
+    act(() => services.serveNewer('0.2.0+2b9a0c1d'))
+
+    expect((await screen.findByTestId('app-shell.update-message')).getAttribute('data-code')).toBe(
+      'new-version',
+    )
+  })
+
+  it("reminds to install the app at the browser's offer, puts it off, and installs it", async () => {
+    const { install } = await homeShell()
+
+    expect(screen.queryByTestId('app-shell.install-message')).toBeNull()
+
+    act(() => install.offer('install-offered'))
+
+    expect((await screen.findByTestId('app-shell.install-message')).getAttribute('data-code')).toBe(
+      'install-available',
+    )
+
+    await userEvent.click(screen.getByTestId('app-shell.install-later-button'))
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.install-message')).toBeNull())
+    expect(install.postponed()).toBe(1)
+
+    act(() => install.offer('install-offered'))
+    await userEvent.click(await screen.findByTestId('app-shell.install-button'))
+
+    await waitFor(() => expect(screen.queryByTestId('app-shell.install-message')).toBeNull())
+    expect(install.prompted()).toBe(1)
   })
 })

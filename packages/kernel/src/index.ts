@@ -23,6 +23,15 @@ export {
 } from './base-event'
 export { Entity } from './entity'
 export { ExceptionBase } from './exception'
+export {
+  checkPasswordRules,
+  keepsPasswordRules,
+  PASSWORD_LENGTH,
+  PASSWORD_RULES,
+  PASSWORD_SYMBOLS,
+  type PasswordRule,
+  type PasswordRulesKept,
+} from './password-rules'
 export { applyRules, type DomainRule, type RuleViolation } from './rules'
 export {
   type ChangeSpec,

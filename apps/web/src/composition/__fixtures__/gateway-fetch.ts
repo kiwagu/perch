@@ -6,6 +6,8 @@ export interface SentRequest {
   readonly method: string | undefined
   readonly authorization: string | null
   readonly device: string | null
+  /** The device's label, named only by a sign-up or sign-in. */
+  readonly label?: string
   readonly body: unknown
 }
 
@@ -17,12 +19,14 @@ export function fakeFetch(...answers: Array<() => Promise<Response>>) {
   const sent: SentRequest[] = []
   const fetcher: Fetcher = async (url, init) => {
     const headers = new Headers(init.headers)
+    const label = headers.get('X-Perch-Device-Label')
 
     sent.push({
       url,
       method: init.method,
       authorization: headers.get('Authorization'),
       device: headers.get('X-Perch-Device'),
+      ...(label === null ? {} : { label }),
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
     })
 

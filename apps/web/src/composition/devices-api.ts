@@ -1,7 +1,6 @@
 /**
- * The gateway's device routes over HTTP, called with the device's access token and its id
- * (`X-Perch-Device`): the identity's devices, signing one out, and signing out everywhere. A
- * refused token is renewed once through the sync leader and the call is made again.
+ * The gateway's device routes over HTTP, called with the device's session token and its id
+ * (`X-Perch-Device`): the identity's devices, signing one out, and signing out everywhere.
  */
 
 import { idSchemas } from '@workspace/ids'

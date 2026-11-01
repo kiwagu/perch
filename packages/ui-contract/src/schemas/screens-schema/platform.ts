@@ -16,6 +16,7 @@ import {
 } from '../../names.schema'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
+import { platformMailSchema } from './mail'
 
 const actionParameterSchema = z
   .strictObject({
@@ -33,6 +34,7 @@ const platformActionSchema = z
     result: z.string().describe('What holds once the action succeeds.'),
     codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
+    mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
   })
   .describe('One platform action.')
 

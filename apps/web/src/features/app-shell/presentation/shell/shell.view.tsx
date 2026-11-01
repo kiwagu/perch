@@ -22,8 +22,11 @@ export interface ShellLinkProps {
 }
 
 export interface ShellViewProps {
-  /** Where the start is: opening the data, ready, failed, or stopped because the browser keeps no site data. */
-  readonly status: 'opening' | 'ready' | 'failed' | 'storage-blocked'
+  /**
+   * Where the start is: starting, opening a signed-in account's data around its screen, ready,
+   * failed, or stopped because the browser keeps no site data.
+   */
+  readonly status: 'opening' | 'opening-data' | 'ready' | 'failed' | 'storage-blocked'
   readonly signedIn: boolean
   readonly activePath: string
   /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
@@ -63,6 +66,14 @@ export interface ShellViewProps {
   readonly onUpdate?: (() => void) | undefined
   /** The code the state of the sync shows for a signed-in account; none for a guest. */
   readonly sync?: SyncStatus | undefined
+  /** The code the reminder to install the app shows until it is installed or put off; none else. */
+  readonly install?: 'install-available' | 'install-by-steps' | undefined
+  /** Whether the frame's flow takes the install now: its button is enabled while it does. */
+  readonly canInstall?: boolean | undefined
+  readonly onInstall?: (() => void) | undefined
+  /** Whether the frame's flow takes the reminder put off now. */
+  readonly canPostponeInstall?: boolean | undefined
+  readonly onPostponeInstall?: (() => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -111,7 +122,8 @@ export function ShellView(props: ShellViewProps) {
     value: locale,
     label: locale === 'en' ? t('app.shell.locale.en') : t('app.shell.locale.es'),
   }))
-  // One status line: visually hidden once ready, the visible message otherwise.
+  // One status line: visually hidden once ready, the visible message otherwise (beside the screen
+  // while a signed-in account's data opens).
   const status = (
     <p
       className={props.status === 'ready' ? 'sr-only' : 'text-muted-foreground'}
@@ -121,7 +133,8 @@ export function ShellView(props: ShellViewProps) {
     >
       {match(props.status)
         .with('ready', () => t('app.shell.sync.local'))
-        .with('opening', () => t('app.shell.opening-db'))
+        .with('opening', () => t('app.shell.starting'))
+        .with('opening-data', () => t('app.shell.opening-db'))
         .with('storage-blocked', () => t('app.shell.storage-blocked'))
         .with('failed', () => t('app.shell.failed'))
         .exhaustive()}
@@ -214,8 +227,43 @@ export function ShellView(props: ShellViewProps) {
           </Button>
         </Alert>
       ) : null}
+      {props.status === 'ready' && props.install ? (
+        <Alert>
+          <AlertDescription data-testid="app-shell.install-message" data-code={props.install}>
+            {match(props.install)
+              .with('install-available', () => t('app.shell.install.available'))
+              .with('install-by-steps', () => t('app.shell.install.by-steps'))
+              .exhaustive()}
+          </AlertDescription>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {props.install === 'install-available' ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!props.canInstall}
+                onClick={props.onInstall}
+                data-testid="app-shell.install-button"
+              >
+                {t('app.shell.install.install')}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!props.canPostponeInstall}
+              onClick={props.onPostponeInstall}
+              data-testid="app-shell.install-later-button"
+            >
+              {t('app.shell.install.later')}
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+      {/* The notice and the toasts show once a signed-in account's data is open; a notice raised
+          before waits for it, and a toast raised before goes unseen. */}
       <div data-slot="notice" className="min-h-15 sm:min-h-10">
-        {props.notice ? (
+        {props.status === 'ready' && props.notice ? (
           <p
             className="text-sm text-muted-foreground"
             role="status"
@@ -227,7 +275,7 @@ export function ShellView(props: ShellViewProps) {
         ) : null}
       </div>
       <Toaster>
-        {(props.toasts ?? []).map((toast) => (
+        {(props.status === 'ready' ? (props.toasts ?? []) : []).map((toast) => (
           <Toast
             key={toast.id}
             data-testid="app-shell.toast"
@@ -268,7 +316,8 @@ export function ShellView(props: ShellViewProps) {
           </Button>
         </div>
       ) : null}
-      {props.status === 'ready' ? props.children : null}
+      {/* The screen renders once ready, and around a signed-in account's data while it opens. */}
+      {props.status === 'ready' || props.status === 'opening-data' ? props.children : null}
     </AppShell>
   )
 }

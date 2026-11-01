@@ -55,6 +55,7 @@ export { parseYaml } from './read-yaml'
 export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
+  ACCOUNT,
   type AnchorBinding,
   type AnchorDef,
   type Binding,
@@ -70,6 +71,7 @@ export {
   loadScreensWith,
   type ParamValue,
   type Platform,
+  type PlatformMail,
   type Screen,
   type ScreensFile,
 } from './screens'

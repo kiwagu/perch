@@ -12,7 +12,7 @@
         "id": "prf",
         "actions": {
           "createProfile": {
-            "description": "Creates the profile of a new account, at sign-up.",
+            "description": "Creates the profile of a new account, when its email is first verified, on the device that verified it.",
             "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" }
           },
           "updateName": {
@@ -68,14 +68,14 @@
     },
     "settings": {
       "type": "object",
-      "description": "The settings of an account: what the app is like for it, today its language. One row per account, created at sign-up, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
+      "description": "The settings of an account: what the app is like for it, today its language. One row per account, created when its email is first verified, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
       "x-perch": {
         "table": "settings",
         "region": "private",
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account, at sign-up, each with its starting value.",
+            "description": "Creates the settings of a new account, when its email is first verified, on the device that verified it, each with its starting value.",
             "params": { "id": "$id", "identity": "identity", "locale": "locale" }
           },
           "updateLocale": {

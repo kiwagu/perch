@@ -27,8 +27,19 @@ function frame(reloadedFor: string[] = []) {
     done: (update: string) => reloadedFor.includes(update),
     mark: (update: string) => void reloadedFor.push(update),
   }
+  const install = {
+    prompt: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    postpone: vi.fn<() => void>(),
+  }
   const actor = createActor(
-    createShellMachine({ values: () => values, signOutHere, reload, setTheme, selfReloads }),
+    createShellMachine({
+      values: () => values,
+      signOutHere,
+      reload,
+      setTheme,
+      selfReloads,
+      install,
+    }),
   ).start()
   const spoken: Locale[] = []
   const emitted: unknown[] = []
@@ -41,6 +52,7 @@ function frame(reloadedFor: string[] = []) {
     signOutHere,
     reload,
     setTheme,
+    install,
     spoken,
     emitted,
     signIn: (account = 'idn_ann') => {
@@ -65,14 +77,27 @@ function frame(reloadedFor: string[] = []) {
     type: (unsaved: boolean) => {
       values = { ...values, unsaved }
     },
+    /** The start ends: a guest's frame ready, a signed-in account's once its data opened too. */
+    open: () => {
+      actor.send({ type: 'platform.started' })
+      actor.send({ type: 'platform.opened' })
+    },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
     chooseTheme: (theme: Theme) => actor.send({ type: 'app-shell.theme-select', theme }),
     canChooseTheme: () =>
       actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'dark' }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
     canUpdate: () => actor.getSnapshot().can({ type: 'app-shell.update-button' }),
-    is: (state: 'ready' | 'failed' | 'crashed' | 'updating' | 'reloading') =>
-      actor.getSnapshot().matches(state),
+    is: (
+      state:
+        | 'opening-data'
+        | 'ready'
+        | 'failed'
+        | 'crashed'
+        | 'updating'
+        | 'reloading'
+        | 'installing',
+    ) => actor.getSnapshot().matches(state),
   }
 }
 
@@ -97,10 +122,10 @@ const sameAs = (event: unknown, expected: object): boolean =>
   JSON.stringify(event) === JSON.stringify(expected)
 
 describe('shell machine', () => {
-  it('opens the frame, or says the data failed or the browser keeps none', () => {
+  it('opens the frame, or says the start failed or the browser keeps none', () => {
     const opened = frame()
 
-    opened.actor.send({ type: 'platform.opened' })
+    opened.actor.send({ type: 'platform.started' })
 
     expect(opened.is('ready')).toBe(true)
 
@@ -118,6 +143,57 @@ describe('shell machine', () => {
     expect(blocked.canChoose()).toBe(false)
   })
 
+  it("renders a guest's screen once started, and a signed-in account's frame while its data opens", () => {
+    const guest = frame()
+
+    guest.actor.send({ type: 'platform.started' })
+
+    expect(guest.is('ready')).toBe(true)
+
+    const signedIn = frame()
+
+    signedIn.signIn()
+    signedIn.actor.send({ type: 'platform.started' })
+
+    expect(signedIn.is('opening-data')).toBe(true)
+
+    signedIn.actor.send({ type: 'platform.opened' })
+
+    expect(signedIn.is('ready')).toBe(true)
+  })
+
+  it("says a signed-in account's data failed while its frame was shown", () => {
+    const failed = frame()
+
+    failed.signIn()
+    failed.actor.send({ type: 'platform.started' })
+    failed.actor.send({ type: 'platform.open-failed' })
+
+    expect(failed.is('failed')).toBe(true)
+  })
+
+  it('takes a theme while the signed-in data opens, and no message, crash or language', () => {
+    const opening = frame()
+
+    opening.signIn()
+    opening.actor.send({ type: 'platform.started' })
+    opening.chooseTheme('dark')
+
+    expect(opening.setTheme).toHaveBeenCalledWith('dark')
+    expect(opening.canChoose()).toBe(false)
+    expect(opening.canUpdate()).toBe(false)
+
+    opening.actor.send({ type: 'platform.new-version', served: SERVED })
+    opening.actor.send({ type: 'platform.protocol-refused' })
+    opening.actor.send({ type: 'platform.synced' })
+    opening.actor.send({ type: 'platform.install-offered' })
+    opening.actor.send({ type: 'platform.crashed' })
+    opening.actor.send({ type: 'platform.change-rejected' })
+
+    expect(opening.is('opening-data')).toBe(true)
+    expect(opening.emitted).toEqual([])
+  })
+
   it('speaks a language chosen while the data opens, or failed to', () => {
     const shell = frame()
 
@@ -131,7 +207,7 @@ describe('shell machine', () => {
   it("speaks a guest's choice with nothing to store", () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.choose('es')
 
     expect(shell.is('ready')).toBe(true)
@@ -141,7 +217,7 @@ describe('shell machine', () => {
   it('takes no language from a signed-in account: its settings screen does', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.signIn()
     shell.store('en')
 
@@ -155,7 +231,7 @@ describe('shell machine', () => {
   it('clears the notice and the state of the sync when the account signs out', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.signIn()
     shell.actor.send({ type: 'platform.signed-out' })
 
@@ -176,7 +252,7 @@ describe('shell machine', () => {
       codes: ['changes-reloaded'],
     }
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.change-rejected' })
     shell.actor.send({ type: 'platform.changes-reloaded' })
 
@@ -186,7 +262,7 @@ describe('shell machine', () => {
   it('speaks a language stored that this device has not seen yet, once', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.signIn()
     shell.store('es')
     shell.store('es')
@@ -198,7 +274,7 @@ describe('shell machine', () => {
   it("takes this device's own writes coming back late for its own, a failed one too", () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.signIn()
     shell.store('en')
     // The settings screen stores es, then en, and en's store fails; es comes back late.
@@ -217,7 +293,7 @@ describe('shell machine', () => {
     const opening = frame()
 
     opening.chooseTheme('dark')
-    opening.actor.send({ type: 'platform.opened' })
+    opening.open()
     opening.chooseTheme('light')
     opening.signIn()
     opening.chooseTheme('system')
@@ -237,7 +313,7 @@ describe('shell machine', () => {
   it('applies a theme chosen around a crash, the message staying', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
     shell.chooseTheme('dark')
 
@@ -271,7 +347,7 @@ describe('shell machine', () => {
   it('says a screen that failed to render, and takes it away when another screen opens', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
 
     expect(shell.is('crashed')).toBe(true)
@@ -290,7 +366,7 @@ describe('shell machine', () => {
   it("renders the screen again in a guest's language chosen after a crash", () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
     shell.choose('es')
 
@@ -302,7 +378,7 @@ describe('shell machine', () => {
   it('loads the page again from the crash message', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
     shell.actor.send({ type: 'app-shell.reload-button' })
 
@@ -312,7 +388,7 @@ describe('shell machine', () => {
   it('offers to load a newer build the server serves, and loads it from the button', async () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.new-version', served: SERVED })
 
     expect(shell.emitted.at(-1)).toEqual(NEW_VERSION)
@@ -332,7 +408,7 @@ describe('shell machine', () => {
   it('says a protocol the server no longer takes, which a newer build heard later does not replace', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.new-version', served: SERVED })
     shell.actor.send({ type: 'platform.protocol-refused' })
 
@@ -348,7 +424,7 @@ describe('shell machine', () => {
     const reloadedFor: string[] = []
     const shell = frame(reloadedFor)
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     // No update waits yet.
     shell.actor.send({ type: 'platform.tab-hidden' })
 
@@ -373,7 +449,7 @@ describe('shell machine', () => {
   it('loads the page again by itself once per update: a server still serving it afterwards starts no loop', () => {
     const shell = frame([SERVED, 'protocol'])
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.new-version', served: SERVED })
     shell.actor.send({ type: 'platform.tab-hidden' })
 
@@ -392,7 +468,7 @@ describe('shell machine', () => {
   it('says an update around a crash, the crash message staying, and loads the page again', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
     shell.actor.send({ type: 'platform.protocol-refused' })
 
@@ -408,7 +484,7 @@ describe('shell machine', () => {
   it('loads the page again by itself around a crash too, when the tab goes to the background', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.actor.send({ type: 'platform.crashed' })
     shell.actor.send({ type: 'platform.new-version', served: SERVED })
     shell.actor.send({ type: 'platform.tab-hidden' })
@@ -436,7 +512,7 @@ describe('shell machine', () => {
   it('says the state of the sync the platform gives, around a crash too', () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.opened' })
+    shell.open()
     shell.signIn()
 
     for (const code of ['connecting', 'synced', 'sending', 'offline', 'sync-stopped'] as const) {
@@ -462,5 +538,62 @@ describe('shell machine', () => {
     failed.actor.send({ type: 'platform.open-failed' })
 
     expect(failed.actor.getSnapshot().can({ type: 'platform.offline' })).toBe(false)
+  })
+
+  it('reminds to install the app, installs it from the button, and puts it off from later', async () => {
+    const shell = frame()
+    const installShown = {
+      type: 'show',
+      anchor: 'app-shell.install-message',
+      codes: ['install-available'],
+    }
+    const installGone = { type: 'clear', anchor: 'app-shell.install-message' }
+
+    shell.open()
+    shell.actor.send({ type: 'platform.install-offered' })
+
+    expect(shell.emitted.at(-1)).toEqual(installShown)
+
+    shell.actor.send({ type: 'app-shell.install-button' })
+
+    expect(shell.is('installing')).toBe(true)
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.install.prompt).toHaveBeenCalledOnce()
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+
+    shell.actor.send({ type: 'platform.install-by-steps' })
+    shell.actor.send({ type: 'app-shell.install-later-button' })
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.install.postpone).toHaveBeenCalledOnce()
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+
+    shell.actor.send({ type: 'platform.installed' })
+
+    expect(shell.emitted.at(-1)).toEqual(installGone)
+  })
+
+  it('takes the reminder away when the browser shows no window after all', async () => {
+    const shell = frame()
+
+    shell.install.prompt.mockImplementation(() => Promise.reject(new Error('no window')))
+    shell.open()
+    shell.actor.send({ type: 'platform.install-offered' })
+    shell.actor.send({ type: 'app-shell.install-button' })
+    await waitFor(shell.actor, (state) => state.matches('ready'))
+
+    expect(shell.emitted.at(-1)).toEqual({ type: 'clear', anchor: 'app-shell.install-message' })
+  })
+
+  it('takes no install around a crash, while the data opens or once it failed to', () => {
+    const crashed = frame()
+
+    crashed.open()
+    crashed.actor.send({ type: 'platform.crashed' })
+
+    expect(crashed.actor.getSnapshot().can({ type: 'app-shell.install-button' })).toBe(false)
+    expect(crashed.actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
+    expect(frame().actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
   })
 })

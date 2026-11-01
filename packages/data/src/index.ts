@@ -1,14 +1,6 @@
 export type { Engines } from 'surrealdb'
 
-export { type AuthOptions, createAuth } from './auth'
-export {
-  AUTH,
-  type AuthPort,
-  type AuthTokens,
-  type AuthUser,
-  type SignInInput,
-  type SignUpInput,
-} from './auth.port'
+export type { AuthUser, SignInInput, SignUpInput } from './auth.port'
 export { CHANGE_EVENT, onChange, publishChange } from './changes'
 export { runCommand } from './commands'
 export { type DataError, type DataErrorCode, dataError } from './errors'

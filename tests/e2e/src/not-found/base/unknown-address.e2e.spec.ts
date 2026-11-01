@@ -27,7 +27,7 @@ test.describe('Open an address no page has', { tag: '@smoke' }, () => {
       await expect(page).toHaveURL(/\/sign-in$/)
     })
 
-    await test.step('3. Sign up and wait for [/me], then open the unknown address again', async () => {
+    await test.step('3. Sign up, open the link of [mail:sign-up] and wait for [/me], then open the unknown address again', async () => {
       await signUp(page)
       await page.goto(data.unknownAddress)
       await appReady(page)

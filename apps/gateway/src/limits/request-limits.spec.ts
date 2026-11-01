@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { idSchemas } from '@workspace/ids'
-import { RECONNECT_DELAYS_MS } from '@workspace/replica/sync'
 import { manualClock } from '@workspace/replica/testing'
 
 import { RequestLimits, type SignInAttempt, type SignInOutcome } from './request-limits'
@@ -18,6 +17,17 @@ function settle(attempt: SignInAttempt, outcome: SignInOutcome): void {
   }
 
   attempt.settle(outcome)
+}
+
+/** The client address the verification mails come from, unless a test names another. */
+const FROM = '203.0.113.7'
+
+/** Another client address, which nothing from `FROM` charges. */
+const ELSEWHERE = '203.0.113.8'
+
+/** The answers of `count` calls of `ask`, one after the other. */
+function answers<T>(count: number, ask: (n: number) => T): T[] {
+  return Array.from({ length: count }, (_, n) => ask(n))
 }
 
 function limitsOn() {
@@ -124,132 +134,6 @@ describe('RequestLimits', () => {
     }
   })
 
-  it('takes 10 renewals of one device within 15 minutes and refuses the 11th with the rest of the window', async () => {
-    const { clock, limits } = limitsOn()
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({ allowed: true })
-    }
-
-    await clock.advance(5 * minute)
-    expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({
-      allowed: false,
-      retryAfterMs: 10 * minute,
-    })
-    // Another device from the same address still renews.
-    expect(limits.renewal('203.0.113.7', 'device-phone')).toEqual({ allowed: true })
-    await clock.advance(10 * minute)
-    expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({ allowed: true })
-  })
-
-  it('takes 120 renewals of one address across devices within a minute and refuses the 121st', async () => {
-    const { clock, limits } = limitsOn()
-
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', `device-${attempt}`)).toEqual({ allowed: true })
-    }
-
-    await clock.advance(20_000)
-    expect(limits.renewal('203.0.113.7', 'device-120')).toEqual({
-      allowed: false,
-      retryAfterMs: 40_000,
-    })
-    expect(limits.renewal('203.0.113.8', 'device-121')).toEqual({ allowed: true })
-    await clock.advance(40_000)
-    expect(limits.renewal('203.0.113.7', 'device-122')).toEqual({ allowed: true })
-  })
-
-  it("leaves the address uncharged by a renewal its device's limit refuses", () => {
-    const { limits } = limitsOn()
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      limits.renewal('203.0.113.7', 'device-laptop')
-    }
-
-    // 110 refusals of the laptop take nothing of the address's 120.
-    for (let attempt = 0; attempt < 110; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', 'device-laptop').allowed).toBe(false)
-    }
-
-    for (let attempt = 0; attempt < 110; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', `device-${attempt}`)).toEqual({ allowed: true })
-    }
-
-    expect(limits.renewal('203.0.113.7', 'device-110').allowed).toBe(false)
-  })
-
-  it("leaves the device uncharged by a renewal its address's limit refuses", async () => {
-    const { clock, limits } = limitsOn()
-
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      limits.renewal('203.0.113.7', `device-${attempt}`)
-    }
-
-    // 20 refusals by the address take nothing of the laptop's 10.
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({
-        allowed: false,
-        retryAfterMs: minute,
-      })
-    }
-
-    await clock.advance(minute)
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      expect(limits.renewal('203.0.113.7', 'device-laptop')).toEqual({ allowed: true })
-    }
-
-    expect(limits.renewal('203.0.113.7', 'device-laptop').allowed).toBe(false)
-  })
-
-  it('lets 500 devices behind one address renew within 5 minutes with the client backoff, none left blocked', async () => {
-    const { clock, limits } = limitsOn()
-    const start = clock.now()
-    const nat = '203.0.113.7'
-    /** When each device that has not renewed yet says hello again, and how often it was refused. */
-    const waiting = new Map<string, { at: number; refused: number }>()
-
-    for (let device = 0; device < 500; device += 1) {
-      waiting.set(`device-${device}`, { at: start, refused: 0 })
-    }
-
-    while (waiting.size > 0) {
-      const next = Math.min(...Array.from(waiting.values(), (hello) => hello.at))
-
-      if (next > start + 5 * minute) {
-        break
-      }
-
-      await clock.advance(next - clock.now())
-
-      for (const [device, hello] of waiting) {
-        if (hello.at !== next) {
-          continue
-        }
-
-        if (limits.renewal(nat, device).allowed) {
-          waiting.delete(device)
-        } else {
-          // The client's reconnect after a 1013 close: the next delay of its backoff.
-          const last = RECONNECT_DELAYS_MS.length - 1
-
-          hello.at = next + (RECONNECT_DELAYS_MS[Math.min(hello.refused, last)] ?? 0)
-          hello.refused += 1
-        }
-      }
-    }
-
-    expect(waiting.size).toBe(0)
-
-    // Each device kept its own limit while the address refused it: from an address of its own,
-    // it still renews.
-    for (let device = 0; device < 500; device += 1) {
-      const address = `198.18.${Math.floor(device / 256)}.${device % 256}`
-
-      expect(limits.renewal(address, `device-${device}`)).toEqual({ allowed: true })
-    }
-  })
-
   it('takes 30 invitations of one identity within 10 minutes, from any addresses, and refuses the 31st with the rest of the window', async () => {
     const { clock, limits } = limitsOn()
 
@@ -331,6 +215,75 @@ describe('RequestLimits', () => {
     expect(limits.createOrganisation(identity(3), '203.0.113.8')).toEqual({ allowed: true })
     await clock.advance(45 * minute)
     expect(limits.createOrganisation(identity(4), '203.0.113.7')).toEqual({ allowed: true })
+  })
+
+  it('takes three resends of an email within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
+    const { clock, limits } = limitsOn()
+
+    expect(answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))).toEqual(
+      answers(3, () => ({ allowed: true })),
+    )
+    await clock.advance(5 * minute)
+    expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({
+      allowed: false,
+      retryAfterMs: 10 * minute,
+    })
+    // The address took three of its 200: 197 more fit, the refused resend's place given back.
+    expect(answers(197, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(197, () => true),
+    )
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+  })
+
+  it('takes 200 verification mails of one address within 15 minutes, sign-ups and resends together, and refuses the 201st of either kind', async () => {
+    const { clock, limits } = limitsOn()
+    const mixed = answers(200, (n) =>
+      n % 2 === 0
+        ? limits.verificationMail(FROM)
+        : limits.verificationMail(FROM, `user-${n}@example.test`),
+    )
+
+    expect(mixed).toEqual(answers(200, () => ({ allowed: true })))
+    await clock.advance(5 * minute)
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: false, retryAfterMs: 10 * minute })
+    expect(limits.verificationMail(FROM, 'fresh@example.test')).toEqual({
+      allowed: false,
+      retryAfterMs: 10 * minute,
+    })
+    // Another address keeps its own budget.
+    expect(limits.verificationMail(ELSEWHERE)).toEqual({ allowed: true })
+    expect(limits.verificationMail(ELSEWHERE, 'fresh@example.test')).toEqual({ allowed: true })
+  })
+
+  it("leaves an email's resends untouched by the resends its address's budget refuses", () => {
+    const { limits } = limitsOn()
+
+    answers(200, () => limits.verificationMail(FROM))
+
+    expect(answers(3, () => limits.verificationMail(FROM, 'victim@example.test').allowed)).toEqual([
+      false,
+      false,
+      false,
+    ])
+    // The victim's three resends are all still there, from anywhere else.
+    expect(
+      answers(4, () => limits.verificationMail(ELSEWHERE, 'victim@example.test').allowed),
+    ).toEqual([true, true, true, false])
+  })
+
+  it("opens the address's and the email's windows again once 15 minutes have passed", async () => {
+    const { clock, limits } = limitsOn()
+
+    answers(3, () => limits.verificationMail(FROM, 'ghost@example.test'))
+    answers(197, () => limits.verificationMail(FROM))
+
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    expect(limits.verificationMail(ELSEWHERE, 'ghost@example.test').allowed).toBe(false)
+
+    await clock.advance(15 * minute)
+
+    expect(limits.verificationMail(FROM, 'ghost@example.test')).toEqual({ allowed: true })
+    expect(limits.verificationMail(FROM)).toEqual({ allowed: true })
   })
 
   it("leaves the address uncharged by a creation its identity's limit refuses", () => {

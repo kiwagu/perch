@@ -1,28 +1,32 @@
 /**
  * The smoke test behind `cli.ts`: the gateway runs in this process in front of a SurrealDB
- * stand and serves a new identity's two devices over HTTP and WebSocket, through sign-up,
- * sign-in, push, fan-out and sign-out. It prints one line per step and stops at the first
- * step that fails or takes longer than 5 s. The identity it signs up stays on the stand, for
- * the sweep of `@example.test` accounts.
+ * stand and serves a new identity's two devices over HTTP and WebSocket, through sign-up and the
+ * verification of its email through the mail in the stand's mailbox, sign-in, push, fan-out and
+ * sign-out. It prints one line per step and stops at the first step that fails or takes longer
+ * than 5 s. The identities it signs up stay on the stand, for the sweep of `@example.test`
+ * accounts.
  */
 
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
 import { profileIdFactory } from '@workspace/ids'
+import { Mailbox } from '@workspace/mailbox'
 import { RegionDoc, systemClock } from '@workspace/replica'
 import { CLOSE } from '@workspace/replica/protocol'
-import type { z } from '@workspace/zod'
+import { z } from '@workspace/zod'
 
 import { createGatewayRoot } from '../../src/composition/root'
 import { gatewayConfig } from '../../src/config'
+import { SmtpMailer } from '../../src/mail'
 import { startServer } from '../../src/server'
 import { profileCreate, profileRename } from '../../src/sync/__fixtures__/profile'
 
 import { accessSteps } from './access'
 import type { SmokeDevice } from './device'
 import { deviceSessionSteps } from './device-sessions'
-import { postCredentials, type SignedIn } from './http'
+import { freshPassword } from './fresh-password'
+import { postCredentials, type SignedIn, signUp } from './http'
 import { organisationSteps } from './organisation'
-import { check, hello, helloOnRefresh, type Opened, step, takeUpdates, unwrap } from './steps'
+import { check, hello, type Opened, refusedHello, step, takeUpdates, unwrap } from './steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
 const STAND_USER = {
@@ -30,12 +34,24 @@ const STAND_USER = {
   password: 'gateway-stand-password',
 } as const
 
-const smokeConfig = gatewayConfig.pick({
-  SURREAL_URL: true,
-  GATEWAY_SURREAL_USER: true,
-  GATEWAY_SURREAL_PASS: true,
-  GATEWAY_JWT_KEY: true,
-})
+const smokeConfig = gatewayConfig
+  .pick({
+    SURREAL_URL: true,
+    GATEWAY_SURREAL_USER: true,
+    GATEWAY_SURREAL_PASS: true,
+    GATEWAY_AUTH_SECRET: true,
+    GATEWAY_PUBLIC_URL: true,
+    GATEWAY_SMTP_URL: true,
+    GATEWAY_MAIL_FROM: true,
+  })
+  .extend({
+    /** The REST API of the stand's MailDev, where the smoke reads the mails its sign-ups sent. */
+    MAILBOX_URL: z.url({
+      protocol: /^https?$/,
+      error:
+        "must be the http(s):// address of the stand's mailbox, which `bun run test:db` at the repository root sets",
+    }),
+  })
 
 type SmokeConfig = z.output<typeof smokeConfig>
 
@@ -58,6 +74,15 @@ async function welcomed(
 }
 
 async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
+  const mail = await step('mail server answered', async () => {
+    const mailer = unwrap(
+      SmtpMailer.create({ url: config.GATEWAY_SMTP_URL, from: config.GATEWAY_MAIL_FROM }),
+    )
+
+    unwrap(await mailer.verify())
+
+    return mailer
+  })
   const root = await step(`gateway opened ${config.SURREAL_URL}`, async () =>
     unwrap(
       await createGatewayRoot({
@@ -67,7 +92,9 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
           username: config.GATEWAY_SURREAL_USER,
           password: config.GATEWAY_SURREAL_PASS,
         },
-        signingKey: config.GATEWAY_JWT_KEY,
+        authSecret: config.GATEWAY_AUTH_SECRET,
+        publicUrl: config.GATEWAY_PUBLIC_URL,
+        mail,
         clock: systemClock,
       }),
     ),
@@ -82,18 +109,19 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   opened.server = server
 
   const base = `http://127.0.0.1:${server.port}`
+  const mailbox = new Mailbox(config.MAILBOX_URL)
   const credentials = {
     email: `smoke-${crypto.randomUUID()}@example.test`,
-    password: crypto.randomUUID(),
+    password: freshPassword(),
   }
-  const first = await step(`signed up ${credentials.email}`, () =>
-    postCredentials(base, '/auth/sign-up', {
+  const first = await step('signed up, verified through the mail on device 1', () =>
+    signUp(base, mailbox, {
       ...credentials,
       device: { id: 'smoke-device-1', label: 'Smoke device 1' },
     }),
   )
   const second = await step('signed in a second device', () =>
-    postCredentials(base, '/auth/sign-in', {
+    postCredentials(base, '/auth/sign-in/email', {
       ...credentials,
       device: { id: 'smoke-device-2', label: 'Smoke device 2' },
     }),
@@ -156,15 +184,18 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(code === CLOSE.signedOut, `closed with ${code}`)
   })
 
-  await step(`the revoked refresh key is refused: closed with ${CLOSE.unauthorized}`, async () => {
-    const { code } = await helloOnRefresh(base, opened, first)
+  await step(
+    `device 1's token after its sign-out: its hello closed with ${CLOSE.unauthorized}`,
+    async () => {
+      const { code } = await refusedHello(base, opened, first)
 
-    check(code === CLOSE.unauthorized, `closed with ${code}`)
-  })
+      check(code === CLOSE.unauthorized, `closed with ${code}`)
+    },
+  )
 
-  await accessSteps(base, root, config.GATEWAY_JWT_KEY, opened)
-  await deviceSessionSteps(base, opened)
-  await organisationSteps(base, opened, second, credentials)
+  await accessSteps(base, mailbox)
+  await deviceSessionSteps(base, mailbox, opened)
+  await organisationSteps(base, mailbox, opened, second, credentials)
 }
 
 /** Runs the smoke test; resolves to the process's exit code. */
@@ -177,8 +208,13 @@ export async function runSmoke(env: Readonly<Record<string, string | undefined>>
     SURREAL_URL: url !== undefined && URL.canParse(url) ? wsRpcUrl(url) : url,
     GATEWAY_SURREAL_USER: env['GATEWAY_SURREAL_USER'] ?? STAND_USER.username,
     GATEWAY_SURREAL_PASS: env['GATEWAY_SURREAL_PASS'] ?? STAND_USER.password,
-    // No default: the smoke opens the stand's directory with the key its gateway signs with.
-    GATEWAY_JWT_KEY: env['GATEWAY_JWT_KEY'],
+    // No defaults: the smoke's gateway runs with the stand gateway's own secret, front origin and
+    // mail server, and reads the mails in that server's mailbox.
+    GATEWAY_AUTH_SECRET: env['GATEWAY_AUTH_SECRET'],
+    GATEWAY_PUBLIC_URL: env['GATEWAY_PUBLIC_URL'],
+    GATEWAY_SMTP_URL: env['GATEWAY_SMTP_URL'],
+    GATEWAY_MAIL_FROM: env['GATEWAY_MAIL_FROM'],
+    MAILBOX_URL: env['MAILBOX_URL'],
   })
 
   if (!parsed.success) {

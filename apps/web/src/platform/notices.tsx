@@ -1,6 +1,6 @@
 /**
  * Short messages for the user that outlive the page that raised them, such as
- * "Welcome" after signing up, which the next page still shows. The shell
+ * "Welcome" after signing in, which the next page still shows. The shell
  * renders the latest one, until a newer one replaces it or the shell clears it.
  * A notice is raised by its contract code; the frame gives the words of each code
  * (`NOTICE_TEXTS`), and a code without words throws.

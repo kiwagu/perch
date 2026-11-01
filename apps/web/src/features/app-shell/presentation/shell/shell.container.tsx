@@ -14,6 +14,7 @@ import { useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 import { EVENTS } from '../../../../platform/events.port'
 import { useFrameEffects } from '../../../../platform/frame-effects'
+import { type InstallOffer, useDeviceInstall } from '../../../../platform/install'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
@@ -45,6 +46,24 @@ const SYNC_EVENTS = {
   'sync-stopped': 'platform.sync-stopped',
 } as const
 
+const INSTALL_MESSAGE = 'app-shell.install-message'
+
+/** The frame's platform event for each offer to install the app. */
+const INSTALL_EVENTS = {
+  'install-offered': 'platform.install-offered',
+  'install-by-steps': 'platform.install-by-steps',
+  installed: 'platform.installed',
+} as const satisfies Record<InstallOffer, string>
+
+type InstallCode = 'install-available' | 'install-by-steps'
+
+const installCode = (codes: readonly string[]): InstallCode | undefined =>
+  codes.includes('install-available')
+    ? 'install-available'
+    : codes.includes('install-by-steps')
+      ? 'install-by-steps'
+      : undefined
+
 const syncCode = (codes: readonly string[]): SyncStatus | undefined =>
   codes.find((code): code is SyncStatus => Object.hasOwn(SYNC_EVENTS, code))
 
@@ -62,6 +81,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const events = useService(EVENTS)
   const servedBuild = useService(SERVED_BUILD)
   const syncStatus = useService(SYNC_STATUS)
+  const install = useDeviceInstall()
+  const offer = useSyncExternalStore(
+    (onChange) => install.subscribe(onChange),
+    () => install.current(),
+  )
   const syncNow = useSyncExternalStore(
     (onChange) => syncStatus.subscribe(onChange),
     () => syncStatus.current(),
@@ -92,6 +116,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const [crash, setCrash] = useState<'screen-crashed' | undefined>(undefined)
   const [update, setUpdate] = useState<UpdateCode | undefined>(undefined)
   const [sync, setSync] = useState<SyncStatus | undefined>(undefined)
+  const [installShown, setInstallShown] = useState<InstallCode | undefined>(undefined)
   const device = useDeviceTheme()
   const unsaved = useUnsavedInput()
 
@@ -110,10 +135,15 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
   useSelector(actor, (state) => state)
+  // A signed-in account's data still opening: the frame shows no message of the platform yet, so
+  // what the platform says reaches the frame's flow once the data is open.
+  const dataOpening = actor.getSnapshot().matches('opening-data')
   const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
   const canReload = actor.getSnapshot().can({ type: 'app-shell.reload-button' })
   const canChooseTheme = actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'light' })
   const canUpdate = actor.getSnapshot().can({ type: 'app-shell.update-button' })
+  const canInstall = actor.getSnapshot().can({ type: 'app-shell.install-button' })
+  const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
   // The stored language arriving or changing, here or from another device: the frame's data event.
   const stored = row?.locale
@@ -145,6 +175,10 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // a protocol refused before the frame listened (the sync of a saved account starts with the
   // page) reaches it now.
   useEffect(() => {
+    if (dataOpening) {
+      return
+    }
+
     const stop = shellEvents(events, actor)
 
     if (session.protocolRefused()) {
@@ -152,20 +186,30 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     }
 
     return stop
-  }, [events, session, actor])
+  }, [dataOpening, events, session, actor])
 
   // A newer build the server serves: the frame's platform event.
   useEffect(
-    () => servedBuild.watch((served) => actor.send({ type: 'platform.new-version', served })),
-    [servedBuild, actor],
+    () =>
+      dataOpening
+        ? undefined
+        : servedBuild.watch((served) => actor.send({ type: 'platform.new-version', served })),
+    [dataOpening, servedBuild, actor],
   )
 
   // The state of this device's sync, while an account is signed in: the frame's platform event.
   useEffect(() => {
-    if (syncNow !== undefined) {
+    if (!dataOpening && syncNow !== undefined) {
       actor.send({ type: SYNC_EVENTS[syncNow] })
     }
-  }, [syncNow, actor])
+  }, [dataOpening, syncNow, actor])
+
+  // The browser's offer to install the app, or the app installed: the frame's platform event.
+  useEffect(() => {
+    if (!dataOpening && offer !== undefined) {
+      actor.send({ type: INSTALL_EVENTS[offer] })
+    }
+  }, [dataOpening, offer, actor])
 
   // The tab going to the background: the frame's platform event, which loads the page again by
   // itself when an update waits and no field holds unsaved input.
@@ -198,6 +242,15 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       if (event.anchor === SYNC_MESSAGE) {
         setSync(undefined)
       }
+
+      if (event.anchor === INSTALL_MESSAGE) {
+        setInstallShown(undefined)
+      }
+    })
+    const installing = actor.on('show', (event) => {
+      if (event.anchor === INSTALL_MESSAGE) {
+        setInstallShown(installCode(event.codes))
+      }
     })
     const synced = actor.on('show', (event) => {
       if (event.anchor === SYNC_MESSAGE) {
@@ -216,6 +269,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       cleared.unsubscribe()
       updated.unsubscribe()
       synced.unsubscribe()
+      installing.unsubscribe()
     }
   }, [actor])
 
@@ -232,7 +286,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   return (
     <ShellView
-      status="ready"
+      status={dataOpening ? 'opening-data' : 'ready'}
       signedIn={user !== undefined}
       activePath={pathname}
       canChooseLocale={canChoose}
@@ -267,6 +321,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
         })
       }}
       sync={sync}
+      install={installShown}
+      canInstall={canInstall}
+      onInstall={() => actor.send({ type: 'app-shell.install-button' })}
+      canPostponeInstall={canPostponeInstall}
+      onPostponeInstall={() => actor.send({ type: 'app-shell.install-later-button' })}
       update={update}
       canUpdate={canUpdate}
       onUpdate={() => {

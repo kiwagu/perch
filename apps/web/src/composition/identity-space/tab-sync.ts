@@ -107,10 +107,6 @@ export class TabSync {
       // Another tab began a sign-out: the session holds this tab's writes back.
       case 'sign-out':
         break
-      // Another tab needs new keys: the leader asks the gateway for them over its channel.
-      case 'renew':
-        this.#leading.current?.renew()
-        break
       // Another tab reset a region: open it again from the database.
       case 'reset':
         void this.#reloads.reloadStale()

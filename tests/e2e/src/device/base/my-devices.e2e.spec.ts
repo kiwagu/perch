@@ -43,7 +43,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       '[data-testid="device.list.session-item"]:not([data-state="current"])',
     )
 
-    await test.step('1. On device A, sign up and open [/devices]', async () => {
+    await test.step('1. On device A, sign up, open the link of [mail:sign-up] and open [/devices]', async () => {
       // The `signedIn` fixture has signed device A up through the sign-in page.
       await expect(page).toHaveURL(/\/me$/)
       await page.getByTestId('app-shell.nav.devices-link').click()

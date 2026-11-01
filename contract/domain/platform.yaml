@@ -2,30 +2,33 @@
 version: 1
 actions:
   sign-up:
-    description: Creates an account with its profile and its settings, and signs this device in.
+    description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
     params:
       email:
         type: string
         description: The email of the new account.
       password:
         type: string
-        description: The password of the new account.
+        description: "The password of the new account: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol. A password that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password."
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
       locale:
         type: string
-        description: The language the new account's settings start with.
-    result: the account is created with its profile and its settings, the device is signed in, the app moves to /me with code welcome
+        description: The language the new account's mails speak and its settings start with.
+    result: "the account is created and the mail below is sent to it; the device is not signed in, and /sign-in asks to check the mail; an email that has an account already gets the same answer and no mail"
     codes:
       - sign-up-rejected
       - rate-limited
-      - other-account
       - name-required
       - name-too-long
       - failed
+    mail:
+      to: email
+      language: locale
+      link: { screen: user.verify-email, search: token }
   sign-in:
-    description: Signs this device in to an account.
+    description: Signs this device in to an account whose email is verified.
     params:
       email:
         type: string
@@ -33,12 +36,40 @@ actions:
       password:
         type: string
         description: The password of the account.
-    result: the device is signed in, the app moves to /me with code welcome
+    result: the device is signed in, the app moves to /me with code welcome; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
     codes:
       - invalid-credentials
+      - email-not-verified
       - rate-limited
       - other-account
       - failed
+  verify-email:
+    description: Verifies the email of an account with the token its verification mail carries, and signs this device in to the account the first time.
+    params:
+      token:
+        type: string
+        description: The token the link of the verification mail carries in the address of /verify-email.
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened again after that answers verified-before and signs nothing in; a link older than a day answers link-expired"
+    codes:
+      - link-invalid
+      - link-expired
+      - other-account
+      - rate-limited
+      - failed
+  resend-verification:
+    description: Sends the mail whose link verifies an account's email again.
+    params:
+      email:
+        type: string
+        description: The email of the account.
+    result: "the mail below is on its way when the email has an account not verified yet; an unknown email, or one verified already, gets the same answer and no mail; one email takes three resends within a quarter of an hour, and a fourth answers rate-limited and sends nothing"
+    codes:
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.verify-email, search: token }
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -81,6 +112,16 @@ actions:
     description: Loads the page again from the server.
     params: {}
     result: the page loads again; what this tab held and had not stored is gone
+    codes: []
+  install.prompt:
+    description: Shows the browser's own window that installs the app, where the browser offers one.
+    params: {}
+    result: the browser asks the user; installed, the app opens as the installed app and the reminder goes for good on this device; declined, the reminder is put off as by install.postpone
+    codes: []
+  install.postpone:
+    description: Puts the reminder to install the app off on this device.
+    params: {}
+    result: the reminder goes, and comes back after three days on this device
     codes: []
   organisations.create:
     description: Creates an organisation.
@@ -144,7 +185,8 @@ actions:
     roles:
       - admin
 events:
-  opened: The local data is open, and the frame renders the screen.
+  started: "The start is done: the browser keeps site data and the app knows who is signed in on this device, so the frame and the open screen can render."
+  opened: The signed-in account's local data is open.
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
@@ -160,6 +202,9 @@ events:
   connecting: The browser has a network, but the sync of the signed-in account is not connected yet, or connects again.
   offline: The browser has no network, so changes made on this device wait here until it is back.
   sync-stopped: "The sync of the signed-in account stopped and does not resume in this page: the server no longer takes its protocol, or the browser cannot lead a sync."
+  install-offered: The browser can install the app and offers to, and this device has not put the reminder off for now.
+  install-by-steps: "The browser installs the app only by the user's own steps (Share, then Add to Home Screen), and this device has not put the reminder off for now."
+  installed: The app was installed on this device.
 toasts:
   organisations.create: organisation-created
   organisations.invite: invited
@@ -199,10 +244,14 @@ reserved:
   - app-shell.update-message
   - app-shell.update-button
   - app-shell.sync-message
+  - app-shell.install-message
+  - app-shell.install-button
+  - app-shell.install-later-button
 status:
   anchor: app-shell.status
   states:
     - opening
+    - opening-data
     - ready
     - failed
     - storage-blocked

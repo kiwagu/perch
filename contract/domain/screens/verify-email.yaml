@@ -1,0 +1,116 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: user.verify-email
+title: Verify the email
+description: "What the link of a verification mail opens: the first time, it verifies the account's email with the link's token and signs this device in to the account; a link opened again says the email is verified; a link that does not verify says why and sends a new one to an email typed."
+flag: null
+bindings:
+  - path: /verify-email
+    guard: guest
+    roles: [ guest ]
+    history: push
+    search:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: The token the verification mail carries in its link.
+          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFubkBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJl ]
+      additionalProperties: false
+entry: [ user.verify-email.status, user.verify-email.message, user.verify-email.error ]
+anchors:
+  user.verify-email.status:
+    kind: status
+    description: Says the link is being checked; the message or the error replaces it once it is.
+    states: [ loading ]
+  user.verify-email.message:
+    kind: message
+    description: "What the link did when it signed nothing in: the email was verified before, beside the link to sign in; or, after a resend, that a new link is on its way to the email typed."
+    codes: [ verified-before, check-your-mail ]
+  user.verify-email.sign-in-link:
+    kind: link
+    description: Leads to the sign-in page; shown with verified-before.
+    binding: { route: /sign-in }
+  user.verify-email.error:
+    kind: error
+    description: Why the link did not verify the email, or why a new link was not sent.
+    codes: [ link-invalid, link-expired, other-account, rate-limited, failed ]
+  user.verify-email.form:
+    kind: form
+    description: Sends a new verification link to the email typed; shown with the error, and again after a resend.
+  user.verify-email.email-input:
+    kind: input
+    description: The email to send a new verification link to (type email).
+    binding:
+      action: platform.resend-verification
+      params:
+        email: user.verify-email.email-input
+  user.verify-email.resend-button:
+    kind: button
+    description: Sends a new verification link to the email typed; disabled while it sends.
+    binding:
+      action: platform.resend-verification
+      params:
+        email: user.verify-email.email-input
+states:
+  loading: "user.verify-email.status in loading: the link is being checked."
+  ready: "The message, or the error with the form that sends a new link."
+flow:
+  initial: verifying
+  meta:
+    guards:
+      signedIn: "the link verified the email just now and this device is signed in to the account; false when the email was verified before, which signs nothing in"
+  states:
+    verifying:
+      description: The token of the link is being exchanged.
+      invoke:
+        src: platform.verify-email
+        input: { token: { search: token } }
+        onDone:
+          - target: done
+            guard: signedIn
+            description: The email is verified, this device is signed in, and the account's settings and profile are created.
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+          - target: verified
+            description: The email was verified before; nothing is signed in.
+            actions:
+              - show: { user.verify-email.message: [ verified-before ] }
+        onError:
+          target: resend-offered
+          actions:
+            - show: user.verify-email.error
+    verified:
+      description: The message says the email was verified before, beside user.verify-email.sign-in-link.
+      type: final
+    resend-offered:
+      description: The error says why the link did not verify the email; the form sends a new link to the email typed.
+      on:
+        user.verify-email.resend-button: resending
+    resending:
+      invoke:
+        src: platform.resend-verification
+        input: { email: user.verify-email.email-input }
+        onDone:
+          target: sent
+          actions:
+            - clear: user.verify-email.error
+            - show: { user.verify-email.message: [ check-your-mail ] }
+        onError:
+          target: resend-offered
+          description: The error says why the new link was not sent; a message of an earlier resend goes.
+          actions:
+            - clear: user.verify-email.message
+            - show: user.verify-email.error
+    sent:
+      description: The message says a new link is on its way to the email typed; the form sends another.
+      on:
+        user.verify-email.resend-button: resending
+    done:
+      description: The app has moved to /me.
+      type: final
+wireframe: |-
+  - heading "Verify your email" [level=1]
+  - status: Checking your link…
