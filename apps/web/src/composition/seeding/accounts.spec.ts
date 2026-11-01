@@ -24,7 +24,7 @@ import type { AccountInput, Inbox, SeedDevice } from './types'
 
 const ann: AccountInput = {
   email: 'ann@example.test',
-  password: 'pass-word-1',
+  password: 'Pass-word-1',
   name: 'Ann',
   bio: 'Seeded.',
   locale: 'es',
@@ -202,7 +202,7 @@ describe("the seed client's account", () => {
     'fails an email whose account (%s) has another password as invalid credentials, never asking the mailbox for a mail',
     async (_, verified) => {
       const auth = fakeGatewayAuth()
-      const theirs = { ...ann, password: 'their-pass-word' }
+      const theirs = { ...ann, password: 'Their-pass-word-1' }
 
       expect(
         (await (verified ? verifiedElsewhere(auth, theirs) : auth.signUp(theirs))).isOk(),

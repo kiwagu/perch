@@ -63,6 +63,7 @@
         "@xstate/react": "catalog:",
         "better-auth": "catalog:",
         "entity-id": "catalog:",
+        "lucide-react": "catalog:",
         "neverthrow": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",

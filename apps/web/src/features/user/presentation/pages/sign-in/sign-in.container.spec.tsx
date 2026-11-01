@@ -124,6 +124,17 @@ const typeInto = (testId: string, value: string) =>
 
 const submitButton = () => screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement
 
+/** The rules the list marks `met`, by the name of their item, in its order. */
+const metRules = () =>
+  [...screen.getByTestId('user.sign-in.password-rule-list').children]
+    .filter((item) => item.getAttribute('data-state') === 'met')
+    .map((item) =>
+      (item.getAttribute('data-testid') ?? '').replace(
+        /^user\.sign-in\.password-rule-list\.(.+)-item$/,
+        '$1',
+      ),
+    )
+
 describe('SignInContainer', () => {
   it('moves to the profile once another tab signs someone in: one account per browser', async () => {
     const { session, signedIn } = switchableSession()
@@ -144,7 +155,7 @@ describe('SignInContainer', () => {
       target: { value: ann.email },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
     // The session opens the space and tells its listeners before the sign-in answers.
@@ -176,10 +187,10 @@ describe('SignInContainer', () => {
       target: { value: ann.email },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-confirmation-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
@@ -190,6 +201,7 @@ describe('SignInContainer', () => {
     expect(message.textContent).toContain(ann.email)
     expect(router.state.location.pathname).toBe('/sign-in')
     // The form is back in the mode sign-in, with the email kept.
+    expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
     expect(screen.queryByTestId('user.sign-in.password-confirmation-input')).toBeNull()
     expect(screen.queryByTestId('user.sign-in.name-input')).toBeNull()
     expect((screen.getByTestId('user.sign-in.email-input') as HTMLInputElement).value).toBe(
@@ -221,10 +233,10 @@ describe('SignInContainer', () => {
     fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
     typeEmail(ann.email)
     fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-confirmation-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
@@ -257,7 +269,7 @@ describe('SignInContainer', () => {
       target: { value: ann.email },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
 
@@ -288,10 +300,10 @@ describe('SignInContainer', () => {
       target: { value: ann.email },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.password-confirmation-input'), {
-      target: { value: 'pass-word-1' },
+      target: { value: 'Pass-word-1' },
     })
     fireEvent.change(screen.getByTestId('user.sign-in.name-input'), { target: { value: 'Ann' } })
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
@@ -324,13 +336,13 @@ describe('SignInContainer', () => {
     renderSignIn(fakeSession().session)
 
     fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
-    typeInto('user.sign-in.password-input', 'pass-word-1')
-    typeInto('user.sign-in.password-confirmation-input', 'pass')
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass')
 
     expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
     expect(submitButton().disabled).toBe(false)
 
-    typeInto('user.sign-in.password-confirmation-input', 'pass-x')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-x')
 
     expect(screen.getByTestId('user.sign-in.error').getAttribute('data-code')).toBe(
       'passwords-differ',
@@ -340,10 +352,67 @@ describe('SignInContainer', () => {
     ).toBe('true')
     expect(submitButton().disabled).toBe(true)
 
-    typeInto('user.sign-in.password-confirmation-input', 'pass-word-1')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-word-1')
 
     expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
     expect(submitButton().disabled).toBe(false)
+  })
+
+  it('marks the rules of a new password as it is typed, holding the submit while one is broken', async () => {
+    renderSignIn(fakeSession().session)
+
+    expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+
+    expect(screen.getByTestId('user.sign-in.password-rule-list')).toBeTruthy()
+    expect(metRules()).toEqual([])
+    expect(submitButton().disabled).toBe(true)
+
+    typeInto('user.sign-in.password-input', 'abcdefghij')
+
+    expect(metRules()).toEqual(['length', 'characters', 'lowercase'])
+    expect(submitButton().disabled).toBe(true)
+
+    typeInto('user.sign-in.password-input', 'Abcdefghij1!')
+
+    expect(metRules()).toEqual([
+      'length',
+      'characters',
+      'digit',
+      'uppercase',
+      'lowercase',
+      'symbol',
+    ])
+    expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
+    expect(submitButton().disabled).toBe(false)
+
+    typeInto('user.sign-in.password-input', 'Abcdefg hij1!')
+
+    expect(metRules()).toEqual(['length', 'digit', 'uppercase', 'lowercase', 'symbol'])
+    expect(submitButton().disabled).toBe(true)
+
+    fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
+
+    expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
+  })
+
+  it('judges the passwords typed in the mode sign-in on the switch to sign-up', async () => {
+    renderSignIn(fakeSession().session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-x')
+    fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
+    // In the mode sign-in a keystroke in the password tells the flow nothing.
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
+
+    // The password keeps the rules, and the password typed again before no longer agrees with it.
+    expect(metRules()).toHaveLength(6)
+    expect(screen.getByTestId('user.sign-in.error').getAttribute('data-code')).toBe(
+      'passwords-differ',
+    )
+    expect(submitButton().disabled).toBe(true)
   })
 
   it('never sends the password typed again: the session is asked for the account with the email, the password, the name and the language', async () => {
@@ -360,14 +429,14 @@ describe('SignInContainer', () => {
     renderSignIn(session)
     fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
     typeInto('user.sign-in.email-input', ann.email)
-    typeInto('user.sign-in.password-input', 'pass-word-1')
-    typeInto('user.sign-in.password-confirmation-input', 'pass-word-1')
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-word-1')
     typeInto('user.sign-in.name-input', 'Ann')
     fireEvent.click(submitButton())
 
     await screen.findByTestId('user.sign-in.mail-message')
     expect(asked).toStrictEqual([
-      { email: ann.email, password: 'pass-word-1', name: 'Ann', locale: 'en' },
+      { email: ann.email, password: 'Pass-word-1', name: 'Ann', locale: 'en' },
     ])
     // Asked for, what was typed is no longer unsaved, once the form has heard the submit's outcome.
     await waitFor(() => expect(unsavedNow).toBe(false))
@@ -387,8 +456,8 @@ describe('SignInContainer', () => {
     renderSignIn(session)
     fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
     typeInto('user.sign-in.email-input', ann.email)
-    typeInto('user.sign-in.password-input', 'pass-word-1')
-    typeInto('user.sign-in.password-confirmation-input', 'pass-word')
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-word')
     typeInto('user.sign-in.name-input', 'Ann')
     fireEvent.click(submitButton())
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))

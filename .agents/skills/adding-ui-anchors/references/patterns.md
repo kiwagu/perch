@@ -154,7 +154,9 @@ A button that switches a mode is one anchor whose value says the mode, never two
 <Button
   type="button"
   variant="link"
-  onClick={props.onToggleMode}
+  onClick={() =>
+    props.onToggleMode({ password: values.password, confirmation: values.confirmation })
+  }
   data-testid="user.sign-in.toggle-button"
   data-value={signingUp ? 'sign-in' : 'sign-up'}
 >
@@ -263,7 +265,7 @@ inside. Among JSX children the marker is the only content of a comment container
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
 that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
-139-159, the descriptions left out), the state that signs in, written in the shorter forms (a
+195-215, the descriptions left out), the state that signs in, written in the shorter forms (a
 transition as its target, an effect by its name with the codes it shows; `signing-up` writes
 only `show: user.sign-in.error` and leaves its codes to the platform's `sign-up`; `bun run
 contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
@@ -291,11 +293,22 @@ signing-in:
           - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
 ```
 
-And `apps/web/src/features/user/application/sign-in.machine.ts` (lines 120-298): an actor
-per `invoke.src`, a guard per name of `meta.guards`, the same states, events, targets and
+And the machine, in its folder `apps/web/src/features/user/application/sign-in-machine/`
+(`machine.ts` lines 65-252, its guards in `guards.ts` lines 43-50): an actor per
+`invoke.src`, a guard per name of `meta.guards`, the same states, events, targets and
 effects; what the app adds is its own (the `error` in context, which its `show` and `clear`
 keep for the form's error, the guards' code, the `input` built from the submit event), and
-`clearError` and `showError(...codes)` are the flow's effects on that error, written once:
+`clearError` and `showError(...codes)` are the flow's effects on that error, written once.
+The guards read what the event carries, the passwords as typed among it:
+
+```ts
+export const signInGuards = {
+  emailNotVerified: ({ event }: GuardArgs) =>
+    failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
+  passwordBreaksRules: ({ event }: GuardArgs) => !keepsPasswordRules(passwordsOf(event).password),
+  // passwordsDiffer, confirmationStrays, confirmationFollows: the password typed again
+}
+```
 
 ```ts
 return setup({
@@ -304,11 +317,7 @@ return setup({
     events: {} as SignInEvent,
     emitted: {} as SignInEmitted,
   },
-  guards: {
-    emailNotVerified: ({ event }) =>
-      failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
-    // passwordsDiffer, confirmationStrays, confirmationFollows: the password typed again
-  },
+  guards: signInGuards,
   actors: {
     'platform.sign-in': fromPromise(
       ({ input }: { readonly input: { readonly form: SignInForm } }) =>
@@ -368,12 +377,13 @@ return setup({
 
 The events are the anchors the user acts on (`{ type: 'user.sign-in.submit-button', form,
 confirmation }`, the password typed again beside the form the actors take; `{ type:
-'user.sign-in.password-input', password, confirmation }` for a keystroke), and the mode is the
-state (`sign-up` and `passwords-differ` are the mode sign-up), not context. An actor resolves
+'user.sign-in.password-input', password, confirmation }` for a keystroke, and the same two on
+`user.sign-in.toggle-button`, judged on the way into sign-up), and the mode is the state
+(`sign-up`, `password-weak` and `passwords-differ` are the mode sign-up), not context. An actor resolves
 with its result and rejects with the failure (`settled` and `failureOf` of
 `apps/web/src/platform/actor-outcome.ts`), so `onDone` and `onError` are the action's success
 and failure. The page sends the events and reads what the machine keeps: the sign-in container
-(`presentation/pages/sign-in/sign-in.container.tsx`, lines 73-95) renders the view from the
+(`presentation/pages/sign-in/sign-in.container.tsx`, lines 73-94) renders the view from the
 state and its context and sends each event, and `useScreenMachine`
 (`apps/web/src/platform/screen-machine.ts`) does what the machine emits, the welcome on the
 frame's notice through `useFrameEffects` and the move on `navigate`.

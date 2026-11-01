@@ -7,8 +7,8 @@ import { useService } from '../../../../../platform/module'
 import { HOME_PATH } from '../../../../../platform/router'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
-import { createSignInMachine } from '../../../application/sign-in.machine'
 import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
+import { createSignInMachine } from '../../../application/sign-in-machine'
 
 import { type SignInControl, SignInView } from './sign-in.view'
 
@@ -32,11 +32,11 @@ export function SignInContainer() {
   )
   const done = state.matches('done')
   const busy = submitting || done
-  // The mode is the state: sign-up only while creating an account (the passwords differing among
-  // them), sign-in otherwise (asking to check the mail and offering the resend among them, the
-  // values kept, and done, which only a sign-in reaches).
-  const mode = (['sign-up', 'passwords-differ', 'signing-up'] as const).some((name) =>
-    state.matches(name),
+  // The mode is the state: sign-up only while creating an account (the password breaking a rule
+  // and the passwords differing among them), sign-in otherwise (asking to check the mail and
+  // offering the resend among them, the values kept, and done, which only a sign-in reaches).
+  const mode = (['sign-up', 'password-weak', 'passwords-differ', 'signing-up'] as const).some(
+    (name) => state.matches(name),
   )
     ? 'sign-up'
     : 'sign-in'
@@ -88,7 +88,7 @@ export function SignInContainer() {
           confirmation,
         }).then((saved) => saved && !actor.getSnapshot().matches('passwords-differ'))
       }
-      onToggleMode={() => send({ type: 'user.sign-in.toggle-button' })}
+      onToggleMode={(passwords) => send({ type: 'user.sign-in.toggle-button', ...passwords })}
       onTypePassword={(field, passwords) => send({ type: PASSWORD_INPUTS[field], ...passwords })}
       onResend={(email) => submit({ type: 'user.sign-in.resend-button', email })}
     />

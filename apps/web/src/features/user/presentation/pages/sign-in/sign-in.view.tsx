@@ -10,6 +10,8 @@ import { Input } from '@workspace/ui/components/ui/input'
 
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 
+import { PasswordRuleList } from './password-rule-list'
+
 /** The anchor of the form's error, drawn above the fields or under the field its code concerns. */
 const SIGN_IN_ERROR_TEST_ID = 'user.sign-in.error'
 
@@ -47,7 +49,8 @@ export interface SignInViewProps {
   readonly can: (control: SignInControl) => boolean
   /** Signs in or up with the values: resolves whether it did. */
   readonly onSubmit: (values: SignInValues) => Promise<boolean>
-  readonly onToggleMode: () => void
+  /** Switches the mode, with both passwords as typed. */
+  readonly onToggleMode: (passwords: Passwords) => void
   /** A keystroke in a password at sign-up, with both passwords as they are after it. */
   readonly onTypePassword: (field: PasswordField, passwords: Passwords) => void
   /** Sends the verification mail to `email` again: resolves whether it did. */
@@ -103,6 +106,8 @@ export function SignInView(props: SignInViewProps) {
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
   // The error under the password typed again describes that field while it shows there.
   const confirmationErrorId = useId()
+  // The rules of a new password describe the password while an account is created.
+  const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
     email: '',
     password: '',
@@ -184,8 +189,10 @@ export function SignInView(props: SignInViewProps) {
                 type="password"
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
                 required
+                aria-describedby={signingUp ? rulesId : undefined}
                 data-testid="user.sign-in.password-input"
               />
+              {signingUp ? <PasswordRuleList id={rulesId} password={values.password} /> : null}
             </Field>
             {signingUp ? (
               <Field data-invalid={concerns === 'confirmation' ? true : undefined}>
@@ -233,7 +240,9 @@ export function SignInView(props: SignInViewProps) {
             <Button
               type="button"
               variant="link"
-              onClick={props.onToggleMode}
+              onClick={() =>
+                props.onToggleMode({ password: values.password, confirmation: values.confirmation })
+              }
               data-testid="user.sign-in.toggle-button"
               data-value={signingUp ? 'sign-in' : 'sign-up'}
             >

@@ -32,6 +32,27 @@ const PASSWORDS_DIFFER = 'sign-in:PASSWORDS_DIFFER'
 
 const input = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
+const LENGTH = 'user.sign-in.password-rule-list.length-item'
+const CHARACTERS = 'user.sign-in.password-rule-list.characters-item'
+const DIGIT = 'user.sign-in.password-rule-list.digit-item'
+const UPPERCASE = 'user.sign-in.password-rule-list.uppercase-item'
+const LOWERCASE = 'user.sign-in.password-rule-list.lowercase-item'
+const SYMBOL = 'user.sign-in.password-rule-list.symbol-item'
+
+/** The items of the list of rules, in the order it shows them. */
+const RULE_ITEMS = [LENGTH, CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL]
+
+/** The items of the list of rules marked `met`, in order; every other item carries no state. */
+function markedMet(): string[] {
+  const items = RULE_ITEMS.map((testId) => screen.getByTestId(testId))
+
+  expect(items.map((item) => item.getAttribute('data-state'))).toEqual(
+    items.map((item) => (item.getAttribute('data-state') === 'met' ? 'met' : null)),
+  )
+
+  return RULE_ITEMS.filter((testId) => screen.getByTestId(testId).getAttribute('data-state'))
+}
+
 /** The notice of the last session, once it carries `code`. */
 function noticeWith(code: string): HTMLElement {
   const notice = screen.getByTestId('user.sign-in.notice-message')
@@ -72,7 +93,11 @@ describe('SignInView', () => {
 
     fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
 
-    expect(onToggleMode).toHaveBeenCalledOnce()
+    // The switch carries the passwords as typed, for the flow to judge on the way into sign-up.
+    expect(onToggleMode).toHaveBeenCalledExactlyOnceWith({
+      password: 'secret-ann',
+      confirmation: '',
+    })
   })
 
   it('also asks for the password again and a name to create an account', () => {
@@ -126,6 +151,78 @@ describe('SignInView', () => {
       ['confirmation', { password: 'secret-ann', confirmation: 'se' }],
       ['password', { password: 'secret-anx', confirmation: 'se' }],
     ])
+  })
+
+  it('lists the rules of a new password under the password while creating an account only', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
+    expect(input('user.sign-in.password-input').getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('lists the rules under the password, describing it, none of them met with nothing typed', () => {
+    renderView({ mode: 'sign-up' })
+
+    const list = screen.getByTestId('user.sign-in.password-rule-list')
+    const password = input('user.sign-in.password-input')
+
+    expect(list.tagName).toBe('UL')
+    expect(
+      [...list.children].map((item) => [item.getAttribute('data-testid'), item.tagName]),
+    ).toEqual(RULE_ITEMS.map((testId) => [testId, 'LI']))
+    expect(markedMet()).toEqual([])
+    // Under the password: in its own field, after the input, and naming it as its description.
+    expect(password.closest('[data-slot="field"]')?.contains(list)).toBe(true)
+    expect(password.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.getElementById(password.getAttribute('aria-describedby') ?? '')).toBe(list)
+  })
+
+  it('marks the rules the password keeps as it is typed', () => {
+    renderView({ mode: 'sign-up' })
+
+    type('user.sign-in.password-input', 'abcdefghij')
+    expect(markedMet()).toEqual([LENGTH, CHARACTERS, LOWERCASE])
+
+    type('user.sign-in.password-input', 'Abcdefghij1!')
+    expect(markedMet()).toEqual(RULE_ITEMS)
+
+    type('user.sign-in.password-input', 'Abcdefg hij1!')
+    expect(markedMet()).toEqual([LENGTH, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
+
+    type('user.sign-in.password-input', 'Abcdefghij1!Abcdefghij1!Abcdefghij1!')
+    expect(markedMet()).toEqual([CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
+  })
+
+  it('reads each rule with whether it is met, the icons left out', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    expect(screen.getByTestId(LENGTH).textContent).toBe(
+      `${en['user.sign-in.password-rule.length']}${en['user.sign-in.password-rule.met']}`,
+    )
+    expect(screen.getByTestId(SYMBOL).textContent).toBe(
+      `${en['user.sign-in.password-rule.symbol']}${en['user.sign-in.password-rule.not-met']}`,
+    )
+    expect(
+      screen
+        .getByTestId('user.sign-in.password-rule-list')
+        .querySelectorAll('svg:not([aria-hidden="true"])'),
+    ).toHaveLength(0)
+  })
+
+  it('lists the rules in Spanish', () => {
+    renderView({ mode: 'sign-up' }, 'es')
+
+    expect(RULE_ITEMS.map((testId) => screen.getByTestId(testId).textContent)).toEqual(
+      [
+        es['user.sign-in.password-rule.length'],
+        es['user.sign-in.password-rule.characters'],
+        es['user.sign-in.password-rule.digit'],
+        es['user.sign-in.password-rule.uppercase'],
+        es['user.sign-in.password-rule.lowercase'],
+        es['user.sign-in.password-rule.symbol'],
+      ].map((text) => `${text}${es['user.sign-in.password-rule.not-met']}`),
+    )
   })
 
   it('tells no keystroke in the password while signing in', () => {

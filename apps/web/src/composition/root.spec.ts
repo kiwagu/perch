@@ -220,7 +220,7 @@ describe('createAppRoot', () => {
       (
         await signUpVerified(services.session, auth, {
           email,
-          password: 'pass-word-1',
+          password: 'Pass-word-1',
           name: 'Ann',
           locale: 'en',
         })

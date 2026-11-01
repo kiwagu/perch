@@ -204,7 +204,7 @@ describe('AccountStartService on a session', () => {
   it('finishes a start left without its profile, with no second settings and no second profile, however often it is resumed', async () => {
     const input = {
       email: 'ann@example.test',
-      password: 'pass-word-1',
+      password: 'Pass-word-1',
       name: 'Ann',
       locale: 'es' as const,
     }

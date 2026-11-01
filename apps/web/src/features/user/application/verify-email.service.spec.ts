@@ -133,7 +133,7 @@ describe('VerifyEmailService on a session', () => {
   it('makes the account whole where its link is first opened, and only there and then', async () => {
     const input = {
       email: 'ann@example.test',
-      password: 'pass-word-1',
+      password: 'Pass-word-1',
       name: 'Ann',
       locale: 'es' as const,
     }

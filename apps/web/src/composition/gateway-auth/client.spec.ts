@@ -9,7 +9,7 @@ import { type Fetcher, type GatewayAuth, gatewayAuth } from './client'
 
 const BASE = 'https://app.example.test/backend'
 
-const credentials = { email: 'ann@example.test', password: 'pass-word-1' }
+const credentials = { email: 'ann@example.test', password: 'Pass-word-1' }
 
 const signUpInput = { ...credentials, name: 'Ann', locale: 'es' }
 

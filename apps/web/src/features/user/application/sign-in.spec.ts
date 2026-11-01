@@ -16,12 +16,12 @@ import { profileCommands, profileShape } from '../presentation/pages/profile/pro
 import { ProfileService } from './profile.service'
 import { settingsCommands, settingsShape } from './settings/settings.model.gen'
 import { SettingsService } from './settings/settings.service'
-import { createSignInMachine } from './sign-in.machine'
 import { type SignInForm, SignInService } from './sign-in.service'
+import { createSignInMachine } from './sign-in-machine'
 
 const ann = {
   email: 'ann@example.test',
-  password: 'secret-ann',
+  password: 'Secret-ann1',
   name: 'Ann',
   locale: 'es' as const,
 }
@@ -70,6 +70,13 @@ function recordingSession(
   }
 
   return { asked, port }
+}
+
+/** The switch of mode, Ann's password typed and typed again. */
+const toggled = {
+  type: 'user.sign-in.toggle-button' as const,
+  password: ann.password,
+  confirmation: ann.password,
 }
 
 /** The submit of `form`, the password typed again the same. */
@@ -149,7 +156,7 @@ describe('the sign-in form', () => {
     const emitted: unknown[] = []
 
     actor.on('*', (event) => emitted.push(event))
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
     actor.send(submitted(ann))
 
     const asked = await settled(actor)
@@ -206,7 +213,7 @@ describe('the sign-in form', () => {
     async (from) => {
       const actor = start()
 
-      actor.send({ type: 'user.sign-in.toggle-button' })
+      actor.send(toggled)
       actor.send(submitted(ann))
       await settled(actor)
 
@@ -237,7 +244,7 @@ describe('the sign-in form', () => {
     const { port } = recordingSession({ resend: limited })
     const actor = start(new SignInService(port))
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
     actor.send(submitted(ann))
     expect((await settled(actor)).context.mail).toBe('check-your-mail')
 
@@ -255,7 +262,7 @@ describe('the sign-in form', () => {
   it('lets the mail message go when a sign-in starts from it', async () => {
     const actor = start()
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
     actor.send(submitted(ann))
     await settled(actor)
 
@@ -270,11 +277,11 @@ describe('the sign-in form', () => {
   it('lets the mail message go when the form switches to sign-up from it', async () => {
     const actor = start()
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
     actor.send(submitted(ann))
     await settled(actor)
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
 
     expect(actor.getSnapshot()).toMatchObject({
       value: 'sign-up',
@@ -303,7 +310,7 @@ describe('the sign-in form', () => {
   it('goes back to the mode it failed in, and a switch of mode clears the reason', async () => {
     const actor = start()
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
     actor.send(submitted({ ...ann, name: ' ' }))
 
     const failed = await settled(actor)
@@ -311,7 +318,7 @@ describe('the sign-in form', () => {
     expect(failed.value).toBe('sign-up')
     expect(failed.context.error).toBe('profile:NAME_REQUIRED')
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
 
     expect(actor.getSnapshot()).toMatchObject({ value: 'sign-in', context: { error: undefined } })
   })
@@ -321,11 +328,11 @@ describe('the sign-in form', () => {
 
     expect(actor.getSnapshot().value).toBe('sign-in')
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
 
     expect(actor.getSnapshot().value).toBe('sign-up')
 
-    actor.send({ type: 'user.sign-in.toggle-button' })
+    actor.send(toggled)
 
     expect(actor.getSnapshot().value).toBe('sign-in')
   })

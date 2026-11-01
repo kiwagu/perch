@@ -23,8 +23,8 @@ import {
 
 import { SIGN_IN_LOCK } from './sign-in'
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'Pass-word-2', name: 'Bob', locale: 'en' }
 
 /** Carol, signed in on this browser by another tab. */
 const carol: KeptDevice = {
@@ -220,7 +220,7 @@ describe('signing up', () => {
     expect((await tab.session.signUp(annSignUp)).isOk()).toBe(true)
 
     const link = auth.linkFor(annSignUp.email)
-    const again = { ...annSignUp, password: 'other-pass-word', name: 'Other' }
+    const again = { ...annSignUp, password: 'Other-pass-word-1', name: 'Other' }
 
     expect((await tab.session.signUp(again))._unsafeUnwrap()).toBeUndefined()
     // No new link, and the account keeps its password and its name.

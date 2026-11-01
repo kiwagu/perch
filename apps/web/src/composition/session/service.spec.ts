@@ -40,7 +40,7 @@ const ann: KeptDevice = {
   memberships: [],
 }
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1', name: 'Ann', locale: 'en' }
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
@@ -67,7 +67,7 @@ const signingIn = (device: SignedInDevice): GatewayAuth => ({
   signOut: () => okAsync(undefined),
 })
 
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2', name: 'Bob', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'Pass-word-2', name: 'Bob', locale: 'en' }
 
 const worlds: TestWorld[] = []
 

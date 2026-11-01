@@ -25,11 +25,14 @@ empty state when the profile is missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
-machine (the flow of `contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt
-invokes `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it
-compares the password typed again as either password is typed, it keeps the codes of the form's
-error and mail message, and the address the last sign-up or resend mailed, and emits `show` and
-`navigate` for the page), the
+machine in its folder `application/sign-in-machine/` (the flow of
+`contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt invokes
+`platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it holds the
+password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
+and compares the password typed again as either password is typed and on the switch into
+sign-up, it keeps the codes of the form's error and mail message, and the address the last
+sign-up or resend mailed, and emits `show` and `navigate` for the page; `machine.ts` builds it,
+`guards.ts` holds the flow's guards, `events.ts` and `context.ts` what it takes and keeps), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -85,6 +88,11 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   machine's state handles them; the chosen language, kept in the settings, follows the
   identity across devices (the frame stores and follows it, see the app-shell module), and a
   new account's settings start in the language chosen before signing up, sent with the sign-up;
+  a sign-up lists the rules of a new password under the password (`user.sign-in.password-rule-list`,
+  `password-rule-list.tsx`, the lines `user.sign-in.password-rule.*`), describing it, each rule
+  marked `met` while the password as typed keeps it, its state read out with it
+  (`user.sign-in.password-rule.met` or `.not-met`), and the submit is disabled while the password
+  breaks a rule, the password typed again not judged until it keeps them all;
   a sign-up asks for the password twice, checked as it is typed: once the password typed again is
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
