@@ -1,7 +1,8 @@
 /**
  * The effects of a flow as XState runs them, `{ type, params }`: `show` (an anchor shows one
- * of its codes), `clear` (it shows none) and `navigate` (the app moves to a binding). The
- * implementation provides them; the machine names them.
+ * of its codes), `clear` (a field is emptied, an anchor that carries codes shows none) and
+ * `navigate` (the app moves to a binding). The implementation provides them; the machine names
+ * them.
  */
 
 import { z } from '@workspace/zod'
@@ -28,14 +29,20 @@ const showSchema = z
 
 const clearSchema = z
   .strictObject({
-    type: z.literal('clear').describe('The effect: an anchor stops showing its code.'),
+    type: z
+      .literal('clear')
+      .describe('The effect: a field is emptied, or an anchor stops showing its code.'),
     params: z
       .strictObject({
-        anchor: anchorSchema.describe('The anchor that shows no code any more.'),
+        anchor: anchorSchema.describe(
+          'The field to empty, or the anchor that carries codes and shows none any more.',
+        ),
       })
       .describe('Which anchor.'),
   })
-  .describe('The anchor shows no code until one is shown again.')
+  .describe(
+    'A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again.',
+  )
 
 export const navigateParamsSchema = z
   .strictObject({

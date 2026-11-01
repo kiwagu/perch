@@ -116,9 +116,11 @@ for Bun.
     another kind nor a secret field, sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
-    that exist, a navigate's search keys of the binding it moves to, each value a literal or
-    `{ anchor }`, a field its own screen declares (never a `visibility-button` nor a secret
-    field),
+    that exist, a clear's anchor one that carries codes, which then shows none, whatever its
+    kind and screen, else a field of its own screen, which it empties (a secret one included;
+    never a `visibility-button`), a navigate's search keys of the binding it
+    moves to, each value a literal or `{ anchor }`, a field its own screen declares (never a
+    `visibility-button` nor a secret field),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,

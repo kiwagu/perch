@@ -91,6 +91,14 @@ describe('instructionsOf', () => {
   it('says a navigate may carry into a search what a field of the screen holds', () => {
     expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
   })
+  it('says what a clear does to a field and to an anchor that carries codes', () => {
+    expect(instructions.screenMap).toContain(
+      '`clear` empties a field of the screen, a secret one included, so it holds no input any more, as if nothing was typed',
+    )
+    expect(instructions.screenMap).toContain(
+      'and makes an anchor that carries codes show none until one is shown again',
+    )
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')
