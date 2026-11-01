@@ -21,5 +21,5 @@ Where: [/verify-email] from a [mail:sign-up] whose link was opened already
 4. Click [user.verify-email.sign-in-link]
 
 ### Expected result
-- After step 3 [user.verify-email.message] carries [code:verified-before], the URL stays [/verify-email] and [app-shell.nav.sign-in-link] shows
+- After step 3 [user.verify-email.message] carries [code:verified-before], the URL stays [/verify-email] and [user.verify-email.sign-in-link] shows
 - After step 4 the URL is [/sign-in]

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the signed-in account's frame with its open screen while its data opens, the latest notice, the toasts of what the user changed, the navigation between the screens, the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol, the state of this device's sync for a signed-in account, and a reminder to install the app until it is installed."
+description: "The frame around every screen: the readiness status, the signed-in account's frame with its open screen while its data opens, the latest notice, the toasts of what the user changed, the navigation between the screens for a signed-in account (a guest sees none), the theme of the device, the language choice of a guest, a way out of a device whose data will not open, a message with a reload in the place of a screen that failed to render, and a message with a reload when a newer version is served or the server no longer takes this version's protocol, the state of this device's sync for a signed-in account, and a reminder to install the app until it is installed."
 frame: true
 flag: null
 bindings: []
@@ -20,7 +20,8 @@ anchors:
     description: "The outcome of a mutation, shown for a short while in the tab that acted: several may show at once, stacked with the newest at the top and the earlier ones moving down; a click dismisses one. It renders once per toast shown, each carrying data-code; its codes are derived, one per operation a flow runs: an action of the model, or a platform action the platform's toasts map lists."
   app-shell.nav:
     kind: nav
-    description: "The main navigation: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current."
+    description: "The main navigation of a signed-in account: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current. A guest sees no navigation at all: the sign-in page and the page a mail's link opens lead on by their own links."
+    roles: [ identity, member, admin ]
   app-shell.nav.profile-link:
     kind: link
     description: The link to the profile, shown to a signed-in account.
@@ -43,7 +44,7 @@ anchors:
     roles: [ identity, member, admin ]
   app-shell.nav.sign-in-link:
     kind: link
-    description: The link to sign-in, the only link a guest sees.
+    description: "The link to sign-in that a guest's navigation held. A guest sees no navigation now, so the link goes: kept declared until the frame no longer renders it, then dropped."
     binding: { route: /sign-in }
     roles: [ guest ]
   app-shell.theme-select:
@@ -114,7 +115,7 @@ anchors:
 states:
   opening: app-shell.status says the app is starting; no screen is rendered.
   opening-data: "The navigation of the signed-in account, the theme select and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
-  ready: The navigation, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again and app-shell.install-message until the app is installed; app-shell.status is a visually hidden text.
+  ready: The navigation for a signed-in account, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again and app-shell.install-message until the app is installed; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
 flow:
