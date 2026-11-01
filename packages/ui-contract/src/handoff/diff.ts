@@ -5,8 +5,8 @@
  * the error fields it adds or removes on the anchors both hold (written or derived, so a
  * constraint added to the model shows as the code it gives), the
  * fields that start or stop holding input, the actions that leave what the user typed behind
- * and how each leave that would lose it asks, and the transitions it adds or removes in each
- * activity both contracts hold.
+ * and how each leave that would lose it asks, the notices the platform actions declare, and the
+ * transitions it adds or removes in each activity both contracts hold.
  */
 
 import { type Contract, codesOf, declaredAnchors } from '../check'
@@ -36,6 +36,8 @@ export interface ContractChanges {
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
   unsavedInput: Change
+  /** As `<action>.<name>`, the notices the platform actions declare. */
+  notices: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
@@ -50,6 +52,12 @@ const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
 const unsavedInputOf = (contract: Contract | undefined): string[] =>
   Object.entries(contract?.screens.platform.unsavedInput ?? {}).map(
     ([leave, how]) => `${leave}: ${how}`,
+  )
+
+/** The notices the platform actions declare, as `<action>.<name>`; none when undeclared. */
+const noticesOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.actions ?? {}).flatMap(([action, { notices }]) =>
+    (notices ?? []).map(({ name }) => `${action}.${name}`),
   )
 
 function changeOf(before: readonly string[], after: readonly string[]): Change {
@@ -204,6 +212,7 @@ export function diffContracts(
       after?.screens.platform.leaving ?? [],
     ),
     unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
+    notices: changeOf(noticesOf(before), noticesOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),

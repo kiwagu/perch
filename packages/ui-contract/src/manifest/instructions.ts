@@ -32,7 +32,7 @@ const LANGUAGE = [
 
 const SESSION = [
   'Every scenario starts in a fresh browser context with nobody signed in (`guest`).',
-  "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows) and, when it sends a mail, its `mail`; never assume it from the action's name.",
+  "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows) and, when it sends mails, its `mail` and its `notices`; never assume it from the action's name.",
   'One account per browser: a second account, or a second device of the same one, needs a browser context of its own.',
 ].join(' ')
 
@@ -54,7 +54,7 @@ const SCREEN_MAP = [
 const BINDINGS = [
   '`{ "model": "<entity>.<field>" }` shows or edits `model.$defs.<entity>.properties.<field>`.',
   '`{ "action": "<entity>.<action>" }` runs an action of `model.$defs.<entity>.x-perch.actions`; `{ "action": "platform.<name>" }` runs `platform.actions.<name>`. Its `params` name, per parameter, the anchor whose value it takes, a constant `{ "value": ... }`, or `{ "search": "<name>" }`, the value of that search parameter of the route the screen was opened at.',
-  'An action of `platform.actions` that sends a mail declares it under `mail`: `to` (the parameter whose value it goes to, or `account`), `language` (a parameter holding a language, or `account`) and `link` (the `screen` its link opens and the `search` parameter carrying its token); a scenario names it `[mail:<action>]`.',
+  'An action of `platform.actions` that sends a mail declares it under `mail`: `to` (the parameter whose value it goes to, or `account`), `language` (a parameter holding a language, or `account`) and `link` (the `screen` its link opens and the `search` parameter carrying its token); a scenario names it `[mail:<action>]`. Its `notices` are mails that only tell, with no token, each with its `name`, `to` (a parameter, or `account`: the email of the account the action acts on, as it was before the action changed anything), `language` and, optionally, a plain `link` to a `screen` whose routes need no parameter; a scenario names one `[notice:<action>.<name>]`.',
   '`{ "route": "/path" }` navigates to the path of a binding of some screen.',
   'A list of bindings runs in its order, or one of them by the mode of the screen; the `flow` says which.',
   "An anchor with `asks` asks the frame's confirmation (`asks.dialog`, with `asks.code`) before its action runs: the app's platform gate opens it, confirm runs the action and cancel does not; a screen builds no dialog of its own for it.",
@@ -86,7 +86,7 @@ const ACTIVITIES = [
 const SCENARIOS = [
   '`scenarios` are the end-to-end scenarios in the spec-instruction shape, authored as Markdown files in the e2e tree (`tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md`: a YAML front matter with `tags`, an optional `activity`, `devices` and `data`, then the sections `# <title>`, `Where:`, `## Scenario:`, `### Steps` and `### Expected result`) and carried here parsed.',
   `Their fields: \`id\` (the file's path under \`tests/e2e/scenarios/\` without \`.md\`, \`<entity>/<layer>/[<area>/]<slug>\` with the layer one of ${quoted(SCENARIO_LAYERS)}; the test is \`tests/e2e/src/<id>.e2e.spec.ts\`), \`title\`, \`tags\` (\`smoke\` or \`full\`), \`activity\` (the id of the activity of \`activities\` it walks, when it walks one), \`devices\` (a letter per browser with the role it reaches by the end; every device starts as \`guest\`), \`where\`, \`data\` (\`generate\` or a fixed value), \`scenario\`, \`steps\` and \`expected\`.`,
-  'Brackets in their text reference the contract: `[<anchor>]` (in `ids`, or derived from one with a suffix of its `derived`), `[/path]` (a route of `screens`), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and `[mail:<action>]` (a platform action that declares the mail it sends).',
+  'Brackets in their text reference the contract: `[<anchor>]` (in `ids`, or derived from one with a suffix of its `derived`), `[/path]` (a route of `screens`), `[code:<code>]`, `[state:<state>]`, `[value:<value>]`, `[mail:<action>]` (a platform action that declares the mail it sends) and `[notice:<action>.<name>]` (a notice of that name the platform action declares).',
   "They are the contract's feedback loop: a scenario that cannot be written from the contract alone (an anchor, a code, a state, a route or a role it would need) names a gap to fix in the contract files, never one to work around in a test.",
 ].join(' ')
 

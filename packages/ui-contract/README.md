@@ -71,9 +71,12 @@ for Bun.
     those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
-    reserved word no parameter of an action that sends a mail takes, and
+    reserved word no parameter of an action that sends a mail or a notice takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
-    type `PlatformMail`),
+    type `PlatformMail`) and `platformNoticeSchema` (a notice of the action's `notices`, a mail
+    that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, `to:
+    account` being the account's email as it was before the action changed anything, and an
+    optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
     leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
@@ -94,7 +97,8 @@ for Bun.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
-    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`).
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
+    `[notice:<action>.<name>]`).
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
@@ -140,9 +144,13 @@ for Bun.
     its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
     platform action declares goes to a parameter of the action or the account, takes its
     language from one or the account, and links to a screen whose every route declares its
-    search parameter; an action that sends a mail has no parameter named `account`)
+    search parameter; an action that sends a mail or a notice has no parameter named
+    `account`), `noticesProblems` (the notices of a platform action carry names unique within
+    it, go to a parameter of the action or the account, take their language from one or the
+    account, and link, when they do, to a screen with a route, every route of which needs no
+    parameter: no `$param`, no splat, no required search key)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
-    it, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
+    it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
@@ -221,8 +229,9 @@ for Bun.
     both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
     them), the codes as `<anchor> <code>` and an error's fields as `<error> <code>
     -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
-    the actions of `platform.leaving` added and removed, and the entries of
-    `platform.unsavedInput` as `<leave>: <how it asks>`;
+    the actions of `platform.leaving` added and removed, the entries of
+    `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
+    actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
     <target>`);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one

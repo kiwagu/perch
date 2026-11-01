@@ -72,6 +72,7 @@ export {
   type ParamValue,
   type Platform,
   type PlatformMail,
+  type PlatformNotice,
   type Screen,
   type ScreensFile,
 } from './screens'

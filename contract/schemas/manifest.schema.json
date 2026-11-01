@@ -5128,6 +5128,53 @@
                   "link"
                 ],
                 "additionalProperties": false
+              },
+              "notices": {
+                "description": "The notices the action sends, when it sends any: mails that only tell, with no token, each by its name.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "The name of the notice, unique within the action: `password-changed`; a scenario names it `[notice:<action>.<name>]`."
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$",
+                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                    },
+                    "language": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$",
+                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                    },
+                    "link": {
+                      "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
+                      "type": "object",
+                      "properties": {
+                        "screen": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                          "description": "The screen the link opens, at a route that needs no parameter: the link carries no token and no search."
+                        }
+                      },
+                      "required": [
+                        "screen"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "to",
+                    "language"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A notice the action sends: a mail that only tells, with no token."
+                }
               }
             },
             "required": [

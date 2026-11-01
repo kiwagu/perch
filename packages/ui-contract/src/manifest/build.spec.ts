@@ -221,3 +221,22 @@ describe('the visibility-button of a password input', () => {
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
 })
+
+describe('the notices of a platform action', () => {
+  it('carries each notice an action declares, and tells an agent how to read one', () => {
+    const base = fixtureContract()
+    const notices = [
+      { name: 'password-changed', to: 'account', language: 'account', link: { screen: 'sample' } },
+    ]
+
+    Object.assign(base.screens.platform.actions['sign-out'] ?? {}, { notices })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.manifestVersion).toBe(1)
+    expect(built.platform.actions['sign-out']?.notices).toEqual(notices)
+    expect(built.contract.instructions.bindings).toContain('`notices`')
+    expect(built.contract.instructions.scenarios).toContain('[notice:<action>.<name>]')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
