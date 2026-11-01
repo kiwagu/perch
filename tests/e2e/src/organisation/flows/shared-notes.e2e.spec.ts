@@ -1,6 +1,6 @@
 // scenario: organisation/flows/shared-notes
 import { generate } from '../../support/data'
-import { expect, notice, pageLoads, signUp, test } from '../../support/fixtures'
+import { expect, pageLoads, signUp, test, toast } from '../../support/fixtures'
 import { createOrganisation, inviteMember } from '../../support/organisation'
 
 test.describe('Share notes inside an organisation and keep private data private', {
@@ -20,7 +20,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -31,7 +31,7 @@ test.describe('Share notes inside an organisation and keep private data private'
     const loadsOfB = pageLoads(deviceB)
 
     const { userA, loadsOfA } =
-      await test.step('2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
         // Full page loads of device A from here: B's note must reach it without one.
         const loads = pageLoads(page)
@@ -45,7 +45,7 @@ test.describe('Share notes inside an organisation and keep private data private'
       })
 
     await test.step('3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]', async () => {
-      // Expected: After step 3 device A shows [app-shell.notice-message] carrying [code:invited]
+      // Expected: After step 3 device A shows [app-shell.toast] carrying [code:invited]
       //   and user B in [organisation.members.list]
       await inviteMember(page, userB.email)
     })
@@ -63,7 +63,7 @@ test.describe('Share notes inside an organisation and keep private data private'
       await expect(page.getByTestId('user.profile.heading')).toHaveText(userA.name)
       await page.getByTestId('user.profile.bio-textarea').fill(data.bioOfA)
       await page.getByTestId('user.profile.save-button').click()
-      await expect(notice(page, 'profile-saved')).toBeVisible()
+      await expect(toast(page, 'profile-saved')).toBeVisible()
       await page.getByTestId('app-shell.nav.organisation-link').click()
       await expect(
         page.getByTestId('organisation.notes.list').getByTestId('organisation.notes.text-cell'),

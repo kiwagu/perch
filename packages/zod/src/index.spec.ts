@@ -19,4 +19,8 @@ describe('the shared zod instance', () => {
   it('derives the key for any issue code', () => {
     expect(validationKey('invalid_type')).toBe('validation.invalid_type')
   })
+
+  it('keeps the parser Zod compiles for an object schema, outside a browser', () => {
+    expect(z.config().jitless).toBeFalsy()
+  })
 })

@@ -16,6 +16,8 @@ export interface FlowLookups {
   readonly screen: string
   /** The frame's toast anchor, which says the success of a model action; none, nothing is derived. */
   readonly toast: string | undefined
+  /** The platform actions whose success toasts, each with its code (`platform.yaml` `toasts`). */
+  readonly platformToasts: Readonly<Record<string, string>>
 }
 
 /** A toast the loader derived: the frame's toast anchor, its code, the model action it says succeeded. */

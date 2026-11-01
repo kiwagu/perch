@@ -15,6 +15,7 @@ import type {
   screenSchema,
   transitionSchema,
 } from '../../schemas'
+import type { DerivedQuestion } from '../derive'
 import type { DerivedToast } from '../expand-flow'
 
 export type Screen = z.infer<typeof screenSchema>
@@ -49,4 +50,9 @@ export interface ScreensFile {
    * action whose success it says: the vocabulary vouches for them by one rule row.
    */
   toasts: readonly DerivedToast[]
+  /**
+   * The questions the loader derived on the frame's confirmation, one per code, each with the
+   * destructive action it asks before: the vocabulary vouches for them by one rule row.
+   */
+  questions: readonly DerivedQuestion[]
 }

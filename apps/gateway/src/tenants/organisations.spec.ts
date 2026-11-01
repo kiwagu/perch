@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   type AuthUser,
-  createAuth,
   type DataError,
   type LocalDb,
   openLocalDb,
@@ -12,11 +11,21 @@ import {
 } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
-import type { IdentityId } from '@workspace/ids'
+import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
+import {
+  AUTH_SECRET,
+  AUTH_URL,
+  deviceHeaders,
+  mailsOf,
+  signUpOn,
+} from '../auth/__fixtures__/auth-instance'
+import { createAuthInstance } from '../auth/auth-instance'
+import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Outbox } from '../mail/__fixtures__/outbox'
 
 import directoryRows from './__fixtures__/directory-rows.surql'
 import identityForget from './__fixtures__/identity-forget.surql'
@@ -30,14 +39,11 @@ import tenantRows from './__fixtures__/tenant-rows.surql'
 import tenantSweep from './__fixtures__/tenant-sweep.surql'
 import type { OrganisationRefusalCode } from './organisation-refusal'
 import { Organisations } from './organisations'
-import identityByEmailStatement from './surql/identity-by-email.surql'
 import memberRemoveStatement from './surql/member-remove.surql'
 import membershipAddStatement from './surql/membership-add.surql'
 import membershipRemoveStatement from './surql/membership-remove.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import { TenantDatabases } from './tenant-databases'
-
-const PASSWORD = 'pass-word-1'
 
 /** Closes what a test opened, the organisations' databases before the directory. */
 const cleanups: Array<() => Promise<void>> = []
@@ -57,19 +63,28 @@ function refused(code: OrganisationRefusalCode) {
   return { kind: 'refused', code }
 }
 
-/** Signs an identity up through the directory's access method, as the gateway does. */
+/**
+ * Signs an identity up through Better Auth over the directory, as the gateway does, and verifies
+ * it through the mail the sign-up sent.
+ */
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
-  const auth = createAuth(directory, {
-    access: 'identity',
-    namespace: NAMESPACE,
-    database: DIRECTORY,
+  const outbox = new Outbox()
+  const auth = createAuthInstance({
+    local: directory,
+    secret: AUTH_SECRET,
+    baseURL: AUTH_URL,
+    trustedOrigins: [new URL(AUTH_URL).origin],
+    clock: manualClock(),
+    publicUrl: new URL(AUTH_URL).origin,
+    mail: outbox,
+    log: { error: () => {}, warn: () => {} },
   })
 
-  try {
-    return (await auth.signUp({ email, password: PASSWORD }))._unsafeUnwrap()
-  } finally {
-    await auth.close()
-  }
+  mailsOf(auth, outbox)
+
+  const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
+
+  return { id: idSchemas.identity.schema.parse(user.id), email: user.email }
 }
 
 /** A statement the organisations' databases hold until it is let go. */

@@ -21,14 +21,17 @@ import {
 
 import { activitiesProblems } from './activities'
 import { bindingsProblems } from './bindings'
+import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { flowProblems } from './flow'
 import { leavingProblems } from './leaving'
+import { mailsProblems } from './mails'
 import { routesProblems } from './routes'
 import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
 import { screensProblems } from './screens'
 import { searchProblems } from './search'
+import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
@@ -89,8 +92,11 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   runsProblems,
   routesProblems,
   leavingProblems,
+  toastsProblems,
+  confirmationsProblems,
   unsavedInputProblems,
   searchProblems,
+  mailsProblems,
   scenariosProblems,
 ]
 

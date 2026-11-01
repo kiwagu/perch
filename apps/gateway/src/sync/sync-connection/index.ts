@@ -3,5 +3,5 @@
 export { SyncConnection } from './connection'
 /** The end of a device's WebSocket the connection writes to, and what the connection needs. */
 export type { SocketLike, SyncConnectionDeps } from './deps'
-/** The close of a hello whose renewal a limit refused: the device tries again later. */
-export { TRY_AGAIN_LATER } from './hello-keys'
+/** The close code of a socket the device's newer connection or newer session took over. */
+export { SUPERSEDED } from './reasons'

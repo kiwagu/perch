@@ -11,6 +11,7 @@ import {
   type Activity,
   type AnchorDef,
   type BindingRef,
+  CONFIRM_RULE_ROW,
   jsonPath,
   type Lines,
   type Model,
@@ -31,7 +32,7 @@ export interface Contract {
   readonly activities: Activity[]
   /** The line of each key and item of each activity's file, by the activity's id. */
   readonly activityLines: ReadonlyMap<string, Lines>
-  /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
+  /** The scenarios of `tests/e2e/scenarios`, sorted by their ids. */
   readonly scenarios: Scenario[]
   /** The line of each field of each scenario's file, by the scenario's id. */
   readonly scenarioLines: ReadonlyMap<string, Lines>
@@ -54,6 +55,9 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
       at: ['screens', index, 'anchors', anchor],
     })),
   )
+
+/** The two answers of a question the frame asks: going on, and staying. */
+export const ANSWERS = ['confirm-button', 'cancel-button'] as const
 
 /** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
 export function bindingRefsOf(
@@ -168,13 +172,16 @@ export function knownAnchors(contract: Contract): (anchor: string) => boolean {
 }
 
 /**
- * The codes of the contract: the vocabulary's rows, the rule row aside (it is no code), and each
- * toast code the loader derived, which the rule row stands for.
+ * The codes of the contract: the vocabulary's rows, the rule rows aside (they are no codes), and
+ * each toast and question code the loader derived, which the rule rows stand for.
  */
 export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<string> =>
   new Set([
-    ...Object.keys(vocabulary.codes).filter((code) => code !== TOAST_RULE_ROW),
+    ...Object.keys(vocabulary.codes).filter(
+      (code) => code !== TOAST_RULE_ROW && code !== CONFIRM_RULE_ROW,
+    ),
     ...screens.toasts.map(({ code }) => code),
+    ...screens.questions.map(({ code }) => code),
   ])
 
 /** Every state of the vocabulary: app, container and row states. */

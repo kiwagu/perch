@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../../files'
-import { flowIn, flowStateIn, sampleContract } from '../contract.fixture'
+import { flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
 import { flowProblems } from './problems'
 
@@ -92,6 +92,35 @@ describe('flowProblems', () => {
         }`,
       ])
     }
+  })
+  it('takes an invoke input from a search parameter of every route of the screen', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    invoke.input = { title: { search: 'tab' } }
+
+    expect(printed(contract)).toEqual([])
+
+    invoke.input = { title: { search: 'token' } }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.input.title: "token" is not a search parameter of every route of the screen`,
+    ])
+  })
+  it('takes an invoke input only from a search parameter on every route of the screen', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    screenIn(contract, 'sample').bindings.push({
+      path: '/sample',
+      roles: ['member'],
+      history: 'push',
+    })
+    invoke.input = { title: { search: 'tab' } }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.input.title: "tab" is not a search parameter of every route of the screen`,
+    ])
   })
   it('leaves out the minted id and any parameter the implementation computes', () => {
     const contract = sampleContract()

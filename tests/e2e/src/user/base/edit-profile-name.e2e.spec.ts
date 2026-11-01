@@ -1,6 +1,6 @@
 // scenario: user/base/edit-profile-name
 import { generate } from '../../support/data'
-import { appReady, expect, notice, test } from '../../support/fixtures'
+import { appReady, expect, test, toast } from '../../support/fixtures'
 
 test.describe('Rename yourself on the profile page', { tag: '@smoke' }, () => {
   test('A signed-in user changes their name and keeps it after a reload', async ({
@@ -30,8 +30,8 @@ test.describe('Rename yourself on the profile page', { tag: '@smoke' }, () => {
     })
 
     // Expected:
-    // - After step 4 [app-shell.notice-message] carries [code:profile-saved]
-    await expect(notice(page, 'profile-saved')).toBeVisible()
+    // - After step 4 [app-shell.toast] carries [code:profile-saved]
+    await expect(toast(page, 'profile-saved')).toBeVisible()
     // - [user.profile.heading] shows the new name
     await expect(page.getByTestId('user.profile.heading')).toHaveText(data.newName)
     // - Reloading the page keeps the new name

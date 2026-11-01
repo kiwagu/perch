@@ -8,9 +8,7 @@
 
 import type { Problem } from '../files'
 
-import { bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
-
-const ANSWERS = ['confirm-button', 'cancel-button'] as const
+import { ANSWERS, bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
 
 export function unsavedInputProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)

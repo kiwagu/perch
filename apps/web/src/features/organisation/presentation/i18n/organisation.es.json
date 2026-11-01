@@ -21,7 +21,6 @@
   "organisation.members.title": "Miembros",
   "organisation.invite.email": "Correo de una cuenta existente",
   "organisation.invite.submit": "Invitar",
-  "organisation.invite.invited": "Invitado",
   "organisation.members.remove": "Quitar",
   "organisation.error.key-invalid": "Usa de 2 a 32 letras minúsculas, dígitos y guiones bajos, empezando por una letra.",
   "organisation.error.name-required": "Escribe un nombre.",

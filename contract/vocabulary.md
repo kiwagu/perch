@@ -71,6 +71,7 @@ another is a code or a state of one anchor, never a second anchor.
 | `list` | the container of a list, with `data-state` when its data arrives after the page | `getByRole('list')` |
 | `form` | the container of a form | |
 | `dialog` | a modal window or a confirmation, with `data-code` for what it asks | `getByRole('alertdialog')` or `getByRole('dialog')` |
+| `confirmation` | the frame's question before a destructive action, one for the whole app: an alert dialog with `data-code` for the action it asks about, rendering `confirm-button` (go on) and `cancel-button` (stay) | `getByRole('alertdialog')` |
 | `panel` | a side or inline panel that is not modal | |
 | `section` | a region inside a page, with `data-state` when its data arrives after the page | |
 | `page` | the root element of a screen | |
@@ -113,8 +114,9 @@ The `data-state` of `app-shell.status`.
 
 | State | Meaning |
 |---|---|
-| `opening` | the local data is being opened and no screen is rendered yet |
-| `ready` | the frame and the screen are rendered, so a test may start |
+| `opening` | the app starts: it checks the site storage and who is signed in, and no screen is rendered yet |
+| `opening-data` | the signed-in account's frame and the open screen are rendered while its local data is being opened |
+| `ready` | the frame and the screen are rendered, and a signed-in account's data is open, so a test may start |
 | `failed` | the saved account's data could not be opened, and the frame offers `app-shell.sign-out-here-button` |
 | `storage-blocked` | the browser keeps no site data, so the app stops with a message and shows no sign-in form |
 
@@ -139,6 +141,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
+| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item` | the password typed keeps this rule |
 
 ## Codes
 
@@ -147,25 +150,32 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 
 | Code | Where | Meaning |
 |---|---|---|
-| `welcome` | `app-shell.notice-message` | the account signed up or signed in |
-| `profile-saved` | `app-shell.notice-message` | the profile was saved |
-| `invited` | `app-shell.notice-message` | an account was invited into the organisation |
+| `welcome` | `app-shell.notice-message` | the account signed in, or its email was verified and this device signed in to it |
 | `devices-read-failed` | `app-shell.notice-message` | the devices of the account could not be read |
 | `device-sign-out-failed` | `app-shell.notice-message` | signing a device, or every device, out did not go through |
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
+| `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
+| `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message` | a mail whose link verifies the email typed is on its way, if that email has an account waiting for it; the same words when it has none, so the page tells nobody which emails have accounts |
+| `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
+| `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
+| `link-invalid` | `user.verify-email.error` | the link is not one a verification mail carried, or its account is gone |
+| `link-expired` | `user.verify-email.error` | the link is older than a day; the same page sends a new one |
 | `invalid-credentials` | `user.sign-in.error` | the email or the password is wrong |
-| `sign-up-rejected` | `user.sign-in.error` | no account can be created with this email |
-| `rate-limited` | `user.sign-in.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
-| `other-account` | `user.sign-in.error` | another account is signed in on this browser and must be signed out first |
+| `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
+| `passwords-differ` | `user.sign-in.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
+| `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
@@ -178,6 +188,16 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
 | `unsaved-input` | `app-shell.leave-dialog` | the dialog asks whether to leave and lose what was typed but not saved |
+| `screen-crashed` | `app-shell.crash-message` | the open screen failed to render; another screen, a language chosen or a reload may bring it back |
+| `new-version` | `app-shell.update-message` | the server serves a newer version of the app than the one this tab runs, and loading the page again brings it |
+| `protocol-outdated` | `app-shell.update-message` | the server no longer takes the sync protocol of the version this tab runs, so this device's changes stop syncing until the page loads again |
+| `synced` | `app-shell.sync-message` | the sync is connected and no change made on this device waits to be sent |
+| `sending` | `app-shell.sync-message` | the sync is connected and changes made on this device are on their way to the server |
+| `connecting` | `app-shell.sync-message` | the browser has a network, but the sync is not connected yet, or connects again |
+| `offline` | `app-shell.sync-message` | the browser has no network, so changes made on this device wait here until it is back |
+| `sync-stopped` | `app-shell.sync-message` | the sync stopped and does not resume in this page: the server no longer takes its protocol, or the browser cannot lead a sync |
+| `install-available` | `app-shell.install-message` | the browser can install the app and offers to; the reminder carries the button that asks it |
+| `install-by-steps` | `app-shell.install-message` | the browser installs the app only by the user's own steps, which the reminder shows (Share, then Add to Home Screen) |
 
 ## Choice values
 
@@ -188,6 +208,14 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 |---|---|---|
 | `app-shell.locale-select.option` | `en` | the option makes the app speak English |
 | `app-shell.locale-select.option` | `es` | the option makes the app speak Spanish |
+| `app-shell.theme-select.option` | `light` | the option shows the app light on this device |
+| `app-shell.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
+| `user.settings.locale-select.option` | `en` | the option makes the account speak English |
+| `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
+| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
+| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
+| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -203,9 +231,12 @@ screen name of its own.
 |---|---|
 | `app-shell` | the frame around every screen, with the navigation, the language, the status and the notices |
 | `user.sign-in` | the page that signs an account in or creates one (`/sign-in`) |
+| `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in (`/verify-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
+| `not-found` | what an address no other route takes opens (`/$`) |
+| `user.settings` | the settings of the signed-in account and of this device: the theme and the language (`/settings`) |
 
 ## Roles
 
@@ -226,11 +257,23 @@ included.
 |---|---|
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
-| `app-shell.nav` | the main navigation, whose links are the four anchors below, declared on their own and not derived |
+| `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
 | `app-shell.nav.sign-in-link` | the link to `/sign-in`, shown to a guest, which renders no derived anchor |
 | `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
+| `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
+| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
+| `app-shell.confirmation` | the frame's question before a destructive action, which carries `data-code` and renders `app-shell.confirmation.confirm-button` (go on) and `app-shell.confirmation.cancel-button` (stay) |
+| `app-shell.crash-message` | the message in the place of a screen that failed to render, which carries `data-code` and renders no derived anchor |
+| `app-shell.reload-button` | the button that loads the page again, shown with `app-shell.crash-message`, which renders no derived anchor |
+| `app-shell.update-message` | the message that the page should load again, a newer version served or the sync protocol refused, which carries `data-code` and renders no derived anchor |
+| `app-shell.update-button` | the button that loads the page again on the version the server serves, shown with `app-shell.update-message`, which renders no derived anchor |
+| `app-shell.sync-message` | the state of this device's sync for a signed-in account, the same in every tab, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-message` | the reminder to install the app until it is installed, which carries `data-code` and renders no derived anchor |
+| `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
+| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
+| `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |

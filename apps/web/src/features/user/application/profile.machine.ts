@@ -99,9 +99,10 @@ async function settled<T>(result: ResultAsync<T, BusError | DataError> | undefin
   return outcome.isOk() ? outcome.value : Promise.reject(outcome.error)
 }
 
+/** The toast of a Save, said once where it ends, however many writes it ran. */
 const SAVED = {
   type: 'show',
-  params: { anchor: 'app-shell.notice-message', codes: ['profile-saved'] },
+  params: { anchor: 'app-shell.toast', codes: ['profile-saved'] },
 } as const
 const REFUSED = {
   type: 'show',

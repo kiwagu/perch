@@ -8,7 +8,7 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 - Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
   containers.
-- mcproc 0.11.0 or later (`npm i -g mcproc`): it starts and stops the stands from
+- mcproc 0.13.0 or later (`npm i -g mcproc`): it starts and stops the stands from
   `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. The
   mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
   and the gateway without the gateway's environment, its database or the front.
@@ -22,16 +22,17 @@ database, and a gateway keeps it in sync with the central SurrealDB.
 
 ## Local stands
 
-A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves a
-web app build (`apps/web/dist-dev` on the dev stand, `apps/web/dist` on the e2e stand) and,
-under `/backend/`, the gateway on one https origin; the
-browser talks to nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
-by mcproc (pm2 underneath).
+A stand is SurrealDB in memory, the gateway, a MailDev mailbox and a Caddy front
+(`infra/dev/`) that serves a web app build (`apps/web/dist-dev` on the dev stand,
+`apps/web/dist` on the e2e stand) and, under `/backend/`, the gateway on one https origin; the
+browser talks to nothing else. Every mail the stand's gateway sends lands in the stand's
+mailbox: open the verification mails there. The processes are declared in
+`.mcproc/mcproc.yaml` and driven by mcproc (pm2 underneath).
 
-| Stand | Profile | Open | SurrealDB | Gateway | Web app |
-|---|---|---|---|---|---|
-| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | build watcher |
-| tests | `e2e` | https://localhost:5493 | 127.0.0.1:8010 | 127.0.0.1:5191 | production build |
+| Stand | Profile | Open | Mailbox | SurrealDB | Gateway | Web app |
+|---|---|---|---|---|---|---|
+| development | `dev` | https://localhost:5443 | http://127.0.0.1:1080 | 127.0.0.1:8000 | 127.0.0.1:5181 | build watcher |
+| tests | `e2e` | https://localhost:5493 | http://127.0.0.1:1090 | 127.0.0.1:8010 | 127.0.0.1:5191 | production build |
 
 These are the main checkout's addresses, slot 0 of the manifest's `vars`; a worktree made with
 `mcproc worktree add` runs the same stands on a slot of its own, every port shifted by 100 per
@@ -39,7 +40,9 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
 *Worktrees* below).
 
 - `mcproc start dev`, then open https://localhost:5443; `mcproc stop dev` stops the stand. The
-  gateway waits for its database and defines its namespace user there before it starts. The
+  gateway waits for its database and its mailbox, and defines its namespace user in the
+  database before it starts. The mailbox's web UI, http://127.0.0.1:1080, shows every mail the dev stand sends
+  (its SMTP server is 127.0.0.1:1025); a restart of `maildev-dev` empties it. The
   `web` app is a build watcher (`vite build --watch` in development mode, with source maps), not
   a dev server, so there is no hot module replacement: after a code change it rewrites
   `apps/web/dist-dev` in 1-3 s, then reload the page. Until its first build finishes the front
@@ -60,14 +63,19 @@ slot, under its own project slug (`perch-w1`), so several checkouts run side by 
 - `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
   the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
-  `GATEWAY_URL` and `E2E_BASE_URL` of the e2e stand, `SURREAL_DEV_URL` and `GATEWAY_DEV_URL` of
-  the dev stand) and the stands' signing key `GATEWAY_JWT_KEY`; none of them has an address of
-  its own.
+  `GATEWAY_URL`, `E2E_BASE_URL` and the mailbox's `MAILBOX_URL` of the e2e stand,
+  `SURREAL_DEV_URL`, `GATEWAY_DEV_URL` and `MAILBOX_DEV_URL` of the dev stand) and what the e2e
+  stand's gateway runs with: the stands' auth secret `GATEWAY_AUTH_SECRET`, the public origin
+  of its front, `GATEWAY_PUBLIC_URL`, its mail server `GATEWAY_SMTP_URL` and the stands' From
+  `GATEWAY_MAIL_FROM`; none of them has an address of its own.
 - `bun run load -- --devices 20 --members 10 --hold 15`: the gateway load test. It starts a
   gateway of its own on port 5197 in front of the e2e stand's SurrealDB and prints one table row
   per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
   the in-memory e2e stand, so afterwards run `mcproc restart surrealdb-e2e`, then
   `mcproc restart gateway-e2e`; `bun run seed:sweep` reaches the dev stand only.
+- `bun run perf:measure`: the start's timings on a slowed-down phone against their budgets,
+  on the production build the e2e stand serves (see `tests/e2e/README.md`); the size budgets
+  are checked by every production build (see `apps/web/README.md`).
 - `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
   profile, waits for each of its apps and runs the Playwright specs through the front;
@@ -112,8 +120,9 @@ Each workspace has a README with its role, key exports and commands.
 
 - `apps/web`: the browser application; each signed-in identity's local replica in its own
   IndexedDB database, synced through the gateway by one leading tab per browser.
-- `apps/gateway`: the Bun server in front of the central SurrealDB: sign-up and sign-in over
-  HTTP, sync over a WebSocket.
+- `apps/gateway`: the Bun server in front of the central SurrealDB: accounts on Better Auth,
+  each device holding a session token, the device and organisation routes over HTTP, and sync
+  over a WebSocket.
 - `packages/replica`: Loro region documents, the projector into the local database, the
   sync protocol, the server's region log, batch validation and hub, and the device's sync engine.
 - `packages/data`: the SurrealDB driver: local databases, shapes and commands, accounts.
@@ -123,9 +132,9 @@ Each workspace has a README with its role, key exports and commands.
 - `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
 - `packages/ui-contract`: the anchor grammar of every `data-testid` and the UI contract tooling:
   the loaders, the three checks, the manifest, coverage and the hand-over diff.
-- `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
-  container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
-  logger, the UI kit and the single Zod instance.
+- `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,mailbox,ui,zod}`: the buses,
+  the container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel,
+  the logger, the client of the stands' mailboxes, the UI kit and the single Zod instance.
 
 ## Gates
 
@@ -160,7 +169,8 @@ Each workspace has a README with its role, key exports and commands.
 - `bun run contract:routes`: the routes of the screen files, one example deep link each,
   where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
-  the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
+  the seed data (with the dev stand's addresses from `mcproc exec`; neither needs the auth
+  secret).
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
 - `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file that the first run on a checkout writes from the sizes committed where HEAD left `main`, never from the working tree (also in `check` and in the pre-commit hook): a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails, so a branch's growth fails from its checkout's first run.
 - `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.

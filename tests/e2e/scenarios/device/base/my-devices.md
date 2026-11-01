@@ -17,10 +17,10 @@ Where: [/devices] on device A, and [/me] on device B, another browser
 ## Scenario: A device signed out from another one leaves at once, signing out everywhere signs every device out, and the account signs in again after it
 
 ### Steps
-1. On device A, sign up and open [/devices]
+1. On device A, sign up, open the link of [mail:sign-up] and open [/devices]
 2. On device B, sign in with the same account and wait for [/me]
 3. On device A, reload [/devices]
-4. On device A, click [device.list.revoke-button] on device B's [device.list.session-item]
+4. On device A, click [device.list.revoke-button] on device B's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]
 5. On device B, sign in again with the same account and wait for [/me]
 6. On device A, click [device.everywhere.open-button] and confirm with [device.everywhere.dialog.confirm-button]
 7. On device A, sign in again with the same account and wait for [/me]

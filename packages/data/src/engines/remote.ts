@@ -5,8 +5,8 @@ export const remoteEngines = (): Engines => createRemoteEngines()
 
 /**
  * A server's WebSocket RPC endpoint for any of its `http(s)://` or `ws(s)://` addresses:
- * `https` and `wss` become `wss`, the others `ws`, and the path is `/rpc`. Sessions and
- * record users need WebSocket, while stand tools are often given the HTTP address.
+ * `https` and `wss` become `wss`, the others `ws`, and the path is `/rpc`. The SDK runs sessions
+ * and transactions only over WebSocket, while stand tools are often given the HTTP address.
  */
 export function wsRpcUrl(url: string): string {
   const parsed = new URL(url)

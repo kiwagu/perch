@@ -18,8 +18,8 @@ Where: [/org] on device A (user A) and [/org] on device B (user B, another brows
 ## Scenario: Two members of one organisation see each other's notes and nothing private
 
 ### Steps
-1. On device B, sign up as user B and wait for [/me]
-2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 5. On device A, open [/me], enter the bio of A into [user.profile.bio-textarea], click [user.profile.save-button] and open [/org] again
@@ -28,7 +28,7 @@ Where: [/org] on device A (user A) and [/org] on device B (user B, another brows
 
 ### Expected result
 - After step 2 device A shows the organisation name in [organisation.page.heading] and [organisation.page.role-badge] with [value:admin]
-- After step 3 device A shows [app-shell.notice-message] carrying [code:invited] and user B in [organisation.members.list]
+- After step 3 device A shows [app-shell.toast] carrying [code:invited] and user B in [organisation.members.list]
 - After step 6 device B shows the organisation name in [organisation.page.heading], [organisation.page.role-badge] with [value:member] and the note by A in [organisation.notes.list], without an invitation page or a reload
 - Within 5 seconds of step 7 device A shows the note by B in [organisation.notes.list], without a reload; the delay is reported as "note-sync-latency-ms"
 - Device B shows no [organisation.members.list] and no [organisation.invite.form]

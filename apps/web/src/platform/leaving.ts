@@ -21,9 +21,12 @@ export const LEAVE_POLICY: LeavePolicy = {
 
 export const LEAVING_CONTROLS: ReadonlySet<string> = new Set([
   'app-shell.locale-select',
+  'app-shell.reload-button',
   'app-shell.sign-out-here-button',
+  'app-shell.update-button',
   'organisation.page.current-select',
   'user.profile.sign-out-button',
+  'user.settings.locale-select',
 ])
 
 export const isLeavingControl = (control: string): boolean => LEAVING_CONTROLS.has(control)

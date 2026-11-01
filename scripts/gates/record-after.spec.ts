@@ -95,11 +95,11 @@ describe('record-after', () => {
 
   it('records no receipt for a run given a spec, says so, and passes as the suite did', () => {
     const root = checkout()
-    const run = recordAfter(root, [...FULL_RUN.e2e, 'user/flows/key-renewal'])
+    const run = recordAfter(root, [...FULL_RUN.e2e, 'user/flows/sign-out'])
 
     expect(run.status).toBe(0)
     expect(run.stdout).toContain(
-      'gates: e2e passed on a partial run (bun tests/e2e/scripts/run-e2e.ts user/flows/key-renewal): no receipt recorded',
+      'gates: e2e passed on a partial run (bun tests/e2e/scripts/run-e2e.ts user/flows/sign-out): no receipt recorded',
     )
     expect(receipts(root)).toEqual([])
   })

@@ -1,8 +1,10 @@
-import { err, errAsync, okAsync, Result, type ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
 import { type DataError, type LocalDb, recordId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
+
+import { identityByEmail } from '../auth/identity-by-email'
 
 import { type OrganisationError, refused } from './organisation-refusal'
 import {
@@ -19,7 +21,6 @@ import {
   toTenant,
 } from './organisation-rows'
 import identitiesByIdStatement from './surql/identities-by-id.surql'
-import identityByEmailStatement from './surql/identity-by-email.surql'
 import membershipRoleStatement from './surql/membership-role.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import tenantByKeyStatement from './surql/tenant-by-key.surql'
@@ -77,15 +78,13 @@ export class OrganisationLookup {
     )
   }
 
-  /** The identity that signs in with `email`; none is refused. */
+  /**
+   * The identity that signs in with `email`, in any case, through the auth module's lookup; none
+   * is refused.
+   */
   identityByEmail(email: string): ResultAsync<Member['identity'], OrganisationError> {
-    return reading(
-      this.#directory.db.query<[IdentityRow | undefined]>(identityByEmailStatement, { email }),
-      'could not look an identity up by its email',
-    ).andThen(([row]) =>
-      row
-        ? identityIdOf(keyOf(row.id)).map((id) => ({ id, email: row.email }))
-        : err(refused('no-such-identity')),
+    return identityByEmail(this.#directory, email).andThen((identity) =>
+      identity ? ok(identity) : err(refused('no-such-identity')),
     )
   }
 

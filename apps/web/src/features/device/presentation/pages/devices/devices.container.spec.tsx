@@ -8,13 +8,18 @@ import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory } from '@workspace/ids'
 
 import { FakeDevices, offline, phone, rejected } from '../../../../../platform/__fixtures__/devices'
+import { memoryInstall } from '../../../../../platform/__fixtures__/install'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
+import { memoryTheme } from '../../../../../platform/__fixtures__/theme'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { DEVICES } from '../../../../../platform/devices.port'
+import { InstallContext } from '../../../../../platform/install'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import { ThemeContext } from '../../../../../platform/theme'
 import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
+import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from '../../../../app-shell/presentation/shell/shell.container'
 import { ShellFrameContext } from '../../../../app-shell/presentation/shell/shell-frame'
 import { DeviceModule } from '../../../device.module'
@@ -66,7 +71,7 @@ async function openPage(): Promise<void> {
     modules: [DeviceModule],
     session,
     layout: () => (
-      <NoticeProvider>
+      <NoticeProvider texts={NOTICE_TEXTS}>
         <ShellContainer>
           <Outlet />
         </ShellContainer>
@@ -80,11 +85,15 @@ async function openPage(): Promise<void> {
 
   render(
     <I18nProvider locale="en" catalogs={{ en: englishCatalog }}>
-      <ShellFrameContext.Provider value={openedFrame()}>
-        <ServicesProvider services={services}>
-          <RouterProvider router={router} />
-        </ServicesProvider>
-      </ShellFrameContext.Provider>
+      <ThemeContext.Provider value={memoryTheme()}>
+        <InstallContext.Provider value={memoryInstall()}>
+          <ShellFrameContext.Provider value={openedFrame()}>
+            <ServicesProvider services={services}>
+              <RouterProvider router={router} />
+            </ServicesProvider>
+          </ShellFrameContext.Provider>
+        </InstallContext.Provider>
+      </ThemeContext.Provider>
     </I18nProvider>,
   )
   await screen.findByTestId('app-shell.nav.devices-link')

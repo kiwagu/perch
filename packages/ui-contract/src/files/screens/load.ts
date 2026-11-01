@@ -7,14 +7,16 @@
  * missing platform file are problems of the file or folder concerned. Once every file is
  * read, what a file leaves to the contract is derived (`derive/`): an error anchor's codes and
  * fields from the failures of the actions its part binds, as the model and the platform give
- * them, and whether a field holds input, from its kind and its bindings. A file may author its flow in the shorter forms (a transition as its target, an effect
+ * them, and whether a field holds input, from its kind and its bindings; and, with a
+ * confirmation on the frame, the question each control of a destructive action asks before it
+ * runs (`derive/questions.ts`), the confirmation carrying every code asked with. A file may author its flow in the shorter forms (a transition as its target, an effect
  * by its name, a region by its pattern or its button, the region of a button left out): each
  * flow is expanded with the codes the anchors of all screens carry, the failures of the
  * actions, the screen's buttons and the frame's toast anchor, which says the success of each
- * model action a flow invokes (`expand-flow/toasts.ts`); that anchor then carries every code a
+ * model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
  * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
- * screen with its file, with the toasts the loader derived.
+ * screen with its file, with the toasts and the questions the loader derived.
  */
 
 import { join } from 'node:path'
@@ -22,11 +24,14 @@ import { join } from 'node:path'
 import { isRecord } from '../../records'
 import { platformFileSchema } from '../../schemas'
 import {
+  type DerivedQuestion,
   type FailureOf,
   failuresOf,
   toastCodesOf,
   withDerivedErrors,
   withDerivedInputs,
+  withDerivedQuestions,
+  withQuestionCodes,
   withToastCodes,
 } from '../derive'
 import type { DerivedToast } from '../expand-flow'
@@ -34,10 +39,16 @@ import { filesUnder } from '../files-under'
 import { loadModel, type Model } from '../model'
 import { parseFile } from '../parse-file'
 import { PLATFORM_FILE, SCREENS_DIR } from '../paths'
-import type { Problem } from '../problems'
+import { jsonPath, type Problem } from '../problems'
 import { readYaml } from '../read-yaml'
 
-import { codesOfRead, type Lookups, toastOfRead, writesToastCodes } from './lookups'
+import {
+  codesOfRead,
+  confirmationOfRead,
+  frameWritesCodes,
+  type Lookups,
+  toastOfRead,
+} from './lookups'
 import { expandedOf, parsedOf } from './screen-file'
 import type { PlatformFile, Screen, ScreensFile } from './types'
 
@@ -46,11 +57,13 @@ const SUFFIX = '.yaml'
 function readScreenFiles(
   root: string,
   failureOf: FailureOf,
+  platformToasts: Readonly<Record<string, string>>,
 ): {
   screens: Screen[]
   files: string[]
   problems: Problem[]
   toasts: DerivedToast[]
+  questions: DerivedQuestion[]
 } {
   const screens: Screen[] = []
   const files: string[] = []
@@ -59,7 +72,7 @@ function readScreenFiles(
   if (paths === undefined || paths.length === 0) {
     const message = paths === undefined ? 'cannot read the folder' : 'holds no screen file'
 
-    return { screens, files, problems: [{ file: SCREENS_DIR, message }], toasts: [] }
+    return { screens, files, problems: [{ file: SCREENS_DIR, message }], toasts: [], questions: [] }
   }
 
   const problems: Problem[] = []
@@ -84,9 +97,40 @@ function readScreenFiles(
     }
   }
 
-  const values = read.map(({ value }) => value)
-  const lookups: Lookups = { codesOf: codesOfRead(values), failureOf, toast: toastOfRead(values) }
-  const expanded = read.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
+  const dialog = confirmationOfRead(read.map(({ value }) => value))
+  const asked = read.map(({ file, value }) => ({
+    file,
+    ...withDerivedQuestions(file, value, dialog),
+  }))
+  const asking = new Map<string, DerivedQuestion>()
+
+  for (const each of asked) {
+    problems.push(...each.problems)
+
+    for (const one of each.questions) {
+      if (!asking.has(one.code)) {
+        asking.set(one.code, one)
+      }
+    }
+  }
+
+  const frame = asked.find(({ value }) => isRecord(value) && value['frame'] === true)
+
+  if (dialog !== undefined && frame !== undefined && frameWritesCodes([frame.value], dialog)) {
+    problems.push({
+      file: frame.file,
+      message: `${jsonPath(['anchors', dialog, 'codes'])}: the codes of the confirmation are derived from the questions its controls ask: the frame writes none`,
+    })
+  }
+
+  const values = asked.map(({ value }) => value)
+  const lookups: Lookups = {
+    codesOf: codesOfRead(values),
+    failureOf,
+    toast: toastOfRead(values),
+    platformToasts,
+  }
+  const expanded = asked.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
   const { toast } = lookups
   const codes =
     toast === undefined
@@ -109,9 +153,10 @@ function readScreenFiles(
 
   for (const { file, value } of expanded) {
     if (value !== undefined) {
+      const toasted = toast === undefined ? value : withToastCodes(value, toast, codes)
       const loaded = parsedOf(
         file,
-        toast === undefined ? value : withToastCodes(value, toast, codes),
+        dialog === undefined ? toasted : withQuestionCodes(toasted, dialog, [...asking.keys()]),
       )
 
       problems.push(...loaded.problems)
@@ -127,11 +172,11 @@ function readScreenFiles(
   // each with its own vocabulary row.
   const written = new Set(expanded.flatMap(({ writtenToasts }) => writtenToasts))
   const toasts =
-    toast !== undefined && writesToastCodes(values, toast)
+    toast !== undefined && frameWritesCodes(values, toast)
       ? []
       : [...derived.values()].filter(({ code }) => !written.has(code))
 
-  return { screens, files, problems, toasts }
+  return { screens, files, problems, toasts, questions: [...asking.values()] }
 }
 
 function readPlatform(root: string): { platform?: PlatformFile; problems: Problem[] } {
@@ -158,7 +203,13 @@ export function loadScreensWith(
 ): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
   const failureOf = failuresOf(model, platform?.actions)
-  const { screens, files, problems: screenProblems, toasts } = readScreenFiles(root, failureOf)
+  const {
+    screens,
+    files,
+    problems: screenProblems,
+    toasts,
+    questions,
+  } = readScreenFiles(root, failureOf, platform?.toasts ?? {})
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {
@@ -167,7 +218,10 @@ export function loadScreensWith(
 
   const { version, ...section } = platform
 
-  return { screens: { version, screens, files, platform: section, toasts }, problems: [] }
+  return {
+    screens: { version, screens, files, platform: section, toasts, questions },
+    problems: [],
+  }
 }
 
 /**

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { emit, fromPromise, setup } from 'xstate'
 
 import { fakeServices, fakeSession } from './__fixtures__/session'
+import { type ConfirmGuard, ConfirmGuardContext } from './confirm-guard.port'
 import { type LeaveGuard, LeaveGuardContext } from './leave-guard.port'
 import { defineModule } from './module'
 import { createAppRouter } from './router'
@@ -16,8 +17,12 @@ type Event =
   | { readonly type: 'x.nothing-button' }
   | { readonly type: 'x.leave-button' }
   | { readonly type: 'user.profile.sign-out-button' }
+  | { readonly type: 'organisation.notes.delete-button' }
 
-/** Two saves in a chain, a button that does nothing, a flow's own move, and a leaving control. */
+/**
+ * Two saves in a chain, a button that does nothing, a flow's own move, a leaving control and a
+ * control whose action destroys.
+ */
 const machine = setup({
   types: { events: {} as Event, emitted: {} as { type: 'navigate'; to: string } },
   actors: {
@@ -38,6 +43,7 @@ const machine = setup({
         'x.nothing-button': { actions: emit({ type: 'navigate', to: '/here' }) },
         'x.leave-button': { actions: emit({ type: 'navigate', to: '/there' }) },
         'user.profile.sign-out-button': 'out',
+        'organisation.notes.delete-button': 'deleted',
       },
     },
     'saving-one': {
@@ -50,6 +56,7 @@ const machine = setup({
     },
     'saving-two': { invoke: { src: 'save', input: () => ({ fail: false }), onDone: 'idle' } },
     out: {},
+    deleted: {},
   },
 })
 
@@ -166,7 +173,7 @@ const PageModule = defineModule({
   ],
 })
 
-async function open(guard: LeaveGuard, at = '/here') {
+async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = confirming()) {
   const { session } = fakeSession()
   const router = createAppRouter({
     modules: [PageModule],
@@ -177,9 +184,11 @@ async function open(guard: LeaveGuard, at = '/here') {
 
   render(
     <ServicesProvider services={fakeServices(session)}>
-      <LeaveGuardContext.Provider value={guard}>
-        <RouterProvider router={router} />
-      </LeaveGuardContext.Provider>
+      <ConfirmGuardContext.Provider value={asking}>
+        <LeaveGuardContext.Provider value={guard}>
+          <RouterProvider router={router} />
+        </LeaveGuardContext.Provider>
+      </ConfirmGuardContext.Provider>
     </ServicesProvider>,
   )
   await screen.findByTestId('state')
@@ -207,6 +216,11 @@ async function openWatched(): Promise<Watched> {
 const passing = (): LeaveGuard => ({
   confirm: vi.fn(() => Promise.resolve(true)),
   before: vi.fn(() => Promise.resolve(true)),
+})
+
+/** The frame's confirmation, answering `answer` to every question. */
+const confirming = (answer = true): ConfirmGuard => ({
+  before: vi.fn(() => Promise.resolve(answer)),
 })
 
 describe('useScreenMachine', () => {
@@ -370,5 +384,38 @@ describe('useScreenMachine', () => {
 
     expect(guard.before).toHaveBeenCalledWith('user.profile.sign-out-button')
     expect(screen.getByTestId('state').textContent).toBe('out')
+  })
+
+  it('asks the confirmation before a destructive control, and sends nothing when the user stays', async () => {
+    const staying = confirming(false)
+    const { running } = await open(passing(), '/here', staying)
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+
+    expect(staying.before).toHaveBeenCalledWith('organisation.notes.delete-button')
+    expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
+
+  it('sends a destructive control once confirmed, and asks for no other event', async () => {
+    const asking = confirming()
+    const guard = passing()
+    const { running } = await open(guard, '/here', asking)
+
+    act(() => running.send({ type: 'x.nothing-button' }))
+    expect(asking.before).not.toHaveBeenCalled()
+
+    expect(await act(() => running.submit({ type: 'organisation.notes.delete-button' }))).toBe(true)
+    expect(asking.before).toHaveBeenCalledWith('organisation.notes.delete-button')
+    expect(guard.before).not.toHaveBeenCalled()
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+  })
+
+  it('resolves a destructive submit false when the user stays, and sends nothing', async () => {
+    const { running } = await open(passing(), '/here', confirming(false))
+
+    expect(await act(() => running.submit({ type: 'organisation.notes.delete-button' }))).toBe(
+      false,
+    )
+    expect(screen.getByTestId('state').textContent).toBe('idle')
   })
 })

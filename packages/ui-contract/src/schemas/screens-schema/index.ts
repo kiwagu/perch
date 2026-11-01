@@ -2,6 +2,7 @@ export {
   actionNameSchema,
   anchorBindingSchema,
   anchorDefSchema,
+  asksSchema,
   bindingRefSchema,
   modelFieldPathSchema,
   sourceSchema,
@@ -19,6 +20,7 @@ export {
   platformEventNameSchema,
   transitionSchema,
 } from './flow'
+export { ACCOUNT, type PlatformMail, platformMailSchema } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
 export { platformSchema } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'

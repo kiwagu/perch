@@ -42,6 +42,11 @@ const FAILED = {
   type: 'show',
   params: { anchor: 'app-shell.notice-message', codes: ['device-sign-out-failed'] },
 } as const
+/** The toast the contract derives for another device signed out. */
+const DEVICE_SIGNED_OUT = {
+  type: 'show',
+  params: { anchor: 'app-shell.toast', codes: ['device-signed-out'] },
+} as const
 const SIGNED_OUT = {
   type: 'show',
   params: { anchor: 'user.sign-in.notice-message', codes: ['signed-out-elsewhere'] },
@@ -88,7 +93,7 @@ export function createDevicesMachine(deps: DevicesMachineDeps) {
 
             return { device: event.device }
           },
-          onDone: { target: 'viewing' },
+          onDone: { target: 'viewing', actions: [DEVICE_SIGNED_OUT] },
           onError: { target: 'viewing', actions: [FAILED] },
         },
       },

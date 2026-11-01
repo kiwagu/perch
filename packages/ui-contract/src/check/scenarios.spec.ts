@@ -40,7 +40,7 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: [state:busy] is not a state of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:c] is not a choice value of the vocabulary',
       'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [value:kx] is not a choice value of the vocabulary',
-      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state or a value: "Save"',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: not an anchor, a route, a code, a state, a value or a mail: "Save"',
       'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [code:lost] is not a code of the vocabulary',
     ])
   })
@@ -58,6 +58,30 @@ describe('scenariosProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([])
+  })
+  it('resolves a mail by the platform action that declares it', () => {
+    const contract = sampleContract()
+    const scenario = firstScenario(contract)
+
+    Object.assign(contract.screens.platform.actions, {
+      'invite.send': {
+        description: 'Sends an invitation.',
+        params: { email: { type: 'string', description: 'The address.' } },
+        result: 'a mail is on its way',
+        codes: ['failed'],
+        mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'tab' } },
+      },
+    })
+    scenario.steps = [
+      'Open the link of [mail:invite.send]',
+      'And of [mail:sign-out]',
+      'And of [mail:gone]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[1]: [mail:sign-out] names no platform action that sends a mail',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[2]: [mail:gone] names no platform action that sends a mail',
+    ])
   })
   it('wants every device to act as a role of the vocabulary', () => {
     const contract = sampleContract()

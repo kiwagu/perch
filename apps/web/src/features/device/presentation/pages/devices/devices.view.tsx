@@ -1,6 +1,4 @@
-import { useMemo } from 'react'
-
-import { useLocale, useT } from '@workspace/i18n'
+import { useFormats, useT } from '@workspace/i18n'
 import type { DeviceSessionId } from '@workspace/ids'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -93,12 +91,7 @@ function DeviceRow(props: {
  */
 export function DevicesView(props: DevicesViewProps) {
   const t = useT()
-  const locale = useLocale()
-  const when = useMemo(() => {
-    const format = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
-
-    return (date: Date) => format.format(date)
-  }, [locale])
+  const when = useFormats().dateTime
 
   return (
     <Card className="mx-auto w-full max-w-md">

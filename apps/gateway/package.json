@@ -7,23 +7,28 @@
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "test:db": "bun scripts/smoke/cli.ts",
     "load": "bun scripts/load/ws-clients.ts"
   },
   "dependencies": {
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
+    "@workspace/email": "workspace:*",
+    "@workspace/i18n": "workspace:*",
     "@workspace/ids": "workspace:*",
     "@workspace/kernel": "workspace:*",
     "@workspace/logger": "workspace:*",
     "@workspace/replica": "workspace:*",
     "@workspace/zod": "workspace:*",
+    "better-auth": "catalog:",
     "neverthrow": "catalog:",
+    "nodemailer": "catalog:",
     "ts-pattern": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
+    "@workspace/mailbox": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

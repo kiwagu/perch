@@ -53,9 +53,4 @@ export class DeviceSeen {
       },
     )
   }
-
-  /** A renewal marked the device seen as it moved the row to the new grant. */
-  renewed(): void {
-    this.#seenAt = this.#clock.now()
-  }
 }

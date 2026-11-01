@@ -5,8 +5,8 @@
   "type": "module",
   "exports": {
     "./seeding": {
-      "types": "./src/composition/seeding.ts",
-      "import": "./src/composition/seeding.ts"
+      "types": "./src/composition/seeding/index.ts",
+      "import": "./src/composition/seeding/index.ts"
     }
   },
   "scripts": {
@@ -34,11 +34,14 @@
     "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",
     "@xstate/react": "catalog:",
+    "better-auth": "catalog:",
     "entity-id": "catalog:",
+    "lucide-react": "catalog:",
     "neverthrow": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "ts-pattern": "catalog:",
+    "workbox-window": "catalog:",
     "xstate": "catalog:"
   },
   "devDependencies": {
@@ -54,6 +57,7 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plugin-pwa": "catalog:",
     "vite-plugin-wasm": "catalog:",
     "vitest": "catalog:"
   }

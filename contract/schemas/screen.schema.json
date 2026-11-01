@@ -488,11 +488,26 @@
                               ],
                               "additionalProperties": false,
                               "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "search": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "The name of a search parameter every route of the screen declares."
+                                }
+                              },
+                              "required": [
+                                "search"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                             }
                           ],
-                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                         },
-                        "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                        "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                       }
                     },
                     "required": [
@@ -576,11 +591,26 @@
                                 ],
                                 "additionalProperties": false,
                                 "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "search": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "The name of a search parameter every route of the screen declares."
+                                  }
+                                },
+                                "required": [
+                                  "search"
+                                ],
+                                "additionalProperties": false,
+                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                               }
                             ],
-                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                            "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                           },
-                          "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                          "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                         }
                       },
                       "required": [
@@ -723,6 +753,11 @@
               }
             ],
             "description": "Where the entries of a list, a section or a table come from."
+          },
+          "confirm": {
+            "description": "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
+            "type": "boolean",
+            "const": false
           }
         },
         "required": [
@@ -927,9 +962,24 @@
                               ],
                               "additionalProperties": false,
                               "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "search": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "The name of a search parameter every route of the screen declares."
+                                }
+                              },
+                              "required": [
+                                "search"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                             }
                           ],
-                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                         }
                       },
                       "onDone": {
@@ -1303,9 +1353,24 @@
                                               ],
                                               "additionalProperties": false,
                                               "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "search": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                                  "description": "The name of a search parameter every route of the screen declares."
+                                                }
+                                              },
+                                              "required": [
+                                                "search"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                             }
                                           ],
-                                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                          "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                                         }
                                       },
                                       "onDone": {

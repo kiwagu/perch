@@ -1,7 +1,9 @@
 /**
  * Short messages for the user that outlive the page that raised them, such as
- * "Welcome" after signing up, which the next page still shows. The shell
+ * "Welcome" after signing in, which the next page still shows. The shell
  * renders the latest one, until a newer one replaces it or the shell clears it.
+ * A notice is raised by its contract code; the frame gives the words of each code
+ * (`NOTICE_TEXTS`), and a code without words throws.
  */
 
 import {
@@ -16,19 +18,21 @@ import {
 
 import type { Translate } from '@workspace/i18n'
 
+import { entryOf, type Texts } from './texts'
+
 export interface Notice {
-  /** The contract code of what it says (`welcome`, `profile-saved`), shown as `data-code`. */
+  /** The contract code of what it says (`welcome`, `change-rejected`), shown as `data-code`. */
   readonly code: string
   /**
-   * Its words, which the page that raises it knows, said in the language the app speaks while it
-   * is shown: a notice raised in one language reads in the next one chosen.
+   * Its words, from the frame's map, said in the language the app speaks while it is shown: a
+   * notice raised in one language reads in the next one chosen.
    */
   readonly text: (t: Translate) => string
 }
 
 interface NoticeChannel {
   readonly notice: Notice | undefined
-  readonly notify: (notice: Notice) => void
+  readonly notify: (code: string) => void
   readonly clear: () => void
 }
 
@@ -38,7 +42,8 @@ const NoticeContext = createContext<NoticeChannel>({
   clear: () => {},
 })
 
-export function NoticeProvider(props: { readonly children: ReactNode }) {
+export function NoticeProvider(props: { readonly texts: Texts; readonly children: ReactNode }) {
+  const { texts } = props
   const [notice, setNotice] = useState<Notice | undefined>(undefined)
   // Each clear starts a generation: a `notify` taken before it (a page's request whose reply
   // comes after the account that sent it signed out) raises nothing.
@@ -47,12 +52,14 @@ export function NoticeProvider(props: { readonly children: ReactNode }) {
   const notify = useMemo(() => {
     const raisedIn = generation
 
-    return (next: Notice) => {
+    return (code: string) => {
+      const text = entryOf(texts, code, 'notice')
+
       if (current.current === raisedIn) {
-        setNotice(next)
+        setNotice({ code, text })
       }
     }
-  }, [generation])
+  }, [generation, texts])
   const clear = useCallback(() => {
     current.current += 1
     setGeneration(current.current)
@@ -63,7 +70,7 @@ export function NoticeProvider(props: { readonly children: ReactNode }) {
   return <NoticeContext.Provider value={channel}>{props.children}</NoticeContext.Provider>
 }
 
-export const useNotify = (): ((notice: Notice) => void) => useContext(NoticeContext).notify
+export const useNotify = (): ((code: string) => void) => useContext(NoticeContext).notify
 
 export const useNotice = (): Notice | undefined => useContext(NoticeContext).notice
 

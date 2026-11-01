@@ -16,6 +16,7 @@ import {
 } from '../../names.schema'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
+import { platformMailSchema } from './mail'
 
 const actionParameterSchema = z
   .strictObject({
@@ -33,6 +34,7 @@ const platformActionSchema = z
     result: z.string().describe('What holds once the action succeeds.'),
     codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
+    mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
   })
   .describe('One platform action.')
 
@@ -87,6 +89,12 @@ export const platformSchema = z
       .optional()
       .describe(
         'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
+      ),
+    toasts: z
+      .record(platformActionNameSchema, codeSchema)
+      .optional()
+      .describe(
+        'The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.',
       ),
     unsavedInput: unsavedInputSchema.optional(),
     reserved: z

@@ -54,7 +54,8 @@ code and the tests follow; the checks hold them to the contract.
    state, a guard, a code, a facet) goes on through steps 2 to 5 like a new element.
 2. **The model.** A field or an action the screen needs goes into its entity of
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
-   `contract/domain/platform.yaml` when the platform runs it.
+   `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
+   mail declares it under `mail`.
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -69,8 +70,13 @@ code and the tests follow; the checks hold them to the contract.
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
    the region of a button bound to one action when it only runs the action, and the toast of a
-   model action's success (write `toast: false` on the invoke, or on a region `by` its button,
-   when the screen wants none). Add its
+   mutation's success (one per operation, where it ends, a chain of actions named by the control
+   that starts it; one event starting several at once is refused; on by default for an action of the
+   model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
+   `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
+   toast for a message of its own), and the question before a destructive action (a control
+   bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
+   its anchor to run it without asking). Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms
@@ -79,14 +85,15 @@ code and the tests follow; the checks hold them to the contract.
    contract:flow <screen>`) and the element to the `wireframe`. A
    new code, state or choice value goes into its table of the vocabulary in the same change:
    those tables are business, like the screen file. The toast codes the contract derives for
-   model actions' successes are the exception: the rule row `<object>-<verb>ed` stands for them,
-   and only their words are written, in the frame's map. A field holds input by itself; only a
+   mutations' successes (an action of the model, or a platform action the platform's `toasts`
+   lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
+   words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
    `holdsInput={false}` in the JSX, and the contract derives which.
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references. When it cannot be written from the contract, the scenario has found a
+   bracket references; it names a mail by the action that sends it, `[mail:<action>]`. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either
@@ -101,7 +108,9 @@ code and the tests follow; the checks hold them to the contract.
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes; an app's machine may lack what its flow added, and does
-   nothing the flow does not say). A rename or a removal keeps the old name declared in
+   nothing the flow does not say, or is still its flow at the branch's base; a scenario may
+   wait for its test, which the landing on
+   `main` requires). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer
    the output of `bun run contract:diff main`, the contract commits by hash with their diff

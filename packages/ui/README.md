@@ -4,7 +4,8 @@
 
 The visual primitives every view is built from: shadcn components on Base UI with
 Tailwind CSS v4, mobile first. The package holds no text, no translations and no domain
-knowledge; copy and data arrive through props. Dark colors follow the system setting.
+knowledge; copy and data arrive through props. The dark colors apply while `<html>` carries
+the class `dark` (the `dark:` variant follows it), which the app sets for its theme.
 Every primitive spreads its props onto its element, so a call site passes `data-testid` and
 the other contract attributes directly. A composite takes its anchor (`data-testid`) as a
 `testId` prop and builds the anchors of the parts it renders itself with
@@ -54,7 +55,10 @@ than its portal or overlay. A control that is not a test target carries a
 - `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus `success` and `warning`:
   Tailwind's green and orange, 600 in light and 400 in dark, as `destructive` is red) and the
   base layer; import it once in the app. It points Tailwind at the kit's components, so their
-  classes are generated in apps.
+  classes are generated in apps. The base layer also hides the native scrollbar of a Base UI
+  list (`.base-ui-disable-scrollbar`): the kit's components render no inline `<style>`, which a
+  strict style policy refuses (`Select` keeps its popup under Base UI's `CSPProvider` with
+  `disableStyleElements`).
 
 ## Commands
 

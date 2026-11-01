@@ -65,9 +65,12 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
   }
 }
 
+/** What the machine emits for the frame's toast: the success of a note's change. */
+const toast = (code: string) => ({ type: 'show', anchor: 'app-shell.toast', codes: [code] })
+
 describe('organisation machine', () => {
-  it('opens and closes the create form by its toggle, and creates from it', async () => {
-    const { actor, deps, snapshot, region } = page()
+  it('opens and closes the create form by its toggle, and creates from it with its toast', async () => {
+    const { actor, deps, snapshot, region, emitted } = page()
 
     actor.send({ type: 'organisation.create.toggle-button' })
 
@@ -87,6 +90,7 @@ describe('organisation machine', () => {
     expect(deps.create).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'globex', name: 'Globex' }),
     )
+    expect(emitted).toEqual([toast('organisation-created')])
   })
 
   it('keeps the create form open with the code of a refused creation, until a creation starts every area afresh', async () => {
@@ -110,8 +114,8 @@ describe('organisation machine', () => {
     expect(snapshot().context.editing).toBeUndefined()
   })
 
-  it('edits one note at a time, the one acted on last', async () => {
-    const { actor, deps, snapshot, region } = page()
+  it('edits one note at a time, the one acted on last, and says the save in a toast', async () => {
+    const { actor, deps, snapshot, region, emitted } = page()
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.edit-button', id: agenda })
@@ -132,20 +136,24 @@ describe('organisation machine', () => {
     expect(snapshot().can({ type: 'organisation.notes.save-button', id: agenda, text: '' })).toBe(
       false,
     )
+    expect(emitted).toEqual([toast('note-updated')])
   })
 
-  it('closes the open edit form when another note is deleted', async () => {
-    const { actor, deps, region } = page()
+  it('closes the open edit form when another note is deleted, and says the deletion in a toast', async () => {
+    const { actor, deps, region, emitted } = page()
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.delete-button', id: agenda })
     await region('note-items', 'idle')
 
     expect(deps.deleteNote).toHaveBeenCalledWith(agenda)
+    expect(emitted).toEqual([toast('note-deleted')])
   })
 
   it('keeps the edit form open with the code of a refused save, and forgets it once a change of a note is done', async () => {
-    const { actor, snapshot, region } = page({ editNote: () => refused('note:FORBIDDEN') })
+    const { actor, snapshot, region, emitted } = page({
+      editNote: () => refused('note:FORBIDDEN'),
+    })
 
     actor.send({ type: 'organisation.notes.edit-button', id: hello })
     actor.send({ type: 'organisation.notes.save-button', id: hello, text: 'Hello, all' })
@@ -157,24 +165,24 @@ describe('organisation machine', () => {
     await region('notes-add', 'idle')
 
     expect(snapshot().context.errors.codes.notes).toBeUndefined()
+    expect(emitted).toEqual([toast('note-created')])
   })
 
-  it('shows the invited notice and reads the members again after an invitation', async () => {
+  it('toasts an invitation and a removal, reading the members again after each', async () => {
     const { actor, deps, snapshot, emitted, region } = page()
 
     actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
     await region('invite', 'idle')
 
     expect(deps.invite).toHaveBeenCalledWith('bea@example.test')
-    expect(emitted).toEqual([
-      { type: 'show', anchor: 'app-shell.notice-message', codes: ['invited'] },
-    ])
+    expect(emitted).toEqual([toast('invited')])
     expect(snapshot().context.membersChanged).toBe(1)
 
     actor.send({ type: 'organisation.members.remove-button', identity: bea })
     await region('members', 'idle')
 
     expect(deps.remove).toHaveBeenCalledWith(bea)
+    expect(emitted.slice(1)).toEqual([toast('member-removed')])
     expect(snapshot().context.membersChanged).toBe(2)
   })
 

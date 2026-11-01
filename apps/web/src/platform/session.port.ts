@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
+import type { Locale } from '@workspace/i18n'
 import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
@@ -33,10 +34,42 @@ export interface PushRejection {
   readonly reloaded: boolean
 }
 
+/**
+ * What a verification link did on this device: signed it in to the account the first time
+ * (`signed-in`), with the name and the language the account signed up with, which its profile and
+ * its settings start from; nothing after (`verified-before`).
+ */
+export type EmailVerified =
+  | {
+      readonly kind: 'signed-in'
+      readonly user: AuthUser
+      readonly name: string
+      readonly locale: Locale
+    }
+  | { readonly kind: 'verified-before' }
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
-  signUp(input: SignUpInput): ResultAsync<AuthUser, DataError>
+  /**
+   * Creates the account and has its verification mail sent; this device is not signed in, and an
+   * email that has an account answers the same.
+   */
+  signUp(input: SignUpInput): ResultAsync<void, DataError>
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
+  /**
+   * Exchanges the token of a verification link: the first exchange verifies the account's email
+   * and signs this device in, as a sign-in does (one at a time with the browser's other sign-ins,
+   * refused as `data:OTHER_ACCOUNT` when another account is signed in on this browser by the time
+   * the gateway answered, whose new session is then signed out); a link verified before signs
+   * nothing in and changes nothing. A link the gateway refuses fails as `data:LINK_EXPIRED` (past
+   * its lifetime) or `data:LINK_INVALID`.
+   */
+  verifyEmail(token: string): ResultAsync<EmailVerified, DataError>
+  /**
+   * Asks the gateway to send the verification mail of `email` again; it answers alike whether the
+   * email has an account not verified yet, a verified one or none. Nothing changes in the session.
+   */
+  resendVerification(email: string): ResultAsync<void, DataError>
   /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,
@@ -61,6 +94,11 @@ export interface SessionPort {
   /** The word the last session left for the sign-in page, until `clearNotice`. */
   notice(): SessionNotice | undefined
   clearNotice(): void
+  /**
+   * Whether the gateway refused the sync protocol of the build this page runs since the page
+   * loaded: the sync stopped, and stays stopped until the page loads again.
+   */
+  protocolRefused(): boolean
   /** The organisations the signed-in identity belongs to, as the gateway last said; none while nobody is signed in. */
   memberships(): readonly Membership[]
   /** Hears the memberships or the current organisation change, a sign-in or sign-out included. */
@@ -72,8 +110,6 @@ export interface SessionPort {
   currentTenant(): Membership | undefined
   /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
   selectTenant(key: string): void
-  /** Hears each change the gateway refused and this device undid, and again when that dropped later changes. */
-  subscribeRejections(listener: (rejection: PushRejection) => void): () => void
 }
 
 export const SESSION = token<SessionPort>('Session')

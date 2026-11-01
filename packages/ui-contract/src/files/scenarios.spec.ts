@@ -84,6 +84,18 @@ describe('loadScenarios', () => {
     })
     expect([...lines.keys()]).toEqual(ids)
   })
+  it('sorts by id, not by file name: an id comes before the ids that extend it', () => {
+    for (const id of ['a/base/sign-up-taken-email', 'a/base/sign-up']) {
+      writeScenario(id)
+    }
+
+    const { scenarios, lines, problems } = loadScenarios(root)
+    const ids = ['a/base/sign-up', 'a/base/sign-up-taken-email']
+
+    expect(problems).toEqual([])
+    expect(scenarios.map((scenario) => scenario.id)).toEqual(ids)
+    expect([...lines.keys()]).toEqual(ids)
+  })
   it('reports a path outside the id grammar, an unknown layer and a file that is no scenario', () => {
     writeScenario('user/base/sign-up')
     write('user/01-sign-up.md', formatScenario({ ...SAMPLE, id: 'user/01-sign-up' }))

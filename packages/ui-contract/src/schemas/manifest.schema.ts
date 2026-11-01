@@ -21,7 +21,13 @@ import { scenarioSchema } from '../scenarios'
 
 import { activitySchema } from './activity.schema'
 import { flatJsonSchema } from './flat-json-schema'
-import { anchorBindingSchema, bindingSchema, platformSchema, screenSchema } from './screens-schema'
+import {
+  anchorBindingSchema,
+  asksSchema,
+  bindingSchema,
+  platformSchema,
+  screenSchema,
+} from './screens-schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
 const tableOf = (key: z.ZodString, meaning: string, what: string) =>
@@ -125,6 +131,7 @@ const idSchema = z
       .describe('The derived suffixes the element renders.'),
     roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
+    asks: asksSchema.optional(),
     holdsInput: z
       .boolean()
       .optional()

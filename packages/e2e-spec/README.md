@@ -38,5 +38,5 @@ step.
   `tests/e2e/src/<id>.e2e.spec.ts` from the scenario with that id, never over an existing
   file.
 - `bun run e2e:coverage`: the pairing check (`--root=. --tests=tests/e2e/src`), part of
-  `bun run check`.
+  `bun run check` and of the pre-commit hook on a commit on `main`.
 - `bun run test`, `bun run typecheck`, `bun run lint`.

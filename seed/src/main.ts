@@ -1,20 +1,21 @@
 /**
  * The seed command behind `cli.ts`.
  *
- *   seed [--fresh] [--reset] [--manifest=<file>] [--gateway=<url>] [--url=<stand>]
+ *   seed [--fresh] [--reset] [--manifest=<file>] [--gateway=<url>] [--mailbox=<url>] [--url=<stand>]
  *   seed sweep [--url=<stand>]
  *
  * Accounts are created through the gateway at `--gateway`, else at `GATEWAY_DEV_URL`, which
- * `bun run seed` sets from the mcproc manifest: this checkout's dev gateway. The stand behind
- * it is reached only by the sweep (`seed sweep`, and `--reset` before seeding): `--url` (else
- * `SURREAL_DEV_URL`, set the same way), `--namespace=`, `--database=`, `--user=` and `--pass=`
- * name it and its system user, by default the stand's root on the gateway's database. The sweep
- * applies the directory schema with `GATEWAY_JWT_KEY`, the key the stand's gateway signs with,
- * which `bun run seed` sets from the manifest as well: required, so the stand keeps its key.
+ * `bun run seed` sets from the mcproc manifest: this checkout's dev gateway. Each new account is
+ * verified through the mail the gateway sends it, read from the stand's mailbox at `--mailbox`,
+ * else at `MAILBOX_DEV_URL`, set the same way. The stand behind the gateway is reached only by
+ * the sweep (`seed sweep`, and `--reset` before seeding): `--url` (else `SURREAL_DEV_URL`, set
+ * the same way), `--namespace=`, `--database=`, `--user=` and `--pass=` name it and its system
+ * user, by default the stand's root on the gateway's database.
  */
 
 import { writeFileSync } from 'node:fs'
 
+import { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
 import type { SeedMode } from './catalog'
@@ -22,23 +23,24 @@ import { runSeed, type StandTarget, sweep } from './seed'
 
 const FLAGS = new Set(['--fresh', '--reset'])
 
-const OPTIONS = ['gateway', 'url', 'namespace', 'database', 'user', 'pass', 'manifest']
+const OPTIONS = ['gateway', 'mailbox', 'url', 'namespace', 'database', 'user', 'pass', 'manifest']
 
 /** The gateway's `http(s)://` address, without a trailing slash: its routes are appended. */
 const gatewayAddress = z
   .url({ protocol: /^https?$/, error: 'must be the http(s):// address of the gateway' })
   .transform((url) => url.replace(/\/+$/, ''))
 
+/** The `http(s)://` address of the REST API of the stand's mailbox, where the verification mails arrive. */
+const mailboxAddress = z.url({
+  protocol: /^https?$/,
+  error: "must be the http(s):// address of the stand's mailbox",
+})
+
 /** The stand's `http(s)://` or `ws(s)://` address, reached by the sweep as its system user. */
 const standAddress = z.url({
   protocol: /^(https?|wss?)$/,
   error: 'must be the http(s):// or ws(s):// address of the stand',
 })
-
-/** The key the stand's gateway signs with; an issue names the variable, never the value. */
-const signingKey = z
-  .string({ error: "must be the key the stand's gateway signs with" })
-  .min(1, { error: "must be the key the stand's gateway signs with" })
 
 function readOption(argv: readonly string[], name: string): string | undefined {
   const prefix = `--${name}=`
@@ -83,14 +85,6 @@ export async function main(
     return 1
   }
 
-  const key = signingKey.safeParse(env['GATEWAY_JWT_KEY'])
-
-  if (!key.success) {
-    console.error(`seed: GATEWAY_JWT_KEY ${key.error.issues[0]?.message ?? ''}`)
-
-    return 1
-  }
-
   const target: StandTarget = {
     gatewayUrl: gateway.data,
     url: stand.data,
@@ -100,7 +94,6 @@ export async function main(
       username: readOption(argv, 'user') ?? 'root',
       password: readOption(argv, 'pass') ?? 'root',
     },
-    signingKey: key.data,
   }
 
   if (argv[0] === 'sweep') {
@@ -120,10 +113,23 @@ export async function main(
     )
   }
 
+  const mailbox = mailboxAddress.safeParse(readOption(argv, 'mailbox') ?? env['MAILBOX_DEV_URL'])
+
+  if (!mailbox.success) {
+    console.error(`seed: --mailbox or MAILBOX_DEV_URL ${mailbox.error.issues[0]?.message ?? ''}`)
+
+    return 1
+  }
+
   const mode: SeedMode = argv.includes('--fresh')
     ? { kind: 'fresh', run: Date.now().toString(36) }
     : { kind: 'demo' }
-  const result = await runSeed({ ...target, mode, reset: argv.includes('--reset') })
+  const result = await runSeed({
+    ...target,
+    mode,
+    reset: argv.includes('--reset'),
+    inbox: new Mailbox(mailbox.data),
+  })
 
   if (result.isErr()) {
     console.error(`seed: ${result.error.code} ${result.error.message ?? ''}`)
