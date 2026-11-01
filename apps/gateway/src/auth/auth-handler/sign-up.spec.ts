@@ -22,49 +22,60 @@ const FROM = '203.0.113.7'
 /** Another client address, which nothing from `FROM` charges. */
 const ELSEWHERE = '203.0.113.8'
 
+/** How long a test waits for real sign-ups to reach the floor: argon2 is slow on a busy host. */
+const ARGON2_WAIT = { timeout: 10_000 }
+
+/** How long a test of real sign-ups may run: its waits for argon2, then the floor. */
+const REAL_SIGN_UPS_MS = 30_000
+
 /** What Better Auth answers a sign-up it accepted, new email or taken. */
 const accepted = () => Response.json({ token: null, user: {} })
 
 describe('authHandler, the sign-up', () => {
-  it('answers a new, a taken and a concurrently taken email alike, at the floor', async () => {
-    const { route, clock, outbox } = await mountedOnRealAuth()
-    let settled = 0
-    const up = (email: string) =>
-      route(signUpRequest(email), FROM).finally(() => {
-        settled += 1
-      })
-    const pending = [
-      up('ann@example.test'),
-      up('ann@example.test'),
-      up('bob@example.test'),
-      up('bob@example.test'),
-    ]
+  it(
+    'answers a new, a taken and a concurrently taken email alike, at the floor',
+    async () => {
+      const { route, clock, outbox } = await mountedOnRealAuth()
+      let settled = 0
+      const up = (email: string) =>
+        route(signUpRequest(email), FROM).finally(() => {
+          settled += 1
+        })
+      const pending = [
+        up('ann@example.test'),
+        up('ann@example.test'),
+        up('bob@example.test'),
+        up('bob@example.test'),
+      ]
 
-    // Better Auth has answered all four: only the floor holds their answers back.
-    await vi.waitFor(() => expect(clock.pending()).toBe(4))
-    expect(settled).toBe(0)
-    await clock.advance(SIGN_UP_FLOOR_MS)
+      // Better Auth has answered all four (each hashes a password, slow on a busy host): only the
+      // floor holds their answers back.
+      await vi.waitFor(() => expect(clock.pending()).toBe(4), ARGON2_WAIT)
+      expect(settled).toBe(0)
+      await clock.advance(SIGN_UP_FLOOR_MS)
 
-    const answers = await Promise.all(pending)
+      const answers = await Promise.all(pending)
 
-    for (const answer of answers) {
-      expect(answer?.status).toBe(202)
-      expect(await answer?.text()).toBe('')
-      expect(answer?.headers.get('set-cookie')).toBeNull()
-      expect([...(answer?.headers.keys() ?? [])].sort()).toEqual(
-        [...(answers[0]?.headers.keys() ?? [])].sort(),
-      )
-    }
+      for (const answer of answers) {
+        expect(answer?.status).toBe(202)
+        expect(await answer?.text()).toBe('')
+        expect(answer?.headers.get('set-cookie')).toBeNull()
+        expect([...(answer?.headers.keys() ?? [])].sort()).toEqual(
+          [...(answers[0]?.headers.keys() ?? [])].sort(),
+        )
+      }
 
-    const later = up('ann@example.test')
+      const later = up('ann@example.test')
 
-    await clock.advance(SIGN_UP_FLOOR_MS)
-    expect((await later)?.status).toBe(202)
-    await outbox.next('ann@example.test')
-    await outbox.next('bob@example.test')
-    expect(outbox.to('ann@example.test')).toHaveLength(1)
-    expect(outbox.to('bob@example.test')).toHaveLength(1)
-  })
+      await clock.advance(SIGN_UP_FLOOR_MS)
+      expect((await later)?.status).toBe(202)
+      await outbox.next('ann@example.test')
+      await outbox.next('bob@example.test')
+      expect(outbox.to('ann@example.test')).toHaveLength(1)
+      expect(outbox.to('bob@example.test')).toHaveLength(1)
+    },
+    REAL_SIGN_UPS_MS,
+  )
 
   it('answers no sooner than the floor after the request began', async () => {
     const { route, clock } = mountedOnFakeAuth(accepted)
@@ -133,9 +144,6 @@ const BREAKING = [
   ['no lowercase letter', 'ABCDEFGHIJ1!'],
   ['no symbol', 'Abcdefghij12'],
 ] as const
-
-/** How long a test waits for real sign-ups to reach the floor: argon2 is slow on a busy host. */
-const ARGON2_WAIT = { timeout: 10_000 }
 
 describe('authHandler, the rules of a new password', () => {
   it.each(BREAKING)(
