@@ -298,6 +298,14 @@ An anchor's `binding` says what the element does or shows:
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
 - `{ route: /path }`: the path of a binding of some screen.
+- `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
+  switch): the field starts with the value of that search parameter of the route the screen
+  was opened at, and the user may change it; every binding of the screen declares it under
+  `search`. It sits in a list beside the action the field gives its value to: the email a
+  link carried into `/forgot-password?email=...` fills the email input the request is sent
+  with, `[ { search: email }, { action: platform.request-password-reset, params: { email:
+  user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the
+  value there (`{ anchor: <field> }`, below).
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
@@ -870,7 +878,8 @@ gap is fixed in the contract files first, never worked around in a test.
   and holds its shape, and each screen file is named by its first binding; every anchor
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
-  vocabulary is used; every binding points at a field, an action or a route that exists,
+  vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
+  every route of the screen declares, which only a field starts with,
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
   constant or a search parameter,
   every path parses in the router's syntax, every example of a route parameter matches

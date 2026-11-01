@@ -64,8 +64,8 @@ code and the tests follow; the checks hold them to the contract.
    another anchor plus a derived suffix: the entries of a list `x.list` are
    `x.list.<object>-item`, never `x.list.item`.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
-   `description`, its `binding` (the model field, the action with its params, a route, or a
-   list of them), and its `codes` (an error's `fields` with them: the field each code
+   `description`, its `binding` (the model field, the action with its params, a route, the
+   search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the

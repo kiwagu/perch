@@ -240,3 +240,21 @@ describe('the notices of a platform action', () => {
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
 })
+
+describe('a field that starts with a search parameter', () => {
+  it('carries the binding on the field, and tells an agent how to read it', () => {
+    const base = fixtureContract()
+    const binding = [
+      { search: 'view' },
+      { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+    ]
+
+    Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, { binding })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.title-input']?.binding).toEqual(binding)
+    expect(built.contract.instructions.bindings).toContain('`{ "search": "<name>" }` on a field')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})

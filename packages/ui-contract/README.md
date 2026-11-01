@@ -68,7 +68,9 @@ for Bun.
     flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
-    those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
+    those of `authoredAnchorDefSchema`, whose `binding` is a model field, an action, a route or
+    `{ search }`, the search parameter a field starts with; the source of
+    `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
     reserved word no parameter of an action that sends a mail or a notice takes, and
@@ -110,7 +112,8 @@ for Bun.
     alone), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
     input), a constant or a search parameter every route of the screen declares, routes,
-    sources), `flowProblems` (a flow names states, events
+    the search parameter a field starts with, one every route of the screen declares, never on
+    another kind, sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
     that exist, a navigate's search keys of the binding it moves to, each value a literal or

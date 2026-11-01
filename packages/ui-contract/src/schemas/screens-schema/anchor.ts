@@ -51,8 +51,20 @@ export const bindingRefSchema = z
         route: z.string().regex(/^\//).describe('The path of a binding the anchor navigates to.'),
       })
       .describe('The anchor navigates to a route.'),
+    z
+      .strictObject({
+        search: z
+          .string()
+          .regex(/^[a-z][a-zA-Z0-9]*$/)
+          .describe('The name of a search parameter every route of the screen declares.'),
+      })
+      .describe(
+        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+      ),
   ])
-  .describe('What the anchor is bound to: a model field, an action or a route.')
+  .describe(
+    'What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with.',
+  )
 
 export const anchorBindingSchema = z
   .union([

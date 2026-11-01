@@ -530,9 +530,24 @@
                     ],
                     "additionalProperties": false,
                     "description": "The anchor navigates to a route."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "search": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                        "description": "The name of a search parameter every route of the screen declares."
+                      }
+                    },
+                    "required": [
+                      "search"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                   }
                 ],
-                "description": "What the anchor is bound to: a model field, an action or a route."
+                "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
               },
               {
                 "minItems": 1,
@@ -633,9 +648,24 @@
                       ],
                       "additionalProperties": false,
                       "description": "The anchor navigates to a route."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "search": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]*$",
+                          "description": "The name of a search parameter every route of the screen declares."
+                        }
+                      },
+                      "required": [
+                        "search"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                     }
                   ],
-                  "description": "What the anchor is bound to: a model field, an action or a route."
+                  "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
                 },
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
