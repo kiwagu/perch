@@ -369,9 +369,14 @@ as it holds its router to the bindings.
   the machine does not enable it: it is always enabled.
 - The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
-  } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
-  navigate, params: { to, search } }`, the app moves to that binding. The app implements
-  all three. Each value of a navigate's `search` is a search key of the binding it moves to,
+  } }`, an anchor that carries codes shows none until one is shown again; a field is emptied;
+  and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app
+  implements all three. A `clear` names a field of the flow's own screen (an input, a
+  textarea, a select, a checkbox, a radio or a switch, a `secret` one included), which
+  returns to its empty or initial value and holds no input any more, as if nothing was typed,
+  or an anchor that carries codes; never a button, a list, a link, a `visibility-button` or
+  any other anchor: a form empties its passwords this way once the action that took them
+  succeeds. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
@@ -458,14 +463,14 @@ out, and the loader derives it, the same way every time:
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
-  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
-  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
-  bindings runs an action that takes the field itself as a parameter, an action no other
-  anchor of its screen runs with it (the language select, the organisation select), applies
-  at once and holds none; a field whose action a submit button also runs with it (the
-  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
-  wins. The manifest carries it, and `contract:diff` lists the
-  fields that start or stop holding input.
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a
+  `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask
+  before such a leave. A field one of whose bindings runs an action that takes the field
+  itself as a parameter, an action no other anchor of its screen runs with it (the language
+  select, the organisation select), applies at once and holds none; a field whose action a
+  submit button also runs with it (the sign-in email) holds input. The loader sets
+  `holdsInput` on every field; a written value wins. The manifest carries it, and
+  `contract:diff` lists the fields that start or stop holding input.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
   a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
@@ -894,9 +899,10 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist (a navigate's search keys of the
-  binding it moves to, each `{ anchor }` a field of the flow's own screen that holds no
-  secret), reaches each of its states
+  actions, anchors with their codes and bindings that exist (a clear's anchor a field of the
+  flow's own screen or an anchor that carries codes, a navigate's search keys of the binding
+  it moves to, each `{ anchor }` a field of the flow's own screen that holds no secret),
+  reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
   declared by the frame alone, once, reserved, with both answers and no action of its own,
