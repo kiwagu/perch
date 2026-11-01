@@ -29,7 +29,7 @@ beforeEach(async () => {
   me = (
     await signUpVerified(session, opened.auth, {
       email: 'ann@example.test',
-      password: 'secret-ann',
+      password: 'Secret-ann1',
       name: 'Ann',
       locale: 'en',
     })

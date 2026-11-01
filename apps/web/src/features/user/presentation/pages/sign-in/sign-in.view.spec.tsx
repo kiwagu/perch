@@ -104,8 +104,8 @@ describe('SignInView', () => {
     const { onSubmit } = renderView({ mode: 'sign-up' })
 
     type('user.sign-in.email-input', 'ann@example.test')
-    type('user.sign-in.password-input', 'secret-ann')
-    type('user.sign-in.password-confirmation-input', 'secret-ann')
+    type('user.sign-in.password-input', 'Secret-ann1')
+    type('user.sign-in.password-confirmation-input', 'Secret-ann1')
     type('user.sign-in.name-input', 'Ann')
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
 
@@ -120,8 +120,8 @@ describe('SignInView', () => {
     )
     expect(onSubmit).toHaveBeenCalledWith({
       email: 'ann@example.test',
-      password: 'secret-ann',
-      confirmation: 'secret-ann',
+      password: 'Secret-ann1',
+      confirmation: 'Secret-ann1',
       name: 'Ann',
     })
   })

@@ -70,7 +70,7 @@ describe('UserModule', () => {
       (
         await container
           .get(SIGN_IN_SERVICE)
-          .signUp({ email, password: 'secret-ann', name: 'Ann', locale: 'es' })
+          .signUp({ email, password: 'Secret-ann1', name: 'Ann', locale: 'es' })
       ).isOk(),
     ).toBe(true)
 

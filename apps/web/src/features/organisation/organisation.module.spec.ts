@@ -67,7 +67,7 @@ describe('OrganisationModule', () => {
     const ann = (
       await signUpVerified(world.session, auth, {
         email: 'ann@example.test',
-        password: 'secret-ann',
+        password: 'Secret-ann1',
         name: 'Ann',
         locale: 'en',
       })
