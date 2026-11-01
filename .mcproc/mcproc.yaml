@@ -166,6 +166,8 @@ apps:
       - database/src
       - packages/data/src
       - packages/di/src
+      - packages/email/src
+      - packages/i18n/src
       - packages/ids/src
       - packages/kernel/src
       - packages/logger/src
