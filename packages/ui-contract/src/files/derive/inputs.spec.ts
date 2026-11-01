@@ -85,6 +85,32 @@ describe('withDerivedInputs', () => {
     })
   })
 
+  it('derives the same with a search parameter the field starts with beside its action', () => {
+    const anchors = withDerivedInputs(
+      screen({
+        'sample.form.email-input': {
+          kind: 'input',
+          binding: [
+            { search: 'email' },
+            { action: 'platform.reset', params: { email: 'sample.form.email-input' } },
+          ],
+        },
+        'sample.form.submit-button': {
+          kind: 'button',
+          binding: { action: 'platform.reset', params: { email: 'sample.form.email-input' } },
+        },
+        'sample.page.kind-select': { kind: 'select', binding: { search: 'kind' } },
+      }),
+    )
+
+    expect(anchors).toMatchObject({
+      anchors: {
+        'sample.form.email-input': { holdsInput: true },
+        'sample.page.kind-select': { holdsInput: true },
+      },
+    })
+  })
+
   it('keeps what the file writes', () => {
     const anchors = { 'sample.form.title-input': { kind: 'input', holdsInput: false } }
 

@@ -1,20 +1,20 @@
 /**
  * The bracket references of a scenario's text: `[<anchor>]`, `[/path]`, `[code:<code>]`,
- * `[state:<state>]`, `[value:<value>]` and `[mail:<action>]`. Anything else in brackets is a
- * problem; whether a reference names something the contract declares is the contract check's
- * business.
+ * `[state:<state>]`, `[value:<value>]`, `[mail:<action>]` and `[notice:<action>.<name>]`.
+ * Anything else in brackets is a problem; whether a reference names something the contract
+ * declares is the contract check's business.
  */
 
 import { isAnchor } from '../anchors'
 
 export type Reference = {
-  kind: 'anchor' | 'route' | 'code' | 'state' | 'value' | 'mail'
+  kind: 'anchor' | 'route' | 'code' | 'state' | 'value' | 'mail' | 'notice'
   value: string
   raw: string
 }
 
 const GROUP = /\[([^\]]*)\]/g
-const PREFIXED = /^(code|state|value|mail):(.+)$/
+const PREFIXED = /^(code|state|value|mail|notice):(.+)$/
 
 function referenceOf(inner: string, raw: string): Reference | undefined {
   if (inner.startsWith('/')) {
@@ -27,7 +27,8 @@ function referenceOf(inner: string, raw: string): Reference | undefined {
     prefixed?.[1] === 'code' ||
     prefixed?.[1] === 'state' ||
     prefixed?.[1] === 'value' ||
-    prefixed?.[1] === 'mail'
+    prefixed?.[1] === 'mail' ||
+    prefixed?.[1] === 'notice'
   ) {
     return { kind: prefixed[1], value: prefixed[2] ?? '', raw }
   }
@@ -45,7 +46,9 @@ export function referencesIn(text: string): { references: Reference[]; problems:
     if (reference) {
       references.push(reference)
     } else {
-      problems.push(`not an anchor, a route, a code, a state, a value or a mail: "${inner}"`)
+      problems.push(
+        `not an anchor, a route, a code, a state, a value, a mail or a notice: "${inner}"`,
+      )
     }
   }
 

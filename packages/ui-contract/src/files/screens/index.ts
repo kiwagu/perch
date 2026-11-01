@@ -1,4 +1,4 @@
-export { ACCOUNT, type PlatformMail } from '../../schemas'
+export { ACCOUNT, type PlatformMail, type PlatformNotice } from '../../schemas'
 
 export { loadScreens, loadScreensWith } from './load'
 export type {

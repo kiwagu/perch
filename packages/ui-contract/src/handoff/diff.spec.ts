@@ -99,6 +99,7 @@ describe('diffContracts', () => {
       questions: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
+      notices: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -261,6 +262,29 @@ describe('diffContracts', () => {
     expect(formatChanges(diffContracts(asking, quieter))).toContain(
       'unsaved-input entries added: unload: never',
     )
+  })
+  it('lists the notices each platform action declares, as they come and go', () => {
+    const noticing = (names: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      Object.assign(contract.screens.platform.actions['sign-out'] ?? {}, {
+        notices: names.map((name) => ({ name, to: 'account', language: 'account' })),
+      })
+
+      return contract
+    }
+
+    expect(diffContracts(before, noticing(['signed-out'])).notices).toEqual({
+      added: ['sign-out.signed-out'],
+      removed: [],
+    })
+    expect(diffContracts(noticing(['signed-out']), noticing(['password-changed'])).notices).toEqual(
+      { added: ['sign-out.password-changed'], removed: ['sign-out.signed-out'] },
+    )
+    expect(formatChanges(diffContracts(noticing(['signed-out']), before)).split('\n')).toEqual([
+      'contract changes: 1 notice removed',
+      'notices removed: sign-out.signed-out',
+    ])
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(

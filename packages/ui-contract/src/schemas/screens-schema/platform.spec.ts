@@ -66,3 +66,40 @@ describe('platformSchema mail', () => {
     }
   })
 })
+
+describe('platformSchema notices', () => {
+  const sending = (notices: unknown) =>
+    platformSchema.safeParse({ ...PLATFORM, actions: { send: { ...ACTION, notices } } }).success
+
+  it('accepts notices to a parameter or the account, with a plain link or none', () => {
+    expect(
+      sending([
+        { name: 'password-changed', to: 'account', language: 'account' },
+        {
+          name: 'email-changed',
+          to: 'email',
+          language: 'locale',
+          link: { screen: 'user.reset-password' },
+        },
+      ]),
+    ).toBe(true)
+  })
+  it('refuses a link with a search, a key of its own, a name out of kebab-case or no notice', () => {
+    for (const notices of [
+      [
+        {
+          name: 'password-changed',
+          to: 'account',
+          language: 'account',
+          link: { screen: 'user.reset-password', search: 'token' },
+        },
+      ],
+      [{ name: 'password-changed', to: 'account', language: 'account', subject: 'x' }],
+      [{ name: 'passwordChanged', to: 'account', language: 'account' }],
+      [{ to: 'account', language: 'account' }],
+      [],
+    ]) {
+      expect(sending(notices), JSON.stringify(notices)).toBe(false)
+    }
+  })
+})

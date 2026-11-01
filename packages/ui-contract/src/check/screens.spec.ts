@@ -97,10 +97,13 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].holdsInput: only a field holds input',
     ])
   })
-  it('takes a visibility-button on an input and refuses it on any other kind', () => {
+  it('takes a visibility-button on a secret input and refuses it on any other kind', () => {
     const contract = sampleContract()
 
-    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    Object.assign(anchorIn(contract, 'sample.title-input'), {
+      secret: true,
+      derived: ['visibility-button'],
+    })
 
     expect(printed(contract)).toEqual([])
 
@@ -110,6 +113,29 @@ describe('screensProblems', () => {
     expect(printed(contract)).toEqual([
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].derived[0]: only an input renders a visibility-button',
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].derived[1]: only an input renders a visibility-button',
+    ])
+  })
+  it('refuses an eye on an input that holds no secret: it shows what a secret field hides', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.title-input"].derived[0]: only a secret input renders a visibility-button: declare it secret: true',
+    ])
+  })
+  it('takes secret on a field and refuses it on any other kind', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').secret = true
+    anchorIn(contract, 'sample.mode-select').secret = true
+
+    expect(printed(contract)).toEqual([])
+
+    anchorIn(contract, 'sample.save-button').secret = true
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].secret: only a field holds a secret',
     ])
   })
   it('wants every anchor to start with its screen id and end with its kind', () => {

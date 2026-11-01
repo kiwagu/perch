@@ -194,6 +194,7 @@ describe('the visibility-button of a password input', () => {
     const base = fixtureContract()
 
     Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      secret: true,
       derived: ['visibility-button'],
     })
 
@@ -211,6 +212,8 @@ describe('the visibility-button of a password input', () => {
     })
 
     expect(built.ids['sample.title-input']?.derived).toEqual(['visibility-button'])
+    expect(built.ids['sample.title-input']?.secret).toBe(true)
+    expect(built.contract.instructions.screenMap).toContain('`secret`')
     expect(built.contract.derivedSuffixes['visibility-button']).toBe('the eye of a password input')
     expect(built.contract.derivedParts).toEqual({
       'confirm-button': { kind: 'button' },
@@ -218,6 +221,43 @@ describe('the visibility-button of a password input', () => {
       'visibility-button': { kind: 'button', values: VISIBILITY_VALUES },
     })
     expect(Object.keys(VISIBILITY_VALUES)).toEqual(['show', 'hide'])
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
+describe('the notices of a platform action', () => {
+  it('carries each notice an action declares, and tells an agent how to read one', () => {
+    const base = fixtureContract()
+    const notices = [
+      { name: 'password-changed', to: 'account', language: 'account', link: { screen: 'sample' } },
+    ]
+
+    Object.assign(base.screens.platform.actions['sign-out'] ?? {}, { notices })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.manifestVersion).toBe(1)
+    expect(built.platform.actions['sign-out']?.notices).toEqual(notices)
+    expect(built.contract.instructions.bindings).toContain('`notices`')
+    expect(built.contract.instructions.scenarios).toContain('[notice:<action>.<name>]')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
+describe('a field that starts with a search parameter', () => {
+  it('carries the binding on the field, and tells an agent how to read it', () => {
+    const base = fixtureContract()
+    const binding = [
+      { search: 'view' },
+      { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+    ]
+
+    Object.assign(base.screens.screens[0]?.anchors['sample.title-input'] ?? {}, { binding })
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.title-input']?.binding).toEqual(binding)
+    expect(built.contract.instructions.bindings).toContain('`{ "search": "<name>" }` on a field')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
 })

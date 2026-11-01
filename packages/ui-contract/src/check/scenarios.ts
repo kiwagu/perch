@@ -3,7 +3,8 @@
  * their text resolves (an anchor declared, or derived from a declared base with a suffix it
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
  * pattern row matches, `show` or `hide` once an input renders a visibility-button, a mail
- * `[mail:<action>]` a platform action that declares one), the
+ * `[mail:<action>]` a platform action that declares one, a notice `[notice:<action>.<name>]` a
+ * notice of that name the platform action declares), the
  * activity a scenario names is one of `contract/domain/activities`, and every device acts as
  * a role of the vocabulary. Each problem is one of the scenario's file, named by its field and
  * at the line of that field (of the deepest part of its path the file holds); the ids are
@@ -24,6 +25,7 @@ import {
   own,
   statesOf,
 } from './contract'
+import { unknownNotice } from './notices'
 
 /** The text fields of a scenario that carry bracket references, with their paths. */
 export const textsOf = (scenario: Scenario): Array<{ text: string; at: PropertyKey[] }> => [
@@ -63,6 +65,8 @@ export function referenceResolver(
         return own(contract.screens.platform.actions, value)?.mail === undefined
           ? `${raw} names no platform action that sends a mail`
           : undefined
+      case 'notice':
+        return unknownNotice(contract.screens.platform, value, raw)
     }
   }
 }

@@ -186,7 +186,11 @@ export const visibilityButtonsOf = (screens: ScreensFile): Set<string> =>
 /** The problem of a visibility-button named as more than presentation: `never` says as what. */
 export const presentationOnly = (
   anchor: string,
-  never: 'an event of a flow' | 'an event of an activity' | 'a value an action takes',
+  never:
+    | 'an event of a flow'
+    | 'an event of an activity'
+    | 'a value an action takes'
+    | 'a value a search carries',
 ): string => `"${anchor}" is a ${VISIBILITY_BUTTON}: presentation only, never ${never}`
 
 /**

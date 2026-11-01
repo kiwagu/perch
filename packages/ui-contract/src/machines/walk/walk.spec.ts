@@ -98,6 +98,21 @@ describe('the walk of a flow', () => {
 
     expect(shadowed).toMatchObject({ expected: { state: 'c' }, actual: { state: 'b' } })
   })
+  it('carries a navigate whose search takes what a field holds, as written', () => {
+    const navigate = {
+      type: 'navigate',
+      params: { to: '/forgot', search: { email: { anchor: 'sample.email-input' } } },
+    } as const
+    const flow = flowOf({
+      initial: 'form',
+      states: {
+        form: { on: { 'sample.forgot-link': { target: 'gone', actions: [navigate] } } },
+        gone: { type: 'final' },
+      },
+    })
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([[navigate]])
+  })
   it("expects the effects in XState's order: exit, the transition's, entry; none on staying, a clear among them", () => {
     const flow = flowOf({
       initial: 'a',

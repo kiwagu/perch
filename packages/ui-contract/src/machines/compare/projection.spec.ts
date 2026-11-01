@@ -57,3 +57,34 @@ describe('the projection of a machine config', () => {
     expect(projected(opened.config)).not.toEqual(projected(flow))
   })
 })
+
+describe('the projection of a navigate', () => {
+  it('holds the field a search value takes, as it holds a literal', () => {
+    const config = (anchor: string) =>
+      ({
+        initial: 'form',
+        states: {
+          form: {
+            on: {
+              'sample.forgot-link': {
+                target: 'gone',
+                actions: [
+                  {
+                    type: 'navigate',
+                    params: { to: '/forgot', search: { email: { anchor } } },
+                  },
+                ],
+              },
+            },
+          },
+          gone: { type: 'final' },
+        },
+      }) as const
+    const flow = flowSchema.parse(config('sample.email-input'))
+
+    expect(projected(createMachine(config('sample.email-input')).config)).toEqual(projected(flow))
+    expect(projected(createMachine(config('sample.name-input')).config)).not.toEqual(
+      projected(flow),
+    )
+  })
+})
