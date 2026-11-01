@@ -3,11 +3,18 @@
  * platform file, the activities and the model) and the scenario files of
  * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
  * with an example link on each binding, the platform section and the activities verbatim,
- * the scenarios parsed, every declared anchor by name with its screen, and the model
- * document.
+ * the scenarios parsed, every declared anchor by name with its screen, each derived suffix
+ * with the kind and values of the part it marks, and the model document.
  */
 
-import { ANCHOR_ATTRIBUTES, ANCHOR_PATTERN, PAGE_HELPER } from '../anchors'
+import {
+  ANCHOR_ATTRIBUTES,
+  ANCHOR_PATTERN,
+  kindOf,
+  PAGE_HELPER,
+  VISIBILITY_BUTTON,
+  VISIBILITY_VALUES,
+} from '../anchors'
 import {
   type Activity,
   CONFIRM_RULE_ROW,
@@ -105,6 +112,18 @@ const routeParamsOf = (screens: readonly Screen[]): Manifest['routeParams'] =>
     ),
   )
 
+/** Each derived suffix with the part it marks: its kind, and the values its suffix defines. */
+const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =>
+  Object.fromEntries(
+    Object.keys(vocabulary.suffixes).map((suffix) => [
+      suffix,
+      {
+        kind: kindOf(suffix),
+        ...(suffix === VISIBILITY_BUTTON ? { values: { ...VISIBILITY_VALUES } } : {}),
+      },
+    ]),
+  )
+
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
   return {
     version: screens.version,
@@ -112,6 +131,7 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     idPattern: ANCHOR_PATTERN.source,
     kinds: vocabulary.kinds,
     derivedSuffixes: vocabulary.suffixes,
+    derivedParts: partsOf(vocabulary),
     attributes: mapValues(vocabulary.attributes, ({ on, meaning }) => `${on}: ${meaning}`),
     appStateAnchor: screens.platform.status.anchor,
     appStates: vocabulary.appStates,

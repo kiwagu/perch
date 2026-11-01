@@ -12,7 +12,7 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 8 screens, 103 anchors and 56 codes.
+The contract declares 8 screens, 102 anchors and 56 codes.
 
 Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 49/50, ignored 2.
 
@@ -90,12 +90,12 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 1 |
-| app-shell | 22 | 41 |
+| app-shell | 21 | 41 |
 | device | 10 | 1 |
-| user.profile | 10 | 29 |
+| user.profile | 10 | 30 |
 | organisation | 30 | 10 |
 | user.settings | 3 | 4 |
-| user.sign-in | 18 | 25 |
+| user.sign-in | 18 | 26 |
 | user.verify-email | 7 | 5 |
 
 <!-- coverage:end -->

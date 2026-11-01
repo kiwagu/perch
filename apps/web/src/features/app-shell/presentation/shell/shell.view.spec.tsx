@@ -123,18 +123,26 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.sign-out-here-button')).toBeNull()
   })
 
-  it('links to sign-in when signed out and to the profile when signed in', () => {
-    const { unmount } = renderShell()
-    const signedOut = screen.getAllByTestId('app-shell.nav.sign-in-link')
+  it('shows a guest no navigation, only the banner and the page', () => {
+    renderShell({ signedIn: false, activePath: '/sign-in' })
 
-    expect(signedOut[0]?.getAttribute('href')).toBe('/sign-in')
-    expect(signedOut[0]?.getAttribute('aria-current')).toBe('page')
-    unmount()
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByText(en['app.shell.title'])).toBeTruthy()
+    expect(screen.getByTestId('app-shell.theme-select')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+    expect(screen.getByText('page')).toBeTruthy()
+  })
 
+  it('links a signed-in account to its profile, marked current on it', () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
-    expect(screen.getAllByTestId('app-shell.nav.profile-link')[0]?.getAttribute('href')).toBe('/me')
-    expect(screen.queryByTestId('app-shell.nav.sign-in-link')).toBeNull()
+    const profile = screen.getByTestId('app-shell.nav.profile-link')
+
+    expect(profile.getAttribute('href')).toBe('/me')
+    expect(profile.getAttribute('aria-current')).toBe('page')
+    expect(profile.textContent).toBe(en['app.shell.nav.profile'])
   })
 
   it('links a signed-in user to the organisation page', () => {
@@ -175,14 +183,23 @@ describe('ShellView', () => {
     expect(notice.getAttribute('role')).toBe('status')
   })
 
-  it("marks a signed-in account's navigation, settings included, with no language select", () => {
+  it("marks a signed-in account's navigation, its four links in it, with no language select", () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
     expect(navigation.tagName).toBe('NAV')
-    expect(within(navigation).getByTestId('app-shell.nav.profile-link')).toBeTruthy()
-    expect(within(navigation).getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+    expect(navigation.getAttribute('aria-label')).toBe(en['app.shell.navigation'])
+    expect(
+      within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('data-testid')),
+    ).toEqual([
+      'app-shell.nav.profile-link',
+      'app-shell.nav.organisation-link',
+      'app-shell.nav.devices-link',
+      'app-shell.nav.settings-link',
+    ])
     // The settings screen takes a signed-in account's language.
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
   })
@@ -239,11 +256,14 @@ describe('ShellView', () => {
   })
 
   it('speaks Spanish when the Spanish catalog is chosen', () => {
-    renderShell({ locale: 'es' })
+    renderShell({ locale: 'es', signedIn: true, activePath: '/me' })
 
-    const navigation = screen.getAllByTestId('app-shell.nav.sign-in-link')[0] as HTMLElement
+    const navigation = screen.getByTestId('app-shell.nav')
 
-    expect(within(navigation).getByText(es['app.shell.nav.sign-in'])).toBeTruthy()
+    expect(navigation.getAttribute('aria-label')).toBe(es['app.shell.navigation'])
+    expect(screen.getByTestId('app-shell.nav.profile-link').textContent).toBe(
+      es['app.shell.nav.profile'],
+    )
     expect(screen.getByText(es['app.shell.title'])).toBeTruthy()
   })
 
@@ -314,7 +334,9 @@ describe('ShellView', () => {
 
     expect(message.getAttribute('data-code')).toBe('screen-crashed')
     expect(message.textContent).toBe(en['app.shell.crash.screen-crashed'])
-    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+    // The frame stays around it: a guest's theme and language selects.
+    expect(screen.getByTestId('app-shell.theme-select')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('app-shell.reload-button'))
 

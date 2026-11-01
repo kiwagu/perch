@@ -93,6 +93,40 @@
           },
           "description": "The suffixes of derived anchors: `<anchor>.<suffix>`."
         },
+        "derivedParts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The kind of the part: the last word of its suffix."
+              },
+              "values": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "description": "What the part says while it carries the value."
+                },
+                "description": "The data-value values the suffix itself defines, never rows of `choiceValues`."
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false,
+            "description": "The part a derived suffix marks."
+          },
+          "description": "Each derived suffix with the part it marks: its kind and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`)."
+        },
         "attributes": {
           "type": "object",
           "propertyNames": {
@@ -300,6 +334,7 @@
         "idPattern",
         "kinds",
         "derivedSuffixes",
+        "derivedParts",
         "attributes",
         "appStateAnchor",
         "appStates",
@@ -1025,7 +1060,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders: `confirm-button`, `option`.",
+                  "description": "The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.",
                   "type": "array",
                   "items": {
                     "type": "string",

@@ -82,6 +82,12 @@ describe('instructionsOf', () => {
       "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",
     )
   })
+  it("says a password input's visibility-button is presentation only, held by the input itself", () => {
+    expect(instructions.screenMap).toContain('`<input>.visibility-button`')
+    expect(instructions.screenMap).toContain('never an event of a flow and always enabled')
+    expect(instructions.screenMap).toContain('`contract.derivedParts`')
+    expect(instructions.gaps).toContain('whether a password input shows what it holds')
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')

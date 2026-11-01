@@ -47,6 +47,7 @@ const SCREEN_MAP = [
   "A state of the root may be `type: parallel`: its `states` are regions, the screen's independent areas, all active at once, each with its `initial` and its plain states; a target of the root may name a region's state as `<parallel>.<region>.<state>` (the other regions start at their `initial`), a target in a region names a state of that region or, by the flow's `id` (a one-segment name the flow declares, which the app gives its machine), a state of the root as `#<flow id>.<state>`, which leaves the parallel state and enters that state afresh, and within a parallel state an event is handled by one region or by the state's own `on`, never by two.",
   'Carry it into `setup({ guards, actions, actors }).createMachine(flow)` unchanged, implementing the guards it names, the three effects and an actor per `invoke.src`.',
   'A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event (`snapshot.can`), and disabled otherwise: a Save disabled while it saves is the flow saying so, never a flag of its own.',
+  `A \`visibility-button\` (\`<input>.visibility-button\`, the eye of a password input, in \`contract.derivedParts\`) shows what the input holds as typed, or hides it again: presentation only, it is never an event of a flow and always enabled, and its \`${VALUE}\` names what a click does, \`show\` or \`hide\`.`,
   `\`ids\` holds the same anchors flat, each with its screen. On a development or e2e build, \`window.${PAGE_HELPER}.anchors()\` lists the anchors the page renders now, with their attributes and visibility.`,
 ].join(' ')
 
@@ -92,6 +93,7 @@ const SCENARIOS = [
 const GAPS = [
   'When the contract cannot say what you need (a state, a region, an event, a value, a route, a role, a code, a shape), stop at that part: build what the contract covers and report a contract gap with your result, as four lines: `Contract gap:` what is needed; `Facet:` which part of the contract cannot say it (the model, a screen file, the platform, the flow subset, an activity, the scenario grammar, a check); `Emulation refused:` the workaround you did not build; `Proposal:` the change to the contract and its cost.',
   'Never hold it in the app or in a test instead: state in a component for a flow state or a region the contract lacks, a value or a route it does not carry, an anchor or a code born in the code or in a test. An emulation is a fork of the model that no check sees and the next build from this manifest loses; the contract is changed first.',
+  'The one transient state a component holds is whether a password input shows what it holds, which the `visibility-button` the contract declares on it toggles.',
 ].join(' ')
 
 export function instructionsOf(

@@ -149,4 +149,24 @@ describe('bindingsProblems', () => {
       `${AT}["sample.save-button"].binding.params.title: "sample.title-input.item" is not a declared anchor`,
     ])
   })
+  it("refuses a visibility-button as a param's anchor, and keeps its input", () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.createThing',
+      params: { title: 'sample.title-input.visibility-button' },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.title: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value an action takes`,
+    ])
+
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.createThing',
+      params: { title: 'sample.title-input' },
+    }
+
+    expect(printed(contract)).toEqual([])
+  })
 })

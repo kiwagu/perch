@@ -2,13 +2,14 @@
  * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
  * words. Every kind, derived suffix, code, state, role and screen name the screens and the
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
- * permission to; every choice value belongs to an anchor that exists; every code listed is
+ * permission to; every choice value belongs to an anchor that exists and is no visibility-button,
+ * whose values its suffix defines; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
  * A code the loader derived on the toast anchor needs no row: the rule row
  * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { screenOf } from '../anchors'
+import { screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
   jsonPath,
@@ -28,6 +29,7 @@ import {
   knownAnchors,
   locate,
   statesOf,
+  visibilityButtonsOf,
 } from './contract'
 
 const FRAME_SCREEN = 'app-shell'
@@ -174,6 +176,7 @@ function validPattern(pattern: string): boolean {
 
 function choiceValueProblems(contract: Contract): Problem[] {
   const known = knownAnchors(contract)
+  const visibilityButtons = visibilityButtonsOf(contract.screens)
 
   return Object.entries(contract.vocabulary.choiceValues).flatMap(([anchor, rows]) => {
     const values = Object.keys(rows)
@@ -191,6 +194,13 @@ function choiceValueProblems(contract: Contract): Problem[] {
       ...(known(anchor)
         ? []
         : [inVocabulary(`choice values of "${anchor}": no such anchor in the screens`)]),
+      ...(visibilityButtons.has(anchor)
+        ? [
+            inVocabulary(
+              `choice values of "${anchor}": a ${VISIBILITY_BUTTON} carries show or hide, the values of its suffix, and takes no rows`,
+            ),
+          ]
+        : []),
     ]
   })
 }

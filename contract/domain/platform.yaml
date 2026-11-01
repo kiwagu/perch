@@ -228,7 +228,6 @@ reserved:
   - app-shell.status
   - app-shell.notice-message
   - app-shell.nav
-  - app-shell.nav.sign-in-link
   - app-shell.nav.profile-link
   - app-shell.nav.organisation-link
   - app-shell.nav.devices-link
