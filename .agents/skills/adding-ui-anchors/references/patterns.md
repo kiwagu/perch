@@ -293,6 +293,9 @@ signing-in:
           - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
 ```
 
+`clear: user.sign-in.error` takes the code off the form's error; a `clear` that names a
+field of the screen empties it instead, a secret one included, so it holds no input any more.
+
 And the machine, in its folder `apps/web/src/features/user/application/sign-in-machine/`
 (`machine.ts` lines 65-252, its guards in `guards.ts` lines 43-50): an actor per
 `invoke.src`, a guard per name of `meta.guards`, the same states, events, targets and
