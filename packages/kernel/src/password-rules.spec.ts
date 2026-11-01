@@ -17,6 +17,20 @@ const CYRILLIC_ZHE = String.fromCodePoint(0x0436)
 /** The capital of `CYRILLIC_ZHE`. */
 const CYRILLIC_CAPITAL_ZHE = String.fromCodePoint(0x0416)
 
+/** Cyrillic letters that look like the Latin a, e and o, written by their code points. */
+const CYRILLIC_A = String.fromCodePoint(0x0430)
+const CYRILLIC_IE = String.fromCodePoint(0x0435)
+const CYRILLIC_O = String.fromCodePoint(0x043e)
+
+/** The Greek omicron, which looks like the Latin o. */
+const GREEK_OMICRON = String.fromCodePoint(0x03bf)
+
+/** A combining acute accent: after an `e` it reads as an accented e, typed as two characters. */
+const COMBINING_ACUTE = String.fromCodePoint(0x0301)
+
+/** A high surrogate on its own, with no low surrogate after it: no character at all. */
+const LONE_SURROGATE = String.fromCharCode(0xd800)
+
 /** A password of `length` characters that keeps every other rule. */
 const ofLength = (length: number): string => `Ab1!${'c'.repeat(length - 4)}`
 
@@ -94,9 +108,16 @@ describe('the rules of a new password', () => {
     ['a space', 'Abcdefg hij1!'],
     ['a tab', 'Abcdefg\thij1!'],
     ['a control character', 'Abcdefg\u0007hij1!'],
+    ['a NUL character', 'Abcdefg\u0000hij1!'],
     ['a deletion character', 'Abcdefg\u007fhij1!'],
     ['an accented letter', 'Abcdefgéhij1!'],
     ['a Cyrillic letter', `Abcdefg${CYRILLIC_ZHE}hij1!`],
+    ['an accent combined with a Latin letter', `Abcdefge${COMBINING_ACUTE}hij1!`],
+    ['a Cyrillic a that looks Latin', `Abcdefg${CYRILLIC_A}hij1!`],
+    ['a Cyrillic e that looks Latin', `Abcdefg${CYRILLIC_IE}hij1!`],
+    ['a Cyrillic o that looks Latin', `Abcdefg${CYRILLIC_O}hij1!`],
+    ['a Greek omicron that looks Latin', `Abcdefg${GREEK_OMICRON}hij1!`],
+    ['a lone surrogate', `Abcdefg${LONE_SURROGATE}hij1!`],
     ['an emoji', 'Abcdefg\u{1F600}hij1!'],
   ])('breaks the characters rule with %s, and no other', (_, password) => {
     expect(checkPasswordRules(password)).toEqual({
