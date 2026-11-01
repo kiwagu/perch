@@ -19,12 +19,15 @@ than its portal or overlay. A control that is not a test target carries a
 ## Key exports
 
 - `./components/ui/*`: shadcn primitives (button, card, input, textarea, label, field, alert,
-  alert-dialog, separator, dropdown-menu, select, sheet), and `Form`: a form whose `onSubmit`
-  returns whether it saved; on `true` each of its own fields takes the value it held when the
-  submit started as saved (what was typed during the save stays unsaved), and the default
-  submit is always prevented. Add more with `bunx shadcn add <name>`
-  in this folder, or copy what `bunx shadcn view <name>` prints when `add` cannot resolve an
-  alias; the file then belongs to us and is edited in place. `toast` is the kit's own:
+  alert-dialog, separator, dropdown-menu, select, sheet). `Alert` is a message on the card: its
+  `variant` `default` keeps it plain with a muted description, and a tone (`success`,
+  `warning`, `info` or `destructive`) paints its title, description and icon in that tone.
+  `Form` is a form whose `onSubmit` returns whether it saved; on `true` each of its own fields
+  takes the value it held when the submit started as saved (what was typed during the save
+  stays unsaved), and the default submit is always prevented. Add more with
+  `bunx shadcn add <name>` in this folder, or copy what `bunx shadcn view <name>` prints when
+  `add` cannot resolve an alias; the file then belongs to us and is edited in place. `toast` is
+  the kit's own:
   `Toaster`, the polite live region (`role="status"`, each addition announced alone) around the
   list the app's toasts stack in, centred at the top, in the order given, and `Toast`, one toast
   carrying its `data-code` and its `tone` (`success`, `warning` or `error`: the theme's
@@ -52,13 +55,21 @@ than its portal or overlay. A control that is not a test target carries a
   compares its choices, one or several, as it compares an item, `isItemEqualToValue` or
   `Object.is`), and takes `holdsInput={false}` for a choice that applies at once.
 - `./lib/utils`: `cn` for class names.
-- `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus `success` and `warning`:
-  Tailwind's green and orange, 600 in light and 400 in dark, as `destructive` is red) and the
-  base layer; import it once in the app. It points Tailwind at the kit's components, so their
-  classes are generated in apps. The base layer also hides the native scrollbar of a Base UI
-  list (`.base-ui-disable-scrollbar`): the kit's components render no inline `<style>`, which a
-  strict style policy refuses (`Select` keeps its popup under Base UI's `CSPProvider` with
-  `disableStyleElements`).
+- `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus the tones `success`,
+  `warning` and `info` beside its `destructive`) and the base layer; import it once in the app.
+  It points Tailwind at the kit's components, so their classes are generated in apps. The base
+  layer also hides the native scrollbar of a Base UI list (`.base-ui-disable-scrollbar`): the
+  kit's components render no inline `<style>`, which a strict style policy refuses (`Select`
+  keeps its popup under Base UI's `CSPProvider` with `disableStyleElements`). A text in a tone
+  reads at 4.5:1 or more on the card and the background in both themes, which
+  `src/styles/global.spec.ts` holds (light: Tailwind's green-700, amber-700, blue-700 and
+  red-700; dark: green-400, orange-400, blue-400 and red-400). Which tone a message takes:
+  - `success`: an outcome that went through (saved, sent, removed).
+  - `warning`: a caution or a degraded state (offline, slow, about to expire).
+  - `info`: neutral information worth noticing (a new version, a link on its way).
+  - `destructive`: an error or a failure.
+  - A requirement not met yet while the user types (a password rule) is no error: it stays
+    `muted-foreground`, never red.
 
 ## Commands
 
