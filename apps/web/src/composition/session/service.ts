@@ -1,6 +1,12 @@
-import { okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
-import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
+import {
+  type AuthUser,
+  type DataError,
+  dataError,
+  type SignInInput,
+  type SignUpInput,
+} from '@workspace/data'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
@@ -10,8 +16,17 @@ import type {
   SignOutOptions,
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
+import type { AccountSession } from '../gateway-auth'
 import type { IdentitySpace } from '../identity-space'
-import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity, savedNotice } from '../storage'
+import {
+  deviceIdFrom,
+  forgetNotice,
+  IDENTITY_KEY,
+  MEMBERSHIPS_KEY,
+  savedIdentity,
+  savedNotice,
+  savedToken,
+} from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
 import type { SessionOptions } from './options'
@@ -168,6 +183,20 @@ export class SessionService implements SessionPort {
     return this.#options.auth.resetPassword(token, password)
   }
 
+  /** Asks the gateway with this device's session; the other devices hear their sign-out (4002). */
+  changePassword(currentPassword: string, password: string): ResultAsync<void, DataError> {
+    return this.#accountSession().andThen((session) =>
+      this.#options.auth.changePassword({ currentPassword, password }, session),
+    )
+  }
+
+  /** Asks the gateway with this device's session; nothing changes here until the link is opened. */
+  changeEmail(email: string, password: string): ResultAsync<void, DataError> {
+    return this.#accountSession().andThen((session) =>
+      this.#options.auth.changeEmail({ email, password }, session),
+    )
+  }
+
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
     return this.#transitions.serially(() => this.#signingOut.signOut(options.forgetUnsent ?? false))
   }
@@ -270,6 +299,15 @@ export class SessionService implements SessionPort {
           this.#state.openFor(opening) ? this.#organisations.adopt(created) : undefined,
         )
       : this.#organisations.adopt(created)
+  }
+
+  /** The session this device is signed in with, for a change of its account; none signed in fails. */
+  #accountSession(): ResultAsync<AccountSession, DataError> {
+    const token = savedToken(this.#options.storage)
+
+    return token === undefined || this.#state.open() === undefined
+      ? errAsync(dataError('data:AUTH_FAILED', 'nobody is signed in on this device'))
+      : okAsync({ token, device: deviceIdFrom(this.#options.storage) })
   }
 
   /**

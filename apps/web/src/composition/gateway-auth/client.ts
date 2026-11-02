@@ -8,6 +8,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
+import { accountChangeOf } from './account-change'
 import { mailRequested } from './mail-request'
 import { passwordResetOf } from './password-reset'
 import { signedOutOf } from './sign-out'
@@ -62,6 +63,28 @@ export interface GatewayAuth {
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError>
   /**
+   * Changes the password of the account `session` is signed in to: the gateway signs its other
+   * devices out and keeps this one signed in. A wrong current password fails as
+   * `data:INVALID_CREDENTIALS`, a new one that breaks the rules as `data:PASSWORD_REJECTED`, a
+   * token the gateway no longer takes as `data:AUTH_FAILED`, a request to wait as
+   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer as
+   * `data:WRITE_FAILED` naming its status, never a password.
+   */
+  changePassword(
+    input: { readonly currentPassword: string; readonly password: string },
+    session: AccountSession,
+  ): ResultAsync<void, DataError>
+  /**
+   * Asks to change the email of the account `session` is signed in to: the mail whose link makes
+   * the change goes to the new email, and the answer is alike whether the new email has an account
+   * or not. A wrong password fails as `data:INVALID_CREDENTIALS`, an email that is not one as
+   * `data:EMAIL_INVALID`, and the rest as a change of the password does.
+   */
+  changeEmail(
+    input: { readonly email: string; readonly password: string },
+    session: AccountSession,
+  ): ResultAsync<void, DataError>
+  /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as
    * `data:AUTH_FAILED`: it is dead already. A request the gateway refuses otherwise (any other
@@ -70,6 +93,12 @@ export interface GatewayAuth {
    * token may be sent again.
    */
   signOut(token: string, device: string): ResultAsync<void, DataError>
+}
+
+/** The session a change of the signed-in account is asked with: its token and the device's id. */
+export interface AccountSession {
+  readonly token: string
+  readonly device: string
 }
 
 /** The part of `fetch` the gateway's auth uses. */
@@ -92,7 +121,8 @@ function urlOf(input: string | URL | Request): string {
  * The gateway's `POST <baseUrl>/auth/sign-in/email` through Better Auth's client, and its own
  * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
  * `POST <baseUrl>/auth/send-verification-email`, `POST <baseUrl>/auth/request-password-reset`,
- * `POST <baseUrl>/auth/reset-password` and `POST <baseUrl>/auth/sign-out`, whose answers
+ * `POST <baseUrl>/auth/reset-password`, `POST <baseUrl>/auth/change-password`,
+ * `POST <baseUrl>/auth/change-email` and `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
  * keep their meaning; any other answer fails the attempt with its status, never with a token, a
@@ -114,6 +144,12 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
   const callOptions = (device: NamedDevice) => ({
     headers: deviceHeaders(device),
     disableSignal: true,
+  })
+
+  /** The headers of a request made for the signed-in device: its session token and its id. */
+  const bearer = (session: AccountSession) => ({
+    Authorization: `Bearer ${session.token}`,
+    'X-Perch-Device': session.device,
   })
 
   /**
@@ -159,6 +195,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
         : post('reset-password', { token, password }).andThen(passwordResetOf),
+    changePassword: (input, session) =>
+      post('change-password', input, bearer(session)).andThen((answer) =>
+        accountChangeOf(answer, 204),
+      ),
+    changeEmail: (input, session) =>
+      post('change-email', input, bearer(session)).andThen((answer) =>
+        accountChangeOf(answer, 202),
+      ),
     signOut: (token, device) =>
       ResultAsync.fromPromise(
         fetcher(`${baseUrl}/auth/sign-out`, {

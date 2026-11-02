@@ -37,6 +37,7 @@
   "app.shell.toast.invited": "Member invited.",
   "app.shell.toast.profile-saved": "Profile saved.",
   "app.shell.toast.device-signed-out": "Device signed out.",
+  "app.shell.toast.password-changed": "Password changed. Your other devices are signed out.",
   "app.shell.confirm.cancel": "Cancel",
   "app.shell.confirm.note-delete.title": "Delete this note?",
   "app.shell.confirm.note-delete.body": "It can't be undone.",

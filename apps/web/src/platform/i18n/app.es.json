@@ -37,6 +37,7 @@
   "app.shell.toast.invited": "Miembro invitado.",
   "app.shell.toast.profile-saved": "Perfil guardado.",
   "app.shell.toast.device-signed-out": "Sesión cerrada en ese dispositivo.",
+  "app.shell.toast.password-changed": "Contraseña cambiada. Se cerró la sesión en tus otros dispositivos.",
   "app.shell.confirm.cancel": "Cancelar",
   "app.shell.confirm.note-delete.title": "¿Eliminar esta nota?",
   "app.shell.confirm.note-delete.body": "No se puede deshacer.",

@@ -121,3 +121,78 @@ describe('gatewayAuth.resetPassword', () => {
     )
   })
 })
+
+describe('gatewayAuth.changePassword and changeEmail', () => {
+  const session = { token: 'session-token-1', device: 'device-1' }
+  const change = { currentPassword: 'Secret-old1', password: 'Secret-new1' }
+  const email = { email: 'ann.new@example.test', password: 'Secret-old1' }
+
+  it('changes the password with the session token and the device, and nothing else', async () => {
+    const recorded = fakeFetch(noContent())
+
+    expect((await gatewayAuth(BASE, recorded.fetcher).changePassword(change, session)).isOk()).toBe(
+      true,
+    )
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/change-password`,
+        method: 'POST',
+        authorization: 'Bearer session-token-1',
+        device: 'device-1',
+        body: change,
+      },
+    ])
+  })
+
+  it('asks to change the email the same way, answered 202', async () => {
+    const recorded = fakeFetch(accepted())
+
+    expect((await gatewayAuth(BASE, recorded.fetcher).changeEmail(email, session)).isOk()).toBe(
+      true,
+    )
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/change-email`,
+        method: 'POST',
+        authorization: 'Bearer session-token-1',
+        device: 'device-1',
+        body: email,
+      },
+    ])
+  })
+
+  it.each([
+    [400, { code: 'invalid-credentials' }, 'data:INVALID_CREDENTIALS'],
+    [400, { code: 'password-rejected' }, 'data:PASSWORD_REJECTED'],
+    [400, { code: 'email-invalid' }, 'data:EMAIL_INVALID'],
+    [400, { code: 'bad-request' }, 'data:WRITE_REJECTED'],
+    [401, { code: 'unauthorized' }, 'data:AUTH_FAILED'],
+    [429, { code: 'rate-limited' }, 'data:RATE_LIMITED'],
+    [500, { code: 'internal' }, 'data:WRITE_FAILED'],
+  ])('reads %s %j as %s, naming no password', async (status, body, code) => {
+    for (const asked of [
+      (fetcher: Parameters<typeof gatewayAuth>[1]) =>
+        gatewayAuth(BASE, fetcher).changePassword(change, session),
+      (fetcher: Parameters<typeof gatewayAuth>[1]) =>
+        gatewayAuth(BASE, fetcher).changeEmail(email, session),
+    ]) {
+      const refused = (await asked(fakeFetch(respond(status, body)).fetcher))._unsafeUnwrapErr()
+
+      expect(refused.code).toBe(code)
+      namesNone(refused, change.currentPassword, change.password, session.token)
+    }
+  })
+
+  it('keeps nothing of a rejected request: no cause, no password', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (
+        await gatewayAuth(BASE, fetcher).changePassword(
+          { currentPassword: PASSWORD_MARKER, password: PASSWORD_MARKER },
+          { token: TOKEN_MARKER, device: 'device-1' },
+        )
+      )._unsafeUnwrapErr(),
+    )
+  })
+})

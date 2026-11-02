@@ -72,10 +72,19 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
   this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
   chooses the same one) and the account's language
-  (stored through `settings.updateLocale`, spoken at once), its screen's flow run as its machine
-  (`application/settings/settings.machine.ts`, held to `contract/domain/screens/settings.yaml` by
-  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
-  language changes.
+  (stored through `settings.updateLocale`, spoken at once), the account's password (the current
+  one, the new one typed twice and held to the rules of a new password as at sign-up, changed
+  through `platform.change-password`, which signs the account's other devices out; a change says
+  so on the frame's toast, `password-changed`, and the flow's `clear` empties the form, whose
+  values the page holds, `useFieldClears`; a refusal shows under the field its code concerns) and
+  the account's email (the new email and the current password, `platform.change-email`, which
+  mails the new email a link that makes the change; the message `check-your-mail` names it, the
+  same words whether that email has an account or not), its screen's flow run as its machine
+  (`application/settings/settings-machine/`: the theme, language, password and email regions of
+  one parallel state, `machine.ts` assembling `password-region.ts` and `email-region.ts`, held to
+  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
+  `useScreenMachine`, which asks the leave guard before the language changes; its view is
+  `settings.view.tsx` with `password-form.view.tsx` and `email-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.

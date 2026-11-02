@@ -90,6 +90,19 @@ export interface SessionPort {
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError>
   /**
+   * Changes the signed-in account's password with its current one: the gateway signs its other
+   * devices out and keeps this one signed in. A wrong current password fails as
+   * `data:INVALID_CREDENTIALS`, a new one that breaks the rules as `data:PASSWORD_REJECTED`, and
+   * nobody signed in here as `data:AUTH_FAILED`.
+   */
+  changePassword(currentPassword: string, password: string): ResultAsync<void, DataError>
+  /**
+   * Asks to change the signed-in account's email, confirmed by its password: the mail whose link
+   * makes the change goes to `email`, alike whether it has an account or not. A wrong password
+   * fails as `data:INVALID_CREDENTIALS`, an email that is not one as `data:EMAIL_INVALID`.
+   */
+  changeEmail(email: string, password: string): ResultAsync<void, DataError>
+  /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,
    * when changes could not be sent and signing out would lose them.

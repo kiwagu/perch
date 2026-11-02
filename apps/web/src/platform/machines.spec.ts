@@ -29,7 +29,7 @@ import { createOrganisationMachine } from '../features/organisation/application/
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
-import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
+import { createSettingsMachine } from '../features/user/application/settings/settings-machine'
 import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
 import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
@@ -124,6 +124,8 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
       setTheme: () => {},
       storeLocale: () => okAsync(undefined),
+      changePassword: () => okAsync(undefined),
+      changeEmail: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({
