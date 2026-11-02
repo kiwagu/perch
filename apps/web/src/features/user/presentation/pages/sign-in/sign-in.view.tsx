@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -188,13 +189,14 @@ export function SignInView(props: SignInViewProps) {
             </Field>
             <Field>
               <FieldLabel htmlFor={ids.password}>{t('user.sign-in.password')}</FieldLabel>
-              <Input
+              <PasswordInput
                 {...password('password')}
-                type="password"
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
                 required
                 aria-describedby={signingUp ? rulesId : undefined}
-                data-testid="user.sign-in.password-input"
+                showLabel={t('user.password.show')}
+                hideLabel={t('user.password.hide')}
+                testId="user.sign-in.password-input"
               />
               {signingUp ? <PasswordRuleList id={rulesId} password={values.password} /> : null}
             </Field>
@@ -203,14 +205,15 @@ export function SignInView(props: SignInViewProps) {
                 <FieldLabel htmlFor={ids.confirmation}>
                   {t('user.sign-in.password-confirmation')}
                 </FieldLabel>
-                <Input
+                <PasswordInput
                   {...password('confirmation')}
-                  type="password"
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
                   aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
-                  data-testid="user.sign-in.password-confirmation-input"
+                  showLabel={t('user.password.show')}
+                  hideLabel={t('user.password.hide')}
+                  testId="user.sign-in.password-confirmation-input"
                 />
                 {error && concerns === 'confirmation' ? (
                   <FieldError

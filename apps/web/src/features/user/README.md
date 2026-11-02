@@ -93,6 +93,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   marked `met` while the password as typed keeps it, its state read out with it
   (`user.sign-in.password-rule.met` or `.not-met`), and the submit is disabled while the password
   breaks a rule, the password typed again not judged until it keeps them all;
+  each password input is the kit's `PasswordInput`, whose eye (`<input>.visibility-button`,
+  `user.password.show` or `.hide`) shows what it holds as typed or hides it again, presentation
+  only and never an event of the flow;
   a sign-up asks for the password twice, checked as it is typed: once the password typed again is
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the

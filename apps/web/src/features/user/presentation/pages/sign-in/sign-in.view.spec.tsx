@@ -471,6 +471,37 @@ describe('SignInView', () => {
     )
   })
 
+  it('shows each password as typed on a click of its eye, and hides it again on the next', () => {
+    const onTypePassword = renderView({ mode: 'sign-up' }).onTypePassword
+
+    for (const testId of [
+      'user.sign-in.password-input',
+      'user.sign-in.password-confirmation-input',
+    ]) {
+      const eye = screen.getByTestId(`${testId}.visibility-button`)
+
+      type(testId, 'Secret-ann1')
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.show'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('text')
+      expect(input(testId).value).toBe('Secret-ann1')
+      expect(eye.getAttribute('data-value')).toBe('hide')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.hide'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+    }
+
+    // The eye is presentation only: the flow hears the keystrokes, never the clicks.
+    expect(onTypePassword).toHaveBeenCalledTimes(2)
+  })
+
   it('says the device was signed out because the password changed', () => {
     renderView({ notice: 'password-changed-elsewhere' })
 

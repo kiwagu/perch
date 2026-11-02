@@ -6,6 +6,8 @@
   "user.sign-in.email": "Correo electrónico",
   "user.sign-in.password": "Contraseña",
   "user.sign-in.password-confirmation": "Confirma la contraseña",
+  "user.password.show": "Mostrar la contraseña",
+  "user.password.hide": "Ocultar la contraseña",
   "user.sign-in.password-rule.length": "De 10 a 35 caracteres",
   "user.sign-in.password-rule.characters": "Solo letras latinas, dígitos y símbolos, sin espacios",
   "user.sign-in.password-rule.digit": "Al menos un dígito",
