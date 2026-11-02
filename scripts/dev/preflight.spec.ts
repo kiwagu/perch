@@ -64,6 +64,20 @@ describe('the preflight of bun run dev', () => {
     })
   })
 
+  it('lets the watcher alone run beside the pm2 gateway, with the services down', () => {
+    // bun run dev -- --filter=@workspace/web: turbo selects the web app's watcher only.
+    const webOnly = {
+      ...ready,
+      runs: { gateway: false, web: true },
+      surreal: { ...ready.surreal, answers: false },
+      mailbox: { ...ready.mailbox, answers: false },
+      gatewayPort: { port: 5181, free: false },
+      pm2: { gateway: true, web: false },
+    }
+
+    expect(preflight(webOnly)).toEqual({ errors: [], warnings: [] })
+  })
+
   it('leaves out what an excluded workspace would need', () => {
     const down = {
       ...ready,

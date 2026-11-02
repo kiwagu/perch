@@ -1,6 +1,6 @@
 /**
- * The checks `bun run dev` makes on this host before it starts: whether a service answers at its
- * url, and whether a port is free to listen on.
+ * The checks `bun run dev` makes on this host before it starts: whether a service's health url
+ * answers it is ready, whether the front serves, and whether a port is free to listen on.
  */
 
 import { createServer } from 'node:net'
@@ -8,21 +8,40 @@ import { createServer } from 'node:net'
 /** How long a service has to answer its url. */
 const ANSWER_TIMEOUT_MS = 2000
 
+const isSuccess = (status: number): boolean => status >= 200 && status < 300
+
 /**
- * Whether something answers HTTP at `url` without a server error: the stands' front answers 404
- * until the watcher's first build, and its certificate is the stands' own, so it is not verified.
+ * The HTTP status `url` answers with, or none when nothing answers in time. The front's
+ * certificate is the stands' own, so it is not verified.
  */
-export async function answers(url: string): Promise<boolean> {
+async function statusOf(url: string): Promise<number | undefined> {
   try {
     const response = await fetch(url, {
       signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
       tls: { rejectUnauthorized: false },
     })
 
-    return response.status < 500
+    return response.status
   } catch {
-    return false
+    return undefined
   }
+}
+
+/** Whether a service's health url answers that it is ready: a 2xx, nothing else. */
+export async function healthy(url: string): Promise<boolean> {
+  const status = await statusOf(url)
+
+  return status !== undefined && isSuccess(status)
+}
+
+/**
+ * Whether the front serves its page: a 2xx, or the 404 it answers until the watcher's first build
+ * writes apps/web/dist-dev.
+ */
+export async function frontServes(url: string): Promise<boolean> {
+  const status = await statusOf(url)
+
+  return status !== undefined && (isSuccess(status) || status === 404)
 }
 
 /** Whether a server could listen on 127.0.0.1 at `port` now. */

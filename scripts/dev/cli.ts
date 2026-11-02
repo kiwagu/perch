@@ -2,9 +2,9 @@
 /**
  * `bun run dev` at the repository root: the Bun dev scripts of the workspaces in the foreground,
  * through turbo (the gateway's `bun --watch` and the web app's build watcher into
- * apps/web/dist-dev), with this checkout's dev stand. It reads the stand from
- * `mcproc --json describe` (the manifest's vars resolved for this checkout's slot), checks it
- * (`preflight.ts`), defines the gateway's user on the dev SurrealDB with the stand operator and
+ * apps/web/dist-dev), with this checkout's dev stand. It asks turbo which of them its arguments
+ * select (`selection.ts`), reads the stand from `mcproc --json describe` (the manifest's vars
+ * resolved for this checkout's slot), checks it (`preflight.ts`), defines the gateway's user on the dev SurrealDB with the stand operator and
  * becomes turbo, run with the gateway's settings (`scripts/stand-gateway/`, the mapping the
  * manifest's gateway apps start with too). SurrealDB, MailDev and Caddy are dedicated services it
  * does not start: `mcproc start services`.
@@ -19,7 +19,8 @@ import { becomeCommand, defineGatewayUser, gatewaySettings } from '../stand-gate
 
 import { devStand, mcprocJson, pm2Scripts } from './mcproc.ts'
 import { preflight } from './preflight.ts'
-import { answers, portFree } from './probes.ts'
+import { frontServes, healthy, portFree } from './probes.ts'
+import { selectedScripts, turboDryRun } from './selection.ts'
 import { turboRun } from './turbo-run.ts'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
@@ -32,11 +33,16 @@ function fail(messages: readonly string[]): never {
   process.exit(1)
 }
 
-const { excludes, args } = turboRun('dev', process.argv.slice(2))
-const runs = {
-  gateway: !excludes.includes('@workspace/gateway'),
-  web: !excludes.includes('@workspace/web'),
+const args = turboRun('dev', process.argv.slice(2))
+const path = `${join(root, 'node_modules', '.bin')}${delimiter}${process.env['PATH'] ?? ''}`
+const dry = turboDryRun(root, args, { ...process.env, PATH: path })
+const selection = typeof dry === 'string' ? { problems: [dry] } : selectedScripts(dry.json)
+
+if ('problems' in selection) {
+  fail(selection.problems)
 }
+
+const { runs } = selection
 
 const described = mcprocJson(root, ['describe'])
 const read = typeof described === 'string' ? { problems: [described] } : devStand(described.json)
@@ -54,9 +60,9 @@ if ('problems' in pm2) {
 
 const { stand, urls, slot } = read.devStand
 const [surreal, mailbox, front, free] = await Promise.all([
-  answers(urls.surreal),
-  answers(urls.mailbox),
-  answers(urls.front),
+  healthy(urls.surreal),
+  healthy(urls.mailbox),
+  frontServes(urls.front),
   portFree(stand.gateway),
 ])
 const { errors, warnings } = preflight({
@@ -88,7 +94,5 @@ const running = [
 console.error(
   `bun run dev: the dev stand of slot ${slot}: ${[...running, `the app at ${urls.front}`].join(', ')}`,
 )
-
-const path = `${join(root, 'node_modules', '.bin')}${delimiter}${process.env['PATH'] ?? ''}`
 
 fail([becomeCommand(['turbo', ...args], { ...process.env, PATH: path, ...gatewaySettings(stand) })])

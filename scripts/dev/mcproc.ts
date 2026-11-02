@@ -5,11 +5,11 @@
  * gateway and web run (`mcproc --json ls`).
  */
 
-import { spawnSync } from 'node:child_process'
-
 import { z } from '@workspace/zod'
 
 import { STAND_VARS, type Stand, standFrom } from '../stand-gateway/index.ts'
+
+import { jsonOf, run } from './json-command.ts'
 
 /** The dedicated services of the dev stand `bun run dev` works with, by their app. */
 export const DEV_SERVICES = {
@@ -39,10 +39,24 @@ const describeSchema = z.object({
   apps: z.array(z.object({ name: z.string(), url: z.string().nullable() })),
 })
 
-const lsSchema = z.array(z.object({ app: z.string(), status: z.string() }))
+/**
+ * A row of `mcproc --json ls`. An app whose start waits in the host's memory queue, or was just
+ * let through it, has no pm2 process yet: its row carries the start's lease (state `pending`, the
+ * status `queued #<position>`; state `starting`, the status `starting`), and pm2 runs it soon.
+ */
+const lsSchema = z.array(
+  z.object({
+    app: z.string(),
+    status: z.string(),
+    lease: z.object({ state: z.string() }).optional(),
+  }),
+)
 
-/** The statuses of an app pm2 runs or is about to run (a queued start included). */
-const ACTIVE = new Set(['online', 'launching', 'stopping', 'waiting restart', 'queued'])
+/** The pm2 statuses of an app that runs, or is being restarted. */
+const PM2_ACTIVE = new Set(['online', 'launching', 'stopping', 'waiting restart'])
+
+/** The states of a lease whose start has not run yet: queued, or let through the queue. */
+const LEASE_ACTIVE = new Set(['pending', 'starting'])
 
 const schemaProblems = (command: string, error: z.ZodError): string[] =>
   error.issues.map(
@@ -91,27 +105,21 @@ export function pm2Scripts(
   }
 
   const runs = (app: string): boolean =>
-    parsed.data.some((row) => row.app === app && ACTIVE.has(row.status))
+    parsed.data.some(
+      (row) =>
+        row.app === app &&
+        (PM2_ACTIVE.has(row.status) ||
+          (row.lease !== undefined && LEASE_ACTIVE.has(row.lease.state))),
+    )
 
   return { running: { gateway: runs(DEV_SCRIPTS.gateway), web: runs(DEV_SCRIPTS.web) } }
 }
 
 /** Runs `mcproc --json <args>` for the checkout at `root`: its JSON, or why there is none. */
 export function mcprocJson(root: string, args: readonly string[]): { json: unknown } | string {
-  const command = `mcproc --json ${args.join(' ')}`
-  const result = spawnSync('mcproc', ['--project', root, '--json', ...args], { encoding: 'utf8' })
-
-  if (result.error) {
-    return `${command} could not run (${result.error.message}): bun run dev reads this checkout's stand from the mcproc CLI, so put it on PATH (npm i -g mcproc)`
-  }
-
-  if (result.status !== 0) {
-    return `${command} failed with exit code ${result.status ?? 'none'}: ${result.stderr.trim()}`
-  }
-
-  try {
-    return { json: JSON.parse(result.stdout) as unknown }
-  } catch {
-    return `${command} printed no JSON`
-  }
+  return jsonOf(
+    `mcproc --json ${args.join(' ')}`,
+    run('mcproc', ['--project', root, '--json', ...args], root),
+    "bun run dev reads this checkout's stand from the mcproc CLI, so put it on PATH (npm i -g mcproc)",
+  )
 }

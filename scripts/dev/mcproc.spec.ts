@@ -116,25 +116,66 @@ describe("the dev stand read from mcproc's describe", () => {
 })
 
 describe("the pm2 stand's dev scripts read from mcproc's ls", () => {
-  const ls = (gateway: string, web: string) => [
-    { app: 'surrealdb-dev', status: 'online' },
-    { app: 'gateway', status: gateway },
-    { app: 'web', status: web },
-    { app: 'gateway-e2e', status: 'online' },
+  /** A row of `mcproc --json ls` for an app pm2 knows, trimmed to a few of its fields. */
+  const pm2Row = (app: string, status: string) => ({
+    app,
+    host: 'local',
+    kind: app === 'web' ? 'build' : 'server',
+    status,
+    pm_id: 27,
+    pid: status === 'online' ? 3397372 : null,
+    restarts: 0,
+  })
+  /**
+   * The row of an app whose start holds a lease of the host's memory queue: no pm2 process yet,
+   * the status says where the start is, and the lease says it structurally.
+   */
+  const leaseRow = (app: string, state: 'pending' | 'starting', position: number) => ({
+    app,
+    host: 'local',
+    kind: app === 'web' ? 'build' : 'server',
+    status: state === 'starting' ? 'starting' : `queued #${position}`,
+    pm_id: null,
+    pid: null,
+    restarts: 0,
+    url_status: 'unchecked',
+    lease: {
+      id: 'l_k3v9qx2m7a',
+      state,
+      position,
+      waiting_for:
+        state === 'pending' ? 'needs 1.8G, host has 1.2G over the reserve (600M short)' : null,
+    },
+  })
+  const ls = (gateway: object, web: object) => [
+    pm2Row('surrealdb-dev', 'online'),
+    gateway,
+    web,
+    pm2Row('gateway-e2e', 'online'),
   ]
 
-  it('run while pm2 runs them, restarts them or is about to start them', () => {
-    expect(pm2Scripts(ls('online', 'queued'))).toEqual({ running: { gateway: true, web: true } })
-    expect(pm2Scripts(ls('waiting restart', 'launching'))).toEqual({
+  it('run while pm2 runs them or restarts them', () => {
+    expect(pm2Scripts(ls(pm2Row('gateway', 'online'), pm2Row('web', 'launching')))).toEqual({
       running: { gateway: true, web: true },
     })
+    expect(pm2Scripts(ls(pm2Row('gateway', 'waiting restart'), pm2Row('web', 'stopping')))).toEqual(
+      {
+        running: { gateway: true, web: true },
+      },
+    )
+  })
+
+  it("run once their start is queued for the host's memory, or let through the queue", () => {
+    expect(
+      pm2Scripts(ls(leaseRow('gateway', 'pending', 1), leaseRow('web', 'starting', 0))),
+    ).toEqual({ running: { gateway: true, web: true } })
   })
 
   it('do not run once stopped, never started, done or failed', () => {
-    expect(pm2Scripts(ls('stopped', 'not-started'))).toEqual({
+    expect(pm2Scripts(ls(pm2Row('gateway', 'stopped'), pm2Row('web', 'not-started')))).toEqual({
       running: { gateway: false, web: false },
     })
-    expect(pm2Scripts(ls('failed (exit 1)', 'errored'))).toEqual({
+    expect(pm2Scripts(ls(pm2Row('gateway', 'failed (exit 1)'), pm2Row('web', 'errored')))).toEqual({
       running: { gateway: false, web: false },
     })
   })
