@@ -8,6 +8,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import type { SessionNotice } from '../../../../../platform/session.port'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 
 import { PasswordRuleList } from './password-rule-list'
@@ -36,9 +37,10 @@ export interface SignInViewProps {
   /**
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
-   * another device signed it out.
+   * another device signed it out, `password-changed-elsewhere` once a change of the account's
+   * password did.
    */
-  readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
+  readonly notice?: SessionNotice | undefined
   /** The code of the message asking to open the verification mail, once a sign-up or a resend went through. */
   readonly mail?: 'check-your-mail' | undefined
   /** The address that mail went to, which `check-your-mail` names. */
@@ -96,6 +98,8 @@ function noticeText(
       return t('user.sign-in.notice.resend-after-sign-in')
     case 'signed-out-elsewhere':
       return t('user.sign-in.notice.signed-out-elsewhere')
+    case 'password-changed-elsewhere':
+      return t('user.sign-in.notice.password-changed-elsewhere')
     case 'delete-pending':
       return t('user.sign-in.notice.delete-pending')
   }

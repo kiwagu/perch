@@ -18,6 +18,7 @@
   "user.sign-in.welcome": "Welcome",
   "user.sign-in.notice.resend-after-sign-in": "Some changes made on this device had not reached the server when you were signed out. Sign in again to send them.",
   "user.sign-in.notice.signed-out-elsewhere": "You were signed out from another device.",
+  "user.sign-in.notice.password-changed-elsewhere": "Your password was changed, so you were signed out. Sign in with the new password.",
   "user.sign-in.notice.delete-pending": "You are signed out. Your data leaves this device once the other Perch tabs are closed.",
   "user.sign-in.error.invalid-credentials": "Wrong email or password.",
   "user.sign-in.error.email-not-verified": "Confirm your email first: open the link in the mail we sent you, or send it again.",

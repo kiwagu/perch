@@ -116,7 +116,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   says it has no network; the sign-in page says so when the gateway refused the
   device's session token while changes remain to send after the next sign-in, and says "You
   were signed out from another device." when this device was signed out from another one
-  (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
+  (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), that a change of the
+  account's password signed it out, through a reset link or on another device (the code
+  `password-changed-elsewhere`, when the channel closed with 4002), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);
   it also says to wait when the gateway limits the attempts (`data:RATE_LIMITED`,

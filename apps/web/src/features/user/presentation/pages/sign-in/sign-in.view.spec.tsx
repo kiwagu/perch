@@ -471,6 +471,14 @@ describe('SignInView', () => {
     )
   })
 
+  it('says the device was signed out because the password changed', () => {
+    renderView({ notice: 'password-changed-elsewhere' })
+
+    expect(noticeWith('password-changed-elsewhere').textContent).toBe(
+      'Your password was changed, so you were signed out. Sign in with the new password.',
+    )
+  })
+
   it('says the data leaves this device once the other tabs are closed when another tab held its delete up', () => {
     renderView({ notice: 'delete-pending' })
 

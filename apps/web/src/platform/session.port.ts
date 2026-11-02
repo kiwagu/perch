@@ -15,10 +15,16 @@ export interface SignOutOptions {
  * signed out (its keys refused, signed out from another device, or a write landing during its
  * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
  * again as the same identity sends them. `signed-out-elsewhere` when another device of the
- * identity signed this one out and nothing waited to be sent. `delete-pending` when the device
- * signed out but another tab still held its databases open: they go once that tab closes them.
+ * identity signed this one out and nothing waited to be sent. `password-changed-elsewhere` when
+ * the account's password changed (through a reset link, or on another device), which signed this
+ * device out, and nothing waited to be sent. `delete-pending` when the device signed out but
+ * another tab still held its databases open: they go once that tab closes them.
  */
-export type SessionNotice = 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending'
+export type SessionNotice =
+  | 'resend-after-sign-in'
+  | 'signed-out-elsewhere'
+  | 'password-changed-elsewhere'
+  | 'delete-pending'
 
 /** A change the gateway refused and this device undid: what the shell tells the user about. */
 export interface PushRejection {

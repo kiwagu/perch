@@ -158,10 +158,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
   welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
-  (`signed-out`) or signed out from another device (`revoked`, 4001), none followed by a
+  (`signed-out`), signed out from another device (`revoked`, 4001) or by a change of the
+  account's password (`password-changed`, 4002), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
-  report on `revoked`) behind the `SyncTransport` port;
+  report on `revoked` and `password-changed`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and

@@ -232,9 +232,9 @@ class Engine implements SyncEngine {
   /**
    * The channel ended for good. A refused protocol stops syncing and is reported: this
    * application is older than the gateway, and only a reload brings one that speaks its
-   * protocol; nothing on the device changes. A device signed out from another one stops syncing
-   * without a report: the transport tells the app, whose token no longer works. A refused token
-   * and a sign-out are the app's to act on.
+   * protocol; nothing on the device changes. A device signed out from another one, or by a
+   * change of the account's password, stops syncing without a report: the transport tells the
+   * app, whose token no longer works. A refused token and a sign-out are the app's to act on.
    */
   #ended(reason: EndReason): void {
     match(reason)
@@ -247,7 +247,7 @@ class Engine implements SyncEngine {
           ),
         )
       })
-      .with('revoked', () => this.#stopPasses())
+      .with(P.union('revoked', 'password-changed'), () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
   }
