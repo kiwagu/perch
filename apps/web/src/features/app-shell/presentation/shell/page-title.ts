@@ -9,6 +9,7 @@ export const PAGE_TITLES: Readonly<Record<string, (t: Translate) => string>> = {
   '/verify-email': (t) => t('app.title.user.verify-email'),
   '/forgot-password': (t) => t('app.title.user.forgot-password'),
   '/reset-password': (t) => t('app.title.user.reset-password'),
+  '/confirm-email': (t) => t('app.title.user.confirm-email'),
   '/me': (t) => t('app.title.user.profile'),
   '/org': (t) => t('app.title.organisation'),
   '/devices': (t) => t('app.title.device'),

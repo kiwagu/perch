@@ -33,6 +33,7 @@ export type FakeAuthRequest =
   | { readonly kind: 'reset'; readonly token: string }
   | { readonly kind: 'change-password'; readonly token: string; readonly device: string }
   | { readonly kind: 'change-email'; readonly email: string; readonly token: string }
+  | { readonly kind: 'confirm'; readonly token: string }
   | { readonly kind: 'sign-out'; readonly token: string; readonly device: string }
 
 export interface FakeGatewayAuth extends GatewayAuth {
@@ -294,6 +295,30 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       }
 
       return okAsync(undefined)
+    },
+    confirmEmail: (link) => {
+      requests.push({ kind: 'confirm', token: link })
+
+      const change = confirmations.get(link)
+      const account = change === undefined ? undefined : accounts.get(change.email)
+
+      if (change === undefined || account === undefined || accounts.has(change.next)) {
+        return errAsync(dataError('data:LINK_INVALID', 'the gateway refused the link'))
+      }
+
+      // The account moves to its new email; its sessions stay.
+      confirmations.delete(link)
+      accounts.delete(change.email)
+      accounts.set(change.next, {
+        ...account,
+        identity: { ...account.identity, email: change.next },
+      })
+
+      for (const [given, of] of sessions) {
+        if (of === change.email) sessions.set(given, change.next)
+      }
+
+      return okAsync({ identity: account.identity.id, email: change.next })
     },
     signOut: (signedOut, device) => {
       requests.push({ kind: 'sign-out', token: signedOut, device })

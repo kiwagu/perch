@@ -112,10 +112,17 @@ describe('UserModule', () => {
         guard: undefined,
         search: ['token'],
       },
+      {
+        path: '/confirm-email',
+        page: 'ConfirmEmailPage',
+        guard: undefined,
+        search: ['token'],
+      },
       { path: '/me', page: 'ProfilePage', guard: 'authenticated', search: undefined },
       { path: '/settings', page: 'SettingsPage', guard: 'authenticated', search: undefined },
     ])
     expect(Object.keys(UserModule.declarations).sort()).toEqual([
+      'ConfirmEmailPage',
       'ForgotPasswordPage',
       'ProfilePage',
       'ResetPasswordPage',

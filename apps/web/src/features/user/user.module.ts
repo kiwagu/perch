@@ -9,6 +9,7 @@ import { ACCOUNT_START_SERVICE } from './application/account-start.service'
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-email.service'
+import { ConfirmEmailContainer } from './presentation/pages/confirm-email/confirm-email.container'
 import { ForgotPasswordContainer } from './presentation/pages/forgot-password/forgot-password.container'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
@@ -47,6 +48,7 @@ export const UserModule = defineModule({
     VerifyEmailPage: VerifyEmailContainer,
     ForgotPasswordPage: ForgotPasswordContainer,
     ResetPasswordPage: ResetPasswordContainer,
+    ConfirmEmailPage: ConfirmEmailContainer,
     ProfilePage: ProfileContainer,
     SettingsPage: SettingsContainer,
   },
@@ -68,6 +70,12 @@ export const UserModule = defineModule({
     {
       path: '/reset-password',
       page: 'ResetPasswordPage',
+      search: z.object({ token: z.string().min(1).max(4096).optional() }),
+    },
+    // Open to anyone: the link changes the email whoever is signed in here.
+    {
+      path: '/confirm-email',
+      page: 'ConfirmEmailPage',
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     { path: '/me', page: 'ProfilePage', guard: 'authenticated' },

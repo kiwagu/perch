@@ -1,21 +1,16 @@
 import { useSearch } from '@tanstack/react-router'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 
 import { z } from '@workspace/zod'
 
 import { useService } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { createVerifyEmailMachine } from '../../../application/verify-email.machine'
-import {
-  VERIFY_EMAIL_SERVICE,
-  type VerifyEmailService,
-} from '../../../application/verify-email.service'
+import { VERIFY_EMAIL_SERVICE } from '../../../application/verify-email.service'
+import { useLinkExchange } from '../../components/link-exchange/link-exchange'
 import { RouterLink } from '../../components/page-link/page-link'
 
 import { VerifyEmailView } from './verify-email.view'
-
-/** One exchange of a token, started once, whatever outcome it ends with. */
-type Exchange = ReturnType<VerifyEmailService['verify']>
 
 /** The search of the address, which the route's own schema checked already. */
 const search = z.object({ token: z.string().optional() })
@@ -36,32 +31,12 @@ export function VerifyEmailContainer() {
 function TokenExchange(props: { readonly token: string }) {
   const { token } = props
   const service = useService(VERIFY_EMAIL_SERVICE)
-  // React restarts a mounted screen's effects once in development (StrictMode), which starts its
-  // machine's first invoke again; the gateway signs a device in only at a link's first exchange, so
-  // a second exchange would answer "verified before". The exchange is kept by this mounted page
-  // and reused across that restart; a page mounted anew (a later visit, a revisit after a sign-out
-  // or after a failed exchange, another token in the address) asks afresh.
-  const exchanges = useRef(new Map<string, Exchange>())
+  // The gateway signs a device in only at a link's first exchange, so a second one, which React's
+  // StrictMode would start in development, would answer "verified before": it is kept.
+  const verify = useLinkExchange((each: string) => service.verify(each))
   const machine = useMemo(
-    () =>
-      createVerifyEmailMachine({
-        token,
-        verify: (each) => {
-          const known = exchanges.current.get(each)
-
-          if (known !== undefined) {
-            return known
-          }
-
-          const exchange = service.verify(each)
-
-          exchanges.current.set(each, exchange)
-
-          return exchange
-        },
-        resend: (email) => service.resend(email),
-      }),
-    [service, token],
+    () => createVerifyEmailMachine({ token, verify, resend: (email) => service.resend(email) }),
+    [service, token, verify],
   )
   const { state, submit } = useScreenMachine(machine)
   const showForm = (['resend-offered', 'resending', 'sent'] as const).some((name) =>

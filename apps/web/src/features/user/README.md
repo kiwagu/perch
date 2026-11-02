@@ -59,6 +59,15 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   password refused (`password-rejected`) shows under the password, the form kept. The reset signs
   every device of the account out, this one too when it is signed in to it (its channel hears
   4002), and the page keeps its message, which its machine holds whatever the session does;
+  `/confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
+  confirmation mail's link opens (`application/confirm-email.machine.ts`, the flow of
+  `contract/domain/screens/confirm-email.yaml`): one exchange of the address's token through
+  `platform.confirm-email`, kept across React's StrictMode restart as the verify page keeps its
+  own (`presentation/components/link-exchange/`, `useLinkExchange`); it says the email is the new
+  one (`email-changed`) and, by the account the answer names against the one signed in here, leads
+  to the profile (this account: the session keeps the new email of the account signed in on this
+  browser), to the sign-in page (nobody), or nowhere (another account); a refused link ends on its
+  error;
   `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
@@ -101,8 +110,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
-  `user.reset-password` and `user.profile` in `contract/domain/screens/sign-in.yaml`,
-  `verify-email.yaml`, `forgot-password.yaml`, `reset-password.yaml` and `me.yaml`.
+  `user.reset-password`, `user.confirm-email`, `user.profile` and `user.settings` in
+  `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`, `forgot-password.yaml`,
+  `reset-password.yaml`, `confirm-email.yaml`, `me.yaml` and `settings.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the

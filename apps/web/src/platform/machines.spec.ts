@@ -16,9 +16,10 @@
 
 import { join } from 'node:path'
 
-import { okAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
+import { dataError } from '@workspace/data'
 import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
 
@@ -26,6 +27,7 @@ import { LocaleWrites } from '../features/app-shell/application/locale-writes'
 import { createShellMachine } from '../features/app-shell/application/shell.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
+import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
@@ -115,6 +117,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       token: 't',
       verify: () => okAsync({ kind: 'verified-before' }),
       resend: () => okAsync(undefined),
+    }),
+  'user.confirm-email': () =>
+    createConfirmEmailMachine({
+      token: 't',
+      confirm: () => errAsync(dataError('data:LINK_INVALID', 'not in this spec')),
+      current: () => undefined,
     }),
   'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
   'user.reset-password': () =>

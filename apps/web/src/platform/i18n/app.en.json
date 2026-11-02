@@ -61,6 +61,7 @@
   "app.title.user.verify-email": "Verify your email",
   "app.title.user.forgot-password": "Forgot the password",
   "app.title.user.reset-password": "Set a new password",
+  "app.title.user.confirm-email": "Confirm the new email",
   "app.title.user.profile": "Profile",
   "app.title.organisation": "Organisation",
   "app.title.device": "My devices",

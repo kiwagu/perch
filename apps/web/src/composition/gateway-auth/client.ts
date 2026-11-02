@@ -9,6 +9,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
 import { accountChangeOf } from './account-change'
+import { type EmailConfirmation, emailConfirmationOf } from './email-confirmation'
 import { mailRequested } from './mail-request'
 import { passwordResetOf } from './password-reset'
 import { signedOutOf } from './sign-out'
@@ -85,6 +86,14 @@ export interface GatewayAuth {
     session: AccountSession,
   ): ResultAsync<void, DataError>
   /**
+   * Opens the link of an email confirmation, with no session: the account's email is the new one,
+   * and the answer names the account and its new email; nothing is signed in. A link past its day
+   * fails as `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking
+   * it) as `data:LINK_INVALID`, a request to wait as `data:RATE_LIMITED`, an unreachable gateway as
+   * `data:OFFLINE`, and any other answer as `data:AUTH_FAILED` naming its status, never the token.
+   */
+  confirmEmail(token: string): ResultAsync<EmailConfirmation, DataError>
+  /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as
    * `data:AUTH_FAILED`: it is dead already. A request the gateway refuses otherwise (any other
@@ -122,7 +131,8 @@ function urlOf(input: string | URL | Request): string {
  * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
  * `POST <baseUrl>/auth/send-verification-email`, `POST <baseUrl>/auth/request-password-reset`,
  * `POST <baseUrl>/auth/reset-password`, `POST <baseUrl>/auth/change-password`,
- * `POST <baseUrl>/auth/change-email` and `POST <baseUrl>/auth/sign-out`, whose answers
+ * `POST <baseUrl>/auth/change-email`, `POST <baseUrl>/auth/confirm-email` and
+ * `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
  * keep their meaning; any other answer fails the attempt with its status, never with a token, a
@@ -203,6 +213,10 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       post('change-email', input, bearer(session)).andThen((answer) =>
         accountChangeOf(answer, 202),
       ),
+    confirmEmail: (token) =>
+      token === ''
+        ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
+        : post('confirm-email', { token }).andThen(emailConfirmationOf),
     signOut: (token, device) =>
       ResultAsync.fromPromise(
         fetcher(`${baseUrl}/auth/sign-out`, {

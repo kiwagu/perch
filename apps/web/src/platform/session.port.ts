@@ -3,6 +3,7 @@ import type { ResultAsync } from 'neverthrow'
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
 import type { Locale } from '@workspace/i18n'
+import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
@@ -54,6 +55,12 @@ export type EmailVerified =
     }
   | { readonly kind: 'verified-before' }
 
+/** What an email confirmation's link did: the account whose email changed, and its new email. */
+export interface EmailConfirmed {
+  readonly identity: IdentityId
+  readonly email: string
+}
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
   /**
@@ -102,6 +109,13 @@ export interface SessionPort {
    * fails as `data:INVALID_CREDENTIALS`, an email that is not one as `data:EMAIL_INVALID`.
    */
   changeEmail(email: string, password: string): ResultAsync<void, DataError>
+  /**
+   * Opens the link of an email confirmation, whoever is signed in here: the account's email is the
+   * new one, and when that account is the one signed in on this browser, the browser keeps its new
+   * email. Nothing is signed in or out. A link past its day fails as `data:LINK_EXPIRED`, another
+   * the gateway refuses as `data:LINK_INVALID`.
+   */
+  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError>
   /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,

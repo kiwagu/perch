@@ -10,6 +10,7 @@ import {
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
+  EmailConfirmed,
   EmailVerified,
   SessionNotice,
   SessionPort,
@@ -26,6 +27,7 @@ import {
   savedIdentity,
   savedNotice,
   savedToken,
+  saveIdentityEmail,
 } from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
@@ -308,6 +310,17 @@ export class SessionService implements SessionPort {
     return token === undefined || this.#state.open() === undefined
       ? errAsync(dataError('data:AUTH_FAILED', 'nobody is signed in on this device'))
       : okAsync({ token, device: deviceIdFrom(this.#options.storage) })
+  }
+
+  /**
+   * Asks the gateway alone; the email of the account signed in on this browser, when it is the one
+   * that changed, is kept as the new one, so a later sign-in with it is not taken for another
+   * account's.
+   */
+  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
+    return this.#options.auth
+      .confirmEmail(token)
+      .andTee(({ identity, email }) => saveIdentityEmail(this.#options.storage, identity, email))
   }
 
   /**

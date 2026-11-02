@@ -8,5 +8,6 @@
  */
 
 export { type AccountSession, type Fetcher, type GatewayAuth, gatewayAuth } from './client'
+export type { EmailConfirmation } from './email-confirmation'
 export type { NamedDevice, SignedInDevice } from './signed-in'
 export type { EmailVerification, VerifiedAccount } from './verification'

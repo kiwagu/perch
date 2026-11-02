@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { identityIdFactory } from '@workspace/ids'
+
 import { fakeFetch, noContent, respond } from '../__fixtures__/gateway-fetch'
 import {
   EMAIL_MARKER,
@@ -193,6 +195,60 @@ describe('gatewayAuth.changePassword and changeEmail', () => {
           { token: TOKEN_MARKER, device: 'device-1' },
         )
       )._unsafeUnwrapErr(),
+    )
+  })
+})
+
+describe('gatewayAuth.confirmEmail', () => {
+  const token = 'confirm-token-1'
+  const identity = identityIdFactory.create()
+
+  it('confirms with the token alone, and answers the account and its new email', async () => {
+    const recorded = fakeFetch(respond(200, { identity, email: 'ann.new@example.test' }))
+
+    expect((await gatewayAuth(BASE, recorded.fetcher).confirmEmail(token))._unsafeUnwrap()).toEqual(
+      { identity, email: 'ann.new@example.test' },
+    )
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/confirm-email`,
+        method: 'POST',
+        authorization: null,
+        device: null,
+        body: { token },
+      },
+    ])
+  })
+
+  it('refuses an empty token without asking the gateway', async () => {
+    const recorded = fakeFetch(respond(200, {}))
+
+    expect(
+      (await gatewayAuth(BASE, recorded.fetcher).confirmEmail(''))._unsafeUnwrapErr().code,
+    ).toBe('data:LINK_INVALID')
+    expect(recorded.sent).toEqual([])
+  })
+
+  it.each([
+    [200, { identity: 'not-an-id', email: 'x' }, 'data:AUTH_FAILED'],
+    [400, { code: 'bad-request' }, 'data:LINK_INVALID'],
+    [401, { code: 'link-expired' }, 'data:LINK_EXPIRED'],
+    [401, { code: 'link-invalid' }, 'data:LINK_INVALID'],
+    [429, { code: 'rate-limited' }, 'data:RATE_LIMITED'],
+    [500, { code: 'internal' }, 'data:AUTH_FAILED'],
+  ])('reads %s %j as %s, naming no token', async (status, body, code) => {
+    const { fetcher } = fakeFetch(respond(status, body))
+    const refused = (await gatewayAuth(BASE, fetcher).confirmEmail(token))._unsafeUnwrapErr()
+
+    expect(refused.code).toBe(code)
+    namesNone(refused, token)
+  })
+
+  it('keeps nothing of a rejected request: no cause, no token', async () => {
+    const { fetcher } = fakeFetch(rejectsCarrying())
+
+    keepsNothingOfTheRejection(
+      (await gatewayAuth(BASE, fetcher).confirmEmail(TOKEN_MARKER))._unsafeUnwrapErr(),
     )
   })
 })
