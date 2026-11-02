@@ -5,7 +5,8 @@
  * `item`, the item's description, the composite's item state), inserted after the input, each
  * marked `derivedFrom`. A written anchor with a derived id doubles it and is refused; so is
  * an unknown composite, an opt-in on anything but a secret input, and a second opt-in on the
- * same screen, which would derive the same ids.
+ * same screen, which would derive the same ids. Two composites never derive one anchor: one
+ * that derives an id an earlier composite of the screen derives is refused and inserts none.
  */
 
 import { entriesOf, isRecord } from '../../records'
@@ -69,6 +70,7 @@ export function withDerivedComposites(
 
   const problems: Problem[] = []
   const optedIn = new Map<string, string>()
+  const derivedBy = new Map<string, { composite: string; anchor: string }>()
   const out: Array<[string, unknown]> = []
 
   for (const [anchor, written] of entriesOf(anchors)) {
@@ -113,7 +115,30 @@ export function withDerivedComposites(
     } else {
       optedIn.set(name, anchor)
 
-      for (const [derived, value] of derivedAnchorsOf(name, composite, id)) {
+      const derivations = derivedAnchorsOf(name, composite, id)
+      const doubled = derivations.flatMap(([derived]) => {
+        const earlier = derivedBy.get(derived)
+
+        return earlier === undefined
+          ? []
+          : [
+              problemAt(
+                file,
+                at,
+                `the composite ${name} derives ${derived}, which the composite ${earlier.composite} of ${earlier.anchor} derives already: two composites never derive one anchor`,
+              ),
+            ]
+      })
+
+      // The earlier composite keeps its anchors; the later inserts none, its items hanging under the list.
+      if (doubled.length > 0) {
+        problems.push(...doubled)
+        continue
+      }
+
+      for (const [derived, value] of derivations) {
+        derivedBy.set(derived, { composite: name, anchor })
+
         if (Object.hasOwn(anchors, derived)) {
           problems.push(
             problemAt(

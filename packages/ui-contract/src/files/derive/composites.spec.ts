@@ -123,6 +123,54 @@ describe('withDerivedComposites', () => {
     ])
   })
 
+  it('refuses two composites deriving one anchor: the earlier keeps its anchors, the later inserts none', () => {
+    const OTHER = {
+      description: 'The rules of another password.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: '12 characters at least.', upper: 'An upper-case letter.' },
+    }
+    const result = withDerivedComposites(
+      FILE,
+      screen({
+        'user.sign-in.password-input': input,
+        'user.sign-in.new-password-input': {
+          kind: 'input',
+          secret: true,
+          composite: 'other-rules',
+        },
+      }),
+      { ...COMPOSITES, 'other-rules': OTHER },
+    )
+    const doubled = (id: string) => ({
+      file: FILE,
+      message: `anchors["user.sign-in.new-password-input"].composite: the composite other-rules derives ${id}, which the composite password-rules of user.sign-in.password-input derives already: two composites never derive one anchor`,
+    })
+
+    expect(result.problems).toEqual([
+      doubled('user.sign-in.password-rule-list'),
+      doubled('user.sign-in.password-rule-list.length-item'),
+    ])
+    expect(Object.keys(anchorsOf(result))).toEqual([
+      'user.sign-in.password-input',
+      'user.sign-in.password-rule-list',
+      'user.sign-in.password-rule-list.length-item',
+      'user.sign-in.password-rule-list.digit-item',
+      'user.sign-in.new-password-input',
+    ])
+    expect(anchorsOf(result)['user.sign-in.password-rule-list']).toEqual({
+      kind: 'list',
+      description: 'The rules a new password keeps.',
+      derivedFrom: { composite: 'password-rules' },
+    })
+    expect(anchorsOf(result)['user.sign-in.password-rule-list.length-item']).toEqual({
+      kind: 'item',
+      description: '10 to 35 characters.',
+      states: ['met'],
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    })
+  })
+
   it('refuses a derivedFrom the file writes, and takes it away', () => {
     const result = derived({
       'user.sign-in.rules-list': { kind: 'list', derivedFrom: { composite: 'password-rules' } },
