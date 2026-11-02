@@ -155,6 +155,11 @@ export class SessionService implements SessionPort {
     return this.#options.auth.resendVerification(email)
   }
 
+  /** Asks the gateway alone: the reset signs nothing in or out. */
+  requestPasswordReset(email: string): ResultAsync<void, DataError> {
+    return this.#options.auth.requestPasswordReset(email)
+  }
+
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
     return this.#transitions.serially(() => this.#signingOut.signOut(options.forgetUnsent ?? false))
   }

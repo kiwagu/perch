@@ -28,6 +28,7 @@ export type FakeAuthRequest =
   | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
+  | { readonly kind: 'request-reset'; readonly email: string }
   | { readonly kind: 'sign-out'; readonly token: string; readonly device: string }
 
 export interface FakeGatewayAuth extends GatewayAuth {
@@ -166,6 +167,11 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       if (account && !account.verified) {
         mintLink(account.identity.email)
       }
+
+      return okAsync(undefined)
+    },
+    requestPasswordReset: (email) => {
+      requests.push({ kind: 'request-reset', email })
 
       return okAsync(undefined)
     },

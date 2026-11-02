@@ -8,7 +8,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
-import { resentOf } from './resend'
+import { mailRequested } from './mail-request'
 import { signedOutOf } from './sign-out'
 import { signedUpOf } from './sign-up'
 import { deviceHeaders, type NamedDevice, type SignedInDevice, signedIn } from './signed-in'
@@ -43,6 +43,14 @@ export interface GatewayAuth {
    */
   resendVerification(email: string): ResultAsync<void, DataError>
   /**
+   * Asks the gateway for the mail whose link sets a new password for the account of `email`. It
+   * answers alike whether the email has an account or not; a request to wait fails as
+   * `data:RATE_LIMITED`, another refusal as `data:WRITE_REJECTED`, one the gateway could not
+   * complete as `data:WRITE_FAILED`, and an unreachable gateway as `data:OFFLINE`, never naming
+   * the email.
+   */
+  requestPasswordReset(email: string): ResultAsync<void, DataError>
+  /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as
    * `data:AUTH_FAILED`: it is dead already. A request the gateway refuses otherwise (any other
@@ -72,7 +80,8 @@ function urlOf(input: string | URL | Request): string {
 /**
  * The gateway's `POST <baseUrl>/auth/sign-in/email` through Better Auth's client, and its own
  * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
- * `POST <baseUrl>/auth/send-verification-email` and `POST <baseUrl>/auth/sign-out`, whose answers
+ * `POST <baseUrl>/auth/send-verification-email`, `POST <baseUrl>/auth/request-password-reset` and
+ * `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
  * keep their meaning; any other answer fails the attempt with its status, never with a token, a
@@ -127,7 +136,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
         : post('verify-email', { token }, deviceHeaders(device)).andThen(verificationOf),
-    resendVerification: (email) => post('send-verification-email', { email }).andThen(resentOf),
+    resendVerification: (email) =>
+      post('send-verification-email', { email }).andThen((answer) =>
+        mailRequested(answer, 'the verification mail again'),
+      ),
+    requestPasswordReset: (email) =>
+      post('request-password-reset', { email }).andThen((answer) =>
+        mailRequested(answer, 'the reset mail'),
+      ),
     signOut: (token, device) =>
       ResultAsync.fromPromise(
         fetcher(`${baseUrl}/auth/sign-out`, {

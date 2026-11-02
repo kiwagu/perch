@@ -9,6 +9,7 @@ import { ACCOUNT_START_SERVICE } from './application/account-start.service'
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-email.service'
+import { ForgotPasswordContainer } from './presentation/pages/forgot-password/forgot-password.container'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
 import { SettingsContainer } from './presentation/pages/settings/settings.container'
@@ -43,6 +44,7 @@ export const UserModule = defineModule({
   declarations: {
     SignInPage: SignInContainer,
     VerifyEmailPage: VerifyEmailContainer,
+    ForgotPasswordPage: ForgotPasswordContainer,
     ProfilePage: ProfileContainer,
     SettingsPage: SettingsContainer,
   },
@@ -53,6 +55,12 @@ export const UserModule = defineModule({
       page: 'VerifyEmailPage',
       guard: 'guest',
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
+    },
+    // Open to anyone: a signed-in device may ask for the mail too.
+    {
+      path: '/forgot-password',
+      page: 'ForgotPasswordPage',
+      search: z.object({ email: z.string().max(254).optional() }),
     },
     { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
     { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },

@@ -14,6 +14,7 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
     onToggleMode: vi.fn(),
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
+    onForgot: vi.fn((_email: string) => {}),
   }
 
   renderWithProviders(
@@ -298,6 +299,7 @@ describe('SignInView', () => {
       onSubmit: () => Promise.resolve(true),
       onToggleMode: () => {},
       onTypePassword: () => {},
+      onForgot: () => {},
       onResend: () => Promise.resolve(true),
     }
     const describedBy = () =>
@@ -500,6 +502,21 @@ describe('SignInView', () => {
 
     // The eye is presentation only: the flow hears the keystrokes, never the clicks.
     expect(onTypePassword).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers to ask for a reset mail in the mode sign-in, carrying the email as typed', () => {
+    const { onForgot } = renderView()
+
+    type('user.sign-in.email-input', 'ann@example.test')
+    fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
+
+    expect(onForgot).toHaveBeenCalledWith('ann@example.test')
+  })
+
+  it('offers no reset mail in the mode sign-up', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(screen.queryByTestId('user.sign-in.forgot-link')).toBeNull()
   })
 
   it('says the device was signed out because the password changed', () => {

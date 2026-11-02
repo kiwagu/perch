@@ -43,7 +43,13 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 
 ## Surface
 
-- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/verify-email` (guard `guest`,
+- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/forgot-password` (no guard: a
+  signed-in device may ask too; search `email`) renders `ForgotPasswordPage`, which asks for the
+  mail of a password reset (`application/forgot-password.machine.ts`, the flow of
+  `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
+  email field starts with the address's `email`, `useSearchStart`), the same answer for any email
+  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for);
+  `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
   is an empty one, which the session refuses as `data:LINK_INVALID` without asking the gateway).
@@ -68,12 +74,15 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 - Commands `settings.commands.surql`: `createSettings` (where the account's email is first
   verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
+- Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
+  alone, `RouterLink` its container gives it).
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
-- Anchors: screens `user.sign-in`, `user.verify-email` and `user.profile` in
-  `contract/domain/screens/sign-in.yaml`, `contract/domain/screens/verify-email.yaml` and
+- Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password` and
+  `user.profile` in `contract/domain/screens/sign-in.yaml`,
+  `contract/domain/screens/verify-email.yaml`, `contract/domain/screens/forgot-password.yaml` and
   `contract/domain/screens/me.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
@@ -96,6 +105,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   each password input is the kit's `PasswordInput`, whose eye (`<input>.visibility-button`,
   `user.password.show` or `.hide`) shows what it holds as typed or hides it again, presentation
   only and never an event of the flow;
+  in the mode sign-in the forgot-link (`user.sign-in.forgot-link`) moves to `/forgot-password`
+  carrying the email typed, as the flow's navigate says (the event carries the email field's value
+  in its `fields`, the password never);
   a sign-up asks for the password twice, checked as it is typed: once the password typed again is
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the

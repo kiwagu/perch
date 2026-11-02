@@ -58,6 +58,7 @@
   "app.title.page": "{title} · Perch",
   "app.title.user.sign-in": "Sign in",
   "app.title.user.verify-email": "Verify your email",
+  "app.title.user.forgot-password": "Forgot the password",
   "app.title.user.profile": "Profile",
   "app.title.organisation": "Organisation",
   "app.title.device": "My devices",

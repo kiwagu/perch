@@ -77,6 +77,11 @@ export interface SessionPort {
    */
   resendVerification(email: string): ResultAsync<void, DataError>
   /**
+   * Asks the gateway for the mail whose link sets a new password for the account of `email`; it
+   * answers alike whether the email has an account or not. Nothing changes in the session.
+   */
+  requestPasswordReset(email: string): ResultAsync<void, DataError>
+  /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,
    * when changes could not be sent and signing out would lose them.

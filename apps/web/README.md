@@ -266,14 +266,18 @@ modeling stage.
   `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
   confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
   ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
-  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a destructive
+  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, their search
+  taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
+  field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
   a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
-  for a leave nobody started here (`useLeaveNow()`).
+  for a leave nobody started here (`useLeaveNow()`); `search-start.ts` is a field's binding
+  `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
+  opened, read once, so the field then holds what is typed).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

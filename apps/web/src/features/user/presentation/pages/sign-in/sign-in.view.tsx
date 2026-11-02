@@ -58,6 +58,8 @@ export interface SignInViewProps {
   readonly onTypePassword: (field: PasswordField, passwords: Passwords) => void
   /** Sends the verification mail to `email` again: resolves whether it did. */
   readonly onResend: (email: string) => Promise<boolean>
+  /** Moves to asking for a reset mail, carrying the email as typed. */
+  readonly onForgot: (email: string) => void
 }
 
 /** The contract code of a refusal, with its text. */
@@ -199,6 +201,20 @@ export function SignInView(props: SignInViewProps) {
                 testId="user.sign-in.password-input"
               />
               {signingUp ? <PasswordRuleList id={rulesId} password={values.password} /> : null}
+              {signingUp ? null : (
+                // The flow moves, carrying the email typed; the address is there for a new tab.
+                <a
+                  href="/forgot-password"
+                  className="self-start text-sm underline"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    props.onForgot(values.email)
+                  }}
+                  data-testid="user.sign-in.forgot-link"
+                >
+                  {t('user.sign-in.forgot')}
+                </a>
+              )}
             </Field>
             {signingUp ? (
               <Field data-invalid={concerns === 'confirmation' ? true : undefined}>

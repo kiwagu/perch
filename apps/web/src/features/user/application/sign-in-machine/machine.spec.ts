@@ -383,3 +383,51 @@ describe('the rules of a new password at sign-up', () => {
     })
   })
 })
+
+describe('the forgot-link', () => {
+  const forgot = (email: string): SignInEvent => ({
+    type: 'user.sign-in.forgot-link',
+    fields: { 'user.sign-in.email-input': email },
+  })
+
+  it('moves to /forgot-password carrying the email typed, from the mode sign-in', () => {
+    const { actor, emitted } = form()
+
+    actor.send(forgot('ann@example.test'))
+
+    expect(actor.getSnapshot().value).toBe('forgot-password')
+    expect(actor.getSnapshot().status).toBe('done')
+    expect(emitted).toEqual([
+      {
+        type: 'navigate',
+        to: '/forgot-password',
+        search: { email: { anchor: 'user.sign-in.email-input' } },
+        fields: { 'user.sign-in.email-input': 'ann@example.test' },
+      },
+    ])
+  })
+
+  it('moves after a sign-in refused for an email not verified yet, and after a sign-up', async () => {
+    const refused = form()
+
+    refused.actor.send(submitted(''))
+    await waitFor(refused.actor, (state) => state.matches('unverified'))
+    refused.actor.send(forgot('ann@example.test'))
+
+    expect(refused.actor.getSnapshot().value).toBe('forgot-password')
+
+    const signedUp = signingUp()
+
+    signedUp.actor.send(submitted(ann.password))
+    await waitFor(signedUp.actor, (state) => state.matches('check-mail'))
+    signedUp.actor.send(forgot('ann@example.test'))
+
+    expect(signedUp.actor.getSnapshot().value).toBe('forgot-password')
+  })
+
+  it('is not taken in the mode sign-up', () => {
+    const { actor } = signingUp()
+
+    expect(actor.getSnapshot().can(forgot(''))).toBe(false)
+  })
+})

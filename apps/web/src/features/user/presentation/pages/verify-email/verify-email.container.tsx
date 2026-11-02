@@ -1,4 +1,4 @@
-import { Link, useSearch } from '@tanstack/react-router'
+import { useSearch } from '@tanstack/react-router'
 import { useMemo, useRef } from 'react'
 
 import { z } from '@workspace/zod'
@@ -10,10 +10,9 @@ import {
   VERIFY_EMAIL_SERVICE,
   type VerifyEmailService,
 } from '../../../application/verify-email.service'
+import { RouterLink } from '../../components/page-link/page-link'
 
-import { type VerifyEmailLinkProps, VerifyEmailView } from './verify-email.view'
-
-const RouterLink = ({ to, ...props }: VerifyEmailLinkProps) => <Link to={to} {...props} />
+import { VerifyEmailView } from './verify-email.view'
 
 /** One exchange of a token, started once, whatever outcome it ends with. */
 type Exchange = ReturnType<VerifyEmailService['verify']>

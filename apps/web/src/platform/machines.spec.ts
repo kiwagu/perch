@@ -26,6 +26,7 @@ import { LocaleWrites } from '../features/app-shell/application/locale-writes'
 import { createShellMachine } from '../features/app-shell/application/shell.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
+import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
@@ -114,6 +115,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       verify: () => okAsync({ kind: 'verified-before' }),
       resend: () => okAsync(undefined),
     }),
+  'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
