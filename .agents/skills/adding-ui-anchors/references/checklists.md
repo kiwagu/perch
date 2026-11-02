@@ -41,8 +41,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     `contract:check` runs it in XState) and the `wireframe` (the default state as an
     aria snapshot).
 12. **The scenario.** At least one file under `tests/e2e/scenarios/<entity>/base/` that opens
-    the screen, written from the contract alone. Then the review stop of
-    `.cursor/rules/ui-contract.mdc`: the contract diff to the developer, and wait for the OK.
+    the screen, written from the contract alone, on the contract trunk. Then the review of
+    `.cursor/rules/ui-contract.mdc`: the contract diff to the developer, the OK on the card,
+    and the take onto the feature's branch.
 13. **The code**, after the OK; `bun run e2e:scaffold <id>` writes the scenario's test. The
     module route equals the binding (`routes-contract.spec.ts`) and the router round-trips it
     (`routes-router.spec.ts`); the view renders exactly the anchors of the file. An element
@@ -98,8 +99,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    transition it takes, after the route of the state it leaves; with several devices, each
    step opens with `On device X,`.
 5. **The checks.** `contract:check` holds the activity to the screens and runs it in
-   XState, and `bun run contract:coverage --write`
-   shows how many of its transitions the scenarios walk.
+   XState, and `bun run contract:coverage` shows how many of its transitions the
+   scenarios walk; the area branch writes it into the note (`--write`) with the
+   implementation.
 6. **The hand-off** as for a new screen.
 
 ## Rewriting a component
@@ -136,9 +138,9 @@ incoming change.
 6. **The commits.** This audit follows the merge commit as any contract change, a kind per
    commit: the meta change when the merge brought one (the vocabulary's grammar, the tooling), on
    `feat/contract-first-pass` and landed first (the branches of the rule), the
-   business change (the screen files, the model, the scenarios), which stops for the
-   developer's review, then the implementation's (the attributes, the markers and the
-   tests), after the OK.
+   business change (the screen files, the model, the scenarios), on the contract trunk and
+   taken from it after the developer's OK, then the implementation's (the attributes, the
+   markers and the tests).
 
 ## Changing the coverage method
 

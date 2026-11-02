@@ -60,8 +60,8 @@ pre-commit:
 
     # On a branch an app's machine may lag its flow (a business commit before its
     # implementation): it lacks what the flow added and does nothing the flow does not say, or it
-    # is still its screen's flow at the branch's merge base with main; a branch whose merge base
-    # cannot be found fails here. A commit on main, the landing, and one on a detached HEAD hold
+    # is still its screen's flow at the branch's merge base with main (during a merge, the base
+    # the merge's commit will have); a branch whose merge base cannot be found fails here. A commit on main, the landing, and one on a detached HEAD hold
     # every machine to its whole flow (scripts/contract-ahead.ts).
     - name: unit tests
       run: . scripts/ensure-path.sh && bun run scripts/contract-ahead.ts bun run test
@@ -75,7 +75,9 @@ pre-commit:
 # not pre-commit. It runs pre-commit as a whole, the machine-local jobs included, so an
 # automatic merge, into main too, is checked as a commit is, and what a formatter fixes is
 # staged into it (lefthook stages fixed files only for a hook named pre-commit).
+# CONTRACT_AHEAD_MERGE tells scripts/contract-ahead.ts that git has written no MERGE_HEAD yet,
+# so it reads the commits the merge brings in from the merge's reflog action.
 pre-merge-commit:
   jobs:
     - name: the pre-commit checks
-      run: . scripts/ensure-path.sh && lefthook run pre-commit
+      run: . scripts/ensure-path.sh && CONTRACT_AHEAD_MERGE=1 lefthook run pre-commit

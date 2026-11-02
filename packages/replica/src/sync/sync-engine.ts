@@ -61,6 +61,13 @@ export interface SyncEngine {
    */
   settled(timeoutMs: number): Promise<void>
   /**
+   * Resolves once `region` has caught up with the gateway on the current connection: the welcome
+   * named it, it still syncs, its subscription was answered and every update since was imported in
+   * full. A reconnect or a reload starts it over. Rejects after `timeoutMs` on the clock; never
+   * resolves for a region that stopped, one the welcome left out, or one the engine does not hold.
+   */
+  caughtUp(region: string, timeoutMs: number): Promise<void>
+  /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
    * sign this device out; resolves `signed-out` only when the gateway ended the channel with the
    * sign-out close, which means the session ended. Any other close after the sign-out was
@@ -168,6 +175,10 @@ class Engine implements SyncEngine {
 
   settled(timeoutMs: number): Promise<void> {
     return this.#settling.settled(timeoutMs)
+  }
+
+  caughtUp(region: string, timeoutMs: number): Promise<void> {
+    return this.#settling.caughtUp(region, timeoutMs)
   }
 
   channelStopped(): boolean {
