@@ -71,6 +71,7 @@ export {
   loadScreensWith,
   type ParamValue,
   type Platform,
+  type PlatformComposite,
   type PlatformMail,
   type PlatformNotice,
   type Screen,

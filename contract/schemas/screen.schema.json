@@ -789,6 +789,11 @@
             ],
             "description": "Where the entries of a list, a section or a table come from."
           },
+          "composite": {
+            "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
           "confirm": {
             "description": "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
             "type": "boolean",
