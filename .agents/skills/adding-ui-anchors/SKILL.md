@@ -104,7 +104,8 @@ code and the tests follow; the checks hold them to the contract.
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either
    (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
-   contract and the specs that hold the app to it are meta). A new facet first: the meta
+   contract and the specs that hold the app to it are the implementation's). A new facet
+   first: the meta
    change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
    docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash

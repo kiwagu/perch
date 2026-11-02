@@ -45,7 +45,8 @@ developer approved; the code takes no architectural decision of its own.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
    **Then the review.** The contract is committed first, a layer per commit and no
-   implementation in either (the app's runtime of the contract and its specs are meta). A
+   implementation in either (the app's runtime of the contract and its specs are the
+   implementation's). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
@@ -947,8 +948,9 @@ gap is fixed in the contract files first, never worked around in a test.
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
-  (`CONTRACT_AHEAD_BASE`), so a business commit may change a transition the app has not
-  changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of
+  `main` compares the app it brings with the flows it brings), so a business commit may change
+  a transition the app has not changed yet, and a branch whose merge base with a local `main` cannot be found fails the
   hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
