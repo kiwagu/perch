@@ -220,6 +220,18 @@ describe('a write of the server to a record', () => {
       'id is not a field of profile',
     ],
     [
+      'a name every object inherits',
+      { table: 'profile', id: 'prf_1', set: { constructor: 'x' } },
+      mine,
+      'constructor is not a field of profile',
+    ],
+    [
+      'another name every object inherits',
+      { table: 'profile', id: 'prf_1', set: { toString: 'x' } },
+      mine,
+      'toString is not a field of profile',
+    ],
+    [
       'a list',
       { table: 'note', id: 'nte_1', set: { tags: 'urgent' } },
       acme,

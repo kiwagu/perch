@@ -17,6 +17,13 @@ describe('replica schema', () => {
     expect(fieldOf(schema, 'profile', 'nickname')).toBeUndefined()
   })
 
+  it('finds no field or table under a name every object inherits', () => {
+    for (const name of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      expect(fieldOf(schema, 'profile', name)).toBeUndefined()
+      expect(fieldOf(schema, name, 'fields')).toBeUndefined()
+    }
+  })
+
   it('lists the tables of a region', () => {
     expect(tablesOf(schema, 'private')).toEqual(['profile'])
     expect(tablesOf(schema, 'tenant')).toEqual([])

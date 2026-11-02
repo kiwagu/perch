@@ -22,13 +22,18 @@ export interface ReplicaTable extends TableAbilities {
 
 export type ReplicaSchema = Readonly<Record<string, ReplicaTable>>
 
-/** A field of a replicated table; undefined for a field the table does not have. */
+/**
+ * A field of a replicated table; undefined for a field the table does not have. Only the
+ * schema's own entries count: a name every object inherits, such as `constructor`, is no field.
+ */
 export function fieldOf(
   schema: ReplicaSchema,
   table: string,
   field: string,
 ): ReplicaField | undefined {
-  return schema[table]?.fields[field]
+  const fields = Object.hasOwn(schema, table) ? schema[table]?.fields : undefined
+
+  return fields !== undefined && Object.hasOwn(fields, field) ? fields[field] : undefined
 }
 
 /** The replicated tables whose records live in documents of this region. */

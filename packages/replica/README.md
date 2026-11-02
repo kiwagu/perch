@@ -141,9 +141,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   fields to `set`, each to a `FieldValue`: a plain field's value, a `Date` for a datetime, the id
   of the record a reference names, or a text field's whole text. It is checked against the
   replica schema first: the table belongs to the region's kind, the region holds the record,
-  each field is one of the table's, a list or a counter is refused (only its own operations
-  change it), and in a private region an identity reference names the region's owner. The
-  fields are then set on a fork of the region's document that writes as `SERVER_PEER`, and the
+  each field is one of the table's own (a name every object inherits is none), a list or a
+  counter is refused (only its own operations change it), and in a private region an identity
+  reference names the region's owner. The fields are then set on a fork of the region's
+  document that writes as `SERVER_PEER`, and the
   change is logged with its projection, imported and sent to every subscriber as `updates`, in
   the region's queue like a device's batch and never between the steps of one; a device that
   was offline gets it at its next pull. A region the hub does not hold is loaded for the write
