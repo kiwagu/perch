@@ -203,6 +203,32 @@ describe('withDerivedErrors', () => {
     })
   })
 
+  it('derives the codes the flow shows under states and regions named entry, exit or actions', () => {
+    const show = (code: string) => [{ show: { 'sample.form.error': [code] } }]
+    const screen = {
+      id: 'sample',
+      anchors: { 'sample.form.error': { kind: 'error' } },
+      flow: {
+        initial: 'entry',
+        states: {
+          entry: { entry: show('a'), on: { 'sample.form.go-button': 'exit' } },
+          exit: { exit: show('b'), on: { 'sample.form.go-button': 'actions' } },
+          actions: {
+            type: 'parallel',
+            states: {
+              entry: { initial: 'exit', states: { exit: { entry: show('c') } } },
+              actions: { initial: 'actions', states: { actions: { exit: show('d') } } },
+            },
+          },
+        },
+      },
+    }
+
+    expect(
+      (withDerivedErrors(screen, failureOf) as typeof screen).anchors['sample.form.error'],
+    ).toEqual({ kind: 'error', codes: ['a', 'b', 'c', 'd'] })
+  })
+
   it('leaves an error whose part binds no action, and every other anchor, as written', () => {
     const anchors = {
       'sample.form.error': { kind: 'error', description: 'Nothing fails here.' },

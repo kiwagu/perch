@@ -64,35 +64,39 @@ function showOf(
     : undefined
 }
 
-/** Every effect under `node`: entries, exits and the actions of every transition, at any depth. */
-function effectsUnder(node: unknown, into: unknown[]): unknown[] {
-  if (Array.isArray(node)) {
-    for (const each of listOf(node)) {
-      effectsUnder(each, into)
-    }
-  } else if (isRecord(node)) {
-    for (const [key, value] of Object.entries(node)) {
-      if (key === 'entry' || key === 'exit' || key === 'actions') {
-        into.push(...listOf(value))
-      } else {
-        effectsUnder(value, into)
-      }
-    }
-  }
+/** The actions of a transition or a guarded list of them; a target alone has none. */
+const actionsIn = (transitions: unknown): unknown[] =>
+  listOf(transitions).flatMap((each) => listOf(recordOf(each)['actions']))
 
-  return into
+interface Walked {
+  readonly effects: unknown[]
+  readonly regions: Array<Readonly<Record<string, unknown>>>
 }
 
-/** Every region written `by` a button under `node`, at any depth. */
-function regionsUnder(node: unknown, into: Array<Readonly<Record<string, unknown>>>) {
-  if (isRecord(node)) {
+/**
+ * The effects and the regions written `by` a button under `states`, walked by the flow's
+ * structure, never by a key's name: each state's `entry`, `exit`, the actions of its `on`, of its
+ * invoke's outcomes and of a region's outcomes, then its own `states` (regions included).
+ */
+function walked(states: unknown, into: Walked = { effects: [], regions: [] }): Walked {
+  for (const state of Object.values(recordOf(states))) {
+    const node = recordOf(state)
+    const invoke = recordOf(node['invoke'])
+
+    into.effects.push(
+      ...listOf(node['entry']),
+      ...listOf(node['exit']),
+      ...Object.values(recordOf(node['on'])).flatMap(actionsIn),
+      ...actionsIn(invoke['onDone']),
+      ...actionsIn(invoke['onError']),
+    )
+
     if (typeof node['by'] === 'string') {
-      into.push(node)
+      into.regions.push(node)
+      into.effects.push(...actionsIn(node['onDone']), ...actionsIn(node['onError']))
     }
 
-    for (const each of Object.values(node)) {
-      regionsUnder(each, into)
-    }
+    walked(node['states'], into)
   }
 
   return into
@@ -100,9 +104,7 @@ function regionsUnder(node: unknown, into: Array<Readonly<Record<string, unknown
 
 /** Whether an `onError` shows `error`, in any of its branches and forms. */
 const showsError = (onError: unknown, error: string): boolean =>
-  listOf(onError).some((branch) =>
-    listOf(recordOf(branch)['actions']).some((effect) => showOf(effect)?.anchor === error),
-  )
+  actionsIn(onError).some((effect) => showOf(effect)?.anchor === error)
 
 /** The error the request pattern shows the failure of `request` on, when it does. */
 function defaultedOf(request: Request, failureOf: FailureOf): string | undefined {
@@ -125,7 +127,9 @@ export function flowSourcesOf(screen: unknown, failureOf: FailureOf): FlowSource
     return { shown, invoked }
   }
 
-  for (const show of effectsUnder(flow['states'], []).map(showOf)) {
+  const { effects, regions } = walked(flow['states'])
+
+  for (const show of effects.map(showOf)) {
     if (show?.codes !== undefined) {
       shown.set(show.anchor, unionOf([shown.get(show.anchor) ?? [], show.codes]))
     }
@@ -153,7 +157,7 @@ export function flowSourcesOf(screen: unknown, failureOf: FailureOf): FlowSource
 
   const controls = controlsOf(screen)
 
-  for (const { by, onError } of regionsUnder(flow['states'], [])) {
+  for (const { by, onError } of regions) {
     const control = controls.find(({ anchor }) => anchor === by)
 
     if (control === undefined) {

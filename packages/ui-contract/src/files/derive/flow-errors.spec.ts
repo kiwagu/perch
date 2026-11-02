@@ -54,6 +54,30 @@ describe('flowSourcesOf', () => {
     expect(shown.get('user.verify-email.message')).toEqual(['sent'])
   })
 
+  it('reads the shows under states and regions named entry, exit or actions', () => {
+    const show = (code: string) => [{ show: { [ERROR]: [code] } }]
+    const { shown } = sources({
+      initial: 'entry',
+      states: {
+        entry: { entry: show('a'), on: { [RESEND]: 'exit' } },
+        exit: { exit: show('b'), on: { [RESEND]: { target: 'actions', actions: show('c') } } },
+        actions: {
+          type: 'parallel',
+          states: {
+            entry: { initial: 'exit', states: { exit: { entry: show('d') }, actions: {} } },
+            exit: {
+              initial: 'actions',
+              states: { actions: { on: { [RESEND]: { target: 'entry', actions: show('e') } } } },
+            },
+            actions: { by: 'user.verify-email.remove-button', onError: { actions: show('f') } },
+          },
+        },
+      },
+    })
+
+    expect(shown.get(ERROR)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+  })
+
   it('lists the actions whose written onError shows the error, with their input', () => {
     const { invoked } = sources({
       initial: 'verifying',
