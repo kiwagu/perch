@@ -233,16 +233,22 @@ for Bun.
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
     after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
-    `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
+    `entity.field`, activities by id and the platform's composites by name, added and
+    removed, sorted; an anchor removed and one
     added are a rename when they are the only ones of their screen and kind; on the anchors
     both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
-    them), the codes as `<anchor> <code>` and an error's fields as `<error> <code>
-    -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
+    them), the codes as `<anchor> <code>`, the states as `<anchor> <state>` and an error's
+    fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
+    as `<anchor> holds input`;
     the actions of `platform.leaving` added and removed, the entries of
     `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
     actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
-    <target>`);
+    <target>`; per screen both sides hold with a flow, the lines of its flow added and
+    removed, `flowLines(flow)`: `initial <state>`, `<path> entry|exit <effect>`, `<path> on
+    <event> -> <target> [<guard>] <effects>`, `<path> invoke <action>`, `<path>
+    onDone|onError ...`, `<path> final`, descriptions aside, so a screen file written shorter
+    that loads to the same flow shows no change);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
@@ -352,12 +358,13 @@ for Bun.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`, the derived parts, the codes
-  and the error fields the anchors both hold gain or lose (derived ones included), the fields
-  that start or
+  `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived
+  parts, the codes, the states and the error fields the anchors both hold gain or lose
+  (derived ones included), the fields that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each included; prints the hand-over block, or the changes as JSON
-  with `--json`). A change to the contract carries the output of
+  transitions changed in each, and the lines changed in each screen's flow included; prints
+  the hand-over block, or the changes as JSON with `--json`). A change to the contract
+  carries the output of
   `bun run contract:diff main` in its description.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
   [--unmarked]`: the coverage block, first the fields and actions of each entity of the

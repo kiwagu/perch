@@ -37,6 +37,45 @@ function changed(before: Contract): Contract {
   return after
 }
 
+/**
+ * The fixture contract with the state of `sample.list` removed, a composite declared by the
+ * platform and the `saving` state failing back to itself rather than to `editing`.
+ */
+function reshaped(before: Contract): Contract {
+  const after = structuredClone(before)
+  const [screen] = after.screens.screens
+  const list = screen?.anchors['sample.list']
+  const saving = screen?.flow?.states['saving']
+  const onError = saving?.type === 'parallel' ? undefined : saving?.invoke?.onError
+
+  if (
+    screen === undefined ||
+    list === undefined ||
+    saving === undefined ||
+    saving.type === 'parallel' ||
+    saving.invoke === undefined ||
+    onError === undefined ||
+    Array.isArray(onError)
+  ) {
+    throw new Error('the fixture lost its list or its saving state')
+  }
+
+  const { states: _states, ...stateless } = list
+
+  screen.anchors['sample.list'] = stateless
+  saving.invoke.onError = { ...onError, target: 'saving' }
+  after.screens.platform.composites = {
+    'password-rules': {
+      description: 'The rules a new password meets.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: 'At least eight characters.' },
+    },
+  }
+
+  return after
+}
+
 /** A visit to the sample screen, as each state of the fixture's activity is. */
 const atSample = () => ({ screen: 'sample', address: { path: '/sample/$key' } })
 
@@ -92,8 +131,10 @@ describe('diffContracts', () => {
         renamed: [{ from: 'sample.save-button', to: 'sample.store-button' }],
       },
       derived: { added: [], removed: [] },
+      composites: { added: [], removed: [] },
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
+      anchorStates: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       questions: { added: [], removed: [] },
@@ -108,6 +149,23 @@ describe('diffContracts', () => {
         removed: [],
         transitions: { thing: { added: [], removed: [] } },
       },
+      flows: { sample: { added: [], removed: [] } },
+    })
+  })
+  it('lists the composites, the states of the anchors both hold and the lines of each flow', () => {
+    const changes = diffContracts(before, reshaped(before))
+
+    expect(changes.composites).toEqual({ added: ['password-rules'], removed: [] })
+    expect(changes.anchorStates).toEqual({ added: [], removed: ['sample.list loading'] })
+    expect(changes.flows).toEqual({
+      sample: {
+        added: ['saving onError -> saving show sample.save-button: failed'],
+        removed: ['saving onError -> editing show sample.save-button: failed'],
+      },
+    })
+    expect(diffContracts(reshaped(before), before).composites).toEqual({
+      added: [],
+      removed: ['password-rules'],
     })
   })
   it('lists the codes and the error fields gained or lost by the anchors both contracts hold', () => {
@@ -331,6 +389,7 @@ describe('diffContracts', () => {
     ])
     expect(changes.anchors.removed).toEqual([])
     expect(changes.activities).toEqual({ added: ['thing'], removed: [], transitions: {} })
+    expect(changes.flows).toEqual({})
   })
   it('finds nothing between a contract and itself', () => {
     expect(formatChanges(diffContracts(before, before))).toBe('contract changes: none')
@@ -371,6 +430,17 @@ describe('formatChanges', () => {
       'activities removed: gone',
       'transitions added in thing: editing on sample.title-input -> saved, saved on sample.page -> editing',
       'transitions removed in thing: editing on sample.save-button -> saved',
+    ])
+  })
+  it('prints the composites, the anchor states and the flow lines changed in each screen', () => {
+    const before = fixtureContract()
+
+    expect(formatChanges(diffContracts(before, reshaped(before))).split('\n')).toEqual([
+      'contract changes: 1 composite added, 1 anchor state removed, 1 flow transition added in sample, 1 flow transition removed in sample',
+      'composites added: password-rules',
+      'anchor states removed: sample.list loading',
+      'flow transitions added in sample: saving onError -> saving show sample.save-button: failed',
+      'flow transitions removed in sample: saving onError -> editing show sample.save-button: failed',
     ])
   })
 })

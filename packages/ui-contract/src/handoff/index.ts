@@ -12,6 +12,7 @@ export {
 } from './coverage'
 export { listDescriptions } from './descriptions'
 export { type ContractChanges, diffContracts } from './diff'
+export { flowLines } from './flow-lines'
 export { formatChanges } from './format-changes'
 export { type BoundMember, type ModelCoverage, modelCoverage } from './model'
 export { COVERAGE_END, COVERAGE_START, replaceCoverageBlock } from './note'
