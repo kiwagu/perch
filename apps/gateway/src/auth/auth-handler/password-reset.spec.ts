@@ -313,6 +313,11 @@ describe('authHandler, the reset of a password', () => {
     await signedInOn(mounted, ANN, ['laptop'])
 
     const token = await resetLink(mounted)
+    const empty = await mounted.route(reset(token, ''), FROM)
+
+    expect(empty?.status).toBe(400)
+    expect(await empty?.json()).toEqual({ code: 'password-rejected' })
+
     const weak = await mounted.route(reset(token, 'abcdefghij'), FROM)
 
     expect(weak?.status).toBe(400)

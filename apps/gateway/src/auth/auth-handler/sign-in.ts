@@ -14,10 +14,12 @@ import { refusalOf, withJsonBody, withoutCookies } from './requests'
 export const SIGN_IN_PATH = '/auth/sign-in/email'
 
 /**
- * What a sign-in's body must name before anything is read for its email: its email and its
- * password, as strings. Better Auth gets all of it.
+ * What a sign-in's body must name before anything is read for its email: its email, and a password
+ * that is not empty, as strings. An empty password answers alike for any email here: Better Auth
+ * would hash it to keep the time of an unknown email's answer, which fails, while it checks a known
+ * one's and finds it wrong. Better Auth gets all of the body.
  */
-const signInBody = z.object({ email: z.string(), password: z.string() })
+const signInBody = z.object({ email: z.string(), password: z.string().min(1) })
 
 /** As much of an accepted sign-in's answer as holding it to its account needs. */
 const acceptedSession = z.object({
@@ -147,8 +149,8 @@ async function withStart(response: Response, start: AccountStart): Promise<Respo
 }
 
 /**
- * A sign-in: its body must be JSON naming an email and a password (else 400 `bad-request`, before
- * anything is read for the email), and the email, in lower case, must find a place among its
+ * A sign-in: its body must be JSON naming an email and a password that is not empty (else 400
+ * `bad-request`, before anything is read for the email), and the email, in lower case, must find a place among its
  * failed sign-ins and those still under way (`RequestLimits.signInAttempt`; else 429). Better Auth
  * gets that very JSON, and the place is settled once with what it answered. A sign-in takes no turn
  * of the account: it runs alike, and as soon, whether the email has an account and whatever work

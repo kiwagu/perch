@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
@@ -176,6 +177,36 @@ describe('authHandler, a sign-in and what runs beside it', () => {
     expect(await liveSessions(mounted, bob.identity)).toEqual(['laptop'])
     expect(await liveSessions(mounted, ann.identity)).toEqual(['desk'])
   }, 30_000)
+
+  it('answers an empty password alike for an email that has an account and one that has none, before anything is read', async () => {
+    const queries: string[] = []
+    const mounted = await mountedOnRealAuth({
+      directory: (local) =>
+        interceptQueries(local, (text) => {
+          queries.push(text)
+        }),
+    })
+
+    await signedInOn(mounted, ANN, ['laptop'])
+    queries.splice(0)
+
+    const answers = await Promise.all(
+      [ANN, GHOST].map((email) =>
+        mounted.route(
+          postTo('/auth/sign-in/email', { email, password: '' }, { device: 'desk' }),
+          FROM,
+        ),
+      ),
+    )
+
+    for (const answer of answers) {
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code: 'bad-request' })
+    }
+
+    // Better Auth was not asked: it reads the email's account first.
+    expect(queries).toEqual([])
+  })
 
   it('answers a sign-in that names no password at once, for an email that has an account as for one that has none, whatever runs for them', async () => {
     const mounted = await mountedOnRealAuth()

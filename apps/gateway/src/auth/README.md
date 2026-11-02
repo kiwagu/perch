@@ -92,8 +92,9 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email and a password, as strings, answers 400 `bad-request` before anything is read for the
-email; one that is reaches Better Auth as that very JSON, so the email whose password is checked
+an email and a password that is not empty, as strings, answers 400 `bad-request` before anything
+is read for the email, alike for any email (Better Auth would hash an empty password to time an
+unknown email's answer, which fails, and check a known one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
 is the email counted. Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
@@ -429,9 +430,11 @@ error carries one.
   uniform answers and their floors, each limit, the single use, the newest link only, the
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
-  change and a confirmation, a sign-in that checked the old password beside a reset or a change,
-  or whose email moved to another account meanwhile, or to one and away or back again, left with
-  no working session and no other account's start, the start a
+  change and a confirmation, an empty password answered alike for any email before anything is
+  read, an empty current password answered `invalid-credentials`, a sign-in that checked the old
+  password beside a reset or a change, or whose email moved to another account meanwhile, or to
+  one and away or back again, left with no working session and no other account's start, the
+  start a
   sign-in carries while the account's profile or settings are missing, a reset that verifies an
   email and the sign-up link answering verified-before after it, a confirmation that ends the
   reset links, a sign-in

@@ -192,6 +192,16 @@ describe('authHandler, the request to change the email', () => {
     expect((await mounted.route(confirm(second), FROM))?.status).toBe(200)
   })
 
+  it('refuses an empty password with invalid-credentials, mailing nothing', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const empty = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, ''), FROM)
+
+    expect(empty?.status).toBe(400)
+    expect(await empty?.json()).toEqual({ code: 'invalid-credentials' })
+    expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
+  })
+
   it('answers a request without a live session of its device 401', async () => {
     const mounted = await mountedOnRealAuth()
     const answer = await mounted.route(
