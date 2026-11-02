@@ -97,18 +97,34 @@ export function subscriber(id: string): TestSubscriber {
  * imported from the hub, as a device's outbox would push them.
  */
 export function editFrom(doc: LoroDoc, name: string, identity: string = owner): Uint8Array {
-  const from = imported.get(doc)
-
-  if (!from) {
-    throw new Error('the document does not belong to a test subscriber')
-  }
-
   const record = doc.getMap('records').getOrCreateContainer('profile/prf_1', new LoroMap())
 
   record.set('identity', identity)
   record.set('email', 'ann@example.test')
   record.set('name', name)
   doc.commit()
+
+  return sinceImport(doc)
+}
+
+/**
+ * Sets one field of the profile a subscriber's document holds, and exports every change made
+ * since the document last imported from the hub, as a device's outbox would push them.
+ */
+export function setFrom(doc: LoroDoc, field: string, value: string): Uint8Array {
+  doc.getMap('records').getOrCreateContainer('profile/prf_1', new LoroMap()).set(field, value)
+  doc.commit()
+
+  return sinceImport(doc)
+}
+
+/** Every change a subscriber's document made since it last imported from the hub. */
+function sinceImport(doc: LoroDoc): Uint8Array {
+  const from = imported.get(doc)
+
+  if (!from) {
+    throw new Error('the document does not belong to a test subscriber')
+  }
 
   return doc.export({ mode: 'update', from })
 }

@@ -1,3 +1,4 @@
+import { LoroDoc, type LoroMap } from 'loro-crdt'
 import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -18,15 +19,25 @@ import {
   openDatabase,
   openHub,
   region,
+  setFrom,
   snapshotIn,
   snapshotOf,
   subscriber,
   underPeerOf,
 } from './__fixtures__/hub'
-import { countRows, forgedHistory, nameIn, storedSnapshot } from './__fixtures__/log'
+import {
+  countRows,
+  forgedHistory,
+  nameIn,
+  profileIn,
+  storedEmail,
+  storedSnapshot,
+} from './__fixtures__/log'
+import type { RecordWrite } from './record-write'
 import { type RegionDatabases, singleDatabase } from './region-databases'
-import type { Subscriber } from './region-hub'
+import type { RegionHub, Subscriber } from './region-hub'
 import { RegionLog } from './region-log'
+import { SERVER_PEER } from './server-peer'
 import acceptStatement from './surql/server-accept.surql'
 import headsStatement from './surql/server-heads.surql'
 import loadStatement from './surql/server-load.surql'
@@ -747,3 +758,322 @@ describe('region hub', () => {
     expect(ann.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 2, head: 2 })
   })
 })
+
+const newEmail = 'ann@new.example.test'
+
+/** The server sets the email of the owner's profile. */
+const emailWrite: RecordWrite = { table: 'profile', id: 'prf_1', set: { email: newEmail } }
+
+/** A promise a test settles by hand, to hold a query until it says so. */
+function gate() {
+  let open: () => void = () => {}
+  const opened = new Promise<void>((resolve) => {
+    open = resolve
+  })
+
+  return { opened, open }
+}
+
+/** Lets the work already asked of the hub run as far as it can. */
+async function drain(): Promise<void> {
+  for (let tick = 0; tick < 20; tick += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+describe('a write of the server to a record', () => {
+  it('is logged under the next head, projected, and sent to every subscriber of the region as updates', async () => {
+    const { hub, local, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+
+    expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrap()).toBe(2)
+
+    for (const device of [a, b]) {
+      expect(device.received.at(-1)).toMatchObject({
+        type: 'updates',
+        region: region.id,
+        head: 2,
+        snapshot: false,
+      })
+      expect(profileIn(device.doc)).toMatchObject({ name: 'Ann', email: newEmail })
+    }
+
+    expect(await storedEmail(local, 'prf_1')).toBe(newEmail)
+    expect(await countRows(local, '_replica_update')).toBe(2)
+    expect((await hub.heads([region.id]))._unsafeUnwrap()).toEqual([{ region: region.id, head: 2 }])
+  })
+
+  it('reaches a device that was away at its next subscription from its version, as only what it lacks', async () => {
+    const { hub, a, fresh } = await hubWithHistory(['Ann'])
+
+    fresh.doc.import(snapshotOf(a.doc))
+    const known = fresh.doc.version().encode()
+
+    ;(await hub.writeRecord(region, emailWrite))._unsafeUnwrap()
+    ;(await hub.subscribe(region, actor, fresh, known))._unsafeUnwrap()
+
+    expect(fresh.received).toEqual([
+      expect.objectContaining({ type: 'updates', head: 2, snapshot: false }),
+    ])
+    expect(profileIn(fresh.doc)).toMatchObject({ name: 'Ann', email: newEmail })
+  })
+
+  it("never interleaves with a device's batch: each waits for the other in the region's queue, and the numbers stay gapless", async () => {
+    const held = gate()
+    let holding = false
+    let accepts = 0
+    const { hub, local, a } = await hubWithTwoSubscribers({
+      intercept: (text) => {
+        if (text !== acceptStatement) {
+          return undefined
+        }
+
+        accepts += 1
+
+        return holding ? held.opened : undefined
+      },
+    })
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+
+    // The server's write is stored first and held there; the device's next batch is asked meanwhile.
+    holding = true
+    const written = hub.writeRecord(region, emailWrite)
+
+    await drain()
+    holding = false
+    const pushed = hub.push(region.id, a, 2, [setFrom(a.doc, 'name', 'Ana')])
+
+    await drain()
+
+    expect(accepts).toBe(2)
+
+    held.open()
+
+    expect((await written)._unsafeUnwrap()).toBe(2)
+    ;(await pushed)._unsafeUnwrap()
+
+    expect(a.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 2, head: 3 })
+    expect(await countRows(local, '_replica_update')).toBe(3)
+    // The batch was checked and projected on a document that held the write.
+    expect(await storedEmail(local, 'prf_1')).toBe(newEmail)
+    expect(profileIn(snapshotIn(await subscribed(hub)))).toMatchObject({
+      name: 'Ana',
+      email: newEmail,
+    })
+  })
+
+  it("waits for a device's batch under way before it is stored", async () => {
+    const held = gate()
+    let holding = false
+    let accepts = 0
+    const { hub, a } = await hubWithTwoSubscribers({
+      intercept: (text) => {
+        if (text !== acceptStatement) {
+          return undefined
+        }
+
+        accepts += 1
+
+        return holding ? held.opened : undefined
+      },
+    })
+
+    holding = true
+    const pushed = hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')])
+
+    await drain()
+    holding = false
+    const written = hub.writeRecord(region, emailWrite)
+
+    await drain()
+
+    expect(accepts).toBe(1)
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+
+    expect((await written)._unsafeUnwrap()).toBe(2)
+    expect(a.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 1, head: 1 })
+  })
+
+  it("refuses as foreign-peer a device's batch under the server's peer, storing nothing", async () => {
+    const { hub, local, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+
+    const forger = new LoroDoc()
+
+    forger.import(snapshotOf(a.doc))
+    forger.setPeerId(SERVER_PEER)
+    const from = forger.version()
+
+    ;(forger.getMap('records').get('profile/prf_1') as LoroMap).set('email', 'eve@example.test')
+    forger.commit()
+    ;(await hub.push(region.id, a, 2, [forger.export({ mode: 'update', from })]))._unsafeUnwrap()
+
+    expect(a.received.at(-1)).toMatchObject({ type: 'reject', batch: 2, reason: 'foreign-peer' })
+    expect(b.received.filter((m) => m.type === 'updates' && m.head > 1)).toEqual([])
+    expect(await countRows(local, '_replica_update')).toBe(1)
+    expect(await storedEmail(local, 'prf_1')).toBe('ann@example.test')
+
+    // The server's own write under that peer is taken in as before.
+    expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrap()).toBe(2)
+  })
+
+  it("accepts the owner's later edit of another field of the record, and its edit made before the write reached it", async () => {
+    const { hub, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+
+    // Device b renames the profile before the server's write reaches it, and pushes after.
+    const concurrent = setFrom(b.doc, 'name', 'Ana')
+
+    ;(await hub.writeRecord(region, emailWrite))._unsafeUnwrap()
+    ;(await hub.push(region.id, b, 1, [concurrent]))._unsafeUnwrap()
+    ;(await hub.push(region.id, a, 2, [setFrom(a.doc, 'name', 'Anna')]))._unsafeUnwrap()
+
+    expect(b.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 1, head: 3 })
+    expect(a.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 2, head: 4 })
+
+    for (const doc of [a.doc, b.doc, snapshotIn(await subscribed(hub))]) {
+      expect(profileIn(doc)).toMatchObject({ name: 'Anna', email: newEmail })
+    }
+  })
+
+  it("accepts the owner's concurrent write of the same field, and every copy settles on one value: the server's in a tie", async () => {
+    const { hub, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+
+    const concurrent = setFrom(b.doc, 'email', 'ann@other.example.test')
+
+    ;(await hub.writeRecord(region, emailWrite))._unsafeUnwrap()
+    ;(await hub.push(region.id, b, 1, [concurrent]))._unsafeUnwrap()
+
+    expect(b.received.findLast((m) => m.type === 'ack')).toMatchObject({ batch: 1, head: 3 })
+
+    for (const doc of [a.doc, b.doc, snapshotIn(await subscribed(hub))]) {
+      expect(profileIn(doc)?.['email']).toBe(newEmail)
+    }
+  })
+
+  it.each<[string, RecordWrite]>([
+    ['an unknown record', { table: 'profile', id: 'prf_9', set: { email: newEmail } }],
+    ['a field outside the table', { table: 'profile', id: 'prf_1', set: { nickname: 'Annie' } }],
+    ['a value the projection refuses', { table: 'profile', id: 'prf_1', set: { name: '' } }],
+  ])('refuses a write naming %s, logging and sending nothing', async (_, write) => {
+    const { hub, local, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+    const received = b.received.length
+
+    expect((await hub.writeRecord(region, write))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_REJECTED',
+    )
+    expect(b.received).toHaveLength(received)
+    expect(await countRows(local, '_replica_update')).toBe(1)
+    expect((await hub.heads([region.id]))._unsafeUnwrap()).toEqual([{ region: region.id, head: 1 }])
+    expect(profileIn(snapshotIn(await subscribed(hub)))).toMatchObject({
+      name: 'Ann',
+      email: 'ann@example.test',
+    })
+  })
+
+  it('logs and sends nothing for a write that sets every field to the value it holds', async () => {
+    const { hub, local, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+    const received = b.received.length
+
+    expect(
+      (
+        await hub.writeRecord(region, {
+          table: 'profile',
+          id: 'prf_1',
+          set: { email: 'ann@example.test' },
+        })
+      )._unsafeUnwrap(),
+    ).toBe(1)
+    expect(b.received).toHaveLength(received)
+    expect(await countRows(local, '_replica_update')).toBe(1)
+  })
+
+  it('loads a region nobody holds for the write, then unloads it after the idle time and releases its database', async () => {
+    const { counts, databases } = counting()
+    const { hub, clock, local, a } = await hubWithHistory(['Ann'], { databases })
+
+    hub.unsubscribe(region.id, a.id)
+    await clock.advance(60_000)
+    expect(hub.loadedRegions()).toBe(0)
+
+    expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrap()).toBe(2)
+    expect(hub.loadedRegions()).toBe(1)
+    expect(await storedEmail(local, 'prf_1')).toBe(newEmail)
+
+    await clock.advance(60_000)
+
+    expect(hub.loadedRegions()).toBe(0)
+    expect(counts).toEqual({ acquired: 2, released: 2 })
+    expect(profileIn(snapshotIn(await subscribed(hub)))).toMatchObject({ email: newEmail })
+  })
+
+  it('keeps the region it writes when the unload of the region waits in its queue', async () => {
+    const held = gate()
+    let holding = false
+    const { counts, databases } = counting()
+    const { hub, clock, a } = await hubWithHistory(['Ann'], {
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    // The device's last batch is stored meanwhile; it leaves, and the unload comes due behind it.
+    holding = true
+    const pushed = hub.push(region.id, a, 2, [editFrom(a.doc, 'Ana')])
+
+    await drain()
+    holding = false
+    hub.unsubscribe(region.id, a.id)
+    await clock.advance(60_000)
+    const written = hub.writeRecord(region, emailWrite)
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+
+    expect((await written)._unsafeUnwrap()).toBe(3)
+    expect(hub.loadedRegions()).toBe(1)
+    expect(counts).toEqual({ acquired: 1, released: 0 })
+
+    await clock.advance(60_000)
+
+    expect(hub.loadedRegions()).toBe(0)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+  })
+
+  it('fails a write once the hub is closed, holding nothing', async () => {
+    const { counts, databases } = counting()
+    const { hub } = await openHub({ databases })
+
+    await hub.close()
+
+    expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrapErr().code).toBe(
+      'data:WRITE_FAILED',
+    )
+    expect(hub.loadedRegions()).toBe(0)
+    expect(counts.acquired).toBe(0)
+  })
+})
+
+let freshDevices = 0
+
+/** A device of the owner newly subscribed to the region, with the full snapshot it was answered. */
+async function subscribed(hub: RegionHub) {
+  freshDevices += 1
+
+  const device = subscriber(`fresh-${freshDevices}`)
+
+  ;(await hub.subscribe(region, actor, device, null))._unsafeUnwrap()
+
+  return device
+}
