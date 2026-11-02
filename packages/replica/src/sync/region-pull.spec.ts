@@ -14,6 +14,7 @@ import { RegionPull } from './region-pull'
 function pullAlone() {
   const sent: ClientMessage[] = []
   const errors: DataError[] = []
+  const resubscribed = { count: 0 }
   const pull = new RegionPull({
     region: RegionDoc.inMemory('private', regionId),
     transport: {
@@ -28,9 +29,17 @@ function pullAlone() {
     onSettled: () => {},
     onError: (error) => errors.push(error),
     subscribed: () => true,
+    resubscribe: () => {
+      resubscribed.count += 1
+    },
   })
 
-  return { pull, errors, pulls: () => sent.filter(({ type }) => type === 'pull').length }
+  return {
+    pull,
+    errors,
+    pulls: () => sent.filter(({ type }) => type === 'pull').length,
+    resubscriptions: () => resubscribed.count,
+  }
 }
 
 describe('whether a region pull caught up', () => {
@@ -70,29 +79,33 @@ describe('whether a region pull caught up', () => {
     expect(pull.caughtUp()).toBe(true)
   })
 
-  it('stays behind after a failed import until the answer to a pull imports in full, whatever imports meanwhile', async () => {
-    const { pull, pulls, errors } = pullAlone()
-    const { all } = serverHistory()
+  it('stays behind after a failed import, subscribing again, until the answer to a subscription imports in full', async () => {
+    const { pull, pulls, resubscriptions, errors } = pullAlone()
+    const { all, snapshot } = serverHistory()
 
     await pull.imported(new Uint8Array([1, 2, 3]), 1, true)
 
     expect(errors).toEqual([expect.objectContaining({ code: 'data:WRITE_REJECTED' })])
-    expect(pulls()).toBe(1)
+    expect(resubscriptions()).toBe(1)
+    expect(pulls()).toBe(0)
     expect(pull.caughtUp()).toBe(false)
 
-    // An update that answers no request imports cleanly, and the region still lacks what was lost.
-    pull.end()
+    // An update that answers no subscription imports in full, and the region still lacks what was lost.
     await pull.imported(all, 2, false)
 
     expect(pull.caughtUp()).toBe(false)
 
     pull.retry()
 
-    expect(pulls()).toBe(2)
+    expect(resubscriptions()).toBe(2)
+    expect(pulls()).toBe(0)
 
-    pull.end()
-    await pull.imported(all, 2, true)
+    await pull.imported(snapshot, 2, true)
 
     expect(pull.caughtUp()).toBe(true)
+
+    pull.retry()
+
+    expect(resubscriptions()).toBe(2)
   })
 })

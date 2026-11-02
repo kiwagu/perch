@@ -27,6 +27,7 @@ import {
   regionId,
   settleAll,
   twoDevices,
+  writeBio,
   writeName,
 } from './__fixtures__/devices'
 import { holdOn } from './__fixtures__/held-statement'
@@ -721,8 +722,8 @@ describe('whether a region caught up with the gateway', () => {
     await caught
   })
 
-  it('waits past an answer and the pull after it that both failed to import, as settled() does not, until a full pass pulls them', async () => {
-    let failures = 2
+  it('waits past an answer and the answer to its recovery that both failed to import, as settled() does not, until a full pass subscribes again', async () => {
+    let failImports = true
     const gateway = await openGateway()
     const a = await openDevice(gateway)
 
@@ -734,8 +735,7 @@ describe('whether a region caught up with the gateway', () => {
     const b = await openDevice(gateway, {
       wrap: (local) =>
         interceptQueries(local, (text) => {
-          if (failures > 0 && text === importStatement) {
-            failures -= 1
+          if (failImports && text === importStatement) {
             throw new Error('the store refused the write')
           }
         }),
@@ -745,15 +745,134 @@ describe('whether a region caught up with the gateway', () => {
     b.engine.start()
     await b.engine.settled(60_000)
 
-    expect(b.errors.map(({ code }) => code)).toEqual(['data:WRITE_FAILED', 'data:WRITE_FAILED'])
+    // The answer, the answer to the subscription sent at once, and any pull meanwhile all failed.
+    expect(b.errors.length).toBeGreaterThanOrEqual(2)
+    expect(b.errors.every(({ code }) => code === 'data:WRITE_FAILED')).toBe(true)
     expect(b.region.recordJson(profileKey)).toBeUndefined()
     expect(await hasSettled(caught)).toBe(false)
 
+    failImports = false
     b.engine.visibility('hidden')
     b.engine.visibility('visible')
     await caught
 
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+  })
+
+  it('stays pending after a failed answer while a batch another device sent first imports in full, until the answer to its recovery does', async () => {
+    // Each accept the gateway runs while a hold is armed waits for that hold.
+    const holds: Array<{ readonly reach: () => void; readonly held: Promise<void> }> = []
+    const holdNextAccept = () => {
+      let reach = (): void => {}
+      let release = (): void => {}
+      const reached = new Promise<void>((resolve) => {
+        reach = resolve
+      })
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+
+      holds.push({ reach, held })
+
+      return { reached, release }
+    }
+    const gateway = await openGateway({
+      wrap: (server) =>
+        interceptQueries(server, (text) => {
+          const hold = text === acceptStatement ? holds.shift() : undefined
+
+          if (hold) {
+            hold.reach()
+
+            return hold.held
+          }
+        }),
+    })
+    // The next import of b waits for `failImport`, then fails.
+    let failImport: Promise<void> | undefined
+    let releaseImport = (): void => {}
+    let importReached = (): void => {}
+    const importing = new Promise<void>((resolve) => {
+      importReached = resolve
+    })
+    const a = await openDevice(gateway)
+    const b = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          const held = failImport
+
+          if (held && text === importStatement) {
+            failImport = undefined
+            importReached()
+
+            return held.then(() => {
+              throw new Error('the store refused the write')
+            })
+          }
+        }),
+    })
+    const c = await openDevice(gateway)
+    const newEmail = 'ann@new.example.test'
+
+    for (const device of [a, b, c]) {
+      device.engine.start()
+    }
+
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a, b, c])
+
+    // a names the profile Ana while b and c are offline; c writes a bio that needs only Ann.
+    b.transport.goOffline()
+    c.transport.goOffline()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settleAll([a])
+    writeBio(c.region, 'from c')
+
+    // b comes back; its probe goes unanswered, so only its subscription brings anything, and the
+    // answer's import waits.
+    const probed = gateway.stub.swallowNextProbe()
+
+    failImport = new Promise<void>((resolve) => {
+      releaseImport = resolve
+    })
+    b.transport.goOnline()
+    await probed
+    await importing
+
+    const caught = b.engine.caughtUp(regionId, 60_000).then(() => b.region.recordJson(profileKey))
+
+    // c comes back and pushes its bio, which the gateway takes in, held; a write of the server's
+    // own waits behind it, held too once its turn comes.
+    const bio = holdNextAccept()
+
+    c.transport.goOnline()
+    await bio.reached
+
+    const write = holdNextAccept()
+
+    const written = gateway.stub.hub.writeRecord(
+      { kind: 'private', id: regionId },
+      { table: 'profile', id: 'prf_1', set: { email: newEmail } },
+    )
+
+    // b's import fails: the recovery it sends at once waits behind both.
+    releaseImport()
+    await vi.waitFor(() => expect(b.errors.map(({ code }) => code)).toEqual(['data:WRITE_FAILED']))
+
+    // c's bio reaches b and imports in full; b still lacks Ana, and the recovery's answer has not come.
+    bio.release()
+    await write.reached
+    await vi.waitFor(() => expect(b.region.recordJson(profileKey)).toMatchObject({ bio: 'from c' }))
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+    expect(await hasSettled(caught)).toBe(false)
+
+    write.release()
+
+    expect(await caught).toMatchObject({ name: 'Ana', bio: 'from c', email: newEmail })
+    expect((await written).isOk()).toBe(true)
   })
 
   it('rejects at its timeout for a region that stopped syncing, though settled() resolves', async () => {

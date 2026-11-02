@@ -207,7 +207,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails pulls at once and on every full pass until an answer imports in full; only
+  import that fails subscribes again at once, on every full pass and on a reconnect, until the
+  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
+  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  connection goes with the document's version and the first update after it is its answer, and
+  any later one there (a recovery, a region replaced, a subscription sent again) goes without a
+  version, the snapshot that only such a subscription gets being its answer; only
   the ack of a first push moves the cursor; the push after a rollback carries every outbox row
   from the refused ones through their inverse, rows other tabs queued between included, whatever
   `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch

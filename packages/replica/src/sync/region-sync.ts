@@ -3,8 +3,7 @@ import { match } from 'ts-pattern'
 import type { DataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
-import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
-import { MAX_PUSH_UPDATES, type ServerMessage } from '../protocol'
+import type { ServerMessage } from '../protocol'
 import type { RegionDoc } from '../region-doc'
 
 import { LocalCatchUp } from './local-catch-up'
@@ -36,16 +35,20 @@ export interface RegionSyncOptions {
   readonly batchRows?: number
   /** How many rows past its snapshot the local log holds before it is compacted; 200 by default. */
   readonly localCompactionRows?: number
+  /** It takes the place of another sync of the region on this connection; see `subscribe`. */
+  readonly replacing?: boolean
 }
 
 type ErrorCode = Extract<ServerMessage, { readonly type: 'error' }>['code']
+
+type Updates = Extract<ServerMessage, { readonly type: 'updates' }>
 
 /**
  * Syncs one region document with the gateway over the transport. It subscribes with the
  * document's version once the gateway welcomes the device, imports what the server sends (one
  * message at a time, in the order they came) and pulls whenever an import leaves updates
- * waiting for history, until one completes; an import that fails pulls at once and again on
- * every full pass and reconnect, until the answer to a pull or a subscription imports in full.
+ * waiting for history, until one completes; an import that fails subscribes again at once and
+ * on every full pass and reconnect, until the answer to a subscription imports in full.
  * It pushes the outbox one batch at a time; an acknowledged batch leaves the outbox, a rejected
  * one is rolled back by an inverse commit and pushed again together with it, whatever the batch
  * limit: the push after a rollback carries every row up to the inverse, the rows other tabs
@@ -76,6 +79,10 @@ export class RegionSync implements DrainTarget {
   #epoch = 0
   /** The server has answered the subscription of the current connection. */
   #answered = false
+  /** A subscription went out on this connection, by this sync or the one it replaced. */
+  #joined: boolean
+  /** The current subscription went without a version: only the snapshot answering it counts. */
+  #awaitsSnapshot = false
   /** Updates handed over and not imported yet, the answer to the subscription included. */
   #unimported = 0
   #stopped = false
@@ -86,18 +93,6 @@ export class RegionSync implements DrainTarget {
   #welcomed = true
 
   constructor(options: RegionSyncOptions) {
-    const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
-
-    if (!Number.isInteger(batchRows) || batchRows < 1 || batchRows > MAX_PUSH_UPDATES) {
-      throw new RangeError(`batchRows must be an integer from 1 to ${MAX_PUSH_UPDATES}`)
-    }
-
-    const localCompactionRows = options.localCompactionRows ?? COMPACTION_LOG_LIMIT
-
-    if (!Number.isInteger(localCompactionRows) || localCompactionRows < 0) {
-      throw new RangeError('localCompactionRows must be an integer from 0')
-    }
-
     const { region, clock, onError } = options
     const stop = (error: DataError): void => this.#stop(error)
     // Nothing goes out for the region once it no longer syncs on this connection (retired, or
@@ -114,8 +109,9 @@ export class RegionSync implements DrainTarget {
     this.#region = region
     this.#transport = transport
     this.#onError = onError
+    this.#joined = options.replacing ?? false
     this.#localCatchUp = new LocalCatchUp(region, onError)
-    this.#localCompaction = new LocalCompaction(region, localCompactionRows, onError)
+    this.#localCompaction = new LocalCompaction(region, options.localCompactionRows, onError)
     this.#pull = new RegionPull({
       region,
       transport,
@@ -123,6 +119,7 @@ export class RegionSync implements DrainTarget {
       onSettled: options.onSettled,
       onError,
       subscribed: () => this.#subscribed,
+      resubscribe: () => this.subscribe(),
     })
     this.#compaction = new RegionCompaction({ region, transport, onError })
     this.#push = new RegionPush({
@@ -130,7 +127,7 @@ export class RegionSync implements DrainTarget {
       transport,
       clock,
       onError,
-      batchRows,
+      batchRows: options.batchRows,
       gate: {
         // A region the welcome did not name pushes nothing on this connection, as a stopped one.
         stopped: () => this.#stopped || !this.#welcomed,
@@ -179,24 +176,28 @@ export class RegionSync implements DrainTarget {
 
   /**
    * After `welcome`: subscribe with the document's version. Its answer is the updates the
-   * document lacks, so it also serves as the pull an incomplete import left outstanding.
+   * document lacks, so it also serves as the pull an incomplete import left outstanding and
+   * recovers a failed one. Once a subscription went out on this connection, the gateway may hold
+   * it and send updates before it answers the next, so the next goes without a version: the
+   * snapshot that answers it is told apart from them.
    */
   subscribe(): void {
     if (this.#stopped || !this.#welcomed) {
       return
     }
 
-    const doc = this.#region.doc
-    const version = doc.version()
+    const version = this.#region.doc.version()
 
     this.#epoch += 1
     this.#answered = false
+    this.#awaitsSnapshot = this.#joined || version.length() === 0
     this.#pull.end()
     this.#subscribed = this.#transport.send({
       type: 'subscribe',
       region: this.id,
-      vv: version.length() === 0 ? null : ownBytes(version.encode()),
+      vv: this.#awaitsSnapshot ? null : ownBytes(version.encode()),
     })
+    this.#joined ||= this.#subscribed
   }
 
   /**
@@ -212,6 +213,7 @@ export class RegionSync implements DrainTarget {
   /** The channel fell: the subscription is gone, and a push in flight will not be answered. */
   channelDown(): void {
     this.#subscribed = false
+    this.#joined = false
     this.#answered = false
     this.#pull.end()
     this.#compaction.forget()
@@ -272,7 +274,7 @@ export class RegionSync implements DrainTarget {
     }
   }
 
-  /** Repeats the pull an incomplete or failed import left outstanding; every full pass asks for it. */
+  /** Repeats the subscription a failed import, or the pull an incomplete one, left outstanding. */
   retryPull(): void {
     if (!this.#stopped && this.#welcomed) {
       this.#pull.retry()
@@ -331,7 +333,7 @@ export class RegionSync implements DrainTarget {
     }
 
     await match(message)
-      .with({ type: 'updates' }, ({ bytes, head }) => this.#imported(bytes, head, epoch))
+      .with({ type: 'updates' }, (updates) => this.#imported(updates, epoch))
       .with({ type: 'ack' }, ({ batch, head, compact }) =>
         this.#push.acknowledged(batch, head, compact),
       )
@@ -346,20 +348,21 @@ export class RegionSync implements DrainTarget {
   }
 
   /**
-   * Imports what the server sent under the subscription numbered `epoch`. The first updates
-   * after a subscription answer it; the first after a pull are taken as the pull's answer.
+   * Imports what the server sent under the subscription numbered `epoch`. The first updates after
+   * a subscription answer it, the snapshot when it went without a version; the first after a pull
+   * are taken as the pull's answer, which ends the pull but recovers no failed import.
    */
-  async #imported(bytes: Uint8Array, head: number, epoch: number): Promise<void> {
+  async #imported(updates: Updates, epoch: number): Promise<void> {
     // Updates that came over a connection since gone do not answer the current subscription.
     const current = epoch === this.#epoch && this.#subscribed
-    const answering = current && (this.#pull.pulling() || !this.#answered)
+    const answer = current && !this.#answered && (updates.snapshot || !this.#awaitsSnapshot)
 
     if (current) {
-      this.#answered = true
+      this.#answered ||= answer
       this.#pull.end()
     }
 
-    await this.#pull.imported(bytes, head, answering)
+    await this.#pull.imported(updates.bytes, updates.head, answer)
   }
 
   /**
