@@ -54,8 +54,16 @@ modeling stage.
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. A sign-out forgets the kept start with the device (`forgetDevice`); a
   session that only closes (a tab that goes) keeps it for the next open. A start that a sign-out
-  left unfinished stays so: later sign-ins do not finish it, and the account shows what it has,
-  its profile page's empty state when the profile is missing. `resendVerification(email)` asks
+  left unfinished stays so until a sign-in learns of it: a sign-in whose answer carries `start`
+  (`{ name, locale }`: the account has no settings or profile at the gateway yet, because a reset
+  verified its email or the device that verified it has not synced its start) keeps that start
+  before the device is saved (`SessionOptions.keepAccountStart`), marked `afterPull`; such a start
+  is not finished as the space opens, but by the tab that leads the sync once its engine has
+  settled (`SyncEngine.settled`: the channel is up and every region, the private one included,
+  has had its first answer on this connection, the gateway's updates the device lacked imported,
+  with an empty outbox), so it creates only what the pull left missing and never races a record
+  another device created and changed meanwhile. Until then the account shows what it has, its
+  profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
   the session. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named

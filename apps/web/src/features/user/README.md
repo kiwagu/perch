@@ -19,9 +19,11 @@ then its profile with the name it signed up with, each created only where the de
 under an id derived from the identity, so the account never has two; the start is kept on the
 browser until both exist and finished when the account's space opens there again, the browser's
 tabs taking their turns so that one tab never creates what another created; the composition
-root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start,
-which then stays unfinished: later sign-ins do not finish it, and the profile page shows its
-empty state when the profile is missing), the `ProfileService`
+root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start;
+a start a sign-in learnt of, the account having no settings or profile at the gateway yet, is
+kept by `keepAfterPull` and finished by `resumeAfterPull` once the device has pulled what the
+account has, `resume` leaving it alone; until then the profile page shows its empty state when
+the profile is missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in

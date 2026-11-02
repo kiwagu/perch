@@ -113,6 +113,27 @@ describe('gatewayAuth', () => {
     ])
   })
 
+  it('keeps what an account that has not started starts from, when the sign-in carries it', async () => {
+    const { fetcher } = fakeFetch(
+      respond(200, { ...signedIn, start: { name: 'Ann', locale: 'es' } }),
+    )
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
+      identity: { id: ann, email: credentials.email },
+      token: 'token-1',
+      start: { name: 'Ann', locale: 'es' },
+    })
+
+    // A start the app cannot take is no signed-in account.
+    for (const start of [{ name: '', locale: 'es' }, { name: 'Ann', locale: 'fr' }, 'Ann']) {
+      const odd = fakeFetch(respond(200, { ...signedIn, start }))
+
+      expect((await signIn(gatewayAuth(BASE, odd.fetcher)))._unsafeUnwrapErr().code).toBe(
+        'data:AUTH_FAILED',
+      )
+    }
+  })
+
   it('keeps the raw token of the body, never the signed one of the set-auth-token header', async () => {
     const { fetcher } = fakeFetch(withSignedHeader(signedIn))
 

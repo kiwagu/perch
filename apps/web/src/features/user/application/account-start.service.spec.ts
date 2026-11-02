@@ -128,7 +128,7 @@ describe('AccountStartService', () => {
       'data:WRITE_FAILED',
     )
     expect(held.created).toEqual(['settings'])
-    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: false })
 
     held.refuseProfiles(false)
 
@@ -150,7 +150,7 @@ describe('AccountStartService', () => {
 
     expect((await starts.resume(ann)).isOk()).toBe(true)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
 
     expect((await starts.resume(bob)).isOk()).toBe(true)
     expect(held.created).toEqual([])
@@ -167,7 +167,7 @@ describe('AccountStartService', () => {
     const later: StartTurns = (run) => ResultAsync.fromSafePromise(waiting).andThen(() => run())
     const starts = new AccountStartService(held.profiles, held.settings, kept, later)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
 
     const resuming = starts.resume(ann)
 
@@ -177,6 +177,63 @@ describe('AccountStartService', () => {
 
     expect((await resuming).isOk()).toBe(true)
     expect(held.created).toEqual([])
+  })
+})
+
+describe('AccountStartService, for a start a sign-in learnt of', () => {
+  it('keeps it until the pull, creating nothing as the space opens, and only what is missing after', async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: true })
+
+    // The space opens before the device pulled: nothing is created.
+    expect((await starts.resume(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual([])
+
+    // The pull brought the settings another device made: only the profile is missing.
+    expect(
+      (
+        await held.settings.createSettings({
+          id: settingsIdFactory.create(),
+          identity: ann.id,
+          locale: 'en',
+        })
+      ).isOk(),
+    ).toBe(true)
+    held.created.splice(0)
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['profile'])
+    expect(held.settingsRows()).toHaveLength(1)
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it('keeps nothing for a name the profile would refuse', () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+
+    expect(starts.keepAfterPull(ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code).toBe(
+      'profile:NAME_REQUIRED',
+    )
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it("finishes after the pull a start the first verification kept, and nobody else's", async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+    const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
+
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
+
+    expect((await starts.resumeAfterPull(bob)).isOk()).toBe(true)
+    expect(held.created).toEqual([])
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['settings', 'profile'])
   })
 })
 

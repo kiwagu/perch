@@ -179,7 +179,10 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     onSyncState: (state) => {
       options.onSyncState(state)
       sync.syncState(state)
+      starts.syncState(state)
     },
+    // The start of an account a sign-in learnt of waits for this device's first pull.
+    keepAccountStart: (user, from) => starts.keepAfterPull(user, from),
     onError: options.onError,
     publish: (event) => {
       void events.publish([event]).match(
@@ -217,6 +220,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   // Listening before the session restores: the start of the page finishes a start kept here.
   const starts = accountStarts({
     session,
+    space: () => session.space(),
     runner: session.runner,
     commands,
     settings,
@@ -232,7 +236,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(COMMANDS, () => commands)
     .singleton(EVENTS, () => events)
     .singleton(SETTINGS_SERVICE, () => settings)
-    .singleton(ACCOUNT_START_SERVICE, () => starts)
+    .singleton(ACCOUNT_START_SERVICE, () => starts.service)
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)

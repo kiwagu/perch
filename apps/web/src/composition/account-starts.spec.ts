@@ -23,8 +23,10 @@ import {
   profileShape,
 } from '../features/user/presentation/pages/profile/profile.model.gen'
 
+import { fakeGatewayAuth, verifiedElsewhere } from './__fixtures__/gateway-auth'
 import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/session'
-import { accountStarts, accountStartTurns } from './account-starts'
+import { type AccountStarts, accountStarts, accountStartTurns } from './account-starts'
+import type { GatewayAuth } from './gateway-auth'
 import { type KeptDevice, keptAccountStart, memoryStorage, saveDevice } from './storage'
 
 const ann: KeptDevice = {
@@ -33,7 +35,12 @@ const ann: KeptDevice = {
   memberships: [],
 }
 
-const annStart: AccountStart = { identity: ann.identity.id, name: 'Ann', locale: 'es' }
+const annStart: AccountStart = {
+  identity: ann.identity.id,
+  name: 'Ann',
+  locale: 'es',
+  afterPull: false,
+}
 
 const worlds: TestWorld[] = []
 
@@ -145,6 +152,7 @@ describe('the account starts of a browser', () => {
 
     accountStarts({
       session: a.session,
+      space: () => a.session.space(),
       runner: a.session.runner,
       commands: a.commands,
       settings: ofA.settings,
@@ -177,5 +185,104 @@ describe('the account starts of a browser', () => {
       'ran',
     )
     expect(flush).toHaveBeenCalledOnce()
+  })
+})
+
+describe('a start a sign-in learnt of', () => {
+  /** Ann's account at the gateway, verified on a device that never synced its start. */
+  async function annElsewhere() {
+    const auth = fakeGatewayAuth()
+    const signUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'es' }
+
+    expect((await verifiedElsewhere(auth, signUp)).isOk()).toBe(true)
+
+    // Her account has no settings or profile at the gateway: each sign-in answers its start.
+    const starting: GatewayAuth = {
+      ...auth,
+      signIn: (input, device) =>
+        auth
+          .signIn(input, device)
+          .map((signed) => ({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+    }
+
+    return { auth: starting, signUp }
+  }
+
+  /**
+   * A browser that signs in through `auth`, sharing `gateway` when given one, its starts wired as
+   * the root wires them: the sign-in keeps a start, the leading tab finishes it after its pull.
+   */
+  async function browser(auth: GatewayAuth, gateway?: TestWorld['gateway']) {
+    const tab: { starts?: AccountStarts } = {}
+    const world = await openTestWorld({
+      auth,
+      ...(gateway ? { gateway } : {}),
+      keepAccountStart: (user, from) => tab.starts?.keepAfterPull(user, from),
+      onSyncState: (state) => tab.starts?.syncState(state),
+    })
+
+    worlds.push(world)
+
+    const services = servicesOf(world)
+
+    tab.starts = accountStarts({
+      session: world.session,
+      space: () => world.session.space(),
+      runner: world.session.runner,
+      commands: world.commands,
+      settings: services.settings,
+      storage: world.storage,
+      locks: undefined,
+      logger: { warn: () => {} },
+    })
+
+    return { world, ...services }
+  }
+
+  it('creates the settings and the profile once the device pulled what the account has: nothing', async () => {
+    const { auth, signUp } = await annElsewhere()
+    const { world, settings, profiles } = await browser(auth)
+    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+
+    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept()).toBeUndefined())
+    expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
+      { locale: 'es' },
+    ])
+    expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
+      { name: 'Ann', email: 'ann@example.test' },
+    ])
+  })
+
+  it('creates nothing over what another device started and changed before this one pulled it', async () => {
+    const { auth, signUp } = await annElsewhere()
+    const first = await browser(auth)
+    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+
+    // The first device starts the account, then changes its language, and syncs it all.
+    await vi.waitFor(() => expect(keptAccountStart(first.world.storage).kept()).toBeUndefined())
+
+    const [row] = (await first.settings.read({ identity: user.id }))._unsafeUnwrap()
+
+    expect(
+      (
+        await first.settings.updateLocale({
+          id: row?.id ?? expect.unreachable('settings'),
+          locale: 'en',
+        })
+      ).isOk(),
+    ).toBe(true)
+    await (first.world.session.space()?.sync ?? expect.unreachable('it leads')).settled(30_000)
+
+    // The second device signs in while the gateway still answers that the account has not started.
+    const second = await browser(auth, first.world.gateway)
+
+    expect((await second.world.session.signIn(signUp)).isOk()).toBe(true)
+    await vi.waitFor(() => expect(keptAccountStart(second.world.storage).kept()).toBeUndefined())
+
+    // Its start found both records pulled: the change stands, and there is one of each.
+    expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
+      { id: row?.id, locale: 'en' },
+    ])
+    expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
   })
 })
