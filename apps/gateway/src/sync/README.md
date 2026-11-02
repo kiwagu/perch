@@ -11,8 +11,10 @@ has no `index.ts` yet: it predates the index rule and is imported file by file.
 
 Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
 device id at protocol 7; the gateway reads the session, checks the device, marks it seen and
-welcomes it. The session is read through Better Auth (`AuthSessions.read`) at every hello, so a
-session that ended or expired reads as none at once. A token that reads no live session closes
+welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
+profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
+auth module), without holding the hello. The session is read through Better Auth
+(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once. A token that reads no live session closes
 the socket with 4401 (`the session was not accepted`), and a session opened on another device
 than the one the hello names with 4401 too (`no session for this device`): a session is bound to
 the device it was opened on. A read the directory could not make closes the socket as a failed
@@ -64,6 +66,11 @@ when none is named), and each close moves the registry's revocation epoch, recor
 what it names. A hello reads the epoch before it reads its session, and registers with it: a
 close of the device or of its identity that lands meanwhile refuses the registration (4001), and
 one before is seen by the read, since the routes end the session before they close the sockets.
+A device whose session a change of the account's password ended (a reset link, which ends every
+session of the account, or a change on another device, which ends every other one) is closed the
+same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
+tell its person why; a hello whose registration such a close refuses, while it is under way, is
+closed with 4001 as for any other close.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
 of an email opened on it, closes the identity's sockets on that device the same way, with 1000
 (`another connection of this device took over`): its session ended the earlier one, and the

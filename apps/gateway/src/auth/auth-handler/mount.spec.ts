@@ -9,6 +9,8 @@ import { RequestLimits } from '../../limits/request-limits'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
+  accountServicesOf,
+  betterAuthToken,
   deviceHeaders,
   type OpenAuthOptions,
   openAuth,
@@ -20,8 +22,11 @@ import {
   ANN,
   fakeConnections,
   mountedOnFakeAuth,
+  noAccounts,
   noSessions,
   printedDuring,
+  STAND_IN_ACCOUNT,
+  signedInAnswer,
   signUpRequest,
 } from './__fixtures__/mount'
 import { authHandler } from './mount'
@@ -46,7 +51,11 @@ const UNSERVED = [
   '/get-session',
   '/sign-out',
   '/update-user',
-  '/change-password',
+  // Better Auth's own reset link, a GET that redirects with the token, and its server-only
+  // endpoints of a password: the gateway answers the reset and the change itself.
+  '/reset-password/reset-token-0123456789abcdef',
+  '/verify-password',
+  '/set-password',
   '/delete-user',
   '/token',
   '/jwks',
@@ -107,6 +116,8 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
   const route = authHandler({
     auth: opened.auth,
     sessions: noSessions,
+    ...accountServicesOf(opened),
+    profiles: noAccounts.profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
@@ -232,7 +243,7 @@ describe('authHandler', () => {
   })
 
   it('hands the sign-up and the sign-in to Better Auth at their public paths, and nothing else', async () => {
-    const { route, received, clock } = mountedOnFakeAuth(status(200))
+    const { route, received, clock } = mountedOnFakeAuth(signedInAnswer)
     const up = route(signUpRequest(ANN), FROM)
 
     await clock.advance(SIGN_UP_FLOOR_MS)
@@ -275,6 +286,11 @@ describe('authHandler', () => {
       // Better Auth's own verification is a GET with the token in its URL: never served so.
       ['GET', '/auth/verify-email?token=a.link.token'],
       ['GET', '/auth/send-verification-email'],
+      ['GET', '/auth/request-password-reset'],
+      ['GET', '/auth/reset-password?token=reset-token-0123456789abcdef'],
+      ['GET', '/auth/change-password'],
+      ['GET', '/auth/change-email'],
+      ['GET', '/auth/confirm-email?token=a.link.token'],
     ] as const) {
       const response = await route(new Request(`http://gateway.test${path}`, { method }), FROM)
 
@@ -371,7 +387,9 @@ describe('authHandler', () => {
 
   it("clears an email's failed sign-ins once one succeeds", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 200 ? signedInAnswer() : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 200
@@ -491,7 +509,7 @@ describe('authHandler', () => {
   })
 
   it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
-    const body = JSON.stringify({ token: 'raw-token' })
+    const body = JSON.stringify({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
     const { route, clock } = mountedOnFakeAuth(() => {
       const headers = new Headers({ 'content-type': 'application/json' })
 
@@ -547,7 +565,7 @@ describe('authHandler', () => {
 
     // Verified through the mail the sign-up sent, the account signs in.
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 
@@ -634,7 +652,7 @@ describe('authHandler', () => {
   })
 
   it("closes the device's sockets of the identity signed in with 1000 before it answers the sign-in", async () => {
-    const ann = identityIdFactory.create()
+    const ann = STAND_IN_ACCOUNT
     let release = () => {}
     const closing = new Promise<void>((resolve) => {
       release = resolve
@@ -676,20 +694,25 @@ describe('authHandler', () => {
   })
 
   it('closes nothing for a sign-in Better Auth refused, or an answer that names no identity or no device', async () => {
-    const ann = identityIdFactory.create()
-    const answers: Array<() => Response> = [
-      () => Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    const ann = STAND_IN_ACCOUNT
+    const refused = await mountedOnFakeAuth(() =>
+      Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    ).route(signIn('ann@example.test'), FROM)
+
+    expect(refused?.status).toBe(401)
+    expect(await refused?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
+
+    // An acceptance that names no session of an account cannot be held to one: it fails.
+    for (const answer of [
       () => new Response('not json', { status: 200 }),
       () => Response.json({ token: 'raw-token' }),
       () => Response.json({ token: 'raw-token', user: { id: 'not-an-identity' } }),
-    ]
-
-    for (const answer of answers) {
+    ]) {
       const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
 
-      expect(response?.status).toBe(answer().status)
-      expect(await response?.text()).toBe(await answer().text())
+      expect(response?.status).toBe(500)
+      expect(await response?.json()).toEqual({ code: 'internal' })
       expect(closes).toEqual([])
     }
 
@@ -719,7 +742,7 @@ describe('authHandler', () => {
     expect((await up).status).toBe(202)
     expect(closes).toEqual([])
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 

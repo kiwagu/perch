@@ -14,6 +14,7 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
     onToggleMode: vi.fn(),
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
+    onForgot: vi.fn((_email: string) => {}),
   }
 
   renderWithProviders(
@@ -233,10 +234,10 @@ describe('SignInView', () => {
     type('user.sign-in.password-input', 'abcdefghij')
 
     expect(screen.getByTestId(LENGTH).textContent).toBe(
-      `${en['user.sign-in.password-rule.length']}${en['user.sign-in.password-rule.met']}`,
+      `${en['user.password-rule.length']}${en['user.password-rule.met']}`,
     )
     expect(screen.getByTestId(SYMBOL).textContent).toBe(
-      `${en['user.sign-in.password-rule.symbol']}${en['user.sign-in.password-rule.not-met']}`,
+      `${en['user.password-rule.symbol']}${en['user.password-rule.not-met']}`,
     )
     expect(
       screen
@@ -250,13 +251,13 @@ describe('SignInView', () => {
 
     expect(RULE_ITEMS.map((testId) => screen.getByTestId(testId).textContent)).toEqual(
       [
-        es['user.sign-in.password-rule.length'],
-        es['user.sign-in.password-rule.characters'],
-        es['user.sign-in.password-rule.digit'],
-        es['user.sign-in.password-rule.uppercase'],
-        es['user.sign-in.password-rule.lowercase'],
-        es['user.sign-in.password-rule.symbol'],
-      ].map((text) => `${text}${es['user.sign-in.password-rule.not-met']}`),
+        es['user.password-rule.length'],
+        es['user.password-rule.characters'],
+        es['user.password-rule.digit'],
+        es['user.password-rule.uppercase'],
+        es['user.password-rule.lowercase'],
+        es['user.password-rule.symbol'],
+      ].map((text) => `${text}${es['user.password-rule.not-met']}`),
     )
   })
 
@@ -298,6 +299,7 @@ describe('SignInView', () => {
       onSubmit: () => Promise.resolve(true),
       onToggleMode: () => {},
       onTypePassword: () => {},
+      onForgot: () => {},
       onResend: () => Promise.resolve(true),
     }
     const describedBy = () =>
@@ -468,6 +470,60 @@ describe('SignInView', () => {
 
     expect(noticeWith('signed-out-elsewhere').textContent).toBe(
       'You were signed out from another device.',
+    )
+  })
+
+  it('shows each password as typed on a click of its eye, and hides it again on the next', () => {
+    const onTypePassword = renderView({ mode: 'sign-up' }).onTypePassword
+
+    for (const testId of [
+      'user.sign-in.password-input',
+      'user.sign-in.password-confirmation-input',
+    ]) {
+      const eye = screen.getByTestId(`${testId}.visibility-button`)
+
+      type(testId, 'Secret-ann1')
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.show'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('text')
+      expect(input(testId).value).toBe('Secret-ann1')
+      expect(eye.getAttribute('data-value')).toBe('hide')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.hide'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+    }
+
+    // The eye is presentation only: the flow hears the keystrokes, never the clicks.
+    expect(onTypePassword).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers to ask for a reset mail in the mode sign-in, carrying the email as typed', () => {
+    const { onForgot } = renderView()
+
+    type('user.sign-in.email-input', 'ann@example.test')
+    fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
+
+    expect(onForgot).toHaveBeenCalledWith('ann@example.test')
+  })
+
+  it('offers no reset mail in the mode sign-up', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(screen.queryByTestId('user.sign-in.forgot-link')).toBeNull()
+  })
+
+  it('says the device was signed out because the password changed', () => {
+    renderView({ notice: 'password-changed-elsewhere' })
+
+    expect(noticeWith('password-changed-elsewhere').textContent).toBe(
+      'Your password was changed, so you were signed out. Sign in with the new password.',
     )
   })
 

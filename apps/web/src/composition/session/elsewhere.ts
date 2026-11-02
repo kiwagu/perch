@@ -15,7 +15,7 @@ import type { SessionHost } from './host'
 import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { SessionSignIn } from './sign-in'
-import type { SessionSignOut } from './sign-out'
+import type { ElsewhereNotice, SessionSignOut } from './sign-out'
 import { sessionTransportContext } from './transport-context'
 
 export interface SessionElsewhereOptions {
@@ -64,6 +64,8 @@ export class SessionElsewhere {
       },
       refused: () => void this.#forced(() => this.#signingOut.refused(identity)),
       revoked: () => void this.#outElsewhere(identity),
+      passwordChanged: () =>
+        void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
       // The build is what the gateway refuses, whichever account's channel heard it, and while
       // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
@@ -108,13 +110,18 @@ export class SessionElsewhere {
   }
 
   /**
-   * Signed out from another device (4001), or everywhere at this device's request: as a refused
-   * token, and the sign-in page says why. Whichever of the two runs second changes nothing, and
-   * so does one whose session is no longer open (`still`) when its turn comes.
+   * Signed out from another device (4001), everywhere at this device's request, or by a change of
+   * the account's password (4002, whose `notice` says so): as a refused token, and the sign-in
+   * page says why. Whichever of two runs second changes nothing, and so does one whose session is
+   * no longer open (`still`) when its turn comes.
    */
-  #outElsewhere(identity: IdentityId, still = () => true): Promise<void> {
+  #outElsewhere(
+    identity: IdentityId,
+    still = () => true,
+    notice: ElsewhereNotice = 'signed-out-elsewhere',
+  ): Promise<void> {
     return this.#forced(() =>
-      still() ? this.#signingOut.refused(identity, 'signed-out-elsewhere') : okAsync(undefined),
+      still() ? this.#signingOut.refused(identity, notice) : okAsync(undefined),
     )
   }
 

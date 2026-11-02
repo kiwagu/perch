@@ -44,7 +44,12 @@ describe('the signed-in device', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
-    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'en' })
+    keptAccountStart(storage).keep({
+      identity: ann.identity.id,
+      name: 'Ann',
+      locale: 'en',
+      afterPull: false,
+    })
     forgetDevice(storage)
 
     expect(keptAccountStart(storage).kept()).toBeUndefined()

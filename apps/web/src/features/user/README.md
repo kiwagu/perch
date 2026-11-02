@@ -19,9 +19,11 @@ then its profile with the name it signed up with, each created only where the de
 under an id derived from the identity, so the account never has two; the start is kept on the
 browser until both exist and finished when the account's space opens there again, the browser's
 tabs taking their turns so that one tab never creates what another created; the composition
-root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start,
-which then stays unfinished: later sign-ins do not finish it, and the profile page shows its
-empty state when the profile is missing), the `ProfileService`
+root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start;
+a start a sign-in learnt of, the account having no settings or profile at the gateway yet, is
+kept by `keepAfterPull` and finished by `resumeAfterPull` once the device has pulled what the
+account has, `resume` leaving it alone; until then the profile page shows its empty state when
+the profile is missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
@@ -43,7 +45,32 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 
 ## Surface
 
-- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/verify-email` (guard `guest`,
+- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/forgot-password` (no guard: a
+  signed-in device may ask too; search `email`) renders `ForgotPasswordPage`, which asks for the
+  mail of a password reset (`application/forgot-password.machine.ts`, the flow of
+  `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
+  email field starts with the address's `email`, `useSearchStart`), the same answer for any email
+  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for);
+  `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
+  link opens (`application/reset-password.machine.ts`, the flow of
+  `contract/domain/screens/reset-password.yaml`): the new password typed twice, held to the rules
+  of a new password and to the password typed again as either is typed (the guards of
+  `new-password-guards.policy.ts`, shared with the sign-up), then `platform.reset-password` with
+  the address's token; it ends on `password-reset` beside the link to sign in, or on a link that
+  does not work (`link-invalid`, `link-expired`) beside the link that asks for a new one; a
+  password refused (`password-rejected`) shows under the password, the form kept. The reset signs
+  every device of the account out, this one too when it is signed in to it (its channel hears
+  4002), and the page keeps its message, which its machine holds whatever the session does;
+  `/confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
+  confirmation mail's link opens (`application/confirm-email.machine.ts`, the flow of
+  `contract/domain/screens/confirm-email.yaml`): one exchange of the address's token through
+  `platform.confirm-email`, kept across React's StrictMode restart as the verify page keeps its
+  own (`presentation/components/link-exchange/`, `useLinkExchange`); it says the email is the new
+  one (`email-changed`) and, by the account the answer names against the one signed in here, leads
+  to the profile (this account: the session keeps the new email of the account signed in on this
+  browser), to the sign-in page (nobody), or nowhere (another account); a refused link ends on its
+  error;
+  `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
   is an empty one, which the session refuses as `data:LINK_INVALID` without asking the gateway).
@@ -56,10 +83,19 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
   this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
   chooses the same one) and the account's language
-  (stored through `settings.updateLocale`, spoken at once), its screen's flow run as its machine
-  (`application/settings/settings.machine.ts`, held to `contract/domain/screens/settings.yaml` by
-  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
-  language changes.
+  (stored through `settings.updateLocale`, spoken at once), the account's password (the current
+  one, the new one typed twice and held to the rules of a new password as at sign-up, changed
+  through `platform.change-password`, which signs the account's other devices out; a change says
+  so on the frame's toast, `password-changed`, and the flow's `clear` empties the form, whose
+  values the page holds, `useFieldClears`; a refusal shows under the field its code concerns) and
+  the account's email (the new email and the current password, `platform.change-email`, which
+  mails the new email a link that makes the change; the message `check-your-mail` names it, the
+  same words whether that email has an account or not), its screen's flow run as its machine
+  (`application/settings/settings-machine/`: the theme, language, password and email regions of
+  one parallel state, `machine.ts` assembling `password-region.ts` and `email-region.ts`, held to
+  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
+  `useScreenMachine`, which asks the leave guard before the language changes; its view is
+  `settings.view.tsx` with `password-form.view.tsx` and `email-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
@@ -68,13 +104,17 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 - Commands `settings.commands.surql`: `createSettings` (where the account's email is first
   verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
+- Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
+  alone, `RouterLink` its container gives it) and `presentation/components/password-rule-list/`
+  (`PasswordRuleList`, the rules of a new password under it, its screen giving the anchors).
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
-- Anchors: screens `user.sign-in`, `user.verify-email` and `user.profile` in
-  `contract/domain/screens/sign-in.yaml`, `contract/domain/screens/verify-email.yaml` and
-  `contract/domain/screens/me.yaml`.
+- Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
+  `user.reset-password`, `user.confirm-email`, `user.profile` and `user.settings` in
+  `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`, `forgot-password.yaml`,
+  `reset-password.yaml`, `confirm-email.yaml`, `me.yaml` and `settings.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
@@ -89,10 +129,17 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   identity across devices (the frame stores and follows it, see the app-shell module), and a
   new account's settings start in the language chosen before signing up, sent with the sign-up;
   a sign-up lists the rules of a new password under the password (`user.sign-in.password-rule-list`,
-  `password-rule-list.tsx`, the lines `user.sign-in.password-rule.*`), describing it, each rule
+  the shared `presentation/components/password-rule-list/`, each screen giving the anchors of its
+  items, the lines `user.password-rule.*`), describing it, each rule
   marked `met` while the password as typed keeps it, its state read out with it
-  (`user.sign-in.password-rule.met` or `.not-met`), and the submit is disabled while the password
+  (`user.password-rule.met` or `.not-met`), and the submit is disabled while the password
   breaks a rule, the password typed again not judged until it keeps them all;
+  each password input is the kit's `PasswordInput`, whose eye (`<input>.visibility-button`,
+  `user.password.show` or `.hide`) shows what it holds as typed or hides it again, presentation
+  only and never an event of the flow;
+  in the mode sign-in the forgot-link (`user.sign-in.forgot-link`) moves to `/forgot-password`
+  carrying the email typed, as the flow's navigate says (the event carries the email field's value
+  in its `fields`, the password never);
   a sign-up asks for the password twice, checked as it is typed: once the password typed again is
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
@@ -116,7 +163,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   says it has no network; the sign-in page says so when the gateway refused the
   device's session token while changes remain to send after the next sign-in, and says "You
   were signed out from another device." when this device was signed out from another one
-  (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), and that the data
+  (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), that a change of the
+  account's password signed it out, through a reset link or on another device (the code
+  `password-changed-elsewhere`, when the channel closed with 4002), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);
   it also says to wait when the gateway limits the attempts (`data:RATE_LIMITED`,

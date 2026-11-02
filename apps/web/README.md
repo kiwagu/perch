@@ -54,8 +54,21 @@ modeling stage.
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. A sign-out forgets the kept start with the device (`forgetDevice`); a
   session that only closes (a tab that goes) keeps it for the next open. A start that a sign-out
-  left unfinished stays so: later sign-ins do not finish it, and the account shows what it has,
-  its profile page's empty state when the profile is missing. `resendVerification(email)` asks
+  left unfinished stays so until a sign-in learns of it: a sign-in whose answer carries `start`
+  (`{ name, locale }`: the account has no settings or profile at the gateway yet, because a reset
+  verified its email or the device that verified it has not synced its start) keeps that start
+  before the device is saved (`SessionOptions.keepAccountStart`), marked `afterPull`; such a start
+  is not finished as the space opens, but by the tab that leads the sync once its engine says the
+  account's private region caught up with the gateway on this connection
+  (`SyncEngine.caughtUp(privateRegionId(identity), …)`: the welcome named it, it still syncs, its
+  subscription was answered and every update since was imported in full, none lost and none
+  waiting for its history; a region that stopped or that the welcome left out never catches up,
+  and the start waits), so it creates only what the pull left missing and never races a record
+  another device created and changed meanwhile. Every start's turn first projects what the tab's
+  documents hold, pulled updates included, before it reads the store, and a create the document
+  refuses for a record it holds after all counts as done once the projection shows it; a start
+  that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
+  profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
   the session. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
@@ -266,14 +279,18 @@ modeling stage.
   `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
   confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
   ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
-  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, a destructive
+  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, their search
+  taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
+  field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
   a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
-  for a leave nobody started here (`useLeaveNow()`).
+  for a leave nobody started here (`useLeaveNow()`); `search-start.ts` is a field's binding
+  `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
+  opened, read once, so the field then holds what is typed).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.

@@ -3,6 +3,7 @@ import type { ResultAsync } from 'neverthrow'
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
 import type { Locale } from '@workspace/i18n'
+import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
@@ -15,10 +16,16 @@ export interface SignOutOptions {
  * signed out (its keys refused, signed out from another device, or a write landing during its
  * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
  * again as the same identity sends them. `signed-out-elsewhere` when another device of the
- * identity signed this one out and nothing waited to be sent. `delete-pending` when the device
- * signed out but another tab still held its databases open: they go once that tab closes them.
+ * identity signed this one out and nothing waited to be sent. `password-changed-elsewhere` when
+ * the account's password changed (through a reset link, or on another device), which signed this
+ * device out, and nothing waited to be sent. `delete-pending` when the device signed out but
+ * another tab still held its databases open: they go once that tab closes them.
  */
-export type SessionNotice = 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending'
+export type SessionNotice =
+  | 'resend-after-sign-in'
+  | 'signed-out-elsewhere'
+  | 'password-changed-elsewhere'
+  | 'delete-pending'
 
 /** A change the gateway refused and this device undid: what the shell tells the user about. */
 export interface PushRejection {
@@ -48,6 +55,12 @@ export type EmailVerified =
     }
   | { readonly kind: 'verified-before' }
 
+/** What an email confirmation's link did: the account whose email changed, and its new email. */
+export interface EmailConfirmed {
+  readonly identity: IdentityId
+  readonly email: string
+}
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
   /**
@@ -70,6 +83,39 @@ export interface SessionPort {
    * email has an account not verified yet, a verified one or none. Nothing changes in the session.
    */
   resendVerification(email: string): ResultAsync<void, DataError>
+  /**
+   * Asks the gateway for the mail whose link sets a new password for the account of `email`; it
+   * answers alike whether the email has an account or not. Nothing changes in the session.
+   */
+  requestPasswordReset(email: string): ResultAsync<void, DataError>
+  /**
+   * Sets a new password with a reset link's `token`. Nothing is signed in; the gateway signs every
+   * device of the account out, this one too when it is signed in to it, which its channel hears as
+   * a change of the password (4002). A password that breaks the rules fails as
+   * `data:PASSWORD_REJECTED`, a link past its hour as `data:LINK_EXPIRED`, another the gateway
+   * refuses as `data:LINK_INVALID`.
+   */
+  resetPassword(token: string, password: string): ResultAsync<void, DataError>
+  /**
+   * Changes the signed-in account's password with its current one: the gateway signs its other
+   * devices out and keeps this one signed in. A wrong current password fails as
+   * `data:INVALID_CREDENTIALS`, a new one that breaks the rules as `data:PASSWORD_REJECTED`, and
+   * nobody signed in here as `data:AUTH_FAILED`.
+   */
+  changePassword(currentPassword: string, password: string): ResultAsync<void, DataError>
+  /**
+   * Asks to change the signed-in account's email, confirmed by its password: the mail whose link
+   * makes the change goes to `email`, alike whether it has an account or not. A wrong password
+   * fails as `data:INVALID_CREDENTIALS`, an email that is not one as `data:EMAIL_INVALID`.
+   */
+  changeEmail(email: string, password: string): ResultAsync<void, DataError>
+  /**
+   * Opens the link of an email confirmation, whoever is signed in here: the account's email is the
+   * new one, and when that account is the one signed in on this browser, the browser keeps its new
+   * email. Nothing is signed in or out. A link past its day fails as `data:LINK_EXPIRED`, another
+   * the gateway refuses as `data:LINK_INVALID`.
+   */
+  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError>
   /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,

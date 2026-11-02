@@ -24,7 +24,9 @@ with data generated from the seed catalog, each through the link of its verifica
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
 and the search parameter of its link, and the language of its HTML's root element, never its
-wording; a failed check prints no address, link, token or HTML of the mail. Key pages are compared with screenshots on
+wording; a notice, a mail that only tells (`notices` on the action), is held to its recipient,
+its language and its plain link to the declared screen or none, and to what it must not name; a
+failed check prints no address, link, token or HTML of the mail. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
 --update-snapshots=changed` rewrites the ones that differ.
@@ -40,9 +42,18 @@ checkout), which `mcproc exec` sets too.
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
 (`{ tag: '@smoke' }`); nothing compares the two yet. `@smoke`: `user/base/` (one account on
 its own) and `contract/base/manifest`. `@full`: `user/flows/` (one account across devices,
-tabs or time), `device/base/my-devices`, `user/base/resend-same-answer` and
-`user/base/resend-limit` (several mails of one run), and `organisation/flows/` (two accounts,
-each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
+tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
+again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
+`forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
+`reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
+`change-email-refused`), and `organisation/flows/` (two accounts, each in a browser of its
+own). `bun run test:e2e --grep @smoke` runs the first set.
+
+The suite runs from the front's one client address, so it spends the gateway's per-address
+limits, which a launcher run starts afresh by restarting the gateway: the mails of sign-ups,
+resends, reset requests and email changes (200 per quarter hour), and the attempts at a reset
+link and at a confirmation link (20 each per ten minutes). A test uses fresh emails and as few
+of them as its scenario needs.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
@@ -127,10 +138,13 @@ None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tes
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures,
 `signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
-its own that opens and signs in with the same account when a test asks) and `anotherAccount`
+its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
-a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`), `signIn`
-(fails at once when the sign-in page shows its error, naming its code), `startSignUp` (submits
+a test asks) and `freshDevice` (device B of an account the test makes itself: a browser
+context of its own that opens nothing and signs nothing in by itself), `appReady` (waits for
+`app-shell.status` in `ready`, `APP_READY`), `signIn`
+(fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
+profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
 opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
 `/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
@@ -153,8 +167,16 @@ their workers report); the fixtures watch every browser a test opens.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).
-`src/support/data.ts`: the generators (accounts, another password, names, bios, organisation
-keys and names, note texts).
+`src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
+`/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
+its send button and waits for the gateway's answer), `resetRequested` (its message),
+`openResetMail` (opens the link of the reset mail, held to its declaration) and
+`enterNewPassword` (types the new password twice on `/reset-password` and submits it).
+`src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
+(sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
+`openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
+names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
 at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for; and
 `expectBoundedNonArrival`, a bounded non-arrival: an address's mail count stays put from the
@@ -167,6 +189,15 @@ reads it, from the action's parameters or the account; each check asserts a comp
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).
+`src/support/notice-contract.ts`: every notice a test reads is held to its declaration under
+`notices` in `platform.yaml`, named `<action>.<name>` as a scenario names it:
+`expectDeclaredNotice` (its one recipient, the account's address before the action or a
+parameter's; the `lang` of its HTML's root element; every link it carries, in its HTML and its
+text, opening the declared screen at one of its routes' paths with no search and no fragment,
+or no link when it declares none; and, given `hides`, that its subject, text and HTML, its own
+recipient's address taken out, name neither that email nor its local part nor its domain) and
+`nextDeclaredNotice` (waits for the notice to its declared recipient after the mails a test has
+seen there and holds it to its declaration). A failure prints no address, link or HTML.
 
 ## Commands
 

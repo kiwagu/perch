@@ -1,6 +1,6 @@
 import type { ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import type { AuthUser, DataError, LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
@@ -13,7 +13,7 @@ import type {
 } from '@workspace/replica/sync'
 
 import type { ChangeRejected, ChangesReloaded, ProtocolRefused } from '../../platform/events.port'
-import type { GatewayAuth } from '../gateway-auth'
+import type { AccountSignedUpAs, GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
 import type { KeyValueStorage } from '../storage'
 
@@ -73,6 +73,12 @@ export interface SessionOptions {
   /** An identity's space starts to open (`open-db`) or is open (`ready`). */
   readonly onStep?: (step: 'open-db' | 'ready') => void
   readonly onSyncState: (state: SyncState) => void
+  /**
+   * A sign-in answered that the account has not started (no settings or profile of it reached
+   * the gateway yet): what it starts from, told before the device is saved, so the start is kept
+   * for this browser to finish once it has pulled what the account has.
+   */
+  readonly keepAccountStart: (user: AuthUser, from: AccountSignedUpAs) => void
   readonly onError: (error: DataError) => void
   /**
    * Tells the app a change the gateway refused, or refused again, and a sync protocol it no longer

@@ -255,7 +255,12 @@ describe('createAppRoot', () => {
 
     saveDevice(storage, ann)
     // A first verification here created nothing yet when the page went.
-    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'es' })
+    keptAccountStart(storage).keep({
+      identity: ann.identity.id,
+      name: 'Ann',
+      locale: 'es',
+      afterPull: false,
+    })
 
     const { result } = await boot(storage, [], [])
 
@@ -290,6 +295,7 @@ describe('createAppRoot', () => {
       identity: identityIdFactory.create(),
       name: 'Bob',
       locale: 'en',
+      afterPull: false,
     })
     await booted.close()
 
@@ -309,6 +315,7 @@ describe('createAppRoot', () => {
       identity: identityIdFactory.create(),
       name: 'Bob',
       locale: 'en',
+      afterPull: false,
     })
 
     expect((await services.session.signOut())._unsafeUnwrap()).toBe('signed-out')
