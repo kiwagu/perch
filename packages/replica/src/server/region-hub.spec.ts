@@ -1090,6 +1090,51 @@ describe('a write of the server to a record', () => {
     })
   })
 
+  it("continues the server's peer across the region's unload: a write after the reload reaches a device as an update it imports", async () => {
+    const { hub, clock, a } = await hubWithHistory(['Ann'])
+
+    expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrap()).toBe(2)
+
+    hub.unsubscribe(region.id, a.id)
+    await clock.advance(60_000)
+    expect(hub.loadedRegions()).toBe(0)
+
+    const later = { ...emailWrite, set: { email: 'ann@later.example.test' } }
+
+    expect((await hub.writeRecord(region, later))._unsafeUnwrap()).toBe(3)
+    ;(await hub.subscribe(region, actor, a, a.doc.version().encode()))._unsafeUnwrap()
+
+    expect(a.received.at(-1)).toMatchObject({ type: 'updates', head: 3, snapshot: false })
+    expect(profileIn(a.doc)?.['email']).toBe('ann@later.example.test')
+    // Each write set one field: the second took the counter after the first's.
+    expect(a.doc.version().toJSON().get(SERVER_PEER)).toBe(2)
+    expect(profileIn(snapshotIn(await subscribed(hub)))?.['email']).toBe('ann@later.example.test')
+  })
+
+  it("continues the server's peer across a compaction and the reload from its snapshot", async () => {
+    const { hub, clock, local, a } = await hubWithHistory(['Ann'])
+
+    ;(await hub.writeRecord(region, emailWrite))._unsafeUnwrap()
+    ;(await hub.compact(region.id, a, 2, snapshotOf(a.doc)))._unsafeUnwrap()
+    expect(a.received.at(-1)).toMatchObject({ type: 'compaction', covers: 2, outcome: 'accepted' })
+
+    const second = { ...emailWrite, set: { email: 'ann@second.example.test' } }
+    const third = { ...emailWrite, set: { email: 'ann@third.example.test' } }
+
+    expect((await hub.writeRecord(region, second))._unsafeUnwrap()).toBe(3)
+    hub.unsubscribe(region.id, a.id)
+    await clock.advance(60_000)
+    expect(hub.loadedRegions()).toBe(0)
+    expect((await hub.writeRecord(region, third))._unsafeUnwrap()).toBe(4)
+    ;(await hub.subscribe(region, actor, a, a.doc.version().encode()))._unsafeUnwrap()
+
+    expect(a.received.at(-1)).toMatchObject({ type: 'updates', head: 4, snapshot: false })
+    expect(profileIn(a.doc)?.['email']).toBe('ann@third.example.test')
+    expect(a.doc.version().toJSON().get(SERVER_PEER)).toBe(3)
+    expect(await storedEmail(local, 'prf_1')).toBe('ann@third.example.test')
+    expect(profileIn(snapshotIn(await subscribed(hub)))?.['email']).toBe('ann@third.example.test')
+  })
+
   it('fails a write once the hub is closed, holding nothing', async () => {
     const { counts, databases } = counting()
     const { hub } = await openHub({ databases })
