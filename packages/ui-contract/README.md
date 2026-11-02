@@ -246,9 +246,11 @@ for Bun.
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
     <target>`; per screen both sides hold with a flow, the lines of its flow added and
     removed, `flowLines(flow)`: `initial <state>`, `<path> entry|exit <effect>`, `<path> on
-    <event> -> <target> [<guard>] <effects>`, `<path> invoke <action>`, `<path>
-    onDone|onError ...`, `<path> final`, descriptions aside, so a screen file written shorter
-    that loads to the same flow shows no change);
+    <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
+    sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
+    alternative and an entry or exit effect carry their position, `#<n>`, among more than
+    one, as order runs the machine; so a screen file written shorter that loads to the same
+    flow shows no change);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field

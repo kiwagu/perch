@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
+import type { Effect, Flow, FlowState, FlowTransition } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
 
 import { diffContracts } from './diff'
@@ -74,6 +75,31 @@ function reshaped(before: Contract): Contract {
   }
 
   return after
+}
+
+/** The plain state `name` of a flow, for a spec to change. */
+function plainState(flow: Flow, name: string): FlowState {
+  const state = flow.states[name]
+
+  if (state === undefined || state.type === 'parallel') {
+    throw new Error(`the flow has no plain state ${name}`)
+  }
+
+  return state
+}
+
+/** The fixture contract with the flow of its sample screen changed by `change`. */
+function withFlow(base: Contract, change: (flow: Flow) => void): Contract {
+  const contract = structuredClone(base)
+  const flow = contract.screens.screens[0]?.flow
+
+  if (flow === undefined) {
+    throw new Error('the fixture has no flow')
+  }
+
+  change(flow)
+
+  return contract
 }
 
 /** A visit to the sample screen, as each state of the fixture's activity is. */
@@ -442,6 +468,85 @@ describe('formatChanges', () => {
       'flow transitions added in sample: saving onError -> saving show sample.save-button: failed',
       'flow transitions removed in sample: saving onError -> editing show sample.save-button: failed',
     ])
+  })
+})
+
+describe('diffContracts and the order and the inputs of a flow', () => {
+  const before = fixtureContract()
+  const given: FlowTransition = { guard: 'titleGiven', target: 'saving' }
+  const otherwise: FlowTransition = { target: 'editing' }
+  const clearError: Effect = { type: 'clear', params: { anchor: 'sample.save-button' } }
+  const showError: Effect = {
+    type: 'show',
+    params: { anchor: 'sample.save-button', codes: ['failed'] },
+  }
+  const flowsBetween = (from: (flow: Flow) => void, to: (flow: Flow) => void) =>
+    diffContracts(withFlow(before, from), withFlow(before, to)).flows
+
+  it('lists two guarded alternatives of an event swapped, as the first that holds is taken', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'editing').on = { 'sample.save-button': [given, otherwise] }
+        },
+        (flow) => {
+          plainState(flow, 'editing').on = { 'sample.save-button': [otherwise, given] }
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: [
+          'editing on sample.save-button #1 -> editing',
+          'editing on sample.save-button #2 -> saving [titleGiven]',
+        ],
+        removed: [
+          'editing on sample.save-button #1 -> saving [titleGiven]',
+          'editing on sample.save-button #2 -> editing',
+        ],
+      },
+    })
+  })
+  it('lists two entry effects swapped, as the last one decides what shows', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'saving').entry = [clearError, showError]
+        },
+        (flow) => {
+          plainState(flow, 'saving').entry = [showError, clearError]
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: [
+          'saving entry #1 show sample.save-button: failed',
+          'saving entry #2 clear sample.save-button',
+        ],
+        removed: [
+          'saving entry #1 clear sample.save-button',
+          'saving entry #2 show sample.save-button: failed',
+        ],
+      },
+    })
+  })
+  it('lists an invoke whose input takes a parameter from elsewhere', () => {
+    expect(
+      flowsBetween(
+        () => undefined,
+        (flow) => {
+          const { invoke } = plainState(flow, 'saving')
+
+          if (invoke !== undefined) {
+            invoke.input = { title: { value: 'untitled' } }
+          }
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: ['saving invoke thing.updateThing {"title":{"value":"untitled"}}'],
+        removed: ['saving invoke thing.updateThing {"title":"sample.title-input"}'],
+      },
+    })
   })
 })
 

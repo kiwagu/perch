@@ -1,14 +1,30 @@
 /**
  * A flow as lines for the hand-over diff, one per fact a machine runs: its initial state and
  * each region's, each entry and exit effect, each transition on an event with its target,
- * guard and effects, each invoke and its outcomes, each final state. A state is named by its
- * path (`viewing.form.open`); descriptions are left out, as they change nothing that runs.
+ * guard and effects, each invoke with its input and its outcomes, each final state. A state is
+ * named by its path (`viewing.form.open`); descriptions are left out, as they change nothing
+ * that runs. The diff compares lines as sets, so where order runs the machine a line carries
+ * its position, `#<n>`, in a sequence of more than one: the guarded alternatives of an event
+ * or an outcome (the first that holds is taken) and a state's entry and exit effects.
  */
 
 import { type Effect, type Flow, type FlowTransition, flowNodes } from '../files'
+import { isRecord } from '../records'
 
 const asList = <T>(value: T | T[] | undefined): T[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value]
+
+/** Each item with its position, ` #<n>`, in a sequence of more than one; a single one has none. */
+const positioned = <T>(items: readonly T[]): Array<{ at: string; item: T }> =>
+  items.map((item, index) => ({ at: items.length > 1 ? ` #${index + 1}` : '', item }))
+
+/** `value` as JSON, each object's keys sorted, so the order a file writes them in is no change. */
+const canonicalJson = (value: unknown): string =>
+  JSON.stringify(value, (_key, each: unknown) =>
+    isRecord(each)
+      ? Object.fromEntries(Object.entries(each).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : each,
+  )
 
 const effectText = (effect: Effect): string => {
   switch (effect.type) {
@@ -30,6 +46,13 @@ const transitionLine = (head: string, transition: FlowTransition): string =>
     ...(transition.actions ?? []).map(effectText),
   ].join(' ')
 
+/** The lines of the transitions of `head` in order, each numbered when there are more than one. */
+const transitionLines = (
+  head: string,
+  transitions: FlowTransition | FlowTransition[] | undefined,
+): string[] =>
+  positioned(asList(transitions)).map(({ at, item }) => transitionLine(`${head}${at}`, item))
+
 /** The lines of `flow`, in the order of its file: a parallel state before its regions. */
 export function flowLines(flow: Flow): string[] {
   return [
@@ -42,17 +65,21 @@ export function flowLines(flow: Flow): string[] {
       const invoke = 'invoke' in state ? state.invoke : undefined
 
       return [
-        ...(state.entry ?? []).map((effect) => `${path} entry ${effectText(effect)}`),
-        ...(state.exit ?? []).map((effect) => `${path} exit ${effectText(effect)}`),
+        ...positioned(state.entry ?? []).map(
+          ({ at, item }) => `${path} entry${at} ${effectText(item)}`,
+        ),
+        ...positioned(state.exit ?? []).map(
+          ({ at, item }) => `${path} exit${at} ${effectText(item)}`,
+        ),
         ...Object.entries(state.on ?? {}).flatMap(([event, transitions]) =>
-          asList(transitions).map((each) => transitionLine(`${path} on ${event}`, each)),
+          transitionLines(`${path} on ${event}`, transitions),
         ),
         ...(invoke === undefined
           ? []
           : [
-              `${path} invoke ${invoke.src}`,
-              ...asList(invoke.onDone).map((each) => transitionLine(`${path} onDone`, each)),
-              ...asList(invoke.onError).map((each) => transitionLine(`${path} onError`, each)),
+              `${path} invoke ${invoke.src}${invoke.input === undefined ? '' : ` ${canonicalJson(invoke.input)}`}`,
+              ...transitionLines(`${path} onDone`, invoke.onDone),
+              ...transitionLines(`${path} onError`, invoke.onError),
             ]),
         ...('type' in state && state.type === 'final' ? [`${path} final`] : []),
       ]
