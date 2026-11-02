@@ -74,9 +74,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `memberships` message tells each later change of them. `CLOSE` names the gateway's close
   codes: `protocol` 4400, `unauthorized` 4401 (a token that holds no live session, or a session
   opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
-  `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the device's session was
+  `signedOut` 4000 (the device's own sign-out), `revoked` 4001 (the device's session was
   signed out from another device, alone or with every device of its identity, also while its
-  hello is under way). And the membership contract the gateway
+  hello is under way) and `passwordChanged` 4002 (the device's session ended because the
+  account's password changed: through a reset link, every device; on another device, every
+  device but that one). And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
@@ -171,7 +173,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
-  settles) and every region has its first answer on the current connection, `signOut()` that
+  settles) and every region has its first answer on the current connection (a region that
+  stopped or that the welcome left out counts as settled), `caughtUp(region, timeoutMs)` once
+  that one region has caught up with the gateway on the current connection: the welcome named
+  it, it still syncs, its subscription was answered, and every update since, the answer
+  included, was imported in full (none waits to be imported, none failed or left updates
+  waiting for their history, no pull is out); a reconnect or a reload of the region starts it
+  over, and it rejects after `timeoutMs`, never resolving for a region that stopped, one the
+  welcome left out or one the engine does not hold, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
   other close after it asked, or none within 10 seconds, stops the transport and answers
   `offline`; it answers `offline` at once while the channel is down and `online()` says there is
@@ -187,10 +196,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
   welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
-  (`signed-out`) or signed out from another device (`revoked`, 4001), none followed by a
+  (`signed-out`), signed out from another device (`revoked`, 4001) or by a change of the
+  account's password (`password-changed`, 4002), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
-  report on `revoked`) behind the `SyncTransport` port;
+  report on `revoked` and `password-changed`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and
@@ -200,7 +210,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails pulls at once and on every full pass until an answer imports in full; only
+  import that fails subscribes again at once, on every full pass and on a reconnect, until the
+  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
+  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  connection goes with the document's version and the first update after it is its answer, and
+  any later one there (a recovery, a region replaced, a subscription sent again) goes without a
+  version, the snapshot that only such a subscription gets being its answer; only
   the ack of a first push moves the cursor; the push after a rollback carries every outbox row
   from the refused ones through their inverse, rows other tabs queued between included, whatever
   `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch

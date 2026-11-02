@@ -139,7 +139,8 @@ export class SessionSignIn {
    * Makes the sign-in whole: until then its token lives here only, and nothing reaches the
    * browser's storage, which the other tabs follow. The memberships are read with the token and
    * the device it names; then, while the session is still open and no other account was saved
-   * meanwhile, the identity, the token and the memberships are saved in one step. Every way out
+   * meanwhile, the start of an account that has not started is kept (`keepAccountStart`), and the
+   * identity, the token and the memberships are saved in one step. Every way out
    * that does not keep this attempt's token leaves it to be signed out (at once while the browser
    * is online, else kept for later), never another tab's. A throw while it holds the token (the
    * read, the save) lets go of it (`cleanUpSignIn`, a save it broke off midway undone) and fails
@@ -157,6 +158,12 @@ export class SessionSignIn {
           .andThen(() => this.#host.options.listMemberships(device.token, named))
           .andThen((memberships) => whole().map(() => memberships))
           .map((memberships) => {
+            // The start of an account that has none is kept before the device: a tab that follows
+            // the saved identity finds it there.
+            if (device.start !== undefined) {
+              this.#host.options.keepAccountStart(device.identity, device.start)
+            }
+
             saveDevice(this.#host.options.storage, { ...device, memberships })
 
             return device

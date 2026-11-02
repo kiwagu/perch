@@ -3,8 +3,8 @@
 ## Role in the architecture
 
 End-to-end tests of the web application in a real browser, on two Playwright projects:
-`mobile` (Pixel 7) first, then `desktop` (1280x800). Each test pairs with an
-instruction-style scenario, a Markdown file in `scenarios/` beside `src/`: the scenario
+`mobile` (Pixel 7) runs every test, `desktop` (1280x800) the `@smoke` ones. Each test pairs
+with an instruction-style scenario, a Markdown file in `scenarios/` beside `src/`: the scenario
 `scenarios/<entity>/<layer>/[<area>/]<slug>.md` with the test
 `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts`, whose first line names the scenario's
 id, its path without `.md` (`// scenario: user/base/sign-up`). A scenario opens with a YAML
@@ -24,7 +24,9 @@ with data generated from the seed catalog, each through the link of its verifica
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
 and the search parameter of its link, and the language of its HTML's root element, never its
-wording; a failed check prints no address, link, token or HTML of the mail. Key pages are compared with screenshots on
+wording; a notice, a mail that only tells (`notices` on the action), is held to its recipient,
+its language and its plain link to the declared screen or none, and to what it must not name; a
+failed check prints no address, link, token or HTML of the mail. Key pages are compared with screenshots on
 `mobile`; the baselines are not committed: the first run on a machine writes them, later
 runs compare against them; after an intended change of a page, `bun run test:e2e
 --update-snapshots=changed` rewrites the ones that differ.
@@ -38,11 +40,34 @@ gateway sent from the stand's MailDev at `MAILBOX_URL` (http://127.0.0.1:1090 in
 checkout), which `mcproc exec` sets too.
 
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
-(`{ tag: '@smoke' }`); nothing compares the two yet. `@smoke`: `user/base/` (one account on
-its own) and `contract/base/manifest`. `@full`: `user/flows/` (one account across devices,
-tabs or time), `device/base/my-devices`, `user/base/resend-same-answer` and
-`user/base/resend-limit` (several mails of one run), and `organisation/flows/` (two accounts,
-each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set.
+(`{ tag: '@smoke' }`); nothing compares the two yet. The tag decides where a test runs: the
+`mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
+goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
+`user/base/` (one account on its own) but the tests named below, `organisation/base/`,
+`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation` and
+`open-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
+tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
+again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
+`forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
+`reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
+`change-email-refused`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
+a new version, offline, an outdated protocol, the sync status), and `organisation/flows/` (two
+accounts, each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set
+on both projects.
+
+The suite runs from the front's one client address, so its tests, on every worker, share the
+gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
+credential checks (sign-ups, sign-ins, verifications and changes of a password or an email, 20
+per ten seconds) set the number of workers: with two, a run makes at most 17 in any ten seconds;
+three reached 22 and four had a sign-in refused. The others the run spends as a whole, in one
+window of each, and stays under them in whatever order the workers take the tests: the mails
+of sign-ups, resends, reset requests and email changes (about 120 of 200 per quarter hour), the
+attempts at a reset link (10 of 20 per ten minutes) and at a confirmation link (7 of 20), the
+organisations created (16 of 30 an hour) and the invitations (7 of 60 per ten minutes). The
+limits a test runs into on purpose (`resend-limit`, `forgot-password-limit`) are an email's,
+and every test uses fresh emails. A test uses as few emails, sign-ins and links as its scenario
+needs; a new one that signs up, mails, opens a link or creates an organisation counts against
+these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
@@ -124,13 +149,23 @@ the organisation and its note on device B).
 
 None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tests, and
 `scenarios/` beside them holds their scenarios, one file each at the same path.
+`scripts/spec-reporter.ts`: the run's log, as two workers run the tests side by side: each spec
+file's tests printed together once the last of them ended, one line each (outcome, project,
+title, tags, time) with, under a failed run, its errors with their stack and cause and where its
+trace is, and under any run the output it wrote, each attempt of a retried test under a header
+of its own; then the tally, with the failed and the flaky tests again. A run stopped early
+prints every file it had not printed yet, a test that never started marked `not run`. The HTML
+report (`playwright-report/`) has the rest; `--list` prints Playwright's own listing.
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures,
 `signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
-its own that opens and signs in with the same account when a test asks) and `anotherAccount`
+its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
-a test asks), `appReady` (waits for `app-shell.status` in `ready`, `APP_READY`), `signIn`
-(fails at once when the sign-in page shows its error, naming its code), `startSignUp` (submits
+a test asks) and `freshDevice` (device B of an account the test makes itself: a browser
+context of its own that opens nothing and signs nothing in by itself), `appReady` (waits for
+`app-shell.status` in `ready`, `APP_READY`), `signIn`
+(fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
+profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
 opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
 `/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
@@ -153,8 +188,16 @@ their workers report); the fixtures watch every browser a test opens.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).
-`src/support/data.ts`: the generators (accounts, another password, names, bios, organisation
-keys and names, note texts).
+`src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
+`/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
+its send button and waits for the gateway's answer), `resetRequested` (its message),
+`openResetMail` (opens the link of the reset mail, held to its declaration) and
+`enterNewPassword` (types the new password twice on `/reset-password` and submits it).
+`src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
+(sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
+`openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
+names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
 at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for; and
 `expectBoundedNonArrival`, a bounded non-arrival: an address's mail count stays put from the
@@ -167,6 +210,15 @@ reads it, from the action's parameters or the account; each check asserts a comp
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).
+`src/support/notice-contract.ts`: every notice a test reads is held to its declaration under
+`notices` in `platform.yaml`, named `<action>.<name>` as a scenario names it:
+`expectDeclaredNotice` (its one recipient, the account's address before the action or a
+parameter's; the `lang` of its HTML's root element; every link it carries, in its HTML and its
+text, opening the declared screen at one of its routes' paths with no search and no fragment,
+or no link when it declares none; and, given `hides`, that its subject, text and HTML, its own
+recipient's address taken out, name neither that email nor its local part nor its domain) and
+`nextDeclaredNotice` (waits for the notice to its declared recipient after the mails a test has
+seen there and holds it to its declaration). A failure prints no address, link or HTML.
 
 ## Commands
 
@@ -177,7 +229,9 @@ has seen, holds it to its declaration and opens its link).
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
-  `--update-snapshots=missing`). `CI=1` runs one worker.
+  `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
+  `playwright.config.ts`, measured against the credential limit above), and its log is
+  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
   their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
@@ -190,4 +244,5 @@ has seen, holds it to its declaration and opens its link).
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
+- `bun run test` (here): the reporter's unit tests (`bun test ./scripts`).
 - `bun run typecheck`, `bun run lint`.

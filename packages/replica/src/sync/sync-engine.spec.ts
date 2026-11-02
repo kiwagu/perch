@@ -12,6 +12,7 @@ import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
 import loadStatement from '../server/surql/server-load.surql'
 import appendStatement from '../surql/replica-append.surql'
+import importStatement from '../surql/replica-import.surql'
 import { interceptRegionResets, type ManualClock } from '../testing'
 
 import {
@@ -26,8 +27,10 @@ import {
   regionId,
   settleAll,
   twoDevices,
+  writeBio,
   writeName,
 } from './__fixtures__/devices'
+import { holdOn } from './__fixtures__/held-statement'
 
 afterEach(async () => {
   await closeDevices()
@@ -167,6 +170,22 @@ describe('sync engine', () => {
     expect(a.transport.online()).toBe(false)
     expect(a.errors).toEqual([])
     // What the device wrote stays in its outbox: the app decides what becomes of it.
+    expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('stops syncing without a report once the password changed, keeping what the device wrote', async () => {
+    const { a, stub } = await twoDevices()
+    const heard: string[] = []
+
+    a.transport.onEnded((reason) => heard.push(`${reason} while ${a.channel()}`))
+    stub.endWith('password-changed')
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    expect((await a.region.flush()).isOk()).toBe(true)
+
+    expect(heard).toEqual(['password-changed while up'])
+    expect(a.channel()).toBe('down')
+    expect(a.errors).toEqual([])
     expect((await a.region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
 
@@ -666,6 +685,317 @@ describe('sync engine', () => {
 
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+})
+
+describe('whether a region caught up with the gateway', () => {
+  it('resolves once the first answer to its subscription is imported', async () => {
+    const gateway = await openGateway()
+    const a = await openDevice(gateway)
+
+    a.engine.start()
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a])
+
+    const b = await openDevice(gateway)
+    const caught = b.engine.caughtUp(regionId, 60_000).then(() => b.region.recordJson(profileKey))
+
+    b.engine.start()
+
+    expect(await caught).toMatchObject({ name: 'Ann' })
+  })
+
+  it('does not resolve while the answer to its subscription is being imported', async () => {
+    const gateway = await openGateway()
+    const a = await openDevice(gateway)
+    const hold = holdOn(importStatement)
+    const b = await openDevice(gateway, { wrap: hold.wrap })
+
+    a.engine.start()
+    b.engine.start()
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a, b])
+
+    // The device holds what the server holds: a probe finds its cursor at the head and pulls nothing.
+    b.transport.goOffline()
+    hold.gate.holding = true
+    b.transport.goOnline()
+    await hold.reached
+
+    const caught = b.engine.caughtUp(regionId, 60_000)
+
+    // A full pass ends meanwhile, and the engine checks again.
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(await hasSettled(caught)).toBe(false)
+
+    hold.gate.holding = false
+    hold.release()
+    await caught
+  })
+
+  it('waits past an answer and the answer to its recovery that both failed to import, as settled() does not, until a full pass subscribes again', async () => {
+    let failImports = true
+    const gateway = await openGateway()
+    const a = await openDevice(gateway)
+
+    a.engine.start()
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a])
+
+    const b = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failImports && text === importStatement) {
+            throw new Error('the store refused the write')
+          }
+        }),
+    })
+    const caught = b.engine.caughtUp(regionId, 120_000)
+
+    b.engine.start()
+    await b.engine.settled(60_000)
+
+    // The answer, the answer to the subscription sent at once, and any pull meanwhile all failed.
+    expect(b.errors.length).toBeGreaterThanOrEqual(2)
+    expect(b.errors.every(({ code }) => code === 'data:WRITE_FAILED')).toBe(true)
+    expect(b.region.recordJson(profileKey)).toBeUndefined()
+    expect(await hasSettled(caught)).toBe(false)
+
+    failImports = false
+    b.engine.visibility('hidden')
+    b.engine.visibility('visible')
+    await caught
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+  })
+
+  it('stays pending after a failed answer while a batch another device sent first imports in full, until the answer to its recovery does', async () => {
+    // Each accept the gateway runs while a hold is armed waits for that hold.
+    const holds: Array<{ readonly reach: () => void; readonly held: Promise<void> }> = []
+    const holdNextAccept = () => {
+      let reach = (): void => {}
+      let release = (): void => {}
+      const reached = new Promise<void>((resolve) => {
+        reach = resolve
+      })
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+
+      holds.push({ reach, held })
+
+      return { reached, release }
+    }
+    const gateway = await openGateway({
+      wrap: (server) =>
+        interceptQueries(server, (text) => {
+          const hold = text === acceptStatement ? holds.shift() : undefined
+
+          if (hold) {
+            hold.reach()
+
+            return hold.held
+          }
+        }),
+    })
+    // The next import of b waits for `failImport`, then fails.
+    let failImport: Promise<void> | undefined
+    let releaseImport = (): void => {}
+    let importReached = (): void => {}
+    const importing = new Promise<void>((resolve) => {
+      importReached = resolve
+    })
+    const a = await openDevice(gateway)
+    const b = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          const held = failImport
+
+          if (held && text === importStatement) {
+            failImport = undefined
+            importReached()
+
+            return held.then(() => {
+              throw new Error('the store refused the write')
+            })
+          }
+        }),
+    })
+    const c = await openDevice(gateway)
+    const newEmail = 'ann@new.example.test'
+
+    for (const device of [a, b, c]) {
+      device.engine.start()
+    }
+
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+    await settleAll([a, b, c])
+
+    // a names the profile Ana while b and c are offline; c writes a bio that needs only Ann.
+    b.transport.goOffline()
+    c.transport.goOffline()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settleAll([a])
+    writeBio(c.region, 'from c')
+
+    // b comes back; its probe goes unanswered, so only its subscription brings anything, and the
+    // answer's import waits.
+    const probed = gateway.stub.swallowNextProbe()
+
+    failImport = new Promise<void>((resolve) => {
+      releaseImport = resolve
+    })
+    b.transport.goOnline()
+    await probed
+    await importing
+
+    const caught = b.engine.caughtUp(regionId, 60_000).then(() => b.region.recordJson(profileKey))
+
+    // c comes back and pushes its bio, which the gateway takes in, held; a write of the server's
+    // own waits behind it, held too once its turn comes.
+    const bio = holdNextAccept()
+
+    c.transport.goOnline()
+    await bio.reached
+
+    const write = holdNextAccept()
+
+    const written = gateway.stub.hub.writeRecord(
+      { kind: 'private', id: regionId },
+      { table: 'profile', id: 'prf_1', set: { email: newEmail } },
+    )
+
+    // b's import fails: the recovery it sends at once waits behind both.
+    releaseImport()
+    await vi.waitFor(() => expect(b.errors.map(({ code }) => code)).toEqual(['data:WRITE_FAILED']))
+
+    // c's bio reaches b and imports in full; b still lacks Ana, and the recovery's answer has not come.
+    bio.release()
+    await write.reached
+    await vi.waitFor(() => expect(b.region.recordJson(profileKey)).toMatchObject({ bio: 'from c' }))
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
+    expect(await hasSettled(caught)).toBe(false)
+
+    write.release()
+
+    expect(await caught).toMatchObject({ name: 'Ana', bio: 'from c', email: newEmail })
+    expect((await written).isOk()).toBe(true)
+  })
+
+  it('rejects at its timeout for a region that stopped syncing, though settled() resolves', async () => {
+    // A region whose reload fails stops syncing.
+    const { a, settle, stub, clock } = await twoDevices(
+      {},
+      {
+        wrap: (local) =>
+          interceptRegionResets(local, () => {
+            throw new Error('the database refuses the reset')
+          }),
+      },
+    )
+
+    stub.rejectEverything()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(a.errors.map(({ code }) => code)).toEqual(['data:PUSH_REJECTED', 'data:SYNC_STOPPED'])
+
+    const caught = a.engine.caughtUp(regionId, 1_000)
+
+    await clock.advance(999)
+
+    expect(await hasSettled(caught)).toBe(false)
+
+    await clock.advance(1)
+
+    await expect(caught).rejects.toThrow(
+      `${regionId} did not catch up with the gateway within 1000 ms`,
+    )
+  })
+
+  it('rejects at its timeout for a region the welcome leaves out, and for one the engine does not hold', async () => {
+    const gateway = await openGateway({ schema: replicaSchema })
+    const device = await openDevice(gateway, { identity: ann, region: acmeRegion })
+
+    device.engine.start()
+    await device.engine.settled(60_000)
+
+    const left = device.engine.caughtUp(acmeRegion.id, 1_000)
+    const unknown = device.engine.caughtUp(regionId, 1_000)
+
+    await gateway.clock.advance(1_000)
+
+    await expect(left).rejects.toThrow('1000 ms')
+    await expect(unknown).rejects.toThrow('1000 ms')
+  })
+
+  it('once the channel fell, resolves only when the answer of the next connection is imported', async () => {
+    const { a, b } = await twoDevices()
+
+    await b.engine.caughtUp(regionId, 60_000)
+    b.transport.goOffline()
+
+    const caught = b.engine.caughtUp(regionId, 60_000).then(() => b.region.recordJson(profileKey))
+
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settleAll([a])
+
+    expect(await hasSettled(caught)).toBe(false)
+
+    b.transport.goOnline()
+
+    expect(await caught).toMatchObject({ name: 'Ana' })
+  })
+
+  it('once a reload replaced the region, resolves only when its new document is pulled', async () => {
+    let reached = () => {}
+    const resetting = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { a, stub } = await twoDevices(
+      {},
+      {
+        wrap: (local) =>
+          interceptRegionResets(local, () => {
+            reached()
+
+            return held
+          }),
+      },
+    )
+    const before = a.region
+
+    await a.engine.caughtUp(regionId, 60_000)
+    stub.rejectEverything()
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await resetting
+
+    const caught = a.engine.caughtUp(regionId, 60_000).then(() => a.region)
+
+    expect(await hasSettled(caught)).toBe(false)
+
+    release()
+
+    const reloaded = await caught
+
+    expect(reloaded).not.toBe(before)
+    expect(reloaded.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
   })
 })
 

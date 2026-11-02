@@ -31,6 +31,7 @@ export {
   saveDevice,
   savedIdentity,
   savedToken,
+  saveIdentityEmail,
   TOKEN_KEY,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'

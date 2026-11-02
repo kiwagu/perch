@@ -18,12 +18,14 @@ export const BASE_URL = z
 export default defineConfig({
   testDir: './src',
   testMatch: '**/*.e2e.spec.ts',
-  // Measured 2026-10-16 on the dev host, 4 tests (2 specs x 2 projects): 1 worker
-  // 28.3 s, 2 workers 18.4 s, both stable over repeated runs; every test signs up a
-  // fresh account in a fresh browser context, so specs share no state. CI keeps one
-  // worker so its log reads in spec order.
-  workers: process.env['CI'] ? 1 : 2,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  // Every test signs up a fresh account in a fresh browser context, so specs share no state but
+  // the gateway's limits of the one client address the front gives every browser. Its credential
+  // checks (sign-ups, sign-ins, verifications, changes of a password or an email, 20 per 10 s) set
+  // the number of workers, measured 2026-11-02 on the dev host (16 cores) over the 90 tests: two
+  // ran them in 4.0 min with at most 17 checks in any 10 s; three took 2.7 min but reached 22, and
+  // four (2.4 min) had a sign-in refused. The reporter prints each spec file's tests together.
+  workers: 2,
+  reporter: [['./scripts/spec-reporter.ts'], ['html', { open: 'never' }]],
   // Screenshot baselines are not committed (images stay out of the repository): the
   // first run on a machine writes them, later runs compare against them.
   updateSnapshots: 'missing',
@@ -37,11 +39,12 @@ export default defineConfig({
     serviceWorkers: 'block',
     trace: 'retain-on-failure',
   },
-  // Mobile first: every spec runs on a phone, then on a desktop.
+  // Mobile first: every test runs on a phone, and the `@smoke` ones on a desktop too.
   projects: [
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
     {
       name: 'desktop',
+      grep: /@smoke/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],

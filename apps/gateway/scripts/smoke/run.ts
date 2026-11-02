@@ -2,7 +2,7 @@
  * The smoke test behind `cli.ts`: the gateway runs in this process in front of a SurrealDB
  * stand and serves a new identity's two devices over HTTP and WebSocket, through sign-up and the
  * verification of its email through the mail in the stand's mailbox, sign-in, push, fan-out and
- * sign-out. It prints one line per step and stops at the first step that fails or takes longer
+ * sign-out, then the reset of a password through its mail. It prints one line per step and stops at the first step that fails or takes longer
  * than 5 s. The identities it signs up stay on the stand, for the sweep of `@example.test`
  * accounts.
  */
@@ -26,6 +26,7 @@ import { deviceSessionSteps } from './device-sessions'
 import { freshPassword } from './fresh-password'
 import { postCredentials, type SignedIn, signUp } from './http'
 import { organisationSteps } from './organisation'
+import { passwordResetSteps } from './password-reset'
 import { check, hello, type Opened, refusedHello, step, takeUpdates, unwrap } from './steps'
 
 /** The gateway user the stand operator defines on a local stand, for what env leaves out. */
@@ -194,6 +195,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   )
 
   await accessSteps(base, mailbox)
+  await passwordResetSteps(base, mailbox, opened)
   await deviceSessionSteps(base, mailbox, opened)
   await organisationSteps(base, mailbox, opened, second, credentials)
 }

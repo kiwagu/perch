@@ -51,24 +51,30 @@ developer approved; the code takes no architectural decision of its own.
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
-   one, and a change its review brings is a commit of its own on top, never an amend). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
-   merged in after that landing, then takes the business change (the screen files, the
-   activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
-   (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
-   landing they build on, the reason for every change, the gaps signalled) and gives an OK on those commits or asks for changes
-   to the contract. A change the review brings is a commit of its own on top of the ones
-   under review, never an amend, and the OK is then asked on all of them. The OK covers those
-   commits, and the last business commit of a rename
-   or a removal that drops the old names the review listed. Any other contract commit made,
-   re-cut, amended or rebased after it, even with its files unchanged, and a return to the
-   implementation after other work, stop here again. The code and the tests,
-   a test's scaffold included, start only after the OK, in commits of their own. A rename or a
-   removal keeps the old name declared until the code no longer renders it, then a last
-   business commit drops it, approved with the first, with no new stop; any other contract
-   change found while writing the code is a commit of its own and goes back to step 1 and
-   stops again, a meta one through `feat/contract-first-pass` and its landing, after which
-   `main` is merged into the feature branch. A fix that brings the code back to what the
-   contract already says, correctly, has no contract diff and no stop.
+   one, and a change its review brings is a commit of its own on top, never an amend). The
+   business change (the screen files, the activities, the platform, the model, the
+   scenarios, the rows of the vocabulary's tables), the entry point of a feature, is then
+   modelled on the contract trunk, `contract/trunk` (`.cursor/rules/branch-reuse-first.mdc`),
+   with `main` merged in after that landing: the developer's modeling session, in the trunk's
+   own worktree and never reading the code, commits it under the feature's card, each
+   decision a commit of its own on top, never an amend. The developer reads the contract diff
+   (`bun run contract:diff main`, the commits by hash with their diff, the meta landing they
+   build on, the reason for every change, the gaps signalled) and says when the card's
+   contract is right: that is the OK, and the card names it with its trunk commits. The
+   feature's own branch then takes the card as one business commit (`git cherry-pick
+   --no-commit` of the card's commits, oldest first, then one `git commit` through the hook),
+   and the code and the tests, a test's scaffold included, start on top of it, in commits of
+   their own. The OK covers the card's commits, and the last business commit of a rename or a
+   removal, written on the feature's branch, which drops the old names the card listed: a
+   rename or a removal keeps the old name declared until the code no longer renders it, then
+   that commit drops it, with no new stop. Any other contract change found while writing the
+   code goes back to step 1 on the trunk and is taken as one more commit, a meta one through
+   `feat/contract-first-pass` and its landing, after which `main` is merged into the trunk and
+   into the feature branch. A business commit written on the feature's branch instead, a
+   feature begun there before the trunk or an amendment the developer allows there, stops
+   here for the developer's OK on its hash, as `.cursor/rules/ui-contract.mdc` says. A fix that
+   brings the code back to what the contract already says, correctly, has no contract diff and
+   no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the

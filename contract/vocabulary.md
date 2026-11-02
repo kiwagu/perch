@@ -144,7 +144,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
-| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item` | the password typed keeps this rule |
+| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item`, `user.reset-password.password-rule-list.length-item`, `user.reset-password.password-rule-list.characters-item`, `user.reset-password.password-rule-list.digit-item`, `user.reset-password.password-rule-list.uppercase-item`, `user.reset-password.password-rule-list.lowercase-item`, `user.reset-password.password-rule-list.symbol-item`, `user.settings.password-rule-list.length-item`, `user.settings.password-rule-list.characters-item`, `user.settings.password-rule-list.digit-item`, `user.settings.password-rule-list.uppercase-item`, `user.settings.password-rule-list.lowercase-item`, `user.settings.password-rule-list.symbol-item` | the password typed keeps this rule |
 
 ## Codes
 
@@ -164,21 +164,26 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
+| `password-changed-elsewhere` | `user.sign-in.notice-message` | the account's password changed on another device or through a reset link, which signed this device out; it signs in with the new password |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
-| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message` | a mail whose link verifies the email typed is on its way, if that email has an account waiting for it; the same words when it has none, so the page tells nobody which emails have accounts |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet); the same words when it has none, so the page tells nobody which emails have accounts |
 | `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
 | `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
-| `link-invalid` | `user.verify-email.error` | the link is not one a verification mail carried, or its account is gone |
-| `link-expired` | `user.verify-email.error` | the link is older than a day; the same page sends a new one |
-| `invalid-credentials` | `user.sign-in.error` | the email or the password is wrong |
+| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
+| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is too old: a verification or confirmation link after a day, a reset link after an hour; a new one is asked for |
+| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error` | the email or the password is wrong |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
-| `passwords-differ` | `user.sign-in.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
-| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
+| `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
+| `email-invalid` | `user.settings.email.error` | the new email is not an email |
+| `password-reset` | `user.reset-password.message` | the password is the new one and every device of the account is signed out; the account signs in with it |
+| `email-changed` | `user.confirm-email.message` | the account's email is the new one, which signs it in from now on |
+| `passwords-differ` | `user.sign-in.error`, `user.reset-password.error`, `user.settings.password.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
@@ -235,11 +240,14 @@ screen name of its own.
 | `app-shell` | the frame around every screen, with the navigation, the language, the status and the notices |
 | `user.sign-in` | the page that signs an account in or creates one (`/sign-in`) |
 | `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in (`/verify-email`) |
+| `user.forgot-password` | the page that asks for a mail whose link sets a new password (`/forgot-password`) |
+| `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
+| `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account and of this device: the theme and the language (`/settings`) |
+| `user.settings` | the settings of the signed-in account and of this device: the theme, the language, the password and the email (`/settings`) |
 
 ## Roles
 

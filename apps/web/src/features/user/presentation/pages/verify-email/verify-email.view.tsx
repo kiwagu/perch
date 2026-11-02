@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode, useId, useState } from 'react'
+import { type ComponentType, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
@@ -8,12 +8,7 @@ import { Field, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
-export interface VerifyEmailLinkProps {
-  readonly to: string
-  readonly className?: string | undefined
-  readonly 'data-testid'?: string | undefined
-  readonly children: ReactNode
-}
+import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 export interface VerifyEmailViewProps {
   /** Whether the link is being checked. */
@@ -30,10 +25,8 @@ export interface VerifyEmailViewProps {
   readonly canResend: boolean
   /** Sends a new link to `email`: resolves whether it did. */
   readonly onResend: (email: string) => Promise<boolean>
-  readonly link?: ComponentType<VerifyEmailLinkProps>
+  readonly link?: ComponentType<PageLinkProps>
 }
-
-const PlainLink = ({ to, ...props }: VerifyEmailLinkProps) => <a href={to} {...props} />
 
 /** The contract code of a failure, with its text. */
 function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {

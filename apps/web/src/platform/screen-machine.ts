@@ -1,6 +1,7 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
- * frame's guard (the action that used the input completed), asks the frame's confirmation before
+ * frame's guard (the action that used the input completed), its search taking the value of a field
+ * from what the moving event carries (`navigate-search.ts`), asks the frame's confirmation before
  * a destructive control's event and the guard before a leaving control's, in that order, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
@@ -25,6 +26,7 @@ import { questionOf } from './confirmations'
 import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
+import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -61,13 +63,17 @@ const childrenOf = (snapshot: unknown): Map<string, string> =>
     ),
   )
 
-/** A flow's `navigate` effect: where to go, with its search when it gives one. */
-const isNavigate = (
-  event: unknown,
-): event is { readonly to: string; readonly search?: Readonly<Record<string, unknown>> } =>
+/**
+ * A flow's `navigate` effect as a machine emits it: where to go, with its search when it gives one,
+ * and what the fields of the event that moves hold, for the values the search takes from them.
+ */
+const isNavigate = (event: unknown): event is NavigateParams & { readonly fields?: FieldValues } =>
   isRecord(event) &&
   typeof event['to'] === 'string' &&
-  (event['search'] === undefined || isRecord(event['search']))
+  (event['search'] === undefined || isSearch(event['search'])) &&
+  (event['fields'] === undefined ||
+    (isRecord(event['fields']) &&
+      Object.values(event['fields']).every((value) => typeof value === 'string')))
 
 const DONE = 'xstate.done.actor.'
 const FAILED = 'xstate.error.actor.'
@@ -178,7 +184,9 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
       if (isNavigate(event)) {
         void navigate({
           to: event.to,
-          ...(event.search === undefined ? {} : { search: event.search }),
+          ...(event.search === undefined
+            ? {}
+            : { search: searchOf(event.search, event.fields ?? {}) }),
           ignoreBlocker: true,
         })
       }
