@@ -9,10 +9,11 @@
  * (`derive/composites.ts`); the params of a form's button, from what the fields of its part pass
  * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
  * reads them as if written; an error anchor's codes and fields from the failures of the actions
- * its part binds, as the model and the platform give them, and whether a field holds input, from
- * its kind and its bindings; and, with a confirmation on the frame, the question each control of
- * a destructive action asks before it runs (`derive/questions.ts`), the confirmation carrying
- * every code asked with. A file may author its flow in the shorter forms (a transition as its
+ * its part binds and its flow shows on it, as the model and the platform give them, and the codes
+ * the flow shows on it (`derive/errors.ts`); whether a field holds input, from its kind and its
+ * bindings; and, with a confirmation on the frame, the question each control of a destructive
+ * action asks before it runs (`derive/questions.ts`), the confirmation carrying every code asked
+ * with. A file may author its flow in the shorter forms (a transition as its
  * target, an effect by its name, a region by its pattern or its button, the region of a button
  * left out): each flow is expanded with the codes the anchors of all screens carry, the failures
  * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
