@@ -45,7 +45,8 @@ developer approved; the code takes no architectural decision of its own.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
    **Then the review.** The contract is committed first, a layer per commit and no
-   implementation in either (the app's runtime of the contract and its specs are meta). A
+   implementation in either (the app's runtime of the contract and its specs are the
+   implementation's). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
