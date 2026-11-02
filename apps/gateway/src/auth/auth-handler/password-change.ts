@@ -4,6 +4,7 @@ import { z } from '@workspace/zod'
 import type { SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { bearerRefused } from '../bearer-caller'
 
 import type { AuthMountDeps } from './mount'
 import { afterPasswordChange } from './password-changed'
@@ -19,10 +20,14 @@ const changeBody = z.object({ currentPassword: z.string(), password: z.string() 
  * that breaks the rules 400 `password-rejected` at once. The current password must find a place
  * among its account's failed sign-ins, as a sign-in's does (`RequestLimits.signInAttempt`, by the
  * caller's email; 429 when they are spent), and a wrong one keeps its place there: 400
- * `invalid-credentials`; a right one clears them. In the account's turn, Better Auth checks the
- * current password and sets the new one; then every other session of the account ends and the
- * sockets of their devices close with 4002, the caller's own session and sockets staying, every
- * reset link and the pending change of its email end, and the notice of a changed password starts
+ * `invalid-credentials`; a right one clears them. In the account's turn, the current password is
+ * checked against the credential row and the new one hashed; then one transaction makes sure the
+ * caller's session is still live (401 `unauthorized` when it ended meanwhile) and the row still
+ * holds the hash that was checked, and sets the new password, ends every other session of the
+ * account, every reset link and the pending change of its email, all or none
+ * (`AccountPasswords.change`; 500 `internal` with nothing changed when it fails). Once it
+ * committed, the sockets of the devices whose session it ended close with 4002, the caller's own
+ * session and sockets staying, and the notice of a changed password starts
  * (`afterPasswordChange`): 204 with no body.
  */
 export function changePassword(
@@ -66,7 +71,8 @@ async function changed(
   try {
     return await deps.accounts.run(caller.identity, async () => {
       const change = await deps.passwords.change(
-        caller.token,
+        caller.identity,
+        caller.session,
         body.data.currentPassword,
         body.data.password,
       )
@@ -75,17 +81,21 @@ async function changed(
         return internal()
       }
 
-      if (change.value === 'wrong-password') {
+      if (change.value.kind === 'wrong-password') {
         outcome = 'failed'
 
         return refused(400, 'invalid-credentials')
       }
 
+      // The caller's session ended while the change waited for the account.
+      if (change.value.kind === 'unauthorized') {
+        return bearerRefused()
+      }
+
       outcome = 'succeeded'
+      await afterPasswordChange(deps, caller.identity, change.value.devices)
 
-      const after = await afterPasswordChange(deps, caller.identity, caller.session)
-
-      return after.isOk() ? new Response(null, { status: 204 }) : internal()
+      return new Response(null, { status: 204 })
     })
   } finally {
     attempt.settle(outcome)

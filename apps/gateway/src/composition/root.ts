@@ -184,7 +184,7 @@ export function createGatewayRoot(
         secret: options.authSecret,
       }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
-      passwords: new AccountPasswords({ auth, directory: local }),
+      passwords: new AccountPasswords({ auth, directory: local, clock: options.clock }),
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,

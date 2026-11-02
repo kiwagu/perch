@@ -1,19 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { CLOSE } from '@workspace/replica/protocol'
+import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
+import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
+import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 
 import {
   ANN,
+  ARGON2_WAIT,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
   postTo,
   printedDuring,
   type Sender,
+  sessionInsertHold,
   signedInOn,
   signInRequest,
+  turnsAsked,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
@@ -153,4 +160,82 @@ describe('authHandler, the change of a password', () => {
       expect(told).not.toContain(secret)
     }
   })
+})
+
+/** What a sign-in answers, as far as these tests read it. */
+const signedInAnswer = z.object({ token: z.string().min(1) })
+
+describe('authHandler, a change of a password and what runs beside it', () => {
+  it(
+    'leaves no working session to a sign-in with the old password that checked it before the change',
+    async () => {
+      const hold = sessionInsertHold()
+      const mounted = await mountedOnRealAuth({ directory: hold.directory })
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
+      const asked = turnsAsked(mounted.turns)
+
+      hold.arm()
+
+      const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+
+      await vi.waitFor(() => expect(hold.paused()).toBe(true), ARGON2_WAIT)
+
+      let changed = false
+      const changing = mounted.route(change(ann.on('laptop'), PASSWORD), FROM).finally(() => {
+        changed = true
+      })
+
+      await vi.waitFor(() => expect(changed || asked(ann.identity) >= 2).toBe(true), ARGON2_WAIT)
+      hold.release()
+
+      const [signedIn, answered] = await Promise.all([signingIn, changing])
+
+      expect(answered?.status).toBe(204)
+
+      if (signedIn?.status === 200) {
+        const { token: phone } = signedInAnswer.parse(await signedIn.json())
+
+        expect(await mounted.sessions.read(phone)).toEqual({ kind: 'none' })
+      }
+
+      expect((await mounted.sessions.read(ann.tokens.get('laptop') ?? '')).kind).toBe('session')
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'leaves the password, the sessions and the links as they were when a step of the change fails',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop', 'phone'])
+
+      await pastFloor(
+        mounted.clock,
+        mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+        RESET_REQUEST_FLOOR_MS,
+      )
+
+      const link = linkToken(await mounted.outbox.next(ANN, 1))
+
+      ;(await mounted.emailChanges.ask(ann.identity, ANN, 'ann.new@example.test'))._unsafeUnwrap()
+      await mounted.local.db.query(cancelRefuseStatement)
+
+      const failed = await mounted.route(change(ann.on('laptop'), PASSWORD), FROM)
+      const [pending] = await mounted.local.db.query<[unknown[]]>(pendingChangeStatement, {
+        identity: ann.identity,
+      })
+
+      expect(failed?.status).toBe(500)
+      expect((await mounted.sessions.read(ann.tokens.get('phone') ?? '')).kind).toBe('session')
+      expect(ann.sockets.get('phone')?.ended).toEqual([])
+      expect(mounted.closes).toEqual([])
+      expect((await mounted.resets.read(link))._unsafeUnwrap()).toBeDefined()
+      expect(pending).toHaveLength(1)
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
+
+      await mounted.local.db.query(cancelAllowStatement)
+      expect((await mounted.route(change(ann.on('laptop'), PASSWORD), FROM))?.status).toBe(204)
+    },
+    ARGON2_RUNS_MS,
+  )
 })

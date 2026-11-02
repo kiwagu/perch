@@ -44,18 +44,6 @@ describe('ResetLinks', () => {
     expect((await resets.read('no-such-token'))._unsafeUnwrap()).toBeUndefined()
   })
 
-  it('spends a link once: a second claim, or two at once, find it gone', async () => {
-    const { resets, link, identity } = await harness()
-    const token = await link()
-    const claims = await Promise.all([resets.claim(token), resets.claim(token)])
-
-    expect(claims.map((claim) => claim._unsafeUnwrap()?.identity)).toEqual(
-      expect.arrayContaining([identity, undefined]),
-    )
-    expect((await resets.claim(token))._unsafeUnwrap()).toBeUndefined()
-    expect((await resets.read(token))._unsafeUnwrap()).toBeUndefined()
-  })
-
   it('keeps the newest link of the account and ends the earlier ones as Better Auth keeps each new one', async () => {
     const { resets, link } = await harness()
     const first = await link()
@@ -63,20 +51,5 @@ describe('ResetLinks', () => {
 
     expect((await resets.read(first))._unsafeUnwrap()).toBeUndefined()
     expect((await resets.read(second))._unsafeUnwrap()).toBeDefined()
-  })
-
-  it("ends every link of the account, and none of another account's", async () => {
-    const { resets, link, identity, auth, outbox, passwords } = await harness()
-    const token = await link()
-
-    await signUpOn(auth, 'bob@example.test', deviceHeaders('desk'))
-    expect((await passwords.requestReset('bob@example.test'))._unsafeUnwrap()).toBe('asked')
-
-    const bobs = linkToken(await outbox.next('bob@example.test', 1))
-
-    ;(await resets.endAll(identity))._unsafeUnwrap()
-
-    expect((await resets.read(token))._unsafeUnwrap()).toBeUndefined()
-    expect((await resets.read(bobs))._unsafeUnwrap()).toBeDefined()
   })
 })

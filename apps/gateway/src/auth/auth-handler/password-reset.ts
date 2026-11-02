@@ -69,12 +69,15 @@ export async function requestPasswordReset(
  * attempts are taken first (`RequestLimits.passwordReset`, 429 once spent, whatever came of the
  * earlier ones). A password that breaks the rules of a new password answers 400
  * `password-rejected` at once, the link kept. A token no link holds (unknown, used, or replaced by
- * a newer one) answers 401 `link-invalid`, one whose link is an hour old 401 `link-expired`. In
- * the account's turn (by its identity) the link is spent (401 `link-invalid` when a reset at the
- * same time spent it first) and the password set, hashed as Better Auth hashes one; then every
- * session of the account ends, its sockets close with 4002, every reset link and the pending
- * change of its email end, and the notice of a changed password starts (`afterPasswordChange`):
- * 204 with no body. Nothing is signed in, whatever session the request carries.
+ * a newer one) answers 401 `link-invalid`, one whose link is an hour old 401 `link-expired`. The
+ * new password is hashed, as Better Auth hashes one, before the account's turn (by its identity);
+ * in it, one transaction judges the link again on the clock as it is then (401 `link-invalid` or
+ * `link-expired`, nothing changed), spends it with every other reset link of the account, sets
+ * the password, ends every session of the account and its pending change of email, all or none
+ * (`AccountPasswords.reset`; 500 `internal` with nothing changed when it fails). Once it
+ * committed, the account's sockets close with 4002 and the notice of a changed password starts
+ * (`afterPasswordChange`): 204 with no body. Nothing is signed in, whatever session the request
+ * carries.
  */
 export async function resetPassword(
   deps: AuthMountDeps,
@@ -114,27 +117,27 @@ export async function resetPassword(
   }
 
   const { identity } = link.value
+  const hash = await deps.passwords.hash(password)
+
+  if (hash.isErr()) {
+    return internal()
+  }
 
   return deps.accounts.run(identity, async () => {
-    const claimed = await deps.resets.claim(token)
+    // The link is judged again at its spending, on the clock as it is then: it may have been
+    // spent, replaced or expired while the reset waited for the account.
+    const reset = await deps.passwords.reset(identity, token, hash.value)
 
-    if (claimed.isErr()) {
+    if (reset.isErr()) {
       return internal()
     }
 
-    // Spent meanwhile, by a reset at the same time or a newer request's link.
-    if (claimed.value?.identity !== identity) {
-      return refused(401, 'link-invalid')
+    if (reset.value !== 'reset') {
+      return refused(401, reset.value)
     }
 
-    const set = await deps.passwords.set(identity, password)
+    await afterPasswordChange(deps, identity, 'every')
 
-    if (set.isErr()) {
-      return internal()
-    }
-
-    const after = await afterPasswordChange(deps, identity)
-
-    return after.isOk() ? new Response(null, { status: 204 }) : internal()
+    return new Response(null, { status: 204 })
   })
 }

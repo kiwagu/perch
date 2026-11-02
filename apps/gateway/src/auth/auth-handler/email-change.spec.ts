@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
+import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 
 import {
   ANN,
   ARGON2_WAIT,
+  holdTurn,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
@@ -15,8 +17,10 @@ import {
   type SignedInAccount,
   signedInOn,
   signInRequest,
+  turnsAsked,
 } from './__fixtures__/mount'
 import { CHANGE_EMAIL_FLOOR_MS } from './email-change'
+import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -139,7 +143,14 @@ describe('authHandler, the request to change the email', () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    for (const email of ['not an email', 'ann@', '@example.test']) {
+    for (const email of [
+      'not an email',
+      'ann@',
+      '@example.test',
+      '',
+      '   ',
+      `${'a'.repeat(310)}@example.test`,
+    ]) {
       const refused = await mounted.route(changeTo(ann.on('laptop'), email), FROM)
 
       expect(refused?.status).toBe(400)
@@ -401,5 +412,65 @@ describe('authHandler, the confirmation of a new email', () => {
     for (const secret of [ANN, NEW_EMAIL, token, PASSWORD, 'Wrong-pass-1']) {
       expect(told).not.toContain(secret)
     }
+  })
+})
+
+describe('authHandler, a change of the email and what runs beside it', () => {
+  it('creates no link for a change of the email that waited while a reset ended its session', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    const link = linkToken(await mounted.outbox.next(ANN, 1))
+    const asked = turnsAsked(mounted.turns)
+    const release = await holdTurn(mounted.turns, ann.identity)
+    const resetting = mounted.route(
+      postTo('/auth/reset-password', { token: link, password: 'New-pass-word-2' }),
+      FROM,
+    )
+
+    await vi.waitFor(() => expect(asked(ann.identity)).toBe(2), ARGON2_WAIT)
+
+    const changing = mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL), FROM)
+
+    await vi.waitFor(() => expect(asked(ann.identity)).toBe(3), ARGON2_WAIT)
+    release()
+    expect((await resetting)?.status).toBe(204)
+
+    const changed = await changing
+
+    expect(changed?.status).toBe(401)
+    expect(await changed?.json()).toEqual({ code: 'unauthorized' })
+
+    const [pending] = await mounted.local.db.query<[unknown[]]>(pendingChangeStatement, {
+      identity: ann.identity,
+    })
+
+    expect(pending).toEqual([])
+    expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
+  }, 30_000)
+
+  it('answers link-expired to a link that expired while the confirmation waited for the account', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const token = await confirmationLink(mounted, ann)
+    const asked = turnsAsked(mounted.turns)
+    const release = await holdTurn(mounted.turns, ann.identity)
+    const confirming = mounted.route(confirm(token), FROM)
+
+    await vi.waitFor(() => expect(asked(ann.identity)).toBe(2))
+    await mounted.clock.advance(DAY_MS)
+    release()
+
+    const expired = await confirming
+
+    expect(expired?.status).toBe(401)
+    expect(await expired?.json()).toEqual({ code: 'link-expired' })
+    expect((await mounted.sessions.identityOf(ANN))._unsafeUnwrap()).toBe(ann.identity)
   })
 })

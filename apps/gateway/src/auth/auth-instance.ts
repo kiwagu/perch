@@ -143,9 +143,10 @@ export function authOptions(options: AuthInstanceOptions) {
     // none. Bulk endings go through the gateway's own update by identity, `/revoke-other-sessions`
     // included. This guards the HTTP handler only: `auth.api` calls still reach these endpoints.
     // `/change-password` ends the other sessions through the same bulk delete when it is asked
-    // to: the gateway calls it through `auth.api` without that (`AccountPasswords`) and ends them
-    // by its own update. `/change-email` signs a device in at its confirmation and mails through
-    // the verification mail: the gateway asks for and confirms a change itself (`EmailChanges`).
+    // to, and sets the password apart from them: the gateway changes a password itself, the new
+    // password and every ending in one transaction (`AccountPasswords`). `/change-email` signs a
+    // device in at its confirmation and mails through the verification mail: the gateway asks for
+    // and confirms a change itself (`EmailChanges`).
     disabledPaths: [
       '/revoke-sessions',
       '/revoke-other-sessions',

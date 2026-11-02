@@ -10,7 +10,8 @@ import { inspect } from 'node:util'
 import { errAsync, okAsync } from 'neverthrow'
 import { expect, onTestFinished, vi } from 'vitest'
 
-import { dataError } from '@workspace/data'
+import { dataError, type LocalDb } from '@workspace/data'
+import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
@@ -85,15 +86,13 @@ const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read h
 
 /**
  * A stand-in for the sessions a verification reads: no link names an email, no email has an
- * account, no session is read back, no token holds a session, and nothing is ended.
+ * account, no session is read back, and no token holds a session.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationEmail: async () => undefined,
   identityOf: () => okAsync(undefined),
   signedIn: notHere,
   read: async () => ({ kind: 'none' }),
-  revokeAll: notHere,
-  revokeOthers: notHere,
 }
 
 /**
@@ -102,8 +101,14 @@ export const noSessions: AuthMountDeps['sessions'] = {
  * to be asked.
  */
 export const noAccounts: Pick<AuthMountDeps, 'passwords' | 'resets' | 'emailChanges' | 'mails'> = {
-  passwords: { requestReset: notHere, set: notHere, change: notHere, matches: notHere },
-  resets: { read: notHere, claim: notHere, endAll: notHere },
+  passwords: {
+    requestReset: notHere,
+    hash: notHere,
+    reset: notHere,
+    change: notHere,
+    matches: notHere,
+  },
+  resets: { read: notHere },
   emailChanges: {
     ask: notHere,
     cancel: notHere,
@@ -161,7 +166,7 @@ const INSTANCES = new WeakMap<Outbox, AuthInstance>()
  * The mount over a real Better Auth instance on an embedded directory (closed when the test
  * finishes), with the gateway's sessions over it, a real registry of sync connections (`registry`)
  * whose every close the mount asks for is also kept (`closes`), real limits on the instance's
- * clock, and the accounts' turns.
+ * clock, and the accounts' turns (`turns`), which a test may hold to make work wait.
  */
 export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const opened = await openAuth(
@@ -181,6 +186,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const registry = new ConnectionRegistry({ onFailure: (error) => failures.push(error.code) })
   const closes: Close[] = []
   const accounts = accountServicesOf(opened)
+  const turns = new KeyedTurns<string>()
   const route = authHandler({
     auth: opened.auth,
     sessions: {
@@ -191,8 +197,6 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           ? errAsync(dataError('data:QUERY_FAILED', READBACK_FAILURE))
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
-      revokeAll: (identity) => sessions.revokeAll(identity),
-      revokeOthers: (identity, keep) => sessions.revokeOthers(identity, keep),
     },
     ...accounts,
     limits: new RequestLimits({ clock: opened.clock }),
@@ -204,7 +208,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
       },
     },
     clock: opened.clock,
-    accounts: new KeyedTurns<string>(),
+    accounts: turns,
   })
   /** Ann's identity, once she signed up. */
   const annsId = async (): Promise<IdentityId> => {
@@ -217,7 +221,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     return identity
   }
 
-  return { ...opened, ...accounts, sessions, registry, failures, closes, route, annsId }
+  return { ...opened, ...accounts, sessions, registry, failures, closes, route, annsId, turns }
 }
 
 /**
@@ -421,4 +425,72 @@ export async function pastFloor(
   await clock.advance(floorMs)
 
   return answer
+}
+
+/**
+ * Holds `key`'s turn on `turns` until the answer is called: work asked under that key from then
+ * on waits behind it. Resolves once the turn is held.
+ */
+export async function holdTurn(turns: KeyedTurns<string>, key: string): Promise<() => void> {
+  let release = (): void => {}
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let held = (): void => {}
+  const holding = new Promise<void>((resolve) => {
+    held = resolve
+  })
+
+  void turns.run(key, () => {
+    held()
+
+    return released
+  })
+  await holding
+
+  return release
+}
+
+/** How many turns of a key `turns` was asked for from now on, by key. */
+export function turnsAsked(turns: KeyedTurns<string>): (key: string) => number {
+  const run = vi.spyOn(turns, 'run')
+
+  onTestFinished(() => {
+    run.mockRestore()
+  })
+
+  return (key) => run.mock.calls.filter(([asked]) => asked === key).length
+}
+
+/**
+ * A directory for `openAuth` whose next insert of a session, once `arm` was called, waits until
+ * `release` is called; `paused` tells whether one is waiting.
+ */
+export function sessionInsertHold() {
+  let armed = false
+  let waiting = false
+  let release = (): void => {}
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  return {
+    directory: (local: LocalDb) =>
+      interceptQueries(local, (text) => {
+        // Better Auth's adapter writes a session with an insert into its table.
+        if (armed && text.startsWith('INSERT') && text.includes('`device_session`')) {
+          armed = false
+          waiting = true
+
+          return released
+        }
+
+        return undefined
+      }),
+    arm: () => {
+      armed = true
+    },
+    paused: () => waiting,
+    release: () => release(),
+  }
 }

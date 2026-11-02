@@ -67,7 +67,13 @@ export async function handedOver(deps: AuthMountDeps, request: Request): Promise
  * A sign-in: its body must be JSON naming an email (else 400 `bad-request`), and the email, in
  * lower case, must find a place among its failed sign-ins and those still under way
  * (`RequestLimits.signInAttempt`; else 429). Better Auth gets that very JSON, and the place is
- * settled once with what it answered.
+ * settled once with what it answered. For an email that has an account, Better Auth's whole
+ * sign-in, from the check of the password to the session it writes, runs in the account's turn
+ * (by its identity's key), as a reset and a change of the password do: a sign-in that checked the
+ * old password writes its session before the new password's transaction ends every session, or
+ * checks the new password after it, so no session outlives the password it was opened with. An
+ * email that has no account takes no turn: its look-up costs it the same read, and Better Auth
+ * answers it alike. A look-up that fails answers 500 `internal`, nothing checked.
  */
 export async function signIn(deps: AuthMountDeps, request: Request): Promise<Response> {
   const body = await readBody(request)
@@ -77,11 +83,22 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
     return Response.json({ code: 'bad-request' }, { status: 400 })
   }
 
-  const attempt = deps.limits.signInAttempt(named.data.email.toLowerCase())
+  const email = named.data.email.toLowerCase()
+  const attempt = deps.limits.signInAttempt(email)
 
   if (!attempt.allowed) {
     return tooMany(attempt)
   }
 
-  return settling(attempt, () => handedOver(deps, withJsonBody(request, body)))
+  return settling(attempt, async () => {
+    const identity = await deps.sessions.identityOf(email)
+
+    if (identity.isErr()) {
+      return Response.json({ code: 'internal' }, { status: 500 })
+    }
+
+    const ask = () => handedOver(deps, withJsonBody(request, body))
+
+    return identity.value === undefined ? ask() : deps.accounts.run(identity.value, ask)
+  })
 }

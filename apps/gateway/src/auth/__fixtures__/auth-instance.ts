@@ -98,7 +98,11 @@ export async function openAuth(options: OpenAuthOptions = {}): Promise<OpenedAut
  */
 export function accountServicesOf(opened: OpenedAuth) {
   return {
-    passwords: new AccountPasswords({ auth: opened.auth, directory: opened.local }),
+    passwords: new AccountPasswords({
+      auth: opened.auth,
+      directory: opened.local,
+      clock: opened.clock,
+    }),
     resets: new ResetLinks(opened.local),
     emailChanges: new EmailChanges({
       directory: opened.local,

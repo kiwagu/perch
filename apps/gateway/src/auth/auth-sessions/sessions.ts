@@ -10,15 +10,8 @@ import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
-import sessionsEndOthersStatement from '../surql/device-sessions-end-others.surql'
 
-import {
-  type SessionRevoke,
-  type SignOutEnding,
-  toEndedDevices,
-  toSessionRevoke,
-  toSignOutEnding,
-} from './endings'
+import { type SessionRevoke, type SignOutEnding, toSessionRevoke, toSignOutEnding } from './endings'
 import { readSession, type SessionRead } from './read'
 import { readSignedIn, readVerificationEmail, type SignedInAccount } from './verification'
 
@@ -104,23 +97,6 @@ export class AuthSessions {
         .retry(),
       `the sessions of ${identity} could not be ended`,
     ).map(() => undefined)
-  }
-
-  /**
-   * Ends every live session of `identity` but session `keep`, and marks every expired one but it
-   * ended at its expiry; a session that ended already keeps its end. Answers the devices whose
-   * session was live until now, each once.
-   */
-  revokeOthers(
-    identity: IdentityId,
-    keep: DeviceSessionId,
-  ): ResultAsync<readonly string[], DataError> {
-    return writing(
-      this.#directory.db
-        .query<[unknown]>(sessionsEndOthersStatement, { identity, keep, ended_at: this.#now() })
-        .retry(),
-      `the other sessions of ${identity} could not be ended`,
-    ).andThen(([answer]) => toEndedDevices(answer))
   }
 
   /**

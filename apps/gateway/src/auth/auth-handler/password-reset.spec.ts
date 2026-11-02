@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { CLOSE } from '@workspace/replica/protocol'
+import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
+import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
+import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
+import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 
 import {
   ANN,
+  ARGON2_WAIT,
+  holdTurn,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   PASSWORD,
@@ -14,8 +20,10 @@ import {
   postTo,
   printedDuring,
   resendRequest,
+  sessionInsertHold,
   signedInOn,
   signInRequest,
+  turnsAsked,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
@@ -367,3 +375,101 @@ async function signUpSpanish(mounted: Mounted): Promise<void> {
     headers: deviceHeaders('laptop'),
   })
 }
+
+/** What a sign-in answers, as far as these tests read it. */
+const signedInAnswer = z.object({ token: z.string().min(1) })
+
+/** The pending change of the email of `identity`, if any. */
+async function pendingChange(mounted: Mounted, identity: string): Promise<unknown[]> {
+  const [rows] = await mounted.local.db.query<[unknown[]]>(pendingChangeStatement, { identity })
+
+  return rows
+}
+
+describe('authHandler, a reset and what runs beside it', () => {
+  it('leaves no working session to a sign-in with the old password that checked it before a reset', async () => {
+    const hold = sessionInsertHold()
+    const mounted = await mountedOnRealAuth({ directory: hold.directory })
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const token = await resetLink(mounted)
+    const asked = turnsAsked(mounted.turns)
+
+    hold.arm()
+
+    // A sign-in with the old password has checked it and waits to write its session.
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+
+    await vi.waitFor(() => expect(hold.paused()).toBe(true), ARGON2_WAIT)
+
+    let reset = false
+    const resetting = mounted
+      .route(postTo('/auth/reset-password', { token, password: NEW_PASSWORD }), FROM)
+      .finally(() => {
+        reset = true
+      })
+
+    // The reset either ran to its end, or waits for the account's turn the sign-in holds.
+    await vi.waitFor(() => expect(reset || asked(ann.identity) >= 2).toBe(true), ARGON2_WAIT)
+    hold.release()
+
+    const [signedIn, answered] = await Promise.all([signingIn, resetting])
+
+    expect(answered?.status).toBe(204)
+
+    if (signedIn?.status === 200) {
+      const { token: phone } = signedInAnswer.parse(await signedIn.json())
+
+      expect(await mounted.sessions.read(phone)).toEqual({ kind: 'none' })
+    }
+
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(401)
+  }, 30_000)
+
+  it('answers link-expired to a link that expired while the reset waited for the account', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const token = await resetLink(mounted)
+    const link = (await mounted.resets.read(token))._unsafeUnwrap() ?? expect.unreachable('a link')
+    const asked = turnsAsked(mounted.turns)
+    const release = await holdTurn(mounted.turns, ann.identity)
+    const resetting = mounted.route(reset(token), FROM)
+
+    await vi.waitFor(() => expect(asked(ann.identity)).toBe(2), ARGON2_WAIT)
+    await mounted.clock.advance(link.expiresAt.getTime() - mounted.clock.now())
+    release()
+
+    const expired = await resetting
+
+    expect(expired?.status).toBe(401)
+    expect(await expired?.json()).toEqual({ code: 'link-expired' })
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
+  })
+
+  it('leaves the password, the link, the sessions and the pending change of the email as they were when a step of the reset fails', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop', 'phone'])
+    const token = await resetLink(mounted)
+
+    ;(await mounted.emailChanges.ask(ann.identity, ANN, 'ann.new@example.test'))._unsafeUnwrap()
+    await mounted.local.db.query(cancelRefuseStatement)
+
+    const failed = await mounted.route(reset(token), FROM)
+
+    expect(failed?.status).toBe(500)
+    expect((await mounted.resets.read(token))._unsafeUnwrap()).toBeDefined()
+    expect(await pendingChange(mounted, ann.identity)).toHaveLength(1)
+
+    for (const device of ['laptop', 'phone']) {
+      expect((await mounted.sessions.read(ann.tokens.get(device) ?? '')).kind).toBe('session')
+      expect(ann.sockets.get(device)?.ended).toEqual([])
+    }
+
+    expect(mounted.closes).toEqual([])
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
+
+    // Once the directory takes the step again, the same link sets the password.
+    await mounted.local.db.query(cancelAllowStatement)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect(await pendingChange(mounted, ann.identity)).toEqual([])
+  })
+})

@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 import type { SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { bearerRefused } from '../bearer-caller'
 
 import { until } from './floor'
 import type { AuthMountDeps } from './mount'
@@ -22,23 +23,26 @@ import { type MountCaller, signedIn } from './signed-in'
  */
 export const CHANGE_EMAIL_FLOOR_MS = 800
 
-const changeBody = z.object({ email: z.string().min(1).max(320), password: z.string() })
-const emailShape = z.email()
+const changeBody = z.object({ email: z.string(), password: z.string() })
+/** A new email as the change takes it: an email of at most 320 characters, trimmed. */
+const newEmailShape = z.email().max(320)
 const confirmBody = z.object({ token: z.string().min(1).max(4096) })
 
 /**
  * Asks to change the caller's email (`{ email, password }`, with the device's token and
  * `X-Perch-Device`). After the caller is read (`signedIn`), it takes one of the client address's
  * credential checks (429); a body it cannot read answers 400 `bad-request`, a new email that is
- * not an email 400 `email-invalid`. Then one of the address's mails and one of the account's
- * three changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`, 429), and the
- * password must find a place among the account's failed sign-ins (429), a wrong one keeping it:
- * 400 `invalid-credentials`. With the right password, in the account's turn, its earlier pending
- * change ends and, when no account has the new email (the caller's own email counts as taken), a
- * new change is kept and the mail to the new email starts, its link carrying the change's token;
- * a taken email gets no mail. Both answer `202` with no body, no sooner than
- * `CHANGE_EMAIL_FLOOR_MS` after the request began. The account keeps its email until the link is
- * opened.
+ * not an email (empty, longer than 320 characters, or of any other shape) 400 `email-invalid`.
+ * Then one of the address's mails and one of the account's three changes in a quarter of an hour
+ * are taken (`RequestLimits.emailChangeMail`, 429). Everything after runs in the account's turn,
+ * so no reset or change of its password runs in between: the caller's session is read again (401
+ * `unauthorized` when it ended meanwhile) with the account's email as it is now, the password must
+ * find a place among that email's failed sign-ins (429) and match the credential row, a wrong one
+ * keeping its place: 400 `invalid-credentials`. With the right password the earlier pending change
+ * ends and, when no account has the new email (the account's own email counts as taken), a new
+ * change is kept and the mail to the new email starts, its link carrying the change's token; a
+ * taken email gets no mail. Both answer `202` with no body, no sooner than `CHANGE_EMAIL_FLOOR_MS`
+ * after the request began. The account keeps its email until the link is opened.
  */
 export function changeEmail(
   deps: AuthMountDeps,
@@ -69,9 +73,9 @@ async function asked(
     return badRequest()
   }
 
-  const newEmail = body.data.email.trim().toLowerCase()
+  const newEmail = newEmailShape.safeParse(body.data.email.trim().toLowerCase())
 
-  if (!emailShape.safeParse(newEmail).success) {
+  if (!newEmail.success) {
     return refused(400, 'email-invalid')
   }
 
@@ -81,7 +85,45 @@ async function asked(
     return tooMany(mails)
   }
 
-  const email = caller.email.toLowerCase()
+  const answer = await deps.accounts.run(caller.identity, () =>
+    authenticated(deps, caller, body.data.password, newEmail.data),
+  )
+
+  if (answer !== 'kept') {
+    return answer
+  }
+
+  await until(deps.clock, started + CHANGE_EMAIL_FLOOR_MS)
+
+  return new Response(null, { status: 202 })
+}
+
+/**
+ * In the account's turn: the caller's session read again, with the account's email as it is now,
+ * then its password checked against its failed sign-ins and the credential row, then the change
+ * kept (`keepChange`): `kept`, or the answer that refuses it.
+ */
+async function authenticated(
+  deps: AuthMountDeps,
+  caller: MountCaller,
+  password: string,
+  newEmail: string,
+): Promise<Response | 'kept'> {
+  const read = await deps.sessions.read(caller.token)
+
+  if (read.kind === 'failed') {
+    return internal()
+  }
+
+  if (
+    read.kind === 'none' ||
+    read.caller.identity !== caller.identity ||
+    read.caller.device !== caller.device
+  ) {
+    return bearerRefused()
+  }
+
+  const email = read.caller.email.toLowerCase()
   const attempt = deps.limits.signInAttempt(email)
 
   if (!attempt.allowed) {
@@ -91,7 +133,7 @@ async function asked(
   let outcome: SignInOutcome = 'unjudged'
 
   try {
-    const matches = await deps.passwords.matches(caller.token, body.data.password)
+    const matches = await deps.passwords.matches(caller.identity, password)
 
     if (matches.isErr()) {
       return internal()
@@ -106,17 +148,9 @@ async function asked(
     return refused(400, 'invalid-credentials')
   }
 
-  const kept = await deps.accounts.run(caller.identity, () =>
-    keepChange(deps, caller.identity, email, newEmail),
-  )
+  const kept = await keepChange(deps, caller.identity, email, newEmail)
 
-  if (kept.isErr()) {
-    return internal()
-  }
-
-  await until(deps.clock, started + CHANGE_EMAIL_FLOOR_MS)
-
-  return new Response(null, { status: 202 })
+  return kept.isOk() ? 'kept' : internal()
 }
 
 /**
@@ -152,8 +186,10 @@ function keepChange(
  * taken first (`RequestLimits.emailConfirmation`, 429 once spent). A token the gateway did not
  * sign as a confirmation answers 401 `link-invalid`, one asked a day ago or more 401
  * `link-expired`. In the turns of the account and of the new email (so no sign-up of the new
- * email runs meanwhile), the pending change the token names is spent, and the account's email
- * becomes the new one: 401 `link-invalid` when that change was not pending (used before, replaced
+ * email runs meanwhile), the token is judged again on the clock as it is then (401 `link-expired`
+ * when it expired while the confirmation waited), the pending change the token names is spent,
+ * and the account's email becomes the new one: 401 `link-invalid` when that change was not
+ * pending (used before, replaced
  * by a newer one, or ended by a change of the password), when the account's email is no longer
  * the one the change was asked from, or when the new email has got an account meanwhile. Once it
  * changed, the notice of a changed email starts to the old email, and it answers 200
@@ -177,7 +213,8 @@ export async function confirmEmail(
     return badRequest()
   }
 
-  const read = await deps.emailChanges.read(body.data.token)
+  const { token } = body.data
+  const read = await deps.emailChanges.read(token)
 
   if (read.isErr() || read.value.kind === 'invalid') {
     return refused(401, 'link-invalid')
@@ -191,6 +228,14 @@ export async function confirmEmail(
 
   return deps.accounts.run(claims.identity, () =>
     deps.accounts.run(claims.newEmail, async () => {
+      // The link is judged again at its spending, on the clock as it is then: it may have expired
+      // while the confirmation waited for the account.
+      const again = await deps.emailChanges.read(token)
+
+      if (again.isErr() || again.value.kind === 'expired') {
+        return refused(401, 'link-expired')
+      }
+
       const claimed = await deps.emailChanges.claim(claims)
 
       if (claimed.isErr()) {

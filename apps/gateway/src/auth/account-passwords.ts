@@ -1,19 +1,41 @@
 import { isAPIError } from 'better-auth/api'
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
+import type { DeviceSessionId, IdentityId } from '@workspace/ids'
+import type { Clock } from '@workspace/replica'
+import { z } from '@workspace/zod'
 
 import type { AuthInstance } from './auth-instance'
-import { writing } from './device-session-rows'
-import { hashPassword } from './password-hash'
-import accountPasswordSetStatement from './surql/account-password-set.surql'
+import { toEndedDevices } from './auth-sessions'
+import { reading, writing } from './device-session-rows'
+import { hashPassword, verifyPassword } from './password-hash'
+import accountPasswordStatement from './surql/account-password.surql'
+import passwordChangeCommitStatement from './surql/password-change-commit.surql'
+import passwordResetCommitStatement from './surql/password-reset-commit.surql'
 
-/** What a change of a password did: changed it, or found the current password wrong. */
-export type PasswordChange = 'changed' | 'wrong-password'
+/** What a reset with a link did: set the password, or found the link unknown or past its hour. */
+export type PasswordReset = 'reset' | 'link-invalid' | 'link-expired'
+
+/**
+ * What a change of a password did: changed it, ending the sessions of `devices` (each device
+ * whose session was live until then), or changed nothing because the current password is wrong or
+ * the caller's session is no longer live.
+ */
+export type PasswordChange =
+  | { readonly kind: 'changed'; readonly devices: readonly string[] }
+  | { readonly kind: 'wrong-password' }
+  | { readonly kind: 'unauthorized' }
 
 /** What a request for a reset mail did: asked for it, or was refused (not an email). */
 export type ResetRequest = 'asked' | 'refused'
+
+const resetOutcome = z.enum(['reset', 'link-invalid', 'link-expired'])
+const changeOutcome = z.object({
+  outcome: z.enum(['changed', 'wrong-password', 'unauthorized']),
+  ended: z.unknown(),
+})
+const storedHash = z.string().min(1)
 
 /** Better Auth's code on a refusal it threw, if the failure is one. */
 function refusalCode(cause: unknown): string | undefined {
@@ -26,35 +48,43 @@ function refusalCode(cause: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined
 }
 
-/** The headers of a call with the raw session token `token`. */
-const bearer = (token: string): Headers => new Headers({ authorization: `Bearer ${token}` })
+/** What a transaction answered: the value its `RETURN` gave, second to last after the COMMIT. */
+const returned = (results: readonly unknown[]): unknown => results.at(-2)
+
+/** A password hashed as Better Auth hashes one; a failure names nothing of it. */
+const hashed = (password: string): ResultAsync<string, DataError> =>
+  ResultAsync.fromPromise(hashPassword(password), () =>
+    dataError('data:WRITE_FAILED', 'a password could not be hashed'),
+  )
 
 export interface AccountPasswordsOptions {
-  /** Better Auth, whose own endpoints are called on the server. */
+  /** Better Auth, which keeps a new reset link and starts its mail. */
   readonly auth: AuthInstance
-  /** The directory, where a reset's new password is written on the credential row. */
+  /** The directory, where a password, its sessions and its links change together. */
   readonly directory: LocalDb
+  /** When a reset link is judged expired, and when the sessions a new password ends end. */
+  readonly clock: Clock
 }
 
 /**
- * The passwords of accounts: a request for a reset mail, the change of a signed-in account's
- * password and the check of its current password through Better Auth's own endpoints called on
- * the server (`auth.api`), and the password a reset link sets, written by the gateway. None of
- * Better Auth's endpoints of a password is served over HTTP: the auth mount answers those paths
- * itself, and the change is called with no `revokeOtherSessions`, so Better Auth never ends
- * sessions by its bulk delete; the gateway ends them itself. Better Auth's own reset is not used:
- * it spends the link inside a transaction through a call SurrealDB's adapter does not have, so
- * the gateway spends the link (`ResetLinks.claim`) and sets the password with the same hash
- * (`set`). A refusal that is not one of these answers, or a failure, is a `DataError` that names
- * nothing of the password, the token or the email.
+ * The passwords of accounts. A request for a reset mail goes through Better Auth's own endpoint
+ * called on the server (`auth.api`), which keeps the link and starts the mail. A reset and a change
+ * are the gateway's own, each one transaction of the directory (`password-reset-commit.surql`,
+ * `password-change-commit.surql`): the new password, the end of the account's sessions (every one
+ * at a reset, every other one at a change), of its reset links and of its pending change of email
+ * commit together or not at all, so no failure leaves a new password beside sessions or links that
+ * outlive it. Each hashes the new password as Better Auth hashes one, before its transaction. A
+ * failure is a `DataError` that names nothing of the password, the token or the email.
  */
 export class AccountPasswords {
   readonly #auth: AuthInstance
   readonly #directory: LocalDb
+  readonly #clock: Clock
 
   constructor(options: AccountPasswordsOptions) {
     this.#auth = options.auth
     this.#directory = options.directory
+    this.#clock = options.clock
   }
 
   /**
@@ -63,89 +93,126 @@ export class AccountPasswords {
    * `refused` when the email is not an email.
    */
   requestReset(email: string): ResultAsync<ResetRequest, DataError> {
-    return this.#ask(
-      () => this.#auth.api.requestPasswordReset({ body: { email } }),
-      (code) => (code === 'VALIDATION_ERROR' ? 'refused' : undefined),
-      'asked',
-      'a reset mail could not be asked for',
-    )
-  }
-
-  /**
-   * Sets `password` as the password of `identity`, hashed as Better Auth hashes one, on its
-   * credential row; fails when the identity has none. The caller holds it to the rules of a new
-   * password first.
-   */
-  set(identity: IdentityId, password: string): ResultAsync<void, DataError> {
-    return ResultAsync.fromPromise(hashPassword(password), () =>
-      dataError('data:WRITE_FAILED', 'a password could not be hashed'),
-    )
-      .andThen((hash) =>
-        writing(
-          this.#directory.db
-            .query<[unknown]>(accountPasswordSetStatement, { identity, hash })
-            .retry(),
-          `the password of ${identity} could not be set`,
-        ),
-      )
-      .andThen(([rows]) =>
-        Array.isArray(rows) && rows.length > 0
-          ? okAsync(undefined)
-          : errAsync(dataError('data:WRITE_FAILED', `${identity} has no password to set`)),
-      )
-  }
-
-  /**
-   * Changes the password of the account whose live session holds `token` from `current` to
-   * `password`: `wrong-password` when `current` is not its password. No session ends here.
-   */
-  change(token: string, current: string, password: string): ResultAsync<PasswordChange, DataError> {
-    return this.#ask(
-      () =>
-        this.#auth.api.changePassword({
-          body: { currentPassword: current, newPassword: password },
-          headers: bearer(token),
-        }),
-      (code) => (code === 'INVALID_PASSWORD' ? 'wrong-password' : undefined),
-      'changed',
-      'a password could not be changed',
-    )
-  }
-
-  /** Whether `password` is the password of the account whose live session holds `token`. */
-  matches(token: string, password: string): ResultAsync<boolean, DataError> {
-    return this.#ask(
-      () => this.#auth.api.verifyPassword({ body: { password }, headers: bearer(token) }),
-      (code) => (code === 'INVALID_PASSWORD' ? false : undefined),
-      true,
-      'a password could not be checked',
-    )
-  }
-
-  /**
-   * Runs `call`: `done` when it answers, what `refusal` makes of the code of a refusal it throws,
-   * else a failure with `message` alone (Better Auth's words and cause stay out of it).
-   */
-  #ask<T>(
-    call: () => Promise<unknown>,
-    refusal: (code: string | undefined) => T | undefined,
-    done: T,
-    message: string,
-  ): ResultAsync<T, DataError> {
     return ResultAsync.fromPromise(
-      call().then(
-        () => done,
-        (cause: unknown) => {
-          const answer = refusal(refusalCode(cause))
-
-          if (answer === undefined) {
-            throw cause
+      this.#auth.api.requestPasswordReset({ body: { email } }).then(
+        (): ResetRequest => 'asked',
+        (cause: unknown): ResetRequest => {
+          if (refusalCode(cause) === 'VALIDATION_ERROR') {
+            return 'refused'
           }
 
-          return answer
+          throw cause
         },
       ),
-      () => dataError('data:WRITE_FAILED', message),
+      () => dataError('data:WRITE_FAILED', 'a reset mail could not be asked for'),
     )
   }
+
+  /** `password` hashed as Better Auth hashes one, ready for a reset. */
+  hash(password: string): ResultAsync<string, DataError> {
+    return hashed(password)
+  }
+
+  /**
+   * Resets the password of `identity` to `hash` with the reset link whose token is `token`, now on
+   * the clock, in one transaction: the link must still be the identity's and live now, else
+   * `link-invalid` or `link-expired` and nothing changes; then every reset link of the identity
+   * (this one spent with them), its password, every one of its sessions and its pending change of
+   * email change together.
+   */
+  reset(identity: IdentityId, token: string, hash: string): ResultAsync<PasswordReset, DataError> {
+    return writing(
+      this.#directory.db
+        .query<unknown[]>(passwordResetCommitStatement, {
+          identity,
+          link_token: token,
+          hash,
+          ended_at: new Date(this.#clock.now()),
+        })
+        .retry(),
+      `the password of ${identity} could not be reset`,
+    ).andThen((results) => {
+      const outcome = resetOutcome.safeParse(returned(results))
+
+      return outcome.success
+        ? ok(outcome.data)
+        : err(dataError('data:QUERY_FAILED', 'the reset of a password has an unknown shape'))
+    })
+  }
+
+  /**
+   * Changes the password of `identity` from `current` to `password` for its session `keep`: the
+   * current password is checked against the credential row first, then, in one transaction, the
+   * session must still be live and the row must still hold the hash that was checked (else
+   * `unauthorized` or `wrong-password`, nothing changed), and the new password, every reset link of
+   * the identity, every one of its other sessions and its pending change of email change together.
+   */
+  change(
+    identity: IdentityId,
+    keep: DeviceSessionId,
+    current: string,
+    password: string,
+  ): ResultAsync<PasswordChange, DataError> {
+    return this.#checked(identity, current).andThen((verified) =>
+      verified === undefined
+        ? okAsync<PasswordChange, DataError>({ kind: 'wrong-password' })
+        : hashed(password).andThen((hash) => this.#commitChange(identity, keep, verified, hash)),
+    )
+  }
+
+  /** Whether `password` is the password on the credential row of `identity`. */
+  matches(identity: IdentityId, password: string): ResultAsync<boolean, DataError> {
+    return this.#checked(identity, password).map((verified) => verified !== undefined)
+  }
+
+  /** The hash on `identity`'s credential row when `password` matches it; none when it does not. */
+  #checked(identity: IdentityId, password: string): ResultAsync<string | undefined, DataError> {
+    return reading(
+      this.#directory.db.query<[unknown[]]>(accountPasswordStatement, { identity }),
+      `the password of ${identity} could not be read`,
+    ).andThen(([rows]) => {
+      const hash = storedHash.safeParse(rows[0])
+
+      return hash.success
+        ? ResultAsync.fromPromise(verifyPassword({ password, hash: hash.data }), () =>
+            dataError('data:QUERY_FAILED', 'a password could not be checked'),
+          ).map((matches) => (matches ? hash.data : undefined))
+        : okAsync(undefined)
+    })
+  }
+
+  #commitChange(
+    identity: IdentityId,
+    keep: DeviceSessionId,
+    verified: string,
+    hash: string,
+  ): ResultAsync<PasswordChange, DataError> {
+    return writing(
+      this.#directory.db
+        .query<unknown[]>(passwordChangeCommitStatement, {
+          identity,
+          keep,
+          verified_hash: verified,
+          hash,
+          ended_at: new Date(this.#clock.now()),
+        })
+        .retry(),
+      `the password of ${identity} could not be changed`,
+    ).andThen((results) => toPasswordChange(returned(results)))
+  }
+}
+
+/** A change as its transaction answered it; its values stay out of the error. */
+function toPasswordChange(value: unknown): Result<PasswordChange, DataError> {
+  const answer = changeOutcome.safeParse(value)
+
+  if (!answer.success) {
+    return err(dataError('data:QUERY_FAILED', 'the change of a password has an unknown shape'))
+  }
+
+  const { outcome, ended } = answer.data
+
+  return outcome === 'changed'
+    ? toEndedDevices(ended).map((devices): PasswordChange => ({ kind: 'changed', devices }))
+    : ok({ kind: outcome })
 }
