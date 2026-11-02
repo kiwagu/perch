@@ -19,7 +19,9 @@ then accepted together with its projection and the binding of each Loro peer it 
 to the pushing identity in one transaction, under a number without gaps (a batch of another
 identity under a bound peer is refused, so no member can write as another member's device),
 and a compaction replaces rows with the server's own snapshot of the region at that
-row, once a device proposed one of the same version (the proposed bytes are never stored). A hub holds
+row, once a device proposed one of the same version (the proposed bytes are never stored). The
+server writes a region's records too: a change of its own to one record, made as a Loro peer
+reserved for the server and bound to no identity, takes the same way as a device's batch. A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
 region from memory once nobody has subscribed for a while; each region's log lives in the
@@ -85,8 +87,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   peer the `BatchWriter` names (the peers whose changes the batch brings) to its pushing
   identity in the same transaction, refusing a projection that breaks a schema rule, a record
   of another region (one that exists without this region's projection marker, or a deletion of
-  one), or a batch of another identity under a bound peer, with `data:WRITE_REJECTED` (the
-  second's message starts with `ownership`, the third's with `peer`); `compact(covers,
+  one), or a batch under `SERVER_PEER` or under a peer bound to another identity, with
+  `data:WRITE_REJECTED` (the second's message starts with `ownership`, the third's with `peer`);
+  `accept(plan, 'server')` takes the server's own change and binds no peer; `compact(covers,
   proposal, snapshotOf)` resolves to a `CompactionOutcome`: a proposal whose version matches the
   version stored with row `covers` is accepted, and the log stores the snapshot `snapshotOf`
   exports for that version, never the proposal; `head()`, `covers()`. `validateBatch(input)` applies a
@@ -126,12 +129,40 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
-  ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in
-  the region; every region document a device opens writes as a random peer of its own, so honest
-  devices never share one) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  ability refuses, `foreign-peer` for a batch under the server's Loro peer or one another
+  identity writes as in the region; every region document a device opens writes as a random peer
+  of its own, so honest devices never share one) and sends the batch to the other subscribers,
+  `writeRecord(region, write)` (below), `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+  `writeRecord(region, write)` makes a change of the server's own to one record of a region and
+  resolves to its number in the log. A `RecordWrite` names the record's `table` and `id` and the
+  fields to `set`, each to a `FieldValue`: a plain field's value, a `Date` for a datetime, the id
+  of the record a reference names, or a text field's whole text. It is checked against the
+  replica schema first: the table belongs to the region's kind, the region holds the record,
+  each field is one of the table's own (a name every object inherits is none), a list or a
+  counter is refused (only its own operations change it), a date names a time, and in a private
+  region an identity reference names the region's owner. The fields are then set on a fork of
+  the region's document that writes as `SERVER_PEER`, and the
+  change is logged with its projection, imported and sent to every subscriber as `updates`, in
+  the region's queue like a device's batch and never between the steps of one; a device that
+  was offline gets it at its next pull. A region the hub does not hold is loaded for the write
+  and unloads after the idle time when nobody subscribes. A write the schema or the projection
+  refuses, or with a value the document cannot hold, is `data:WRITE_REJECTED` (a value of the
+  result, never a throw) and logs nothing, a write that changes nothing resolves to
+  the current head without a log row, and once the hub is closed a write is `data:WRITE_FAILED`.
+  What a server write means for the record: a plain field is last-writer-wins, as a device's
+  write is (Loro orders two concurrent writes of a field by Lamport time, then by peer, and
+  `SERVER_PEER` is the largest peer Loro allows, so the server's value wins a tie); a text field
+  is replaced through its mergeable text and merges with concurrent edits. The gateway does not
+  hold devices to read-only fields, so a device's concurrent write of the same field is accepted
+  whatever the contract says, and every copy converges on the one value Loro picks. A device's
+  later batches touching the record are checked as before and pass: the server binds no peer
+  and keeps the region's owner rule. On a device the change is an ordinary update, stored in the
+  local log, imported and projected, so compaction and snapshots treat it like any other row on
+  both sides. The server's peer continues the counters of the hub's document, so one hub writes
+  a region at a time.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
   push carries, 256 by default; `localCompactionRows`, how many rows past its snapshot a region's
   local log holds before a full pass compacts it, 200 by default as on the server;
@@ -220,14 +251,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
-  its records and which fields are text, list or counter containers, references or
-  datetimes; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
+  its records and every field with its kind: a text, list or counter container, a reference, a
+  datetime or a plain value; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands
 
 - `bun run test`: unit tests of the write path, the schema, the protocol, the region
-  references, the batch validator, the batch writer,
+  references, the batch validator, the batch writer, the server's record writes,
   the transport, the cadence, the outbox drain, the leader, the hints and the manual clock, and
   functional tests of the projector, persistence, the server log, the batch intake, the region
   hub, region sync

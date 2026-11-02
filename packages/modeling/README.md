@@ -21,7 +21,7 @@ TypeScript or React code.
   `generated-<module>.toml` suites (shapes of the `tenant` region are left out: record users
   have no access to the tenant database on the server yet; a module with only such shapes
   gets no suite) and the replica schema (every
-  replicated table with its region and field kinds) in the database workspace,
+  replicated table with its region and the kind of each of its fields) in the database workspace,
   `<database>/src/replica.schema.gen.ts`. `--check` writes nothing and fails on missing,
   different or stale output.
 - CLI `lint-surql [dir ...]` (root `bun run lint:surql`, part of `lint` and `check`): fails on a

@@ -30,12 +30,19 @@ export interface RegionState {
   readonly subscribers: Map<string, Subscription>
   /** Devices whose subscription waits in the queue for its answer. */
   readonly joining: Map<string, Subscription>
+  /** How many writes of the server's own are asked of the region and not settled yet. */
+  writes: number
   /** Settles once the work asked of the region so far has; the next work waits for it. */
   queue: Promise<void>
   /** The region's log and document, once the first subscription has loaded them. */
   loaded: Loaded | undefined
   /** Cancels the unload scheduled when the last device left. */
   unload: (() => void) | undefined
+}
+
+/** Nobody subscribes to the region or waits to, and no write is asked of it. */
+function idle(state: RegionState): boolean {
+  return state.subscribers.size === 0 && state.joining.size === 0 && state.writes === 0
 }
 
 export interface HeldRegionsOptions {
@@ -48,10 +55,10 @@ export interface HeldRegionsOptions {
 }
 
 /**
- * The regions a hub holds, by id: each from its first subscription, with its subscribers, its queue
- * of work (one piece at a time, in the order asked) and, once loaded, its log and document from its
- * own database, held until the region unloads. A region nobody subscribes to any more unloads after
- * an idle time, and its database is released.
+ * The regions a hub holds, by id: each from its first subscription or write, with its subscribers,
+ * its queue of work (one piece at a time, in the order asked) and, once loaded, its log and document
+ * from its own database, held until the region unloads. A region nobody subscribes to or writes any
+ * more unloads after an idle time, and its database is released.
  */
 export class HeldRegions {
   readonly #regions = new Map<string, RegionState>()
@@ -84,6 +91,7 @@ export class HeldRegions {
       ref,
       subscribers: new Map(),
       joining: new Map(),
+      writes: 0,
       queue: Promise.resolve(),
       loaded: undefined,
       unload: undefined,
@@ -157,7 +165,7 @@ export class HeldRegions {
     subscriber: Subscriber,
     work: () => ResultAsync<void, DataError>,
   ): ResultAsync<void, DataError> {
-    const run = state.queue.then(() =>
+    return this.#queued(state, () =>
       work().orElse((error) => {
         this.#onError(error)
         deliver(
@@ -169,8 +177,38 @@ export class HeldRegions {
         return ok(undefined)
       }),
     )
+  }
 
-    // The next work waits for this one to settle, whatever its outcome.
+  /**
+   * Runs a write of the server's own on the region in its queue, holding and loading the region
+   * first when it is not: from the moment it is asked until it settled, the region does not
+   * unload, and then it unloads after the idle time when nobody subscribes, as after a device
+   * left. Its outcome, a failure included, is the caller's.
+   */
+  write<T>(
+    ref: RegionRef,
+    work: (state: RegionState, loaded: Loaded) => ResultAsync<T, DataError>,
+  ): ResultAsync<T, DataError> {
+    const state = this.#regions.get(ref.id) ?? this.hold(ref)
+
+    state.unload?.()
+    state.unload = undefined
+    state.writes += 1
+
+    const run = Promise.resolve(
+      this.#queued(state, () => this.load(state).andThen((loaded) => work(state, loaded))),
+    ).finally(() => {
+      state.writes -= 1
+      this.unloadWhenIdle(state)
+    })
+
+    return new ResultAsync(run)
+  }
+
+  /** Runs `work` once the work asked of the region before it has settled, whatever its outcome. */
+  #queued<T>(state: RegionState, work: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
+    const run = state.queue.then(() => work())
+
     state.queue = run.then(
       () => undefined,
       () => undefined,
@@ -180,21 +218,20 @@ export class HeldRegions {
   }
 
   /**
-   * Schedules the region's unload once no device subscribes to it. The unload runs in the
-   * region's queue, after the work asked before it, and only if still nobody subscribes; it
-   * releases the region's database.
+   * Schedules the region's unload once no device subscribes to it and no write is asked of it.
+   * The unload runs in the region's queue, after the work asked before it, and only if it is
+   * still idle; it releases the region's database. Once closed, nothing is scheduled: closing
+   * released every database.
    */
   unloadWhenIdle(state: RegionState): void {
-    if (state.unload || state.subscribers.size > 0 || state.joining.size > 0) {
+    if (this.#closed || state.unload || !idle(state)) {
       return
     }
 
     state.unload = this.#clock.schedule(this.#idleUnloadMs, () => {
       state.unload = undefined
       state.queue = state.queue.then(() => {
-        const idle = state.subscribers.size === 0 && state.joining.size === 0
-
-        if (idle && this.#regions.get(state.ref.id) === state) {
+        if (idle(state) && this.#regions.get(state.ref.id) === state) {
           this.#regions.delete(state.ref.id)
           state.loaded?.database.release()
           state.loaded = undefined

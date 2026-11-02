@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ShapeRunner } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 
 import { replicaSchema } from '../__fixtures__/note'
+import { profileById, profileSchema } from '../__fixtures__/profile'
 import countsStatement from '../__fixtures__/replica-counts.surql'
+import { Projector } from '../projector'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
@@ -663,5 +666,51 @@ describe('sync engine', () => {
 
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+  })
+})
+
+describe('a write of the server to a record of the region', () => {
+  const newEmail = 'ann@new.example.test'
+  const region = { kind: 'private', id: regionId } as const
+  const write = { table: 'profile', id: 'prf_1', set: { email: newEmail } }
+
+  it('reaches a subscribed device as an ordinary update, and its projection shows it', async () => {
+    const { stub, a, settle } = await twoDevices()
+    const failures: string[] = []
+    const projector = new Projector(a.region, a.local, profileSchema, {
+      onError: (error) => failures.push(error.message),
+    })
+    const stop = projector.start()
+
+    expect((await stub.hub.writeRecord(region, write))._unsafeUnwrap()).toBe(2)
+    await settle()
+    expect((await projector.flush()).isOk()).toBe(true)
+    stop()
+
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann', email: newEmail })
+    expect(
+      (await new ShapeRunner(a.local).read(profileById, { id: 'prf_1' }))._unsafeUnwrap(),
+    ).toMatchObject({ name: 'Ann', email: newEmail })
+    expect(failures).toEqual([])
+    expect(a.region.pulled()).toBe(2)
+  })
+
+  it('reaches a device that was offline at its next pull from its version, and its later edit of another field is accepted', async () => {
+    const { stub, a, b, settle } = await twoDevices()
+
+    b.transport.goOffline()
+    expect((await stub.hub.writeRecord(region, write))._unsafeUnwrap()).toBe(2)
+    b.transport.goOnline()
+    await b.engine.settled(60_000)
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann', email: newEmail })
+
+    writeName(b.region, 'Ana')
+    b.engine.localWrite()
+    await settle()
+
+    expect(stub.rejections()).toBe(0)
+    expect(b.region.pulled()).toBe(3)
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ana', email: newEmail })
   })
 })
