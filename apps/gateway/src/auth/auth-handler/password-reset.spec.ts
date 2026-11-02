@@ -12,7 +12,9 @@ import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 import {
   ANN,
   ARGON2_WAIT,
+  heldQueries,
   holdTurn,
+  isSessionInsert,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   PASSWORD,
@@ -20,7 +22,6 @@ import {
   postTo,
   printedDuring,
   resendRequest,
-  sessionInsertHold,
   signedInOn,
   signInRequest,
   turnsAsked,
@@ -388,13 +389,13 @@ async function pendingChange(mounted: Mounted, identity: string): Promise<unknow
 
 describe('authHandler, a reset and what runs beside it', () => {
   it('leaves no working session to a sign-in with the old password that checked it before a reset', async () => {
-    const hold = sessionInsertHold()
-    const mounted = await mountedOnRealAuth({ directory: hold.directory })
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
     const ann = await signedInOn(mounted, ANN, ['laptop'])
     const token = await resetLink(mounted)
     const asked = turnsAsked(mounted.turns)
 
-    hold.arm()
+    const hold = queries.hold(isSessionInsert)
 
     // A sign-in with the old password has checked it and waits to write its session.
     const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)

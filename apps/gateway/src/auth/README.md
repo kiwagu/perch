@@ -92,8 +92,9 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email answers 400 `bad-request`; one that is reaches Better Auth as that very JSON, so the
-email whose password is checked is the email counted. Better Auth's answers reach the client
+an email and a password, as strings, answers 400 `bad-request` before anything is read for the
+email; one that is reaches Better Auth as that very JSON, so the email whose password is checked
+is the email counted. Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
@@ -208,11 +209,16 @@ of email: all of them or none, so a failure (500 `internal`) leaves the password
 sessions and the pending change as they were. Once it committed, the account's sockets close with
 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`) and the notice of a
 changed password starts (`afterPasswordChange`): 204 with no body, and nothing is signed in.
-A sign-in of an email that has an account runs in the same turn, from Better Auth's check of the
-password to the session it writes (`auth-handler/sign-in.ts`), so a sign-in that checked the old
-password has written its session before the reset's transaction ends every session, or checks
-the new password after it: no session outlives the password it was opened with. An email that
-has no account takes no turn; the look-up of its account is the same read. Better Auth's
+A sign-in takes no turn of the account, so it runs alike, and as soon, whether its email has an
+account and whatever work of that account is under way (`auth-handler/sign-in.ts`). It reads the
+email's account and the hash of its password before Better Auth checks the password
+(`AccountPasswords.credentialOf`, the same read for an email that has no account) and again once
+Better Auth wrote the session; when the two differ (a reset or a change gave the account a new
+password, or a confirmation moved the email to another account, while Better Auth checked the
+password), the session is ended at once by its token, the device's sockets close, and the sign-in
+answers 401 as wrong credentials do. Since a reset's or a change's transaction ends every session
+present at its commit, a session written before it is ended by it and one written after is ended
+by the sign-in itself: no session outlives the password it was opened with. Better Auth's
 clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
 expired, not unknown: an account keeps one reset link and one pending change of its email at
 most, each replaced by the next.
@@ -366,7 +372,8 @@ error carries one.
   ending of all but a device's newest session at a sign-in, the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
-  the move of an identity's email, the hash on a credential row, and the two transactions of a
+  the move of an identity's email, the hash on a credential row, an email's account and its
+  hash as a sign-in reads them, and the two transactions of a
   new password: a reset's and a change's).
 - Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
@@ -382,13 +389,16 @@ error carries one.
   sockets close before a readback that fails, and that every resend answers no sooner than
   Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
-  takes one of its address's verification mails; `auth-handler/password-reset.spec.ts`,
+  takes one of its address's verification mails; `auth-handler/sign-in.spec.ts`,
+  `auth-handler/password-reset.spec.ts`,
   `auth-handler/password-change.spec.ts` and `auth-handler/email-change.spec.ts`, which hold the
   uniform answers and their floors, each limit, the single use, the newest link only, the
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
-  change and a confirmation, a sign-in that checked the old password beside a reset or a change
-  left with no working session, a change of the email that waited while a reset ended its
+  change and a confirmation, a sign-in that checked the old password beside a reset or a change,
+  or whose email moved to another account meanwhile, left with no working session, a sign-in
+  that names no password answered at once for any email, no sign-in taking a turn, a change of
+  the email that waited while a reset ended its
   session making no link, a reset or a change whose last step fails leaving every step undone,
   the notices with their recipient and language, the old address's notice holding no part of the
   new email, and that nothing of an email, a token or a password reaches a log;

@@ -86,13 +86,14 @@ const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read h
 
 /**
  * A stand-in for the sessions a verification reads: no link names an email, no email has an
- * account, no session is read back, and no token holds a session.
+ * account, no session is read back, no token holds a session, and nothing is signed out.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationEmail: async () => undefined,
   identityOf: () => okAsync(undefined),
   signedIn: notHere,
   read: async () => ({ kind: 'none' }),
+  signOut: notHere,
 }
 
 /**
@@ -107,6 +108,9 @@ export const noAccounts: Pick<AuthMountDeps, 'passwords' | 'resets' | 'emailChan
     reset: notHere,
     change: notHere,
     matches: notHere,
+    // Every email reads alike before and after Better Auth's answer: no account a confirmation
+    // moved, no password a reset changed.
+    credentialOf: () => okAsync(undefined),
   },
   resets: { read: notHere },
   emailChanges: {
@@ -197,6 +201,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           ? errAsync(dataError('data:QUERY_FAILED', READBACK_FAILURE))
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
+      signOut: (token) => sessions.signOut(token),
     },
     ...accounts,
     limits: new RequestLimits({ clock: opened.clock }),
@@ -462,35 +467,57 @@ export function turnsAsked(turns: KeyedTurns<string>): (key: string) => number {
   return (key) => run.mock.calls.filter(([asked]) => asked === key).length
 }
 
+/** A query a test holds until it releases it, once it was asked. */
+export interface HeldQuery {
+  /** Whether the query was asked and waits. */
+  paused(): boolean
+  release(): void
+}
+
+/** Better Auth's adapter writes a session with an insert into its table. */
+export const isSessionInsert = (text: string): boolean =>
+  text.startsWith('INSERT') && text.includes('`device_session`')
+
+/** Better Auth's adapter looks an account up by its email in its table. */
+export const isAccountLookup = (text: string): boolean =>
+  text.startsWith('SELECT') && text.includes('FROM `identity`') && text.includes('email')
+
 /**
- * A directory for `openAuth` whose next insert of a session, once `arm` was called, waits until
- * `release` is called; `paused` tells whether one is waiting.
+ * A directory for `openAuth` whose queries a test may hold: `hold(matches)` makes the next query
+ * `matches` takes, from then on, wait until the hold is released.
  */
-export function sessionInsertHold() {
-  let armed = false
-  let waiting = false
-  let release = (): void => {}
-  const released = new Promise<void>((resolve) => {
-    release = resolve
-  })
+export function heldQueries() {
+  const holds: Array<{
+    readonly matches: (text: string) => boolean
+    taken: boolean
+    readonly released: Promise<void>
+    asked: boolean
+  }> = []
 
   return {
     directory: (local: LocalDb) =>
       interceptQueries(local, (text) => {
-        // Better Auth's adapter writes a session with an insert into its table.
-        if (armed && text.startsWith('INSERT') && text.includes('`device_session`')) {
-          armed = false
-          waiting = true
+        const hold = holds.find((each) => !each.taken && each.matches(text))
 
-          return released
+        if (hold === undefined) {
+          return undefined
         }
 
-        return undefined
+        hold.taken = true
+        hold.asked = true
+
+        return hold.released
       }),
-    arm: () => {
-      armed = true
+    hold: (matches: (text: string) => boolean): HeldQuery => {
+      let release = (): void => {}
+      const released = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const hold = { matches, taken: false, released, asked: false }
+
+      holds.push(hold)
+
+      return { paused: () => hold.asked, release: () => release() }
     },
-    paused: () => waiting,
-    release: () => release(),
   }
 }

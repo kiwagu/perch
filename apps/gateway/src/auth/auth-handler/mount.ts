@@ -33,11 +33,14 @@ const CONFIRM_EMAIL_PATH = '/auth/confirm-email'
  */
 export interface AuthMountDeps {
   readonly auth: Pick<AuthInstance, 'handler'>
-  readonly sessions: Pick<AuthSessions, 'signedIn' | 'identityOf' | 'verificationEmail' | 'read'>
-  /** The reset mail, the reset, the change and the check of a password. */
+  readonly sessions: Pick<
+    AuthSessions,
+    'signedIn' | 'identityOf' | 'verificationEmail' | 'read' | 'signOut'
+  >
+  /** The reset mail, the reset, the change and the check of a password, an email's credential. */
   readonly passwords: Pick<
     AccountPasswords,
-    'requestReset' | 'hash' | 'reset' | 'change' | 'matches'
+    'requestReset' | 'hash' | 'reset' | 'change' | 'matches' | 'credentialOf'
   >
   /** The reset links of accounts, which Better Auth keeps. */
   readonly resets: Pick<ResetLinks, 'read'>
@@ -60,10 +63,10 @@ export interface AuthMountDeps {
   readonly clock: Clock
   /**
    * One account's work, one turn at a time in this process: its sign-ups, verifications and reset
-   * requests by its email in lower case; its sign-ins, its reset, its changes of password and of
-   * email by its identity's key; a confirmation by both, the identity first, then the new email, so
-   * no sign-up of the new email runs meanwhile. No work takes an identity's turn inside an email's,
-   * so the turns never wait on each other in a circle.
+   * requests by its email in lower case; its reset, its changes of password and of email by its
+   * identity's key; a confirmation by both, the identity first, then the new email, so no sign-up
+   * of the new email runs meanwhile. A sign-in takes no turn (`signIn`). No work takes an
+   * identity's turn inside an email's, so the turns never wait on each other in a circle.
    */
   readonly accounts: KeyedTurns<string>
 }

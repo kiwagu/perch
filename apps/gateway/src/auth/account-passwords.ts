@@ -2,7 +2,7 @@ import { isAPIError } from 'better-auth/api'
 import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
-import type { DeviceSessionId, IdentityId } from '@workspace/ids'
+import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -13,6 +13,7 @@ import { hashPassword, verifyPassword } from './password-hash'
 import accountPasswordStatement from './surql/account-password.surql'
 import passwordChangeCommitStatement from './surql/password-change-commit.surql'
 import passwordResetCommitStatement from './surql/password-reset-commit.surql'
+import signInCredentialStatement from './surql/sign-in-credential.surql'
 
 /** What a reset with a link did: set the password, or found the link unknown or past its hour. */
 export type PasswordReset = 'reset' | 'link-invalid' | 'link-expired'
@@ -29,6 +30,29 @@ export type PasswordChange =
 
 /** What a request for a reset mail did: asked for it, or was refused (not an email). */
 export type ResetRequest = 'asked' | 'refused'
+
+/**
+ * The account an email signs in to, and the hash on its credential row (none when it has no
+ * credential row): a new password always gets a hash of its own, so the hash tells whether the
+ * password changed.
+ */
+export interface SignInCredential {
+  readonly identity: IdentityId
+  readonly hash: string | undefined
+}
+
+/** Whether two reads of an email's credential found the same account with the same password. */
+export function sameCredential(
+  before: SignInCredential | undefined,
+  after: SignInCredential | undefined,
+): boolean {
+  return before?.identity === after?.identity && before?.hash === after?.hash
+}
+
+const credentialRow = z.object({
+  identity: idSchemas.identity.schema,
+  hash: z.string().min(1).nullish(),
+})
 
 const resetOutcome = z.enum(['reset', 'link-invalid', 'link-expired'])
 const changeOutcome = z.object({
@@ -158,6 +182,28 @@ export class AccountPasswords {
         ? okAsync<PasswordChange, DataError>({ kind: 'wrong-password' })
         : hashed(password).andThen((hash) => this.#commitChange(identity, keep, verified, hash)),
     )
+  }
+
+  /**
+   * The account `email` signs in to, in any case, and the hash on its credential row, or none
+   * when no account has the email. A sign-in reads it before Better Auth checks the password and
+   * again once Better Auth wrote the session (`sameCredential`).
+   */
+  credentialOf(email: string): ResultAsync<SignInCredential | undefined, DataError> {
+    return reading(
+      this.#directory.db.query<[unknown]>(signInCredentialStatement, { email }),
+      'the credential of an email could not be read',
+    ).andThen(([value]) => {
+      if (value === undefined || value === null) {
+        return ok(undefined)
+      }
+
+      const row = credentialRow.safeParse(value)
+
+      return row.success
+        ? ok({ identity: row.data.identity, hash: row.data.hash ?? undefined })
+        : err(dataError('data:QUERY_FAILED', 'the credential of an email has an unknown shape'))
+    })
   }
 
   /** Whether `password` is the password on the credential row of `identity`. */
