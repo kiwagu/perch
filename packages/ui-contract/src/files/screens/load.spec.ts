@@ -578,6 +578,32 @@ describe('loadScreens', () => {
     })
   })
 
+  it("gives a form's button the params its fields pass for each action it binds", () => {
+    writeSample((screen) => {
+      const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+      anchors['sample.title-input'] = {
+        ...anchors['sample.title-input'],
+        binding: [
+          { model: 'thing.title' },
+          { action: 'thing.createThing', params: { title: 'sample.title-input' } },
+        ],
+      }
+      anchors['sample.save-button'] = {
+        ...anchors['sample.save-button'],
+        binding: [{ action: 'thing.createThing' }, { action: 'thing.updateThing' }],
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found.map(formatProblem)).toEqual([])
+    expect(screens?.screens[0]?.anchors['sample.save-button']?.binding).toEqual([
+      { action: 'thing.createThing', params: { title: 'sample.title-input' } },
+      { action: 'thing.updateThing' },
+    ])
+  })
+
   it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
     writeSample((screen) => {
       screen['anchors'] = {

@@ -9,6 +9,7 @@ export {
   failuresOf,
   type PlatformCodes,
 } from './failures'
+export { partOf, withDerivedParams } from './form-params'
 export { withDerivedInputs } from './inputs'
 export { type DerivedQuestion, withDerivedQuestions, withQuestionCodes } from './questions'
 export { TOAST_RULE_ROW, toastCodesOf, withToastCodes } from './toasts'
