@@ -121,7 +121,7 @@ describe('emitModel', () => {
 })
 
 describe('emitReplicaSchema', () => {
-  it('lists the CRDT, reference and datetime fields of replicated tables', () => {
+  it('lists every field of replicated tables with its kind', () => {
     expect(emitReplicaSchema(schema)).toMatchSnapshot()
   })
 
@@ -129,7 +129,7 @@ describe('emitReplicaSchema', () => {
     const text = emitReplicaSchema(schema)
 
     expect(text).toContain(
-      "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },",
+      "  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, name: { kind: 'plain' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },",
     )
     expect(text).not.toContain('  identity:')
   })

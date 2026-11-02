@@ -220,8 +220,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
-  its records and which fields are text, list or counter containers, references or
-  datetimes; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
+  its records and every field with its kind: a text, list or counter container, a reference, a
+  datetime or a plain value; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands
