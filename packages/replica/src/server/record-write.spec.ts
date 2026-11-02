@@ -232,6 +232,18 @@ describe('a write of the server to a record', () => {
       'toString is not a field of profile',
     ],
     [
+      'a date that names no time, in a datetime field',
+      { table: 'note', id: 'nte_1', set: { created_at: new Date(Number.NaN) } },
+      acme,
+      'note.created_at is set to a date that names no time',
+    ],
+    [
+      'a date that names no time, in a reference',
+      { table: 'profile', id: 'prf_1', set: { identity: new Date(Number.NaN) } },
+      mine,
+      'profile.identity is set to a date that names no time',
+    ],
+    [
       'a list',
       { table: 'note', id: 'nte_1', set: { tags: 'urgent' } },
       acme,

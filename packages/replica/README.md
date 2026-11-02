@@ -142,14 +142,15 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   of the record a reference names, or a text field's whole text. It is checked against the
   replica schema first: the table belongs to the region's kind, the region holds the record,
   each field is one of the table's own (a name every object inherits is none), a list or a
-  counter is refused (only its own operations change it), and in a private region an identity
-  reference names the region's owner. The fields are then set on a fork of the region's
-  document that writes as `SERVER_PEER`, and the
+  counter is refused (only its own operations change it), a date names a time, and in a private
+  region an identity reference names the region's owner. The fields are then set on a fork of
+  the region's document that writes as `SERVER_PEER`, and the
   change is logged with its projection, imported and sent to every subscriber as `updates`, in
   the region's queue like a device's batch and never between the steps of one; a device that
   was offline gets it at its next pull. A region the hub does not hold is loaded for the write
   and unloads after the idle time when nobody subscribes. A write the schema or the projection
-  refuses is `data:WRITE_REJECTED` and logs nothing, a write that changes nothing resolves to
+  refuses, or with a value the document cannot hold, is `data:WRITE_REJECTED` (a value of the
+  result, never a throw) and logs nothing, a write that changes nothing resolves to
   the current head without a log row, and once the hub is closed a write is `data:WRITE_FAILED`.
   What a server write means for the record: a plain field is last-writer-wins, as a device's
   write is (Loro orders two concurrent writes of a field by Lamport time, then by peer, and

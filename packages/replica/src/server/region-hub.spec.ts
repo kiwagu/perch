@@ -1051,6 +1051,45 @@ describe('a write of the server to a record', () => {
     expect(counts).toEqual({ acquired: 1, released: 1 })
   })
 
+  it('refuses a date that names no time as a value, logging and sending nothing, and takes the next write', async () => {
+    const { hub, local } = await openHub()
+    const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+    const ann = subscriber('ann')
+    const bob = subscriber('bob')
+    const id = noteIdFactory.create()
+    const at = new Date('2026-11-02T10:00:00.000Z')
+
+    ;(await hub.subscribe(acme, memberOf('idn_ann'), ann, null))._unsafeUnwrap()
+    ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
+    ;(
+      await hub.push(acme.id, ann, 1, [
+        noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' }),
+      ])
+    )._unsafeUnwrap()
+    const received = bob.received.length
+
+    const refused = await hub.writeRecord(acme, {
+      table: 'note',
+      id,
+      set: { created_at: new Date(Number.NaN) },
+    })
+
+    expect(refused._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: 'note.created_at is set to a date that names no time',
+    })
+    expect(bob.received).toHaveLength(received)
+    expect(await countRows(local, '_replica_update')).toBe(1)
+
+    expect(
+      (await hub.writeRecord(acme, { table: 'note', id, set: { created_at: at } }))._unsafeUnwrap(),
+    ).toBe(2)
+    expect(bob.received.at(-1)).toMatchObject({ type: 'updates', head: 2 })
+    expect(bob.doc.getMap('records').toJSON()).toMatchObject({
+      [`note/${id}`]: { created_at: '2026-11-02T10:00:00.000Z' },
+    })
+  })
+
   it('fails a write once the hub is closed, holding nothing', async () => {
     const { counts, databases } = counting()
     const { hub } = await openHub({ databases })

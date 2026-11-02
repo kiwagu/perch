@@ -1,8 +1,9 @@
 import { type LoroDoc, LoroMap } from 'loro-crdt'
-import { err, ok, type Result } from 'neverthrow'
+import { err, ok, Result } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 
+import { messageOf } from '../failure'
 import { documentValue, writeField } from '../field-values'
 import { recordKey } from '../keys'
 import { toColumns } from '../projection-values'
@@ -41,10 +42,10 @@ const refused = (message: string): Result<never, DataError> =>
   err(dataError('data:WRITE_REJECTED', message))
 
 /**
- * Why a field of the write cannot be set, or undefined when it can. A list or a counter changes
- * only through its own operations. In a private region every identity reference names the
- * region's owner, the rule a device's batch is held to as well, so the owner's devices can
- * still edit the record afterwards.
+ * Why a field of the write cannot be set, or undefined when it can. A date that names no time
+ * has no ISO form to store. A list or a counter changes only through its own operations. In a
+ * private region every identity reference names the region's owner, the rule a device's batch
+ * is held to as well, so the owner's devices can still edit the record afterwards.
  */
 function unsettable(
   { region, schema, write }: PlanRecordWriteInput,
@@ -55,6 +56,10 @@ function unsettable(
 
   if (!kind) {
     return `${field} is not a field of ${write.table}`
+  }
+
+  if (value instanceof Date && Number.isNaN(value.getTime())) {
+    return `${write.table}.${field} is set to a date that names no time`
   }
 
   if (kind.kind === 'list' || kind.kind === 'counter') {
@@ -108,12 +113,26 @@ export function planRecordWrite(
   }
 
   const record = found as LoroMap
+  // A value the document cannot hold refuses the write, as a value, like any other refusal.
+  const written = Result.fromThrowable(
+    () => {
+      for (const [field, value] of Object.entries(write.set)) {
+        writeField(schema, write.table, record, field, value)
+      }
 
-  for (const [field, value] of Object.entries(write.set)) {
-    writeField(schema, write.table, record, field, value)
+      fork.commit()
+    },
+    (cause) =>
+      dataError(
+        'data:WRITE_REJECTED',
+        `${entry} cannot take the values: ${messageOf(cause)}`,
+        cause,
+      ),
+  )()
+
+  if (written.isErr()) {
+    return err(written.error)
   }
-
-  fork.commit()
 
   // Loro makes no operation of a value a field holds already.
   if (fork.version().compare(doc.version()) === 0) {
