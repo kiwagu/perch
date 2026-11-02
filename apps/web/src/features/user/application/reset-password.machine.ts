@@ -77,9 +77,8 @@ const showError = (...codes: readonly string[]) =>
 const clearError = { type: 'clear', params: { anchor: ERROR } } as const
 
 /**
- * The page a reset mail's link opens, as the screen's flow says
- * (`contract/domain/screens/reset-password.yaml`): the new password is held to the rules of a new
- * password and to the password typed again as either is typed, the submit is taken only while they
+ * The page a reset mail's link opens, as its screen's flow says: the new password is held to the
+ * rules of a new password and to the password typed again as either is typed, the submit is taken only while they
  * agree, and the reset of the address's token ends on the message that the password is the new
  * one, or on a link that does not work; any other refusal leaves the form as typed. Its `show` and
  * `clear` keep the codes of the page's error and message for the view and emit any other.

@@ -21,8 +21,8 @@ const NOT_STORED = {
 } as const
 
 /**
- * The settings screen's flow (`contract/domain/screens/settings.yaml`) as the app runs it: the
- * theme, the language, the password and the email are regions of one parallel state. Its `show`
+ * The settings screen's flow as the app runs it: the theme, the language, the password and the
+ * email are regions of one parallel state. Its `show`
  * and `clear` keep the codes of the password form's error and of the email form's error and
  * message for the view, and emit the rest: a code on the frame, a field to empty.
  */

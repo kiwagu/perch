@@ -52,9 +52,8 @@ function confirmedIdentity(event: object): string | undefined {
 }
 
 /**
- * The page a confirmation mail's link opens, as the screen's flow says
- * (`contract/domain/screens/confirm-email.yaml`): it starts by confirming the token of its
- * address, then says the email is the new one, ending by who is signed in here: this account
+ * The page a confirmation mail's link opens, as its screen's flow says: it starts by confirming the
+ * token of its address, then says the email is the new one, ending by who is signed in here: this account
  * (`done-here`, beside the profile), nobody (`done`, beside the sign-in page) or another account
  * (`done-elsewhere`, with no link); a link refused ends on its error. Its `show` and `clear` keep
  * the codes of the page's error and message for the view and emit any other.

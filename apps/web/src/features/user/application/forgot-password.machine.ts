@@ -48,8 +48,8 @@ function emailInput({ event }: { readonly event: ForgotPasswordEvent }): {
 }
 
 /**
- * The page that asks for the mail of a password reset, as the screen's flow says
- * (`contract/domain/screens/forgot-password.yaml`): the send button asks for it, the message asks to
+ * The page that asks for the mail of a password reset, as its screen's flow says: the send button
+ * asks for it, the message asks to
  * open its link once the request went through, a refusal says why, and the button asks again as
  * often as it is pressed. Its `show` and `clear` keep the codes of the page's error and message for
  * the view and emit any other.
