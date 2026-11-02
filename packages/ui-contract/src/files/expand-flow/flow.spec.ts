@@ -311,3 +311,105 @@ describe('expandFlow', () => {
     expect(flowSchema.safeParse(flow).success).toBe(true)
   })
 })
+
+describe('the request pattern', () => {
+  const request = (states: Record<string, unknown>) =>
+    expandFlow({ initial: 'idle', states }, LOOKUPS)
+
+  it('gives an invoke without onError the clear on entry and the failure shown on the way back', () => {
+    const { flow, issues } = request({
+      idle: { on: { 'sample.form.save-button': 'saving' } },
+      saving: { invoke: { src: 'thing.save', onDone: 'idle' } },
+    })
+
+    expect(issues).toEqual([])
+    expect((flow as { states: Record<string, unknown> }).states['saving']).toEqual({
+      entry: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
+      invoke: {
+        src: 'thing.save',
+        onDone: { target: 'idle' },
+        onError: {
+          target: 'idle',
+          actions: [
+            { type: 'show', params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] } },
+          ],
+        },
+      },
+    })
+  })
+
+  it('keeps a written entry, adding the clear first unless it clears the error already', () => {
+    const states = (entry: unknown) => ({
+      idle: { on: { 'sample.form.save-button': 'saving' } },
+      saving: { entry, invoke: { src: 'thing.save', onDone: 'idle' } },
+    })
+    const entryOf = (entry: unknown) =>
+      (request(states(entry)).flow as { states: { saving: { entry: unknown } } }).states.saving
+        .entry
+
+    expect(entryOf([{ clear: 'sample.page.status' }])).toEqual([
+      { type: 'clear', params: { anchor: 'sample.form.error' } },
+      { type: 'clear', params: { anchor: 'sample.page.status' } },
+    ])
+    expect(entryOf([{ clear: 'sample.form.error' }])).toEqual([
+      { type: 'clear', params: { anchor: 'sample.form.error' } },
+    ])
+  })
+
+  it('adds the default show to an onError written as its target alone, and nothing to one with actions', () => {
+    const states = (onError: unknown) => ({
+      idle: { on: { 'sample.form.save-button': 'saving' } },
+      saving: { invoke: { src: 'thing.save', onDone: 'idle', onError } },
+    })
+    const onErrorOf = (onError: unknown) =>
+      (request(states(onError)).flow as { states: { saving: { invoke: { onError: unknown } } } })
+        .states.saving.invoke.onError
+    const show = {
+      type: 'show',
+      params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
+    }
+
+    expect(onErrorOf('idle')).toEqual({ target: 'idle', actions: [show] })
+    expect(onErrorOf({ target: 'idle', description: 'Back.' })).toEqual({
+      target: 'idle',
+      description: 'Back.',
+      actions: [show],
+    })
+    expect(onErrorOf({ target: 'idle', actions: [{ clear: 'sample.page.status' }] })).toEqual({
+      target: 'idle',
+      actions: [{ type: 'clear', params: { anchor: 'sample.page.status' } }],
+    })
+    expect(onErrorOf([{ target: 'idle', guard: 'changed' }, 'idle'])).toEqual([
+      { target: 'idle', guard: 'changed' },
+      { target: 'idle' },
+    ])
+  })
+
+  it('adds nothing for an action that fails with no code, and no entry clear either', () => {
+    const { flow, issues } = request({
+      idle: { on: { 'sample.form.save-button': 'opening' } },
+      opening: { invoke: { src: 'platform.things.open', onDone: 'idle' } },
+    })
+
+    expect(issues).toEqual([])
+    expect((flow as { states: Record<string, unknown> }).states['opening']).toEqual({
+      invoke: { src: 'platform.things.open', onDone: { target: 'idle' } },
+    })
+  })
+
+  it('reports a state with codes to show and no single way back, at its invoke', () => {
+    const { issues } = request({
+      idle: { on: { 'sample.form.save-button': 'saving' } },
+      saved: { on: { 'sample.form.save-button': 'saving' } },
+      saving: { invoke: { src: 'thing.save', onDone: 'saved' } },
+    })
+
+    expect(issues).toEqual([
+      {
+        at: ['flow', 'states', 'saving', 'invoke', 'onError'],
+        message:
+          'thing.save fails with taken, failed and the state writes no onError: saving is entered from idle and saved: no single way back; write its onError',
+      },
+    ])
+  })
+})

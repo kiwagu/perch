@@ -16,11 +16,11 @@
 
 import { isRecord, listOf, recordOf } from '../../../records'
 import { toastCodesOf } from '../../derive'
+import { enteredBy, type Place } from '../../flow-places'
 import type { Expansion } from '../expansion'
 
 import { codeOf } from './codes'
 import { type Operations, operationsOf } from './operations'
-import { enteredBy, type Place } from './places'
 
 /** What the walk of a flow reads: the expansion, and the outcomes of the flow's operations. */
 interface Walk {

@@ -1,6 +1,6 @@
 /** Where a state of a flow stands, and the states a transition's target enters from there. */
 
-import { recordOf } from '../../../records'
+import { recordOf } from '../records'
 
 /** Where a state stands: itself, the states beside it, and the states of the root. */
 export interface Place {
