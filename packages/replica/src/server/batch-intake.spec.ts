@@ -33,6 +33,7 @@ beforeEach(async () => {
     ref: { kind: 'tenant', id: regionId },
     subscribers: new Map(),
     joining: new Map(),
+    writes: 0,
     queue: Promise.resolve(),
     loaded,
     unload: undefined,
