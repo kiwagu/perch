@@ -7,9 +7,8 @@
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB, MailDev and Caddy
   in containers.
 - mcproc 0.13.0 or later (`npm i -g mcproc`): it starts and stops the stands from
-  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. The
-  mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
-  and the gateway without the gateway's environment, its database or the front.
+  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. `bun run
+  dev` needs it too: it reads this checkout's stand from `mcproc --json describe`.
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
   self-signed certificate is made, and the browser asks to accept it once.
 - `bunx playwright install` for the browsers the e2e specs run in.
@@ -33,9 +32,21 @@ These are the main checkout's addresses; a worktree runs the same stands with ev
 shifted. [.mcproc/README.md](../../.mcproc/README.md) describes each app of the stands and the
 worktrees, and [infra/dev/README.md](../../infra/dev/README.md) the front and the mailbox.
 
-1. `mcproc start dev`, then open https://localhost:5443; `mcproc stop dev` stops the stand. The
-   web app is a build watcher, not a dev server, so there is no hot module replacement: after a
-   code change it rewrites the build in 1-3 s, and a reload of the page shows it.
+1. Bring the development stand up in one of two ways, then open https://localhost:5443. The web
+   app is a build watcher, not a dev server, so there is no hot module replacement: after a code
+   change it rewrites the build in 1-3 s, and a reload of the page shows it.
+   - `mcproc start dev` runs the whole stand under pm2, the gateway and the watcher too, each
+     restarted on a change of its sources; `mcproc logs dev` shows their output, and
+     `mcproc stop dev` stops the stand. Take it when the stand should just run, for an agent or in
+     the background.
+   - `mcproc start services` starts only the dedicated services, SurrealDB, the mailbox and the
+     front, and `bun run dev` then runs the Bun dev scripts in your terminal through turbo: the
+     gateway (`bun --watch`, restarted on a change) and the watcher, with this checkout's
+     addresses. Take it to see their output in one place and stop them with Ctrl-C;
+     `bun run dev --exclude @workspace/web` (or `-x`) leaves a workspace out. Before it starts, it
+     stops with what to do when the dev SurrealDB or the mailbox does not answer, or when the
+     gateway and the watcher of `mcproc start dev` already run (`mcproc stop gateway && mcproc
+     stop web` hands them over), and warns when the front does not answer.
 2. Sign up in the app. Every mail the stand's gateway sends lands in its mailbox, whose web UI,
    http://127.0.0.1:1080, shows the verification mail; its link signs the device in.
 3. `bun run seed --reset` seeds the demo accounts and the organisation `acme`, with `ann` as its
