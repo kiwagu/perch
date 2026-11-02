@@ -122,7 +122,7 @@ export function expandFlow(
     flow: {
       ...flow,
       states: withDerivedToasts(
-        withDerivedRegions(withDefaultOutcomes(states, expansion, at), expansion),
+        withDerivedRegions(withDefaultOutcomes({ ...flow, states }, expansion, at), expansion),
         expansion,
         at,
       ),

@@ -1,16 +1,23 @@
 /**
- * The request pattern, filled on every invoke that writes no `onError` and whose action fails
- * with codes: on entry the error of the part is cleared (unless the state's `entry` clears it
- * already), and the failure shows its codes on that error on the one way back
- * (`files/derive/requests.ts`). An `onError` written as its target alone keeps the default
- * show; one with actions, or a guarded list, wins entirely. An action that fails with no code
- * gets nothing. A state with codes to show and no single way back is an issue at its invoke.
+ * The request pattern, on every invoke whose action fails with codes and whose `onError` the flow
+ * leaves out or writes as its target alone (`files/derive/requests.ts`):
+ *
+ * - none written: on entry the state clears the error its failure shows on (unless its `entry`
+ *   clears it already), and the failure goes the one way back, showing its codes on that error;
+ *   a state with no way back or no error is an issue at its invoke, naming every reason;
+ * - a target alone: the target stays, and the failure shows its codes on the error; a state with
+ *   no error is an issue at its `onError`.
+ *
+ * An `onError` with actions, or a guarded list, wins entirely; an action that fails with no code
+ * gets nothing.
  */
 
 import { listOf, recordOf } from '../../records'
-import { failureCodes, isBare, requestsOf } from '../derive'
+import { failureCodes, isBare, type Request, requestsOf } from '../derive'
 
 import type { Expansion } from './expansion'
+
+type State = Readonly<Record<string, unknown>>
 
 const clearOf = (anchor: string) => ({ type: 'clear', params: { anchor } })
 const showOf = (anchor: string, codes: readonly string[]) => ({
@@ -25,7 +32,7 @@ const clears = (effect: unknown, anchor: string): boolean =>
 function updatedAt(
   states: Readonly<Record<string, unknown>>,
   names: readonly string[],
-  update: (state: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>,
+  update: (state: State) => State,
 ): Readonly<Record<string, unknown>> {
   const [name, ...rest] = names
 
@@ -44,62 +51,89 @@ function updatedAt(
   }
 }
 
-/**
- * `states` (the flow's, expanded) with the request pattern on each invoke it fits, the issues
- * pushed on `expansion`; `at` is where the flow sits in its file.
- */
-export function withDefaultOutcomes(
-  states: Readonly<Record<string, unknown>>,
-  expansion: Expansion,
-  at: readonly PropertyKey[],
-): Readonly<Record<string, unknown>> {
-  const declared = (anchor: string): boolean => expansion.codesOf(anchor) !== undefined
-  let out = states
+/** The update a request gets, or the reason it gets none, for a failure with `codes`. */
+function outcomeOf(
+  request: Request,
+  codes: readonly string[],
+): { update: (state: State) => State } | { why: string } {
+  const failing = `${request.src} fails with ${codes.join(', ')}`
+  const { onError, back, error } = request
 
-  for (const request of requestsOf({ states }, expansion.screen, declared)) {
-    const codes = failureCodes(expansion.failureOf(request.src))
-    const { onError, fallback } = request
-
-    // Nothing to show, or an onError with actions or a guarded list: written wins entirely.
-    if (codes.length === 0 || (onError !== undefined && !isBare(onError))) {
-      continue
+  if (onError !== undefined) {
+    if ('why' in error) {
+      return { why: `${failing} and its onError shows them nowhere: ${error.why}; write its show` }
     }
 
-    if ('why' in fallback) {
-      // A bare written target stays as written: the screen chose where to go, and no part has an error to show.
-      if (onError === undefined) {
-        expansion.issues.push({
-          at: [...at, ...request.at, 'invoke', 'onError'],
-          message: `${request.src} fails with ${codes.join(', ')} and the state writes no onError: ${fallback.why}; write its onError`,
-        })
-      }
+    // A target alone keeps its target (`stateOf` made a string target `{ target }` already).
+    const target = typeof onError === 'string' ? { target: onError } : recordOf(onError)
+    const show = showOf(error.anchor, codes)
 
-      continue
+    return {
+      update: (state) => ({
+        ...state,
+        invoke: { ...recordOf(state['invoke']), onError: { ...target, actions: [show] } },
+      }),
     }
+  }
 
-    const { back, error } = fallback
-    const show = showOf(error, codes)
+  if ('why' in back || 'why' in error) {
+    const whys = [back, error].flatMap((each) => ('why' in each ? [each.why] : []))
 
-    out = updatedAt(out, request.names, (state) => {
-      const invoke = recordOf(state['invoke'])
+    return {
+      why: `${failing} and the state writes no onError: ${whys.join('; ')}; write its onError`,
+    }
+  }
 
-      if (onError !== undefined) {
-        // A target alone keeps the default show (`stateOf` made a string target `{ target }` already).
-        const target = typeof onError === 'string' ? { target: onError } : recordOf(onError)
+  const show = showOf(error.anchor, codes)
 
-        return { ...state, invoke: { ...invoke, onError: { ...target, actions: [show] } } }
-      }
-
+  return {
+    update: (state) => {
       const entry = listOf(state['entry'])
 
       return {
         ...state,
-        entry: entry.some((effect) => clears(effect, error))
+        entry: entry.some((effect) => clears(effect, error.anchor))
           ? [...entry]
-          : [clearOf(error), ...entry],
-        invoke: { ...invoke, onError: { target: back, actions: [show] } },
+          : [clearOf(error.anchor), ...entry],
+        invoke: {
+          ...recordOf(state['invoke']),
+          onError: { target: back.state, actions: [show] },
+        },
       }
-    })
+    },
+  }
+}
+
+/**
+ * The states of `flow` (expanded, with its `initial`) with the request pattern on each invoke it
+ * fits, the issues pushed on `expansion`; `at` is where the flow sits in its file.
+ */
+export function withDefaultOutcomes(
+  flow: Readonly<Record<string, unknown>>,
+  expansion: Expansion,
+  at: readonly PropertyKey[],
+): Readonly<Record<string, unknown>> {
+  const declared = (anchor: string): boolean => expansion.codesOf(anchor) !== undefined
+  let out = recordOf(flow['states'])
+
+  for (const request of requestsOf(flow, expansion.screen, declared)) {
+    const codes = failureCodes(expansion.failureOf(request.src))
+
+    // Nothing to show, or an onError with actions or a guarded list: written wins entirely.
+    if (codes.length === 0 || (request.onError !== undefined && !isBare(request.onError))) {
+      continue
+    }
+
+    const outcome = outcomeOf(request, codes)
+
+    if ('why' in outcome) {
+      expansion.issues.push({
+        at: [...at, ...request.at, 'invoke', 'onError'],
+        message: outcome.why,
+      })
+    } else {
+      out = updatedAt(out, request.names, outcome.update)
+    }
   }
 
   return out

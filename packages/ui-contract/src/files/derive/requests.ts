@@ -1,12 +1,17 @@
 /**
- * The requests of a flow: each state that runs an action (an `invoke`), with the one way back
- * the request pattern takes when the state writes no `onError`: the one sibling state whose
- * transitions on control events enter it, and the error anchor of the part those controls sit
- * in (`<part>.error`), else the screen's (`<screen>.error`); with no control entering, the
- * part of the invoke's input fields. An initial state, a state two states enter, one an
- * invoke's outcome enters, or one entered from outside its area (a deep target from the root,
- * an id target, the parallel state's own `on`) has no single way back, and says why. Read on
- * the flow as written or as expanded: a transition may be its target alone.
+ * The requests of a flow: each state that runs an action (an `invoke`), with the two things the
+ * request pattern needs, found apart, or why each is missing.
+ *
+ * - The way back, taken when the state writes no `onError`: the one sibling state whose
+ *   transitions on control events enter it. A state where its area starts (the `initial` of the
+ *   root or of its region) has none, whatever enters it; so has a state nothing enters, one two
+ *   states enter, one an invoke's outcome enters, or one entered from outside its area (a deep
+ *   target from the root, an id target, the parallel state's own `on`).
+ * - The error its failure shows on: the part the controls of every transition entering it sit
+ *   in, however many states those leave; with no control entering, the part of the invoke's
+ *   input fields; one part, whose `<part>.error`, else the screen's `<screen>.error`.
+ *
+ * Read on the flow as written or as expanded: a transition may be its target alone.
  */
 
 import { entriesOf, isRecord, listOf, recordOf } from '../../records'
@@ -25,8 +30,10 @@ export interface Request {
   readonly src: string
   /** The invoke's `onError` as written, if any. */
   readonly onError: unknown
-  /** The default's way back and error anchor, or why there is none. */
-  readonly fallback: { readonly back: string; readonly error: string } | { readonly why: string }
+  /** The state a failure goes back to when the flow writes no `onError`, or why there is none. */
+  readonly back: { readonly state: string } | { readonly why: string }
+  /** The error anchor a failure shows its codes on, or why there is none. */
+  readonly error: { readonly anchor: string } | { readonly why: string }
 }
 
 interface Located {
@@ -35,6 +42,8 @@ interface Located {
   readonly at: readonly PropertyKey[]
   readonly node: unknown
   readonly place: Place
+  /** Whether its area starts in it: it is the `initial` of the root or of its region. */
+  readonly starts: boolean
 }
 
 /** An enterer of a state: the state it leaves, and the event, undefined for an invoke's outcome. */
@@ -53,9 +62,13 @@ const targetOf = (transition: unknown): unknown =>
 export const isBare = (onError: unknown): boolean =>
   typeof onError === 'string' || (isRecord(onError) && onError['actions'] === undefined)
 
-/** Every state under `states`, regions and their states included, in the order written. */
+/**
+ * Every state under `states`, whose area starts in `initial`, regions and their states included,
+ * in the order written.
+ */
 function locatedAll(
   states: Readonly<Record<string, unknown>>,
+  initial: unknown,
   root: Readonly<Record<string, unknown>>,
   names: readonly string[],
   at: readonly PropertyKey[],
@@ -67,10 +80,14 @@ function locatedAll(
       at: [...at, 'states', name],
       node,
       place: { self: node, siblings: states, root },
+      starts: name === initial,
     }
-    const inner = recordOf(node)['states']
+    const { states: inner, initial: innerInitial } = recordOf(node)
 
-    return [here, ...(isRecord(inner) ? locatedAll(inner, root, here.names, here.at) : [])]
+    return [
+      here,
+      ...(isRecord(inner) ? locatedAll(inner, innerInitial, root, here.names, here.at) : []),
+    ]
   })
 }
 
@@ -110,15 +127,14 @@ const inputFieldsOf = (invoke: Readonly<Record<string, unknown>>): string[] =>
     (value): value is string => typeof value === 'string',
   )
 
-function fallbackOf(
-  state: Located,
-  enterers: readonly Enterer[],
-  screen: string,
-  declared: (anchor: string) => boolean,
-): Request['fallback'] {
+function backOf(state: Located, enterers: readonly Enterer[]): Request['back'] {
   const { name } = state
   const froms = [...new Set(enterers.map(({ from }) => from))]
   const [from] = froms
+
+  if (state.starts) {
+    return { why: `${name} is where its area starts, so it has no single way back` }
+  }
 
   if (from === undefined) {
     return { why: `nothing enters ${name}, so it has no way back` }
@@ -138,11 +154,21 @@ function fallbackOf(
     return { why: `${name} is entered by the outcome of ${from.name}, not by a control` }
   }
 
+  return { state: from.name }
+}
+
+function errorOf(
+  state: Located,
+  enterers: readonly Enterer[],
+  screen: string,
+  declared: (anchor: string) => boolean,
+): Request['error'] {
+  const { name } = state
   const controls = enterers.flatMap(({ event }) =>
     event !== undefined && isControl(event) ? [event] : [],
   )
-  const anchors =
-    controls.length > 0 ? controls : inputFieldsOf(recordOf(recordOf(state.node)['invoke']))
+  const byControls = controls.length > 0
+  const anchors = byControls ? controls : inputFieldsOf(recordOf(recordOf(state.node)['invoke']))
   const parts = [...new Set(anchors.map(partOf))]
   const [part] = parts
 
@@ -151,35 +177,41 @@ function fallbackOf(
   }
 
   if (parts.length > 1) {
-    return { why: `the controls that enter ${name} sit in different parts (${parts.join(', ')})` }
+    const which = byControls
+      ? `the controls that enter ${name}`
+      : `the fields the input of ${name} names`
+
+    return { why: `${which} sit in different parts (${parts.join(', ')})` }
   }
 
-  const error = [`${part}.error`, `${screen}.error`].find(declared)
+  const anchor = [`${part}.error`, `${screen}.error`].find(declared)
 
-  return error === undefined
-    ? { why: `no ${part}.error and no ${screen}.error` }
-    : { back: from.name, error }
+  return anchor === undefined ? { why: `no ${part}.error and no ${screen}.error` } : { anchor }
 }
 
-/** The requests of `flow` (as read: `{ states }`), on the screen `screen` whose anchors `declared` knows. */
+/**
+ * The requests of `flow` (as read: `{ initial, states }`), on the screen `screen` whose anchors
+ * `declared` knows.
+ */
 export function requestsOf(
   flow: unknown,
   screen: string,
   declared: (anchor: string) => boolean,
 ): Request[] {
-  const states = isRecord(flow) ? flow['states'] : undefined
+  const { states, initial } = recordOf(flow)
 
   if (!isRecord(states)) {
     return []
   }
 
-  const located = locatedAll(states, states, [], [])
+  const located = locatedAll(states, initial, states, [], [])
   const enterers = enterersOf(located)
 
   return located.flatMap((state): Request[] => {
     const node = recordOf(state.node)
     const invoke = recordOf(node['invoke'])
     const src = invoke['src']
+    const entering = enterers.get(state.node) ?? []
 
     return typeof src === 'string'
       ? [
@@ -190,7 +222,8 @@ export function requestsOf(
             state: node,
             src,
             onError: invoke['onError'],
-            fallback: fallbackOf(state, enterers.get(state.node) ?? [], screen, declared),
+            back: backOf(state, entering),
+            error: errorOf(state, entering, screen, declared),
           },
         ]
       : []

@@ -412,4 +412,162 @@ describe('the request pattern', () => {
       },
     ])
   })
+
+  /** The states `expandFlow` makes of `states` starting in `initial`, with the issues. */
+  const startingIn = (initial: string, states: Record<string, unknown>) => {
+    const { flow, issues } = expandFlow({ initial, states }, LOOKUPS)
+
+    return { states: (flow as { states: Record<string, unknown> }).states, issues }
+  }
+  const SHOW = {
+    type: 'show',
+    params: { anchor: 'sample.form.error', codes: ['taken', 'failed'] },
+  }
+  /** `invoke` with `onError` when one is given. */
+  const invoking = (invoke: Record<string, unknown>, onError?: unknown) =>
+    onError === undefined ? { invoke } : { invoke: { ...invoke, onError } }
+
+  it('reports an initial request a sibling retries into, and shows on its bare onError', () => {
+    const retried = (onError?: unknown) =>
+      startingIn('saving', {
+        saving: invoking({ src: 'thing.save', onDone: 'done' }, onError),
+        failed: { on: { 'sample.form.retry-button': 'saving' } },
+        done: { type: 'final' },
+      })
+
+    const unwritten = retried()
+    const bare = retried('failed')
+
+    expect(unwritten.issues).toEqual([
+      {
+        at: ['flow', 'states', 'saving', 'invoke', 'onError'],
+        message:
+          'thing.save fails with taken, failed and the state writes no onError: saving is where its area starts, so it has no single way back; write its onError',
+      },
+    ])
+    expect(unwritten.states['saving']).toEqual({
+      invoke: { src: 'thing.save', onDone: { target: 'done' } },
+    })
+    expect(bare.issues).toEqual([])
+    expect(bare.states['saving']).toEqual({
+      invoke: {
+        src: 'thing.save',
+        onDone: { target: 'done' },
+        onError: { target: 'failed', actions: [SHOW] },
+      },
+    })
+  })
+
+  it('reports an initial request of a region a sibling retries into, and shows on its bare onError', () => {
+    const retried = (onError?: unknown) =>
+      expandedRegion({
+        initial: 'saving',
+        states: {
+          saving: invoking({ src: 'thing.save', onDone: 'idle' }, onError),
+          failed: { on: { 'sample.form.retry-button': 'saving' } },
+          idle: {},
+        },
+      })
+
+    expect(retried().issues).toEqual([
+      {
+        at: [
+          'flow',
+          'states',
+          'viewing',
+          'states',
+          'form',
+          'states',
+          'saving',
+          'invoke',
+          'onError',
+        ],
+        message:
+          'thing.save fails with taken, failed and the state writes no onError: saving is where its area starts, so it has no single way back; write its onError',
+      },
+    ])
+    expect(retried().region).toMatchObject({
+      states: { saving: { invoke: { src: 'thing.save', onDone: { target: 'idle' } } } },
+    })
+    expect(retried().region).not.toHaveProperty(['states', 'saving', 'invoke', 'onError'])
+    expect(retried().region).not.toHaveProperty(['states', 'saving', 'entry'])
+    expect(retried('failed')).toEqual({
+      region: {
+        initial: 'saving',
+        states: {
+          saving: {
+            invoke: {
+              src: 'thing.save',
+              onDone: { target: 'idle' },
+              onError: { target: 'failed', actions: [SHOW] },
+            },
+          },
+          failed: { on: { 'sample.form.retry-button': { target: 'saving' } } },
+          idle: {},
+        },
+      },
+      issues: [],
+    })
+  })
+
+  it('shows on the bare onError of an initial request by the part of its input fields', () => {
+    const { states, issues } = startingIn('saving', {
+      saving: invoking(
+        { src: 'thing.save', input: { name: 'sample.form.name-input' }, onDone: 'idle' },
+        'idle',
+      ),
+      idle: {},
+    })
+
+    expect(issues).toEqual([])
+    expect(states['saving']).toEqual({
+      invoke: {
+        src: 'thing.save',
+        input: { name: 'sample.form.name-input' },
+        onDone: { target: 'idle' },
+        onError: { target: 'idle', actions: [SHOW] },
+      },
+    })
+  })
+
+  it('shows on the bare onError of a request two states enter by controls of one part', () => {
+    const { states, issues } = startingIn('idle', {
+      idle: { on: { 'sample.form.save-button': 'saving' } },
+      saved: { on: { 'sample.form.save-button': 'saving' } },
+      saving: invoking({ src: 'thing.save', onDone: 'saved' }, 'idle'),
+    })
+
+    expect(issues).toEqual([])
+    expect(states['saving']).toEqual({
+      invoke: {
+        src: 'thing.save',
+        onDone: { target: 'saved' },
+        onError: { target: 'idle', actions: [SHOW] },
+      },
+    })
+  })
+
+  it('reports a bare onError with no error to show on, and every reason a request lacks', () => {
+    const bare = startingIn('idle', {
+      idle: { on: { 'other.part.go-button': 'saving' } },
+      saving: invoking({ src: 'thing.save', onDone: 'idle' }, 'idle'),
+    })
+    const neither = startingIn('saving', {
+      saving: invoking({ src: 'thing.save', onDone: 'saving' }),
+    })
+
+    expect(bare.issues).toEqual([
+      {
+        at: ['flow', 'states', 'saving', 'invoke', 'onError'],
+        message:
+          'thing.save fails with taken, failed and its onError shows them nowhere: no other.part.error and no sample.error; write its show',
+      },
+    ])
+    expect(bare.states['saving']).toEqual({
+      invoke: { src: 'thing.save', onDone: { target: 'idle' }, onError: { target: 'idle' } },
+    })
+    expect(neither.issues.map(({ message }) => message)).toEqual([
+      'thing.save fails with taken, failed and the state writes no onError: saving is where its area starts, so it has no single way back; no control enters saving and its input names no field: no part has its error; write its onError',
+    ])
+  })
 })

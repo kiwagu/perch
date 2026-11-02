@@ -10,8 +10,15 @@ const ANCHORS = new Set([
 ])
 const declared = (anchor: string) => ANCHORS.has(anchor)
 
-const fallbackOf = (flow: unknown, screen: string, name: string) =>
-  requestsOf(flow, screen, declared).find((request) => request.name === name)?.fallback
+const requestOf = (flow: unknown, screen: string, name: string) =>
+  requestsOf(flow, screen, declared).find((request) => request.name === name)
+
+/** The way back and the error of the request `name`. */
+const outcomeOf = (flow: unknown, screen: string, name: string) => {
+  const request = requestOf(flow, screen, name)
+
+  return { back: request?.back, error: request?.error }
+}
 
 describe('requestsOf', () => {
   it('finds the way back and the error of a state one sibling enters on a control', () => {
@@ -32,7 +39,8 @@ describe('requestsOf', () => {
         state: flow.states['signing-in'],
         src: 'platform.sign-in',
         onError: undefined,
-        fallback: { back: 'idle', error: 'user.sign-in.error' },
+        back: { state: 'idle' },
+        error: { anchor: 'user.sign-in.error' },
       },
     ])
   })
@@ -58,16 +66,16 @@ describe('requestsOf', () => {
       },
     }
 
-    expect(fallbackOf(flow, 'user.settings', 'saving')).toEqual({
-      back: 'idle',
-      error: 'user.settings.password.error',
+    expect(outcomeOf(flow, 'user.settings', 'saving')).toEqual({
+      back: { state: 'idle' },
+      error: { anchor: 'user.settings.password.error' },
     })
-    expect(requestsOf(flow, 'user.settings', declared)[1]?.fallback).toEqual({
-      back: 'idle',
-      error: 'user.settings.error',
+    expect(requestsOf(flow, 'user.settings', declared)[1]?.error).toEqual({
+      anchor: 'user.settings.error',
     })
-    expect(requestsOf(flow, 'user.profile', declared)[1]?.fallback).toEqual({
-      why: 'no user.settings.theme.error and no user.profile.error',
+    expect(requestsOf(flow, 'user.profile', declared)[1]).toMatchObject({
+      back: { state: 'idle' },
+      error: { why: 'no user.settings.theme.error and no user.profile.error' },
     })
   })
 
@@ -114,18 +122,72 @@ describe('requestsOf', () => {
         },
       },
     }
+    const nothing = {
+      initial: 'idle',
+      states: {
+        idle: {},
+        orphan: { invoke: { src: 'platform.sign-in', onDone: 'idle' } },
+      },
+    }
 
-    expect(fallbackOf(initial, 'user.sign-in', 'verifying')).toEqual({
-      why: 'nothing enters verifying, so it has no way back',
+    expect(outcomeOf(initial, 'user.sign-in', 'verifying')).toEqual({
+      back: { why: 'verifying is where its area starts, so it has no single way back' },
+      error: {
+        why: 'no control enters verifying and its input names no field: no part has its error',
+      },
     })
-    expect(fallbackOf(two, 'user.sign-in', 'sending')).toEqual({
-      why: 'sending is entered from idle and sent: no single way back',
+    expect(requestOf(nothing, 'user.sign-in', 'orphan')?.back).toEqual({
+      why: 'nothing enters orphan, so it has no way back',
     })
-    expect(fallbackOf(chained, 'user.sign-in', 'second')).toEqual({
+    expect(outcomeOf(two, 'user.sign-in', 'sending')).toEqual({
+      back: { why: 'sending is entered from idle and sent: no single way back' },
+      error: { anchor: 'user.sign-in.error' },
+    })
+    expect(requestOf(chained, 'user.sign-in', 'second')?.back).toEqual({
       why: 'second is entered by the outcome of first, not by a control',
     })
-    expect(fallbackOf(deep, 'user.sign-in', 'sending')).toEqual({
-      why: 'sending is entered from outside its area (idle)',
+    expect(outcomeOf(deep, 'user.sign-in', 'sending')).toEqual({
+      back: { why: 'sending is entered from outside its area (idle)' },
+      error: { anchor: 'user.sign-in.error' },
+    })
+  })
+
+  it('has no way back from a state where its area starts, though a sibling retries into it', () => {
+    const atRoot = {
+      initial: 'loading',
+      states: {
+        loading: { invoke: { src: 'platform.sign-in', onDone: 'done' } },
+        failed: { on: { 'user.sign-in.retry-button': 'loading' } },
+        done: { type: 'final' },
+      },
+    }
+    const inRegion = {
+      initial: 'viewing',
+      states: {
+        viewing: {
+          type: 'parallel',
+          states: {
+            password: {
+              initial: 'saving',
+              states: {
+                saving: { invoke: { src: 'platform.change-password', onDone: 'idle' } },
+                failed: { on: { 'user.settings.password.retry-button': 'saving' } },
+                idle: {},
+              },
+            },
+            other: { initial: 'rest', states: { rest: {} } },
+          },
+        },
+      },
+    }
+
+    expect(outcomeOf(atRoot, 'user.sign-in', 'loading')).toEqual({
+      back: { why: 'loading is where its area starts, so it has no single way back' },
+      error: { anchor: 'user.sign-in.error' },
+    })
+    expect(outcomeOf(inRegion, 'user.settings', 'saving')).toEqual({
+      back: { why: 'saving is where its area starts, so it has no single way back' },
+      error: { anchor: 'user.settings.password.error' },
     })
   })
 
@@ -155,13 +217,35 @@ describe('requestsOf', () => {
         saving: { invoke: { src: 'platform.sign-in', onDone: 'idle' } },
       },
     }
+    const fields = {
+      initial: 'saving',
+      states: {
+        saving: {
+          invoke: {
+            src: 'platform.change-password',
+            input: {
+              password: 'user.settings.password.new-password-input',
+              email: 'user.settings.email.email-input',
+              token: { search: 'token' },
+            },
+            onDone: 'saving',
+          },
+        },
+      },
+    }
 
-    expect(fallbackOf(byEvent, 'user.sign-in', 'loading')).toEqual({
-      back: 'idle',
-      error: 'user.sign-in.error',
+    expect(outcomeOf(byEvent, 'user.sign-in', 'loading')).toEqual({
+      back: { state: 'idle' },
+      error: { anchor: 'user.sign-in.error' },
     })
-    expect(fallbackOf(parts, 'user.settings', 'saving')).toEqual({
-      why: 'the controls that enter saving sit in different parts (user.settings.password, user.settings.email)',
+    expect(outcomeOf(parts, 'user.settings', 'saving')).toEqual({
+      back: { state: 'idle' },
+      error: {
+        why: 'the controls that enter saving sit in different parts (user.settings.password, user.settings.email)',
+      },
+    })
+    expect(requestOf(fields, 'user.settings', 'saving')?.error).toEqual({
+      why: 'the fields the input of saving names sit in different parts (user.settings.password, user.settings.email)',
     })
   })
 
