@@ -10,6 +10,7 @@ export {
   UI_KIT_DIR,
   UI_KIT_MODULE,
 } from './coverage'
+export { listDescriptions } from './descriptions'
 export { type ContractChanges, diffContracts } from './diff'
 export { formatChanges } from './format-changes'
 export { type BoundMember, type ModelCoverage, modelCoverage } from './model'

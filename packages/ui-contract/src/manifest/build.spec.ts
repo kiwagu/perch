@@ -109,6 +109,37 @@ describe('buildManifest', () => {
     })
     expect(manifestSchema.safeParse(built).success).toBe(true)
   })
+  it('writes the description the engine says where the file writes none, and keeps a written one', () => {
+    const withSecret = fixtureContract()
+    const screen = withSecret.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    screen.anchors['sample.title-input'] = {
+      kind: 'input',
+      binding: { model: 'thing.title' },
+      secret: true,
+    }
+
+    const built = buildManifest({ ...withSecret, product: PRODUCT, now: NOW })
+    const anchors = built.screens.find(({ id }) => id === 'sample')?.anchors
+
+    expect(anchors?.['sample.title-input']?.description).toBe(
+      'A secret the action takes, never shown (type password).',
+    )
+    expect(anchors?.['sample.page']?.description).toBe('The root of the screen.')
+    expect(anchors?.['sample.save-button']).not.toHaveProperty('description')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('gives each derived part the meaning of its suffix', () => {
+    expect(manifest.contract.derivedParts['option']).toEqual({
+      kind: 'option',
+      description: 'one entry of a select',
+    })
+    expect(manifestSchema.safeParse(manifest).error?.issues).toBeUndefined()
+  })
   it('carries the screens, the platform, the activities, the scenarios and the model verbatim', () => {
     const withoutBindings = (screens: readonly { bindings: unknown }[]) =>
       screens.map(({ bindings: _bindings, ...screen }) => screen)
@@ -216,9 +247,13 @@ describe('the visibility-button of a password input', () => {
     expect(built.contract.instructions.screenMap).toContain('`secret`')
     expect(built.contract.derivedSuffixes['visibility-button']).toBe('the eye of a password input')
     expect(built.contract.derivedParts).toEqual({
-      'confirm-button': { kind: 'button' },
-      option: { kind: 'option' },
-      'visibility-button': { kind: 'button', values: VISIBILITY_VALUES },
+      'confirm-button': { kind: 'button', description: 'the primary action of a dialog' },
+      option: { kind: 'option', description: 'one entry of a select' },
+      'visibility-button': {
+        kind: 'button',
+        description: 'the eye of a password input',
+        values: VISIBILITY_VALUES,
+      },
     })
     expect(Object.keys(VISIBILITY_VALUES)).toEqual(['show', 'hide'])
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()

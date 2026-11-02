@@ -1,6 +1,12 @@
 export { compositeAnchorsOf, withDerivedComposites } from './composites'
 export { CONFIRM_RULE_ROW, isDestructive, questionCodeOf } from './confirmations'
 export { type Control, controlsOf } from './controls'
+export {
+  type DescriptionContext,
+  derivedDescriptionOf,
+  describedOf,
+  TYPE_PASSWORD,
+} from './descriptions'
 export { withDerivedErrors } from './errors'
 export {
   type Failure,

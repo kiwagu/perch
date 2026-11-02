@@ -1,4 +1,4 @@
-/** `ui-contract coverage [--write] [--json] [--unmarked]`. */
+/** `ui-contract coverage [--write] [--json] [--unmarked] [--descriptions]`. */
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { COVERAGE_FILE } from '../files'
 import {
   listControls,
+  listDescriptions,
   measureCoverage,
   renderCoverage,
   replaceCoverageBlock,
@@ -37,6 +38,12 @@ export function coverage(argv: readonly string[]): number {
 
   if (argv.includes('--unmarked')) {
     console.log(listControls(measure))
+
+    return 0
+  }
+
+  if (argv.includes('--descriptions')) {
+    console.log(listDescriptions(contract))
 
     return 0
   }

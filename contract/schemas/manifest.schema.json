@@ -107,6 +107,10 @@
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                 "description": "The kind of the part: the last word of its suffix."
               },
+              "description": {
+                "type": "string",
+                "description": "What the part is: the meaning of its suffix in the vocabulary."
+              },
               "values": {
                 "type": "object",
                 "propertyNames": {
@@ -120,12 +124,13 @@
               }
             },
             "required": [
-              "kind"
+              "kind",
+              "description"
             ],
             "additionalProperties": false,
             "description": "The part a derived suffix marks."
           },
-          "description": "Each derived suffix with the part it marks: its kind and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`)."
+          "description": "Each derived suffix with the part it marks: its kind, its meaning and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`)."
         },
         "attributes": {
           "type": "object",

@@ -7,10 +7,14 @@ export {
 export {
   CONFIRM_RULE_ROW,
   type DerivedQuestion,
+  type DescriptionContext,
+  derivedDescriptionOf,
+  describedOf,
   isBare,
   type Request,
   requestsOf,
   TOAST_RULE_ROW,
+  TYPE_PASSWORD,
 } from './derive'
 export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'

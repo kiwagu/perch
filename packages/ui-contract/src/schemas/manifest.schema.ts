@@ -68,6 +68,9 @@ const contractSchema = z
         z
           .strictObject({
             kind: kebabNameSchema.describe('The kind of the part: the last word of its suffix.'),
+            description: z
+              .string()
+              .describe('What the part is: the meaning of its suffix in the vocabulary.'),
             values: tableOf(
               z.string(),
               'What the part says while it carries the value.',
@@ -77,7 +80,7 @@ const contractSchema = z
           .describe('The part a derived suffix marks.'),
       )
       .describe(
-        'Each derived suffix with the part it marks: its kind and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`).',
+        'Each derived suffix with the part it marks: its kind, its meaning and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`).',
       ),
     attributes: tableOf(
       z.string(),
