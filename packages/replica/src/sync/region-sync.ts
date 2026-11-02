@@ -76,6 +76,8 @@ export class RegionSync implements DrainTarget {
   #epoch = 0
   /** The server has answered the subscription of the current connection. */
   #answered = false
+  /** Updates handed over and not imported yet, the answer to the subscription included. */
+  #unimported = 0
   #stopped = false
   /**
    * The gateway's last welcome named the region, so the device may name it on this connection.
@@ -222,7 +224,15 @@ export class RegionSync implements DrainTarget {
    */
   handle(message: ServerMessage): Promise<void> {
     const epoch = this.#epoch
-    const handled = this.#queue.then(() => this.#dispatch(message, epoch))
+    const update = message.type === 'updates' ? 1 : 0
+
+    this.#unimported += update
+
+    const handled = this.#queue
+      .then(() => this.#dispatch(message, epoch))
+      .finally(() => {
+        this.#unimported -= update
+      })
 
     this.#queue = handled.then(
       () => undefined,
@@ -282,6 +292,15 @@ export class RegionSync implements DrainTarget {
         !this.#pull.pulling() &&
         !this.#compaction.pending())
     )
+  }
+
+  /**
+   * Caught up with the gateway on this connection: it syncs, the server answered its subscription,
+   * and every update since was imported in full (none waits, none failed or left updates waiting
+   * for their history, and no pull is out). A new sync, or one whose channel fell, is not.
+   */
+  caughtUp(): boolean {
+    return this.syncing() && this.#answered && this.#unimported === 0 && this.#pull.caughtUp()
   }
 
   stopped(): boolean {

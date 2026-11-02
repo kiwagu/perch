@@ -29,6 +29,8 @@ import {
   writeBio,
   writeName,
 } from './__fixtures__/devices'
+import { holdOn } from './__fixtures__/held-statement'
+import { serverHistory } from './__fixtures__/server-history'
 import { RegionSync } from './region-sync'
 import type { SyncTransport } from './transport'
 
@@ -121,24 +123,6 @@ async function alone(
     lastBatch,
     otherTab,
     reconnects: () => recycled.count,
-  }
-}
-
-/** Server updates of the profile: a later one that needs an earlier one, and all of it. */
-function serverHistory() {
-  const author = new LoroDoc()
-
-  author.getMap('records').setContainer(profileKey, new LoroMap()).set('name', 'Ann')
-  author.commit()
-
-  const first = author.version()
-
-  ;(author.getMap('records').get(profileKey) as LoroMap).set('name', 'Ana')
-  author.commit()
-
-  return {
-    gap: new Uint8Array(author.export({ mode: 'update', from: first })),
-    all: new Uint8Array(author.export({ mode: 'update' })),
   }
 }
 
@@ -262,29 +246,6 @@ describe('region sync on its own', () => {
 
     expect(count('pull')).toBe(2)
   })
-
-  /** A database that holds `statement` once `holding` is set, until `release`; `reached` resolves once held. */
-  function holdOn(statement: string) {
-    let release = (): void => {}
-    let reach = (): void => {}
-    const gate = { holding: false }
-    const held = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const reached = new Promise<void>((resolve) => {
-      reach = resolve
-    })
-    const wrap = (local: LocalDb) =>
-      interceptQueries(local, (text) => {
-        if (gate.holding && text === statement) {
-          reach()
-
-          return held
-        }
-      })
-
-    return { gate, wrap, reached, release }
-  }
 
   it('sends nothing for its region once retired, though an import under way ends after it', async () => {
     const hold = holdOn(importStatement)
@@ -568,6 +529,130 @@ describe('region sync on its own', () => {
     expect(errors).toEqual([expect.objectContaining({ code: 'data:QUERY_FAILED' })])
     expect(reconnects()).toBe(1)
     expect((await region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  describe('whether it caught up with the gateway', () => {
+    it('is caught up once the answer to its subscription is imported in full, not while it is imported', async () => {
+      const hold = holdOn(importStatement)
+      const { sync } = await alone({ persisted: true, wrap: hold.wrap })
+      const { all } = serverHistory()
+
+      sync.subscribe()
+
+      expect(sync.caughtUp()).toBe(false)
+
+      hold.gate.holding = true
+      const handled = sync.handle(updates(all, 2))
+
+      await hold.reached
+
+      expect(sync.caughtUp()).toBe(false)
+
+      hold.gate.holding = false
+      hold.release()
+      await handled
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up after the answer and the pull after it both failed to import, until a full pass pulls what it lacked', async () => {
+      let failImport = true
+      const { sync, count, errors } = await alone({
+        persisted: true,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failImport && text === importStatement) {
+              throw new Error('the store refused the write')
+            }
+          }),
+      })
+      const { all } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(all, 2))
+
+      expect(count('pull')).toBe(1)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      // Nothing more goes out and nothing waits for an answer, so a settled check counts it quiet.
+      expect(errors).toHaveLength(2)
+      expect(sync.quiet()).toBe(true)
+      expect(sync.caughtUp()).toBe(false)
+
+      failImport = false
+      sync.retryPull()
+
+      expect(count('pull')).toBe(2)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up while the pull a probe asked for is out, until its answer is imported', async () => {
+      const { sync, count } = await alone()
+      const { all } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(emptyRegion, 0, true))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      // The server's head is ahead of the cursor: what moved it never arrived.
+      sync.catchUp(2)
+
+      expect(count('pull')).toBe(1)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up once the channel fell, until the subscription of the next connection is answered', async () => {
+      const { sync } = await alone()
+      const { all } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      sync.channelDown()
+
+      expect(sync.caughtUp()).toBe(false)
+
+      sync.welcome(true)
+
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is never caught up while the welcome leaves it out, nor once it is retired', async () => {
+      const { sync } = await alone()
+      const { all } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(all, 2))
+      sync.welcome(false)
+
+      expect(sync.caughtUp()).toBe(false)
+
+      sync.welcome(true)
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      sync.retire()
+
+      expect(sync.caughtUp()).toBe(false)
+    })
   })
 })
 

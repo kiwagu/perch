@@ -43,8 +43,8 @@ export interface EngineSettlingOptions {
 /**
  * Tells when an engine has settled: the channel is up, every region has its first answer on this
  * connection, the outboxes are empty and every local update is durable, nothing waits for an answer
- * and no message is being handled. Whatever such a check reads calls `changed`, so a waiting
- * `settled` checks again.
+ * and no message is being handled; and when one region has caught up with the gateway. Whatever
+ * such a check reads calls `changed`, so a waiting `settled` or `caughtUp` checks again.
  */
 export class EngineSettling {
   readonly #regions: ReadonlyMap<string, SyncedRegion>
@@ -66,7 +66,7 @@ export class EngineSettling {
     this.#ready = options.ready
   }
 
-  /** Something a settled check reads changed: a waiting `settled` checks again. */
+  /** Something a check reads changed: a waiting `settled` or `caughtUp` checks again. */
   changed(): void {
     this.#change.fire()
   }
@@ -82,17 +82,35 @@ export class EngineSettling {
 
   /** Resolves once the engine has settled; rejects after `timeoutMs` on the clock. */
   settled(timeoutMs: number): Promise<void> {
+    return this.#until(() => this.#isSettled(), timeoutMs, 'the sync did not settle')
+  }
+
+  /**
+   * Resolves once region `id` has caught up with the gateway on the current connection, whichever
+   * sync holds it by then (`RegionSync.caughtUp`); rejects after `timeoutMs` on the clock, which is
+   * all it does for a region that stopped, one the welcome left out, or one the engine does not hold.
+   */
+  caughtUp(id: string, timeoutMs: number): Promise<void> {
+    return this.#until(
+      () => Promise.resolve(this.#regions.get(id)?.sync.caughtUp() === true),
+      timeoutMs,
+      `${id} did not catch up with the gateway`,
+    )
+  }
+
+  /** Resolves once `check` holds, checking again on every change; rejects after `timeoutMs` on the clock. */
+  #until(check: () => Promise<boolean>, timeoutMs: number, failure: string): Promise<void> {
     return new Promise((resolve, reject) => {
       let waiting = true
       const cancel = this.#clock.schedule(timeoutMs, () => {
         waiting = false
-        reject(new Error(`the sync did not settle within ${timeoutMs} ms`))
+        reject(new Error(`${failure} within ${timeoutMs} ms`))
       })
       const watch = async (): Promise<void> => {
         while (waiting) {
           const change = this.#change.next()
 
-          if (await this.#isSettled()) {
+          if (await check()) {
             if (waiting) {
               waiting = false
               cancel()

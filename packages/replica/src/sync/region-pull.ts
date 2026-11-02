@@ -62,6 +62,14 @@ export class RegionPull {
     return this.#pulling
   }
 
+  /**
+   * Nothing the server sent is missing: no import failed since an answer last imported in full,
+   * none left updates waiting for their history, and no pull is out.
+   */
+  caughtUp(): boolean {
+    return !this.#lost && !this.#incomplete && !this.#pulling
+  }
+
   /** Repeats the pull an incomplete or failed import left outstanding. */
   retry(): void {
     if (this.#incomplete || this.#lost) {
