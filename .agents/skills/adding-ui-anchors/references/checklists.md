@@ -99,8 +99,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    transition it takes, after the route of the state it leaves; with several devices, each
    step opens with `On device X,`.
 5. **The checks.** `contract:check` holds the activity to the screens and runs it in
-   XState, and `bun run contract:coverage --write`
-   shows how many of its transitions the scenarios walk.
+   XState, and `bun run contract:coverage` shows how many of its transitions the
+   scenarios walk; the area branch writes it into the note (`--write`) with the
+   implementation.
 6. **The hand-off** as for a new screen.
 
 ## Rewriting a component
