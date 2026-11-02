@@ -160,6 +160,14 @@ export class SessionService implements SessionPort {
     return this.#options.auth.requestPasswordReset(email)
   }
 
+  /**
+   * Asks the gateway alone: it signs nothing in, and a device of the account it signs out, this one
+   * included, hears so on its channel (4002).
+   */
+  resetPassword(token: string, password: string): ResultAsync<void, DataError> {
+    return this.#options.auth.resetPassword(token, password)
+  }
+
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
     return this.#transitions.serially(() => this.#signingOut.signOut(options.forgetUnsent ?? false))
   }

@@ -12,6 +12,7 @@ import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-e
 import { ForgotPasswordContainer } from './presentation/pages/forgot-password/forgot-password.container'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
+import { ResetPasswordContainer } from './presentation/pages/reset-password/reset-password.container'
 import { SettingsContainer } from './presentation/pages/settings/settings.container'
 import { SignInContainer } from './presentation/pages/sign-in/sign-in.container'
 import { VerifyEmailContainer } from './presentation/pages/verify-email/verify-email.container'
@@ -45,6 +46,7 @@ export const UserModule = defineModule({
     SignInPage: SignInContainer,
     VerifyEmailPage: VerifyEmailContainer,
     ForgotPasswordPage: ForgotPasswordContainer,
+    ResetPasswordPage: ResetPasswordContainer,
     ProfilePage: ProfileContainer,
     SettingsPage: SettingsContainer,
   },
@@ -61,6 +63,12 @@ export const UserModule = defineModule({
       path: '/forgot-password',
       page: 'ForgotPasswordPage',
       search: z.object({ email: z.string().max(254).optional() }),
+    },
+    // Open to anyone: a reset of the account signed in here signs this device out.
+    {
+      path: '/reset-password',
+      page: 'ResetPasswordPage',
+      search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
     { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },

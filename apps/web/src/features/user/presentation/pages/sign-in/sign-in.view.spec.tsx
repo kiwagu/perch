@@ -234,10 +234,10 @@ describe('SignInView', () => {
     type('user.sign-in.password-input', 'abcdefghij')
 
     expect(screen.getByTestId(LENGTH).textContent).toBe(
-      `${en['user.sign-in.password-rule.length']}${en['user.sign-in.password-rule.met']}`,
+      `${en['user.password-rule.length']}${en['user.password-rule.met']}`,
     )
     expect(screen.getByTestId(SYMBOL).textContent).toBe(
-      `${en['user.sign-in.password-rule.symbol']}${en['user.sign-in.password-rule.not-met']}`,
+      `${en['user.password-rule.symbol']}${en['user.password-rule.not-met']}`,
     )
     expect(
       screen
@@ -251,13 +251,13 @@ describe('SignInView', () => {
 
     expect(RULE_ITEMS.map((testId) => screen.getByTestId(testId).textContent)).toEqual(
       [
-        es['user.sign-in.password-rule.length'],
-        es['user.sign-in.password-rule.characters'],
-        es['user.sign-in.password-rule.digit'],
-        es['user.sign-in.password-rule.uppercase'],
-        es['user.sign-in.password-rule.lowercase'],
-        es['user.sign-in.password-rule.symbol'],
-      ].map((text) => `${text}${es['user.sign-in.password-rule.not-met']}`),
+        es['user.password-rule.length'],
+        es['user.password-rule.characters'],
+        es['user.password-rule.digit'],
+        es['user.password-rule.uppercase'],
+        es['user.password-rule.lowercase'],
+        es['user.password-rule.symbol'],
+      ].map((text) => `${text}${es['user.password-rule.not-met']}`),
     )
   })
 

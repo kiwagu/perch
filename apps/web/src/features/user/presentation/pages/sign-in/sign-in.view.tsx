@@ -11,8 +11,17 @@ import { Input } from '@workspace/ui/components/ui/input'
 
 import type { SessionNotice } from '../../../../../platform/session.port'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
+import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
-import { PasswordRuleList } from './password-rule-list'
+/** The rules of a new password the list shows at sign-up, each with its item's anchor. */
+const RULES = [
+  { rule: 'length', testId: 'user.sign-in.password-rule-list.length-item' },
+  { rule: 'characters', testId: 'user.sign-in.password-rule-list.characters-item' },
+  { rule: 'digit', testId: 'user.sign-in.password-rule-list.digit-item' },
+  { rule: 'uppercase', testId: 'user.sign-in.password-rule-list.uppercase-item' },
+  { rule: 'lowercase', testId: 'user.sign-in.password-rule-list.lowercase-item' },
+  { rule: 'symbol', testId: 'user.sign-in.password-rule-list.symbol-item' },
+] as const
 
 /** The anchor of the form's error, drawn above the fields or under the field its code concerns. */
 const SIGN_IN_ERROR_TEST_ID = 'user.sign-in.error'
@@ -200,7 +209,14 @@ export function SignInView(props: SignInViewProps) {
                 hideLabel={t('user.password.hide')}
                 testId="user.sign-in.password-input"
               />
-              {signingUp ? <PasswordRuleList id={rulesId} password={values.password} /> : null}
+              {signingUp ? (
+                <PasswordRuleList
+                  id={rulesId}
+                  password={values.password}
+                  testId="user.sign-in.password-rule-list"
+                  items={RULES}
+                />
+              ) : null}
               {signingUp ? null : (
                 // The flow moves, carrying the email typed; the address is there for a new tab.
                 <a

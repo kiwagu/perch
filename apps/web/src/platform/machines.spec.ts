@@ -28,6 +28,7 @@ import { createDevicesMachine } from '../features/device/application/devices.mac
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
+import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
 import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
 import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
@@ -116,6 +117,8 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       resend: () => okAsync(undefined),
     }),
   'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
+  'user.reset-password': () =>
+    createResetPasswordMachine({ token: 't', reset: () => okAsync(undefined) }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),

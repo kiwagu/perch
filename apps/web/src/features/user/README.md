@@ -49,6 +49,16 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
   email field starts with the address's `email`, `useSearchStart`), the same answer for any email
   (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for);
+  `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
+  link opens (`application/reset-password.machine.ts`, the flow of
+  `contract/domain/screens/reset-password.yaml`): the new password typed twice, held to the rules
+  of a new password and to the password typed again as either is typed (the guards of
+  `new-password-guards.policy.ts`, shared with the sign-up), then `platform.reset-password` with
+  the address's token; it ends on `password-reset` beside the link to sign in, or on a link that
+  does not work (`link-invalid`, `link-expired`) beside the link that asks for a new one; a
+  password refused (`password-rejected`) shows under the password, the form kept. The reset signs
+  every device of the account out, this one too when it is signed in to it (its channel hears
+  4002), and the page keeps its message, which its machine holds whatever the session does;
   `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
@@ -75,15 +85,15 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
 - Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
-  alone, `RouterLink` its container gives it).
+  alone, `RouterLink` its container gives it) and `presentation/components/password-rule-list/`
+  (`PasswordRuleList`, the rules of a new password under it, its screen giving the anchors).
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
-- Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password` and
-  `user.profile` in `contract/domain/screens/sign-in.yaml`,
-  `contract/domain/screens/verify-email.yaml`, `contract/domain/screens/forgot-password.yaml` and
-  `contract/domain/screens/me.yaml`.
+- Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
+  `user.reset-password` and `user.profile` in `contract/domain/screens/sign-in.yaml`,
+  `verify-email.yaml`, `forgot-password.yaml`, `reset-password.yaml` and `me.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
@@ -98,9 +108,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   identity across devices (the frame stores and follows it, see the app-shell module), and a
   new account's settings start in the language chosen before signing up, sent with the sign-up;
   a sign-up lists the rules of a new password under the password (`user.sign-in.password-rule-list`,
-  `password-rule-list.tsx`, the lines `user.sign-in.password-rule.*`), describing it, each rule
+  the shared `presentation/components/password-rule-list/`, each screen giving the anchors of its
+  items, the lines `user.password-rule.*`), describing it, each rule
   marked `met` while the password as typed keeps it, its state read out with it
-  (`user.sign-in.password-rule.met` or `.not-met`), and the submit is disabled while the password
+  (`user.password-rule.met` or `.not-met`), and the submit is disabled while the password
   breaks a rule, the password typed again not judged until it keeps them all;
   each password input is the kit's `PasswordInput`, whose eye (`<input>.visibility-button`,
   `user.password.show` or `.hide`) shows what it holds as typed or hides it again, presentation

@@ -29,6 +29,7 @@ export type FakeAuthRequest =
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
   | { readonly kind: 'request-reset'; readonly email: string }
+  | { readonly kind: 'reset'; readonly token: string }
   | { readonly kind: 'sign-out'; readonly token: string; readonly device: string }
 
 export interface FakeGatewayAuth extends GatewayAuth {
@@ -42,6 +43,8 @@ export interface FakeGatewayAuth extends GatewayAuth {
   mailsTo(email: string): readonly string[]
   /** The identity of the account of `email`, as the gateway keeps it. */
   identityOf(email: string): AuthUser
+  /** The token of the latest reset link the gateway made for the account of `email`. */
+  resetLinkFor(email: string): string
 }
 
 /** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
@@ -63,6 +66,8 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
   const links = new Map<string, string>()
   /** The verification links' tokens mailed to each account, oldest first, by its email. */
   const mailed = new Map<string, string[]>()
+  /** The email of the account each reset link's token sets a password for; only the newest works. */
+  const resets = new Map<string, string>()
   const requests: FakeAuthRequest[] = []
   let issued = 0
   let linked = 0
@@ -94,6 +99,13 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return link
     },
     mailsTo: (email) => mailed.get(email.toLowerCase()) ?? [],
+    resetLinkFor: (email) => {
+      const link = [...resets].findLast(([, of]) => of === email.toLowerCase())?.[0]
+
+      if (link === undefined) throw new Error('the gateway made no reset link for the email')
+
+      return link
+    },
     identityOf: (email) => {
       const account = accounts.get(email.toLowerCase())
 
@@ -172,6 +184,34 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
     },
     requestPasswordReset: (email) => {
       requests.push({ kind: 'request-reset', email })
+
+      const known = email.toLowerCase()
+
+      if (accounts.has(known)) {
+        // The newest link replaces the earlier ones.
+        for (const [link, of] of resets) {
+          if (of === known) resets.delete(link)
+        }
+
+        linked += 1
+        resets.set(`reset-${linked}`, known)
+      }
+
+      return okAsync(undefined)
+    },
+    resetPassword: (link, password) => {
+      requests.push({ kind: 'reset', token: link })
+
+      const email = resets.get(link)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (email === undefined || account === undefined) {
+        return errAsync(dataError('data:LINK_INVALID', 'the gateway refused the link'))
+      }
+
+      // Only that mailbox got the link: the reset verifies the email too.
+      resets.delete(link)
+      accounts.set(email, { ...account, password, verified: true })
 
       return okAsync(undefined)
     },

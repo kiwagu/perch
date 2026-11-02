@@ -82,6 +82,14 @@ export interface SessionPort {
    */
   requestPasswordReset(email: string): ResultAsync<void, DataError>
   /**
+   * Sets a new password with a reset link's `token`. Nothing is signed in; the gateway signs every
+   * device of the account out, this one too when it is signed in to it, which its channel hears as
+   * a change of the password (4002). A password that breaks the rules fails as
+   * `data:PASSWORD_REJECTED`, a link past its hour as `data:LINK_EXPIRED`, another the gateway
+   * refuses as `data:LINK_INVALID`.
+   */
+  resetPassword(token: string, password: string): ResultAsync<void, DataError>
+  /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,
    * when changes could not be sent and signing out would lose them.
