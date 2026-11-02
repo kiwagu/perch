@@ -37,7 +37,13 @@ const indent = (text: string, by: string): string =>
     .map((line) => `${by}${line}`)
     .join('\n')
 
-const plain = (text: string | Buffer): string => stripVTControlCharacters(text.toString())
+/** A control character other than a tab or a line feed (C0, DEL and C1). */
+const isControl = (char: string): boolean =>
+  char !== '\t' && char !== '\n' && (char < ' ' || (char >= '\u007f' && char <= '\u009f'))
+
+/** Text as the log prints it: no terminal escape and no other control character. */
+const plain = (text: string | Buffer): string =>
+  [...stripVTControlCharacters(text.toString())].filter((char) => !isControl(char)).join('')
 
 /**
  * Whether a run is the test's last: it went as expected, was skipped or interrupted, or had no
@@ -52,6 +58,10 @@ const isLast = (test: LoggedTest, result: LoggedResult): boolean =>
 const failed = (test: LoggedTest, result: LoggedResult): boolean =>
   result.status !== 'skipped' && result.status !== test.expectedStatus
 
+/** A test that ran and passed only on a retry. */
+const flaky = (test: LoggedTest, result: LoggedResult): boolean =>
+  !failed(test, result) && result.status !== 'skipped' && result.retry > 0
+
 /** What Playwright hands a reporter it builds: `_mode` is `list` under `playwright test --list`. */
 export interface SpecReporterOptions {
   readonly _mode?: string
@@ -60,15 +70,17 @@ export interface SpecReporterOptions {
 /**
  * The suite's log when several workers run it: each spec file's tests printed together, once the
  * last of them ended, one line each (its outcome, project, title, tags and time) with, under it,
- * the errors of a failed one, the output any test wrote and where a failed one's trace is; then
- * the run's tally with the failed tests again. A file whose tests did not all end (the run was
- * stopped) is printed at the end with the others marked as not run. Under `--list` it prints
- * nothing, so Playwright prints its own listing.
+ * the errors of a failed run, the output any run wrote and where a failed run's trace is, each
+ * attempt under a header of its own when a test was retried; then the run's tally with the failed
+ * and the flaky tests again. When the run stops early, every file not printed yet is printed at
+ * the end: a test stopped before its retry with the attempts it had, one that never started as
+ * not run. Under `--list` it prints nothing, so Playwright prints its own listing.
  */
 export default class SpecReporter implements Reporter {
-  /** Each spec file's tests, the last run of those that ended, and the files printed. */
+  /** Each spec file's tests, every attempt of each test, the tests done, and the files printed. */
   private readonly files = new Map<string, LoggedTest[]>()
-  private readonly ended = new Map<LoggedTest, LoggedResult>()
+  private readonly attempts = new Map<LoggedTest, LoggedResult[]>()
+  private readonly done = new Set<LoggedTest>()
   private readonly printed = new Set<string>()
   private readonly listing: boolean
   private projectWidth = 0
@@ -97,16 +109,18 @@ export default class SpecReporter implements Reporter {
   }
 
   onTestEnd(test: LoggedTest, result: LoggedResult): void {
+    this.attempts.set(test, [...(this.attempts.get(test) ?? []), result])
+
     if (!isLast(test, result)) {
       return
     }
 
-    this.ended.set(test, result)
+    this.done.add(test)
 
     const [, , file = ''] = test.titlePath()
     const tests = this.files.get(file) ?? []
 
-    if (tests.every((each) => this.ended.has(each))) {
+    if (tests.every((each) => this.done.has(each))) {
       this.printFile(file, tests)
     }
   }
@@ -128,33 +142,37 @@ export default class SpecReporter implements Reporter {
 
   onEnd(result: Pick<FullResult, 'status' | 'duration'>): void {
     for (const [file, tests] of this.files) {
-      if (!this.printed.has(file) && tests.some((test) => this.ended.has(test))) {
+      if (!this.printed.has(file)) {
         this.printFile(file, tests)
       }
     }
 
     const all = [...this.files.values()].flat()
     const runs = all.flatMap((test) => {
-      const run = this.ended.get(test)
+      const run = this.attempts.get(test)?.at(-1)
 
       return run ? [{ test, run }] : []
     })
-    const count = (pick: (run: LoggedResult, test: LoggedTest) => boolean) =>
-      runs.filter(({ test, run }) => pick(run, test)).length
-    const failures = runs.filter(({ test, run }) => failed(test, run))
+    const pick = (keep: (test: LoggedTest, run: LoggedResult) => boolean) =>
+      runs.filter(({ test, run }) => keep(test, run))
+    const failures = pick(failed)
+    const flakes = pick(flaky)
+    const passed = pick(
+      (test, run) => !failed(test, run) && run.status !== 'skipped' && run.retry === 0,
+    ).length
+    const skipped = pick((_, run) => run.status === 'skipped').length
+    const list = (title: string, tests: typeof runs) =>
+      tests.length > 0
+        ? `\n${title}:\n${tests.map(({ test, run }) => this.line(test, run, true)).join('\n')}\n`
+        : ''
 
     this.write(
-      `${all.length} tests: ${count((run, test) => !failed(test, run) && run.status !== 'skipped' && run.retry === 0)} passed, ` +
-        `${failures.length} failed, ${count((run, test) => !failed(test, run) && run.retry > 0)} flaky, ` +
-        `${count((run) => run.status === 'skipped')} skipped, ${all.length - runs.length} not run ` +
-        `(${result.status}, ${seconds(result.duration)})\n`,
+      `${all.length} tests: ${passed} passed, ${failures.length} failed, ` +
+        `${flakes.length} flaky, ${skipped} skipped, ${all.length - runs.length} not run ` +
+        `(${result.status}, ${seconds(result.duration)})\n` +
+        list('Failed', failures) +
+        list('Flaky', flakes),
     )
-
-    if (failures.length > 0) {
-      this.write(
-        `\nFailed:\n${failures.map(({ test, run }) => this.line(test, run, true)).join('\n')}\n`,
-      )
-    }
   }
 
   /** Writes to the terminal, but under `--list`; the spec reads it instead. */
@@ -168,9 +186,12 @@ export default class SpecReporter implements Reporter {
     this.printed.add(file)
 
     const lines = tests.flatMap((test) => {
-      const run = this.ended.get(test)
+      const runs = this.attempts.get(test) ?? []
+      const last = runs.at(-1)
 
-      return run ? [this.line(test, run, false), ...this.details(test, run)] : [this.notRun(test)]
+      return last
+        ? [this.line(test, last, false), ...this.details(test, runs)]
+        : [this.notRun(test)]
     })
 
     this.write(`${file}\n${lines.join('\n')}\n\n`)
@@ -180,10 +201,15 @@ export default class SpecReporter implements Reporter {
     const [, project = '', file = '', ...titles] = test.titlePath()
     const mark =
       run.status === 'skipped' ? '-' : failed(test, run) ? '✘' : run.retry > 0 ? '±' : '✓'
-    const retry = run.retry > 0 ? ` (retry #${run.retry})` : ''
+    // A test the run stopped before its next attempt is not done, its last run being a failure.
+    const notes = [
+      ...(run.retry > 0 ? [`retry #${run.retry}`] : []),
+      ...(this.done.has(test) ? [] : ['its retry did not run']),
+    ]
+    const suffix = notes.length > 0 ? ` (${notes.join(', ')})` : ''
     const title = [...(withFile ? [file] : []), ...titles].join(' › ')
 
-    return `  ${mark} ${project.padEnd(this.projectWidth)}  ${[title, ...test.tags].join(' ')}  ${seconds(run.duration)}${retry}`
+    return `  ${mark} ${project.padEnd(this.projectWidth)}  ${[title, ...test.tags].join(' ')}  ${seconds(run.duration)}${suffix}`
   }
 
   private notRun(test: LoggedTest): string {
@@ -192,8 +218,28 @@ export default class SpecReporter implements Reporter {
     return `  · ${project.padEnd(this.projectWidth)}  ${[titles.join(' › '), ...test.tags].join(' ')}  not run`
   }
 
-  /** Under a test's line: a failed one's errors, any output it wrote, a failed one's files. */
-  private details(test: LoggedTest, run: LoggedResult): string[] {
+  /**
+   * Under a test's line, for each of its runs: a failed run's errors, the output it wrote and a
+   * failed run's files; when the test was retried, each run with any of these under a header.
+   */
+  private details(test: LoggedTest, runs: readonly LoggedResult[]): string[] {
+    const retried = runs.length > 1
+
+    return runs.flatMap((run, at) => {
+      const found = this.diagnostics(test, run)
+
+      if (!retried || found.length === 0) {
+        return found.map((text) => indent(text, '      '))
+      }
+
+      return [
+        `      attempt ${at + 1}: ${run.status}  ${seconds(run.duration)}`,
+        ...found.map((text) => indent(text, '        ')),
+      ]
+    })
+  }
+
+  private diagnostics(test: LoggedTest, run: LoggedResult): string[] {
     const isFailure = failed(test, run)
     const errors = isFailure ? run.errors.map((error) => this.describe(error)) : []
     const output = [...run.stdout, ...run.stderr].map(plain).join('')
@@ -205,23 +251,31 @@ export default class SpecReporter implements Reporter {
         )
       : []
 
-    return [...errors, ...(output.trim() ? [output] : []), ...files].map((text) =>
-      indent(text, '      '),
-    )
+    return [...errors, ...(output.trim() ? [output] : []), ...files]
   }
 
+  /**
+   * An error as the log prints it: its message, the code around it, the frames of its stack with
+   * paths from the working directory (where it was thrown when the stack names none, the whole
+   * stack when it is not one of frames) and, after `[cause]:`, its cause.
+   */
   private describe(error: TestError): string {
+    const message = error.message ?? error.value ?? 'an error without a message'
+    const stack = error.stack ?? ''
+    const frames = stack
+      .split('\n')
+      .filter((line) => /^\s*at /.test(line))
+      .map((line) => line.replaceAll(`${process.cwd()}/`, ''))
     const where = error.location
       ? `at ${relative(process.cwd(), error.location.file)}:${error.location.line}:${error.location.column}`
       : ''
+    const trace =
+      frames.length > 0 ? frames.join('\n') : [where, stack === message ? '' : stack].join('\n')
+    const cause = error.cause ? `[cause]: ${this.describe(error.cause)}` : ''
 
-    return [
-      error.message ?? error.value ?? 'an error without a message',
-      error.snippet ?? '',
-      where,
-    ]
-      .filter((part) => part !== '')
+    return [message, error.snippet ?? '', trace, cause]
       .map(plain)
+      .filter((part) => part.trim() !== '')
       .join('\n')
   }
 }

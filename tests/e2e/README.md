@@ -151,9 +151,11 @@ None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tes
 `scenarios/` beside them holds their scenarios, one file each at the same path.
 `scripts/spec-reporter.ts`: the run's log, as two workers run the tests side by side: each spec
 file's tests printed together once the last of them ended, one line each (outcome, project,
-title, tags, time) with, under a failed one, its errors and where its trace is, and under any
-test the output it wrote; then the tally, with the failed tests again. The HTML report
-(`playwright-report/`) has the rest; `--list` prints Playwright's own listing.
+title, tags, time) with, under a failed run, its errors with their stack and cause and where its
+trace is, and under any run the output it wrote, each attempt of a retried test under a header
+of its own; then the tally, with the failed and the flaky tests again. A run stopped early
+prints every file it had not printed yet, a test that never started marked `not run`. The HTML
+report (`playwright-report/`) has the rest; `--list` prints Playwright's own listing.
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures,
 `signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of

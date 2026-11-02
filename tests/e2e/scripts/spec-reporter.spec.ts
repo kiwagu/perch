@@ -92,7 +92,7 @@ describe('the spec reporter', () => {
     )
   })
 
-  it('waits for the last retry, and tallies the run with its failures again', () => {
+  it('waits for the last retry, and tallies the run with its failed and flaky tests again', () => {
     const flaky = aTest('mobile', 'user/sign-up.e2e.spec.ts', 'signs up', 1)
     const reporter = begin([flaky, notes, signUpDesktop])
 
@@ -112,8 +112,64 @@ describe('the spec reporter', () => {
         'Failed:',
         '  ✘ mobile   org/notes.e2e.spec.ts › Scenario › shares a note @smoke  60.0s',
         '',
+        'Flaky:',
+        '  ± mobile   user/sign-up.e2e.spec.ts › Scenario › signs up @smoke  4.2s (retry #1)',
+        '',
       ].join('\n'),
     )
+  })
+
+  it("keeps a failed attempt's diagnostics under a test that passed on its retry", () => {
+    const flaky = aTest('mobile', 'user/sign-up.e2e.spec.ts', 'signs up', 1)
+    const reporter = begin([flaky])
+
+    reporter.onTestEnd(
+      flaky,
+      aRun({
+        status: 'failed',
+        duration: 3000,
+        errors: [{ message: 'expected visible' }],
+        stdout: ['first try\n'],
+        attachments: [
+          { name: 'trace', contentType: 'application/zip', path: `${process.cwd()}/t/0/trace.zip` },
+        ],
+      }),
+    )
+    reporter.onTestEnd(flaky, aRun({ retry: 1 }))
+
+    expect(reporter.text).toContain(
+      [
+        'user/sign-up.e2e.spec.ts',
+        '  ± mobile  Scenario › signs up @smoke  4.2s (retry #1)',
+        '      attempt 1: failed  3.0s',
+        '        expected visible',
+        '        first try',
+        '        trace: t/0/trace.zip',
+        '',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('counts a test stopped between its attempts as failed, with its retry not run', () => {
+    const retried = aTest('mobile', 'user/sign-up.e2e.spec.ts', 'signs up', 1)
+    const reporter = begin([retried, signUpDesktop])
+
+    reporter.onTestEnd(
+      retried,
+      aRun({ status: 'failed', errors: [{ message: 'expected visible' }] }),
+    )
+    reporter.onEnd({ status: 'interrupted', duration: 10_000 })
+
+    expect(reporter.text).toContain(
+      [
+        'user/sign-up.e2e.spec.ts',
+        '  ✘ mobile   Scenario › signs up @smoke  4.2s (its retry did not run)',
+        '      expected visible',
+        '  · desktop  Scenario › signs up @smoke  not run',
+      ].join('\n'),
+    )
+    expect(reporter.text).toContain('2 tests: 0 passed, 1 failed, 0 flaky, 0 skipped, 1 not run')
   })
 
   it('leaves the terminal to the listing of `playwright test --list`', () => {
@@ -121,8 +177,8 @@ describe('the spec reporter', () => {
     expect(new SpecReporter({ _mode: 'test' }).printsToStdio()).toBe(true)
   })
 
-  it('prints at the end a file whose tests did not all run', () => {
-    const reporter = begin([signUpPhone, signUpDesktop])
+  it('names at the end every file whose tests did not all run, one that never started too', () => {
+    const reporter = begin([signUpPhone, signUpDesktop, notes])
 
     reporter.onTestEnd(signUpPhone, aRun({ status: 'interrupted' }))
     reporter.onEnd({ status: 'interrupted', duration: 10_000 })
@@ -132,8 +188,57 @@ describe('the spec reporter', () => {
         'user/sign-up.e2e.spec.ts',
         '  ✘ mobile   Scenario › signs up @smoke  4.2s',
         '  · desktop  Scenario › signs up @smoke  not run',
+        '',
+        'org/notes.e2e.spec.ts',
+        '  · mobile   Scenario › shares a note @smoke  not run',
       ].join('\n'),
     )
-    expect(reporter.text).toContain('2 tests: 0 passed, 1 failed, 0 flaky, 0 skipped, 1 not run')
+    expect(reporter.text).toContain('3 tests: 0 passed, 1 failed, 0 flaky, 0 skipped, 2 not run')
+  })
+
+  it("prints an error's stack and its cause, without control characters", () => {
+    const reporter = begin([notes])
+
+    reporter.onTestEnd(
+      notes,
+      aRun({
+        status: 'failed',
+        errors: [
+          {
+            message: 'Error: outer\r',
+            location: { file: `${process.cwd()}/a.ts`, line: 1, column: 2 },
+            stack: `Error: outer\n    at step (${process.cwd()}/a.ts:1:2)\n    at run (b.ts:3:4)`,
+            cause: { message: 'inner\u0007 cause', stack: 'Error: inner\n    at deep (c.ts:5:6)' },
+          },
+        ],
+      }),
+    )
+
+    expect(reporter.text).toContain(
+      [
+        '      Error: outer',
+        '          at step (a.ts:1:2)',
+        '          at run (b.ts:3:4)',
+        '      [cause]: inner cause',
+        '          at deep (c.ts:5:6)',
+      ].join('\n'),
+    )
+    expect(reporter.text).not.toContain('      at a.ts:1:2')
+  })
+
+  it('prints where an error was thrown when its stack names no frame', () => {
+    const reporter = begin([notes])
+
+    reporter.onTestEnd(
+      notes,
+      aRun({
+        status: 'failed',
+        errors: [
+          { message: 'timed out', location: { file: `${process.cwd()}/a.ts`, line: 1, column: 2 } },
+        ],
+      }),
+    )
+
+    expect(reporter.text).toContain('      timed out\n      at a.ts:1:2\n')
   })
 })
