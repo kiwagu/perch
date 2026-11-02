@@ -127,8 +127,18 @@ set before the rules, of 8 to 128 characters, still signs in. Better Auth's refu
 email, a language the gateway does not speak) pass as their status and code alone; they do not
 depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`, its `id` the
-identity's). An email is kept and matched in lower case, so an address in any case is one
-account. Wrong credentials answer 401; the right password of an account not verified yet answers
+identity's). While the account has not started, the answer also carries `start`:
+`{ "start": { "name": "<the name it signed up with>", "locale": "en" | "es" } }`, the language it
+signed up in. The account has not started while its profile or its settings have not reached the
+directory: the region hub projects the rows of the identity's private region there, so a row a
+device created and pushed is found by the identity. The device that gets `start` creates the
+settings (`locale`) and the profile (`name`, the account's email) under ids derived from the
+identity, as the device that verifies the email by the sign-up mail's link does with the answer of
+that verification; several devices that sign in before either row arrives all get it, and their
+creations converge on the same records. This is how an account whose email a reset verified (it
+never opened its sign-up link) gets its settings and profile at its first sign-in, and also how a
+device signing in before the verifying device's start reached the server learns of it. An email is
+kept and matched in lower case, so an address in any case is one account. Wrong credentials answer 401; the right password of an account not verified yet answers
 403 `EMAIL_NOT_VERIFIED` and sends nothing (`sendOnSignIn: false`): the person asks for the mail
 again.
 
@@ -171,7 +181,8 @@ account's. When its answer carries a session, the identity's sockets on the devi
 with 1000 at once, before the session is read back for the answer, so a readback that fails (500
 `internal`) still leaves no socket of the device's earlier session open. It answers 200
 `{ token, user: { id, email, name, locale } }` the first time (the raw token, the account's name
-and the language it signed up in), 200 `{ token: null }` for an account verified before, and 401
+and the language it signed up in), 200 `{ token: null }` for an account verified before, by an
+earlier opening or by a reset (Better Auth signs nothing in for a verified account), and 401
 `link-expired` for a link past its lifetime or `link-invalid` for any other that verifies
 nothing, an unknown account's included. The turns are this process's: several gateway processes
 would need a claim in the database.
@@ -204,8 +215,10 @@ directory (`AccountPasswords.reset`, `surql/password-reset-commit.surql`) judges
 on the clock as it is then, so a link spent, replaced or expired while the reset waited answers
 401 `link-invalid` or `link-expired` with nothing changed, and otherwise spends it with every
 other reset link of the account, sets the password on the credential row, ends every session of
-the account (the request's own session too when it is one of them) and deletes its pending change
-of email: all of them or none, so a failure (500 `internal`) leaves the password, the link, the
+the account (the request's own session too when it is one of them), verifies its email when it was
+not yet (only that mailbox got the link; Better Auth's `emailVerified` is what a sign-in reads, so
+the account signs in from then on, its first sign-in carrying `start`) and deletes its pending
+change of email: all of them or none, so a failure (500 `internal`) leaves the password, the link, the
 sessions and the pending change as they were. Once it committed, the account's sockets close with
 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`) and the notice of a
 changed password starts (`afterPasswordChange`): 204 with no body, and nothing is signed in.
@@ -266,7 +279,8 @@ the account and then of the new email (so no sign-up of the new email runs meanw
 is judged again on the clock as it is then (401 `link-expired` when it expired while the
 confirmation waited), the pending change the token names is spent (`EmailChanges.claim`, once),
 and the account's email
-becomes the new one only while it is still the email the change was asked from
+becomes the new one only while it is still the email the change was asked from, every reset link
+of the account ending with it in one transaction, since they went to the old email
 (`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
 by a newer one, or ended by a change of the password), when the account's email changed since, or
 when the new email has got an account meanwhile. Once it changed, the notice of a changed email
@@ -372,8 +386,9 @@ error carries one.
   ending of all but a device's newest session at a sign-in, the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
-  the move of an identity's email, the hash on a credential row, an email's account and its
-  hash as a sign-in reads them, and the two transactions of a
+  the move of an identity's email with the end of its reset links, the hash on a credential
+  row, an email's account, its hash and its start as a sign-in reads them, and the two
+  transactions of a
   new password: a reset's and a change's).
 - Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
@@ -396,7 +411,10 @@ error carries one.
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
   change and a confirmation, a sign-in that checked the old password beside a reset or a change,
-  or whose email moved to another account meanwhile, left with no working session, a sign-in
+  or whose email moved to another account meanwhile, left with no working session, the start a
+  sign-in carries while the account's profile or settings are missing, a reset that verifies an
+  email and the sign-up link answering verified-before after it, a confirmation that ends the
+  reset links, a sign-in
   that names no password answered at once for any email, no sign-in taking a turn, a change of
   the email that waited while a reset ended its
   session making no link, a reset or a change whose last step fails leaving every step undone,

@@ -2,6 +2,7 @@ import { isAPIError } from 'better-auth/api'
 import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
+import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
@@ -31,14 +32,22 @@ export type PasswordChange =
 /** What a request for a reset mail did: asked for it, or was refused (not an email). */
 export type ResetRequest = 'asked' | 'refused'
 
+/** What the first device that enters an account starts it from: its sign-up's name and language. */
+export interface AccountStart {
+  readonly name: string
+  readonly locale: Locale
+}
+
 /**
  * The account an email signs in to, and the hash on its credential row (none when it has no
  * credential row): a new password always gets a hash of its own, so the hash tells whether the
- * password changed.
+ * password changed. `start` is there while the account has not started: its profile or its
+ * settings have not reached the directory through its private region yet.
  */
 export interface SignInCredential {
   readonly identity: IdentityId
   readonly hash: string | undefined
+  readonly start: AccountStart | undefined
 }
 
 /** Whether two reads of an email's credential found the same account with the same password. */
@@ -52,6 +61,9 @@ export function sameCredential(
 const credentialRow = z.object({
   identity: idSchemas.identity.schema,
   hash: z.string().min(1).nullish(),
+  name: z.string(),
+  locale: z.enum(SUPPORTED_LOCALES),
+  started: z.boolean(),
 })
 
 const resetOutcome = z.enum(['reset', 'link-invalid', 'link-expired'])
@@ -185,9 +197,10 @@ export class AccountPasswords {
   }
 
   /**
-   * The account `email` signs in to, in any case, and the hash on its credential row, or none
-   * when no account has the email. A sign-in reads it before Better Auth checks the password and
-   * again once Better Auth wrote the session (`sameCredential`).
+   * The account `email` signs in to, in any case, the hash on its credential row and, while the
+   * account has not started, what it starts from; none when no account has the email. A sign-in
+   * reads it before Better Auth checks the password and again once Better Auth wrote the session
+   * (`sameCredential`).
    */
   credentialOf(email: string): ResultAsync<SignInCredential | undefined, DataError> {
     return reading(
@@ -200,9 +213,19 @@ export class AccountPasswords {
 
       const row = credentialRow.safeParse(value)
 
-      return row.success
-        ? ok({ identity: row.data.identity, hash: row.data.hash ?? undefined })
-        : err(dataError('data:QUERY_FAILED', 'the credential of an email has an unknown shape'))
+      if (!row.success) {
+        return err(
+          dataError('data:QUERY_FAILED', 'the credential of an email has an unknown shape'),
+        )
+      }
+
+      const { identity, hash, name, locale, started } = row.data
+
+      return ok({
+        identity,
+        hash: hash ?? undefined,
+        start: started ? undefined : { name, locale },
+      })
     })
   }
 

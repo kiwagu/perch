@@ -8,10 +8,13 @@ import { deviceHeaders } from '../__fixtures__/auth-instance'
 import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
 import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
+import profileRowStatement from '../__fixtures__/profile-row.surql'
+import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
 
 import {
   ANN,
   ARGON2_WAIT,
+  annsLink,
   heldQueries,
   holdTurn,
   isSessionInsert,
@@ -472,5 +475,78 @@ describe('authHandler, a reset and what runs beside it', () => {
     await mounted.local.db.query(cancelAllowStatement)
     expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
     expect(await pendingChange(mounted, ann.identity)).toEqual([])
+  })
+})
+
+/** What a sign-in answers, with the start it may carry. */
+const startAnswer = z.object({
+  token: z.string().min(1),
+  user: z.object({ id: z.string() }),
+  start: z.object({ name: z.string(), locale: z.string() }).optional(),
+})
+
+describe('authHandler, a reset of an account not verified yet', () => {
+  it('verifies its email: its first sign-ins carry the start of the account, until its profile and settings exist', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await mounted.auth.api.signUpEmail({
+      body: { name: 'Ana', email: ANN, password: PASSWORD, locale: 'es' },
+      headers: deviceHeaders('laptop'),
+    })
+    await mounted.outbox.next(ANN)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(403)
+
+    const token = await resetLink(mounted)
+
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+
+    // Two devices sign in at once: both are told to start the account.
+    const answers = await Promise.all(
+      ['phone', 'tablet'].map((device) =>
+        mounted.route(signInRequest(ANN, NEW_PASSWORD, device), FROM),
+      ),
+    )
+
+    for (const answer of answers) {
+      expect(answer?.status).toBe(200)
+      expect(startAnswer.parse(await answer?.json()).start).toEqual({ name: 'Ana', locale: 'es' })
+    }
+
+    const identity = (await mounted.sessions.identityOf(ANN))._unsafeUnwrap()
+
+    await mounted.local.db.query(settingsLocaleStatement, { identity, locale: 'es' })
+
+    const halfway = await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), FROM)
+
+    expect(startAnswer.parse(await halfway?.json()).start).toEqual({ name: 'Ana', locale: 'es' })
+
+    await mounted.local.db.query(profileRowStatement, { identity, name: 'Ana', email: ANN })
+
+    const started = await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), FROM)
+
+    expect(started?.status).toBe(200)
+    expect(startAnswer.parse(await started?.json()).start).toBeUndefined()
+  })
+
+  it('leaves its email unverified when a step of the reset fails', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await annsLink(mounted.outbox)
+
+    const identity =
+      (await mounted.sessions.identityOf(ANN))._unsafeUnwrap() ?? expect.unreachable('Ann')
+    const token = await resetLink(mounted)
+
+    ;(await mounted.emailChanges.ask(identity, ANN, 'ann.new@example.test'))._unsafeUnwrap()
+    await mounted.local.db.query(cancelRefuseStatement)
+
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(500)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(403)
+
+    await mounted.local.db.query(cancelAllowStatement)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'laptop'), FROM))?.status).toBe(
+      200,
+    )
   })
 })

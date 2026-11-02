@@ -126,15 +126,16 @@ export class EmailChanges {
   }
 
   /**
-   * Makes `to` the email of `identity` when its email is still `from`: true once it is, false when
-   * the identity is gone or its email changed meanwhile.
+   * Makes `to` the email of `identity` when its email is still `from`, and ends every reset link
+   * of the identity with it, in one transaction: the links went to the old email. True once it
+   * is, false, nothing changed, when the identity is gone or its email changed meanwhile.
    */
   move(identity: IdentityId, from: string, to: string): ResultAsync<boolean, DataError> {
     return writing(
       this.#directory.db
-        .query<[unknown]>(identityEmailMoveStatement, { identity, from, to })
+        .query<unknown[]>(identityEmailMoveStatement, { identity, from, to })
         .retry(),
       `the email of ${identity} could not be changed`,
-    ).map(([moved]) => typeof moved === 'string')
+    ).map((results) => typeof results.at(-2) === 'string')
   }
 }

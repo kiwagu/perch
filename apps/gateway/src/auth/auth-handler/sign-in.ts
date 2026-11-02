@@ -3,7 +3,7 @@ import { z } from '@workspace/zod'
 import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
-import { type SignInCredential, sameCredential } from '../account-passwords'
+import { type AccountStart, type SignInCredential, sameCredential } from '../account-passwords'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
@@ -20,6 +20,9 @@ const signInBody = z.object({ email: z.string(), password: z.string() })
 
 /** As much of an accepted sign-in's answer as ending its session needs. */
 const acceptedToken = z.object({ token: z.string().min(1) })
+
+/** An accepted sign-in's answer, every field Better Auth gave kept. */
+const acceptedAnswer = z.looseObject({ token: z.string().min(1), user: z.looseObject({}) })
 
 /** What Better Auth answers wrong credentials: the refusal a sign-in that could not stand gets. */
 const notSignedIn = (): Response =>
@@ -65,11 +68,14 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * email to another account, or a reset or a change gave the account a new password, while Better
  * Auth checked the old one: the session it wrote is ended at once by its token and the sign-in
  * answers as wrong credentials do (401), or 500 `internal` when the second read or that ending
- * failed. A reset or a change ends every session present when its transaction commits, so a session written before it
- * is ended by it, and one written after is ended here. Either way the device's sockets close
- * (`closeDevice`): the device's earlier session ended when the new one was written. Any other answer
- * reaches the client as its status and code alone (`refusalOf`); an accepted one, without its
- * cookies.
+ * failed. A reset or a change ends every session present when its transaction commits, so a
+ * session written before it is ended by it, and one written after is ended here. Either way the
+ * device's sockets close (`closeDevice`): the device's earlier session ended when the new one was
+ * written. Any other answer reaches the client as its status and code alone (`refusalOf`); an
+ * accepted one, without its cookies, and with `start` (`{ name, locale }`, what the account signed
+ * up with) while the account has not started: its profile or its settings have not reached the
+ * directory, so the device that signs in creates them, as the device that verifies the email by
+ * the sign-up mail's link does.
  */
 async function handedOver(
   deps: AuthMountDeps,
@@ -94,7 +100,37 @@ async function handedOver(
     return Response.json({ code: 'internal' }, { status: 500 })
   }
 
-  return stands ? withoutCookies(response) : notSignedIn()
+  if (!stands) {
+    return notSignedIn()
+  }
+
+  const start = after.value?.start
+
+  return start === undefined ? withoutCookies(response) : withStart(response, start)
+}
+
+/**
+ * An accepted sign-in's answer, without its cookies, that also tells the device to start the
+ * account: `start`, the name and the language it signed up with, beside Better Auth's `token` and
+ * `user`.
+ */
+async function withStart(response: Response, start: AccountStart): Promise<Response> {
+  const answer = acceptedAnswer.safeParse(await response.json().catch(() => undefined))
+
+  if (!answer.success) {
+    return Response.json({ code: 'internal' }, { status: 500 })
+  }
+
+  const headers = new Headers(response.headers)
+
+  for (const name of ['set-cookie', 'content-length', 'content-type']) {
+    headers.delete(name)
+  }
+
+  return Response.json(
+    { ...answer.data, start: { name: start.name, locale: start.locale } },
+    { status: 200, headers },
+  )
 }
 
 /**

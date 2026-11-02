@@ -16,10 +16,13 @@ import {
   mountedOnFakeAuth,
   mountedOnRealAuth,
   ORIGIN,
+  pastFloor,
+  postTo,
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
 } from './__fixtures__/mount'
+import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -449,5 +452,36 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(JSON.stringify(logs)).not.toMatch(MARKER)
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))
+  })
+})
+
+describe('authHandler, a verification link after a reset verified the email', () => {
+  it('answers verified-before, signs nothing in and creates no session', async () => {
+    const { route, outbox, local, clock } = await mountedOnRealAuth()
+    const token = await annsLink(outbox)
+
+    await pastFloor(
+      clock,
+      route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    const link = linkToken(await outbox.next(ANN, 1))
+
+    expect(
+      (
+        await route(
+          postTo('/auth/reset-password', { token: link, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(204)
+
+    const answer = await route(verify(token, 'phone'), FROM)
+    const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({ token: null })
+    expect(devices).toEqual([])
   })
 })

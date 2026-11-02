@@ -474,3 +474,32 @@ describe('authHandler, a change of the email and what runs beside it', () => {
     expect((await mounted.sessions.identityOf(ANN))._unsafeUnwrap()).toBe(ann.identity)
   })
 })
+
+describe('authHandler, a confirmation and the reset links of the account', () => {
+  it('ends every reset link of the account: one mailed to the old email before the confirmation answers link-invalid after it', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    const link = linkToken(await mounted.outbox.next(ANN, 1))
+    const token = await confirmationLink(mounted, ann)
+
+    expect((await mounted.route(confirm(token), FROM))?.status).toBe(200)
+
+    const refused = await mounted.route(
+      postTo('/auth/reset-password', { token: link, password: 'New-pass-word-2' }),
+      FROM,
+    )
+
+    expect(refused?.status).toBe(401)
+    expect(await refused?.json()).toEqual({ code: 'link-invalid' })
+    expect((await mounted.route(signInRequest(NEW_EMAIL, PASSWORD, 'desk'), FROM))?.status).toBe(
+      200,
+    )
+  })
+})

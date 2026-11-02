@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
+import profileRowStatement from '../__fixtures__/profile-row.surql'
+import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
 
 import {
   ANN,
@@ -132,4 +134,25 @@ describe('authHandler, a sign-in and what runs beside it', () => {
       release()
     }
   }, 30_000)
+})
+
+describe('authHandler, the start of an account at its sign-in', () => {
+  it("carries no start for an account whose profile and settings exist, and the account's own answer as Better Auth gave it", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await mounted.local.db.query(settingsLocaleStatement, { identity: ann.identity, locale: 'en' })
+    await mounted.local.db.query(profileRowStatement, {
+      identity: ann.identity,
+      name: 'Ann',
+      email: ANN,
+    })
+
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+    const body: unknown = await answer?.json()
+
+    expect(answer?.status).toBe(200)
+    expect(body).toMatchObject({ user: { id: ann.identity, email: ANN } })
+    expect(body).not.toHaveProperty('start')
+  })
 })
