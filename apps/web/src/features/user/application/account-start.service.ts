@@ -43,11 +43,41 @@ export interface KeptStartPort {
 }
 
 /**
- * Runs `run` as the only account start among this browser's tabs, once the tab before it left what
- * it wrote durable and projected in the local store the tabs share, so `run` reads it there; it
- * leaves its own writes so for the next.
+ * Resolves once what this tab's documents hold, what they pulled from the gateway included, is
+ * projected in the local store the reads see.
  */
-export type StartTurns = <T>(run: () => ResultAsync<T, SignInError>) => ResultAsync<T, SignInError>
+export type Projected = () => ResultAsync<void, SignInError>
+
+/**
+ * Runs `run` as the only account start among this browser's tabs, once the tab before it left what
+ * it wrote durable and projected in the local store the tabs share and this tab's own documents are
+ * projected there, so `run` reads all of it; `run` is handed `projected` to await the projection
+ * again within its turn. It leaves its own writes durable and projected for the next.
+ */
+export type StartTurns = <T>(
+  run: (projected: Projected) => ResultAsync<T, SignInError>,
+) => ResultAsync<T, SignInError>
+
+/**
+ * A record of the account, created when the store holds none. A create the document refuses because
+ * the record is there after all (another device's, which reached this document after the read) is
+ * done once its projection shows it; any other failure stays the start's.
+ */
+function ensured(
+  read: () => ResultAsync<readonly unknown[], SignInError>,
+  create: () => ResultAsync<void, SignInError>,
+  projected: Projected,
+): ResultAsync<void, SignInError> {
+  return read().andThen((rows) =>
+    rows.length > 0
+      ? okAsync(undefined)
+      : create().orElse((refused) =>
+          projected()
+            .andThen(read)
+            .andThen((now) => (now.length > 0 ? okAsync(undefined) : errAsync(refused))),
+        ),
+  )
+}
 
 /** What an id keeps after its prefix. */
 const bodyOf = (identity: IdentityId): string => identity.slice(identity.indexOf('_') + 1)
@@ -94,7 +124,9 @@ export class AccountStartService {
   start(user: AuthUser, from: AccountStartFrom): ResultAsync<void, SignInError> {
     const kept = this.#keep(user, from, false)
 
-    return kept.isErr() ? errAsync(kept.error) : this.turns(() => this.#finish(user, kept.value))
+    return kept.isErr()
+      ? errAsync(kept.error)
+      : this.turns((projected) => this.#finish(user, kept.value, projected))
   }
 
   /**
@@ -113,11 +145,11 @@ export class AccountStartService {
    * is one that waits for this device's first pull.
    */
   resume(user: AuthUser): ResultAsync<void, SignInError> {
-    return this.turns(() => {
+    return this.turns((projected) => {
       const start = this.kept.kept()
 
       return start?.identity === user.id && !start.afterPull
-        ? this.#finish(user, start)
+        ? this.#finish(user, start, projected)
         : okAsync(undefined)
     })
   }
@@ -127,10 +159,10 @@ export class AccountStartService {
    * has: only what the pull left missing is created.
    */
   resumeAfterPull(user: AuthUser): ResultAsync<void, SignInError> {
-    return this.turns(() => {
+    return this.turns((projected) => {
       const start = this.kept.kept()
 
-      return start?.identity === user.id ? this.#finish(user, start) : okAsync(undefined)
+      return start?.identity === user.id ? this.#finish(user, start, projected) : okAsync(undefined)
     })
   }
 
@@ -149,31 +181,36 @@ export class AccountStartService {
     })
   }
 
-  #finish(user: AuthUser, start: AccountStart): ResultAsync<void, SignInError> {
+  #finish(
+    user: AuthUser,
+    start: AccountStart,
+    projected: Projected,
+  ): ResultAsync<void, SignInError> {
     const owner = { identity: start.identity }
 
-    return this.settings
-      .read(owner)
-      .andThen((rows) =>
-        rows.length > 0
-          ? okAsync(undefined)
-          : this.settings.createSettings({
-              id: settingsIdOf(start.identity),
-              identity: start.identity,
-              locale: start.locale,
-            }),
-      )
-      .andThen(() => this.profiles.read(owner))
-      .andThen((rows) =>
-        rows.length > 0
-          ? okAsync(undefined)
-          : this.profiles.createProfile({
+    return ensured(
+      () => this.settings.read(owner),
+      () =>
+        this.settings.createSettings({
+          id: settingsIdOf(start.identity),
+          identity: start.identity,
+          locale: start.locale,
+        }),
+      projected,
+    )
+      .andThen(() =>
+        ensured(
+          () => this.profiles.read(owner),
+          () =>
+            this.profiles.createProfile({
               id: profileIdOf(start.identity),
               identity: start.identity,
               name: start.name,
               // As the account keeps it: in lower case, however it was typed.
               email: user.email,
             }),
+          projected,
+        ),
       )
       .map(() => this.kept.forget())
   }

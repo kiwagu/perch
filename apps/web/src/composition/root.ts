@@ -221,6 +221,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   const starts = accountStarts({
     session,
     space: () => session.space(),
+    clock: options.clock,
     runner: session.runner,
     commands,
     settings,

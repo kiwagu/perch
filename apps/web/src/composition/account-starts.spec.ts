@@ -22,10 +22,16 @@ import {
   profileCommands,
   profileShape,
 } from '../features/user/presentation/pages/profile/profile.model.gen'
+import type { CommandsPort } from '../platform/commands.port'
 
 import { fakeGatewayAuth, verifiedElsewhere } from './__fixtures__/gateway-auth'
 import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/session'
-import { type AccountStarts, accountStarts, accountStartTurns } from './account-starts'
+import {
+  type AccountStarts,
+  accountStarts,
+  accountStartTurns,
+  START_RETRY_MS,
+} from './account-starts'
 import type { GatewayAuth } from './gateway-auth'
 import { type KeptDevice, keptAccountStart, memoryStorage, saveDevice } from './storage'
 
@@ -158,6 +164,7 @@ describe('the account starts of a browser', () => {
       settings: ofA.settings,
       storage,
       locks,
+      clock: a.clock,
       logger: { warn: () => {} },
     })
     // Tab B's start, which tab B is still to finish.
@@ -168,9 +175,48 @@ describe('the account starts of a browser', () => {
     expect(keptAccountStart(storage).kept()).toBeDefined()
   })
 
+  it('projects what this tab pulled before the start reads, hands it that flush, and flushes its writes after', async () => {
+    const steps: string[] = []
+    const flush = () => {
+      steps.push('flush')
+
+      return okAsync(undefined)
+    }
+    const turns = accountStartTurns(new FakeLocks(), flush)
+
+    expect(
+      (
+        await turns((projected) => {
+          steps.push('read')
+
+          return projected().map(() => 'ran')
+        })
+      )._unsafeUnwrap(),
+    ).toBe('ran')
+    expect(steps).toEqual(['flush', 'read', 'flush', 'flush'])
+  })
+
+  it('runs no start whose reads would miss what was pulled: the projection failed', async () => {
+    const run = vi.fn(() => okAsync('ran'))
+    const turns = accountStartTurns(new FakeLocks(), () =>
+      errAsync(dataError('data:WRITE_FAILED', 'not projected')),
+    )
+
+    expect((await turns(run))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it("fails a turn whose writes could not be flushed for the next tab, and keeps a start's own failure", async () => {
-    const unflushed = () => errAsync(dataError('data:WRITE_FAILED', 'not projected'))
-    const turns = accountStartTurns(new FakeLocks(), unflushed)
+    let flushes = 0
+    // The flush before the start goes through; the one after it does not.
+    const unflushedAfter = () => {
+      flushes += 1
+
+      return flushes % 2 === 1
+        ? okAsync(undefined)
+        : errAsync(dataError('data:WRITE_FAILED', 'not projected'))
+    }
+    const turns = accountStartTurns(new FakeLocks(), unflushedAfter)
 
     expect((await turns(() => okAsync('ran')))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(
@@ -184,7 +230,7 @@ describe('the account starts of a browser', () => {
     expect((await accountStartTurns(undefined, flush)(() => okAsync('ran')))._unsafeUnwrap()).toBe(
       'ran',
     )
-    expect(flush).toHaveBeenCalledOnce()
+    expect(flush).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -212,7 +258,15 @@ describe('a start a sign-in learnt of', () => {
    * A browser that signs in through `auth`, sharing `gateway` when given one, its starts wired as
    * the root wires them: the sign-in keeps a start, the leading tab finishes it after its pull.
    */
-  async function browser(auth: GatewayAuth, gateway?: TestWorld['gateway']) {
+  async function browser(
+    auth: GatewayAuth,
+    gateway?: TestWorld['gateway'],
+    options: {
+      /** The commands the starts run, over the world's own. */
+      readonly commands?: (own: CommandsPort) => CommandsPort
+      readonly logged?: string[]
+    } = {},
+  ) {
     const tab: { starts?: AccountStarts } = {}
     const world = await openTestWorld({
       auth,
@@ -229,11 +283,16 @@ describe('a start a sign-in learnt of', () => {
       session: world.session,
       space: () => world.session.space(),
       runner: world.session.runner,
-      commands: world.commands,
+      commands: options.commands ? options.commands(world.commands) : world.commands,
       settings: services.settings,
       storage: world.storage,
       locks: undefined,
-      logger: { warn: () => {} },
+      clock: world.clock,
+      logger: {
+        warn: (entry) => {
+          options.logged?.push(`${String(entry['event'])}: ${String(entry['outcome'])}`)
+        },
+      },
     })
 
     return { world, ...services }
@@ -284,5 +343,39 @@ describe('a start a sign-in learnt of', () => {
       { id: row?.id, locale: 'en' },
     ])
     expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
+  })
+
+  it('tries a start that failed after the pull again on the same engine, once its wait is over', async () => {
+    const { auth, signUp } = await annElsewhere()
+    const logged: string[] = []
+    let refuseProfile = true
+    const { world, profiles } = await browser(auth, undefined, {
+      logged,
+      // The first creation of the profile fails, as a write that did not go through.
+      commands: (own) => ({
+        execute: (command, params) => {
+          if (command.id === profileCommands.createProfile.id && refuseProfile) {
+            refuseProfile = false
+
+            return errAsync({ code: 'data:WRITE_FAILED', message: 'not written' })
+          }
+
+          return own.execute(command, params)
+        },
+      }),
+    })
+    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+
+    await vi.waitFor(() => expect(logged).toEqual(['account-start: data:WRITE_FAILED']))
+    expect(keptAccountStart(world.storage).kept()).toMatchObject({ afterPull: true })
+    expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
+
+    await world.clock.advance(START_RETRY_MS)
+
+    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept()).toBeUndefined())
+    expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
+      { name: 'Ann' },
+    ])
+    expect(logged).toEqual(['account-start: data:WRITE_FAILED'])
   })
 })

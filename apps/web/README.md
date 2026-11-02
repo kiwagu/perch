@@ -62,7 +62,10 @@ modeling stage.
   settled (`SyncEngine.settled`: the channel is up and every region, the private one included,
   has had its first answer on this connection, the gateway's updates the device lacked imported,
   with an empty outbox), so it creates only what the pull left missing and never races a record
-  another device created and changed meanwhile. Until then the account shows what it has, its
+  another device created and changed meanwhile. Every start's turn first projects what the tab's
+  documents hold, pulled updates included, before it reads the store, and a create the document
+  refuses for a record it holds after all counts as done once the projection shows it; a start
+  that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
   profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
   the session. Until the sign-in is whole its token

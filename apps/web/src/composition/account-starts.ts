@@ -13,6 +13,7 @@
 import { err, ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, dataError, type ShapeRunnerPort } from '@workspace/data'
+import type { Clock } from '@workspace/replica'
 import type { LockManagerLike, SyncEngine } from '@workspace/replica/sync'
 
 import {
@@ -40,8 +41,9 @@ export const ACCOUNT_START_LOCK = 'perch.session.account-start'
 
 /**
  * The turns of the account starts of this browser's tabs: one at a time under the lock, each
- * flushing what it wrote (durable and projected in the shared local store) before it lets go,
- * however it ended; a flush that failed after a start that went through is the turn's failure.
+ * flushing this tab's documents first (what they pulled projected in the shared local store, which
+ * the start reads), handing that flush to the start, and flushing what it wrote before it lets go,
+ * however it ended; a flush that failed around a start that went through is the turn's failure.
  */
 export function accountStartTurns(
   locks: LockManagerLike | undefined,
@@ -59,7 +61,7 @@ export function accountStartTurns(
       () =>
         new ResultAsync(
           (async () => {
-            const outcome = await run()
+            const outcome = await flush().andThen(() => run(flush))
             const flushed = await flush()
 
             // What it wrote may not reach the next tab: the start says so.
@@ -75,10 +77,15 @@ export function accountStartTurns(
  */
 export const FIRST_PULL_WAIT_MS = 30_000
 
+/** How long a leading tab waits before it tries again a start that failed after the pull. */
+export const START_RETRY_MS = 5_000
+
 export interface AccountStartsDeps {
   readonly session: Pick<SessionPort, 'subscribe' | 'flush'>
   /** The signed-in identity's space: its sync engine while this tab leads the sync. */
   readonly space: () => Pick<IdentitySpace, 'identity' | 'sync'> | undefined
+  /** Times the waits of a start that waits for the pull. */
+  readonly clock: Clock
   readonly runner: ShapeRunnerPort
   readonly commands: CommandsPort
   readonly settings: SettingsService
@@ -113,7 +120,14 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
   const logged = (failure: { readonly code: string }) =>
     deps.logger.warn({ event: 'account-start', outcome: failure.code })
   const afterPull = afterFirstPull(deps, kept, (user) =>
-    starts.resumeAfterPull(user).match(() => undefined, logged),
+    starts.resumeAfterPull(user).match(
+      () => true,
+      (failure) => {
+        logged(failure)
+
+        return false
+      },
+    ),
   )
 
   // The page lives as long as the session it follows, so it never stops listening. Nobody signed
@@ -142,43 +156,58 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
  * once its engine has settled (`SyncEngine.settled`): the channel is up, every region of the space
  * has had its first answer on this connection, the private region's included (the subscription,
  * sent with the document's version, is answered with every update of the gateway the device
- * lacked, imported before the answer counts), the outbox is empty and nothing waits for an answer.
- * From then on the device's store holds what the account had at the gateway, so the start creates
- * only what is still missing. An engine that does not settle in time is asked again while it is
- * still the tab's; a new engine (a new leader, a change of the regions) is watched on its own.
+ * lacked), the outbox is empty and nothing waits for an answer. The start's turn then projects
+ * what was pulled before it reads, so it creates only what is still missing. An engine that does
+ * not settle in time is asked again while it is still the tab's, and a start that failed is tried
+ * again after `START_RETRY_MS` on the same engine, while it is kept and the engine is the tab's; a
+ * new engine (a new leader, a change of the regions) is watched on its own.
  */
 function afterFirstPull(
-  deps: Pick<AccountStartsDeps, 'space'>,
+  deps: Pick<AccountStartsDeps, 'space' | 'clock'>,
   kept: KeptStartPort,
-  finish: (user: AuthUser) => Promise<void>,
+  finish: (user: AuthUser) => Promise<boolean>,
 ): () => void {
   let watched: SyncEngine | undefined
+
+  /** The start kept for `identity` that waits for the pull, if any. */
+  const waiting = (identity: string) => {
+    const start = kept.kept()
+
+    return start?.identity === identity && start.afterPull
+  }
 
   return () => {
     const space = deps.space()
     const engine = space?.sync
-    const start = kept.kept()
 
     if (
       space === undefined ||
       engine === undefined ||
       engine === watched ||
-      start?.identity !== space.identity.id ||
-      !start.afterPull
+      !waiting(space.identity.id)
     ) {
       return
     }
 
     watched = engine
 
+    const user = space.identity
     const current = () => deps.space()?.sync === engine
-    const wait = (): void => {
+    const attempt = (): void => {
       void engine.settled(FIRST_PULL_WAIT_MS).then(
-        () => (current() ? finish(space.identity) : undefined),
-        () => (current() ? wait() : undefined),
+        async () => {
+          if (!current() || (await finish(user))) {
+            return
+          }
+
+          if (current() && waiting(user.id)) {
+            deps.clock.schedule(START_RETRY_MS, attempt)
+          }
+        },
+        () => (current() ? attempt() : undefined),
       )
     }
 
-    wait()
+    attempt()
   }
 }
