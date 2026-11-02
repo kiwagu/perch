@@ -3,6 +3,8 @@ import { type DefaultTreeAdapterTypes, defaultTreeAdapter, parse } from 'parse5'
 
 import type { Mail } from '@workspace/mailbox'
 
+import { BASE_URL } from '../../playwright.config'
+
 import {
   contractProblems,
   type MailValues,
@@ -12,6 +14,9 @@ import {
   valueNamed,
 } from './mail-contract'
 import { mailbox } from './mailbox'
+
+/** The origin the stand serves the application from: a notice's link opens it, or none at all. */
+const APP_ORIGIN = new URL(BASE_URL).origin
 
 /** What a test knows of a notice's sending: what it knows of a mail's, and what the notice hides. */
 export interface NoticeValues extends MailValues {
@@ -76,6 +81,22 @@ function readHtml(html: string): HtmlReading {
   return reading
 }
 
+/**
+ * Whether `link` opens one of `paths` of the application plainly: over http(s), at the stand's own
+ * origin, at one of those paths, with no search and no fragment. A link to another origin, or of
+ * another scheme (`javascript:`), with the right path does not.
+ */
+function opensPlainly(link: URL | null, paths: readonly string[]): boolean {
+  return (
+    link !== null &&
+    (link.protocol === 'https:' || link.protocol === 'http:') &&
+    link.origin === APP_ORIGIN &&
+    paths.includes(link.pathname) &&
+    link.search === '' &&
+    link.hash === ''
+  )
+}
+
 /** Every address a mail's text carries, as a mail client would turn it into a link. */
 const addressesOf = (text: string): string[] => text.match(/https?:\/\/[^\s<>"]+/g) ?? []
 
@@ -97,8 +118,8 @@ function namesAPartOf(texts: readonly string[], email: string, recipient: string
 /**
  * Holds a mail to the notice `<action>.<name>` its platform action declares (`platform.yaml`,
  * `notices`): its one recipient, the language of its HTML's root element, and its link, which opens
- * the declared screen at the path of one of its routes with no search and no fragment, or none when
- * the notice declares none; with `hides`, that it names no part of that email. Each check asserts
+ * the declared screen of the application at the stand's own origin, over http(s), at the path of
+ * one of its routes with no search and no fragment, or none when the notice declares none; with `hides`, that it names no part of that email. Each check asserts
  * a comparison's outcome under a fixed message, so a failure prints no address, no link and no
  * HTML of the mail.
  */
@@ -126,10 +147,7 @@ export function expectDeclaredNotice(mail: Mail, notice: string, values: NoticeV
 
     expect(links.length > 0, `missing link: ${named} carries none`).toBe(true)
     expect(
-      links.every(
-        (link) =>
-          link !== null && paths.includes(link.pathname) && link.search === '' && link.hash === '',
-      ),
+      links.every((link) => opensPlainly(link, paths)),
       `wrong link: a link of ${named} does not open its declared screen plainly`,
     ).toBe(true)
   }
