@@ -171,7 +171,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a `SyncEngine` (`start`,
   `stop`, `visibility`, `localWrite` to drain now, `settled(timeoutMs)` once the outbox is
   empty, every local update is durable (one whose append fails is reported once and never
-  settles) and every region has its first answer on the current connection, `signOut()` that
+  settles) and every region has its first answer on the current connection (a region that
+  stopped or that the welcome left out counts as settled), `caughtUp(region, timeoutMs)` once
+  that one region has caught up with the gateway on the current connection: the welcome named
+  it, it still syncs, its subscription was answered, and every update since, the answer
+  included, was imported in full (none waits to be imported, none failed or left updates
+  waiting for their history, no pull is out); a reconnect or a reload of the region starts it
+  over, and it rejects after `timeoutMs`, never resolving for a region that stopped, one the
+  welcome left out or one the engine does not hold, `signOut()` that
   drains and has the gateway sign the device out (`signed-out` only on the sign-out close; any
   other close after it asked, or none within 10 seconds, stops the transport and answers
   `offline`; it answers `offline` at once while the channel is down and `online()` says there is
@@ -200,7 +207,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails pulls at once and on every full pass until an answer imports in full; only
+  import that fails subscribes again at once, on every full pass and on a reconnect, until the
+  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
+  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  connection goes with the document's version and the first update after it is its answer, and
+  any later one there (a recovery, a region replaced, a subscription sent again) goes without a
+  version, the snapshot that only such a subscription gets being its answer; only
   the ack of a first push moves the cursor; the push after a rollback carries every outbox row
   from the refused ones through their inverse, rows other tabs queued between included, whatever
   `batchRows` says, as one update when they are more than `MAX_PUSH_UPDATES`, so a refused batch
