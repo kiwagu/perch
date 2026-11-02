@@ -12,7 +12,7 @@ import { expect, onTestFinished, vi } from 'vitest'
 
 import { dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { type IdentityId, idSchemas } from '@workspace/ids'
+import { type IdentityId, identityIdFactory, idSchemas } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { KeyedTurns } from '../../../keyed-turns'
@@ -81,6 +81,16 @@ export function fakeConnections(closing: Promise<void> = Promise.resolve()) {
   }
 }
 
+/**
+ * The account every email signs in to over a stand-in for Better Auth: the gateway's reads of an
+ * email's credential find it, with one password, before and after the stand-in answers.
+ */
+export const STAND_IN_ACCOUNT = identityIdFactory.create()
+
+/** An accepted sign-in of the stand-in's account, as Better Auth answers one. */
+export const signedInAnswer = (): Response =>
+  Response.json({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
+
 /** What a stand-in that is not meant to be asked fails with. */
 const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read here'))
 
@@ -108,9 +118,10 @@ export const noAccounts: Pick<AuthMountDeps, 'passwords' | 'resets' | 'emailChan
     reset: notHere,
     change: notHere,
     matches: notHere,
-    // Every email reads alike before and after Better Auth's answer: no account a confirmation
-    // moved, no password a reset changed.
-    credentialOf: () => okAsync(undefined),
+    // Every email reads alike before and after Better Auth's answer: the stand-in's account, its
+    // one password, nothing a confirmation moved or a reset changed.
+    credentialOf: () =>
+      okAsync({ identity: STAND_IN_ACCOUNT, hash: 'stand-in-hash', start: undefined }),
   },
   resets: { read: notHere },
   emailChanges: {

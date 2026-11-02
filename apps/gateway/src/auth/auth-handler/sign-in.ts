@@ -1,9 +1,10 @@
+import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
-import { type AccountStart, type SignInCredential, sameCredential } from '../account-passwords'
+import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
@@ -18,8 +19,11 @@ export const SIGN_IN_PATH = '/auth/sign-in/email'
  */
 const signInBody = z.object({ email: z.string(), password: z.string() })
 
-/** As much of an accepted sign-in's answer as ending its session needs. */
-const acceptedToken = z.object({ token: z.string().min(1) })
+/** As much of an accepted sign-in's answer as holding it to its account needs. */
+const acceptedSession = z.object({
+  token: z.string().min(1),
+  user: z.object({ id: idSchemas.identity.schema }),
+})
 
 /** An accepted sign-in's answer, every field Better Auth gave kept. */
 const acceptedAnswer = z.looseObject({ token: z.string().min(1), user: z.looseObject({}) })
@@ -62,18 +66,20 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
 }
 
 /**
- * Hands a sign-in to Better Auth and holds what it signed in to the account `before` read: the
- * email's account and the hash of its password are read again once Better Auth answered 200,
- * after it wrote the session. When they are not what they were before, a confirmation moved the
- * email to another account, or a reset or a change gave the account a new password, while Better
- * Auth checked the old one: the session it wrote is ended at once by its token and the sign-in
- * answers as wrong credentials do (401), or 500 `internal` when the second read or that ending
- * failed. A reset or a change ends every session present when its transaction commits, so a
- * session written before it is ended by it, and one written after is ended here. Either way the
+ * Hands a sign-in to Better Auth and holds what it signed in to the account Better Auth names
+ * (the answer's `user.id`): the email's account and the hash of its password are read again once
+ * Better Auth answered 200, after it wrote the session, and the sign-in stands only when both
+ * reads found that very account with the same password (`signInStands`). Otherwise a confirmation
+ * moved the email between accounts, however often, or a reset or a change gave the account a new
+ * password, while Better Auth looked it up or checked the old password: the session it wrote is
+ * ended at once by its token and the sign-in answers as wrong credentials do (401), or 500
+ * `internal` when the answer names no session, or the second read or that ending failed. A reset
+ * or a change ends every session present when its transaction commits, so a session written
+ * before it is ended by it, and one written after is ended here. Either way the
  * device's sockets close (`closeDevice`): the device's earlier session ended when the new one was
  * written. Any other answer reaches the client as its status and code alone (`refusalOf`); an
  * accepted one, without its cookies, and with `start` (`{ name, locale }`, what the account signed
- * up with) while the account has not started: its profile or its settings have not reached the
+ * in to signed up with) while that account has not started: its profile or its settings have not reached the
  * directory, so the device that signs in creates them, as the device that verifies the email by
  * the sign-up mail's link does.
  */
@@ -89,10 +95,16 @@ async function handedOver(
     return refusalOf(response)
   }
 
+  const answer: unknown = await response
+    .clone()
+    .json()
+    .catch(() => undefined)
+  const accepted = acceptedSession.safeParse(answer)
   const after = await deps.passwords.credentialOf(email)
-  const stands = after.isOk() && sameCredential(before, after.value)
-
-  const ended = stands || (await endWritten(deps, response))
+  const stands =
+    accepted.success && after.isOk() && signInStands(before, after.value, accepted.data.user.id)
+  const ended =
+    stands || (accepted.success && (await deps.sessions.signOut(accepted.data.token)).isOk())
 
   await closeDevice(request, response, deps.connections)
 
@@ -104,6 +116,7 @@ async function handedOver(
     return notSignedIn()
   }
 
+  // The account the sign-in stands for is the one the second read found.
   const start = after.value?.start
 
   return start === undefined ? withoutCookies(response) : withStart(response, start)
@@ -131,20 +144,6 @@ async function withStart(response: Response, start: AccountStart): Promise<Respo
     { ...answer.data, start: { name: start.name, locale: start.locale } },
     { status: 200, headers },
   )
-}
-
-/**
- * Ends the session an accepted sign-in's answer carries, by its token: true once it ended, or
- * when the answer carries none to end; false when the ending failed.
- */
-async function endWritten(deps: AuthMountDeps, response: Response): Promise<boolean> {
-  const answer: unknown = await response
-    .clone()
-    .json()
-    .catch(() => undefined)
-  const accepted = acceptedToken.safeParse(answer)
-
-  return accepted.success ? (await deps.sessions.signOut(accepted.data.token)).isOk() : true
 }
 
 /**

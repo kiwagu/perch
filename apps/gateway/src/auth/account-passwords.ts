@@ -50,12 +50,27 @@ export interface SignInCredential {
   readonly start: AccountStart | undefined
 }
 
-/** Whether two reads of an email's credential found the same account with the same password. */
-export function sameCredential(
+/**
+ * Whether a sign-in stands for `identity`, the account Better Auth signed in: the two reads of
+ * its email, before Better Auth checked the password and once it wrote the session, both found
+ * that very account with a password, the same one. An email that had no account at either read,
+ * an account without a password, another account at either read, or a password that changed in
+ * between all fail it: Better Auth may then have checked a password that is no longer the
+ * account's, or an account the email no longer named.
+ */
+export function signInStands(
   before: SignInCredential | undefined,
   after: SignInCredential | undefined,
+  identity: IdentityId,
 ): boolean {
-  return before?.identity === after?.identity && before?.hash === after?.hash
+  return (
+    before !== undefined &&
+    after !== undefined &&
+    before.identity === identity &&
+    after.identity === identity &&
+    before.hash !== undefined &&
+    before.hash === after.hash
+  )
 }
 
 const credentialRow = z.object({
@@ -200,7 +215,7 @@ export class AccountPasswords {
    * The account `email` signs in to, in any case, the hash on its credential row and, while the
    * account has not started, what it starts from; none when no account has the email. A sign-in
    * reads it before Better Auth checks the password and again once Better Auth wrote the session
-   * (`sameCredential`).
+   * (`signInStands`).
    */
   credentialOf(email: string): ResultAsync<SignInCredential | undefined, DataError> {
     return reading(

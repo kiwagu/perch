@@ -23,6 +23,8 @@ import {
   mountedOnFakeAuth,
   noSessions,
   printedDuring,
+  STAND_IN_ACCOUNT,
+  signedInAnswer,
   signUpRequest,
 } from './__fixtures__/mount'
 import { authHandler } from './mount'
@@ -238,7 +240,7 @@ describe('authHandler', () => {
   })
 
   it('hands the sign-up and the sign-in to Better Auth at their public paths, and nothing else', async () => {
-    const { route, received, clock } = mountedOnFakeAuth(status(200))
+    const { route, received, clock } = mountedOnFakeAuth(signedInAnswer)
     const up = route(signUpRequest(ANN), FROM)
 
     await clock.advance(SIGN_UP_FLOOR_MS)
@@ -382,7 +384,9 @@ describe('authHandler', () => {
 
   it("clears an email's failed sign-ins once one succeeds", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 200 ? signedInAnswer() : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 200
@@ -502,7 +506,7 @@ describe('authHandler', () => {
   })
 
   it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
-    const body = JSON.stringify({ token: 'raw-token' })
+    const body = JSON.stringify({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
     const { route, clock } = mountedOnFakeAuth(() => {
       const headers = new Headers({ 'content-type': 'application/json' })
 
@@ -645,7 +649,7 @@ describe('authHandler', () => {
   })
 
   it("closes the device's sockets of the identity signed in with 1000 before it answers the sign-in", async () => {
-    const ann = identityIdFactory.create()
+    const ann = STAND_IN_ACCOUNT
     let release = () => {}
     const closing = new Promise<void>((resolve) => {
       release = resolve
@@ -687,20 +691,25 @@ describe('authHandler', () => {
   })
 
   it('closes nothing for a sign-in Better Auth refused, or an answer that names no identity or no device', async () => {
-    const ann = identityIdFactory.create()
-    const answers: Array<() => Response> = [
-      () => Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    const ann = STAND_IN_ACCOUNT
+    const refused = await mountedOnFakeAuth(() =>
+      Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    ).route(signIn('ann@example.test'), FROM)
+
+    expect(refused?.status).toBe(401)
+    expect(await refused?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
+
+    // An acceptance that names no session of an account cannot be held to one: it fails.
+    for (const answer of [
       () => new Response('not json', { status: 200 }),
       () => Response.json({ token: 'raw-token' }),
       () => Response.json({ token: 'raw-token', user: { id: 'not-an-identity' } }),
-    ]
-
-    for (const answer of answers) {
+    ]) {
       const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
 
-      expect(response?.status).toBe(answer().status)
-      expect(await response?.text()).toBe(await answer().text())
+      expect(response?.status).toBe(500)
+      expect(await response?.json()).toEqual({ code: 'internal' })
       expect(closes).toEqual([])
     }
 

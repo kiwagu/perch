@@ -226,10 +226,14 @@ A sign-in takes no turn of the account, so it runs alike, and as soon, whether i
 account and whatever work of that account is under way (`auth-handler/sign-in.ts`). It reads the
 email's account and the hash of its password before Better Auth checks the password
 (`AccountPasswords.credentialOf`, the same read for an email that has no account) and again once
-Better Auth wrote the session; when the two differ (a reset or a change gave the account a new
-password, or a confirmation moved the email to another account, while Better Auth checked the
-password), the session is ended at once by its token, the device's sockets close, and the sign-in
-answers 401 as wrong credentials do. Since a reset's or a change's transaction ends every session
+Better Auth wrote the session, and the sign-in stands only when both reads found the very account
+Better Auth signed in (its answer's `user.id`), with a password, the same one
+(`signInStands`). Otherwise (a reset or a change gave the account a new password, or
+confirmations moved the email between accounts, however often and back again, while Better Auth
+looked it up or checked the password) the session is ended at once by its token, the device's
+sockets close, and the sign-in answers 401 as wrong credentials do; an acceptance that names no
+session of an account answers 500 `internal`. A sign-in's `start` is always that of the account it
+stands for. Since a reset's or a change's transaction ends every session
 present at its commit, a session written before it is ended by it and one written after is ended
 by the sign-in itself: no session outlives the password it was opened with. Better Auth's
 clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
@@ -411,7 +415,8 @@ error carries one.
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
   change and a confirmation, a sign-in that checked the old password beside a reset or a change,
-  or whose email moved to another account meanwhile, left with no working session, the start a
+  or whose email moved to another account meanwhile, or to one and away or back again, left with
+  no working session and no other account's start, the start a
   sign-in carries while the account's profile or settings are missing, a reset that verifies an
   email and the sign-up link answering verified-before after it, a confirmation that ends the
   reset links, a sign-in
