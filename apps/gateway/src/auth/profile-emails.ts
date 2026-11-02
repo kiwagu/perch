@@ -77,10 +77,11 @@ export class ProfileEmails {
   /**
    * Compares `identity`'s email with its profile's, as the directory holds them, and queues a
    * follow (`queue`) when the profile carries another; nothing when they agree or the account has
-   * no profile yet. Returns at once; a read that fails is logged by its code.
+   * no profile yet; a read that fails is logged by its code. Resolves once it has decided, the
+   * follow queued but not run, and never rejects: a hello asks for it without waiting.
    */
-  reconcile(identity: IdentityId): void {
-    void this.#read(identity).match(
+  reconcile(identity: IdentityId): Promise<void> {
+    return this.#read(identity).match(
       ({ email, profile, profile_email }) => {
         if (profile !== undefined && profile !== null && profile_email !== email) {
           this.queue(identity)

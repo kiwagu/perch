@@ -140,7 +140,7 @@ export class ConnectionHello {
     // The profile's email follows the account's: one read, after the welcome, and a write in the
     // account's turn only when they differ (a gateway that stopped before a confirmed email
     // reached the profile, or a profile a device created with an email the account left).
-    this.#profiles.reconcile(identity.id)
+    void this.#profiles.reconcile(identity.id)
   }
 
   /**

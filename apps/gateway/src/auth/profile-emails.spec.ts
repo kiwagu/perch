@@ -1,5 +1,5 @@
 import { errAsync, okAsync } from 'neverthrow'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { idSchemas } from '@workspace/ids'
@@ -168,7 +168,9 @@ describe('ProfileEmails', () => {
   it("queues a follow at a hello when the profile's email is not the account's, and nothing when it is", async () => {
     const { profiles, identity, writes, turns, emailChanges, lines } = await harness([])
 
-    profiles.reconcile(identity)
+    // Each reconcile has decided once it resolves; a follow it queued has run once a turn of the
+    // account asked after it has.
+    await profiles.reconcile(identity)
     await turns.run(identity, async () => undefined)
     // The profile carries the account's email: nothing to write.
     expect(writes).toEqual([])
@@ -176,23 +178,20 @@ describe('ProfileEmails', () => {
     expect(
       (await emailChanges.move(identity, ANN, 'ann.second@example.test'))._unsafeUnwrap(),
     ).toBe(true)
-    profiles.reconcile(identity)
+    await profiles.reconcile(identity)
+    await turns.run(identity, async () => undefined)
 
-    await vi.waitFor(() =>
-      expect(writes.map(({ write }) => write.set['email'])).toEqual(['ann.second@example.test']),
-    )
+    expect(writes.map(({ write }) => write.set['email'])).toEqual(['ann.second@example.test'])
     expect(lines).toEqual([])
   })
 
   it('queues nothing at a hello of an account with no profile yet, and logs nothing', async () => {
     const { profiles, identity, writes, turns, lines } = await harness([], false)
 
-    profiles.reconcile(identity)
-    await vi.waitFor(async () => {
-      await turns.run(identity, async () => undefined)
-      expect(writes).toEqual([])
-    })
+    await profiles.reconcile(identity)
+    await turns.run(identity, async () => undefined)
 
+    expect(writes).toEqual([])
     expect(lines).toEqual([])
   })
 })
