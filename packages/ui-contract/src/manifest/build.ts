@@ -3,9 +3,11 @@
  * platform file, the activities and the model) and the scenario files of
  * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
  * with an example link on each binding, the platform section and the activities verbatim,
- * the scenarios parsed, every declared anchor by name with its screen, each derived suffix
- * with the kind, meaning and values of the part it marks, and the model document. An anchor the
- * screen file leaves undescribed carries the description the engine says of it.
+ * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
+ * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
+ * the kind, meaning and values of the part it marks, the composites of the vocabulary, and the
+ * model document. An anchor the screen file leaves undescribed carries the description the
+ * engine says of it.
  */
 
 import {
@@ -77,6 +79,8 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             holdsInput,
             secret,
             asks,
+            composite,
+            derivedFrom,
           },
         ]) => [
           anchor,
@@ -95,6 +99,8 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(holdsInput === undefined ? {} : { holdsInput }),
             ...(secret === undefined ? {} : { secret }),
             ...(asks === undefined ? {} : { asks }),
+            ...(composite === undefined ? {} : { composite }),
+            ...(derivedFrom === undefined ? {} : { derivedFrom }),
           },
         ],
       ),
@@ -185,6 +191,7 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     roles: vocabulary.roles,
     screenNames: vocabulary.screenNames,
     reserved: Object.keys(vocabulary.reserved),
+    composites: vocabulary.composites,
     pageHelper: PAGE_HELPER,
     instructions: instructionsOf(vocabulary, screens.platform, READY),
   }

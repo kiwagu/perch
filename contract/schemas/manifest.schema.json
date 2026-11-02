@@ -258,6 +258,18 @@
           },
           "description": "The anchors the shell owns; a feature never declares them."
         },
+        "composites": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "description": "What the composite is for."
+          },
+          "description": "The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`."
+        },
         "pageHelper": {
           "type": "string",
           "const": "__perch.ui",
@@ -351,6 +363,7 @@
         "roles",
         "screenNames",
         "reserved",
+        "composites",
         "pageHelper",
         "instructions"
       ],
@@ -5480,6 +5493,31 @@
             ],
             "additionalProperties": false,
             "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+          },
+          "composite": {
+            "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "derivedFrom": {
+            "type": "object",
+            "properties": {
+              "composite": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The composite that derives the anchor."
+              },
+              "item": {
+                "description": "The item of the composite the anchor stands for; absent: the list.",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+              }
+            },
+            "required": [
+              "composite"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
           },
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",

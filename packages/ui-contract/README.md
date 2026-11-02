@@ -215,11 +215,12 @@ for Bun.
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
     states taken from the vocabulary and the platform section) and `derivedParts` (each derived
-    suffix with the kind of the part it marks and, for a `visibility-button`, its values), the
-    screens verbatim with
+    suffix with the kind of the part it marks and, for a `visibility-button`, its values) and
+    `composites` (the vocabulary's table of the platform's composites), the screens verbatim with
     each binding's `example` link (`exampleOf`), the platform section and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes, `holdsInput` of a field among them), `routeParams` and the model document.
+    with its kind, its screen and its attributes, `holdsInput` of a field among them, a field's
+    `composite` and a derived anchor's `derivedFrom`), `routeParams` and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
     `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing

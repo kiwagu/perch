@@ -296,3 +296,75 @@ describe('a field that starts with a search parameter', () => {
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
 })
+
+describe('a composite a secret input opts into', () => {
+  it('carries the opt-in and the derived anchors in ids, and the composites in the contract', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    const description = 'the rules a new password keeps'
+
+    sample.anchors['sample.title-input'] = {
+      kind: 'input',
+      secret: true,
+      composite: 'password-rules',
+      binding: { model: 'thing.title' },
+    }
+    sample.anchors['sample.password-rule-list'] = {
+      kind: 'list',
+      description,
+      derivedFrom: { composite: 'password-rules' },
+    }
+    sample.anchors['sample.password-rule-list.length-item'] = {
+      kind: 'item',
+      description: 'at least eight characters',
+      states: ['met'],
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    }
+
+    const composites = { 'password-rules': description }
+    const built = buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, composites },
+      screens: {
+        ...base.screens,
+        platform: {
+          ...base.screens.platform,
+          composites: {
+            'password-rules': {
+              description,
+              list: 'password-rule-list',
+              itemState: 'met',
+              items: { length: 'at least eight characters' },
+            },
+          },
+        },
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(built.ids['sample.title-input']?.composite).toBe('password-rules')
+    expect(built.ids['sample.password-rule-list']?.derivedFrom).toEqual({
+      composite: 'password-rules',
+    })
+    expect(built.ids['sample.password-rule-list.length-item']?.derivedFrom).toEqual({
+      composite: 'password-rules',
+      item: 'length',
+    })
+    expect(built.contract.composites).toEqual(composites)
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("publishes the vocabulary's composites and leaves an anchor that opts into none alone", () => {
+    const base = fixtureContract()
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.contract.composites).toEqual(base.vocabulary.composites)
+    expect(built.ids['sample.title-input']).not.toHaveProperty('composite')
+    expect(built.ids['sample.title-input']).not.toHaveProperty('derivedFrom')
+  })
+})

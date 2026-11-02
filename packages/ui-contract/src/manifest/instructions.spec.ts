@@ -125,6 +125,28 @@ describe('instructionsOf', () => {
     expect(instructions.gaps).toContain('`Proposal:`')
     expect(instructions.gaps).toContain('Never hold it in the app or in a test instead')
   })
+  it('says what a composite opt-in is and how the anchors it derives are marked', () => {
+    expect(instructions.screenMap).toContain(
+      '`composite` on a secret input names the platform composite it opts into (`platform.composites.<name>`)',
+    )
+    expect(instructions.screenMap).toContain(
+      'each marked `derivedFrom` with the composite and, for an item, its name',
+    )
+  })
+  it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {
+    expect(instructions.bindings).toContain(
+      "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning",
+    )
+    expect(instructions.bindings).toContain(
+      'the failures of the actions bound beside it and invoked against it by the flow, plus the codes the flow shows on it, `failed` last',
+    )
+    expect(instructions.bindings).toContain(
+      "an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there",
+    )
+    expect(instructions.bindings).toContain(
+      'an `onError` written as its target alone still shows the failure',
+    )
+  })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
       expect(text.length).toBeGreaterThan(80)
