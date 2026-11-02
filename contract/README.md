@@ -941,8 +941,9 @@ gap is fixed in the contract files first, never worked around in a test.
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
-  (`CONTRACT_AHEAD_BASE`), so a business commit may change a transition the app has not
-  changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of
+  `main` compares the app it brings with the flows it brings), so a business commit may change
+  a transition the app has not changed yet, and a branch whose merge base with a local `main` cannot be found fails the
   hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.

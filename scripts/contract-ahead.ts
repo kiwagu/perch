@@ -3,7 +3,9 @@
  * landing, every app machine is held to its whole flow: the command runs without the ahead
  * mode, and so it does on a detached HEAD, which names no branch to run ahead on. On a branch a business commit may run ahead of its implementation: the command runs
  * with `CONTRACT_AHEAD=1` and `CONTRACT_AHEAD_BASE`, the merge base of HEAD and the local
- * `main`, at whose flows a machine may still be. When that merge base cannot be found (no
+ * `main`, at whose flows a machine may still be; during a merge, the base the merge's commit
+ * will have, so a merge of `main` compares the app it brings with the flows it brings. When
+ * that merge base cannot be found (no
  * local `main`, or no history shared with it), nothing runs and the hook fails: a branch never
  * falls back to a comparison without its base.
  *
@@ -11,6 +13,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 
 const LANDING_BRANCH = 'main'
 
@@ -32,6 +35,25 @@ function git(args: readonly string[]): string | undefined {
   return run.status === 0 ? run.stdout.trim() : undefined
 }
 
+/**
+ * The heads a merge in progress brings in, none outside a merge: those of MERGE_HEAD while the
+ * merge waits for its commit (after a conflict, or `--no-commit`), else those its reflog action
+ * names, which is all an automatic merge leaves its hook, since git writes no MERGE_HEAD there.
+ */
+function incomingHeads(): readonly string[] {
+  const mergeHead = git(['rev-parse', '--git-path', 'MERGE_HEAD'])
+
+  if (mergeHead !== undefined && existsSync(mergeHead)) {
+    return readFileSync(mergeHead, 'utf8')
+      .split('\n')
+      .filter((head) => head !== '')
+  }
+
+  const merging = /^merge (.+)$/.exec(process.env['GIT_REFLOG_ACTION'] ?? '')?.[1]
+
+  return merging === undefined ? [] : merging.split(' ').filter((head) => head !== '')
+}
+
 function modeOf(): Mode {
   const branch = git(['branch', '--show-current'])
 
@@ -39,7 +61,8 @@ function modeOf(): Mode {
     return { kind: 'strict' }
   }
 
-  const base = git(['merge-base', 'HEAD', `refs/heads/${LANDING_BRANCH}`])
+  // With the heads a merge brings in, the merge base of main and the merge's commit to be.
+  const base = git(['merge-base', `refs/heads/${LANDING_BRANCH}`, 'HEAD', ...incomingHeads()])
 
   return base === undefined || base === '' ? { kind: 'no-base' } : { kind: 'ahead', base }
 }
