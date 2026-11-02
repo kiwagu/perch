@@ -58,10 +58,12 @@ modeling stage.
   (`{ name, locale }`: the account has no settings or profile at the gateway yet, because a reset
   verified its email or the device that verified it has not synced its start) keeps that start
   before the device is saved (`SessionOptions.keepAccountStart`), marked `afterPull`; such a start
-  is not finished as the space opens, but by the tab that leads the sync once its engine has
-  settled (`SyncEngine.settled`: the channel is up and every region, the private one included,
-  has had its first answer on this connection, the gateway's updates the device lacked imported,
-  with an empty outbox), so it creates only what the pull left missing and never races a record
+  is not finished as the space opens, but by the tab that leads the sync once its engine says the
+  account's private region caught up with the gateway on this connection
+  (`SyncEngine.caughtUp(privateRegionId(identity), …)`: the welcome named it, it still syncs, its
+  subscription was answered and every update since was imported in full, none lost and none
+  waiting for its history; a region that stopped or that the welcome left out never catches up,
+  and the start waits), so it creates only what the pull left missing and never races a record
   another device created and changed meanwhile. Every start's turn first projects what the tab's
   documents hold, pulled updates included, before it reads the store, and a create the document
   refuses for a record it holds after all counts as done once the projection shows it; a start

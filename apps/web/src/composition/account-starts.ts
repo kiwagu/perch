@@ -3,8 +3,9 @@
  * with, and what finishes one it left half-way. Each time an identity's space opens here (the start
  * of the page, a sign-in, a verification) the start kept for it is finished, unless it waits for
  * the device's first pull: a sign-in that answered `start` (the account has no settings or profile
- * at the gateway yet) keeps one, which the tab that leads the sync finishes once its engine has
- * settled, so it creates only what the pull left missing. The tabs take their turns under one Web
+ * at the gateway yet) keeps one, which the tab that leads the sync finishes once its engine says
+ * the account's private region caught up with the gateway, so it creates only what the pull left
+ * missing. The tabs take their turns under one Web
  * Lock, each leaving its writes durable and projected for the next. A sign-out forgets the kept
  * start with the device (`forgetDevice`), a session that merely closes keeps it. A failure is
  * logged by its code alone.
@@ -13,7 +14,7 @@
 import { err, ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, dataError, type ShapeRunnerPort } from '@workspace/data'
-import type { Clock } from '@workspace/replica'
+import { type Clock, privateRegionId } from '@workspace/replica'
 import type { LockManagerLike, SyncEngine } from '@workspace/replica/sync'
 
 import {
@@ -72,8 +73,8 @@ export function accountStartTurns(
 }
 
 /**
- * How long a leading tab gives its engine to settle at a time; a tab still leading with the same
- * engine waits again.
+ * How long a leading tab waits at a time for the private region to catch up; a tab still leading
+ * with the same engine waits again.
  */
 export const FIRST_PULL_WAIT_MS = 30_000
 
@@ -153,14 +154,15 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
 
 /**
  * What finishes a start that waits for this device's first pull: in the tab that leads the sync,
- * once its engine has settled (`SyncEngine.settled`): the channel is up, every region of the space
- * has had its first answer on this connection, the private region's included (the subscription,
- * sent with the document's version, is answered with every update of the gateway the device
- * lacked), the outbox is empty and nothing waits for an answer. The start's turn then projects
- * what was pulled before it reads, so it creates only what is still missing. An engine that does
- * not settle in time is asked again while it is still the tab's, and a start that failed is tried
- * again after `START_RETRY_MS` on the same engine, while it is kept and the engine is the tab's; a
- * new engine (a new leader, a change of the regions) is watched on its own.
+ * once its engine says the account's private region caught up with the gateway on this connection
+ * (`SyncEngine.caughtUp`): the welcome named it, it still syncs, its subscription was answered and
+ * every update since, the answer included, was imported in full, none lost, none waiting for its
+ * history. A region that stopped or that the welcome left out never catches up, and the start
+ * waits. The start's turn then projects what was pulled before it reads, so it creates only what is
+ * still missing. A region that has not caught up in time is waited for again while the engine is
+ * still the tab's, and a start that failed is tried again after `START_RETRY_MS` on the same engine,
+ * while it is kept and the engine is the tab's; a new engine (a new leader, a change of the
+ * regions) is watched on its own.
  */
 function afterFirstPull(
   deps: Pick<AccountStartsDeps, 'space' | 'clock'>,
@@ -194,7 +196,7 @@ function afterFirstPull(
     const user = space.identity
     const current = () => deps.space()?.sync === engine
     const attempt = (): void => {
-      void engine.settled(FIRST_PULL_WAIT_MS).then(
+      void engine.caughtUp(privateRegionId(user.id), FIRST_PULL_WAIT_MS).then(
         async () => {
           if (!current() || (await finish(user))) {
             return

@@ -1,8 +1,11 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { dataError } from '@workspace/data'
+import { dataError, type LocalDb } from '@workspace/data'
+import { interceptQueries } from '@workspace/data/testing'
 import { identityIdFactory } from '@workspace/ids'
+import { privateRegionId } from '@workspace/replica'
+import { CADENCE_MS, type SyncEngine } from '@workspace/replica/sync'
 import { FakeLocks } from '@workspace/replica/testing'
 
 import {
@@ -27,6 +30,7 @@ import type { CommandsPort } from '../platform/commands.port'
 import { fakeGatewayAuth, verifiedElsewhere } from './__fixtures__/gateway-auth'
 import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/session'
 import {
+  ACCOUNT_START_LOCK,
   type AccountStarts,
   accountStarts,
   accountStartTurns,
@@ -265,12 +269,17 @@ describe('a start a sign-in learnt of', () => {
       /** The commands the starts run, over the world's own. */
       readonly commands?: (own: CommandsPort) => CommandsPort
       readonly logged?: string[]
+      /** Wraps the browser's database, e.g. to make a write fail. */
+      readonly wrap?: (local: LocalDb) => LocalDb
+      /** The Web Locks the starts take their turns under; none by default. */
+      readonly locks?: FakeLocks
     } = {},
   ) {
     const tab: { starts?: AccountStarts } = {}
     const world = await openTestWorld({
       auth,
       ...(gateway ? { gateway } : {}),
+      ...(options.wrap ? { wrap: options.wrap } : {}),
       keepAccountStart: (user, from) => tab.starts?.keepAfterPull(user, from),
       onSyncState: (state) => tab.starts?.syncState(state),
     })
@@ -286,7 +295,7 @@ describe('a start a sign-in learnt of', () => {
       commands: options.commands ? options.commands(world.commands) : world.commands,
       settings: services.settings,
       storage: world.storage,
-      locks: undefined,
+      locks: options.locks,
       clock: world.clock,
       logger: {
         warn: (entry) => {
@@ -377,5 +386,163 @@ describe('a start a sign-in learnt of', () => {
       { name: 'Ann' },
     ])
     expect(logged).toEqual(['account-start: data:WRITE_FAILED'])
+  })
+
+  it('creates nothing while the pull of the private region failed to import, and starts the account once it recovered', async () => {
+    const { auth, signUp } = await annElsewhere()
+    const first = await browser(auth)
+    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+
+    // The first device starts the account and changes its language; the gateway holds both.
+    await vi.waitFor(() => expect(keptAccountStart(first.world.storage).kept()).toBeUndefined())
+
+    const [row] = (await first.settings.read({ identity: user.id }))._unsafeUnwrap()
+    const id = row?.id ?? expect.unreachable('settings')
+
+    expect((await first.settings.updateLocale({ id, locale: 'en' })).isOk()).toBe(true)
+    await (first.world.session.space()?.sync ?? expect.unreachable('it leads')).settled(30_000)
+
+    // The second device cannot store what the gateway sends it: every import of its pull fails.
+    // Its starts take their turns under a lock the spec holds until it looks.
+    const store = { refusing: true }
+    const locks = new FakeLocks()
+    let release = () => {}
+
+    void locks.request(
+      ACCOUNT_START_LOCK,
+      { mode: 'exclusive' },
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        }),
+    )
+
+    const second = await browser(auth, first.world.gateway, {
+      locks,
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          // The statement that stores a server update: it writes an update, and no outbox row.
+          const storesServerUpdate =
+            text.includes('_replica_update SET') && !text.includes('_replica_outbox')
+
+          if (store.refusing && storesServerUpdate) {
+            throw new Error('the store refused the update')
+          }
+        }),
+    })
+
+    expect((await second.world.session.signIn(signUp)).isOk()).toBe(true)
+
+    const engine = second.world.session.space()?.sync ?? expect.unreachable('it leads')
+
+    // Its engine settles all the same: the answer and the answer to its recovery were handled.
+    await engine.settled(30_000)
+    await engine.settled(30_000)
+
+    expect(second.world.failures.map(({ code }) => code)).toContain('data:WRITE_FAILED')
+
+    // Every start that began by now takes its turn, then the spec takes one after them all.
+    release()
+    await new Promise<void>((resolve) => {
+      void locks.request(ACCOUNT_START_LOCK, { mode: 'exclusive' }, async () => resolve())
+    })
+
+    expect(keptAccountStart(second.world.storage).kept()).toMatchObject({ afterPull: true })
+    expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
+    expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
+
+    // The store takes writes again; a full pass subscribes afresh and the pull imports in full.
+    store.refusing = false
+    second.world.failures.splice(0)
+    await second.world.clock.advance(CADENCE_MS.full)
+
+    await vi.waitFor(() => expect(keptAccountStart(second.world.storage).kept()).toBeUndefined())
+    expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
+      { id, locale: 'en' },
+    ])
+    expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
+  })
+})
+
+describe("a start that waits for the pull, by its engine's word", () => {
+  /** A leading engine whose `settled` answers at once and whose `caughtUp` answers as `pulled` says. */
+  function engineOf(pulled: { caughtUp: Promise<void> }) {
+    const asked: string[] = []
+    const engine: SyncEngine = {
+      start: () => {},
+      stop: () => {},
+      visibility: () => {},
+      localWrite: () => {},
+      settled: () => Promise.resolve(),
+      caughtUp: (region) => {
+        asked.push(region)
+
+        return pulled.caughtUp
+      },
+      signOut: () => Promise.resolve('offline'),
+      channelStopped: () => false,
+    }
+
+    return { engine, asked }
+  }
+
+  /** Ann's browser offline, its starts led by `engine`; a start waits for the pull. */
+  async function ledBy(engine: SyncEngine) {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+
+    const world = await openTestWorld({ storage, online: false })
+
+    worlds.push(world)
+    expect((await world.session.restore()).isOk()).toBe(true)
+
+    const services = servicesOf(world)
+    const starts = accountStarts({
+      session: world.session,
+      space: () => ({ identity: ann.identity, sync: engine }),
+      runner: world.session.runner,
+      commands: world.commands,
+      settings: services.settings,
+      storage,
+      locks: undefined,
+      clock: world.clock,
+      logger: { warn: () => {} },
+    })
+
+    keptAccountStart(storage).keep({ ...annStart, afterPull: true })
+    starts.syncState({ leader: true, channel: 'up' })
+
+    return { world, storage, ...services }
+  }
+
+  it('creates nothing while its private region has not caught up, as one stopped or left out of the welcome never does', async () => {
+    const { engine, asked } = engineOf({ caughtUp: new Promise(() => {}) })
+    const { storage, settings, profiles } = await ledBy(engine)
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(asked).toEqual([privateRegionId(ann.identity.id)])
+    expect(keptAccountStart(storage).kept()).toMatchObject({ afterPull: true })
+    expect((await settings.read({ identity: ann.identity.id }))._unsafeUnwrap()).toEqual([])
+    expect((await profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toEqual([])
+  })
+
+  it('starts the account once its private region caught up', async () => {
+    let caughtUp = () => {}
+    const pulled = {
+      caughtUp: new Promise<void>((resolve) => {
+        caughtUp = resolve
+      }),
+    }
+    const { engine } = engineOf(pulled)
+    const { storage, profiles } = await ledBy(engine)
+
+    caughtUp()
+
+    await vi.waitFor(() => expect(keptAccountStart(storage).kept()).toBeUndefined())
+    expect((await profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toMatchObject([
+      { name: 'Ann' },
+    ])
   })
 })
