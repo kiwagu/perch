@@ -9,7 +9,7 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
     page,
     freshDevice,
   }) => {
-    // Device B makes the account's profile and settings once its first pull has settled.
+    // Device B makes the account's profile and settings once its private region caught up.
     test.slow()
 
     const data = {
@@ -53,7 +53,7 @@ test.describe('Reset the password of an account not verified yet', { tag: '@full
         //   [user.profile.name-input] holds the name
         await expect(notice(b, 'welcome')).toBeVisible({ timeout: 15_000 })
         await expectPathname(b, '/me')
-        // The profile comes once the first pull has settled, about a round trip after /me opens.
+        // The profile comes once the private region caught up, about a round trip after /me opens.
         await expect(b.getByTestId('user.profile.email-input')).toHaveValue(data.email, {
           timeout: 15_000,
         })
