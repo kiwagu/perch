@@ -16,6 +16,7 @@ type Event =
   | { readonly type: 'x.save-button'; readonly fail: boolean }
   | { readonly type: 'x.nothing-button' }
   | { readonly type: 'x.leave-button' }
+  | { readonly type: 'x.carry-link'; readonly fields: { readonly 'x.y.email-input': string } }
   | { readonly type: 'user.profile.sign-out-button' }
   | { readonly type: 'organisation.notes.delete-button' }
 
@@ -24,7 +25,15 @@ type Event =
  * control whose action destroys.
  */
 const machine = setup({
-  types: { events: {} as Event, emitted: {} as { type: 'navigate'; to: string } },
+  types: {
+    events: {} as Event,
+    emitted: {} as {
+      type: 'navigate'
+      to: string
+      search?: Readonly<Record<string, unknown>>
+      fields?: Readonly<Record<string, string>>
+    },
+  },
   actors: {
     save: fromPromise(async ({ input }: { input: { fail: boolean } }) => {
       await Promise.resolve()
@@ -42,6 +51,14 @@ const machine = setup({
         'x.save-button': 'saving-one',
         'x.nothing-button': { actions: emit({ type: 'navigate', to: '/here' }) },
         'x.leave-button': { actions: emit({ type: 'navigate', to: '/there' }) },
+        'x.carry-link': {
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { email: { anchor: 'x.y.email-input' }, view: 'read' },
+            fields: event.type === 'x.carry-link' ? event.fields : {},
+          })),
+        },
         'user.profile.sign-out-button': 'out',
         'organisation.notes.delete-button': 'deleted',
       },
@@ -360,6 +377,17 @@ describe('useScreenMachine', () => {
 
     await screen.findByText('there')
     expect(router.state.location.pathname).toBe('/there')
+  })
+
+  it("moves with the value a field of the moving event holds, never the field's anchor", async () => {
+    const { router, running } = await open(passing())
+
+    act(() =>
+      running.send({ type: 'x.carry-link', fields: { 'x.y.email-input': 'ann@example.test' } }),
+    )
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test', view: 'read' })
   })
 
   it('asks the guard before a leaving control, and sends nothing when the user stays', async () => {

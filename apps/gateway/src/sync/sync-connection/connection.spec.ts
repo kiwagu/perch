@@ -1,7 +1,13 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
+import {
+  type DataError,
+  dataError,
+  type LocalDb,
+  openLocalDb,
+  tenantDatabase,
+} from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
@@ -19,17 +25,19 @@ import {
   type ServerMessage,
   serverMessage,
 } from '@workspace/replica/protocol'
-import { RegionHub } from '@workspace/replica/server'
+import { RegionHub, singleDatabase } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
 
 import {
   AUTH_SECRET,
+  accountServicesOf,
   deviceHeaders,
   openAuth,
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
 import { authHandler } from '../../auth/auth-handler'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
+import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
@@ -126,6 +134,42 @@ interface GatewayOptions {
   readonly tenantQueries?: (text: string) => void
   /** Runs before each query the organisations send to the directory; it may throw to make the query fail. */
   readonly directoryQueries?: (text: string) => void
+  /** Holds each write of a profile's email into the region until it resolves. */
+  readonly profileWrites?: Promise<void>
+}
+
+/** A line the auth module logged, with every argument it was given. */
+interface AuthLogLine {
+  readonly level: 'error' | 'warn'
+  readonly fields: unknown
+  readonly message: string
+}
+
+/**
+ * The profile's email over `hub` and `turns`, writing through `hub` once `writes` resolves (at
+ * once without it), and logging every line, all its arguments kept, into `lines`.
+ */
+function profileEmailsOver(
+  local: LocalDb,
+  hub: RegionHub,
+  turns: KeyedTurns<string>,
+  lines: AuthLogLine[],
+  writes?: Promise<void>,
+): ProfileEmails {
+  return new ProfileEmails({
+    directory: local,
+    hub: {
+      writeRecord: (region, write) =>
+        writes === undefined
+          ? hub.writeRecord(region, write)
+          : ResultAsync.fromSafePromise(writes).andThen(() => hub.writeRecord(region, write)),
+    },
+    log: {
+      error: (fields, message) => lines.push({ level: 'error', fields, message }),
+      warn: (fields, message) => lines.push({ level: 'warn', fields, message }),
+    },
+    turns,
+  })
 }
 
 /**
@@ -181,19 +225,32 @@ async function openGateway(options: GatewayOptions = {}) {
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
+  /** What the gateway logged of the auth module's work, every argument kept. */
+  const authLogs: AuthLogLine[] = []
+  const turns = new KeyedTurns<string>()
+  const profiles = profileEmailsOver(local, hub, turns, authLogs, options.profileWrites)
+  const accounts = accountServicesOf(opened)
   /** The gateway's mount of Better Auth's sign-in, over the same registry. */
   const authRoute = authHandler({
     auth: opened.auth,
     sessions,
+    ...accounts,
+    profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
-    accounts: new KeyedTurns<string>(),
+    accounts: turns,
   })
 
   return {
     clock,
     hub,
+    authRoute,
+    authLogs,
+    profiles,
+    emailChanges: accounts.emailChanges,
+    turns,
+    local,
     sessions,
     organisations,
     connections,
@@ -272,6 +329,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
       ...options.hub,
     },
     organisations: gateway.organisations,
+    profiles: gateway.profiles,
     schema: replicaSchema,
     connections: gateway.connections,
     clock: gateway.clock,
@@ -373,8 +431,8 @@ function hello(connection: SyncConnection, token: string, device: string = DEVIC
 }
 
 /** A gateway where Ann has signed up, and a connection to it that has not said hello yet. */
-async function connect(options: ConnectOptions = {}) {
-  const gateway = await openGateway()
+async function connect(options: ConnectOptions = {}, gatewayOptions: GatewayOptions = {}) {
+  const gateway = await openGateway(gatewayOptions)
   const signedUp = await gateway.signUp(ann)
 
   return {
@@ -388,8 +446,8 @@ async function connect(options: ConnectOptions = {}) {
 type Connected = Awaited<ReturnType<typeof connect>>
 
 /** A connection where Ann said hello with the session token her sign-up gave her. */
-async function connectedAsAnn(options: ConnectOptions = {}) {
-  const fixture = await connect(options)
+async function connectedAsAnn(options: ConnectOptions = {}, gatewayOptions: GatewayOptions = {}) {
+  const fixture = await connect(options, gatewayOptions)
 
   await hello(fixture.connection, fixture.ann.token)
 
@@ -713,6 +771,20 @@ describe('SyncConnection', () => {
     await probing
 
     expect(types(socket.sent)).toEqual(['welcome'])
+  })
+
+  it('closes with 4002 a device signed out because its password changed, saying why', async () => {
+    const gateway = await openGateway()
+    const signedUp = await gateway.signUp(ann)
+    const { socket, connection } = openHolding(gateway, holding())
+
+    await hello(connection, signedUp.token)
+    await gateway.connections.close(signedUp.identity.id, undefined, CLOSE.passwordChanged)
+
+    expect(socket.closes).toEqual([
+      [CLOSE.passwordChanged, 'signed out because the password changed'],
+    ])
+    expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
   })
 
   it('closes with 4001 a device signed out while its hello is under way, before its welcome', async () => {
@@ -1320,5 +1392,256 @@ describe('SyncConnection', () => {
 
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+  })
+})
+
+/**
+ * The gateway's services again over `fixture`'s directory, as a gateway that restarted has them: a
+ * hub of its own, a registry, turns and the profile's email of their own, nothing held in memory
+ * from before. The hub is closed when the test finishes.
+ */
+function restartedOver(fixture: Connected) {
+  const hub = new RegionHub({
+    databases: singleDatabase(fixture.local),
+    schema: replicaSchema,
+    clock: fixture.clock,
+    onError: (error) => reported.push(error),
+  })
+  const authLogs: AuthLogLine[] = []
+
+  cleanups.push(() => hub.close())
+
+  return {
+    ...fixture,
+    hub,
+    authLogs,
+    connections: new ConnectionRegistry({ onFailure: (error) => reported.push(error) }),
+    profiles: profileEmailsOver(fixture.local, hub, new KeyedTurns<string>(), authLogs),
+  }
+}
+
+/** The new email most of the following specs confirm. */
+const NEW_EMAIL = 'ann.new@example.test'
+
+/** A confirmation of the link's `token`, as a browser that signed in to nobody sends it. */
+function confirmRequest(token: string): Request {
+  return new Request('http://127.0.0.1:4000/auth/confirm-email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'http://localhost' },
+    body: JSON.stringify({ token }),
+  })
+}
+
+/** Changes Ann's email to `NEW_EMAIL` through the link of a confirmation: what the gateway answered. */
+async function confirmNewEmail(fixture: Connected) {
+  const token = (
+    await fixture.emailChanges.ask(fixture.ann.identity.id, ann.email, NEW_EMAIL)
+  )._unsafeUnwrap()
+
+  return fixture.authRoute(confirmRequest(token), '203.0.113.7')
+}
+
+/** The head of Ann's private region at the hub. */
+async function headOf(fixture: Connected): Promise<number | undefined> {
+  return (await fixture.hub.heads([fixture.region]))._unsafeUnwrap()[0]?.head
+}
+
+/** Subscribes the connection to Ann's region and pushes her profile under `id`: acknowledged at head 1. */
+async function withProfile(fixture: Connected & { readonly doc: RegionDoc }, id: string) {
+  const { connection, region, doc } = fixture
+
+  await connection.receive(encode({ type: 'subscribe', region, vv: null }))
+
+  const created = (
+    await profileCreate(doc, {
+      id,
+      identity: fixture.ann.identity.id,
+      name: 'Ann',
+      email: ann.email,
+    })
+  )._unsafeUnwrap()
+
+  await connection.receive(encode({ type: 'push', region, batch: 1, updates: [created] }))
+}
+
+/** Takes the last `updates` a socket was sent into `doc`. */
+async function takeLastUpdates(sent: readonly ServerMessage[], doc: RegionDoc): Promise<void> {
+  const updates = sent.filter((message) => message.type === 'updates').at(-1)
+
+  if (updates?.type !== 'updates') {
+    expect.unreachable('updates were sent')
+  }
+
+  ;(await doc.importRemote(updates.bytes, updates.head))._unsafeUnwrap()
+}
+
+describe('SyncConnection, the email of the profile after a confirmed change', () => {
+  it('sends the new email to a device subscribed to the private region', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+
+    await vi.waitFor(() =>
+      expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack', 'updates']),
+    )
+    await takeLastUpdates(fixture.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+    expect(fixture.authLogs).toEqual([])
+  })
+
+  it('brings the new email to a device that was offline at the confirmation, at its next pull', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    // The device goes offline with the profile as it pushed it.
+    fixture.connection.closed()
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(async () => expect(await headOf(fixture)).toBe(2))
+
+    const again = open(fixture)
+
+    await hello(again.connection, fixture.ann.token)
+    await again.connection.receive(
+      encode({
+        type: 'subscribe',
+        region: fixture.region,
+        vv: new Uint8Array(fixture.doc.doc.version().encode()),
+      }),
+    )
+    await takeLastUpdates(again.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+  })
+
+  it('answers a confirmation of an account with no profile yet as any other, and logs only a code', async () => {
+    const fixture = await connectedAsAnn()
+
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(() =>
+      expect(fixture.authLogs).toEqual([
+        {
+          level: 'warn',
+          fields: { code: 'auth:PROFILE_NOT_STARTED' },
+          message: 'the account has no profile to carry its new email yet',
+        },
+      ]),
+    )
+    expect(await headOf(fixture)).toBe(0)
+  })
+
+  it('answers a confirmation before the write of the profile ends, which lands once it can', async () => {
+    let release = (): void => {}
+    const writes = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const fixture = await connectedAsAnn({}, { profileWrites: writes })
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+
+    // The write of the profile is held: the confirmation answers all the same.
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    expect(await headOf(fixture)).toBe(1)
+    expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+
+    release()
+    await vi.waitFor(() =>
+      expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack', 'updates']),
+    )
+    await takeLastUpdates(fixture.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+    expect(fixture.authLogs).toEqual([])
+  })
+
+  it('brings a confirmed email into the profile at the next hello after a restart that lost the write', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+    const identity = fixture.ann.identity.id
+
+    await withProfile(fixture, profile)
+    fixture.connection.closed()
+
+    // The email moves, and the gateway stops before the profile's write runs.
+    const token = (await fixture.emailChanges.ask(identity, ann.email, NEW_EMAIL))._unsafeUnwrap()
+    const read = (await fixture.emailChanges.read(token))._unsafeUnwrap()
+    const claims = read.kind === 'change' ? read.claims : expect.unreachable('a pending change')
+
+    expect((await fixture.emailChanges.claim(claims))._unsafeUnwrap()).toBe(true)
+    expect((await fixture.emailChanges.move(identity, ann.email, NEW_EMAIL))._unsafeUnwrap()).toBe(
+      true,
+    )
+    await fixture.hub.close()
+
+    // The gateway's services again, over the same directory, with nothing of the earlier ones.
+    const restarted = restartedOver(fixture)
+    const device = open(restarted)
+
+    await hello(device.connection, fixture.ann.token)
+    await vi.waitFor(async () => expect(await headOf(restarted)).toBe(2))
+    await device.connection.receive(
+      encode({
+        type: 'subscribe',
+        region: fixture.region,
+        vv: new Uint8Array(fixture.doc.doc.version().encode()),
+      }),
+    )
+    await takeLastUpdates(device.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+    expect(restarted.authLogs).toEqual([])
+  })
+
+  it('brings a profile a device created with an email the account no longer has in step at the next hello', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+    const { connection, region, doc } = fixture
+
+    await connection.receive(encode({ type: 'subscribe', region, vv: null }))
+
+    const stale = (
+      await profileCreate(doc, {
+        id: profile,
+        identity: fixture.ann.identity.id,
+        name: 'Ann',
+        email: 'ann.before@example.test',
+      })
+    )._unsafeUnwrap()
+
+    await connection.receive(encode({ type: 'push', region, batch: 1, updates: [stale] }))
+
+    // The device says hello again, as after any reconnect.
+    const again = open(fixture)
+
+    await hello(again.connection, fixture.ann.token)
+    await again.connection.receive(
+      encode({ type: 'subscribe', region, vv: new Uint8Array(doc.doc.version().encode()) }),
+    )
+    await vi.waitFor(async () => expect(await headOf(fixture)).toBe(2))
+    await vi.waitFor(() => expect(types(again.socket.sent).at(-1)).toBe('updates'))
+    await takeLastUpdates(again.socket.sent, doc)
+
+    expect(doc.recordJson(`profile/${profile}`)?.['email']).toBe(ann.email)
+  })
+
+  it('writes nothing more when the profile already carries the email', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(async () => expect(await headOf(fixture)).toBe(2))
+
+    await fixture.profiles.follow(fixture.ann.identity.id)
+    await fixture.profiles.follow(fixture.ann.identity.id)
+
+    expect(await headOf(fixture)).toBe(2)
+    expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack', 'updates'])
+    expect(fixture.authLogs).toEqual([])
   })
 })

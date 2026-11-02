@@ -89,3 +89,13 @@ export async function refusalOf(answer: Response): Promise<Response> {
 
   return Response.json({ code }, { status: answer.status })
 }
+
+/** 400 `bad-request`: a body or a header the route cannot read. */
+export const badRequest = (): Response => Response.json({ code: 'bad-request' }, { status: 400 })
+
+/** 500 `internal`: the gateway failed, nothing of why. */
+export const internal = (): Response => Response.json({ code: 'internal' }, { status: 500 })
+
+/** A refusal by `code` with `status`, nothing else in its body. */
+export const refused = (status: number, code: string): Response =>
+  Response.json({ code }, { status })

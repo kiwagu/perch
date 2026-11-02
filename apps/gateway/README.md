@@ -11,12 +11,14 @@ identity's devices, and serve organisations and their members; devices sync over
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
 `src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
-time (one identity's membership changes, one account's sign-ups and verifications). The modules that predate the index rule have no
+time (one identity's membership changes, one account's sign-ups, verifications, resets and
+changes). The modules that predate the index rule have no
 `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an
-  email and the resend of its mail behind the gateway's limits, device sessions and their session
-  tokens, the sign-outs and the Bearer caller.
+  email and the resend of its mail behind the gateway's limits, the recovery and the change of a
+  password and the change of an email with their mails, device sessions and their session tokens,
+  the sign-outs and the Bearer caller.
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
@@ -106,7 +108,12 @@ the update; each device's next hello is then refused with 4401.
   of one email within 15 minutes answered 429 with `Retry-After`; a verification with a made-up
   token answered 401 `link-invalid`, the right link opened again answered `{ token: null }`;
   and a verification naming no device answered 400, the email staying unverified, a sign-in
-  refused 403, until a verification that names one); then on another identity its device
+  refused 403, until a verification that names one); then the reset of a password on a fresh
+  identity with a phone's socket open (a reset request answered 202 with no body for it and for
+  an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
+  new password with 204, which closes the phone's socket with 4002 and refuses its token at
+  hello, refuses the old password, signs in with the new one and mails the notice of a changed
+  password; the same link again answered 401 `link-invalid`); then on another identity its device
   sessions: a hello
   under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
   400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone

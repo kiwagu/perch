@@ -88,10 +88,15 @@ function renderSignIn(session: SessionPort) {
         useFactory: () => new SignInService(session),
       },
     ],
-    declarations: { SignIn: SignInContainer, Me: () => <p>profile</p> },
+    declarations: {
+      SignIn: SignInContainer,
+      Me: () => <p>profile</p>,
+      Forgot: () => <p>forgot</p>,
+    },
     routes: [
       { path: '/sign-in', page: 'SignIn', guard: 'guest' },
       { path: '/me', page: 'Me', guard: 'authenticated' },
+      { path: '/forgot-password', page: 'Forgot' },
     ],
   })
   const router = createAppRouter({
@@ -136,6 +141,29 @@ const metRules = () =>
     )
 
 describe('SignInContainer', () => {
+  it('moves to ask for a reset mail with the email typed, never the password', async () => {
+    const router = renderSignIn(fakeSession().session)
+
+    await screen.findByTestId('user.sign-in.form')
+    typeInto('user.sign-in.email-input', 'ann@example.test')
+    typeInto('user.sign-in.password-input', 'Secret-ann1')
+    fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
+
+    await screen.findByText('forgot')
+    expect(router.state.location.pathname).toBe('/forgot-password')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
+    expect(router.state.location.href).not.toContain('Secret')
+  })
+
+  it('moves to ask for a reset mail with no email when none is typed', async () => {
+    const router = renderSignIn(fakeSession().session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.forgot-link'))
+
+    await screen.findByText('forgot')
+    expect(router.state.location.search).toEqual({})
+  })
+
   it('moves to the profile once another tab signs someone in: one account per browser', async () => {
     const { session, signedIn } = switchableSession()
     const router = renderSignIn(session)

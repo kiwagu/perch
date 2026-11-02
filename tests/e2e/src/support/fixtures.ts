@@ -40,6 +40,16 @@ export interface AnotherAccount {
   signUp(): Promise<Page>
 }
 
+/**
+ * Another device for an account the test makes itself: a browser of its own (a context of its
+ * own, so its own storage, Web Locks and BroadcastChannel) that opens nothing until a test asks
+ * and signs nothing in by itself.
+ */
+export interface FreshDevice {
+  /** The device's page, on no address yet. */
+  open(): Promise<Page>
+}
+
 interface Fixtures {
   /**
    * A user who has just signed up through the sign-in page, opened the link of the verification
@@ -48,6 +58,7 @@ interface Fixtures {
   readonly signedIn: SeedAccount
   readonly secondDevice: SecondDevice
   readonly anotherAccount: AnotherAccount
+  readonly freshDevice: FreshDevice
 }
 
 /** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
@@ -111,6 +122,15 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
 
   expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
   await page.waitForURL('**/me')
+}
+
+/**
+ * Clicks the profile's sign-out button and waits up to 15 s for the sign-in page: a sign-out waits
+ * for the sync channel first.
+ */
+export async function signOut(page: Page): Promise<void> {
+  await page.getByTestId('user.profile.sign-out-button').click()
+  await expectPathname(page, '/sign-in', 15_000)
 }
 
 /** A fresh account to sign up with, under a name of its own. */
@@ -265,6 +285,12 @@ const extended = base.extend<Fixtures>({
         return page
       },
     })
+    await device.close()
+  },
+  freshDevice: async ({ browser, contextOptions, baseURL }, use) => {
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
+
+    await use({ open: device.open })
     await device.close()
   },
 })

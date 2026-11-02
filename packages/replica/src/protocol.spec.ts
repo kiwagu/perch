@@ -119,6 +119,10 @@ describe('sync protocol', () => {
     expect(CLOSE.revoked).toBe(4001)
   })
 
+  it('closes a device signed out by a change of its password with 4002', () => {
+    expect(CLOSE.passwordChanged).toBe(4002)
+  })
+
   it('refuses text that is not JSON', () => {
     expect(decodeMessage(serverMessage, 'not json').isErr()).toBe(true)
   })

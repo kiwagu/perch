@@ -91,6 +91,9 @@ export function SignInContainer() {
       onToggleMode={(passwords) => send({ type: 'user.sign-in.toggle-button', ...passwords })}
       onTypePassword={(field, passwords) => send({ type: PASSWORD_INPUTS[field], ...passwords })}
       onResend={(email) => submit({ type: 'user.sign-in.resend-button', email })}
+      onForgot={(email) =>
+        send({ type: 'user.sign-in.forgot-link', fields: { 'user.sign-in.email-input': email } })
+      }
     />
   )
 }

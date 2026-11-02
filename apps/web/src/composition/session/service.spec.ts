@@ -60,6 +60,8 @@ const annIn = (memberships: readonly Membership[]): KeptDevice => ({ ...ann, mem
 
 /** A gateway whose sign-in always answers `device`, and which takes no sign-up and no link. */
 const signingIn = (device: SignedInDevice): GatewayAuth => ({
+  // What else the gateway does is not in these tests.
+  ...fakeGatewayAuth(),
   signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
   signIn: () => okAsync(device),
   verifyEmail: () => errAsync(dataError('data:LINK_INVALID', 'not in this test')),
@@ -1304,6 +1306,7 @@ describe('SessionService memberships', () => {
       [bob.token, [globex]],
     ])
     const auth: GatewayAuth = {
+      ...fakeGatewayAuth(),
       signUp: () => errAsync(dataError('data:SIGN_UP_REJECTED', 'sign-up was rejected')),
       signIn: (input) =>
         okAsync(answers.get(input.email) ?? expect.unreachable(`an account for ${input.email}`)),

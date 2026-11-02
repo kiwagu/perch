@@ -1,6 +1,6 @@
-import { defaultTreeAdapter, parse } from 'parse5'
 import { describe, expect, it } from 'vitest'
 
+import { rootLanguage, UNSUBSTITUTED } from './__fixtures__/mail-reading'
 import { anchorsOf, elementsNamed, textOf } from './html'
 import { renderVerificationMail } from './verification-mail.render'
 
@@ -12,18 +12,6 @@ const ADDRESS = `${MARKER}@example.test`
 
 const written = (overrides: { name?: string; link?: string; locale?: string } = {}) =>
   renderVerificationMail({ to: ADDRESS, name: 'Ann', link: LINK, locale: 'en', ...overrides })
-
-/** The `lang` of an HTML document's root element, as the e2e suite reads a mail's language. */
-function rootLanguage(html: string): string | undefined {
-  const root = parse(html).childNodes.find((node) => defaultTreeAdapter.isElementNode(node))
-
-  return root === undefined
-    ? undefined
-    : defaultTreeAdapter.getAttrList(root).find(({ name }) => name === 'lang')?.value
-}
-
-/** A catalog parameter the render left unsubstituted, such as `{name}`. */
-const UNSUBSTITUTED = /\{[a-z]+\}/
 
 describe('renderVerificationMail', () => {
   it('writes the mail in English: to the account, its subject, the root language, the greeting', async () => {
