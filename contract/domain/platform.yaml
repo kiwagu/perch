@@ -93,7 +93,7 @@ actions:
       password:
         type: string
         description: "The new password, kept to the rules of a new password: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol."
-    result: "the account's password is the new one, every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page then keeps its message; nothing is signed in by it. A link unknown, used before or replaced by a newer one answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged. A network address takes twenty attempts within ten minutes, refused or not, and the next answers rate-limited"
+    result: "the account's password is the new one, its email is verified when it was not yet, since only that mailbox got the link (its first sign-in then creates the account's settings and profile, as the link of the sign-up mail would have), every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page then keeps its message; nothing is signed in by it. A link unknown, used before or replaced by a newer one answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged. A network address takes twenty attempts within ten minutes, refused or not, and the next answers rate-limited"
     codes:
       - link-invalid
       - link-expired
@@ -150,7 +150,7 @@ actions:
       token:
         type: string
         description: The token the link of the confirmation mail carries in the address of /confirm-email.
-    result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; the old email gets the notice below, which names neither the new email nor any part of it; the device that opens the link is not signed in by it. A link unknown, used before or replaced by a newer one, one whose account changed its email or its password since the mail was sent, or one whose new email has got an account meanwhile, answers link-invalid; one older than a day link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; every reset link of the account stops working, since it went to the old email; the old email gets the notice below, which names neither the new email nor any part of it; the device that opens the link is not signed in by it. A link unknown, used before or replaced by a newer one, one whose account changed its email or its password since the mail was sent, or one whose new email has got an account meanwhile, answers link-invalid; one older than a day link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
     codes:
       - link-invalid
       - link-expired
