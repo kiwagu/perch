@@ -1,3 +1,4 @@
+export { compositeAnchorsOf, withDerivedComposites } from './composites'
 export { CONFIRM_RULE_ROW, isDestructive, questionCodeOf } from './confirmations'
 export { type Control, controlsOf } from './controls'
 export { withDerivedErrors } from './errors'

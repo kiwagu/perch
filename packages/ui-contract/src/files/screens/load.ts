@@ -5,7 +5,8 @@
  * section. Each file is YAML, then its Zod schema. A missing or empty folder, a file that
  * is not `.yaml`, a file named otherwise than its screen's first binding says and a
  * missing platform file are problems of the file or folder concerned. Once every file is
- * read, what a file leaves to the contract is derived (`derive/`): an error anchor's codes and
+ * read, what a file leaves to the contract is derived (`derive/`): a composite a secret input
+ * opts into, derived as its list and items (`derive/composites.ts`); an error anchor's codes and
  * fields from the failures of the actions its part binds, as the model and the platform give
  * them, and whether a field holds input, from its kind and its bindings; and, with a
  * confirmation on the frame, the question each control of a destructive action asks before it
@@ -28,6 +29,7 @@ import {
   type FailureOf,
   failuresOf,
   toastCodesOf,
+  withDerivedComposites,
   withDerivedErrors,
   withDerivedInputs,
   withDerivedQuestions,
@@ -50,7 +52,7 @@ import {
   toastOfRead,
 } from './lookups'
 import { expandedOf, parsedOf } from './screen-file'
-import type { PlatformFile, Screen, ScreensFile } from './types'
+import type { PlatformComposite, PlatformFile, Screen, ScreensFile } from './types'
 
 const SUFFIX = '.yaml'
 
@@ -58,6 +60,7 @@ function readScreenFiles(
   root: string,
   failureOf: FailureOf,
   platformToasts: Readonly<Record<string, string>>,
+  composites: Readonly<Record<string, PlatformComposite>>,
 ): {
   screens: Screen[]
   files: string[]
@@ -87,7 +90,13 @@ function readScreenFiles(
       problems.push(...yaml.problems)
 
       if (yaml.problems.length === 0) {
-        read.push({ file, value: withDerivedInputs(withDerivedErrors(yaml.value, failureOf)) })
+        const composed = withDerivedComposites(file, yaml.value, composites)
+
+        problems.push(...composed.problems)
+        read.push({
+          file,
+          value: withDerivedInputs(withDerivedErrors(composed.value, failureOf)),
+        })
       }
     } else {
       problems.push({
@@ -209,7 +218,7 @@ export function loadScreensWith(
     problems: screenProblems,
     toasts,
     questions,
-  } = readScreenFiles(root, failureOf, platform?.toasts ?? {})
+  } = readScreenFiles(root, failureOf, platform?.toasts ?? {}, platform?.composites ?? {})
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {

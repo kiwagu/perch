@@ -518,6 +518,66 @@ describe('loadScreens', () => {
     })
   })
 
+  describe('a composite of the platform', () => {
+    const RULES = {
+      description: 'The rules a new password keeps.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: '10 to 35 characters.', digit: 'At least one digit.' },
+    }
+
+    it('is derived into the screen whose secret input opts in, its anchors marked derivedFrom', () => {
+      const platform = parse(readFileSync(join(root, PLATFORM_FILE), 'utf8')) as Record<
+        string,
+        unknown
+      >
+
+      write(PLATFORM_FILE, stringify({ ...platform, composites: { 'password-rules': RULES } }))
+      writeSample((screen) => {
+        screen['anchors'] = {
+          ...(screen['anchors'] as Record<string, unknown>),
+          'sample.title-input': {
+            kind: 'input',
+            secret: true,
+            composite: 'password-rules',
+            binding: { model: 'thing.title' },
+          },
+        }
+      })
+
+      const { screens, problems: found } = loadScreens(root)
+      const anchors = screens?.screens[0]?.anchors
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(anchors?.['sample.password-rule-list']).toEqual({
+        kind: 'list',
+        description: 'The rules a new password keeps.',
+        derivedFrom: { composite: 'password-rules' },
+      })
+      expect(anchors?.['sample.password-rule-list.length-item']).toEqual({
+        kind: 'item',
+        description: '10 to 35 characters.',
+        states: ['met'],
+        derivedFrom: { composite: 'password-rules', item: 'length' },
+      })
+    })
+
+    it('refuses a derivedFrom a screen file writes, as the loader refuses a written asks', () => {
+      writeSample((screen) => {
+        const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+        anchors['sample.list'] = {
+          ...anchors['sample.list'],
+          derivedFrom: { composite: 'password-rules' },
+        }
+      })
+
+      expect(onlyMessage()).toBe(
+        'anchors["sample.list"].derivedFrom: derivedFrom is derived from a composite of the platform: a screen file never writes it',
+      )
+    })
+  })
+
   it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
     writeSample((screen) => {
       screen['anchors'] = {
