@@ -36,7 +36,7 @@ actions:
       password:
         type: string
         description: The password of the account.
-    result: the device is signed in, the app moves to /me with code welcome; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
+    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
     codes:
       - invalid-credentials
       - email-not-verified
@@ -49,7 +49,7 @@ actions:
       token:
         type: string
         description: The token the link of the verification mail carries in the address of /verify-email.
-    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened again after that answers verified-before and signs nothing in; a link older than a day answers link-expired"
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired"
     codes:
       - link-invalid
       - link-expired
