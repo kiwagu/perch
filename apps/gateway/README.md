@@ -81,7 +81,11 @@ the update; each device's next hello is then refused with 4401.
 
 ## Commands
 
-- `bun run dev`: runs the gateway and restarts it on changes.
+- `bun run dev`: runs the gateway with `bun --watch`, restarted on a change of its sources. It
+  reads its configuration from the environment, so run it through the root `bun run dev`, which
+  gives it the development stand's settings (`scripts/stand-gateway/`, as the mcproc manifest's
+  `gateway` app has them) after `mcproc start services`; the pm2 stand's `gateway` app
+  (`mcproc start dev`) is the other way to run it.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
   one per organisation for the organisation services and routes.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
