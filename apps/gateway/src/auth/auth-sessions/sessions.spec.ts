@@ -2,12 +2,24 @@ import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fromDriverValue, type LocalDb } from '@workspace/data'
-import { device_sessionIdFactory, type IdentityId, idSchemas } from '@workspace/ids'
+import {
+  device_sessionIdFactory,
+  type IdentityId,
+  identityIdFactory,
+  idSchemas,
+} from '@workspace/ids'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
-import { AUTH_SECRET, deviceHeaders, openAuth, signUpOn } from '../__fixtures__/auth-instance'
+import {
+  AUTH_SECRET,
+  betterAuthToken,
+  deviceHeaders,
+  openAuth,
+  signUpOn,
+} from '../__fixtures__/auth-instance'
 import deviceSessionExpiriesStatement from '../__fixtures__/device-session-expiries.surql'
 import deviceSessionRowStatement from '../__fixtures__/device-session-row.surql'
+import { signVerificationToken, verificationKey } from '../account-links'
 
 import type { SessionCaller, SessionRead } from './read'
 import { AuthSessions } from './sessions'
@@ -49,7 +61,7 @@ function callerOf(read: SessionRead): SessionCaller {
 
 /**
  * Signs Ann up on her laptop, which signs nothing in and mails her the verification link: the
- * token of its link.
+ * token of its link, which names her account beside Better Auth's own token.
  */
 async function annsLinkToken(opened: Awaited<ReturnType<typeof harness>>): Promise<string> {
   await opened.auth.api.signUpEmail({
@@ -254,7 +266,7 @@ describe('AuthSessions, the reads of a verification', () => {
     const opened = await harness()
     const token = await annsLinkToken(opened)
     const { headers } = await opened.auth.api.verifyEmail({
-      query: { token },
+      query: { token: betterAuthToken(token) },
       headers: deviceHeaders('phone', 'Phone'),
       returnHeaders: true,
     })
@@ -285,37 +297,76 @@ describe('AuthSessions, the reads of a verification', () => {
     expect((await sessions.identityOf('nobody@example.test'))._unsafeUnwrap()).toBeUndefined()
   })
 
-  it("reads the email of a link's token, and none for a token it did not sign or one past its lifetime", async () => {
+  it("reads what a link's token names: the account its mail went to, Better Auth's token and its email", async () => {
     const opened = await harness()
     const token = await annsLinkToken(opened)
-    const otherSecret = await signJWT(
-      { email: 'ann@example.test' },
-      'another-secret-'.padEnd(44, '0'),
-    )
-    const expired = await signJWT({ email: 'ann@example.test' }, AUTH_SECRET, -10)
 
-    expect(await opened.sessions.verificationEmail(token)).toBe('ann@example.test')
-    expect(await opened.sessions.verificationEmail('not-a-token')).toBeUndefined()
-    expect(await opened.sessions.verificationEmail(otherSecret)).toBeUndefined()
-    expect(await opened.sessions.verificationEmail(expired)).toBeUndefined()
+    expect(await opened.sessions.verificationOf(token)).toEqual({
+      identity: (await opened.sessions.identityOf('ann@example.test'))._unsafeUnwrap(),
+      token: betterAuthToken(token),
+      email: 'ann@example.test',
+    })
   })
 
-  it('reads an email in lower case, and none from a token that names no email', async () => {
-    const { sessions } = await harness()
+  it("reads none for a token the gateway did not sign as a link's: Better Auth's own, one signed with the secret itself or another key, a confirmation's", async () => {
+    const opened = await harness()
+    const token = await annsLinkToken(opened)
+    const claims = {
+      purpose: 'verify-email',
+      identity: identityIdFactory.create(),
+      token: betterAuthToken(token),
+    } as const
+    const key = verificationKey(AUTH_SECRET)
 
+    expect(await opened.sessions.verificationOf(betterAuthToken(token))).toBeUndefined()
+    expect(await opened.sessions.verificationOf('not-a-token')).toBeUndefined()
     expect(
-      await sessions.verificationEmail(await signJWT({ email: 'Ann@Example.test' }, AUTH_SECRET)),
-    ).toBe('ann@example.test')
-    expect(
-      await sessions.verificationEmail(await signJWT({ sub: 'ann' }, AUTH_SECRET)),
+      await opened.sessions.verificationOf(await signVerificationToken(claims, AUTH_SECRET)),
     ).toBeUndefined()
+    expect(
+      await opened.sessions.verificationOf(
+        await signVerificationToken(claims, verificationKey('another-secret-'.padEnd(44, '0'))),
+      ),
+    ).toBeUndefined()
+    expect(
+      await opened.sessions.verificationOf(
+        await signJWT({ ...claims, purpose: 'change-email' }, key),
+      ),
+    ).toBeUndefined()
+  })
+
+  it("reads the email of Better Auth's token in lower case, and none once that token is past its lifetime or names no email", async () => {
+    const { sessions } = await harness()
+    const identity = identityIdFactory.create()
+    const key = verificationKey(AUTH_SECRET)
+    const linkOf = (token: string) =>
+      signVerificationToken({ purpose: 'verify-email', identity, token }, key)
+    const upper = await signJWT({ email: 'Ann@Example.test' }, AUTH_SECRET)
+    const expired = await signJWT({ email: 'ann@example.test' }, AUTH_SECRET, -10)
+    const nameless = await signJWT({ sub: 'ann' }, AUTH_SECRET)
+
+    expect(await sessions.verificationOf(await linkOf(upper))).toEqual({
+      identity,
+      token: upper,
+      email: 'ann@example.test',
+    })
+    expect(await sessions.verificationOf(await linkOf(expired))).toEqual({
+      identity,
+      token: expired,
+      email: undefined,
+    })
+    expect(await sessions.verificationOf(await linkOf(nameless))).toEqual({
+      identity,
+      token: nameless,
+      email: undefined,
+    })
   })
 
   it('fails to read a verification session or an identity once the directory is closed', async () => {
     const opened = await harness()
     const token = await annsLinkToken(opened)
     const { headers } = await opened.auth.api.verifyEmail({
-      query: { token },
+      query: { token: betterAuthToken(token) },
       headers: deviceHeaders('phone', 'Phone'),
       returnHeaders: true,
     })

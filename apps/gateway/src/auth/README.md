@@ -143,12 +143,19 @@ kept and matched in lower case, so an address in any case is one account. Wrong 
 403 `EMAIL_NOT_VERIFIED` and sends nothing (`sendOnSignIn: false`): the person asks for the mail
 again.
 
-Better Auth signs the verification link's token with the auth secret (an HS256 token naming the
-email) and hands it to `verificationMailer` (`verification-mail.ts`), its `sendVerificationEmail`,
-which starts the mail and returns at once: the request that asked for a mail never waits for it. The
-mail links to the front's own screen, `<GATEWAY_PUBLIC_URL>/verify-email?token=…`
-(`verificationLink`, `VERIFY_EMAIL_PATH`), never to Better Auth's own verifying URL, and its token
-lives a day (`VERIFICATION_LINK_LIFETIME_S`). The mail is written by `@workspace/email`
+Better Auth signs its verification token with the auth secret (an HS256 token naming the email
+alone) and hands it, with the account, to `verificationMailer` (`verification-mail.ts`), its
+`sendVerificationEmail`, which starts the mail and returns at once: the request that asked for a
+mail never waits for it. The mail links to the front's own screen,
+`<GATEWAY_PUBLIC_URL>/verify-email?token=…` (`verificationLink`, `VERIFY_EMAIL_PATH`), never to
+Better Auth's own verifying URL. The link's token is the gateway's own
+(`account-links/verification-token.ts`): it names the account the mail goes to beside Better
+Auth's token, signed with a key derived from the auth secret (`verificationKey`), so Better Auth
+never takes it for one of its own, nor the gateway one of Better Auth's, or a confirmation's, for
+it. Better Auth's token alone cannot tell one account of an email from another: once a
+confirmation freed an email and a new sign-up took it, it would verify, and sign in, the new
+account. Better Auth's token inside lives a day (`VERIFICATION_LINK_LIFETIME_S`), and so does the
+link. The mail is written by `@workspace/email`
 (`renderVerificationMail`) and sent through the mail port. It speaks the account's language: the one its settings
 name once it has settings (`accountLocale`, `account-locale.ts`), the one it signed up in before.
 Settings that could not be read, or name a language the gateway does not speak, send no mail and are
@@ -163,29 +170,36 @@ lifetime is refused with `TOKEN_EXPIRED`. Better Auth's own resend answers alike
 mails only an account not verified yet; a sign-in sends nothing.
 `AuthSessions` reads what the mount needs for them: the session a verification signed in, by the
 signed token of Better Auth's answer, with its account (`signedIn`), the identity of an email
-(`identityOf`), and the email a link's token names, read with the secret (`verificationEmail`).
+(`identityOf`), and what a link's token names, read with the derived key (`verificationOf`): the
+account its mail went to, Better Auth's token, and the email that token names, read with the
+secret (none once it is past its lifetime).
 
 The mount serves both. A verification is `POST /auth/verify-email` with `{ token }` in its body
 and the device's headers, so a link's token never sits in a URL the gateway serves. It runs in
 this order. The device is named first (none answers 400 `bad-request`): Better Auth marks the
 email verified before it creates the session, so a session refused for want of a device would
-leave the email verified and nobody signed in. The token's email is read with the secret, and the
-account's turn is taken (`GatewayRoot.accountTurns`, by the email in lower case): one account's
-verifications run one at a time in this process, so Better Auth rereads the account's
-`emailVerified` inside the turn, and of two exchanges at once, on one link or two, the second
-answers `{ token: null }` and signs nothing in. A token the secret does not read (forged, or past
-its lifetime) takes no turn: Better Auth refuses it. Inside the turn the identity of the email is
-read (a failure answers 500 `internal` with nothing verified), then Better Auth's own
-`GET /verify-email` is asked with the token alone (no `callbackURL`, so it never redirects) and
-without the request's `Authorization` and `Cookie`, so no session of the request is taken for the
-account's. When its answer carries a session, the identity's sockets on the device are closed
+leave the email verified and nobody signed in. The link's token is read with the derived key: one
+the gateway did not sign as a link's (made up, or Better Auth's own token bare) answers 401
+`link-invalid`, and one whose Better Auth token no longer reads answers 401 `link-expired` (the
+gateway signed it while that token was fresh, so its day has passed), both before any turn and
+without asking Better Auth. Then the account's turn is taken (`GatewayRoot.accountTurns`, by the
+email Better Auth's token names, in lower case): one account's verifications run one at a time in
+this process, so Better Auth rereads the account's `emailVerified` inside the turn, and of two
+exchanges at once, on one link or two, the second answers `{ token: null }` and signs nothing in;
+and no sign-up or confirmation gives the email to another account meanwhile. Inside the turn the
+account that holds the email is read (a failure answers 500 `internal` with nothing verified),
+and a link verifies only the account its mail went to: when another account holds the email, or
+none does, it answers 401 `link-invalid`, verifying and signing in nothing, Better Auth not asked.
+Otherwise Better Auth's own `GET /verify-email` is asked with its token alone (no `callbackURL`,
+so it never redirects) and without the request's `Authorization` and `Cookie`, so no session of
+the request is taken for the account's. When its answer carries a session, the identity's sockets on the device are closed
 with 1000 at once, before the session is read back for the answer, so a readback that fails (500
 `internal`) still leaves no socket of the device's earlier session open. It answers 200
 `{ token, user: { id, email, name, locale } }` the first time (the raw token, the account's name
 and the language it signed up in), 200 `{ token: null }` for an account verified before, by an
 earlier opening or by a reset (Better Auth signs nothing in for a verified account), and 401
 `link-expired` for a link past its lifetime or `link-invalid` for any other that verifies
-nothing, an unknown account's included. The turns are this process's: several gateway processes
+nothing, an unknown account's and another account's included. The turns are this process's: several gateway processes
 would need a claim in the database.
 
 A resend is `POST /auth/send-verification-email` with `{ email }`: Better Auth is handed the email
@@ -394,14 +408,15 @@ error carries one.
   `resetMailer` and `RESET_LINK_LIFETIME_S` (`reset-mail.ts`), `AccountMails`,
   `RESET_PASSWORD_PATH`, `CONFIRM_EMAIL_PATH` and `FORGOT_PASSWORD_PATH` (`account-mails.ts`),
   `AccountPasswords` (`account-passwords.ts`: `requestReset`, `hash`, `reset`, `change`,
-  `matches`), `ResetLinks` (`read`, `keepNewest`) and `EmailChanges` (`ask`, `cancel`,
-  `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) (`account-links/`),
+  `matches`), `ResetLinks` (`read`, `keepNewest`), `EmailChanges` (`ask`, `cancel`,
+  `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) and the token of a verification link
+  (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
   (`account-locale.ts`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
-  `identityOf` and `verificationEmail`; `SignedInAccount`), `DeviceSessions` (`device-sessions.ts`: `list`,
+  `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
   organisation routes, and the caller's email and session row besides), `accountEmail` (`account-email.ts`, an email as the invitations take
@@ -428,7 +443,9 @@ error carries one.
 - `bun run test` in `apps/gateway` runs this module's specs on an embedded in-memory directory
   (`auth-handler/mount.spec.ts` and `auth-handler/verification.spec.ts`, which also hold that
   nothing of an address, a token or a link reaches a log, stderr or an answer, a failed query's
-  included, that one account's verifications at once sign one device in, that a device's
+  included, that one account's verifications at once sign one device in, that a link verifies only
+  the account its mail went to (an email freed by a confirmation and taken by a new sign-up
+  included), that a device's
   sockets close before a readback that fails, and that every resend answers no sooner than
   Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up

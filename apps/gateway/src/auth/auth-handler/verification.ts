@@ -1,12 +1,10 @@
-import { ok } from 'neverthrow'
-
-import type { IdentityId } from '@workspace/ids'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { SUPERSEDED } from '../../sync/sync-connection'
+import type { MailedVerification } from '../auth-sessions'
 import { DEVICE_HEADER } from '../session-hooks'
 
 import type { AuthMountDeps } from './mount'
@@ -15,6 +13,7 @@ import {
   internal,
   publicUrl,
   refusalOf,
+  refused,
   withJsonBody,
   withoutCredentials,
 } from './requests'
@@ -24,9 +23,13 @@ const resendBody = z.object({ email: z.string().min(1).max(320) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**
- * Asks Better Auth for the exchange, holding the account's turn: the identity the token's email
- * names is read first (nothing is verified yet if that read fails), then Better Auth verifies with
- * the token alone (no `callbackURL`: it never redirects) and without the request's credentials. A
+ * Asks Better Auth for the exchange, holding the account's turn by the email: the account that
+ * holds the email is read first (nothing is verified yet if that read fails), and the link
+ * verifies only the account its mail went to. When another account holds the email, or none
+ * does (the email moved away, and maybe a new account signed up with it), the link is dead
+ * (401 `link-invalid`) and Better Auth is not asked: its token names the email alone, and would
+ * verify, and sign in, whichever account holds it now. Otherwise Better Auth verifies with its
+ * token alone (no `callbackURL`: it never redirects) and without the request's credentials. A
  * first verification signs the device in: the identity's sockets on the device are closed with
  * 1000 at once, as at a sign-in, before the session is read back for the answer, so a readback that
  * fails still leaves no socket of the ended session open.
@@ -34,22 +37,23 @@ const linkRefusal = z.object({ code: z.string() })
 async function exchange(
   deps: AuthMountDeps,
   request: Request,
-  token: string,
+  verification: MailedVerification,
+  email: string,
   device: string,
-  email: string | undefined,
 ): Promise<Response> {
-  const identity =
-    email === undefined
-      ? ok<IdentityId | undefined>(undefined)
-      : await deps.sessions.identityOf(email)
+  const holder = await deps.passwords.credentialOf(email)
 
-  if (identity.isErr()) {
+  if (holder.isErr()) {
     return internal()
+  }
+
+  if (holder.value?.identity !== verification.identity) {
+    return refused(401, 'link-invalid')
   }
 
   const url = new URL(publicUrl(request))
 
-  url.search = new URLSearchParams({ token }).toString()
+  url.search = new URLSearchParams({ token: verification.token }).toString()
 
   const answer = await deps.auth.handler(
     new Request(url.href, {
@@ -60,16 +64,11 @@ async function exchange(
   )
 
   if (answer.status === 401) {
-    const refused = linkRefusal.safeParse(await answer.json().catch(() => undefined))
+    const refusal = linkRefusal.safeParse(await answer.json().catch(() => undefined))
 
-    return Response.json(
-      {
-        code:
-          refused.success && refused.data.code === 'TOKEN_EXPIRED'
-            ? 'link-expired'
-            : 'link-invalid',
-      },
-      { status: 401 },
+    return refused(
+      401,
+      refusal.success && refusal.data.code === 'TOKEN_EXPIRED' ? 'link-expired' : 'link-invalid',
     )
   }
 
@@ -83,13 +82,7 @@ async function exchange(
     return Response.json({ token: null })
   }
 
-  // Better Auth signs in the account the token's email names, which the read above found under the
-  // same turn; a session without it cannot happen.
-  if (identity.value === undefined) {
-    return internal()
-  }
-
-  await deps.connections.close(identity.value, device, SUPERSEDED)
+  await deps.connections.close(verification.identity, device, SUPERSEDED)
 
   const account = await deps.sessions.signedIn(signed)
 
@@ -101,11 +94,14 @@ async function exchange(
 /**
  * Exchanges a verification link's token. The device is named first: Better Auth marks the email
  * verified before it creates the session, so a session refused for want of a device would leave
- * the email verified and nobody signed in. The token's email is read with the gateway's secret,
- * and one account's verifications run one at a time in this process (`deps.accounts`): Better Auth
- * rereads the account's `emailVerified` inside the turn, so of two exchanges at once, on one link or
- * two, the second answers `{ token: null }` and signs nothing in. A token the secret does not read
- * (forged, or past its lifetime) needs no turn: Better Auth refuses it.
+ * the email verified and nobody signed in. The link's token is read with a key derived from the
+ * gateway's secret (`AuthSessions.verificationOf`): one the gateway did not sign as a link's is
+ * dead (401 `link-invalid`), and one whose Better Auth token no longer reads has outlived its day
+ * (401 `link-expired`; the gateway signed it when that token was fresh), Better Auth not asked.
+ * Otherwise one account's verifications run one at a time in this process (`deps.accounts`, by the
+ * email Better Auth's token names): Better Auth rereads the account's `emailVerified` inside the
+ * turn, so of two exchanges at once, on one link or two, the second answers `{ token: null }` and
+ * signs nothing in, and no sign-up or confirmation gives the email to another account meanwhile.
  */
 export async function verify(deps: AuthMountDeps, request: Request): Promise<Response> {
   const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
@@ -115,11 +111,17 @@ export async function verify(deps: AuthMountDeps, request: Request): Promise<Res
     return badRequest()
   }
 
-  const { token } = body.data
-  const email = await deps.sessions.verificationEmail(token)
-  const run = () => exchange(deps, request, token, device.data, email)
+  const verification = await deps.sessions.verificationOf(body.data.token)
 
-  return email === undefined ? run() : deps.accounts.run(email, run)
+  if (verification === undefined) {
+    return refused(401, 'link-invalid')
+  }
+
+  const { email } = verification
+
+  return email === undefined
+    ? refused(401, 'link-expired')
+    : deps.accounts.run(email, () => exchange(deps, request, verification, email, device.data))
 }
 
 /**

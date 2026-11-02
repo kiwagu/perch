@@ -3,4 +3,4 @@
 export { type SessionRevoke, type SignOutEnding, toEndedDevices } from './endings'
 export type { SessionCaller, SessionRead } from './read'
 export { AuthSessions, type AuthSessionsOptions } from './sessions'
-export type { SignedInAccount } from './verification'
+export type { MailedVerification, SignedInAccount } from './verification'

@@ -1,13 +1,18 @@
 import { signJWT } from 'better-auth/crypto'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
+import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
-import { AUTH_SECRET, deviceHeaders } from '../__fixtures__/auth-instance'
+import { AUTH_SECRET, betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import deviceSessionDevicesStatement from '../__fixtures__/device-session-devices.surql'
+import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
+import identityVerifiedStatement from '../__fixtures__/identity-verified.surql'
+import { signVerificationToken, verificationKey } from '../account-links'
 
 import {
   ANN,
@@ -62,6 +67,24 @@ function issuedAt(token: string): number {
   return z
     .object({ iat: z.number() })
     .parse(JSON.parse(Buffer.from(payload ?? '', 'base64url').toString('utf8'))).iat
+}
+
+/**
+ * The token of a link as the gateway mails one to `identity`, around Better Auth's `token`; a
+ * new account's unless one is named.
+ */
+function mailedLink(token: string, identity = identityIdFactory.create()): Promise<string> {
+  return signVerificationToken(
+    { purpose: 'verify-email', identity, token },
+    verificationKey(AUTH_SECRET),
+  )
+}
+
+/** The devices of `identity` whose session has not ended. */
+async function liveDevices(local: LocalDb, identity: IdentityId): Promise<string[]> {
+  const [devices] = await local.db.query<[string[]]>(liveSessionsStatement, { identity })
+
+  return devices
 }
 
 /** An answer as a client sees it: its status, its headers and its body. */
@@ -171,8 +194,8 @@ describe('authHandler, the verification of an email', () => {
 
   it('answers a link it cannot read, one past its lifetime and one of no account 401 with its code alone', async () => {
     const { route, closes } = await mountedOnRealAuth()
-    const expired = await signJWT({ email: ANN }, AUTH_SECRET, -10)
-    const ghost = await signJWT({ email: GHOST }, AUTH_SECRET, 3600)
+    const expired = await mailedLink(await signJWT({ email: ANN }, AUTH_SECRET, -10))
+    const ghost = await mailedLink(await signJWT({ email: GHOST }, AUTH_SECRET, 3600))
     const invalid = await seen(await route(verify('not-a-token', 'phone'), FROM))
     const late = await seen(await route(verify(expired, 'phone'), FROM))
     const unknown = await seen(await route(verify(ghost, 'phone'), FROM))
@@ -182,6 +205,18 @@ describe('authHandler, the verification of an email', () => {
     // A link of no account answers as a link that is no link at all.
     expect(unknown).toEqual(invalid)
     expect(closes).toEqual([])
+  })
+
+  it("answers Better Auth's own token, which the gateway never mails bare, link-invalid, verifying nothing", async () => {
+    const mounted = await mountedOnRealAuth()
+    const link = await annsLink(mounted.outbox)
+    const answer = await seen(await mounted.route(verify(betterAuthToken(link), 'phone'), FROM))
+    const [identities] =
+      await mounted.local.db.query<[{ email_verified: boolean }[]]>(identityVerifiedStatement)
+
+    expect([answer.status, JSON.parse(answer.body)]).toEqual([401, { code: 'link-invalid' }])
+    expect(identities.map((identity) => identity.email_verified)).toEqual([false])
+    expect(mounted.closes).toEqual([])
   })
 
   it('answers a verification that names no device, or no token, 400 without asking Better Auth', async () => {
@@ -399,7 +434,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
   it('verifies, refuses and resends with no address or link printed, logged or answered', async () => {
     const { route, outbox, logs } = await mountedOnRealAuth()
     const token = await annsLink(outbox, MARKED)
-    const expired = await signJWT({ email: MARKED }, AUTH_SECRET, -10)
+    const expired = await mailedLink(await signJWT({ email: MARKED }, AUTH_SECRET, -10))
     const { result, printed } = await printedDuring(async () => {
       const first = await seen(await route(verify(token, 'phone'), FROM))
       const others = [
@@ -452,6 +487,75 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(JSON.stringify(logs)).not.toMatch(MARKER)
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))
+  })
+})
+
+describe('authHandler, a verification link and the account it was mailed to', () => {
+  /** An email no account has, until Ann moves to it. */
+  const MOVED = 'ann.moved@example.test'
+
+  /** Whether each identity's email is verified, by its email. */
+  async function verifiedByEmail(local: LocalDb): Promise<Map<string, boolean>> {
+    const [rows] =
+      await local.db.query<[{ email: string; email_verified: boolean }[]]>(
+        identityVerifiedStatement,
+      )
+
+    return new Map(rows.map((row) => [row.email, row.email_verified]))
+  }
+
+  it("answers an account's link link-invalid once its email moved and another account signed up with it, verifying and signing in nothing", async () => {
+    const mounted = await mountedOnRealAuth()
+    const annsToken = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+
+    // Before any change, Ann's link verifies her and signs her laptop in.
+    const first = verifiedAnswer.parse(
+      await (await mounted.route(verify(annsToken, 'laptop'), FROM))?.json(),
+    )
+
+    expect(first.user.id).toBe(ann)
+
+    // Ann moves to another email, which frees hers (the notice of the change goes to it), and Bob
+    // signs up with it.
+    const change = (await mounted.emailChanges.ask(ann, ANN, MOVED))._unsafeUnwrap()
+
+    expect(
+      (await mounted.route(postTo('/auth/confirm-email', { token: change }), FROM))?.status,
+    ).toBe(200)
+    await mounted.outbox.next(ANN, 1)
+
+    const bobsToken = await annsLink(mounted.outbox)
+    const bob = await mounted.annsId()
+
+    expect(bob).not.toBe(ann)
+
+    const old = await mounted.route(verify(annsToken, 'phone'), FROM)
+
+    expect(old?.status).toBe(401)
+    expect(await old?.json()).toEqual({ code: 'link-invalid' })
+    expect(await verifiedByEmail(mounted.local)).toEqual(
+      new Map([
+        [MOVED, true],
+        [ANN, false],
+      ]),
+    )
+    expect(await liveDevices(mounted.local, bob)).toEqual([])
+    expect(mounted.closes).toEqual([[ann, 'laptop', SUPERSEDED]])
+
+    // Bob's own link verifies Bob and signs his device in.
+    const bobs = verifiedAnswer.parse(
+      await (await mounted.route(verify(bobsToken, 'desk'), FROM))?.json(),
+    )
+
+    expect(bobs.user.id).toBe(bob)
+    expect(await liveDevices(mounted.local, bob)).toEqual(['desk'])
+    expect(await verifiedByEmail(mounted.local)).toEqual(
+      new Map([
+        [MOVED, true],
+        [ANN, true],
+      ]),
+    )
   })
 })
 

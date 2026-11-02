@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { interceptQueries } from '@workspace/data/testing'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
-import { deviceHeaders } from '../__fixtures__/auth-instance'
+import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import { hashPassword } from '../password-hash'
 
 import {
@@ -242,7 +242,7 @@ describe('authHandler, the rules of a new password', () => {
     await clock.advance(SIGN_UP_FLOOR_MS)
     expect((await up)?.status).toBe(202)
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 

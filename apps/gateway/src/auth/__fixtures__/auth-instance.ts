@@ -11,7 +11,7 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { linkToken, Outbox } from '../../mail/__fixtures__/outbox'
-import { EmailChanges, ResetLinks } from '../account-links'
+import { EmailChanges, ResetLinks, verificationClaims } from '../account-links'
 import { AccountMails } from '../account-mails'
 import { AccountPasswords } from '../account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth-instance'
@@ -140,6 +140,19 @@ export function deviceHeaders(id: string, label = 'Firefox on Linux'): Headers {
 }
 
 /**
+ * Better Auth's own token inside the token of a verification link (`token`), which a spec hands
+ * Better Auth's endpoint when it calls it directly; the mount reads the link's token itself. The
+ * claims are read without the key, so the token of any instance's link reads; the test fails for
+ * a token that names none.
+ */
+export function betterAuthToken(token: string): string {
+  const [, payload] = token.split('.')
+
+  return verificationClaims.parse(JSON.parse(Buffer.from(payload ?? '', 'base64url').toString()))
+    .token
+}
+
+/**
  * Signs `email` up (the password `Pass-word-1` unless `options` names one) and verifies it through
  * the mail the sign-up sent, which signs in the device the headers name, as a person opening the
  * link on it does.
@@ -167,7 +180,7 @@ export async function signUpOn(
     headers,
   })
 
-  const token = linkToken(await outbox.next(email, seen))
+  const token = betterAuthToken(linkToken(await outbox.next(email, seen)))
   const { headers: answered } = await auth.api.verifyEmail({
     query: { token },
     headers,

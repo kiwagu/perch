@@ -36,7 +36,7 @@ export interface AuthMountDeps {
   readonly auth: Pick<AuthInstance, 'handler'>
   readonly sessions: Pick<
     AuthSessions,
-    'signedIn' | 'identityOf' | 'verificationEmail' | 'read' | 'signOut'
+    'signedIn' | 'identityOf' | 'verificationOf' | 'read' | 'signOut'
   >
   /** The reset mail, the reset, the change and the check of a password, an email's credential. */
   readonly passwords: Pick<
@@ -142,7 +142,9 @@ function credentialChecked(
  *   credential checks too, then exchanges the link's token (`verify`): 200 `{ token, user: { id,
  *   email, name, locale } }` the first time, which signs the device in, 200 `{ token: null }` for
  *   an account verified before, 401 `link-invalid` or `link-expired` for a link that verifies
- *   nothing, 400 `bad-request` without a device or a token, 500 `internal` when the gateway failed.
+ *   nothing (a link verifies only the account its mail went to, so one whose email another
+ *   account holds now is dead), 400 `bad-request` without a device or a token, 500 `internal`
+ *   when the gateway failed.
  * - `POST /auth/send-verification-email` `{ email }`: takes one of the address's verification
  *   mails and one of the email's resends (`RequestLimits.verificationMail`), then asks Better Auth
  *   to send the mail again (`resend`): 202 with no body, alike for any email; 400 `bad-request`

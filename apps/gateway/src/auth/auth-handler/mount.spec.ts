@@ -10,6 +10,7 @@ import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
   accountServicesOf,
+  betterAuthToken,
   deviceHeaders,
   type OpenAuthOptions,
   openAuth,
@@ -564,7 +565,7 @@ describe('authHandler', () => {
 
     // Verified through the mail the sign-up sent, the account signs in.
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 
@@ -741,7 +742,7 @@ describe('authHandler', () => {
     expect((await up).status).toBe(202)
     expect(closes).toEqual([])
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 

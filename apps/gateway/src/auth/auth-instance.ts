@@ -97,6 +97,7 @@ export function authOptions(options: AuthInstanceOptions) {
         mail: options.mail,
         directory: options.local,
         publicUrl: options.publicUrl,
+        secret: options.secret,
         log: options.log,
       }),
     },

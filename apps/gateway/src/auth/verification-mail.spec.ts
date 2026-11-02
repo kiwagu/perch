@@ -7,9 +7,11 @@ import { identityIdFactory } from '@workspace/ids'
 
 import { DIRECTORY, NAMESPACE } from '../config'
 import type { MailPort } from '../mail'
-import { Outbox } from '../mail/__fixtures__/outbox'
+import { linkToken, Outbox } from '../mail/__fixtures__/outbox'
 
+import { AUTH_SECRET } from './__fixtures__/auth-instance'
 import settingsLocaleStatement from './__fixtures__/settings-locale.surql'
+import { readVerificationToken, verificationKey } from './account-links'
 import type { AuthLog } from './auth-log'
 import { verificationLink, verificationMailer } from './verification-mail'
 
@@ -60,6 +62,7 @@ async function mailer(options: MailerOptions = {}) {
       mail: options.mail ?? outbox,
       directory,
       publicUrl: options.publicUrl ?? 'https://localhost:5443',
+      secret: AUTH_SECRET,
       log,
     }),
   }
@@ -92,8 +95,25 @@ describe('verificationMailer', () => {
 
     const mail = await outbox.next(ADDRESS)
 
-    expect(mail.text).toContain('https://localhost:5443/verify-email?token=a.b.c')
+    expect(mail.text).toContain('https://localhost:5443/verify-email?token=')
     expect(mail.subject).toBe('Confirm your email for Perch')
+  })
+
+  it("names the account the mail goes to in its link's token, beside Better Auth's token", async () => {
+    const { outbox, send } = await mailer()
+    const account = user('en')
+
+    await send({ user: account, token: 'a.b.c' })
+
+    const token = linkToken(await outbox.next(ADDRESS))
+
+    expect(await readVerificationToken(token, verificationKey(AUTH_SECRET))).toEqual({
+      purpose: 'verify-email',
+      identity: account.id,
+      token: 'a.b.c',
+    })
+    // Better Auth's secret itself does not read it: the key is the link's own.
+    expect(await readVerificationToken(token, AUTH_SECRET)).toBeUndefined()
   })
 
   it('writes in the language the account signed up in while it has no settings', async () => {

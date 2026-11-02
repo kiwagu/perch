@@ -94,12 +94,21 @@ export const signedInAnswer = (): Response =>
 /** What a stand-in that is not meant to be asked fails with. */
 const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read here'))
 
+/** The email every verification link names over a stand-in for Better Auth. */
+export const STAND_IN_EMAIL = 'stand-in@example.test'
+
 /**
- * A stand-in for the sessions a verification reads: no link names an email, no email has an
+ * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
+ * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
+ * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
  * account, no session is read back, no token holds a session, and nothing is signed out.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
-  verificationEmail: async () => undefined,
+  verificationOf: async (token) => ({
+    identity: STAND_IN_ACCOUNT,
+    token,
+    email: STAND_IN_EMAIL,
+  }),
   identityOf: () => okAsync(undefined),
   signedIn: notHere,
   read: async () => ({ kind: 'none' }),
@@ -211,7 +220,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const route = authHandler({
     auth: opened.auth,
     sessions: {
-      verificationEmail: (token) => sessions.verificationEmail(token),
+      verificationOf: (token) => sessions.verificationOf(token),
       identityOf: (email) => sessions.identityOf(email),
       signedIn: (signed) =>
         options.readbackFails === true

@@ -5,7 +5,7 @@ import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
-import { deviceHeaders } from '../__fixtures__/auth-instance'
+import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
 import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
@@ -381,7 +381,7 @@ async function signUpSpanish(mounted: Mounted): Promise<void> {
     headers: deviceHeaders('laptop'),
   })
   await mounted.auth.api.verifyEmail({
-    query: { token: linkToken(await mounted.outbox.next(ANN, seen)) },
+    query: { token: betterAuthToken(linkToken(await mounted.outbox.next(ANN, seen))) },
     headers: deviceHeaders('laptop'),
   })
 }
