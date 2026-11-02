@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,11 +36,16 @@ function git(cwd: string, ...args: string[]): string {
   return run.stdout.trim()
 }
 
-/** Commits a change of `notes.md` in `root`. */
-function commit(root: string, text: string): void {
-  writeFileSync(join(root, 'notes.md'), `${text}\n`)
+/** Runs git in `root` as an author, for a command that makes a commit. */
+function author(root: string, ...args: string[]): string {
+  return git(root, '-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args)
+}
+
+/** Commits a change of `file` in `root`. */
+function commit(root: string, text: string, file = 'notes.md'): void {
+  writeFileSync(join(root, file), `${text}\n`)
   git(root, 'add', '-A')
-  git(root, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '-m', text)
+  author(root, 'commit', '-q', '-m', text)
 }
 
 /** A checkout of its own whose first branch is `branch`, with one commit on it. */
@@ -54,14 +59,56 @@ function checkout(branch: string): string {
   return root
 }
 
-/** Runs the command of the hook through the script in `root`, a stale ahead mode around it. */
-function run(root: string, code = PRINT_MODE): SpawnSyncReturns<string> {
+/**
+ * A branch `feature` of its own commit, and a `main` that moved on in another file since: the
+ * landing a merge of main brings in, whose commit is returned.
+ */
+function landedSince(root: string): string {
+  git(root, 'switch', '-q', '-c', 'feature')
+  commit(root, 'feature')
+  git(root, 'switch', '-q', 'main')
+  commit(root, 'landed', 'landed.md')
+
+  const landed = git(root, 'rev-parse', 'HEAD')
+
+  git(root, 'switch', '-q', 'feature')
+
+  return landed
+}
+
+/**
+ * Runs the command of the hook through the script in `root`, a stale ahead mode around it and
+ * `env` on top.
+ */
+function run(
+  root: string,
+  code = PRINT_MODE,
+  env: Readonly<Record<string, string>> = {},
+): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [CONTRACT_AHEAD, process.execPath, '-e', code], {
     cwd: root,
     encoding: 'utf8',
     stdio: 'pipe',
-    env: { ...ENV, CONTRACT_AHEAD: '1', CONTRACT_AHEAD_BASE: 'stale' },
+    env: { ...ENV, CONTRACT_AHEAD: '1', CONTRACT_AHEAD_BASE: 'stale', ...env },
   })
+}
+
+/**
+ * A hooks folder whose `pre-merge-commit` runs the script as `lefthook.yml` does, telling it
+ * that it runs for an automatic merge, and writes what the command saw into `mode`.
+ */
+function mergeHook(): { readonly hooks: string; readonly mode: string } {
+  const hooks = mkdtempSync(join(tmpdir(), 'contract-ahead-hooks-'))
+  const mode = join(hooks, 'mode.json')
+
+  made.push(hooks)
+  writeFileSync(
+    join(hooks, 'pre-merge-commit'),
+    `#!/bin/sh\nCONTRACT_AHEAD_MERGE=1 exec "${process.execPath}" "${CONTRACT_AHEAD}" "${process.execPath}" -e '${PRINT_MODE}' > "${mode}"\n`,
+    { mode: 0o755 },
+  )
+
+  return { hooks, mode }
 }
 
 afterEach(() => {
@@ -102,6 +149,86 @@ describe('contract-ahead', () => {
 
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout)).toEqual(['1', base])
+  })
+
+  it('runs a merge of main waiting for its commit at the base the merge will have', () => {
+    const root = checkout('main')
+    const landed = landedSince(root)
+
+    git(root, 'merge', '-q', '--no-commit', 'main')
+
+    const result = run(root)
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(['1', landed])
+  })
+
+  it('runs an automatic merge of main at the base the merge will have, in its hook', () => {
+    const root = checkout('main')
+    const landed = landedSince(root)
+    const { hooks, mode } = mergeHook()
+
+    author(root, '-c', `core.hooksPath=${hooks}`, 'merge', '-q', '-m', 'merge main', 'main')
+
+    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed])
+  })
+
+  it('runs an automatic pull of main at the base the merge will have, in its hook', () => {
+    const origin = checkout('main')
+    const root = mkdtempSync(join(tmpdir(), 'contract-ahead-clone-'))
+
+    made.push(root)
+    git(root, 'clone', '-q', origin, '.')
+    git(root, 'switch', '-q', '-c', 'feature')
+    commit(root, 'feature')
+    commit(origin, 'landed', 'landed.md')
+
+    const landed = git(origin, 'rev-parse', 'HEAD')
+    const { hooks, mode } = mergeHook()
+
+    git(root, 'fetch', '-q', 'origin', 'main:main')
+    author(
+      root,
+      '-c',
+      `core.hooksPath=${hooks}`,
+      'pull',
+      '-q',
+      '--no-rebase',
+      '--no-edit',
+      'origin',
+      'main',
+    )
+
+    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed])
+  })
+
+  it('runs an ordinary commit at its merge base, whatever merge its environment names', () => {
+    const root = checkout('main')
+    const base = git(root, 'rev-parse', 'HEAD')
+
+    landedSince(root)
+
+    const result = run(root, PRINT_MODE, { GIT_REFLOG_ACTION: 'merge main' })
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(['1', base])
+  })
+
+  it('stops an automatic merge whose heads it cannot tell, and runs nothing', () => {
+    const root = checkout('main')
+
+    landedSince(root)
+
+    const result = run(root, PRINT_MODE, {
+      CONTRACT_AHEAD_MERGE: '1',
+      GIT_REFLOG_ACTION: 'merge no-such-branch',
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr.trim()).toBe(
+      'unit tests: cannot tell the commits this automatic merge brings in from its reflog action (merge no-such-branch), so the machines cannot be compared with their flows at the base the merge will have. Merge with --no-commit, then commit.',
+    )
   })
 
   it('passes the exit status of the command on', () => {
