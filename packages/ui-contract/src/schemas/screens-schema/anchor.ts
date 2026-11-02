@@ -51,8 +51,20 @@ export const bindingRefSchema = z
         route: z.string().regex(/^\//).describe('The path of a binding the anchor navigates to.'),
       })
       .describe('The anchor navigates to a route.'),
+    z
+      .strictObject({
+        search: z
+          .string()
+          .regex(/^[a-z][a-zA-Z0-9]*$/)
+          .describe('The name of a search parameter every route of the screen declares.'),
+      })
+      .describe(
+        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+      ),
   ])
-  .describe('What the anchor is bound to: a model field, an action or a route.')
+  .describe(
+    'What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with.',
+  )
 
 export const anchorBindingSchema = z
   .union([
@@ -114,6 +126,12 @@ export const anchorDefSchema = z
       .describe(
         'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
       ),
+    secret: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
+      ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
     fields: z
       .record(codeSchema, baseAnchorSchema)
@@ -133,7 +151,9 @@ export const anchorDefSchema = z
     derived: z
       .array(kebabNameSchema)
       .optional()
-      .describe('The derived suffixes the element renders: `confirm-button`, `option`.'),
+      .describe(
+        'The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.',
+      ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
   })

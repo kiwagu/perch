@@ -48,9 +48,12 @@ describe('instructionsOf', () => {
       expect(instructions.notices).toContain(`\`${anchor}\``)
     }
   })
-  it('names the page helper and the platform actions that make an account', () => {
+  it('names the page helper, and sends what a platform action does to the platform file', () => {
     expect(instructions.screenMap).toContain('`window.__perch.ui.anchors()`')
-    expect(instructions.session).toContain('`platform.sign-up`')
+    expect(instructions.session).toContain(
+      'What a platform action does is read from `platform.actions.<name>`',
+    )
+    expect(instructions.session).toContain("never assume it from the action's name")
   })
   it('says a binding is a route of the router and a route a state address', () => {
     expect(instructions.screenMap).toContain('a TanStack Router path')
@@ -77,6 +80,23 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain(
       "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",
+    )
+  })
+  it("says a password input's visibility-button is presentation only, held by the input itself", () => {
+    expect(instructions.screenMap).toContain('`<input>.visibility-button`')
+    expect(instructions.screenMap).toContain('never an event of a flow and always enabled')
+    expect(instructions.screenMap).toContain('`contract.derivedParts`')
+    expect(instructions.gaps).toContain('whether a password input shows what it holds')
+  })
+  it('says a navigate may carry into a search what a field of the screen holds', () => {
+    expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
+  })
+  it('says what a clear does to a field and to an anchor that carries codes', () => {
+    expect(instructions.screenMap).toContain(
+      '`clear` empties a field of the screen, a secret one included, so it holds no input any more, as if nothing was typed',
+    )
+    expect(instructions.screenMap).toContain(
+      'and makes an anchor that carries codes show none until one is shown again',
     )
   })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {

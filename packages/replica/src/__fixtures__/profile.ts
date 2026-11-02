@@ -13,6 +13,8 @@ export const profileSchema: ReplicaSchema = {
     region: 'private',
     fields: {
       identity: { kind: 'record', table: 'identity' },
+      name: { kind: 'plain' },
+      email: { kind: 'plain' },
       bio: { kind: 'text' },
     },
   },

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ShapeRunner } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 
 import { replicaSchema } from '../__fixtures__/note'
+import { profileById, profileSchema } from '../__fixtures__/profile'
 import countsStatement from '../__fixtures__/replica-counts.surql'
+import { Projector } from '../projector'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
 import acceptStatement from '../server/surql/server-accept.surql'
@@ -137,7 +140,7 @@ describe('sync engine', () => {
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
 
-  it('hears that the gateway refused the keys, then the channel falls for good', async () => {
+  it('hears that the gateway refused the token, then the channel falls for good', async () => {
     const { a, stub } = await twoDevices()
     const heard: string[] = []
 
@@ -318,7 +321,7 @@ describe('sync engine', () => {
     expect(await outcome).toBe('offline')
     expect(stub.signOuts()).toBe(1)
     expect(a.channel()).toBe('down')
-    // Stopped: no reconnect brings the device back on keys the gateway could not revoke.
+    // Stopped: no reconnect brings the device back on a session the gateway could not end.
     expect(a.transport.online()).toBe(false)
     expect(a.engine.channelStopped()).toBe(true)
   })
@@ -346,7 +349,7 @@ describe('sync engine', () => {
 
     await clock.advance(1)
 
-    // A timer is no proof that the gateway revoked the grant.
+    // A timer is no proof that the gateway ended the session.
     expect(await outcome).toBe('offline')
     expect(a.channel()).toBe('down')
     expect(a.transport.online()).toBe(false)
@@ -664,34 +667,50 @@ describe('sync engine', () => {
     expect((await a.region.outbox(10))._unsafeUnwrap()).toEqual([])
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
   })
+})
 
-  it('renew() asks the gateway for new keys over the welcomed channel, and does nothing while it is down', async () => {
-    const { a, stub } = await twoDevices()
+describe('a write of the server to a record of the region', () => {
+  const newEmail = 'ann@new.example.test'
+  const region = { kind: 'private', id: regionId } as const
+  const write = { table: 'profile', id: 'prf_1', set: { email: newEmail } }
 
-    stub.renewAtNextHello({ access: 'access-2', refresh: 'refresh-2' })
+  it('reaches a subscribed device as an ordinary update, and its projection shows it', async () => {
+    const { stub, a, settle } = await twoDevices()
+    const failures: string[] = []
+    const projector = new Projector(a.region, a.local, profileSchema, {
+      onError: (error) => failures.push(error.message),
+    })
+    const stop = projector.start()
 
-    expect(a.engine.renew()).toBe(true)
-    expect(a.transport.renews()).toBe(1)
-    expect(a.transport.reconnects()).toBe(0)
+    expect((await stub.hub.writeRecord(region, write))._unsafeUnwrap()).toBe(2)
+    await settle()
+    expect((await projector.flush()).isOk()).toBe(true)
+    stop()
 
-    a.transport.goOffline()
-
-    expect(a.engine.renew()).toBe(false)
-    expect(a.transport.renews()).toBe(1)
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ann', email: newEmail })
+    expect(
+      (await new ShapeRunner(a.local).read(profileById, { id: 'prf_1' }))._unsafeUnwrap(),
+    ).toMatchObject({ name: 'Ann', email: newEmail })
+    expect(failures).toEqual([])
+    expect(a.region.pulled()).toBe(2)
   })
 
-  it('takes a renewal the gateway refuses for no error: nothing is reported and the regions sync on', async () => {
-    const { a, b, stub, settle } = await twoDevices()
+  it('reaches a device that was offline at its next pull from its version, and its later edit of another field is accepted', async () => {
+    const { stub, a, b, settle } = await twoDevices()
 
-    stub.refuseRenewals()
+    b.transport.goOffline()
+    expect((await stub.hub.writeRecord(region, write))._unsafeUnwrap()).toBe(2)
+    b.transport.goOnline()
+    await b.engine.settled(60_000)
 
-    expect(a.engine.renew()).toBe(true)
+    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann', email: newEmail })
+
+    writeName(b.region, 'Ana')
+    b.engine.localWrite()
     await settle()
-    writeName(a.region, 'Ana')
-    a.engine.localWrite()
-    await settle()
 
-    expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
-    expect(a.errors).toEqual([])
+    expect(stub.rejections()).toBe(0)
+    expect(b.region.pulled()).toBe(3)
+    expect(a.region.recordJson(profileKey)).toMatchObject({ name: 'Ana', email: newEmail })
   })
 })

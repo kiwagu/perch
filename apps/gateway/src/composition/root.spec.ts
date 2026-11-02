@@ -7,42 +7,69 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 import { applySchema } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { readSchema, TEST_SIGNING_KEY } from '@workspace/data/testing'
+import { readSchema } from '@workspace/data/testing'
+import { idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
+import { deviceHeaders, mailsOf, signUpOn } from '../auth/__fixtures__/auth-instance'
 import { DIRECTORY, NAMESPACE } from '../config'
+import { Outbox } from '../mail/__fixtures__/outbox'
 
 import { createGatewayRoot, type GatewayRoot } from './root'
 
 /** The device Ann signs up on. */
 const laptop = { id: 'device-laptop', label: 'Firefox on Linux' }
 
-const ann = { email: 'ann@example.test', password: 'pass-word-1' }
+const ann = { email: 'ann@example.test', password: 'Pass-word-1' }
+
+/** The auth secret of these tests. Test-only. */
+const AUTH_SECRET = 'test-secret-0123456789-0123456789-0123456789'
+
+/** The options every root of these tests opens with, but where its database lives. */
+const rootOptions = {
+  engines: nodeEngines(),
+  authSecret: AUTH_SECRET,
+  publicUrl: 'http://localhost',
+  mail: new Outbox(),
+} as const
+
+/**
+ * Signs Ann up on her laptop through the root's Better Auth and verifies her email through the
+ * mail it sent, which signs the laptop in: her identity and raw token.
+ */
+async function signUpAnn(root: GatewayRoot) {
+  mailsOf(root.auth, rootOptions.mail)
+
+  const { token, user } = await signUpOn(
+    root.auth,
+    ann.email,
+    deviceHeaders(laptop.id, laptop.label),
+    { password: ann.password },
+  )
+
+  return { identity: idSchemas.identity.schema.parse(user.id), token }
+}
 
 describe('createGatewayRoot', () => {
-  it('opens the directory database and serves sign-in over it', async () => {
+  it('opens the directory database and serves sign-up and sessions over it', async () => {
     const root = (
-      await createGatewayRoot({
-        engines: nodeEngines(),
-        url: 'mem://',
-        clock: manualClock(),
-        signingKey: TEST_SIGNING_KEY,
-      })
+      await createGatewayRoot({ ...rootOptions, url: 'mem://', clock: manualClock() })
     )._unsafeUnwrap()
 
     try {
-      const up = await root.sessions.signUp(
-        { email: 'ann@example.test', password: 'pass-word-1' },
-        laptop,
-      )
-      const { identity } = up._unsafeUnwrap()
+      const { identity, token } = await signUpAnn(root)
+      const read = await root.sessions.read(token)
 
       expect(root.local.db.namespace).toBe(NAMESPACE)
       expect(root.local.db.database).toBe(DIRECTORY)
-      expect(identity.id).toMatch(/^idn_/)
+      expect(identity).toMatch(/^idn_/)
+      expect(read).toMatchObject({
+        kind: 'session',
+        caller: { identity, email: ann.email, device: laptop.id },
+      })
       // The device it signed up on is recorded in the directory.
       expect(
-        (await root.deviceSessions.list(identity.id))._unsafeUnwrap().map((row) => row.device),
+        (await root.deviceSessions.list(identity))._unsafeUnwrap().map((row) => row.device),
       ).toEqual([laptop.id])
       expect(root.hub.loadedRegions()).toBe(0)
     } finally {
@@ -50,24 +77,38 @@ describe('createGatewayRoot', () => {
     }
   })
 
+  it("serves Better Auth's routes at the front's public path of the auth routes", async () => {
+    const root = (
+      await createGatewayRoot({ ...rootOptions, url: 'mem://', clock: manualClock() })
+    )._unsafeUnwrap()
+
+    try {
+      const { token } = await signUpAnn(root)
+      const read = (path: string) =>
+        root.auth.handler(
+          new Request(`http://localhost${path}`, {
+            headers: { authorization: `Bearer ${token}` },
+          }),
+        )
+
+      expect((await read('/backend/auth/get-session')).status).toBe(200)
+      expect((await read('/auth/get-session')).status).toBe(404)
+    } finally {
+      await root.close()
+    }
+  })
+
   it('builds the organisations over the directory and closes their databases with it', async () => {
     const root = (
-      await createGatewayRoot({
-        engines: nodeEngines(),
-        url: 'mem://',
-        clock: manualClock(),
-        signingKey: TEST_SIGNING_KEY,
-      })
+      await createGatewayRoot({ ...rootOptions, url: 'mem://', clock: manualClock() })
     )._unsafeUnwrap()
-    const { identity } = (
-      await root.sessions.signUp({ email: 'ann@example.test', password: 'pass-word-1' }, laptop)
-    )._unsafeUnwrap()
+    const { identity } = await signUpAnn(root)
     const acme = (
-      await root.organisations.create({ identity: identity.id, key: 'acme', name: 'Acme' })
+      await root.organisations.create({ identity, key: 'acme', name: 'Acme' })
     )._unsafeUnwrap()
     const handle = (await root.databases.acquire('acme'))._unsafeUnwrap()
 
-    expect(await root.organisations.membershipsOf(identity.id)).toEqual(ok([acme]))
+    expect(await root.organisations.membershipsOf(identity)).toEqual(ok([acme]))
     expect(handle.local.db.namespace).toBe(NAMESPACE)
     expect(handle.local.db.database).toBe('t_acme')
 
@@ -79,16 +120,16 @@ describe('createGatewayRoot', () => {
 describe('createGatewayRoot over a directory on disk', () => {
   const dir = mkdtempSync(join(tmpdir(), 'perch-gateway-root-'))
   const open: GatewayRoot[] = []
-  /** Another key than the one the directory was first opened with. Test-only. */
-  const otherKey = 'root-spec-other-signing-key-'.padEnd(64, '1')
+  /** Another secret than the one the directory was first opened with. Test-only. */
+  const otherSecret = 'root-spec-other-auth-secret-'.padEnd(64, '1')
 
-  async function openRoot(path: string, signingKey: string): Promise<GatewayRoot> {
+  async function openRoot(path: string, authSecret: string): Promise<GatewayRoot> {
     const root = (
       await createGatewayRoot({
-        engines: nodeEngines(),
+        ...rootOptions,
         url: `surrealkv://${path}`,
         clock: manualClock(),
-        signingKey,
+        authSecret,
       })
     )._unsafeUnwrap()
 
@@ -109,34 +150,30 @@ describe('createGatewayRoot over a directory on disk', () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('keeps an issued token valid when the directory schema is applied again with its key', async () => {
-    const root = await openRoot(mkdtempSync(join(dir, 'directory-')), TEST_SIGNING_KEY)
-    const { identity, tokens } = (await root.sessions.signUp(ann, laptop))._unsafeUnwrap()
+  it('keeps a session live when the directory schema is applied again', async () => {
+    const root = await openRoot(mkdtempSync(join(dir, 'directory-')), AUTH_SECRET)
+    const { identity, token } = await signUpAnn(root)
 
-    ;(await applySchema(root.local, readSchema('directory'), TEST_SIGNING_KEY))._unsafeUnwrap()
+    ;(await applySchema(root.local, readSchema('directory')))._unsafeUnwrap()
 
-    const accepted = (await root.sessions.authenticate({ access: tokens.access }))._unsafeUnwrap()
-
-    expect(accepted.renewed).toBe(false)
-    expect(accepted.identity).toEqual(identity)
+    expect(await root.sessions.read(token)).toMatchObject({
+      kind: 'session',
+      caller: { identity, device: laptop.id },
+    })
   })
 
-  it('refuses earlier access tokens once opened with another key, and renews them with the refresh key', async () => {
+  it('keeps a session live when the gateway opens the directory again with another auth secret', async () => {
     const path = mkdtempSync(join(dir, 'directory-'))
-    const first = await openRoot(path, TEST_SIGNING_KEY)
-    const { identity, tokens } = (await first.sessions.signUp(ann, laptop))._unsafeUnwrap()
+    const first = await openRoot(path, AUTH_SECRET)
+    const { identity, token } = await signUpAnn(first)
 
     await closeFirst(first)
 
-    const second = await openRoot(path, otherKey)
-    const refused = await second.sessions.authenticate({ access: tokens.access })
+    const second = await openRoot(path, otherSecret)
 
-    expect(refused._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
-
-    // Every renewal goes through: the limits are not under test here.
-    const renewed = (await second.sessions.authenticate(tokens, () => true))._unsafeUnwrap()
-
-    expect(renewed.renewed).toBe(true)
-    expect(renewed.identity).toEqual(identity)
+    expect(await second.sessions.read(token)).toMatchObject({
+      kind: 'session',
+      caller: { identity, device: laptop.id },
+    })
   })
 })

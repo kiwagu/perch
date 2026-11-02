@@ -79,9 +79,10 @@ describe('the contract folder of the repository', () => {
     expect(files).toEqual([...files].sort())
     expect(files).toContain('contract/domain/screens/__root.yaml')
     expect(screens?.screens.map((screen) => screen.id)).toHaveLength(files.length)
-    expect(screens?.screens[0]?.id).toBe('app-shell')
+    // The frame by its flag: a file named for a splat route (`$.yaml`) sorts before `__root.yaml`.
+    expect(screens?.screens.find((screen) => screen.frame === true)?.id).toBe('app-shell')
   })
-  it('has the scenarios without problems, sorted by their paths', () => {
+  it('has the scenarios without problems, sorted by their ids', () => {
     const { scenarios, problems } = loadScenarios(ROOT)
     const ids = scenarios.map((scenario) => scenario.id)
 

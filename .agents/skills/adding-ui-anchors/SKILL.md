@@ -54,7 +54,9 @@ code and the tests follow; the checks hold them to the contract.
    state, a guard, a code, a facet) goes on through steps 2 to 5 like a new element.
 2. **The model.** A field or an action the screen needs goes into its entity of
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
-   `contract/domain/platform.yaml` when the platform runs it.
+   `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
+   mail declares it under `mail`, and one that sends a mail that only tells, with no token,
+   lists it under `notices` (`references/patterns.md`, "A notice mail").
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -62,8 +64,8 @@ code and the tests follow; the checks hold them to the contract.
    another anchor plus a derived suffix: the entries of a list `x.list` are
    `x.list.<object>-item`, never `x.list.item`.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
-   `description`, its `binding` (the model field, the action with its params, a route, or a
-   list of them), and its `codes` (an error's `fields` with them: the field each code
+   `description`, its `binding` (the model field, the action with its params, a route, the
+   search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
@@ -88,11 +90,16 @@ code and the tests follow; the checks hold them to the contract.
    lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
    words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
-   `holdsInput={false}` in the JSX, and the contract derives which.
+   `holdsInput={false}` in the JSX, and the contract derives which. A field that holds a
+   secret says `secret: true`, and a password input that shows what it holds on demand lists
+   `derived: [ visibility-button ]` beside it: the eye is
+   presentation only, never an event of the flow (`references/patterns.md`, "A password
+   input's eye").
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references. When it cannot be written from the contract, the scenario has found a
+   bracket references; it names a mail by the action that sends it, `[mail:<action>]`, and a
+   notice by its action and its name, `[notice:<action>.<name>]`. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either
@@ -107,7 +114,8 @@ code and the tests follow; the checks hold them to the contract.
    after that landing, takes the business change (the screen files, the activities, the
    platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
    declared, not rendered yet, passes; an app's machine may lack what its flow added, and does
-   nothing the flow does not say; a scenario may wait for its test, which the landing on
+   nothing the flow does not say, or is still its flow at the branch's base; a scenario may
+   wait for its test, which the landing on
    `main` requires). A rename or a removal keeps the old name declared in
    this commit; its drop, after the implementation, is part of what the review approves.
    **Then stop for review** (the gate of the same rule): hand the developer

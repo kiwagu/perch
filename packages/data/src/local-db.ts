@@ -24,13 +24,6 @@ export interface OpenLocalDbOptions {
     readonly password: string
     readonly namespace?: string
   }
-  /**
-   * The key the schema's access methods sign their tokens with, given to the schema as
-   * `$jwt_key`. A server's database is opened with one fixed key, so applying the schema
-   * again leaves every token valid. Without one, each apply gives the access methods a key of
-   * its own: right for a database nobody signs in to from outside (a device's replica, a test).
-   */
-  readonly signingKey?: string
 }
 
 const INDEXED_DB = 'indxdb://'
@@ -103,57 +96,26 @@ export function deleteLocalDb(url: string): ResultAsync<void, DataError> {
   )
 }
 
-/** A signing key for one apply only: 48 random bytes, base64url. */
-function ephemeralKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(48))
-
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+/** Runs the schema text, then remembers it as what the database applied. */
+async function apply(db: Surreal, schema: string): Promise<void> {
+  await db.query(schema)
+  await db.query(rememberSchemaStatement, { schema })
 }
 
 /**
- * What a database remembers of the schema it applied: the text, and with a signing key a
- * digest of the key too, so a new key applies the schema again. Only compared, never run.
+ * Applies the schema text to an open database and remembers it, as `openLocalDb` does when the
+ * schema changed.
  */
-async function markerOf(schema: string, signingKey: string | undefined): Promise<string> {
-  return signingKey === undefined
-    ? schema
-    : `${schema}\n-- signing key ${await sha256Hex(signingKey)}`
-}
-
-/** Runs the schema text with its signing key as `$jwt_key`, then remembers what it applied. */
-async function apply(db: Surreal, schema: string, signingKey: string | undefined): Promise<void> {
-  await db.query(schema, { jwt_key: signingKey ?? ephemeralKey() })
-  await db.query(rememberSchemaStatement, { schema: await markerOf(schema, signingKey) })
-}
-
-/**
- * Applies the schema text to an open database with the signing key its access methods sign
- * tokens with (a key of its own for this apply when none is given), and remembers it, as
- * `openLocalDb` does when the schema changed.
- */
-export function applySchema(
-  local: LocalDb,
-  schema: string,
-  signingKey?: string,
-): ResultAsync<void, DataError> {
-  return ResultAsync.fromPromise(apply(local.db, schema, signingKey), (cause) =>
+export function applySchema(local: LocalDb, schema: string): ResultAsync<void, DataError> {
+  return ResultAsync.fromPromise(apply(local.db, schema), (cause) =>
     dataError('data:QUERY_FAILED', 'could not apply the schema', cause),
   )
 }
 
 /**
  * Connects to a local database and brings its schema up to date before anything
- * reads from it. A schema the database already applied with the same key is left alone:
- * without a fixed key, defining the access method again would give it a new signing key
- * and sign everyone out.
+ * reads from it. A schema the database already applied, the same text, is left alone, so an
+ * opening does not run every definition again.
  */
 export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, DataError> {
   const db = new Surreal({ engines: options.engines })
@@ -166,8 +128,8 @@ export function openLocalDb(options: OpenLocalDbOptions): ResultAsync<LocalDb, D
     await db.use({ namespace: options.namespace, database: options.database })
     const [applied] = await db.query<[string | undefined]>(appliedSchemaStatement)
 
-    if (applied !== (await markerOf(options.schema, options.signingKey))) {
-      await apply(db, options.schema, options.signingKey)
+    if (applied !== options.schema) {
+      await apply(db, options.schema)
     }
 
     let closing: Promise<void> | undefined

@@ -1,6 +1,6 @@
 /**
- * What reaches the session from elsewhere: the channel of its space (memberships, keys the
- * gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
+ * What reaches the session from elsewhere: the channel of its space (memberships, a session token
+ * the gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
  * browser (a sign-in or a sign-out made there).
  */
 
@@ -30,6 +30,7 @@ export class SessionElsewhere {
   readonly #organisations: SessionOrganisations
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
+  #protocolRefused = false
 
   constructor(options: SessionElsewhereOptions) {
     this.#host = options.host
@@ -49,19 +50,31 @@ export class SessionElsewhere {
       )
   }
 
+  /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
+  protocolRefused(): boolean {
+    return this.#protocolRefused
+  }
+
   transportContext(identity: IdentityId): TransportContext {
     return sessionTransportContext(identity, this.#host.options.storage, {
-      renewal: this.#organisations,
       memberships: (memberships) => {
         if (this.#host.open()?.space.identity.id === identity) {
           void this.#organisations.apply(memberships)
         }
       },
-      refused: () => {
-        this.#channelEnded(identity)
-        void this.#forced(() => this.#signingOut.refused(identity))
-      },
+      refused: () => void this.#forced(() => this.#signingOut.refused(identity)),
       revoked: () => void this.#outElsewhere(identity),
+      // The build is what the gateway refuses, whichever account's channel heard it, and while
+      // its space still opens too: kept for the frame that listens later, and published.
+      protocolRefused: () => {
+        this.#protocolRefused = true
+        this.#host.options.publish({
+          name: 'sync.protocol-refused',
+          payload: null,
+          actorId: identity,
+          occurredAt: new Date(),
+        })
+      },
     })
   }
 
@@ -94,21 +107,12 @@ export class SessionElsewhere {
       )
   }
 
-  /** The channel of `identity`, open on this tab, ended for good: its keys are renewed no more. */
-  #channelEnded(identity: IdentityId): void {
-    if (this.#host.open()?.space.identity.id === identity) {
-      this.#organisations.ended()
-    }
-  }
-
   /**
-   * Signed out from another device (4001), or everywhere at this device's request: as refused
-   * keys, and the sign-in page says why. Whichever of the two runs second changes nothing, and
+   * Signed out from another device (4001), or everywhere at this device's request: as a refused
+   * token, and the sign-in page says why. Whichever of the two runs second changes nothing, and
    * so does one whose session is no longer open (`still`) when its turn comes.
    */
   #outElsewhere(identity: IdentityId, still = () => true): Promise<void> {
-    this.#channelEnded(identity)
-
     return this.#forced(() =>
       still() ? this.#signingOut.refused(identity, 'signed-out-elsewhere') : okAsync(undefined),
     )

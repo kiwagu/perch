@@ -19,7 +19,7 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
       .getByTestId('organisation.members.item')
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -28,7 +28,7 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
       })
 
     const userA =
-      await test.step('2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()

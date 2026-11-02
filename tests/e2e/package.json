@@ -11,9 +11,11 @@
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
+    "@workspace/mailbox": "workspace:*",
     "@workspace/seed": "workspace:*",
     "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",
+    "parse5": "catalog:",
     "typescript": "catalog:"
   }
 }

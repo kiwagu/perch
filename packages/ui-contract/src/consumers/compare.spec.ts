@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { sampleContract } from '../check/contract.fixture'
+import { sampleContract, screenIn } from '../check/contract.fixture'
 import { formatProblem } from '../files'
 
 import { compareConsumers } from './compare'
@@ -35,6 +35,26 @@ describe('compareConsumers', () => {
     expect(printed(['attributes.ts'])).toEqual([
       'consumers/attributes.ts:10: "lost" is not a code of the vocabulary',
       'consumers/attributes.ts:15: "c" is not a choice value of the vocabulary',
+    ])
+  })
+  it("takes an input's visibility-button with its values show and hide, and no other value", () => {
+    const contract = sampleContract()
+    const visibility = [collected('visibility.ts')]
+
+    expect(compareConsumers(visibility, contract).map(formatProblem)).toEqual([
+      'consumers/visibility.ts:6: "sample.title-input.visibility-button" is not a declared anchor',
+      'consumers/visibility.ts:9: "sample.title-input.visibility-button" is not a declared anchor',
+      'consumers/visibility.ts:9: "show" is not a choice value of the vocabulary',
+      'consumers/visibility.ts:11: "hide" is not a choice value of the vocabulary',
+      'consumers/visibility.ts:12: "peek" is not a choice value of the vocabulary',
+    ])
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    expect(compareConsumers(visibility, contract).map(formatProblem)).toEqual([
+      'consumers/visibility.ts:12: "peek" is not a choice value of the vocabulary',
     ])
   })
   it('resolves a template without an expression and a wrapped string as it resolves a quoted one', () => {

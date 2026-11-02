@@ -49,8 +49,12 @@ export const showSomeSchema = z
   .describe('`show: { <anchor>: [codes] }`: the anchor shows one of these codes.')
 
 export const clearShortSchema = z
-  .strictObject({ clear: anchorSchema.describe('The anchor that shows no code any more.') })
-  .describe('`clear: <anchor>`: the anchor stops showing its code.')
+  .strictObject({
+    clear: anchorSchema.describe(
+      'The field to empty, or the anchor that carries codes and shows none any more.',
+    ),
+  })
+  .describe('`clear: <anchor>`: a field is emptied, or the anchor stops showing its code.')
 
 export const navigateShortSchema = z
   .strictObject({

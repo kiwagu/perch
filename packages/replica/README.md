@@ -19,7 +19,9 @@ then accepted together with its projection and the binding of each Loro peer it 
 to the pushing identity in one transaction, under a number without gaps (a batch of another
 identity under a bound peer is refused, so no member can write as another member's device),
 and a compaction replaces rows with the server's own snapshot of the region at that
-row, once a device proposed one of the same version (the proposed bytes are never stored). A hub holds
+row, once a device proposed one of the same version (the proposed bytes are never stored). The
+server writes a region's records too: a change of its own to one record, made as a Loro peer
+reserved for the server and bound to no identity, takes the same way as a device's batch. A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
 region from memory once nobody has subscribed for a while; each region's log lives in the
@@ -61,21 +63,20 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (6), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (7), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
-  `hello` names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
+  `hello` carries the device's session token (`token`, the raw token its sign-in answered) and
+  names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
   `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
   the regions the device may name with their heads and the identity's memberships, and a
-  `memberships` message tells each later change of them; a `renew` (no payload) asks for a new
-  pair over the open channel, answered by `tokens`, or by an `error` of code `rate-limited` when
-  the gateway's limits refuse the renewal. `CLOSE` names the gateway's close
-  codes: `protocol` 4400, `unauthorized` 4401 (keys refused, or a device without a session: no
-  session row for the device it names, or a row that holds another grant), `forbidden` 4403,
-  `timeout` 4408, `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the
-  device's session was signed out, from another device, alone or with every device of its
-  identity: also at a hello whose keys still work). And the membership contract the gateway
+  `memberships` message tells each later change of them. `CLOSE` names the gateway's close
+  codes: `protocol` 4400, `unauthorized` 4401 (a token that holds no live session, or a session
+  opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
+  `signedOut` 4000 (the device's own sign-out) and `revoked` 4001 (the device's session was
+  signed out from another device, alone or with every device of its identity, also while its
+  hello is under way). And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
@@ -86,8 +87,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   peer the `BatchWriter` names (the peers whose changes the batch brings) to its pushing
   identity in the same transaction, refusing a projection that breaks a schema rule, a record
   of another region (one that exists without this region's projection marker, or a deletion of
-  one), or a batch of another identity under a bound peer, with `data:WRITE_REJECTED` (the
-  second's message starts with `ownership`, the third's with `peer`); `compact(covers,
+  one), or a batch under `SERVER_PEER` or under a peer bound to another identity, with
+  `data:WRITE_REJECTED` (the second's message starts with `ownership`, the third's with `peer`);
+  `accept(plan, 'server')` takes the server's own change and binds no peer; `compact(covers,
   proposal, snapshotOf)` resolves to a `CompactionOutcome`: a proposal whose version matches the
   version stored with row `covers` is accepted, and the log stores the snapshot `snapshotOf`
   exports for that version, never the proposal; `head()`, `covers()`. `validateBatch(input)` applies a
@@ -127,12 +129,40 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
-  ability refuses, `foreign-peer` for a batch under a Loro peer another identity writes as in
-  the region; every region document a device opens writes as a random peer of its own, so honest
-  devices never share one) and sends the batch to the other subscribers, `pull`, `compact` (stores its own document's snapshot at the proposed row),
+  ability refuses, `foreign-peer` for a batch under the server's Loro peer or one another
+  identity writes as in the region; every region document a device opens writes as a random peer
+  of its own, so honest devices never share one) and sends the batch to the other subscribers,
+  `writeRecord(region, write)` (below), `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
   `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+  `writeRecord(region, write)` makes a change of the server's own to one record of a region and
+  resolves to its number in the log. A `RecordWrite` names the record's `table` and `id` and the
+  fields to `set`, each to a `FieldValue`: a plain field's value, a `Date` for a datetime, the id
+  of the record a reference names, or a text field's whole text. It is checked against the
+  replica schema first: the table belongs to the region's kind, the region holds the record,
+  each field is one of the table's own (a name every object inherits is none), a list or a
+  counter is refused (only its own operations change it), a date names a time, and in a private
+  region an identity reference names the region's owner. The fields are then set on a fork of
+  the region's document that writes as `SERVER_PEER`, and the
+  change is logged with its projection, imported and sent to every subscriber as `updates`, in
+  the region's queue like a device's batch and never between the steps of one; a device that
+  was offline gets it at its next pull. A region the hub does not hold is loaded for the write
+  and unloads after the idle time when nobody subscribes. A write the schema or the projection
+  refuses, or with a value the document cannot hold, is `data:WRITE_REJECTED` (a value of the
+  result, never a throw) and logs nothing, a write that changes nothing resolves to
+  the current head without a log row, and once the hub is closed a write is `data:WRITE_FAILED`.
+  What a server write means for the record: a plain field is last-writer-wins, as a device's
+  write is (Loro orders two concurrent writes of a field by Lamport time, then by peer, and
+  `SERVER_PEER` is the largest peer Loro allows, so the server's value wins a tie); a text field
+  is replaced through its mergeable text and merges with concurrent edits. The gateway does not
+  hold devices to read-only fields, so a device's concurrent write of the same field is accepted
+  whatever the contract says, and every copy converges on the one value Loro picks. A device's
+  later batches touching the record are checked as before and pass: the server binds no peer
+  and keeps the region's owner rule. On a device the change is an ordinary update, stored in the
+  local log, imported and projected, so compaction and snapshots treat it like any other row on
+  both sides. The server's peer continues the counters of the hub's document, so one hub writes
+  a region at a time.
 - `@workspace/replica/sync`: `createSyncEngine(options)` (`batchRows`, the most outbox rows one
   push carries, 256 by default; `localCompactionRows`, how many rows past its snapshot a region's
   local log holds before a full pass compacts it, 200 by default as on the server;
@@ -147,18 +177,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `offline`; it answers `offline` at once while the channel is down and `online()` says there is
   no network), or answers `offline` while anything stays unsent, rows of a region that stopped
   syncing and updates that failed to persist included; it never rejects; `channelStopped()`
-  tells that such a sign-out stopped the channel, after which only a new engine syncs; `renew()`
-  asks the gateway for new keys over the welcomed channel, and answers false,
-  sending nothing, while the channel is not up; a `rate-limited` answer is no error of any region).
+  tells that such a sign-out stopped the channel, after which only a new engine syncs).
   Its parts:
-  `WebSocketTransport` (hello with the stored keys and the `device` it is given, up after the
+  `WebSocketTransport` (hello with the session token its `credentials` give, `{ token }`, and
+  the `device` it is given, ending as `unauthorized` when they give none; up after the
   welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
-  the first delay, and leaves one not welcomed yet to the hello it says; renewed keys to `onTokens`,
-  a renewal the gateway's limits refused to `onRenewalRefused`, the memberships of the welcome and of each
-  `memberships` message to `onMemberships`, `onEnded` with an `EndReason` when the keys
-  (`unauthorized`) or the protocol (`protocol`) are refused, the device is signed out
+  the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
+  welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
+  when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
   (`signed-out`) or signed out from another device (`revoked`, 4001), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
@@ -191,7 +219,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Locks, such a browser does not sync); `writeLockName(identity)` names the lock over writes
   into the identity's database (held `shared` by each write, `exclusive` by a sign-out before
   it deletes; `LockManagerLike.request` takes `mode`); `syncHints(channel)` sends `journal`, `visible`, `kick`,
-  `settled`, `sign-out`, `renew` (a tab asks the leader to renew the keys) and `reset` (a tab reset a region; the others open it again
+  `settled`, `sign-out` and `reset` (a tab reset a region; the others open it again
   from the database) hints between tabs over a `BroadcastChannel` and ignores anything
   else on it. `invert(doc, rows)` applies to a region's document the undo of outbox rows the
   server refused, as a rollback does.
@@ -203,14 +231,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   without a network (welcomed with the identity's private region, where it is the owner, and,
   for each of the `memberships`, none by default, the organisation's region, where its batches
   are checked with the abilities of the membership's role), can go
-  offline and come back, and counts its `reconnects()` and the renewals it asked for, `renews()`;
+  offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
-  `refuseNextPull`, `renewAtNextHello(tokens)` (hands the next renewal these keys: before the
-  welcome of the next device to connect, or as the answer to a `renew`; a `renew` without them is
-  not answered yet), `refuseRenewals` (every `renew` is answered `rate-limited`), `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
-  the channel open), `failNextSignOut` (closes as a gateway that could not
-  revoke the grant), `endWith(reason)` (the gateway refuses the keys or the
-  protocol, or signs the devices out), `closeChannels(identity, device, code)` (closes the
+  `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves
+  the channel open), `failNextSignOut` (closes as a gateway that could not end the session,
+  1011), `endWith(reason)` (the gateway refuses the token or the protocol, or signs the devices
+  out), `closeChannels(identity, device, code)` (closes the
   channels of one device of the identity, or of all of them when `device` is undefined, as the
   gateway closes a device signed out from another one: a code that ends a channel ends it with
   its reason, any other drops it and the device connects again), `rejections`, `signOuts`,
@@ -225,14 +251,14 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
 - `toColumns(schema, table, record)`: a record's values as the document holds them, turned
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
-  its records and which fields are text, list or counter containers, references or
-  datetimes; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
+  its records and every field with its kind: a text, list or counter container, a reference, a
+  datetime or a plain value; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands
 
 - `bun run test`: unit tests of the write path, the schema, the protocol, the region
-  references, the batch validator, the batch writer,
+  references, the batch validator, the batch writer, the server's record writes,
   the transport, the cadence, the outbox drain, the leader, the hints and the manual clock, and
   functional tests of the projector, persistence, the server log, the batch intake, the region
   hub, region sync

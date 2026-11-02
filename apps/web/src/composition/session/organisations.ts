@@ -1,20 +1,16 @@
 /**
  * The session's side of the signed-in identity's organisations on this device: the memberships
- * come with the sign-in, from the leading tab's channel and from the other tabs through the
- * storage; they are kept in the storage, handed to the identity's space and told to the
- * subscribers, with the organisation chosen on this browser. It keeps the inventory of the
- * organisation databases the device holds for the identity, and has the keys the organisation
- * routes present renewed.
+ * are read after the sign-in, then come from the leading tab's channel and from the other tabs
+ * through the storage; they are kept in the storage, handed to the identity's space and told to
+ * the subscribers, with the organisation chosen on this browser. It keeps the inventory of the
+ * organisation databases the device holds for the identity.
  */
 
 import type { IdentityId } from '@workspace/ids'
-import type { Clock } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
-import type { SyncHints } from '@workspace/replica/sync'
 
 import type { IdentitySpace, TenantDatabaseInventory } from '../identity-space'
 import {
-  ACCESS_KEY,
   type KeyValueStorage,
   savedIdentity,
   savedMemberships,
@@ -25,31 +21,20 @@ import {
   saveTenantDatabases,
 } from '../storage'
 
-/** The space of the identity signed in on this tab, and the hints between the identity's tabs. */
+/** The space of the identity signed in on this tab. */
 export interface OpenIdentity {
   readonly space: IdentitySpace
-  readonly hints: SyncHints
 }
 
 export interface SessionOrganisationsOptions {
   readonly storage: KeyValueStorage
-  readonly clock: Clock
   /** The open space of the signed-in identity, if any. */
   readonly open: () => OpenIdentity | undefined
 }
 
-/** How long renewing the keys waits for the gateway's new pair. */
-const RENEW_MS = 10_000
-
 export class SessionOrganisations {
   readonly #options: SessionOrganisationsOptions
   readonly #listeners = new Set<() => void>()
-  /** Renewals waiting for the next keys this tab's channel takes, or for its end. */
-  readonly #renewals = new Set<(renewed: boolean) => void>()
-  /** The renewal under way and the space it renews for; a renewal asked meanwhile joins it. */
-  #renewing: { readonly space: IdentitySpace; readonly renewed: Promise<boolean> } | undefined
-  /** The space whose channel the gateway ended for good: its keys are renewed no more. */
-  #ended: IdentitySpace | undefined
 
   constructor(options: SessionOrganisationsOptions) {
     this.#options = options
@@ -183,109 +168,6 @@ export class SessionOrganisations {
     for (const listener of this.#listeners) {
       listener()
     }
-  }
-
-  /** This tab's channel took new keys. */
-  renewed(): void {
-    for (const renewal of [...this.#renewals]) {
-      renewal(true)
-    }
-  }
-
-  /** The gateway's limits refused the renewal this tab's channel asked for: it gives up at once. */
-  renewalRefused(): void {
-    for (const renewal of [...this.#renewals]) {
-      renewal(false)
-    }
-  }
-
-  /**
-   * This tab's channel ended for good: the gateway refused the keys or signed the device out, and
-   * the device signs out. A renewal waiting for new keys gives up at once, and so does every one
-   * asked for the same space from now on.
-   */
-  ended(): void {
-    this.#ended = this.#options.open()?.space
-
-    for (const renewal of [...this.#renewals]) {
-      renewal(false)
-    }
-  }
-
-  /**
-   * Has the gateway renew the device's keys, as a route that refused the access token asks: the
-   * leading tab asks for a new pair over its open channel (one that is down renews at the hello
-   * that brings it up); another tab asks the leader with the `renew` hint. True once new keys came
-   * within 10 seconds, to this tab's channel or, kept by the leader, into the storage; false at
-   * once when this tab's channel ended for good, the gateway's limits refused the renewal, or
-   * another tab removed the access key (it signed out). A renewal asked while one is under way
-   * joins it: the refresh key works once.
-   */
-  renewKeys(): Promise<boolean> {
-    const open = this.#options.open()
-
-    if (!open || open.space === this.#ended) {
-      return Promise.resolve(false)
-    }
-
-    if (this.#renewing?.space === open.space) {
-      return this.#renewing.renewed
-    }
-
-    const renewing = { space: open.space, renewed: this.#renew(open) }
-
-    this.#renewing = renewing
-    void renewing.renewed.then(() => {
-      if (this.#renewing === renewing) {
-        this.#renewing = undefined
-      }
-    })
-
-    return renewing.renewed
-  }
-
-  /** Connects the leader again, or asks it to, and waits up to 10 seconds for the new keys. */
-  #renew(open: OpenIdentity): Promise<boolean> {
-    const storage = this.#options.storage
-    const before = storage.get(ACCESS_KEY)
-
-    return new Promise((resolve) => {
-      const stops: Array<() => void> = []
-      const finish = (renewed: boolean) => {
-        for (const stop of stops.splice(0)) {
-          stop()
-        }
-
-        resolve(renewed)
-      }
-      const renewal = (renewed: boolean) => finish(renewed)
-
-      this.#renewals.add(renewal)
-      stops.push(
-        () => this.#renewals.delete(renewal),
-        this.#options.clock.schedule(RENEW_MS, () => finish(false)),
-        storage.onChangeElsewhere((key) => {
-          if (key !== ACCESS_KEY) {
-            return
-          }
-
-          // A key another tab removed was not renewed: that tab signed out.
-          const access = storage.get(ACCESS_KEY)
-
-          if (access === undefined) {
-            finish(false)
-          } else if (access !== before) {
-            finish(true)
-          }
-        }),
-      )
-
-      if (open.space.sync) {
-        open.space.renewSync()
-      } else {
-        open.hints.post('renew')
-      }
-    })
   }
 
   /** The identity of `space` is still the one signed in on this browser. */

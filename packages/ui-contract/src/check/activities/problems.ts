@@ -3,7 +3,8 @@
  * what it carries names fields of the model; its `initial` and every `target` are states of
  * it; each state is a visit to a screen that exists (`meta.screen`) at the path of a binding
  * of that screen (`meta.address.path`); every event is a declared anchor (a derived one
- * through its base's `derived`) of that screen or of the frame. Every transition is backed by
+ * through its base's `derived`, never a visibility-button, which is presentation only) of that
+ * screen or of the frame. Every transition is backed by
  * the screens (`backing.ts`): the flow of the anchor's screen (the frame's for a frame
  * anchor) navigates to the target's path after a transition on that anchor, or the anchor is
  * a link to that path. Every guard is
@@ -33,6 +34,8 @@ import {
   inFile,
   knownAnchors,
   own,
+  presentationOnly,
+  visibilityButtonsOf,
 } from '../contract'
 
 import { type Backing, backed, listOf } from './backing'
@@ -45,6 +48,8 @@ interface InActivity {
   readonly contract: Contract
   readonly screens: ReadonlyMap<string, Screen>
   readonly known: (anchor: string) => boolean
+  /** The visibility-buttons the inputs render, presentation only. */
+  readonly visibilityButtons: ReadonlySet<string>
   /** A declared anchor with its screen. */
   readonly declared: ReadonlyMap<string, { readonly def: AnchorDef; readonly screen: Screen }>
   readonly problem: (at: At, message: string) => Problem
@@ -58,6 +63,10 @@ function screenOf({ contract, declared }: InActivity, anchor: string): Screen | 
 }
 
 function eventProblems(inActivity: InActivity, screen: Screen, anchor: string, at: At): Problem[] {
+  if (inActivity.visibilityButtons.has(anchor)) {
+    return [inActivity.problem(at, presentationOnly(anchor, 'an event of an activity'))]
+  }
+
   if (!inActivity.known(anchor)) {
     return [inActivity.problem(at, `"${anchor}" is not a declared anchor`)]
   }
@@ -216,6 +225,7 @@ function activityProblems(inActivity: InActivity): Problem[] {
 export function activitiesProblems(contract: Contract): Problem[] {
   const screens = new Map(contract.screens.screens.map((screen) => [screen.id, screen]))
   const known = knownAnchors(contract)
+  const visibilityButtons = visibilityButtonsOf(contract.screens)
   const declared = new Map(
     declaredAnchors(contract.screens).map(({ anchor, def, screen }) => [anchor, { def, screen }]),
   )
@@ -229,6 +239,7 @@ export function activitiesProblems(contract: Contract): Problem[] {
       contract,
       screens,
       known,
+      visibilityButtons,
       declared,
       problem: (at, message) => inFile(file, `${jsonPath(at)}: ${message}`, lineAt(lines, at)),
     })

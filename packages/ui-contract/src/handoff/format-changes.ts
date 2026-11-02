@@ -6,6 +6,7 @@ import type { Change, ContractChanges } from './diff'
 const LISTS = [
   ['screens', 'screen', 'screens'],
   ['anchors', 'anchor', 'anchors'],
+  ['derived', 'derived anchor', 'derived anchors'],
   ['codes', 'code', 'codes'],
   ['anchorCodes', 'anchor code', 'anchor codes'],
   ['errorFields', 'error field', 'error fields'],
@@ -13,6 +14,7 @@ const LISTS = [
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
+  ['notices', 'notice', 'notices'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
   ['activities', 'activity', 'activities'],

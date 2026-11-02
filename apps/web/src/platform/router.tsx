@@ -13,6 +13,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  type ErrorComponentProps,
   type RouterHistory,
   redirect,
   retainSearchParams,
@@ -37,6 +38,11 @@ export interface AppRouterOptions {
   }
   readonly layout: FunctionComponent
   readonly history?: RouterHistory
+  /**
+   * Put in the place of a page that failed to render, its search refused included, inside the
+   * layout, which stays; its `reset` renders the page again.
+   */
+  readonly crash?: FunctionComponent<ErrorComponentProps>
 }
 
 /** A page that resolves services from its own module before the application's. */
@@ -110,6 +116,7 @@ export function createAppRouter(options: AppRouterOptions) {
         path: route.path,
         component: scopedPage(module, route),
         beforeLoad: guard(route),
+        ...(options.crash ? { errorComponent: options.crash } : {}),
         ...searchOptions(route),
       }),
     ),

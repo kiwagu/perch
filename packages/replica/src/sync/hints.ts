@@ -3,11 +3,10 @@ import { z } from '@workspace/zod'
 /**
  * What one tab tells the others: `journal` (it wrote to the local log), `visible` (it came to the
  * foreground), `kick` (sync now; also the end of a sign-out that left the device signed in),
- * `settled` (the leader imported something), `sign-out` (a sign-out began: hold writes back),
- * `renew` (a tab asks the leader to renew the keys by connecting again) and `reset` (a tab reset a
- * region; the others open it again from the database).
+ * `settled` (the leader imported something), `sign-out` (a sign-out began: hold writes back) and
+ * `reset` (a tab reset a region; the others open it again from the database).
  */
-export type SyncHint = 'journal' | 'visible' | 'kick' | 'settled' | 'sign-out' | 'renew' | 'reset'
+export type SyncHint = 'journal' | 'visible' | 'kick' | 'settled' | 'sign-out' | 'reset'
 
 export interface SyncHints {
   post(hint: SyncHint): void
@@ -27,7 +26,7 @@ export interface HintChannel {
 
 const hintMessage = z.object({
   kind: z.literal('perch-sync-hint'),
-  hint: z.enum(['journal', 'visible', 'kick', 'settled', 'sign-out', 'renew', 'reset']),
+  hint: z.enum(['journal', 'visible', 'kick', 'settled', 'sign-out', 'reset']),
 })
 
 const NO_HINTS: SyncHints = {

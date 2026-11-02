@@ -31,6 +31,10 @@ export default defineConfig({
     baseURL: BASE_URL,
     // The front's certificate is a local one (mkcert's, or self-signed without mkcert).
     ignoreHTTPSErrors: true,
+    // The production build registers the app's service worker, which caches what it serves: every
+    // test runs without it, so requests and page loads stay the network's, but the one that opens
+    // the app offline (`app-shell/base/open-offline`).
+    serviceWorkers: 'block',
     trace: 'retain-on-failure',
   },
   // Mobile first: every spec runs on a phone, then on a desktop.

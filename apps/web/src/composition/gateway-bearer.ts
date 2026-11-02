@@ -1,7 +1,7 @@
 /**
  * Calls of the gateway's routes that act for the signed-in device: each carries the device's
- * access token (`Authorization: Bearer`) and its id (`X-Perch-Device`). A refused token is
- * renewed once through the sync leader and the call is made again.
+ * session token (`Authorization: Bearer`) and its id (`X-Perch-Device`). A refused token is dead,
+ * so the call is not made again.
  */
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
@@ -12,12 +12,10 @@ import { z } from '@workspace/zod'
 import type { Fetcher } from './gateway-auth'
 
 export interface BearerDeps {
-  /** The access token the device holds now, if any. */
+  /** The session token the device holds now, if any. */
   readonly token: () => string | undefined
   /** The device's own id, named in every call: the gateway acts on the device's session. */
   readonly device: () => string
-  /** Gets a new access token for `token()`; false when none could be had. */
-  readonly renew: () => Promise<boolean>
   readonly fetcher?: Fetcher
 }
 
@@ -74,8 +72,8 @@ function refusal(response: Response): ResultAsync<never, DataError> {
 }
 
 /**
- * The gateway's routes under `baseUrl`, called with the device's access token and id. A fetch
- * that throws is `data:OFFLINE`; no token, or a token refused again after a renewal, is
+ * The gateway's routes under `baseUrl`, called with the device's session token and id. A fetch
+ * that throws is `data:OFFLINE`; no token, or a token the gateway refuses (401), is
  * `data:AUTH_FAILED` without a second request.
  */
 export function bearerCalls(baseUrl: string, deps: BearerDeps): BearerCalls {
@@ -100,37 +98,23 @@ export function bearerCalls(baseUrl: string, deps: BearerDeps): BearerCalls {
       (cause) => dataError('data:OFFLINE', 'could not reach the gateway', cause),
     )
 
-  /** One request with the current token; a 401 renews the token once and asks again. */
+  /** One request with the token the device holds now; a 401 ends it: the token is dead. */
   const withToken = (
     path: string,
     method: string,
     body?: unknown,
   ): ResultAsync<Response, DataError> => {
-    const first = deps.token()
+    const token = deps.token()
 
-    if (first === undefined) {
-      return errAsync(authFailed('the device holds no access token'))
+    if (token === undefined) {
+      return errAsync(authFailed('the device holds no session token'))
     }
 
-    return send(path, method, first, body).andThen((response) => {
-      if (response.status !== 401) {
-        return okAsync(response)
-      }
-
-      return ResultAsync.fromPromise(deps.renew(), (cause) =>
-        dataError('data:AUTH_FAILED', 'the access token could not be renewed', cause),
-      ).andThen((renewed) => {
-        const second = renewed ? deps.token() : undefined
-
-        return second === undefined
-          ? errAsync(authFailed('the gateway refused the access token'))
-          : send(path, method, second, body).andThen((again) =>
-              again.status === 401
-                ? errAsync(authFailed('the gateway refused the renewed access token'))
-                : okAsync(again),
-            )
-      })
-    })
+    return send(path, method, token, body).andThen((response) =>
+      response.status === 401
+        ? errAsync(authFailed('the gateway refused the session token'))
+        : okAsync(response),
+    )
   }
 
   return {

@@ -11,13 +11,26 @@ of the checkout it runs in.
   and the e2e launcher. Restart it to get an empty database, then restart `gateway-e2e`, which
   defines its namespace user on the stand when it starts.
 
+- `maildev-dev` (profile `dev`) and `maildev-e2e` (profile `e2e`): MailDev 2.2.1 in docker
+  (`infra/dev/`), each stand's mailbox. The dev stand's gateway sends to SMTP 127.0.0.1:1025 and
+  its web UI at http://127.0.0.1:1080 shows every mail (open a verification link from there);
+  the e2e stand's gateway sends to SMTP 127.0.0.1:1035, and the suites read the mails through
+  its REST API at http://127.0.0.1:1090. Both bind 127.0.0.1 only, keep the mails in the
+  container (a restart empties the mailbox) and are ready once `/healthz` answers. `maildev-dev`
+  is restarted on a change of the compose file. Each gateway waits for its stand's mailbox
+  (`depends_on`).
+
 - `gateway` (profile `dev`) and `gateway-e2e` (profile `e2e`): the gateway on 127.0.0.1:5181 and
   127.0.0.1:5191. Each waits until its SurrealDB answers, runs `scripts/stand-operator.ts` (the
   namespace `app`, the database `directory` and the user `gateway`), then serves. pm2 restarts
   it (`watch:`) on a change of its sources or of a workspace package it imports, a fresh process
   each time: a tree caught mid-edit fails one start, pm2 retries with a growing delay
-  (`exp_backoff_restart_delay`), and the next change brings it back. Both sign tokens with the
-  manifest's stand-only key, `stand_jwt_key` in `vars`, as `GATEWAY_JWT_KEY`.
+  (`exp_backoff_restart_delay`), and the next change brings it back. Both run Better Auth with
+  the manifest's stand-only secret, `stand_auth_secret` in `vars`, as `GATEWAY_AUTH_SECRET`, and
+  each with its own front's origin as `GATEWAY_PUBLIC_URL` (https://localhost:5443 and
+  https://localhost:5493), its own stand's MailDev as `GATEWAY_SMTP_URL`
+  (smtp://127.0.0.1:1025 and smtp://127.0.0.1:1035) and the manifest's `stand_mail_from` as
+  `GATEWAY_MAIL_FROM`.
 
 - `web` (profile `dev`, kind `build`): the web application's build watcher, `vite build
   --watch` in development mode. It listens on no port: every source change rewrites
@@ -37,19 +50,22 @@ of the checkout it runs in.
   already online restart, so a run never meets a stale stand) and waits for it.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
-no persistence. Apps in containers (SurrealDB, Caddy) declare only a url: their ports are held
-outside the app's processes, so wait until `url-ok`. `surreal sql --endpoint
+no persistence. Apps in containers (SurrealDB, MailDev, Caddy) declare only a url: their ports
+are held outside the app's processes, so wait until `url-ok`. `surreal sql --endpoint
 http://127.0.0.1:8010 --user root --pass root` opens a shell against the e2e stand.
 
 Every app declares the memory it takes (`memory:`; `containers:` names the docker containers
-counted with it) and `resources` keeps 4G for the host: a start that does not fit waits its
-turn in the host's queue (`mcproc leases`). `mcproc exec -- <command>` runs a command with
-this checkout's stand addresses and the stands' signing key (`GATEWAY_JWT_KEY`, so the smoke,
-the load test and the seed's sweep open a stand's directory with its gateway's key) in its
-environment (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
-seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section
-names what a new worktree copies from the main checkout (the certificates, the local hook file,
-the screenshot baselines) and how it installs.
+counted with it) and `resources` keeps 4G for the host: a start that does not fit waits its turn
+in the host's queue (`mcproc leases`). `mcproc exec -- <command>` runs a command with this
+checkout's stand addresses and what the e2e stand's gateway runs with (`GATEWAY_AUTH_SECRET`,
+`GATEWAY_PUBLIC_URL`, `GATEWAY_SMTP_URL` and `GATEWAY_MAIL_FROM`, so the smoke and the load test
+run a gateway of their own on that stand with the same secret, front origin and mail server) in
+its environment, with the mailboxes the suites, the smoke, the load test and the seed read the
+links from: `MAILBOX_URL`, the e2e stand's MailDev REST API, and `MAILBOX_DEV_URL`, the dev
+stand's (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
+seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section names
+what a new worktree copies from the main checkout (the certificates, the local hook file, the
+screenshot baselines) and how it installs.
 
 `mcproc start <profile> --reload` restarts the apps already online (a restarted SurrealDB stand
 is empty). pm2 keeps the command and the environment an app started with, so after a change of
@@ -59,3 +75,21 @@ the dev database) alone. An app removed from the manifest is
 unknown to mcproc afterwards; the pm2 process it leaves (`<project>-<app>` in `pm2 ls`,
 `perch-<app>` in the main checkout) goes with `pm2 delete perch-<app>`, as `web-e2e`, the old
 e2e dev server, did.
+
+## Worktrees
+
+A branch gets a checkout of its own, with stands of its own, next to the repository:
+
+- `mcproc worktree add feat/x` (from the main checkout; `--from main` starts a new branch there)
+  makes `../perch.worktrees/feat/x`, claims the next free slot, copies the local certificates,
+  `lefthook-local.yml` and the screenshot baselines, runs `bun install` and writes
+  `.mcproc/mcproc.local.yaml` there with the slot and the project slug (`perch-w1`). In that
+  folder `mcproc start dev` brings the stand up on slot 1's ports (8100, 5281,
+  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; there `bun run
+  seed` addresses that dev stand, `bun run test:db` and `CI=1 bun run test:e2e` that checkout's
+  e2e stand.
+- A start asks the host for memory first: every app declares what it takes and the manifest
+  keeps a reserve, so a stand that does not fit waits its turn (`mcproc ls` shows it as
+  `queued`, `mcproc leases` shows the queue) and comes up by itself once memory frees.
+- `mcproc worktree ls` lists the checkouts with their slots; `mcproc worktree remove feat/x`
+  stops that checkout's apps, deletes the worktree and frees the slot (the branch stays).

@@ -2,6 +2,8 @@ import { resetValidationMode, setValidationMode } from 'entity-id'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  type AccountId,
+  accountIdFactory,
   type IdentityId,
   identityIdFactory,
   idSchemas,
@@ -14,6 +16,8 @@ import {
   registry,
   type TenantId,
   tenantIdFactory,
+  type VerificationId,
+  verificationIdFactory,
 } from './index'
 
 afterEach(() => resetValidationMode())
@@ -35,6 +39,17 @@ describe('the entity id registry', () => {
     expect(membership.startsWith('mbr_')).toBe(true)
     expect(note.startsWith('nte_')).toBe(true)
     expect(registry.kindOf(note)).toBe('note')
+  })
+
+  it('mints the ids of the accounts and verifications of the sign-in library', () => {
+    const account: AccountId = accountIdFactory.create()
+    const verification: VerificationId = verificationIdFactory.create()
+
+    expect(registry.prefixes.account).toBe('acc')
+    expect(registry.prefixes.verification).toBe('vrf')
+    expect(account).toMatch(/^acc_[0-9a-z]{16}\.[0-9a-z]{10}$/)
+    expect(verification).toMatch(/^vrf_[0-9a-z]{16}\.[0-9a-z]{10}$/)
+    expect(registry.kindOf(account)).toBe('account')
   })
 
   it('tells kinds apart', () => {

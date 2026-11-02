@@ -2,10 +2,13 @@
  * Rule 6: the scenarios speak of what the contract declares. Every bracket reference in
  * their text resolves (an anchor declared, or derived from a declared base with a suffix it
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
- * pattern row matches), the activity a scenario names is one of `contract/domain/activities`, and
- * every device acts as a role of the vocabulary. Each problem is one of the scenario's file,
- * named by its field and at the line of that field (of the deepest part of its path the file
- * holds); the ids are paths, so each is used once.
+ * pattern row matches, `show` or `hide` once an input renders a visibility-button, a mail
+ * `[mail:<action>]` a platform action that declares one, a notice `[notice:<action>.<name>]` a
+ * notice of that name the platform action declares), the
+ * activity a scenario names is one of `contract/domain/activities`, and every device acts as
+ * a role of the vocabulary. Each problem is one of the scenario's file, named by its field and
+ * at the line of that field (of the deepest part of its path the file holds); the ids are
+ * paths, so each is used once.
  */
 
 import { ACTIVITIES_DIR, jsonPath, lineAt, type Problem, scenarioFile } from '../files'
@@ -15,12 +18,14 @@ import {
   bindingPaths,
   type Contract,
   codesOf,
+  contractValues,
   has,
   inFile,
-  isChoiceValue,
   knownAnchors,
+  own,
   statesOf,
 } from './contract'
+import { unknownNotice } from './notices'
 
 /** The text fields of a scenario that carry bracket references, with their paths. */
 export const textsOf = (scenario: Scenario): Array<{ text: string; at: PropertyKey[] }> => [
@@ -42,7 +47,7 @@ export function referenceResolver(
   const paths = bindingPaths(contract.screens)
   const states = statesOf(contract.vocabulary)
   const codes = codesOf(contract.vocabulary, contract.screens)
-  const { vocabulary } = contract
+  const values = contractValues(contract)
 
   return ({ kind, value, raw }) => {
     switch (kind) {
@@ -55,9 +60,13 @@ export function referenceResolver(
       case 'state':
         return states.has(value) ? undefined : `${raw} is not a state of the vocabulary`
       case 'value':
-        return isChoiceValue(vocabulary, value)
-          ? undefined
-          : `${raw} is not a choice value of the vocabulary`
+        return values(value) ? undefined : `${raw} is not a choice value of the vocabulary`
+      case 'mail':
+        return own(contract.screens.platform.actions, value)?.mail === undefined
+          ? `${raw} names no platform action that sends a mail`
+          : undefined
+      case 'notice':
+        return unknownNotice(contract.screens.platform, value, raw)
     }
   }
 }

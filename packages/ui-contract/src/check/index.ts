@@ -5,6 +5,7 @@ export {
   bindingRefsOf,
   type Contract,
   codesOf,
+  type DeclaredAnchor,
   declaredAnchors,
   locate,
   modelTargetOf,
@@ -28,6 +29,8 @@ export {
   transitionsOf,
 } from './flow'
 export { leavingProblems } from './leaving'
+export { mailsProblems } from './mails'
+export { noticesProblems, unknownNotice } from './notices'
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'

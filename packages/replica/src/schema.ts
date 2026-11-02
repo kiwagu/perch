@@ -2,9 +2,8 @@ import type { Region } from '@workspace/data'
 import type { TableAbilities } from '@workspace/kernel'
 
 /**
- * What the replica needs to know about a table's fields beyond plain values:
- * which fields are mergeable CRDT containers, which hold references to other
- * records, and which hold datetimes. Fields not listed are last-writer-wins values.
+ * What the replica knows about each field of a table: whether it is a mergeable CRDT
+ * container, a reference to another record, a datetime, or a plain last-writer-wins value.
  * The modeling stage derives this from the schema annotations.
  */
 export type ReplicaField =
@@ -13,8 +12,9 @@ export type ReplicaField =
   | { readonly kind: 'counter' }
   | { readonly kind: 'record'; readonly table: string }
   | { readonly kind: 'datetime' }
+  | { readonly kind: 'plain' }
 
-/** A replicated table: the region whose document holds its records, its non-plain fields, and who may write it. */
+/** A replicated table: the region whose document holds its records, each of its fields, and who may write it. */
 export interface ReplicaTable extends TableAbilities {
   readonly region: Region
   readonly fields: Readonly<Record<string, ReplicaField>>
@@ -22,12 +22,18 @@ export interface ReplicaTable extends TableAbilities {
 
 export type ReplicaSchema = Readonly<Record<string, ReplicaTable>>
 
+/**
+ * A field of a replicated table; undefined for a field the table does not have. Only the
+ * schema's own entries count: a name every object inherits, such as `constructor`, is no field.
+ */
 export function fieldOf(
   schema: ReplicaSchema,
   table: string,
   field: string,
 ): ReplicaField | undefined {
-  return schema[table]?.fields[field]
+  const fields = Object.hasOwn(schema, table) ? schema[table]?.fields : undefined
+
+  return fields !== undefined && Object.hasOwn(fields, field) ? fields[field] : undefined
 }
 
 /** The replicated tables whose records live in documents of this region. */

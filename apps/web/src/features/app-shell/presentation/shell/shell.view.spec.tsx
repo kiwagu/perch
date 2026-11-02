@@ -20,6 +20,9 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
         activePath="/sign-in"
         canChooseLocale={true}
         onLocaleChange={() => {}}
+        theme="system"
+        canChooseTheme={true}
+        onThemeChange={() => {}}
         {...rest}
       >
         <p>page</p>
@@ -40,15 +43,42 @@ describe('ShellView', () => {
     expect(screen.getByText('page')).toBeTruthy()
   })
 
-  it('tells the user the database is opening and holds the page back', () => {
+  it('tells the user the app is starting and holds the page back', () => {
     renderShell({ status: 'opening' })
 
     const status = screen.getByTestId('app-shell.status')
 
     expect(status.getAttribute('data-state')).toBe('opening')
     expect(status.getAttribute('role')).toBe('status')
-    expect(status.textContent).toBe(en['app.shell.opening-db'])
+    expect(status.textContent).toBe(en['app.shell.starting'])
     expect(screen.queryByText('page')).toBeNull()
+  })
+
+  it("shows a signed-in account's navigation and screen while its data opens, saying so", () => {
+    renderShell({ status: 'opening-data', signedIn: true, sync: 'synced', update: 'new-version' })
+
+    const status = screen.getByTestId('app-shell.status')
+
+    expect(status.getAttribute('data-state')).toBe('opening-data')
+    expect(status.textContent).toBe(en['app.shell.opening-db'])
+    expect(status.className).not.toContain('sr-only')
+    expect(screen.getByText('page')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    // No message of the platform shows before the data is open.
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+  })
+
+  it("shows no notice and no toast while a signed-in account's data opens", () => {
+    renderShell({
+      status: 'opening-data',
+      signedIn: true,
+      notice: { code: 'devices-read-failed', text: 'The devices could not be read.' },
+      toasts: [{ id: 1, code: 'device-signed-out', tone: 'success', text: 'Signed out.' }],
+    })
+
+    expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.toast')).toBeNull()
   })
 
   it('says the browser keeps no site data when it blocks storage, and holds the page back', () => {
@@ -93,18 +123,26 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.sign-out-here-button')).toBeNull()
   })
 
-  it('links to sign-in when signed out and to the profile when signed in', () => {
-    const { unmount } = renderShell()
-    const signedOut = screen.getAllByTestId('app-shell.nav.sign-in-link')
+  it('shows a guest no navigation, only the banner and the page', () => {
+    renderShell({ signedIn: false, activePath: '/sign-in' })
 
-    expect(signedOut[0]?.getAttribute('href')).toBe('/sign-in')
-    expect(signedOut[0]?.getAttribute('aria-current')).toBe('page')
-    unmount()
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByText(en['app.shell.title'])).toBeTruthy()
+    expect(screen.getByTestId('app-shell.theme-select')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+    expect(screen.getByText('page')).toBeTruthy()
+  })
 
+  it('links a signed-in account to its profile, marked current on it', () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
-    expect(screen.getAllByTestId('app-shell.nav.profile-link')[0]?.getAttribute('href')).toBe('/me')
-    expect(screen.queryByTestId('app-shell.nav.sign-in-link')).toBeNull()
+    const profile = screen.getByTestId('app-shell.nav.profile-link')
+
+    expect(profile.getAttribute('href')).toBe('/me')
+    expect(profile.getAttribute('aria-current')).toBe('page')
+    expect(profile.textContent).toBe(en['app.shell.nav.profile'])
   })
 
   it('links a signed-in user to the organisation page', () => {
@@ -145,13 +183,49 @@ describe('ShellView', () => {
     expect(notice.getAttribute('role')).toBe('status')
   })
 
-  it('marks the navigation and the language select', () => {
+  it("marks a signed-in account's navigation, its four links in it, with no language select", () => {
     renderShell({ signedIn: true, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
     expect(navigation.tagName).toBe('NAV')
-    expect(within(navigation).getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    expect(navigation.getAttribute('aria-label')).toBe(en['app.shell.navigation'])
+    expect(
+      within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('data-testid')),
+    ).toEqual([
+      'app-shell.nav.profile-link',
+      'app-shell.nav.organisation-link',
+      'app-shell.nav.devices-link',
+      'app-shell.nav.settings-link',
+    ])
+    // The settings screen takes a signed-in account's language.
+    expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+  })
+
+  it("shows anyone the device's theme, a guest and a signed-in account alike", () => {
+    const { unmount } = renderShell({ theme: 'dark' })
+    const select = screen.getByTestId('app-shell.theme-select')
+
+    expect(select.getAttribute('role')).toBe('combobox')
+    expect(select.getAttribute('data-value')).toBe('dark')
+    unmount()
+
+    renderShell({ signedIn: true, activePath: '/me', theme: 'light' })
+
+    expect(screen.getByTestId('app-shell.theme-select').getAttribute('data-value')).toBe('light')
+  })
+
+  it('takes a theme choice only while the frame takes one', () => {
+    renderShell({ canChooseTheme: false })
+
+    expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(true)
+  })
+
+  it("marks a guest's language select", () => {
+    renderShell({ signedIn: false })
+
     expect(screen.getByTestId('app-shell.locale-select').getAttribute('role')).toBe('combobox')
   })
 
@@ -169,6 +243,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme
+          onThemeChange={() => {}}
         >
           <p>page</p>
         </ShellView>
@@ -179,11 +256,14 @@ describe('ShellView', () => {
   })
 
   it('speaks Spanish when the Spanish catalog is chosen', () => {
-    renderShell({ locale: 'es' })
+    renderShell({ locale: 'es', signedIn: true, activePath: '/me' })
 
-    const navigation = screen.getAllByTestId('app-shell.nav.sign-in-link')[0] as HTMLElement
+    const navigation = screen.getByTestId('app-shell.nav')
 
-    expect(within(navigation).getByText(es['app.shell.nav.sign-in'])).toBeTruthy()
+    expect(navigation.getAttribute('aria-label')).toBe(es['app.shell.navigation'])
+    expect(screen.getByTestId('app-shell.nav.profile-link').textContent).toBe(
+      es['app.shell.nav.profile'],
+    )
     expect(screen.getByText(es['app.shell.title'])).toBeTruthy()
   })
 
@@ -233,6 +313,9 @@ describe('ShellView', () => {
           activePath="/sign-in"
           canChooseLocale={true}
           onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
           notice={{ code: 'welcome', text: 'Welcome' }}
         >
           <p>page</p>
@@ -242,5 +325,133 @@ describe('ShellView', () => {
 
     expect(container.querySelector('[data-slot="notice"]')).toBe(slot)
     expect(slot?.contains(screen.getByTestId('app-shell.notice-message'))).toBe(true)
+  })
+
+  it('says a screen failed to render, in its place, with a reload while the flow takes one', () => {
+    const onReload = vi.fn()
+    const { rerender } = renderShell({ crash: 'screen-crashed', canReload: true, onReload })
+    const message = screen.getByTestId('app-shell.crash-message')
+
+    expect(message.getAttribute('data-code')).toBe('screen-crashed')
+    expect(message.textContent).toBe(en['app.shell.crash.screen-crashed'])
+    // The frame stays around it: a guest's theme and language selects.
+    expect(screen.getByTestId('app-shell.theme-select')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('app-shell.reload-button'))
+
+    expect(onReload).toHaveBeenCalledOnce()
+
+    rerender(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ShellView
+          status="ready"
+          signedIn={false}
+          activePath="/sign-in"
+          canChooseLocale={true}
+          onLocaleChange={() => {}}
+          theme="system"
+          canChooseTheme={true}
+          onThemeChange={() => {}}
+          crash="screen-crashed"
+          canReload={false}
+          onReload={onReload}
+        >
+          <p>page</p>
+        </ShellView>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows no crash message or reload while the screen renders', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.crash-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.reload-button')).toBeNull()
+  })
+
+  it('says a newer build is served, above the page, with a reload while the flow takes one', () => {
+    const onUpdate = vi.fn()
+
+    renderShell({ update: 'new-version', canUpdate: true, onUpdate })
+
+    const message = screen.getByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('new-version')
+    expect(message.textContent).toBe(en['app.shell.update.new-version'])
+    expect(screen.getByText('page')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('app-shell.update-button'))
+
+    expect(onUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('says a protocol the server no longer takes, its reload held while the flow takes none', () => {
+    renderShell({ update: 'protocol-outdated', canUpdate: false, onUpdate: () => {}, locale: 'es' })
+
+    const message = screen.getByTestId('app-shell.update-message')
+
+    expect(message.getAttribute('data-code')).toBe('protocol-outdated')
+    expect(message.textContent).toBe(es['app.shell.update.protocol-outdated'])
+    expect(screen.getByTestId('app-shell.update-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows no update message or its reload before an update', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
+    expect(screen.queryByTestId('app-shell.update-button')).toBeNull()
+  })
+
+  it("says the state of this device's sync in the header, in the language the app speaks", () => {
+    renderShell({ signedIn: true, activePath: '/me', sync: 'offline', locale: 'es' })
+
+    const sync = screen.getByTestId('app-shell.sync-message')
+
+    expect(sync.getAttribute('data-code')).toBe('offline')
+    expect(sync.getAttribute('role')).toBe('status')
+    expect(sync.textContent).toBe(es['app.shell.sync.offline'])
+  })
+
+  it('shows no state of the sync without one, as for a guest', () => {
+    renderShell()
+
+    expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+  })
+
+  it('reminds to install the app with its button and later, each while the flow takes it', () => {
+    const onInstall = vi.fn()
+    const onPostponeInstall = vi.fn()
+
+    renderShell({
+      install: 'install-available',
+      canInstall: true,
+      onInstall,
+      canPostponeInstall: true,
+      onPostponeInstall,
+    })
+
+    const message = screen.getByTestId('app-shell.install-message')
+
+    expect(message.getAttribute('data-code')).toBe('install-available')
+    expect(message.textContent).toBe(en['app.shell.install.available'])
+
+    fireEvent.click(screen.getByTestId('app-shell.install-button'))
+    fireEvent.click(screen.getByTestId('app-shell.install-later-button'))
+
+    expect(onInstall).toHaveBeenCalledOnce()
+    expect(onPostponeInstall).toHaveBeenCalledOnce()
+  })
+
+  it('shows the steps that install the app with later and no install button, in Spanish too', () => {
+    renderShell({ install: 'install-by-steps', canPostponeInstall: false, locale: 'es' })
+
+    expect(screen.getByTestId('app-shell.install-message').textContent).toBe(
+      es['app.shell.install.by-steps'],
+    )
+    expect(screen.queryByTestId('app-shell.install-button')).toBeNull()
+    expect(screen.getByTestId('app-shell.install-later-button').hasAttribute('disabled')).toBe(true)
   })
 })

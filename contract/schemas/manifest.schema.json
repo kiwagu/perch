@@ -93,6 +93,40 @@
           },
           "description": "The suffixes of derived anchors: `<anchor>.<suffix>`."
         },
+        "derivedParts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The kind of the part: the last word of its suffix."
+              },
+              "values": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "description": "What the part says while it carries the value."
+                },
+                "description": "The data-value values the suffix itself defines, never rows of `choiceValues`."
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false,
+            "description": "The part a derived suffix marks."
+          },
+          "description": "Each derived suffix with the part it marks: its kind and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`)."
+        },
         "attributes": {
           "type": "object",
           "propertyNames": {
@@ -300,6 +334,7 @@
         "idPattern",
         "kinds",
         "derivedSuffixes",
+        "derivedParts",
         "attributes",
         "appStateAnchor",
         "appStates",
@@ -813,11 +848,26 @@
                                     ],
                                     "additionalProperties": false,
                                     "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "search": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                        "description": "The name of a search parameter every route of the screen declares."
+                                      }
+                                    },
+                                    "required": [
+                                      "search"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                   }
                                 ],
-                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                               },
-                              "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                              "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                             }
                           },
                           "required": [
@@ -840,9 +890,24 @@
                           ],
                           "additionalProperties": false,
                           "description": "The anchor navigates to a route."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "search": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-zA-Z0-9]*$",
+                              "description": "The name of a search parameter every route of the screen declares."
+                            }
+                          },
+                          "required": [
+                            "search"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                         }
                       ],
-                      "description": "What the anchor is bound to: a model field, an action or a route."
+                      "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
                     },
                     {
                       "minItems": 1,
@@ -901,11 +966,26 @@
                                       ],
                                       "additionalProperties": false,
                                       "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "search": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                          "description": "The name of a search parameter every route of the screen declares."
+                                        }
+                                      },
+                                      "required": [
+                                        "search"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                     }
                                   ],
-                                  "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                  "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                                 },
-                                "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                                "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                               }
                             },
                             "required": [
@@ -928,9 +1008,24 @@
                             ],
                             "additionalProperties": false,
                             "description": "The anchor navigates to a route."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "search": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                "description": "The name of a search parameter every route of the screen declares."
+                              }
+                            },
+                            "required": [
+                              "search"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                           }
                         ],
-                        "description": "What the anchor is bound to: a model field, an action or a route."
+                        "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
                       },
                       "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
@@ -953,6 +1048,11 @@
                 "holdsInput": {
                   "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
                   "type": "boolean"
+                },
+                "secret": {
+                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+                  "type": "boolean",
+                  "const": true
                 },
                 "codes": {
                   "description": "The data-code values the element carries.",
@@ -995,7 +1095,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders: `confirm-button`, `option`.",
+                  "description": "The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1233,7 +1333,7 @@
                                   "type": {
                                     "type": "string",
                                     "const": "clear",
-                                    "description": "The effect: an anchor stops showing its code."
+                                    "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                   },
                                   "params": {
                                     "type": "object",
@@ -1241,7 +1341,7 @@
                                       "anchor": {
                                         "type": "string",
                                         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                        "description": "The anchor that shows no code any more."
+                                        "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                       }
                                     },
                                     "required": [
@@ -1256,7 +1356,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "The anchor shows no code until one is shown again."
+                                "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                               },
                               {
                                 "type": "object",
@@ -1280,14 +1380,33 @@
                                           "type": "string"
                                         },
                                         "additionalProperties": {
-                                          "description": "A string, a number or a boolean.",
-                                          "type": [
-                                            "string",
-                                            "number",
-                                            "boolean"
+                                          "anyOf": [
+                                            {
+                                              "description": "A string, a number or a boolean.",
+                                              "type": [
+                                                "string",
+                                                "number",
+                                                "boolean"
+                                              ]
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "A field of the screen, declared on it."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                       }
                                     },
                                     "required": [
@@ -1362,7 +1481,7 @@
                                   "type": {
                                     "type": "string",
                                     "const": "clear",
-                                    "description": "The effect: an anchor stops showing its code."
+                                    "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                   },
                                   "params": {
                                     "type": "object",
@@ -1370,7 +1489,7 @@
                                       "anchor": {
                                         "type": "string",
                                         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                        "description": "The anchor that shows no code any more."
+                                        "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                       }
                                     },
                                     "required": [
@@ -1385,7 +1504,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "The anchor shows no code until one is shown again."
+                                "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                               },
                               {
                                 "type": "object",
@@ -1409,14 +1528,33 @@
                                           "type": "string"
                                         },
                                         "additionalProperties": {
-                                          "description": "A string, a number or a boolean.",
-                                          "type": [
-                                            "string",
-                                            "number",
-                                            "boolean"
+                                          "anyOf": [
+                                            {
+                                              "description": "A string, a number or a boolean.",
+                                              "type": [
+                                                "string",
+                                                "number",
+                                                "boolean"
+                                              ]
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "A field of the screen, declared on it."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                       }
                                     },
                                     "required": [
@@ -1527,7 +1665,7 @@
                                             "type": {
                                               "type": "string",
                                               "const": "clear",
-                                              "description": "The effect: an anchor stops showing its code."
+                                              "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                             },
                                             "params": {
                                               "type": "object",
@@ -1535,7 +1673,7 @@
                                                 "anchor": {
                                                   "type": "string",
                                                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                  "description": "The anchor that shows no code any more."
+                                                  "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                 }
                                               },
                                               "required": [
@@ -1550,7 +1688,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "The anchor shows no code until one is shown again."
+                                          "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                         },
                                         {
                                           "type": "object",
@@ -1574,14 +1712,33 @@
                                                     "type": "string"
                                                   },
                                                   "additionalProperties": {
-                                                    "description": "A string, a number or a boolean.",
-                                                    "type": [
-                                                      "string",
-                                                      "number",
-                                                      "boolean"
+                                                    "anyOf": [
+                                                      {
+                                                        "description": "A string, a number or a boolean.",
+                                                        "type": [
+                                                          "string",
+                                                          "number",
+                                                          "boolean"
+                                                        ]
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "anchor": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "A field of the screen, declared on it."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "anchor"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                      }
                                                     ]
                                                   },
-                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                 }
                                               },
                                               "required": [
@@ -1680,7 +1837,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -1688,7 +1845,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -1703,7 +1860,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -1727,14 +1884,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -1808,9 +1984,24 @@
                                     ],
                                     "additionalProperties": false,
                                     "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "search": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                        "description": "The name of a search parameter every route of the screen declares."
+                                      }
+                                    },
+                                    "required": [
+                                      "search"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                   }
                                 ],
-                                "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                               }
                             },
                             "onDone": {
@@ -1881,7 +2072,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -1889,7 +2080,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -1904,7 +2095,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -1928,14 +2119,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -2034,7 +2244,7 @@
                                                 "type": {
                                                   "type": "string",
                                                   "const": "clear",
-                                                  "description": "The effect: an anchor stops showing its code."
+                                                  "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                 },
                                                 "params": {
                                                   "type": "object",
@@ -2042,7 +2252,7 @@
                                                     "anchor": {
                                                       "type": "string",
                                                       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                      "description": "The anchor that shows no code any more."
+                                                      "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                     }
                                                   },
                                                   "required": [
@@ -2057,7 +2267,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "The anchor shows no code until one is shown again."
+                                              "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                             },
                                             {
                                               "type": "object",
@@ -2081,14 +2291,33 @@
                                                         "type": "string"
                                                       },
                                                       "additionalProperties": {
-                                                        "description": "A string, a number or a boolean.",
-                                                        "type": [
-                                                          "string",
-                                                          "number",
-                                                          "boolean"
+                                                        "anyOf": [
+                                                          {
+                                                            "description": "A string, a number or a boolean.",
+                                                            "type": [
+                                                              "string",
+                                                              "number",
+                                                              "boolean"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "anchor": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "A field of the screen, declared on it."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "anchor"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                          }
                                                         ]
                                                       },
-                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                     }
                                                   },
                                                   "required": [
@@ -2192,7 +2421,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -2200,7 +2429,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -2215,7 +2444,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -2239,14 +2468,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -2345,7 +2593,7 @@
                                                 "type": {
                                                   "type": "string",
                                                   "const": "clear",
-                                                  "description": "The effect: an anchor stops showing its code."
+                                                  "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                 },
                                                 "params": {
                                                   "type": "object",
@@ -2353,7 +2601,7 @@
                                                     "anchor": {
                                                       "type": "string",
                                                       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                      "description": "The anchor that shows no code any more."
+                                                      "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                     }
                                                   },
                                                   "required": [
@@ -2368,7 +2616,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "The anchor shows no code until one is shown again."
+                                              "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                             },
                                             {
                                               "type": "object",
@@ -2392,14 +2640,33 @@
                                                         "type": "string"
                                                       },
                                                       "additionalProperties": {
-                                                        "description": "A string, a number or a boolean.",
-                                                        "type": [
-                                                          "string",
-                                                          "number",
-                                                          "boolean"
+                                                        "anyOf": [
+                                                          {
+                                                            "description": "A string, a number or a boolean.",
+                                                            "type": [
+                                                              "string",
+                                                              "number",
+                                                              "boolean"
+                                                            ]
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "anchor": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "A field of the screen, declared on it."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "anchor"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                          }
                                                         ]
                                                       },
-                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                     }
                                                   },
                                                   "required": [
@@ -2545,7 +2812,7 @@
                                   "type": {
                                     "type": "string",
                                     "const": "clear",
-                                    "description": "The effect: an anchor stops showing its code."
+                                    "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                   },
                                   "params": {
                                     "type": "object",
@@ -2553,7 +2820,7 @@
                                       "anchor": {
                                         "type": "string",
                                         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                        "description": "The anchor that shows no code any more."
+                                        "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                       }
                                     },
                                     "required": [
@@ -2568,7 +2835,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "The anchor shows no code until one is shown again."
+                                "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                               },
                               {
                                 "type": "object",
@@ -2592,14 +2859,33 @@
                                           "type": "string"
                                         },
                                         "additionalProperties": {
-                                          "description": "A string, a number or a boolean.",
-                                          "type": [
-                                            "string",
-                                            "number",
-                                            "boolean"
+                                          "anyOf": [
+                                            {
+                                              "description": "A string, a number or a boolean.",
+                                              "type": [
+                                                "string",
+                                                "number",
+                                                "boolean"
+                                              ]
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "A field of the screen, declared on it."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                       }
                                     },
                                     "required": [
@@ -2674,7 +2960,7 @@
                                   "type": {
                                     "type": "string",
                                     "const": "clear",
-                                    "description": "The effect: an anchor stops showing its code."
+                                    "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                   },
                                   "params": {
                                     "type": "object",
@@ -2682,7 +2968,7 @@
                                       "anchor": {
                                         "type": "string",
                                         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                        "description": "The anchor that shows no code any more."
+                                        "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                       }
                                     },
                                     "required": [
@@ -2697,7 +2983,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "The anchor shows no code until one is shown again."
+                                "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                               },
                               {
                                 "type": "object",
@@ -2721,14 +3007,33 @@
                                           "type": "string"
                                         },
                                         "additionalProperties": {
-                                          "description": "A string, a number or a boolean.",
-                                          "type": [
-                                            "string",
-                                            "number",
-                                            "boolean"
+                                          "anyOf": [
+                                            {
+                                              "description": "A string, a number or a boolean.",
+                                              "type": [
+                                                "string",
+                                                "number",
+                                                "boolean"
+                                              ]
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "A field of the screen, declared on it."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                       }
                                     },
                                     "required": [
@@ -2839,7 +3144,7 @@
                                             "type": {
                                               "type": "string",
                                               "const": "clear",
-                                              "description": "The effect: an anchor stops showing its code."
+                                              "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                             },
                                             "params": {
                                               "type": "object",
@@ -2847,7 +3152,7 @@
                                                 "anchor": {
                                                   "type": "string",
                                                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                  "description": "The anchor that shows no code any more."
+                                                  "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                 }
                                               },
                                               "required": [
@@ -2862,7 +3167,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "The anchor shows no code until one is shown again."
+                                          "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                         },
                                         {
                                           "type": "object",
@@ -2886,14 +3191,33 @@
                                                     "type": "string"
                                                   },
                                                   "additionalProperties": {
-                                                    "description": "A string, a number or a boolean.",
-                                                    "type": [
-                                                      "string",
-                                                      "number",
-                                                      "boolean"
+                                                    "anyOf": [
+                                                      {
+                                                        "description": "A string, a number or a boolean.",
+                                                        "type": [
+                                                          "string",
+                                                          "number",
+                                                          "boolean"
+                                                        ]
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "anchor": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "A field of the screen, declared on it."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "anchor"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                      }
                                                     ]
                                                   },
-                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                 }
                                               },
                                               "required": [
@@ -2992,7 +3316,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -3000,7 +3324,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -3015,7 +3339,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -3039,14 +3363,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -3169,7 +3512,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -3177,7 +3520,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -3192,7 +3535,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -3216,14 +3559,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -3298,7 +3660,7 @@
                                               "type": {
                                                 "type": "string",
                                                 "const": "clear",
-                                                "description": "The effect: an anchor stops showing its code."
+                                                "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                               },
                                               "params": {
                                                 "type": "object",
@@ -3306,7 +3668,7 @@
                                                   "anchor": {
                                                     "type": "string",
                                                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                    "description": "The anchor that shows no code any more."
+                                                    "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                   }
                                                 },
                                                 "required": [
@@ -3321,7 +3683,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "The anchor shows no code until one is shown again."
+                                            "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                           },
                                           {
                                             "type": "object",
@@ -3345,14 +3707,33 @@
                                                       "type": "string"
                                                     },
                                                     "additionalProperties": {
-                                                      "description": "A string, a number or a boolean.",
-                                                      "type": [
-                                                        "string",
-                                                        "number",
-                                                        "boolean"
+                                                      "anyOf": [
+                                                        {
+                                                          "description": "A string, a number or a boolean.",
+                                                          "type": [
+                                                            "string",
+                                                            "number",
+                                                            "boolean"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "A field of the screen, declared on it."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                   }
                                                 },
                                                 "required": [
@@ -3463,7 +3844,7 @@
                                                         "type": {
                                                           "type": "string",
                                                           "const": "clear",
-                                                          "description": "The effect: an anchor stops showing its code."
+                                                          "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                         },
                                                         "params": {
                                                           "type": "object",
@@ -3471,7 +3852,7 @@
                                                             "anchor": {
                                                               "type": "string",
                                                               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                              "description": "The anchor that shows no code any more."
+                                                              "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                             }
                                                           },
                                                           "required": [
@@ -3486,7 +3867,7 @@
                                                         "params"
                                                       ],
                                                       "additionalProperties": false,
-                                                      "description": "The anchor shows no code until one is shown again."
+                                                      "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                     },
                                                     {
                                                       "type": "object",
@@ -3510,14 +3891,33 @@
                                                                 "type": "string"
                                                               },
                                                               "additionalProperties": {
-                                                                "description": "A string, a number or a boolean.",
-                                                                "type": [
-                                                                  "string",
-                                                                  "number",
-                                                                  "boolean"
+                                                                "anyOf": [
+                                                                  {
+                                                                    "description": "A string, a number or a boolean.",
+                                                                    "type": [
+                                                                      "string",
+                                                                      "number",
+                                                                      "boolean"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "anchor": {
+                                                                        "type": "string",
+                                                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                        "description": "A field of the screen, declared on it."
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "anchor"
+                                                                    ],
+                                                                    "additionalProperties": false,
+                                                                    "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                  }
                                                                 ]
                                                               },
-                                                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                             }
                                                           },
                                                           "required": [
@@ -3616,7 +4016,7 @@
                                                           "type": {
                                                             "type": "string",
                                                             "const": "clear",
-                                                            "description": "The effect: an anchor stops showing its code."
+                                                            "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                           },
                                                           "params": {
                                                             "type": "object",
@@ -3624,7 +4024,7 @@
                                                               "anchor": {
                                                                 "type": "string",
                                                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                                "description": "The anchor that shows no code any more."
+                                                                "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                               }
                                                             },
                                                             "required": [
@@ -3639,7 +4039,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "The anchor shows no code until one is shown again."
+                                                        "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                       },
                                                       {
                                                         "type": "object",
@@ -3663,14 +4063,33 @@
                                                                   "type": "string"
                                                                 },
                                                                 "additionalProperties": {
-                                                                  "description": "A string, a number or a boolean.",
-                                                                  "type": [
-                                                                    "string",
-                                                                    "number",
-                                                                    "boolean"
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "A string, a number or a boolean.",
+                                                                      "type": [
+                                                                        "string",
+                                                                        "number",
+                                                                        "boolean"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "anchor": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "A field of the screen, declared on it."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "anchor"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                               }
                                                             },
                                                             "required": [
@@ -3744,9 +4163,24 @@
                                                 ],
                                                 "additionalProperties": false,
                                                 "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "search": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                                    "description": "The name of a search parameter every route of the screen declares."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "search"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                                               }
                                             ],
-                                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                                            "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                                           }
                                         },
                                         "onDone": {
@@ -3817,7 +4251,7 @@
                                                           "type": {
                                                             "type": "string",
                                                             "const": "clear",
-                                                            "description": "The effect: an anchor stops showing its code."
+                                                            "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                           },
                                                           "params": {
                                                             "type": "object",
@@ -3825,7 +4259,7 @@
                                                               "anchor": {
                                                                 "type": "string",
                                                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                                "description": "The anchor that shows no code any more."
+                                                                "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                               }
                                                             },
                                                             "required": [
@@ -3840,7 +4274,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "The anchor shows no code until one is shown again."
+                                                        "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                       },
                                                       {
                                                         "type": "object",
@@ -3864,14 +4298,33 @@
                                                                   "type": "string"
                                                                 },
                                                                 "additionalProperties": {
-                                                                  "description": "A string, a number or a boolean.",
-                                                                  "type": [
-                                                                    "string",
-                                                                    "number",
-                                                                    "boolean"
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "A string, a number or a boolean.",
+                                                                      "type": [
+                                                                        "string",
+                                                                        "number",
+                                                                        "boolean"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "anchor": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "A field of the screen, declared on it."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "anchor"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                               }
                                                             },
                                                             "required": [
@@ -3970,7 +4423,7 @@
                                                             "type": {
                                                               "type": "string",
                                                               "const": "clear",
-                                                              "description": "The effect: an anchor stops showing its code."
+                                                              "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                             },
                                                             "params": {
                                                               "type": "object",
@@ -3978,7 +4431,7 @@
                                                                 "anchor": {
                                                                   "type": "string",
                                                                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                                  "description": "The anchor that shows no code any more."
+                                                                  "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                                 }
                                                               },
                                                               "required": [
@@ -3993,7 +4446,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "The anchor shows no code until one is shown again."
+                                                          "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                         },
                                                         {
                                                           "type": "object",
@@ -4017,14 +4470,33 @@
                                                                     "type": "string"
                                                                   },
                                                                   "additionalProperties": {
-                                                                    "description": "A string, a number or a boolean.",
-                                                                    "type": [
-                                                                      "string",
-                                                                      "number",
-                                                                      "boolean"
+                                                                    "anyOf": [
+                                                                      {
+                                                                        "description": "A string, a number or a boolean.",
+                                                                        "type": [
+                                                                          "string",
+                                                                          "number",
+                                                                          "boolean"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "anchor": {
+                                                                            "type": "string",
+                                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                            "description": "A field of the screen, declared on it."
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "anchor"
+                                                                        ],
+                                                                        "additionalProperties": false,
+                                                                        "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                      }
                                                                     ]
                                                                   },
-                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                                 }
                                                               },
                                                               "required": [
@@ -4128,7 +4600,7 @@
                                                           "type": {
                                                             "type": "string",
                                                             "const": "clear",
-                                                            "description": "The effect: an anchor stops showing its code."
+                                                            "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                           },
                                                           "params": {
                                                             "type": "object",
@@ -4136,7 +4608,7 @@
                                                               "anchor": {
                                                                 "type": "string",
                                                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                                "description": "The anchor that shows no code any more."
+                                                                "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                               }
                                                             },
                                                             "required": [
@@ -4151,7 +4623,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "The anchor shows no code until one is shown again."
+                                                        "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                       },
                                                       {
                                                         "type": "object",
@@ -4175,14 +4647,33 @@
                                                                   "type": "string"
                                                                 },
                                                                 "additionalProperties": {
-                                                                  "description": "A string, a number or a boolean.",
-                                                                  "type": [
-                                                                    "string",
-                                                                    "number",
-                                                                    "boolean"
+                                                                  "anyOf": [
+                                                                    {
+                                                                      "description": "A string, a number or a boolean.",
+                                                                      "type": [
+                                                                        "string",
+                                                                        "number",
+                                                                        "boolean"
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "anchor": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "A field of the screen, declared on it."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "anchor"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                               }
                                                             },
                                                             "required": [
@@ -4281,7 +4772,7 @@
                                                             "type": {
                                                               "type": "string",
                                                               "const": "clear",
-                                                              "description": "The effect: an anchor stops showing its code."
+                                                              "description": "The effect: a field is emptied, or an anchor stops showing its code."
                                                             },
                                                             "params": {
                                                               "type": "object",
@@ -4289,7 +4780,7 @@
                                                                 "anchor": {
                                                                   "type": "string",
                                                                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                                                  "description": "The anchor that shows no code any more."
+                                                                  "description": "The field to empty, or the anchor that carries codes and shows none any more."
                                                                 }
                                                               },
                                                               "required": [
@@ -4304,7 +4795,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "The anchor shows no code until one is shown again."
+                                                          "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
                                                         },
                                                         {
                                                           "type": "object",
@@ -4328,14 +4819,33 @@
                                                                     "type": "string"
                                                                   },
                                                                   "additionalProperties": {
-                                                                    "description": "A string, a number or a boolean.",
-                                                                    "type": [
-                                                                      "string",
-                                                                      "number",
-                                                                      "boolean"
+                                                                    "anyOf": [
+                                                                      {
+                                                                        "description": "A string, a number or a boolean.",
+                                                                        "type": [
+                                                                          "string",
+                                                                          "number",
+                                                                          "boolean"
+                                                                        ]
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "anchor": {
+                                                                            "type": "string",
+                                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                            "description": "A field of the screen, declared on it."
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "anchor"
+                                                                        ],
+                                                                        "additionalProperties": false,
+                                                                        "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                      }
                                                                     ]
                                                                   },
-                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id)."
+                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
                                                                 }
                                                               },
                                                               "required": [
@@ -4676,11 +5186,26 @@
                               ],
                               "additionalProperties": false,
                               "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "search": {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                  "description": "The name of a search parameter every route of the screen declares."
+                                }
+                              },
+                              "required": [
+                                "search"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                             }
                           ],
-                          "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                          "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                         },
-                        "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                        "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                       }
                     },
                     "required": [
@@ -4703,9 +5228,24 @@
                     ],
                     "additionalProperties": false,
                     "description": "The anchor navigates to a route."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "search": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                        "description": "The name of a search parameter every route of the screen declares."
+                      }
+                    },
+                    "required": [
+                      "search"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                   }
                 ],
-                "description": "What the anchor is bound to: a model field, an action or a route."
+                "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
               },
               {
                 "minItems": 1,
@@ -4764,11 +5304,26 @@
                                 ],
                                 "additionalProperties": false,
                                 "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "search": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "The name of a search parameter every route of the screen declares."
+                                  }
+                                },
+                                "required": [
+                                  "search"
+                                ],
+                                "additionalProperties": false,
+                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
                               }
                             ],
-                            "description": "An anchor (the control whose value it takes) or a constant `{ \"value\": ... }`."
+                            "description": "An anchor (the control whose value it takes), a constant `{ \"value\": ... }`, or a search parameter of the screen's route `{ \"search\": \"<name>\" }`."
                           },
-                          "description": "Per parameter of the action, the anchor whose value it takes or a constant."
+                          "description": "Per parameter of the action, the anchor whose value it takes, a constant, or a search parameter of the route."
                         }
                       },
                       "required": [
@@ -4791,9 +5346,24 @@
                       ],
                       "additionalProperties": false,
                       "description": "The anchor navigates to a route."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "search": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]*$",
+                          "description": "The name of a search parameter every route of the screen declares."
+                        }
+                      },
+                      "required": [
+                        "search"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
                     }
                   ],
-                  "description": "What the anchor is bound to: a model field, an action or a route."
+                  "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
                 },
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
@@ -4884,6 +5454,11 @@
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
+          },
+          "secret": {
+            "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",
+            "type": "boolean",
+            "const": true
           }
         },
         "required": [
@@ -4959,6 +5534,96 @@
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                   "description": "A role of the vocabulary."
+                }
+              },
+              "mail": {
+                "description": "The mail the action sends, when it sends one.",
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email."
+                  },
+                  "language": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                  },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "screen": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                        "description": "The screen the link opens, at the path of its route."
+                      },
+                      "search": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-zA-Z0-9]*$",
+                        "description": "The search parameter of that screen's route the link carries its token in."
+                      }
+                    },
+                    "required": [
+                      "screen",
+                      "search"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Where the mail's link leads."
+                  }
+                },
+                "required": [
+                  "to",
+                  "language",
+                  "link"
+                ],
+                "additionalProperties": false
+              },
+              "notices": {
+                "description": "The notices the action sends, when it sends any: mails that only tell, with no token, each by its name.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "The name of the notice, unique within the action: `password-changed`; a scenario names it `[notice:<action>.<name>]`."
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$",
+                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                    },
+                    "language": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-zA-Z0-9]*$",
+                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                    },
+                    "link": {
+                      "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
+                      "type": "object",
+                      "properties": {
+                        "screen": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                          "description": "The screen the link opens, at a route that needs no parameter: the link carries no token and no search."
+                        }
+                      },
+                      "required": [
+                        "screen"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "to",
+                    "language"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A notice the action sends: a mail that only tells, with no token."
                 }
               }
             },

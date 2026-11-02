@@ -9,18 +9,72 @@ import es from '../../i18n/user.es.json'
 import { SignInView, type SignInViewProps } from './sign-in.view'
 
 function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 'en') {
-  const handlers = { onSubmit: vi.fn(() => Promise.resolve(true)), onToggleMode: vi.fn() }
+  const handlers = {
+    onSubmit: vi.fn(() => Promise.resolve(true)),
+    onToggleMode: vi.fn(),
+    onTypePassword: vi.fn(),
+    onResend: vi.fn((_email: string) => Promise.resolve(true)),
+  }
 
-  renderWithProviders(<SignInView mode="sign-in" submitting={false} {...handlers} {...props} />, {
-    locale,
-    es,
-  })
+  renderWithProviders(
+    <SignInView mode="sign-in" showResend={false} can={() => true} {...handlers} {...props} />,
+    { locale, es },
+  )
 
   return handlers
 }
 
 const type = (testId: string, value: string) =>
   fireEvent.change(screen.getByTestId(testId), { target: { value } })
+
+/** The code the form's error keeps while the password typed again differs. */
+const PASSWORDS_DIFFER = 'sign-in:PASSWORDS_DIFFER'
+
+const input = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
+
+const LENGTH = 'user.sign-in.password-rule-list.length-item'
+const CHARACTERS = 'user.sign-in.password-rule-list.characters-item'
+const DIGIT = 'user.sign-in.password-rule-list.digit-item'
+const UPPERCASE = 'user.sign-in.password-rule-list.uppercase-item'
+const LOWERCASE = 'user.sign-in.password-rule-list.lowercase-item'
+const SYMBOL = 'user.sign-in.password-rule-list.symbol-item'
+
+/** The items of the list of rules, in the order it shows them. */
+const RULE_ITEMS = [LENGTH, CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL]
+
+/** The items of the list of rules marked `met`, in order; every other item carries no state. */
+function markedMet(): string[] {
+  const items = RULE_ITEMS.map((testId) => screen.getByTestId(testId))
+
+  expect(items.map((item) => item.getAttribute('data-state'))).toEqual(
+    items.map((item) => (item.getAttribute('data-state') === 'met' ? 'met' : null)),
+  )
+
+  return RULE_ITEMS.filter((testId) => screen.getByTestId(testId).getAttribute('data-state'))
+}
+
+/** The text tones a rule item can take: muted, the success tone, or red. */
+const TONES = ['text-muted-foreground', 'text-success', 'text-destructive']
+
+/**
+ * The tones that apply to a rule item in the state it carries, the one that shows last: its plain
+ * classes, then its variants of that state. Tailwind's `data-[state=…]:` rule also selects the
+ * attribute and comes after the plain utilities, so it wins while it applies.
+ */
+function tonesOf(testId: string): string[] {
+  const item = screen.getByTestId(testId)
+  const state = item.getAttribute('data-state')
+  const classes = [...item.classList]
+  const variant = state ? `data-[state=${state}]:` : undefined
+  const applied = [
+    ...classes.filter((name) => !name.startsWith('data-[')),
+    ...classes.flatMap((name) =>
+      variant && name.startsWith(variant) ? [name.slice(variant.length)] : [],
+    ),
+  ]
+
+  return applied.filter((name) => TONES.includes(name))
+}
 
 /** The notice of the last session, once it carries `code`. */
 function noticeWith(code: string): HTMLElement {
@@ -36,7 +90,9 @@ describe('SignInView', () => {
     const { onSubmit, onToggleMode } = renderView()
 
     expect(screen.getByTestId('user.sign-in.form').tagName).toBe('FORM')
+    expect(screen.queryByTestId('user.sign-in.password-confirmation-input')).toBeNull()
     expect(screen.queryByTestId('user.sign-in.name-input')).toBeNull()
+    expect(input('user.sign-in.password-input').autocomplete).toBe('current-password')
     expect(screen.getByTestId('user.sign-in.toggle-button').getAttribute('data-value')).toBe(
       'sign-up',
     )
@@ -54,19 +110,25 @@ describe('SignInView', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       email: 'ann@example.test',
       password: 'secret-ann',
+      confirmation: '',
       name: '',
     })
 
     fireEvent.click(screen.getByTestId('user.sign-in.toggle-button'))
 
-    expect(onToggleMode).toHaveBeenCalledOnce()
+    // The switch carries the passwords as typed, for the flow to judge on the way into sign-up.
+    expect(onToggleMode).toHaveBeenCalledExactlyOnceWith({
+      password: 'secret-ann',
+      confirmation: '',
+    })
   })
 
-  it('also asks for a name to create an account', () => {
+  it('also asks for the password again and a name to create an account', () => {
     const { onSubmit } = renderView({ mode: 'sign-up' })
 
     type('user.sign-in.email-input', 'ann@example.test')
-    type('user.sign-in.password-input', 'secret-ann')
+    type('user.sign-in.password-input', 'Secret-ann1')
+    type('user.sign-in.password-confirmation-input', 'Secret-ann1')
     type('user.sign-in.name-input', 'Ann')
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
 
@@ -81,9 +143,205 @@ describe('SignInView', () => {
     )
     expect(onSubmit).toHaveBeenCalledWith({
       email: 'ann@example.test',
-      password: 'secret-ann',
+      password: 'Secret-ann1',
+      confirmation: 'Secret-ann1',
       name: 'Ann',
     })
+  })
+
+  it('asks for the password again to create an account, both as a new password', () => {
+    renderView({ mode: 'sign-up' })
+
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(confirmation.type).toBe('password')
+    expect(confirmation.autocomplete).toBe('new-password')
+    expect(confirmation.labels?.[0]?.textContent).toBe(en['user.sign-in.password-confirmation'])
+    expect(input('user.sign-in.password-input').autocomplete).toBe('new-password')
+  })
+
+  it('tells each keystroke in either password while creating an account, with both as typed', () => {
+    const { onTypePassword } = renderView({ mode: 'sign-up' })
+
+    type('user.sign-in.password-input', 'secret-ann')
+    type('user.sign-in.password-confirmation-input', 's')
+    type('user.sign-in.password-confirmation-input', 'se')
+    type('user.sign-in.password-input', 'secret-anx')
+
+    expect(onTypePassword.mock.calls).toEqual([
+      ['password', { password: 'secret-ann', confirmation: '' }],
+      ['confirmation', { password: 'secret-ann', confirmation: 's' }],
+      ['confirmation', { password: 'secret-ann', confirmation: 'se' }],
+      ['password', { password: 'secret-anx', confirmation: 'se' }],
+    ])
+  })
+
+  it('lists the rules of a new password under the password while creating an account only', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.password-rule-list')).toBeNull()
+    expect(input('user.sign-in.password-input').getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('lists the rules under the password, describing it, none of them met with nothing typed', () => {
+    renderView({ mode: 'sign-up' })
+
+    const list = screen.getByTestId('user.sign-in.password-rule-list')
+    const password = input('user.sign-in.password-input')
+
+    expect(list.tagName).toBe('UL')
+    expect(
+      [...list.children].map((item) => [item.getAttribute('data-testid'), item.tagName]),
+    ).toEqual(RULE_ITEMS.map((testId) => [testId, 'LI']))
+    expect(markedMet()).toEqual([])
+    // Under the password: in its own field, after the input, and naming it as its description.
+    expect(password.closest('[data-slot="field"]')?.contains(list)).toBe(true)
+    expect(password.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.getElementById(password.getAttribute('aria-describedby') ?? '')).toBe(list)
+  })
+
+  it('marks the rules the password keeps as it is typed', () => {
+    renderView({ mode: 'sign-up' })
+
+    type('user.sign-in.password-input', 'abcdefghij')
+    expect(markedMet()).toEqual([LENGTH, CHARACTERS, LOWERCASE])
+
+    type('user.sign-in.password-input', 'Abcdefghij1!')
+    expect(markedMet()).toEqual(RULE_ITEMS)
+
+    type('user.sign-in.password-input', 'Abcdefg hij1!')
+    expect(markedMet()).toEqual([LENGTH, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
+
+    type('user.sign-in.password-input', 'Abcdefghij1!Abcdefghij1!Abcdefghij1!')
+    expect(markedMet()).toEqual([CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
+  })
+
+  it('shows a kept rule in the success tone and one not kept yet muted, never red', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    expect(tonesOf(LENGTH)).toEqual(['text-muted-foreground', 'text-success'])
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground'])
+
+    type('user.sign-in.password-input', 'abcdefghij!')
+
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground', 'text-success'])
+  })
+
+  it('reads each rule with whether it is met, the icons left out', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    expect(screen.getByTestId(LENGTH).textContent).toBe(
+      `${en['user.sign-in.password-rule.length']}${en['user.sign-in.password-rule.met']}`,
+    )
+    expect(screen.getByTestId(SYMBOL).textContent).toBe(
+      `${en['user.sign-in.password-rule.symbol']}${en['user.sign-in.password-rule.not-met']}`,
+    )
+    expect(
+      screen
+        .getByTestId('user.sign-in.password-rule-list')
+        .querySelectorAll('svg:not([aria-hidden="true"])'),
+    ).toHaveLength(0)
+  })
+
+  it('lists the rules in Spanish', () => {
+    renderView({ mode: 'sign-up' }, 'es')
+
+    expect(RULE_ITEMS.map((testId) => screen.getByTestId(testId).textContent)).toEqual(
+      [
+        es['user.sign-in.password-rule.length'],
+        es['user.sign-in.password-rule.characters'],
+        es['user.sign-in.password-rule.digit'],
+        es['user.sign-in.password-rule.uppercase'],
+        es['user.sign-in.password-rule.lowercase'],
+        es['user.sign-in.password-rule.symbol'],
+      ].map((text) => `${text}${es['user.sign-in.password-rule.not-met']}`),
+    )
+  })
+
+  it('tells no keystroke in the password while signing in', () => {
+    const { onTypePassword } = renderView()
+
+    type('user.sign-in.password-input', 'secret-ann')
+
+    expect(onTypePassword).not.toHaveBeenCalled()
+  })
+
+  it('says the passwords differ under the password typed again, marking it invalid, and holds the submit', () => {
+    renderView({
+      mode: 'sign-up',
+      error: PASSWORDS_DIFFER,
+      can: (control) => control !== 'user.sign-in.submit-button',
+    })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(error.getAttribute('data-code')).toBe('passwords-differ')
+    expect(error.textContent).toBe(en['user.sign-in.error.passwords-differ'])
+    expect(confirmation.getAttribute('aria-invalid')).toBe('true')
+    expect(input('user.sign-in.password-input').getAttribute('aria-invalid')).toBeNull()
+    // Under it: in the confirmation's own field, after the input.
+    expect(confirmation.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(
+      confirmation.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(input('user.sign-in.submit-button').disabled).toBe(true)
+  })
+
+  it('describes the password typed again by its error exactly while the passwords differ', () => {
+    const props: SignInViewProps = {
+      mode: 'sign-up',
+      showResend: false,
+      can: () => true,
+      onSubmit: () => Promise.resolve(true),
+      onToggleMode: () => {},
+      onTypePassword: () => {},
+      onResend: () => Promise.resolve(true),
+    }
+    const describedBy = () =>
+      input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
+    const { rerender } = renderWithProviders(<SignInView {...props} error={PASSWORDS_DIFFER} />)
+
+    expect(describedBy()).not.toBeNull()
+    expect(document.getElementById(describedBy() ?? '')).toBe(
+      screen.getByTestId('user.sign-in.error'),
+    )
+
+    rerender(<SignInView {...props} error={undefined} />)
+
+    expect(describedBy()).toBeNull()
+
+    rerender(<SignInView {...props} error="data:SIGN_UP_REJECTED" />)
+
+    expect(describedBy()).toBeNull()
+  })
+
+  it('says it in Spanish', () => {
+    renderView({ mode: 'sign-up', error: PASSWORDS_DIFFER }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      es['user.sign-in.error.passwords-differ'],
+    )
+    expect(input('user.sign-in.password-confirmation-input').labels?.[0]?.textContent).toBe(
+      es['user.sign-in.password-confirmation'],
+    )
+  })
+
+  it('shows any other reason above the fields, marking none of them invalid', () => {
+    renderView({ mode: 'sign-up', error: 'data:SIGN_UP_REJECTED' })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const confirmation = input('user.sign-in.password-confirmation-input')
+
+    expect(error.getAttribute('data-code')).toBe('sign-up-rejected')
+    expect(confirmation.getAttribute('aria-invalid')).toBeNull()
+    expect(confirmation.closest('[data-slot="field"]')?.contains(error)).toBe(false)
+    expect(
+      error.compareDocumentPosition(input('user.sign-in.email-input')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('explains why the last attempt failed', () => {
@@ -113,6 +371,74 @@ describe('SignInView', () => {
     expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
       'Another account is signed in on this browser. Sign it out first.',
     )
+  })
+
+  it('says the email is not verified yet when a sign-in was refused for it', () => {
+    renderView({ error: 'data:EMAIL_NOT_VERIFIED' })
+
+    expect(screen.getByTestId('user.sign-in.error').getAttribute('data-code')).toBe(
+      'email-not-verified',
+    )
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      en['user.sign-in.error.email-not-verified'],
+    )
+  })
+
+  it('asks to open the link of the mail sent to the address it went to, whatever the field holds', () => {
+    renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' })
+    type('user.sign-in.email-input', 'bob@example.test')
+
+    const message = screen.getByTestId('user.sign-in.mail-message')
+
+    expect(message.getAttribute('data-code')).toBe('check-your-mail')
+    expect(message.textContent).toBe(
+      en['user.sign-in.mail.check-your-mail'].replace('{email}', 'ann@example.test'),
+    )
+  })
+
+  it('asks it in Spanish', () => {
+    renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.mail-message').textContent).toBe(
+      es['user.sign-in.mail.check-your-mail'].replace('{email}', 'ann@example.test'),
+    )
+  })
+
+  it('shows no mail message and no resend unless told', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.mail-message')).toBeNull()
+    expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+  })
+
+  it('offers to send the mail again to the email typed', () => {
+    const { onResend, onSubmit } = renderView({ showResend: true })
+
+    type('user.sign-in.email-input', 'ann@example.test')
+
+    const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
+
+    expect(resend.textContent).toBe(en['user.sign-in.resend'])
+    expect(resend.disabled).toBe(false)
+
+    fireEvent.click(resend)
+
+    expect(onResend).toHaveBeenCalledWith('ann@example.test')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('holds the resend while it cannot run', () => {
+    const { onResend } = renderView({
+      showResend: true,
+      can: (control) => control !== 'user.sign-in.resend-button',
+    })
+    const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
+
+    expect(resend.disabled).toBe(true)
+
+    fireEvent.click(resend)
+
+    expect(onResend).not.toHaveBeenCalled()
   })
 
   it('says nothing about how the last session ended unless the session left a notice', () => {
@@ -161,8 +487,8 @@ describe('SignInView', () => {
     )
   })
 
-  it('holds the form while an attempt is running', () => {
-    renderView({ submitting: true })
+  it('holds the submit while the flow does not take it', () => {
+    renderView({ can: (control) => control !== 'user.sign-in.submit-button' })
 
     expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
       true,

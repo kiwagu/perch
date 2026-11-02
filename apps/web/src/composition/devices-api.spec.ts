@@ -30,17 +30,12 @@ const listed = {
   ],
 }
 
-/** The client over `fetcher`, with the access token `token()` and the device `device-1`. */
+/** The client over `fetcher`, with the session token `token()` and the device `device-1`. */
 function api(
   fetcher: ReturnType<typeof fakeFetch>['fetcher'],
-  token: () => string | undefined = () => 'access-1',
+  token: () => string | undefined = () => 'token-1',
 ) {
-  return devicesApi('/backend', {
-    token,
-    device: () => 'device-1',
-    renew: () => Promise.resolve(false),
-    fetcher,
-  })
+  return devicesApi('/backend', { token, device: () => 'device-1', fetcher })
 }
 
 describe('devicesApi', () => {
@@ -68,49 +63,23 @@ describe('devicesApi', () => {
       {
         url: '/backend/devices',
         method: 'GET',
-        authorization: 'Bearer access-1',
+        authorization: 'Bearer token-1',
         device: 'device-1',
         body: undefined,
       },
     ])
   })
 
-  it('on 401 renews once through renew() and reads again with the new token', async () => {
+  it('on 401 gives up with data:AUTH_FAILED without a second request: the token is dead', async () => {
     const { fetcher, sent } = fakeFetch(
       respond(401, { code: 'unauthorized' }),
       respond(200, listed),
     )
-    let token = 'old'
-    let renewals = 0
-    const devices = devicesApi('/backend', {
-      token: () => token,
-      device: () => 'device-1',
-      renew: () => {
-        renewals += 1
-        token = 'new'
+    const refused = (await api(fetcher).list())._unsafeUnwrapErr()
 
-        return Promise.resolve(true)
-      },
-      fetcher,
-    })
-
-    expect((await devices.list())._unsafeUnwrap()).toHaveLength(2)
-    expect(renewals).toBe(1)
-    expect(sent.map((request) => request.authorization)).toEqual(['Bearer old', 'Bearer new'])
-    expect(sent.map((request) => request.device)).toEqual(['device-1', 'device-1'])
-  })
-
-  it('on 401 after a renew gives up with data:AUTH_FAILED', async () => {
-    const { fetcher, sent } = fakeFetch(respond(401, { code: 'unauthorized' }))
-    const devices = devicesApi('/backend', {
-      token: () => 'access-1',
-      device: () => 'device-1',
-      renew: () => Promise.resolve(true),
-      fetcher,
-    })
-
-    expect((await devices.list())._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
-    expect(sent).toHaveLength(2)
+    expect(refused.code).toBe('data:AUTH_FAILED')
+    expect(refused.message).toBe('the gateway refused the session token')
+    expect(sent).toHaveLength(1)
   })
 
   it('refuses a list that does not follow the schema, naming the status only', async () => {
@@ -131,7 +100,7 @@ describe('devicesApi', () => {
       {
         url: `/backend/devices/${phone}`,
         method: 'DELETE',
-        authorization: 'Bearer access-1',
+        authorization: 'Bearer token-1',
         device: 'device-1',
         body: undefined,
       },
@@ -154,7 +123,7 @@ describe('devicesApi', () => {
       {
         url: '/backend/auth/sign-out-everywhere',
         method: 'POST',
-        authorization: 'Bearer access-1',
+        authorization: 'Bearer token-1',
         device: 'device-1',
         body: undefined,
       },

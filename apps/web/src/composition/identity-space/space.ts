@@ -63,11 +63,6 @@ export interface IdentitySpace {
   /** The tab's visibility: the leader's cadence follows it; a follower coming to the front tells the leader. */
   visibility(state: Visibility): void
   /**
-   * Has the leading tab's engine ask the gateway for new keys over its channel. Nothing happens
-   * while another tab leads, or while the channel is down: the hello that brings it up renews.
-   */
-  renewSync(): void
-  /**
    * Has the leading tab's engine sign the device out (`SyncEngine.signOut`); `offline` when this
    * tab runs no engine. A change of memberships meanwhile replaces that engine, which ends the
    * sign-out `offline`.
@@ -208,10 +203,6 @@ export class Space implements IdentitySpace {
 
   visibility(state: Visibility): void {
     this.#leading.visibility(state)
-  }
-
-  renewSync(): void {
-    this.#leading.current?.renew()
   }
 
   /**

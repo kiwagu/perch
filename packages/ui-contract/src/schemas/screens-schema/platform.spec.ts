@@ -26,3 +26,80 @@ describe('platformSchema events', () => {
     }
   })
 })
+
+const ACTION = {
+  description: 'Sends a link.',
+  params: { email: { type: 'string', description: 'The address.' } },
+  result: 'a mail is on its way',
+  codes: ['failed'],
+}
+
+describe('platformSchema mail', () => {
+  it('accepts a mail to a parameter or the account, in a parameter or the account, linking to a screen', () => {
+    for (const mail of [
+      { to: 'email', language: 'locale', link: { screen: 'user.verify-email', search: 'token' } },
+      {
+        to: 'account',
+        language: 'account',
+        link: { screen: 'user.reset-password', search: 'token' },
+      },
+    ]) {
+      expect(
+        platformSchema.safeParse({ ...PLATFORM, actions: { send: { ...ACTION, mail } } }).success,
+      ).toBe(true)
+    }
+  })
+  it('refuses a mail without a link, or with a key of its own', () => {
+    for (const mail of [
+      { to: 'email', language: 'account' },
+      { to: 'email', language: 'account', link: { screen: 'user.verify-email' } },
+      {
+        to: 'email',
+        language: 'account',
+        link: { screen: 'user.verify-email', search: 'token' },
+        subject: 'x',
+      },
+    ]) {
+      expect(
+        platformSchema.safeParse({ ...PLATFORM, actions: { send: { ...ACTION, mail } } }).success,
+      ).toBe(false)
+    }
+  })
+})
+
+describe('platformSchema notices', () => {
+  const sending = (notices: unknown) =>
+    platformSchema.safeParse({ ...PLATFORM, actions: { send: { ...ACTION, notices } } }).success
+
+  it('accepts notices to a parameter or the account, with a plain link or none', () => {
+    expect(
+      sending([
+        { name: 'password-changed', to: 'account', language: 'account' },
+        {
+          name: 'email-changed',
+          to: 'email',
+          language: 'locale',
+          link: { screen: 'user.reset-password' },
+        },
+      ]),
+    ).toBe(true)
+  })
+  it('refuses a link with a search, a key of its own, a name out of kebab-case or no notice', () => {
+    for (const notices of [
+      [
+        {
+          name: 'password-changed',
+          to: 'account',
+          language: 'account',
+          link: { screen: 'user.reset-password', search: 'token' },
+        },
+      ],
+      [{ name: 'password-changed', to: 'account', language: 'account', subject: 'x' }],
+      [{ name: 'passwordChanged', to: 'account', language: 'account' }],
+      [{ to: 'account', language: 'account' }],
+      [],
+    ]) {
+      expect(sending(notices), JSON.stringify(notices)).toBe(false)
+    }
+  })
+})

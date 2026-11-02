@@ -199,7 +199,7 @@ describe('SpaceDeletion', () => {
     const { storage, deletion } = harness()
     let destroyed = false
 
-    saveDevice(storage, { identity: ann, tokens: { access: 'a', refresh: 'r' }, memberships: [] })
+    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
 
     const answer = await deletion.destroy({
       identity: ann,
@@ -220,7 +220,7 @@ describe('SpaceDeletion', () => {
   it('keeps listed an identity whose delete it skipped for a sign-in whose open then failed', async () => {
     const { storage, deletion } = harness()
 
-    saveDevice(storage, { identity: ann, tokens: { access: 'a', refresh: 'r' }, memberships: [] })
+    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
 
     expect((await deletion.deleteUnopened(ann.id))._unsafeUnwrap()).toBe('in-use')
 
@@ -290,7 +290,7 @@ describe('SpaceDeletion', () => {
     addLeftoverIdentity(storage, ann.id)
     addLeftoverIdentity(storage, bob.id)
     inventory(ann.id).add(['acme', 'globex'])
-    saveDevice(storage, { identity: bob, tokens: { access: 'a', refresh: 'r' }, memberships: [] })
+    saveDevice(storage, { identity: bob, token: 't', memberships: [] })
 
     await deletion.deleteLeftovers()
 

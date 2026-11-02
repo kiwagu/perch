@@ -1,32 +1,29 @@
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { deviceIdFrom } from './device'
 import type { KeyValueStorage } from './key-value'
 
 /**
- * The pairs of the sign-outs the gateway did not confirm (offline, or giving unsent changes up),
- * each with the device it signs out: their grants still live at the gateway until each is sent to
- * be revoked. One list for every account signed out on this browser, oldest first; it outlives
- * the keys.
+ * The session tokens of the sign-outs the gateway did not confirm (offline, or giving unsent
+ * changes up), each with the device it signs out: their sessions still live at the gateway until
+ * each is sent to be signed out. One list for every account signed out on this browser, oldest
+ * first; it outlives the token kept for the signed-in device.
  */
 const PENDING_REVOKE_KEY = 'perch.session.pending-revoke'
 
-/** How many pairs wait at most: one more drops the oldest. */
+/** How many tokens wait at most: one more drops the oldest. */
 export const PENDING_REVOKE_LIMIT = 8
 
-const keyPair = z.object({ access: z.string().min(1), refresh: z.string().min(1) })
+const pendingToken = z.object({ token: z.string().min(1), device: deviceId })
 
-const pendingPair = keyPair.extend({ device: deviceId })
-
-/** A pair left to revoke, and the device its sign-out named. */
-export type PendingPair = z.infer<typeof pendingPair>
+/** A session token left to sign out, and the device its sign-out named. */
+export type PendingToken = z.infer<typeof pendingToken>
 
 /**
- * The pairs left to revoke, oldest first. An entry that does not describe one is skipped; a
- * single pair kept on its own, as before the list, is read as a list of one from this device.
+ * The tokens left to sign out, oldest first. An entry that does not describe one is skipped, the
+ * key pairs an older build kept among them: the gateway no longer knows them.
  */
-export function pendingRevokes(storage: KeyValueStorage): readonly PendingPair[] {
+export function pendingRevokes(storage: KeyValueStorage): readonly PendingToken[] {
   const text = storage.get(PENDING_REVOKE_KEY)
 
   if (text === undefined) {
@@ -34,49 +31,44 @@ export function pendingRevokes(storage: KeyValueStorage): readonly PendingPair[]
   }
 
   try {
-    const value = JSON.parse(text) as unknown
-    const entries = z.array(z.unknown()).safeParse(value)
+    const entries = z.array(z.unknown()).safeParse(JSON.parse(text) as unknown)
 
-    if (entries.success) {
-      return entries.data.flatMap((entry) => {
-        const parsed = pendingPair.safeParse(entry)
+    return entries.success
+      ? entries.data.flatMap((entry) => {
+          const parsed = pendingToken.safeParse(entry)
 
-        return parsed.success ? [parsed.data] : []
-      })
-    }
-
-    const alone = keyPair.safeParse(value)
-
-    return alone.success ? [{ ...alone.data, device: deviceIdFrom(storage) }] : []
+          return parsed.success ? [parsed.data] : []
+        })
+      : []
   } catch {
     return []
   }
 }
 
-function savePendingRevokes(storage: KeyValueStorage, pairs: readonly PendingPair[]): void {
-  if (pairs.length === 0) {
+function savePendingRevokes(storage: KeyValueStorage, tokens: readonly PendingToken[]): void {
+  if (tokens.length === 0) {
     storage.remove(PENDING_REVOKE_KEY)
   } else {
-    storage.set(PENDING_REVOKE_KEY, JSON.stringify(pairs))
+    storage.set(PENDING_REVOKE_KEY, JSON.stringify(tokens))
   }
 }
 
 /**
- * Keeps a pair to revoke after those kept before (a pair kept already stays where it is), read
- * and written at once so a pair another tab kept meanwhile stays too. Answers the oldest pairs it
- * dropped to keep at most `PENDING_REVOKE_LIMIT`.
+ * Keeps a token to sign out after those kept before (a token kept already stays where it is),
+ * read and written at once so a token another tab kept meanwhile stays too. Answers the oldest
+ * tokens it dropped to keep at most `PENDING_REVOKE_LIMIT`.
  */
 export function addPendingRevoke(
   storage: KeyValueStorage,
-  pair: PendingPair,
-): readonly PendingPair[] {
+  left: PendingToken,
+): readonly PendingToken[] {
   const kept = pendingRevokes(storage)
 
-  if (kept.some((each) => each.refresh === pair.refresh)) {
+  if (kept.some((each) => each.token === left.token)) {
     return []
   }
 
-  const next = [...kept, pair]
+  const next = [...kept, left]
   const dropped = next.slice(0, Math.max(0, next.length - PENDING_REVOKE_LIMIT))
 
   savePendingRevokes(storage, next.slice(dropped.length))
@@ -84,10 +76,10 @@ export function addPendingRevoke(
   return dropped
 }
 
-/** Forgets the pair whose refresh key is `refresh`; the others stay, those another tab kept included. */
-export function forgetPendingRevoke(storage: KeyValueStorage, refresh: string): void {
+/** Forgets the entry of `token`; the others stay, those another tab kept included. */
+export function forgetPendingRevoke(storage: KeyValueStorage, token: string): void {
   savePendingRevokes(
     storage,
-    pendingRevokes(storage).filter((pair) => pair.refresh !== refresh),
+    pendingRevokes(storage).filter((left) => left.token !== token),
   )
 }

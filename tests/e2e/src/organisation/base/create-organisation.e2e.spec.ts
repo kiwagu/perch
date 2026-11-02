@@ -13,7 +13,7 @@ test.describe('Create the first organisation', { tag: '@smoke' }, () => {
     }
 
     const account =
-      await test.step('1. Sign up, open [/org] and wait for [organisation.page.status] to reach [state:empty]', async () => {
+      await test.step('1. Sign up, open the link of [mail:sign-up], open [/org] and wait for [organisation.page.status] to reach [state:empty]', async () => {
         const signedUp = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()

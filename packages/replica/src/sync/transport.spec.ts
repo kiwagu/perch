@@ -48,7 +48,7 @@ class FakeSocket extends EventTarget {
   }
 }
 
-const keys: DeviceCredentials = { access: 'access-key', refresh: 'refresh-key' }
+const keys: DeviceCredentials = { token: 'session-token' }
 
 const welcome: ServerMessage = {
   type: 'welcome',
@@ -67,17 +67,11 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
   const clock = manualClock()
   const sockets: FakeSocket[] = []
   const events: string[] = []
-  let renewalsRefused = 0
   const received: ServerMessage[] = []
-  const tokens: Array<{ readonly access: string; readonly refresh: string }> = []
   const memberships: Array<readonly Membership[]> = []
   const transport = new WebSocketTransport({
     url: 'wss://gateway.example.test/sync',
     credentials,
-    onTokens: (pair) => tokens.push(pair),
-    onRenewalRefused: () => {
-      renewalsRefused += 1
-    },
     onMemberships: (list) => memberships.push(list),
     onEnded: (reason) => events.push(`ended: ${reason}`),
     clock,
@@ -118,17 +112,15 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     sockets,
     events,
     received,
-    tokens,
     memberships,
     transport,
     socket,
     connect,
-    renewalsRefused: () => renewalsRefused,
   }
 }
 
 describe('WebSocket transport', () => {
-  it('says hello with the stored keys and the device when the socket opens', () => {
+  it('says hello with the stored token and the device when the socket opens', () => {
     const { transport, socket } = harness()
 
     transport.start()
@@ -142,21 +134,20 @@ describe('WebSocket transport', () => {
       {
         type: 'hello',
         protocol: PROTOCOL_VERSION,
-        access: 'access-key',
-        refresh: 'refresh-key',
+        token: 'session-token',
         device: 'device-1',
       },
     ])
   })
 
   it('says hello with the current protocol', () => {
-    const { transport, socket } = harness(() => ({ access: 'access-key' }))
+    const { transport, socket } = harness(() => ({ token: 'other-token' }))
 
     transport.start()
     socket().open()
 
     expect(socket().sent).toEqual([
-      { type: 'hello', protocol: PROTOCOL_VERSION, access: 'access-key', device: 'device-1' },
+      { type: 'hello', protocol: PROTOCOL_VERSION, token: 'other-token', device: 'device-1' },
     ])
   })
 
@@ -205,26 +196,6 @@ describe('WebSocket transport', () => {
 
     expect(sockets.length).toBe(9)
     expect(events).toEqual(['up', 'down'])
-  })
-
-  it('hands renewed keys to onTokens', () => {
-    const { connect, tokens } = harness()
-
-    connect().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
-
-    expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
-  })
-
-  it('tells onRenewalRefused of a renewal the gateway refused, and keeps the channel up', () => {
-    const { connect, events, renewalsRefused } = harness()
-    const socket = connect()
-
-    socket.receive({ type: 'error', code: 'rate-limited', message: 'too many renewals' })
-    socket.receive({ type: 'error', code: 'internal', message: 'failed' })
-
-    expect(renewalsRefused()).toBe(1)
-    expect(events).toEqual(['up'])
-    expect(socket.closedWith).toBeUndefined()
   })
 
   it("hands the welcome's memberships and a later memberships message to onMemberships", () => {
@@ -311,7 +282,7 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
-  it('ends as unauthorized when it holds no keys to say hello with', async () => {
+  it('ends as unauthorized when it holds no token to say hello with', async () => {
     const { clock, sockets, transport, socket, events } = harness(() => undefined)
 
     transport.start()
@@ -426,14 +397,14 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(5)
   })
 
-  it('leaves a socket whose hello is under way alone on reconnect(): its hello renews the keys', async () => {
-    const { clock, sockets, transport, socket, events, tokens } = harness()
+  it('leaves a socket whose hello is under way alone on reconnect(): its hello is out', async () => {
+    const { clock, sockets, transport, socket, events } = harness()
 
     transport.start()
-    // Still opening: the hello goes once it opens, with the keys held then.
+    // Still opening: the hello goes once it opens, with the token held then.
     transport.reconnect()
     socket().open()
-    // The hello is out: closing the socket now would spend the refresh key with no pair to show.
+    // The hello is out: closing the socket now would only send another one.
     transport.reconnect()
 
     expect(sockets).toHaveLength(1)
@@ -442,17 +413,14 @@ describe('WebSocket transport', () => {
       {
         type: 'hello',
         protocol: PROTOCOL_VERSION,
-        access: 'access-key',
-        refresh: 'refresh-key',
+        token: 'session-token',
         device: 'device-1',
       },
     ])
 
-    socket().receive({ type: 'tokens', access: 'access-key-2', refresh: 'refresh-key-2' })
     socket().receive(welcome)
     await clock.advance(60_000)
 
-    expect(tokens).toEqual([{ access: 'access-key-2', refresh: 'refresh-key-2' }])
     expect(events).toEqual(['up'])
     expect(sockets).toHaveLength(1)
   })

@@ -5,13 +5,17 @@ import { Container } from '@workspace/di'
 
 import { openTestSession, type TestSession } from '../../composition/__fixtures__/session'
 import type { SessionService } from '../../composition/session'
+import { keptAccountStart, memoryStorage } from '../../composition/storage'
 import { COMMANDS } from '../../platform/commands.port'
 import { SESSION } from '../../platform/session.port'
 
-import { PROFILE_SERVICE } from './application/profile.service'
+import { ACCOUNT_START_SERVICE, AccountStartService } from './application/account-start.service'
+import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
 import { settingsCommands, settingsShape } from './application/settings/settings.model.gen'
 import { SETTINGS_SERVICE, SettingsService } from './application/settings/settings.service'
 import { SIGN_IN_SERVICE } from './application/sign-in.service'
+import { VERIFY_EMAIL_SERVICE } from './application/verify-email.service'
+import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
 import { UserModule } from './user.module'
 
 let opened: TestSession
@@ -22,18 +26,29 @@ beforeEach(async () => {
   opened = await openTestSession()
   session = opened.session
 
+  const settings = new SettingsService(opened.runner, opened.commands, {
+    shape: settingsShape,
+    commands: settingsCommands,
+  })
   const root = new Container()
     .singleton(SHAPE_RUNNER, () => opened.runner)
     .singleton(COMMANDS, () => opened.commands)
     .singleton(SESSION, () => session)
-    // The composition root provides the settings to the frame and to every module.
+    // The composition root provides the settings to the frame and to every module, and the start
+    // of a new account, which it finishes where the account's space opens again.
+    .singleton(SETTINGS_SERVICE, () => settings)
     .singleton(
-      SETTINGS_SERVICE,
+      ACCOUNT_START_SERVICE,
       () =>
-        new SettingsService(opened.runner, opened.commands, {
-          shape: settingsShape,
-          commands: settingsCommands,
-        }),
+        new AccountStartService(
+          new ProfileService(opened.runner, opened.commands, {
+            shape: profileShape,
+            commands: profileCommands,
+          }),
+          settings,
+          keptAccountStart(memoryStorage()),
+          (run) => run(),
+        ),
     )
 
   container = root.child()
@@ -48,28 +63,51 @@ afterEach(async () => {
 })
 
 describe('UserModule', () => {
-  it('provides sign-in, profile and settings services over the application ports', async () => {
-    const user = (
-      await container
-        .get(SIGN_IN_SERVICE)
-        .signUp({ email: 'ann@example.test', password: 'secret-ann', name: 'Ann', locale: 'en' })
+  it('provides sign-in, verification, profile and settings services over the application ports', async () => {
+    const email = 'ann@example.test'
+
+    expect(
+      (
+        await container
+          .get(SIGN_IN_SERVICE)
+          .signUp({ email, password: 'Secret-ann1', name: 'Ann', locale: 'es' })
+      ).isOk(),
+    ).toBe(true)
+
+    // The link of its mail signs this device in, and makes the account whole there.
+    const verified = (
+      await container.get(VERIFY_EMAIL_SERVICE).verify(opened.auth.linkFor(email))
     )._unsafeUnwrap()
+    const user = verified.kind === 'signed-in' ? verified.user : expect.unreachable('signed in')
 
     expect((await session.flush()).isOk()).toBe(true)
-
     expect(
       (await container.get(PROFILE_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ name: 'Ann' }])
+    ).toMatchObject([{ name: 'Ann', email }])
     expect(
       (await container.get(SETTINGS_SERVICE).read({ identity: user.id }))._unsafeUnwrap(),
-    ).toMatchObject([{ locale: 'en' }])
+    ).toMatchObject([{ locale: 'es' }])
   })
 
-  it('routes guests to sign-in and signed-in users to their profile', () => {
-    expect(UserModule.routes).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
-      { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
+  it('routes guests to sign-in and to the verification of their email, and signed-in users to their profile and their settings', () => {
+    expect(
+      UserModule.routes.map((route) => ({
+        path: route.path,
+        page: route.page,
+        guard: route.guard,
+        search: route.search === undefined ? undefined : Object.keys(route.search.shape),
+      })),
+    ).toEqual([
+      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: undefined },
+      { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
+      { path: '/me', page: 'ProfilePage', guard: 'authenticated', search: undefined },
+      { path: '/settings', page: 'SettingsPage', guard: 'authenticated', search: undefined },
     ])
-    expect(Object.keys(UserModule.declarations).sort()).toEqual(['ProfilePage', 'SignInPage'])
+    expect(Object.keys(UserModule.declarations).sort()).toEqual([
+      'ProfilePage',
+      'SettingsPage',
+      'SignInPage',
+      'VerifyEmailPage',
+    ])
   })
 })

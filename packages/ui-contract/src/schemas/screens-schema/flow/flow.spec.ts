@@ -115,6 +115,42 @@ describe('flowSchema', () => {
       }),
     ).toBe(false)
   })
+  it('takes a search value from the field an anchor names, and nothing else of an object', () => {
+    const navigating = (search: unknown): boolean =>
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'navigate', params: { to: '/sign-in', search } }],
+        })
+      })
+
+    expect(navigating({ email: { anchor: 'user.sign-in.email-input' }, mode: 'sign-in' })).toBe(
+      true,
+    )
+    expect(navigating({ email: { anchor: 'user.sign-in.email-input', value: 'x' } })).toBe(false)
+    expect(navigating({ email: { search: 'email' } })).toBe(false)
+    expect(navigating({ email: { anchor: 'email' } })).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: {
+          a: {
+            on: {
+              'user.sign-in.forgot-link': {
+                actions: [
+                  {
+                    navigate: {
+                      to: '/forgot-password',
+                      search: { email: { anchor: 'user.sign-in.email-input' } },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }).success,
+    ).toBe(true)
+  })
   it('refuses an id of two segments, as XState splits an id target on `.`', () => {
     expect(
       changed((config) => {

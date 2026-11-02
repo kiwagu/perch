@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 5 screens, 70 anchors and 40 codes.
+The contract declares 8 screens, 102 anchors and 56 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 35/36, ignored 2.
+Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 49/50, ignored 2.
 
 ## Model
 
@@ -38,9 +38,9 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | --- | --- | --- |
 | id | field | unbound |
 | identity | field | unbound |
-| locale | field | `app-shell.locale-select` |
+| locale | field | `app-shell.locale-select`, `user.settings.locale-select` |
 | createSettings | action | unbound |
-| updateLocale | action | `app-shell.locale-select` |
+| updateLocale | action | `app-shell.locale-select`, `user.settings.locale-select` |
 
 ### note
 
@@ -64,12 +64,13 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
-| app-shell | 5 | 5 | 0 | 100% |
+| app-shell | 10 | 10 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
+| not-found | 2 | 2 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
-| user | 11 | 11 | 0 | 100% |
+| user | 18 | 18 | 0 | 100% |
 | ui kit | 3 | 2 | 2 | 67% |
-| all | 36 | 35 | 2 | 97% |
+| all | 50 | 49 | 2 | 98% |
 
 ### Unmarked
 
@@ -88,11 +89,14 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 12 | 24 |
-| device | 10 | 2 |
-| user.profile | 10 | 19 |
+| not-found | 3 | 1 |
+| app-shell | 21 | 41 |
+| device | 10 | 1 |
+| user.profile | 10 | 30 |
 | organisation | 30 | 10 |
-| user.sign-in | 8 | 10 |
+| user.settings | 3 | 4 |
+| user.sign-in | 18 | 26 |
+| user.verify-email | 7 | 5 |
 
 <!-- coverage:end -->
 

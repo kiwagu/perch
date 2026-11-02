@@ -1,45 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
-import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
-import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
-import { contractAt, diffContracts } from './diff'
+import { diffContracts } from './diff'
 import { formatChanges } from './format-changes'
-
-useRepositories()
-
-const FIXTURES = join(import.meta.dirname, '../__fixtures__')
-const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/domain/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/domain/activities/thing.yaml'
-
-const fixtureFiles = (): Record<string, string> => ({
-  [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
-  [SCREEN]: readFileSync(join(FIXTURES, SCREEN), 'utf8'),
-  [ACTIVITY]: readFileSync(join(FIXTURES, ACTIVITY), 'utf8'),
-  [PLATFORM_FILE]: readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8'),
-  [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
-  [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
-})
-
-/** A repository whose first commit has only a README and whose second adds `files`. */
-function history(files: Readonly<Record<string, string>>): string {
-  const root = repository({ 'README.md': '# sample\n' }, ['README.md'])
-
-  git(root, 'commit', '--quiet', '-m', 'first')
-  git(root, 'tag', 'first')
-
-  writeFiles(root, files)
-  git(root, 'add', '--all')
-  git(root, 'commit', '--quiet', '-m', 'second')
-
-  return root
-}
 
 /** The fixture contract with one anchor renamed, one code added and one field removed. */
 function changed(before: Contract): Contract {
@@ -126,6 +91,7 @@ describe('diffContracts', () => {
         removed: [],
         renamed: [{ from: 'sample.save-button', to: 'sample.store-button' }],
       },
+      derived: { added: [], removed: [] },
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
@@ -133,6 +99,7 @@ describe('diffContracts', () => {
       questions: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
+      notices: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -184,6 +151,26 @@ describe('diffContracts', () => {
       removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists the derived parts the anchors both contracts hold start or stop rendering', () => {
+    const eye = structuredClone(after)
+
+    Object.assign(eye.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    expect(diffContracts(after, eye).derived).toEqual({
+      added: ['sample.title-input.visibility-button'],
+      removed: [],
+    })
+    expect(diffContracts(eye, after).derived).toEqual({
+      added: [],
+      removed: ['sample.title-input.visibility-button'],
+    })
+    expect(formatChanges(diffContracts(after, eye)).split('\n')).toEqual([
+      'contract changes: 1 derived anchor added',
+      'derived anchors added: sample.title-input.visibility-button',
+    ])
   })
   it('lists a toast code a new model action derives as an anchor code added', () => {
     const withToast = (codes: readonly string[]): Contract => {
@@ -276,6 +263,29 @@ describe('diffContracts', () => {
       'unsaved-input entries added: unload: never',
     )
   })
+  it('lists the notices each platform action declares, as they come and go', () => {
+    const noticing = (names: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      Object.assign(contract.screens.platform.actions['sign-out'] ?? {}, {
+        notices: names.map((name) => ({ name, to: 'account', language: 'account' })),
+      })
+
+      return contract
+    }
+
+    expect(diffContracts(before, noticing(['signed-out'])).notices).toEqual({
+      added: ['sign-out.signed-out'],
+      removed: [],
+    })
+    expect(diffContracts(noticing(['signed-out']), noticing(['password-changed'])).notices).toEqual(
+      { added: ['sign-out.password-changed'], removed: ['sign-out.signed-out'] },
+    )
+    expect(formatChanges(diffContracts(noticing(['signed-out']), before)).split('\n')).toEqual([
+      'contract changes: 1 notice removed',
+      'notices removed: sign-out.signed-out',
+    ])
+  })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(
       diffContracts(withActivities(before, 'before'), withActivities(before, 'after')).activities,
@@ -324,35 +334,6 @@ describe('diffContracts', () => {
   })
   it('finds nothing between a contract and itself', () => {
     expect(formatChanges(diffContracts(before, before))).toBe('contract changes: none')
-  })
-})
-
-describe('contractAt', () => {
-  it('reads the contract files, the screen files, the activities and the scenarios at a ref', () => {
-    const contract = contractAt('HEAD', history(fixtureFiles()))
-
-    expect('missing' in contract ? [] : contract.activities.map(({ id }) => id)).toEqual(['thing'])
-    expect(contract).toEqual(fixtureContract())
-  })
-  it('finds no contract at a commit without the folder', () => {
-    expect(contractAt('first', history(fixtureFiles()))).toEqual({ missing: true })
-  })
-  it('refuses a ref that names no commit, and a contract that does not load', () => {
-    const { [MODEL_FILE]: _model, ...partial } = fixtureFiles()
-    const root = history(partial)
-
-    expect(() => contractAt('nowhere', root)).toThrow('"nowhere" names no commit')
-    expect(() => contractAt('HEAD', root)).toThrow(`HEAD has no ${MODEL_FILE}`)
-
-    const files = fixtureFiles()
-    const broken = history({
-      ...files,
-      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 2'),
-    })
-
-    expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/domain/platform.yaml:1: version:',
-    )
   })
 })
 
