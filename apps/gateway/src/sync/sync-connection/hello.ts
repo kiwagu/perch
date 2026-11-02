@@ -7,7 +7,8 @@
  * its hello and then at most every five minutes it talks. A device holds one live socket: the
  * hello that registers closes its older ones (1000), without signing it out. An organisation
  * whose database cannot be read is left out of the welcome (`welcome-heads.ts`); the identity's
- * own region failing fails the hello.
+ * own region failing fails the hello. Once the device is welcomed, the account's email and its
+ * profile's are compared (`ProfileEmails.reconcile`), without holding the hello.
  */
 
 import type { AuthUser } from '@workspace/data'
@@ -17,6 +18,7 @@ import { CLOSE, type ClientMessage } from '@workspace/replica/protocol'
 import type { RegionHub } from '@workspace/replica/server'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
+import type { ProfileEmails } from '../../auth/profile-emails'
 import type { Organisations } from '../../tenants/organisations'
 import type { ConnectionRegistry, MembershipsListener } from '../connections'
 
@@ -35,6 +37,8 @@ export interface ConnectionHelloDeps {
   readonly sessions: Pick<AuthSessions, 'read'>
   readonly hub: Pick<RegionHub, 'heads'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
+  /** Compares the account's email with its profile's once the device is welcomed. */
+  readonly profiles: Pick<ProfileEmails, 'reconcile'>
   readonly connections: Pick<ConnectionRegistry, 'epoch' | 'add' | 'supersede'>
   readonly clock: Clock
   /** Who may write what in each region: the abilities of a member are built from it. */
@@ -57,6 +61,7 @@ export class ConnectionHello {
   readonly #sessions: ConnectionHelloDeps['sessions']
   readonly #hub: ConnectionHelloDeps['hub']
   readonly #organisations: ConnectionHelloDeps['organisations']
+  readonly #profiles: ConnectionHelloDeps['profiles']
   readonly #connections: ConnectionHelloDeps['connections']
   readonly #clock: Clock
   readonly #schema: ReplicaSchema
@@ -71,6 +76,7 @@ export class ConnectionHello {
     this.#sessions = deps.sessions
     this.#hub = deps.hub
     this.#organisations = deps.organisations
+    this.#profiles = deps.profiles
     this.#connections = deps.connections
     this.#clock = deps.clock
     this.#schema = deps.schema
@@ -131,6 +137,10 @@ export class ConnectionHello {
 
     // What changed since the memberships were read applies before any later message is handled.
     this.#changes.welcomed()
+    // The profile's email follows the account's: one read, after the welcome, and a write in the
+    // account's turn only when they differ (a gateway that stopped before a confirmed email
+    // reached the profile, or a profile a device created with an email the account left).
+    this.#profiles.reconcile(identity.id)
   }
 
   /**

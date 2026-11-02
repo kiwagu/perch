@@ -270,8 +270,9 @@ export async function confirmEmail(
       deps.mails.emailChanged(claims.identity, claims.email)
       // Every device shows the profile's email: it follows the account's, in the account's next
       // turn, once this one ended, so the answer waits for nothing the account's profile decides,
-      // and a later change of the email follows after it.
-      void deps.accounts.run(claims.identity, () => deps.profiles.follow(claims.identity))
+      // and a later change of the email follows after it. A gateway that stops before it ran
+      // brings the profile in step at the account's next hello (`ProfileEmails.reconcile`).
+      deps.profiles.queue(claims.identity)
 
       return Response.json({ identity: claims.identity, email: claims.newEmail })
     }),

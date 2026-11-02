@@ -165,6 +165,9 @@ export function createGatewayRoot(
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
+    // One account's work, one turn at a time: the auth mount's and the profile's email's.
+    const accountTurns = new KeyedTurns<string>()
+
     // Better Auth serves its routes under the path of its public URL only, so the server hands it
     // each `/auth/<rest>` it receives at `${FRONT_PREFIX}/auth/<rest>`.
     const auth = createAuthInstance({
@@ -200,7 +203,7 @@ export function createGatewayRoot(
         publicUrl: options.publicUrl,
         log: authLog,
       }),
-      profiles: new ProfileEmails({ directory: local, hub, log: authLog }),
+      profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
       organisations,
       databases,
       hub,
@@ -208,7 +211,7 @@ export function createGatewayRoot(
       connections,
       local,
       limits: new RequestLimits({ clock: options.clock }),
-      accountTurns: new KeyedTurns<string>(),
+      accountTurns,
       clock: options.clock,
       close: async () => {
         await hub.close()

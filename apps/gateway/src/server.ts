@@ -145,6 +145,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           hub: root.hub,
           schema: root.schema,
           organisations: root.organisations,
+          profiles: root.profiles,
           connections: root.connections,
           clock: root.clock,
           log: syncLog,

@@ -139,7 +139,7 @@ export const noAccounts: Pick<
     passwordChanged: () => undefined,
     emailChanged: () => undefined,
   },
-  profiles: { follow: async () => undefined },
+  profiles: { queue: () => undefined },
 }
 
 /**
@@ -222,7 +222,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     },
     ...accounts,
     profiles: {
-      follow: async (identity) => {
+      queue: (identity) => {
         followed.push(identity)
       },
     },

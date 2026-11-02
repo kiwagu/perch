@@ -11,8 +11,10 @@ has no `index.ts` yet: it predates the index rule and is imported file by file.
 
 Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
 device id at protocol 7; the gateway reads the session, checks the device, marks it seen and
-welcomes it. The session is read through Better Auth (`AuthSessions.read`) at every hello, so a
-session that ended or expired reads as none at once. A token that reads no live session closes
+welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
+profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
+auth module), without holding the hello. The session is read through Better Auth
+(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once. A token that reads no live session closes
 the socket with 4401 (`the session was not accepted`), and a session opened on another device
 than the one the hello names with 4401 too (`no session for this device`): a session is bound to
 the device it was opened on. A read the directory could not make closes the socket as a failed

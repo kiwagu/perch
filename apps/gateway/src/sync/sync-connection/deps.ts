@@ -7,6 +7,7 @@ import type { RegionHub } from '@workspace/replica/server'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
 import type { DeviceSessions } from '../../auth/device-sessions'
+import type { ProfileEmails } from '../../auth/profile-emails'
 import type { Organisations } from '../../tenants/organisations'
 import type { ConnectionRegistry } from '../connections'
 
@@ -23,6 +24,11 @@ export interface SyncConnectionDeps {
   readonly devices: Pick<DeviceSessions, 'seen'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
+  /**
+   * Brings the profile's email in step with the account's once a device of the account said hello
+   * (`ProfileEmails.reconcile`): a follow a stopped gateway lost is made good at the next hello.
+   */
+  readonly profiles: Pick<ProfileEmails, 'reconcile'>
   /** Where the connection registers once its session is read, to hear its memberships change. */
   readonly connections: ConnectionRegistry
   readonly clock: Clock

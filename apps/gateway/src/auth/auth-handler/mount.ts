@@ -50,7 +50,7 @@ export interface AuthMountDeps {
   /** The confirmation of a new email and the notices of a changed password and email. */
   readonly mails: Pick<AccountMails, 'confirmEmail' | 'passwordChanged' | 'emailChanged'>
   /** The profile's email, which follows the account's into its private region. */
-  readonly profiles: Pick<ProfileEmails, 'follow'>
+  readonly profiles: Pick<ProfileEmails, 'queue'>
   readonly limits: Pick<
     RequestLimits,
     | 'credentials'

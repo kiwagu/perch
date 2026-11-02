@@ -1,12 +1,15 @@
 import { errAsync, okAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { idSchemas } from '@workspace/ids'
 import type { RecordWrite } from '@workspace/replica/server'
 
-import { deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import { KeyedTurns } from '../keyed-turns'
+
+import { accountServicesOf, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
 import profileRowStatement from './__fixtures__/profile-row.surql'
+import { holdTurn } from './auth-handler/__fixtures__/mount'
 import { ProfileEmails } from './profile-emails'
 
 const closers: Array<() => Promise<void>> = []
@@ -42,6 +45,7 @@ async function harness(answers: readonly HubAnswer[], profiled = true) {
   const writes: Array<{ readonly region: string; readonly write: RecordWrite }> = []
   const lines: Array<{ readonly level: string; readonly code: string; readonly message: string }> =
     []
+  const turns = new KeyedTurns<string>()
   const profiles = new ProfileEmails({
     directory: opened.local,
     hub: {
@@ -66,9 +70,11 @@ async function harness(answers: readonly HubAnswer[], profiled = true) {
       error: ({ code }, message) => lines.push({ level: 'error', code, message }),
       warn: ({ code }, message) => lines.push({ level: 'warn', code, message }),
     },
+    turns,
   })
+  const { emailChanges } = accountServicesOf(opened)
 
-  return { ...opened, identity, profile, profiles, writes, lines }
+  return { ...opened, identity, profile, profiles, writes, lines, turns, emailChanges }
 }
 
 describe('ProfileEmails', () => {
@@ -133,5 +139,60 @@ describe('ProfileEmails', () => {
       },
     ])
     expect(JSON.stringify(lines)).not.toContain(ANN)
+  })
+
+  it('writes the email the account has when its turn comes, and before the work asked of the account after it', async () => {
+    const { profiles, identity, writes, turns, emailChanges } = await harness([])
+    // Work of the account holds its turn: the follow asked now waits behind it.
+    const release = await holdTurn(turns, identity)
+
+    profiles.queue(identity)
+    // The email moves again before the follow runs.
+    expect(
+      (await emailChanges.move(identity, ANN, 'ann.second@example.test'))._unsafeUnwrap(),
+    ).toBe(true)
+
+    const order: string[] = []
+    const later = turns.run(identity, async () => {
+      order.push(`later work, ${writes.length} written before it`)
+    })
+
+    expect(writes).toEqual([])
+    release()
+    await later
+
+    expect(writes.map(({ write }) => write.set['email'])).toEqual(['ann.second@example.test'])
+    expect(order).toEqual(['later work, 1 written before it'])
+  })
+
+  it("queues a follow at a hello when the profile's email is not the account's, and nothing when it is", async () => {
+    const { profiles, identity, writes, turns, emailChanges, lines } = await harness([])
+
+    profiles.reconcile(identity)
+    await turns.run(identity, async () => undefined)
+    // The profile carries the account's email: nothing to write.
+    expect(writes).toEqual([])
+
+    expect(
+      (await emailChanges.move(identity, ANN, 'ann.second@example.test'))._unsafeUnwrap(),
+    ).toBe(true)
+    profiles.reconcile(identity)
+
+    await vi.waitFor(() =>
+      expect(writes.map(({ write }) => write.set['email'])).toEqual(['ann.second@example.test']),
+    )
+    expect(lines).toEqual([])
+  })
+
+  it('queues nothing at a hello of an account with no profile yet, and logs nothing', async () => {
+    const { profiles, identity, writes, turns, lines } = await harness([], false)
+
+    profiles.reconcile(identity)
+    await vi.waitFor(async () => {
+      await turns.run(identity, async () => undefined)
+      expect(writes).toEqual([])
+    })
+
+    expect(lines).toEqual([])
   })
 })

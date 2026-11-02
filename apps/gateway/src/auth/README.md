@@ -294,10 +294,17 @@ starts to the old email, written from the old email, the account's name and lang
 changed and its new email. Sessions stay: a session's caller reads the account's email afresh,
 so every device's next call and hello sees the new one. Every device shows the `email` of the
 profile in the identity's private region, which the devices create but never change, so the
-gateway writes the new email there (`ProfileEmails.follow`, `profile-emails.ts`). It runs in the
-account's next turn, once the confirmation's ended, so the answer and its time do not depend on
-it and a later change of the email follows after it; it writes the identity's email as it is
-then, so a late write never puts an older email back. The profile is found by its identity in the
+gateway writes the new email there (`ProfileEmails`, `profile-emails.ts`). The confirmation asks
+for the write (`queue`), which runs in the account's next turn, once the confirmation's ended,
+so the answer and its time do not depend on it and a later change of the email follows after it;
+it writes the identity's email as it is then (`follow`), so a late write never puts an older email
+back. That write lives in the process only, so a gateway that stops between the move and the
+write would lose it: every hello of a device of the account also compares the identity's email
+with its profile's in the directory, one read after the welcome that the welcome does not wait
+for, and queues the write when they differ (`reconcile`). After a restart every device says hello
+again, so the first one brings the profile in step with no other confirmation; a profile a device
+created with an email the account no longer has is brought in step the same way, at the next hello
+of any of its devices. The profile is found by its identity in the
 directory, where the region hub projects the region's rows, so a profile under any id is found;
 the write is the hub's own change (`RegionHub.writeRecord`), logged, projected and sent to every
 subscribed device like a device's batch, and a device that was offline gets it at its next pull.
@@ -389,7 +396,8 @@ error carries one.
   `AccountPasswords` (`account-passwords.ts`: `requestReset`, `hash`, `reset`, `change`,
   `matches`), `ResetLinks` (`read`, `keepNewest`) and `EmailChanges` (`ask`, `cancel`,
   `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) (`account-links/`),
-  `ProfileEmails` (`profile-emails.ts`: `follow`), `accountLocale` (`account-locale.ts`),
+  `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
+  (`account-locale.ts`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
@@ -404,7 +412,7 @@ error carries one.
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session at a sign-in, the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, an
-  identity's email and the key of its profile, a reset
+  identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
   the move of an identity's email with the end of its reset links, the hash on a credential
   row, an email's account, its hash and its start as a sign-in reads them, and the two
