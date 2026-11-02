@@ -327,8 +327,10 @@ A screen's `states` say what is visible in each container state. The `wireframe`
 default state in Playwright's aria snapshot grammar.
 
 A screen's `flow` is an XState v5 machine config, in the subset `createMachine` takes as
-written: the app carries it into `setup({ guards, actions, actors }).createMachine(flow)`
-unchanged, as it carries a binding into the router.
+written: `contract:check` runs it in `setup({ guards, actions, actors }).createMachine(flow)`,
+with a stub per guard, effect and invoked actor, and an app that builds its own machine for the
+screen holds it to the flow with the engine's comparison (`@workspace/ui-contract/machines`),
+as it holds its router to the bindings.
 
 - `initial` and `states`. A state has a `description`, `type: final` where the flow ends
   (the app has left the screen, or stops), `entry` and `exit` effects, `on` and `invoke`.
@@ -367,9 +369,16 @@ unchanged, as it carries a binding into the router.
   the machine does not enable it: it is always enabled.
 - The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
-  } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
-  navigate, params: { to, search } }`, the app moves to that binding. The app implements
-  all three. Each value of a navigate's `search` is a search key of the binding it moves to,
+  } }`, an anchor that carries codes shows none until one is shown again; a field is emptied;
+  and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app
+  implements all three. The codes come first: a `clear` of an anchor that carries codes,
+  whatever its kind and its screen, a field included, means it shows none until one is shown
+  again. A field that carries none (an input, a textarea, a select, a checkbox, a radio or a
+  switch, a `secret` one included) is emptied, and only on the flow's own screen: it returns
+  to its empty or initial value and holds no input any more, as if nothing was typed; a form
+  empties its passwords this way once the action that took them succeeds. A `clear` never
+  names a `visibility-button`, nor a button, a list, a link or any other anchor unless it
+  carries codes. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
@@ -456,14 +465,14 @@ out, and the loader derives it, the same way every time:
   `user.profile.name-input`), when that control is a field of the screen; a code that two
   bindings pass from two controls concerns the form. What the file writes wins.
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
-  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
-  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
-  bindings runs an action that takes the field itself as a parameter, an action no other
-  anchor of its screen runs with it (the language select, the organisation select), applies
-  at once and holds none; a field whose action a submit button also runs with it (the
-  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
-  wins. The manifest carries it, and `contract:diff` lists the
-  fields that start or stop holding input.
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a
+  `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask
+  before such a leave. A field one of whose bindings runs an action that takes the field
+  itself as a parameter, an action no other anchor of its screen runs with it (the language
+  select, the organisation select), applies at once and holds none; a field whose action a
+  submit button also runs with it (the sign-in email) holds input. The loader sets
+  `holdsInput` on every field; a written value wins. The manifest carries it, and
+  `contract:diff` lists the fields that start or stop holding input.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
   a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
@@ -571,8 +580,8 @@ state is a visit to a screen:
   list of guarded ones in XState's order.
 
 An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the task leads,
-and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
-written, as the flows do. The file follows the layout of a screen file, with keys in the
+and the screens do the work. `contract:check` runs it in
+`setup({ guards }).createMachine(activity)` as written, as it runs the flows. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
 state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
@@ -892,9 +901,11 @@ gap is fixed in the contract files first, never worked around in a test.
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist (a navigate's search keys of the
-  binding it moves to, each `{ anchor }` a field of the flow's own screen that holds no
-  secret), reaches each of its states
+  actions, anchors with their codes and bindings that exist (a clear's anchor one that carries
+  codes, else a field of the flow's own screen, never a `visibility-button`, a navigate's
+  search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
+  that holds no secret),
+  reaches each of its states
   and leaves each one that is not final; every action of `leaving` exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
   declared by the frame alone, once, reserved, with both answers and no action of its own,

@@ -1561,7 +1561,7 @@
                 "type": {
                   "type": "string",
                   "const": "clear",
-                  "description": "The effect: an anchor stops showing its code."
+                  "description": "The effect: a field is emptied, or an anchor stops showing its code."
                 },
                 "params": {
                   "type": "object",
@@ -1569,7 +1569,7 @@
                     "anchor": {
                       "type": "string",
                       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                      "description": "The anchor that shows no code any more."
+                      "description": "The field to empty, or the anchor that carries codes and shows none any more."
                     }
                   },
                   "required": [
@@ -1584,7 +1584,7 @@
                 "params"
               ],
               "additionalProperties": false,
-              "description": "The anchor shows no code until one is shown again."
+              "description": "A field is emptied, as if nothing was typed; an anchor that carries codes shows none until one is shown again."
             },
             {
               "type": "object",
@@ -1705,14 +1705,14 @@
             "clear": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-              "description": "The anchor that shows no code any more."
+              "description": "The field to empty, or the anchor that carries codes and shows none any more."
             }
           },
           "required": [
             "clear"
           ],
           "additionalProperties": false,
-          "description": "`clear: <anchor>`: the anchor stops showing its code."
+          "description": "`clear: <anchor>`: a field is emptied, or the anchor stops showing its code."
         },
         {
           "type": "object",
