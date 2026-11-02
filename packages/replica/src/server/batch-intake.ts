@@ -37,8 +37,9 @@ export interface PushedBatch {
  * peers whose changes it brings to the pushing identity, imports it,
  * acknowledges it with its number and sends it to the region's other subscribers. A refused batch
  * is answered with a reject and changes nothing (`foreign-owner` when it writes a record of another
- * region, `foreign-peer` when it brings changes under a Loro peer another identity's batch was
- * accepted under in the region); a batch the region already holds, delivered again, is acknowledged without a new log row.
+ * region, `foreign-peer` when it brings changes under the server's Loro peer or under one another
+ * identity's batch was accepted under in the region); a batch the region already holds, delivered
+ * again, is acknowledged without a new log row.
  */
 export function takeInBatch(
   intake: BatchIntake,
@@ -115,8 +116,8 @@ export function takeInBatch(
         return errAsync(error)
       }
 
-      // A record of another region, a peer another identity writes as, or a projection that
-      // breaks a schema rule.
+      // A record of another region, the server's peer or one another identity writes as, or a
+      // projection that breaks a schema rule.
       if (error.message.startsWith('ownership')) {
         reject('foreign-owner', error.message)
       } else if (error.message.startsWith('peer')) {

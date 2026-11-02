@@ -1,5 +1,5 @@
 import { LoroDoc, VersionVector } from 'loro-crdt'
-import { err, ok, okAsync, Result, ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 
@@ -8,6 +8,7 @@ import type { CompactionOutcome } from '../protocol'
 
 import { acceptRefusal } from './accept-refusal'
 import type { BatchWriter } from './batch-writer'
+import { SERVER_PEER } from './server-peer'
 import acceptStatement from './surql/server-accept.surql'
 import compactStatement from './surql/server-compact.surql'
 import headStatement from './surql/server-head.surql'
@@ -68,7 +69,8 @@ function refusalOf(cause: unknown): CompactionOutcome | undefined {
  * The server's log of one region. Each accepted batch is stored with its projection in one
  * transaction, under the next number of the region's head row, so the log has no gaps and
  * holds only batches whose projection the schema accepted, each Loro peer writing as one
- * identity, the one whose batch it first came with. Several processes may hold a log
+ * identity, the one whose batch it first came with, but the server's peer, which only the
+ * server's own changes bring. Several processes may hold a log
  * of the same region: the database issues the numbers, and a transaction that conflicts with
  * another process's is replayed. Within a process, the accepts and compactions of one log run
  * one at a time. A compaction replaces the rows up to a point with a snapshot of the server's
@@ -131,17 +133,25 @@ export class RegionLog {
    * Writes the batch's projection and its log row in one transaction; resolves to the batch's
    * seq. A record that belongs to another region (it exists without this region's marker, or a
    * deletion names one this region never projected) refuses the batch with a
-   * `data:WRITE_REJECTED` whose message starts with `ownership`. A batch that brings changes of a
-   * peer another identity's batch was accepted under refuses with a `data:WRITE_REJECTED` whose
-   * message starts with `peer`; otherwise each peer it brings is bound to `writer.identity` in the
-   * same transaction.
+   * `data:WRITE_REJECTED` whose message starts with `ownership`. A device's batch that brings
+   * changes of the server's peer, or of a peer another identity's batch was accepted under,
+   * refuses with a `data:WRITE_REJECTED` whose message starts with `peer`; otherwise each peer it
+   * brings is bound to `writer.identity` in the same transaction. The server's own change
+   * (`writer` is `'server'`) binds no peer: its peer is bound to no identity.
    */
-  accept(plan: AcceptPlan, writer: BatchWriter): ResultAsync<number, DataError> {
+  accept(plan: AcceptPlan, writer: BatchWriter | 'server'): ResultAsync<number, DataError> {
     const { region } = this
+
+    if (writer !== 'server' && writer.peers.includes(SERVER_PEER)) {
+      return errAsync(
+        dataError('data:WRITE_REJECTED', `peer: ${SERVER_PEER} is the server's own in ${region}`),
+      )
+    }
+
     const vars = {
       region,
-      identity: writer.identity,
-      peers: writer.peers,
+      identity: writer === 'server' ? null : writer.identity,
+      peers: writer === 'server' ? [] : writer.peers,
       upserts: plan.upserts,
       deletes: plan.deletes,
       bytes: plan.bytes,

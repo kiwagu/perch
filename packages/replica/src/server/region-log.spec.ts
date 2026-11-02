@@ -19,6 +19,7 @@ import {
   storedProfile,
 } from './__fixtures__/log'
 import { RegionLog } from './region-log'
+import { SERVER_PEER } from './server-peer'
 import compactStatement from './surql/server-compact.surql'
 
 let local: LocalDb
@@ -395,6 +396,33 @@ describe('peer bindings', () => {
       )._unsafeUnwrap(),
     ).toBe(1)
     expect(await boundIdentity(local, other, '42')).toBe('idn_b')
+  })
+
+  it("refuses a device's batch that brings changes of the server's peer whole, binding none of its peers", async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    const refused = await log.accept(planFor('Ann'), {
+      identity: 'idn_a',
+      peers: ['42', SERVER_PEER],
+    })
+
+    expect(refused._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: `peer: ${SERVER_PEER} is the server's own in ${region}`,
+    })
+    expect(log.head()).toBe(0)
+    expect(await countRows(local, '_replica_update')).toBe(0)
+    expect(await boundIdentity(local, region, '42')).toBeUndefined()
+  })
+
+  it("numbers the server's own change like a batch and binds its peer to no identity", async () => {
+    const { log } = (await RegionLog.load(local, region))._unsafeUnwrap()
+
+    expect((await log.accept(planFor('Ann'), ann))._unsafeUnwrap()).toBe(1)
+    expect((await log.accept(planFor('Ana'), 'server'))._unsafeUnwrap()).toBe(2)
+    expect((await storedProfile(local, 'prf_1'))?.name).toBe('Ana')
+    expect(await boundIdentity(local, region, SERVER_PEER)).toBeUndefined()
+    expect(await countRows(local, '_replica_peer')).toBe(1)
   })
 
   it('a binding made through one log holds for another log of the same region', async () => {

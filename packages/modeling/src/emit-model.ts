@@ -226,8 +226,9 @@ export function emitModel(bundle: ComponentBundle, schema: SchemaModel): Generat
 }
 
 /**
- * For every replicated table, the region whose documents hold its records and the
- * field kinds the replica's write path and projector need.
+ * For every replicated table, the region whose documents hold its records and the kind of
+ * each of its fields: the replica's write path and projector read the kinds, and a write of
+ * the server's own names only the fields listed.
  */
 export function emitReplicaSchema(schema: SchemaModel): string {
   const tables = Object.entries(schema.tables)
@@ -246,6 +247,8 @@ export function emitReplicaSchema(schema: SchemaModel): string {
           fields[field] = { kind: 'record', table: inner.tables[0] }
         } else if (inner.kind === 'scalar' && inner.name === 'datetime') {
           fields[field] = { kind: 'datetime' }
+        } else {
+          fields[field] = { kind: 'plain' }
         }
       }
 
