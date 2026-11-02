@@ -24,6 +24,7 @@ import { AccountPasswords } from '../auth/account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
+import { ProfileEmails } from '../auth/profile-emails'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
@@ -51,6 +52,8 @@ export interface GatewayRoot {
   readonly emailChanges: EmailChanges
   /** The mails about an account the gateway sends itself: confirmations and notices. */
   readonly mails: AccountMails
+  /** The profile's email, which follows the account's into its private region through the hub. */
+  readonly profiles: ProfileEmails
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -197,6 +200,7 @@ export function createGatewayRoot(
         publicUrl: options.publicUrl,
         log: authLog,
       }),
+      profiles: new ProfileEmails({ directory: local, hub, log: authLog }),
       organisations,
       databases,
       hub,

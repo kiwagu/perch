@@ -94,6 +94,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       resets: root.resets,
       emailChanges: root.emailChanges,
       mails: root.mails,
+      profiles: root.profiles,
       limits: root.limits,
       connections: root.connections,
       clock: root.clock,

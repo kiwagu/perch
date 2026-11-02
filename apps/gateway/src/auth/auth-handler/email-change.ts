@@ -192,7 +192,8 @@ function keepChange(
  * pending (used before, replaced
  * by a newer one, or ended by a change of the password), when the account's email is no longer
  * the one the change was asked from, or when the new email has got an account meanwhile. Once it
- * changed, the notice of a changed email starts to the old email, and it answers 200
+ * changed, the notice of a changed email starts to the old email, the profile's email follows in
+ * the identity's private region (`ProfileEmails.follow`, after the answer), and it answers 200
  * `{ identity, email }`: the account whose email changed, and its new email, so the page can tell
  * whether this device is signed in to it.
  */
@@ -267,6 +268,10 @@ export async function confirmEmail(
       }
 
       deps.mails.emailChanged(claims.identity, claims.email)
+      // Every device shows the profile's email: it follows the account's, in the account's next
+      // turn, once this one ended, so the answer waits for nothing the account's profile decides,
+      // and a later change of the email follows after it.
+      void deps.accounts.run(claims.identity, () => deps.profiles.follow(claims.identity))
 
       return Response.json({ identity: claims.identity, email: claims.newEmail })
     }),

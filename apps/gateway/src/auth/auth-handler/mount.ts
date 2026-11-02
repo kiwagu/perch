@@ -9,6 +9,7 @@ import type { AccountMails } from '../account-mails'
 import type { AccountPasswords } from '../account-passwords'
 import type { AuthInstance } from '../auth-instance'
 import type { AuthSessions } from '../auth-sessions'
+import type { ProfileEmails } from '../profile-emails'
 
 import { changeEmail, confirmEmail } from './email-change'
 import { changePassword } from './password-change'
@@ -48,6 +49,8 @@ export interface AuthMountDeps {
   readonly emailChanges: Pick<EmailChanges, 'ask' | 'cancel' | 'read' | 'claim' | 'move'>
   /** The confirmation of a new email and the notices of a changed password and email. */
   readonly mails: Pick<AccountMails, 'confirmEmail' | 'passwordChanged' | 'emailChanged'>
+  /** The profile's email, which follows the account's into its private region. */
+  readonly profiles: Pick<ProfileEmails, 'follow'>
   readonly limits: Pick<
     RequestLimits,
     | 'credentials'

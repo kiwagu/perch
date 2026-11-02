@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { IdentityId } from '@workspace/ids'
+import { type IdentityId, profileIdFactory } from '@workspace/ids'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
@@ -224,6 +224,7 @@ describe('authHandler, the start of an account at its sign-in', () => {
 
     await mounted.local.db.query(settingsLocaleStatement, { identity: ann.identity, locale: 'en' })
     await mounted.local.db.query(profileRowStatement, {
+      id: profileIdFactory.create(),
       identity: ann.identity,
       name: 'Ann',
       email: ANN,

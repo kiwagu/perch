@@ -1,5 +1,5 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, openLocalDb, tenantDatabase } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
@@ -31,6 +31,7 @@ import {
 } from '../../auth/__fixtures__/auth-instance'
 import { authHandler } from '../../auth/auth-handler'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
+import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
@@ -182,20 +183,39 @@ async function openGateway(options: GatewayOptions = {}) {
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
+  /** What the gateway logged of the auth module's work, by code. */
+  const authLogs: Array<{ readonly level: 'error' | 'warn'; readonly code: string }> = []
+  const profiles = new ProfileEmails({
+    directory: local,
+    hub,
+    log: {
+      error: ({ code }) => authLogs.push({ level: 'error', code }),
+      warn: ({ code }) => authLogs.push({ level: 'warn', code }),
+    },
+  })
+  const accounts = accountServicesOf(opened)
+  const turns = new KeyedTurns<string>()
   /** The gateway's mount of Better Auth's sign-in, over the same registry. */
   const authRoute = authHandler({
     auth: opened.auth,
     sessions,
-    ...accountServicesOf(opened),
+    ...accounts,
+    profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
-    accounts: new KeyedTurns<string>(),
+    accounts: turns,
   })
 
   return {
     clock,
     hub,
+    authRoute,
+    authLogs,
+    profiles,
+    emailChanges: accounts.emailChanges,
+    turns,
+    local,
     sessions,
     organisations,
     connections,
@@ -1336,5 +1356,130 @@ describe('SyncConnection', () => {
 
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+  })
+})
+
+/** The new email most of the following specs confirm. */
+const NEW_EMAIL = 'ann.new@example.test'
+
+/** A confirmation of the link's `token`, as a browser that signed in to nobody sends it. */
+function confirmRequest(token: string): Request {
+  return new Request('http://127.0.0.1:4000/auth/confirm-email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'http://localhost' },
+    body: JSON.stringify({ token }),
+  })
+}
+
+/** Changes Ann's email to `NEW_EMAIL` through the link of a confirmation: what the gateway answered. */
+async function confirmNewEmail(fixture: Connected) {
+  const token = (
+    await fixture.emailChanges.ask(fixture.ann.identity.id, ann.email, NEW_EMAIL)
+  )._unsafeUnwrap()
+
+  return fixture.authRoute(confirmRequest(token), '203.0.113.7')
+}
+
+/** The head of Ann's private region at the hub. */
+async function headOf(fixture: Connected): Promise<number | undefined> {
+  return (await fixture.hub.heads([fixture.region]))._unsafeUnwrap()[0]?.head
+}
+
+/** Subscribes the connection to Ann's region and pushes her profile under `id`: acknowledged at head 1. */
+async function withProfile(fixture: Connected & { readonly doc: RegionDoc }, id: string) {
+  const { connection, region, doc } = fixture
+
+  await connection.receive(encode({ type: 'subscribe', region, vv: null }))
+
+  const created = (
+    await profileCreate(doc, {
+      id,
+      identity: fixture.ann.identity.id,
+      name: 'Ann',
+      email: ann.email,
+    })
+  )._unsafeUnwrap()
+
+  await connection.receive(encode({ type: 'push', region, batch: 1, updates: [created] }))
+}
+
+/** Takes the last `updates` a socket was sent into `doc`. */
+async function takeLastUpdates(sent: readonly ServerMessage[], doc: RegionDoc): Promise<void> {
+  const updates = sent.filter((message) => message.type === 'updates').at(-1)
+
+  if (updates?.type !== 'updates') {
+    expect.unreachable('updates were sent')
+  }
+
+  ;(await doc.importRemote(updates.bytes, updates.head))._unsafeUnwrap()
+}
+
+describe('SyncConnection, the email of the profile after a confirmed change', () => {
+  it('sends the new email to a device subscribed to the private region', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+
+    await vi.waitFor(() =>
+      expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack', 'updates']),
+    )
+    await takeLastUpdates(fixture.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+    expect(fixture.authLogs).toEqual([])
+  })
+
+  it('brings the new email to a device that was offline at the confirmation, at its next pull', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    // The device goes offline with the profile as it pushed it.
+    fixture.connection.closed()
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(async () => expect(await headOf(fixture)).toBe(2))
+
+    const again = open(fixture)
+
+    await hello(again.connection, fixture.ann.token)
+    await again.connection.receive(
+      encode({
+        type: 'subscribe',
+        region: fixture.region,
+        vv: new Uint8Array(fixture.doc.doc.version().encode()),
+      }),
+    )
+    await takeLastUpdates(again.socket.sent, fixture.doc)
+
+    expect(fixture.doc.recordJson(`profile/${profile}`)?.['email']).toBe(NEW_EMAIL)
+  })
+
+  it('answers a confirmation of an account with no profile yet as any other, and logs only a code', async () => {
+    const fixture = await connectedAsAnn()
+
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(() =>
+      expect(fixture.authLogs).toEqual([{ level: 'warn', code: 'auth:PROFILE_NOT_STARTED' }]),
+    )
+    expect(await headOf(fixture)).toBe(0)
+  })
+
+  it('writes nothing more when the profile already carries the email', async () => {
+    const fixture = await connectedAsAnn()
+    const profile = profileIdFactory.create()
+
+    await withProfile(fixture, profile)
+    expect((await confirmNewEmail(fixture))?.status).toBe(200)
+    await vi.waitFor(async () => expect(await headOf(fixture)).toBe(2))
+
+    await fixture.profiles.follow(fixture.ann.identity.id)
+    await fixture.profiles.follow(fixture.ann.identity.id)
+
+    expect(await headOf(fixture)).toBe(2)
+    expect(types(fixture.socket.sent)).toEqual(['welcome', 'updates', 'ack', 'updates'])
+    expect(fixture.authLogs).toEqual([])
   })
 })

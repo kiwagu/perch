@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { profileIdFactory } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -520,7 +521,12 @@ describe('authHandler, a reset of an account not verified yet', () => {
 
     expect(startAnswer.parse(await halfway?.json()).start).toEqual({ name: 'Ana', locale: 'es' })
 
-    await mounted.local.db.query(profileRowStatement, { identity, name: 'Ana', email: ANN })
+    await mounted.local.db.query(profileRowStatement, {
+      id: profileIdFactory.create(),
+      identity,
+      name: 'Ana',
+      email: ANN,
+    })
 
     const started = await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), FROM)
 

@@ -291,8 +291,21 @@ when the new email has got an account meanwhile. Once it changed, the notice of 
 starts to the old email, written from the old email, the account's name and language alone
 (`AccountMails.emailChanged`), and it answers 200 `{ identity, email }`, the account whose email
 changed and its new email. Sessions stay: a session's caller reads the account's email afresh,
-so every device's next call and hello sees the new one; the profile the devices show is
-replicated, and the gateway does not write it.
+so every device's next call and hello sees the new one. Every device shows the `email` of the
+profile in the identity's private region, which the devices create but never change, so the
+gateway writes the new email there (`ProfileEmails.follow`, `profile-emails.ts`). It runs in the
+account's next turn, once the confirmation's ended, so the answer and its time do not depend on
+it and a later change of the email follows after it; it writes the identity's email as it is
+then, so a late write never puts an older email back. The profile is found by its identity in the
+directory, where the region hub projects the region's rows, so a profile under any id is found;
+the write is the hub's own change (`RegionHub.writeRecord`), logged, projected and sent to every
+subscribed device like a device's batch, and a device that was offline gets it at its next pull.
+A write that changes nothing logs nothing. An account with no profile in the directory yet (no
+device's start has reached the server) gets nothing written, logged as a warning
+`auth:PROFILE_NOT_STARTED`: the device that starts it later creates the profile from the
+account's email as it is then (a sign-in's `user.email`, a verification's answer). A write that
+fails is tried once more, then logged by its code; one the hub refuses is logged at once. The
+confirmation answered 200 already: the email did change.
 
 The mails of a reset, a confirmation and the two notices (`account-mails.ts`, written by
 `@workspace/email`) start at once and never hold the request, and speak the account's language,
@@ -375,7 +388,8 @@ error carries one.
   `AccountPasswords` (`account-passwords.ts`: `requestReset`, `hash`, `reset`, `change`,
   `matches`), `ResetLinks` (`read`, `keepNewest`) and `EmailChanges` (`ask`, `cancel`,
   `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) (`account-links/`),
-  `accountLocale` (`account-locale.ts`), `sessionHooks` (`session-hooks.ts`), `AuthSessions`
+  `ProfileEmails` (`profile-emails.ts`: `follow`), `accountLocale` (`account-locale.ts`),
+  `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
   `identityOf` and `verificationEmail`; `SignedInAccount`), `DeviceSessions` (`device-sessions.ts`: `list`,
@@ -388,7 +402,8 @@ error carries one.
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session at a sign-in, the language an account's settings
-  name, the identity of an email, an identity's email, name and language for a mail, a reset
+  name, the identity of an email, an identity's email, name and language for a mail, an
+  identity's email and the key of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
   the move of an identity's email with the end of its reset links, the hash on a credential
   row, an email's account, its hash and its start as a sign-in reads them, and the two
@@ -427,7 +442,7 @@ error carries one.
   new email, and that nothing of an email, a token or a password reaches a log;
   `account-links/reset-links.spec.ts`,
   `account-links/email-changes.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,
-  `reset-mail.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
+  `reset-mail.spec.ts`, `profile-emails.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).

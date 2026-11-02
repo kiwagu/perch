@@ -253,6 +253,18 @@ describe('authHandler, the confirmation of a new email', () => {
     expect(mounted.outbox.to(NEW_EMAIL)).toHaveLength(1)
   })
 
+  it("asks the account's profile to follow its new email once the email changed, and only then", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const token = await confirmationLink(mounted, ann)
+
+    expect((await mounted.route(confirm('not-a-token'), FROM))?.status).toBe(401)
+    expect((await mounted.route(confirm(token), FROM))?.status).toBe(200)
+    await vi.waitFor(() => expect(mounted.followed).toEqual([ann.identity]))
+    expect((await mounted.route(confirm(token), FROM))?.status).toBe(401)
+    expect(mounted.followed).toEqual([ann.identity])
+  })
+
   it('answers link-invalid to a link opened again, changing nothing more', async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])

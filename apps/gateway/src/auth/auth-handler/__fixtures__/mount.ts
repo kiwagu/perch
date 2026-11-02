@@ -111,7 +111,10 @@ export const noSessions: AuthMountDeps['sessions'] = {
  * and the verification over a stand-in for Better Auth: every one of them fails, as none is meant
  * to be asked.
  */
-export const noAccounts: Pick<AuthMountDeps, 'passwords' | 'resets' | 'emailChanges' | 'mails'> = {
+export const noAccounts: Pick<
+  AuthMountDeps,
+  'passwords' | 'resets' | 'emailChanges' | 'mails' | 'profiles'
+> = {
   passwords: {
     requestReset: notHere,
     hash: notHere,
@@ -136,6 +139,7 @@ export const noAccounts: Pick<AuthMountDeps, 'passwords' | 'resets' | 'emailChan
     passwordChanged: () => undefined,
     emailChanged: () => undefined,
   },
+  profiles: { follow: async () => undefined },
 }
 
 /**
@@ -202,6 +206,8 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const closes: Close[] = []
   const accounts = accountServicesOf(opened)
   const turns = new KeyedTurns<string>()
+  /** The identities whose profile was asked to follow their email, in order. */
+  const followed: IdentityId[] = []
   const route = authHandler({
     auth: opened.auth,
     sessions: {
@@ -215,6 +221,11 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
       signOut: (token) => sessions.signOut(token),
     },
     ...accounts,
+    profiles: {
+      follow: async (identity) => {
+        followed.push(identity)
+      },
+    },
     limits: new RequestLimits({ clock: opened.clock }),
     connections: {
       close: (identity, device, code) => {
@@ -237,7 +248,18 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     return identity
   }
 
-  return { ...opened, ...accounts, sessions, registry, failures, closes, route, annsId, turns }
+  return {
+    ...opened,
+    ...accounts,
+    sessions,
+    registry,
+    failures,
+    closes,
+    route,
+    annsId,
+    turns,
+    followed,
+  }
 }
 
 /**
