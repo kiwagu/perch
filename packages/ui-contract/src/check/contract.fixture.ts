@@ -170,6 +170,7 @@ export function sampleContract(): Contract {
       screenNames: meaning(['app-shell', 'sample']),
       roles: meaning(['guest', 'member']),
       reserved: meaning(['app-shell.status']),
+      composites: {},
     },
     screens: {
       version: 1,

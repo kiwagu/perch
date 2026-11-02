@@ -287,3 +287,12 @@ included.
 | `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
 | `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
+
+## Composites
+
+What the platform declares once and a screen derives by opting in (`platform.yaml`
+`composites`): the list with its items, their descriptions and their item state, so no screen
+repeats them. A row names the composite and what it is for.
+
+| Composite | Meaning |
+|---|---|
