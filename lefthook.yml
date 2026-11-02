@@ -75,7 +75,9 @@ pre-commit:
 # not pre-commit. It runs pre-commit as a whole, the machine-local jobs included, so an
 # automatic merge, into main too, is checked as a commit is, and what a formatter fixes is
 # staged into it (lefthook stages fixed files only for a hook named pre-commit).
+# CONTRACT_AHEAD_MERGE tells scripts/contract-ahead.ts that git has written no MERGE_HEAD yet,
+# so it reads the commits the merge brings in from the merge's reflog action.
 pre-merge-commit:
   jobs:
     - name: the pre-commit checks
-      run: . scripts/ensure-path.sh && lefthook run pre-commit
+      run: . scripts/ensure-path.sh && CONTRACT_AHEAD_MERGE=1 lefthook run pre-commit
