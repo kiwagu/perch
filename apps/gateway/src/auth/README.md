@@ -187,20 +187,30 @@ email Better Auth's token names, in lower case): one account's verifications run
 this process, so Better Auth rereads the account's `emailVerified` inside the turn, and of two
 exchanges at once, on one link or two, the second answers `{ token: null }` and signs nothing in;
 and no sign-up or confirmation gives the email to another account meanwhile. Inside the turn the
-account that holds the email is read (a failure answers 500 `internal` with nothing verified),
-and a link verifies only the account its mail went to: when another account holds the email, or
+account that holds the email is read with the hash of its password, as a sign-in reads them
+(`AccountPasswords.credentialOf`; a failure answers 500 `internal` with nothing verified), and a
+link verifies only the account its mail went to: when another account holds the email, or
 none does, it answers 401 `link-invalid`, verifying and signing in nothing, Better Auth not asked.
 Otherwise Better Auth's own `GET /verify-email` is asked with its token alone (no `callbackURL`,
 so it never redirects) and without the request's `Authorization` and `Cookie`, so no session of
-the request is taken for the account's. When its answer carries a session, the identity's sockets on the device are closed
-with 1000 at once, before the session is read back for the answer, so a readback that fails (500
-`internal`) still leaves no socket of the device's earlier session open. It answers 200
-`{ token, user: { id, email, name, locale } }` the first time (the raw token, the account's name
-and the language it signed up in), 200 `{ token: null }` for an account verified before, by an
-earlier opening or by a reset (Better Auth signs nothing in for a verified account), and 401
-`link-expired` for a link past its lifetime or `link-invalid` for any other that verifies
-nothing, an unknown account's and another account's included. The turns are this process's: several gateway processes
-would need a claim in the database.
+the request is taken for the account's. When its answer carries a session, the identity's sockets
+on the device are closed with 1000 at once, before the session is read back for the answer, so a
+readback that fails (500 `internal`) still leaves no socket of the device's earlier session open.
+The session is then held to the account as a sign-in's is (`signInStands`): the email's account
+and its hash are read again, and the session stands only when both reads found the account the
+link was mailed to, with the same password, and Better Auth signed that account in. A
+verification holds the email's turn and a reset the account's, so a reset can run beside it, and
+one that commits while Better Auth verifies the email ends every session it finds before the
+verification's is written: then the password changed, so the session is ended at once by its token
+and the answer carries none, `{ token: null }` (the reset verified the email) or, when the email left
+the account meanwhile, 401 `link-invalid`. A reset that commits after the second read ends the
+session itself. So no session a verification wrote outlives a reset that completed meanwhile. It
+answers 200 `{ token, user: { id, email, name, locale } }` the first time (the raw token, the
+account's name and the language it signed up in), 200 `{ token: null }` for an account verified
+before, by an earlier opening or by a reset (Better Auth signs nothing in for a verified account),
+and 401 `link-expired` for a link past its lifetime or `link-invalid` for any other that verifies
+nothing, an unknown account's and another account's included. The turns are this process's:
+several gateway processes would need a claim in the database.
 
 A resend is `POST /auth/send-verification-email` with `{ email }`: Better Auth is handed the email
 alone, without the request's `Authorization` and `Cookie`, so only its path for a visitor runs,
@@ -445,7 +455,8 @@ error carries one.
   nothing of an address, a token or a link reaches a log, stderr or an answer, a failed query's
   included, that one account's verifications at once sign one device in, that a link verifies only
   the account its mail went to (an email freed by a confirmation and taken by a new sign-up
-  included), that a device's
+  included), that a verification whose account a reset recovered, or whose email left the
+  account, while Better Auth wrote the session leaves no session and answers none, that a device's
   sockets close before a readback that fails, and that every resend answers no sooner than
   Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up

@@ -1,9 +1,11 @@
+import type { IdentityId } from '@workspace/ids'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { SUPERSEDED } from '../../sync/sync-connection'
+import { type SignInCredential, signInStands } from '../account-passwords'
 import type { MailedVerification } from '../auth-sessions'
 import { DEVICE_HEADER } from '../session-hooks'
 
@@ -23,16 +25,63 @@ const resendBody = z.object({ email: z.string().min(1).max(320) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**
+ * Holds the session a first verification signed in to the account its link was mailed to, as a
+ * sign-in is held (`signInStands`): the email's account and the hash of its password, read before
+ * Better Auth was asked (`before`), are read again now that it wrote the session, and the session
+ * stands only when both reads found that very account, with the same password, and Better Auth
+ * signed that account in. A verification holds the email's turn, not the account's, so a reset of
+ * the account runs beside it: one that commits while Better Auth verifies the email, before the
+ * session is written, ends every session it finds, the new one not yet among them. So when the
+ * password changed, or the email left the account, the session is ended at once by its token, and
+ * the answer carries none: `{ token: null }` while the email is still the account's (it is
+ * verified: the reset verified it, if Better Auth had not), 401 `link-invalid` once it is not. A
+ * session that no longer reads (a reset ended it after it was written) has nothing left to end.
+ * A readback or a second read that fails answers 500 `internal`, a session that was read back
+ * ended first.
+ */
+async function standing(
+  deps: AuthMountDeps,
+  signed: string,
+  email: string,
+  identity: IdentityId,
+  before: SignInCredential | undefined,
+): Promise<Response> {
+  const account = await deps.sessions.signedIn(signed)
+  const after = await deps.passwords.credentialOf(email)
+  const session = account.isOk() ? account.value : undefined
+
+  if (
+    session !== undefined &&
+    after.isOk() &&
+    session.user.id === identity &&
+    signInStands(before, after.value, identity)
+  ) {
+    return Response.json({ token: session.token, user: session.user })
+  }
+
+  const ended = session === undefined || (await deps.sessions.signOut(session.token)).isOk()
+
+  if (account.isErr() || after.isErr() || !ended) {
+    return internal()
+  }
+
+  return after.value?.identity === identity
+    ? Response.json({ token: null })
+    : refused(401, 'link-invalid')
+}
+
+/**
  * Asks Better Auth for the exchange, holding the account's turn by the email: the account that
- * holds the email is read first (nothing is verified yet if that read fails), and the link
- * verifies only the account its mail went to. When another account holds the email, or none
- * does (the email moved away, and maybe a new account signed up with it), the link is dead
- * (401 `link-invalid`) and Better Auth is not asked: its token names the email alone, and would
- * verify, and sign in, whichever account holds it now. Otherwise Better Auth verifies with its
- * token alone (no `callbackURL`: it never redirects) and without the request's credentials. A
- * first verification signs the device in: the identity's sockets on the device are closed with
- * 1000 at once, as at a sign-in, before the session is read back for the answer, so a readback that
- * fails still leaves no socket of the ended session open.
+ * holds the email, and the hash of its password, are read first (nothing is verified yet if that
+ * read fails), and the link verifies only the account its mail went to. When another account
+ * holds the email, or none does (the email moved away, and maybe a new account signed up with it),
+ * the link is dead (401 `link-invalid`) and Better Auth is not asked: its token names the email
+ * alone, and would verify, and sign in, whichever account holds it now. Otherwise Better Auth
+ * verifies with its token alone (no `callbackURL`: it never redirects) and without the request's
+ * credentials. A first verification signs the device in: the identity's sockets on the device are
+ * closed with 1000 at once, as at a sign-in, before the session is read back and held to the
+ * account (`standing`), so a readback that fails, or a session that cannot stand, still leaves no
+ * socket of the ended session open.
  */
 async function exchange(
   deps: AuthMountDeps,
@@ -84,11 +133,7 @@ async function exchange(
 
   await deps.connections.close(verification.identity, device, SUPERSEDED)
 
-  const account = await deps.sessions.signedIn(signed)
-
-  return account.isOk() && account.value !== undefined
-    ? Response.json({ token: account.value.token, user: account.value.user })
-    : internal()
+  return standing(deps, signed, email, verification.identity, holder.value)
 }
 
 /**

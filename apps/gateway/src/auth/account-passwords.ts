@@ -56,7 +56,9 @@ export interface SignInCredential {
  * that very account with a password, the same one. An email that had no account at either read,
  * an account without a password, another account at either read, or a password that changed in
  * between all fail it: Better Auth may then have checked a password that is no longer the
- * account's, or an account the email no longer named.
+ * account's, or an account the email no longer named. The first verification of an email, which
+ * signs a device in, is held to it too: a reset that gave the account a new password meanwhile
+ * ended every session it found, and the verification's may not have been written yet.
  */
 export function signInStands(
   before: SignInCredential | undefined,

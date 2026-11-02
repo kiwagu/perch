@@ -16,8 +16,11 @@ import { signVerificationToken, verificationKey } from '../account-links'
 
 import {
   ANN,
+  ARGON2_WAIT,
   annsLink,
   fakeConnection,
+  heldQueries,
+  isSessionInsert,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   ORIGIN,
@@ -588,4 +591,90 @@ describe('authHandler, a verification link after a reset verified the email', ()
     expect(await answer?.json()).toEqual({ token: null })
     expect(devices).toEqual([])
   })
+
+  it('leaves no session to a verification whose account a reset recovered while Better Auth wrote the session, and answers none', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const token = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+    // The reset link is asked for first: its request takes the email's turn, which the
+    // verification holds.
+    const seen = mounted.outbox.to(ANN).length
+    const asked = await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    expect(asked?.status).toBe(202)
+
+    const reset = linkToken(await mounted.outbox.next(ANN, seen))
+    const insert = queries.hold(isSessionInsert)
+    const verifying = mounted.route(verify(token, 'phone'), FROM)
+
+    // Better Auth read the account unverified, verified it and waits to write the session; a
+    // reset of the account runs to its end meanwhile, ending every session it has.
+    await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (
+        await mounted.route(
+          postTo('/auth/reset-password', { token: reset, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(204)
+    insert.release()
+
+    const answer = await verifying
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({ token: null })
+    expect(await liveDevices(mounted.local, ann)).toEqual([])
+  }, 30_000)
+
+  it('leaves no session to a verification whose account a reset recovered and moved to another email while Better Auth wrote the session, and answers link-invalid', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const token = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+    const seen = mounted.outbox.to(ANN).length
+    const asked = await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    expect(asked?.status).toBe(202)
+
+    const reset = linkToken(await mounted.outbox.next(ANN, seen))
+    const insert = queries.hold(isSessionInsert)
+    const verifying = mounted.route(verify(token, 'phone'), FROM)
+
+    // While Better Auth waits to write the session, a reset recovers the account and a
+    // confirmation moves it to another email: the link's email is no longer the account's.
+    await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (
+        await mounted.route(
+          postTo('/auth/reset-password', { token: reset, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(204)
+
+    const change = (
+      await mounted.emailChanges.ask(ann, ANN, 'ann.moved@example.test')
+    )._unsafeUnwrap()
+
+    expect(
+      (await mounted.route(postTo('/auth/confirm-email', { token: change }), FROM))?.status,
+    ).toBe(200)
+    insert.release()
+
+    const answer = await verifying
+
+    expect(answer?.status).toBe(401)
+    expect(await answer?.json()).toEqual({ code: 'link-invalid' })
+    expect(await liveDevices(mounted.local, ann)).toEqual([])
+  }, 30_000)
 })
