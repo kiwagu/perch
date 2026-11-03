@@ -74,6 +74,45 @@ describe('compareConsumers', () => {
       'consumers/split-name.ts:8: "sample.gone-page" is not a declared anchor',
     ])
   })
+  it('reports a code, a state or a value its anchor never carries, once the literal itself is known', () => {
+    expect(printed(['paired.ts'])).toEqual([
+      'consumers/paired.ts:11: sample.list never carries state current',
+      'consumers/paired.ts:13: sample.thing-item never carries state loading',
+      'consumers/paired.ts:15: sample.save-button never carries state current',
+      'consumers/paired.ts:18: sample.thing-item never carries state loading',
+      'consumers/paired.ts:22: "lost" is not a code of the vocabulary',
+      'consumers/paired.ts:31: sample.list never carries state current',
+    ])
+  })
+  it('holds an attribute after a :has(...) to the element before it, and one beside a :not([data-testid]) to no anchor', () => {
+    const problems = compareConsumers([collected('paired.ts')], sampleContract())
+
+    expect(problems.filter(({ line }) => (line ?? 0) > 23).map(formatProblem)).toEqual([
+      'consumers/paired.ts:31: sample.list never carries state current',
+    ])
+  })
+  it('pairs through what the anchors under it carry, as the scenarios check does', () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').anchors['sample.list.first-item'] = {
+      kind: 'item',
+      states: ['current'],
+    }
+
+    expect(compareConsumers([collected('paired.ts')], contract).map(formatProblem)).toEqual([
+      'consumers/paired.ts:13: sample.thing-item never carries state loading',
+      'consumers/paired.ts:15: sample.save-button never carries state current',
+      'consumers/paired.ts:18: sample.thing-item never carries state loading',
+      'consumers/paired.ts:22: "lost" is not a code of the vocabulary',
+    ])
+  })
+  it('leaves the pairing to an anchor the contract does not declare, which is a problem of its own', () => {
+    const text = `page.locator('[data-testid="sample.gone-list"][data-state="current"]')\n`
+
+    expect(
+      compareConsumers([collectFromTest(text, 'a.ts')], sampleContract()).map(formatProblem),
+    ).toEqual(['a.ts:1: "sample.gone-list" is not a declared anchor'])
+  })
   it('keeps the anchors built at runtime, sorted with the rest by file and line', () => {
     expect(printed(['unknown.ts', 'runtime.ts', 'known.ts'])).toEqual([
       `consumers/runtime.ts:7: ${RUNTIME_TEST_ANCHOR}`,

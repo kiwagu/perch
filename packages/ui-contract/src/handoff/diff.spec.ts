@@ -462,11 +462,11 @@ describe('formatChanges', () => {
     const before = fixtureContract()
 
     expect(formatChanges(diffContracts(before, reshaped(before))).split('\n')).toEqual([
-      'contract changes: 1 composite added, 1 anchor state removed, 1 flow transition added in sample, 1 flow transition removed in sample',
+      'contract changes: 1 composite added, 1 anchor state removed, 1 flow line added in sample, 1 flow line removed in sample',
       'composites added: password-rules',
       'anchor states removed: sample.list loading',
-      'flow transitions added in sample: saving onError -> saving show sample.save-button: failed',
-      'flow transitions removed in sample: saving onError -> editing show sample.save-button: failed',
+      'flow lines added in sample: saving onError -> saving show sample.save-button: failed',
+      'flow lines removed in sample: saving onError -> editing show sample.save-button: failed',
     ])
   })
 })
@@ -505,6 +505,40 @@ describe('diffContracts and the order and the inputs of a flow', () => {
         ],
       },
     })
+  })
+  it('lists the anchors a state renders as a set: one listed more is a line, another order none', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'saving').meta = { renders: ['sample.list', 'sample.save-button'] }
+        },
+        (flow) => {
+          plainState(flow, 'saving').meta = {
+            renders: ['sample.title-input', 'sample.save-button', 'sample.list'],
+          }
+        },
+      ),
+    ).toEqual({ sample: { added: ['saving renders sample.title-input'], removed: [] } })
+  })
+  it('lists a guard written by failure code, and the codes it takes as they change', () => {
+    const guarded = (guard: string | { codes: string[] }) => (flow: Flow) => {
+      flow.meta = { guards: { titleGiven: 'the title input holds a title', limited: guard } }
+    }
+
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded({ codes: ['failed'] })),
+    ).toEqual({ sample: { added: ['guard limited takes failed'], removed: [] } })
+    expect(
+      flowsBetween(guarded({ codes: ['failed'] }), guarded({ codes: ['rate-limited', 'failed'] })),
+    ).toEqual({
+      sample: {
+        added: ['guard limited takes rate-limited, failed'],
+        removed: ['guard limited takes failed'],
+      },
+    })
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded('it tried too often')),
+    ).toEqual({ sample: { added: [], removed: [] } })
   })
   it('lists two entry effects swapped, as the last one decides what shows', () => {
     expect(

@@ -38,7 +38,10 @@ for Bun.
     codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
     `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
     input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, the default outcome of each request
+    screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
+    that a guard by failure code guards shows that guard's codes, one on a later branch the
+    failure's codes but those of the code-guarded branches before it, a problem when they
+    leave none; `files/expand-flow/effects.ts`), the default outcome of each request
     (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
     fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
     does, and goes back to the one state that entered it on a control, showing the failure on
@@ -103,10 +106,16 @@ for Bun.
     optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
-    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema` (a navigate's
-    search value a literal or `{ anchor }`, the value a field of the screen holds)
-    and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
-    `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
+    leaving for a state of the root by `#<flow id>.<state>`, a state of any kind saying in
+    `meta.renders` the anchors it renders (an anchor no state lists is rendered in every
+    state, one a state lists only in the states that list it, a region's state rendering its
+    parallel state's too, and a listed anchor the anchors declared under it,
+    `<anchor>.<rest>`, which are rendered where it is or where they are listed themselves;
+    never on a region an authored flow writes by its pattern or its button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
+    failure codes it holds for), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
+    value a field of the screen holds) and `transitionSchema`, with the types `Flow`,
+    `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
+    `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
     machine config in the subset of the flows without effects or `invoke`, whose states are
     visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
@@ -123,7 +132,7 @@ for Bun.
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
-    `[notice:<action>.<name>]`).
+    `[notice:<action>.<name>]`), in the order the text writes them.
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
@@ -148,8 +157,14 @@ for Bun.
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
     which the app gives its machine, in a region),
-    handles each event of a parallel state in one area, reaches every state, leaves every
-    plain state that is not final, and puts the one transition without a guard last) over
+    handles each event of a parallel state in one area, lists in `meta.renders` anchors its own
+    screen declares (a derived part's base, never the part), each once and never beside an
+    anchor it is declared under, renders in a plain state of the root or a state of a region
+    every anchor it handles that a state lists (a derived part, or an anchor declared under a
+    listed one, through the anchor it is under), guards by failure code only branches of an invoke's
+    `onError`, each code one its action fails with and listed once, reaches every state,
+    leaves every plain state that is not final, and puts the one transition without a guard
+    last) over
     the tree of its states, `flowNodes(flow)` (every state in the order of the file as a
     `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode` with its path
     of names and its place in the flow), with `deepTargetOf`, `idTargetOf`, `rootOf`,
@@ -182,8 +197,21 @@ for Bun.
     parameter: no `$param`, no splat, no required search key)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
-    activity a scenario names, as problems of each scenario's file). A problem of an activity
+    activity a scenario names, as problems of each scenario's file; in each text, the where,
+    the scenario sentence, a step or an expected result, a `[code:x]`, `[state:x]` or
+    `[value:x]` pairs with the anchor named last before it, a route being no anchor, and must
+    be one that anchor carries, `<anchor> never carries code <x>`; after a mail or a notice,
+    what follows speaks of it and pairs with no anchor until the text names one again; with no
+    anchor to pair with, it need only be one of the contract). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
+  - `anchorCarries(contract)`: whether an anchor carries a code, a state or a value
+    (`Carried`): one it declares or one an anchor under it, `<anchor>.<rest>`, declares (the
+    items of a composite's list, the options of a select, the eye of an input). Codes are the
+    loaded `codes`, the derived ones included; states the anchor's `states`; values the rows of
+    its choice values and its options' (a pattern row matching), or `show` and `hide` on a
+    `visibility-button`. The scenarios check pairs its brackets through it, and
+    `pairingResolver(contract)` says why a value does not pair with its anchor
+    (`<anchor> never carries code <x>`), for the scenarios and the consumers check alike.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each
@@ -232,7 +260,20 @@ for Bun.
     `compareConsumers(consumed, contract)` wants every anchor known (declared, or derived
     from a declared base with a suffix it lists in `derived`), every code, state and choice
     value in the vocabulary (and `show` or `hide` once an input renders a
-    `visibility-button`), as the scenarios check resolves its bracket references.
+    `visibility-button`), as the scenarios check resolves its bracket references. A code, a
+    state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor
+    carries, as `anchorCarries` reads it: in a selector string, the `data-testid` selector of
+    the same element pairs with it, before or after it (`elementAnchors` in `elements.ts`).
+    Attribute selectors written one after another are of one element; a `:not(`, `:is(` or
+    `:where(` of one compound is that element too, a `data-testid` in a `:not(` naming none;
+    a `:has(`, any other parenthesised argument, or a `:not(` holding a combinator or a list
+    speaks of elements of its own, which pair among themselves, and after its `)` the
+    element before it goes on; a space, a combinator, a list, an expression or other text
+    leads to another element. A `toHaveAttribute` value pairs with the last
+    `getByTestId('<anchor>')` of the receiver of `expect(<receiver>)` (`assertedAnchor` in
+    `receiver.ts`), through the steps that narrow what it found (`first`, `last`, `nth`,
+    `filter`, `and`) and no other. A receiver held in a variable or built by a helper pairs
+    with nothing and is held to the contract alone.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
@@ -279,8 +320,10 @@ for Bun.
     added and removed (a flow one side lacks has none, so a flow added or removed whole shows
     every line; a screen added or removed whole is a change of the screens alone),
     `flowLines(flow)` (an internal helper of the hand-over, `handoff/flow-lines.ts`, not
-    exported from the root): `initial <state>`, `<path> address <path> <search as JSON, keys
-    sorted>` (those the state's address has), `<path> entry|exit <effect>`, `<path> on
+    exported from the root): `initial <state>`, `guard <name> takes <code>, <code>` (one per
+    guard by failure code, its codes as written; a guard's sentence is prose, no line),
+    `<path> address <path> <search as JSON, keys sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
+    `meta.renders`), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than
@@ -288,7 +331,7 @@ for Bun.
     flow shows no change);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>` and
-    the lines of a flow as `flow transitions added in <screen>`.
+    the lines of a flow as `flow lines added in <screen>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
