@@ -116,7 +116,7 @@ flow:
   meta:
     guards:
       signedOut: no account is signed in on this device
-      storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      storedElsewhere: the stored language is one this tab neither stored nor has seen yet
       themeStoredElsewhere: the stored theme is one this tab neither stored nor has seen yet
       protocolTaken: the server has not refused the sync protocol of the version this tab runs since the page loaded
       quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
@@ -156,7 +156,7 @@ flow:
           description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
-          description: Another device stored a language; the app speaks it at once.
+          description: Another tab or device stored a language; the app speaks it at once.
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
@@ -231,7 +231,7 @@ flow:
           description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
-          description: Another device stored a language; the app speaks it at once.
+          description: Another tab or device stored a language; the app speaks it at once.
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
