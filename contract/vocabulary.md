@@ -282,7 +282,7 @@ included.
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
-| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
+| `app-shell.theme-select` | the theme of this device for a guest, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |

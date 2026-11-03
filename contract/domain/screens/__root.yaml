@@ -40,11 +40,13 @@ anchors:
     roles: [ identity, member, admin ]
   app-shell.theme-select:
     kind: select
-    description: "The theme of this device, for anyone, a guest included: light, dark or the device's own setting; a choice applies at once and stays on this device, the same theme the settings screen chooses."
+    description: "The theme of this device for a guest: light, dark or the device's own setting, starting as the theme this device showed last; a choice applies at once, stays on this device, and is the theme an account created here starts with; a signed-in account chooses its theme on its settings screen, and the theme its settings store applies here too."
     binding:
-      action: platform.theme.set
-      params:
-        theme: app-shell.theme-select
+      - model: settings.theme
+      - action: platform.theme.set
+        params:
+          theme: app-shell.theme-select
+    roles: [ guest ]
     dataValue: true
     derived: [ option ]
   app-shell.locale-select:
@@ -105,7 +107,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the app is starting; no screen is rendered.
-  opening-data: "The navigation of the signed-in account, the theme select and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
+  opening-data: "The navigation of the signed-in account and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
   ready: The navigation for a signed-in account, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again and app-shell.install-message until the app is installed; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
@@ -115,6 +117,7 @@ flow:
     guards:
       signedOut: no account is signed in on this device
       storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      themeStoredElsewhere: the stored theme is one this tab neither stored nor has seen yet
       protocolTaken: the server has not refused the sync protocol of the version this tab runs since the page loaded
       quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
   states:
@@ -139,7 +142,6 @@ flow:
       on:
         platform.opened: ready
         platform.open-failed: failed
-        app-shell.theme-select: {}
     ready:
       description: The frame with the open screen.
       meta: { renders: [ app-shell.nav ] }
@@ -152,6 +154,9 @@ flow:
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
+        model.settings.theme:
+          guard: themeStoredElsewhere
+          description: Another tab or device stored a theme; the app shows it at once.
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -221,6 +226,9 @@ flow:
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
+        model.settings.theme:
+          guard: themeStoredElsewhere
+          description: Another tab or device stored a theme; the app shows it at once.
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
