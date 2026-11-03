@@ -272,8 +272,11 @@ for Bun.
     `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
     actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
-    <target>`; per screen both sides hold with a flow, the lines of its flow added and
-    removed, `flowLines(flow)`: `initial <state>`, `<path> entry|exit <effect>`, `<path> on
+    <target>`; per screen both sides hold with a flow on either side, the lines of its flow
+    added and removed (a flow one side lacks has none, so a flow added or removed whole shows
+    every line; a screen added or removed whole is a change of the screens alone),
+    `flowLines(flow)`: `initial <state>`, `<path> address <path> <search as JSON, keys
+    sorted>` (those the state's address has), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than

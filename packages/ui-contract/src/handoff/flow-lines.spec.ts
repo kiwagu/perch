@@ -100,6 +100,35 @@ describe('flowLines', () => {
       'done final',
     ])
   })
+  it("writes a state's address first, its path and its search as JSON with its keys sorted", () => {
+    const flow = flowIn(sampleContract())
+    const editing = flow.states['editing']
+    const viewing = PARALLEL.states['viewing']
+
+    if (editing === undefined || viewing === undefined) {
+      throw new Error('the sample flow lost a state')
+    }
+
+    editing.meta = { address: { path: '/sample/$key', search: { tab: 'a', id: '$id' } } }
+
+    expect(flowLines(flow).slice(0, 2)).toEqual([
+      'initial editing',
+      'editing address /sample/$key {"id":"$id","tab":"a"}',
+    ])
+
+    editing.meta = { address: { path: '/sample/$key' } }
+
+    expect(flowLines(flow)).toContain('editing address /sample/$key')
+    expect(
+      flowLines({
+        ...PARALLEL,
+        states: {
+          ...PARALLEL.states,
+          viewing: { ...viewing, meta: { address: { search: { tab: 'b' } } } },
+        },
+      }),
+    ).toContain('viewing address {"tab":"b"}')
+  })
   it('writes an exit, and a transition without a target, guard or effect as its event alone', () => {
     const flow = flowIn(sampleContract())
 

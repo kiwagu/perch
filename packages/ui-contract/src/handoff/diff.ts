@@ -7,8 +7,9 @@
  * shows as the code it gives), the fields that start or stop holding input, the actions that
  * leave what the user typed behind and how each leave that would lose it asks, the notices the
  * platform actions declare, the transitions it adds or removes in each activity both contracts
- * hold, and the lines of the flow it adds or removes in each screen both hold with a flow (so
- * a contract written shorter that loads to the same flows shows no change).
+ * hold, and the lines of the flow it adds or removes in each screen both hold (a flow added or
+ * removed whole, every line; so a contract written shorter that loads to the same flows shows no
+ * change).
  */
 
 import { type Contract, codesOf, declaredAnchors } from '../check'
@@ -52,9 +53,10 @@ export interface ContractChanges {
   /** By id; per activity both hold, its transitions as `<state> on <anchor> -> <target>`. */
   activities: Change & { transitions: Record<string, Change> }
   /**
-   * Per screen both contracts hold with a flow, by its id, the lines of the flow (`flowLines`:
-   * initial states, entries, exits, transitions with their targets, guards and effects, invokes
-   * and their outcomes, final states; descriptions aside).
+   * Per screen both contracts hold with a flow on either side, by its id, the lines of the flow
+   * (`flowLines`: initial states, addresses, entries, exits, transitions with their targets,
+   * guards and effects, invokes and their outcomes, final states; descriptions aside), a flow
+   * one side lacks having none.
    */
   flows: Record<string, Change>
 }
@@ -196,15 +198,18 @@ function activityChanges(
   }
 }
 
-/** Each screen's flow, by the screen's id; a screen without one is left out. */
-const flowsOf = (contract: Contract | undefined): Map<string, Flow> =>
-  new Map(
-    (contract?.screens.screens ?? []).flatMap(({ id, flow }) =>
-      flow === undefined ? [] : [[id, flow] as const],
-    ),
-  )
+/** Each screen's flow, by the screen's id, undefined for a screen without one. */
+const flowsOf = (contract: Contract | undefined): Map<string, Flow | undefined> =>
+  new Map((contract?.screens.screens ?? []).map(({ id, flow }) => [id, flow]))
 
-/** Per screen both contracts hold with a flow, the lines of the flow added and removed. */
+/** The lines of a flow, none for a screen without one. */
+const linesOf = (flow: Flow | undefined): string[] => (flow === undefined ? [] : flowLines(flow))
+
+/**
+ * Per screen both contracts hold, with a flow on either side, the lines of the flow added and
+ * removed: a flow one side lacks has no lines, so a flow added or removed whole shows every line.
+ * A screen added or removed whole is a change of `screens` alone.
+ */
 function flowChanges(
   before: Contract | undefined,
   after: Contract | undefined,
@@ -215,7 +220,9 @@ function flowChanges(
     [...flowsOf(after)].flatMap(([id, flow]) => {
       const old = was.get(id)
 
-      return old === undefined ? [] : [[id, changeOf(flowLines(old), flowLines(flow))]]
+      return !was.has(id) || (old === undefined && flow === undefined)
+        ? []
+        : [[id, changeOf(linesOf(old), linesOf(flow))]]
     }),
   )
 }

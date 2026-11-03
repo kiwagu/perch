@@ -653,7 +653,8 @@ states, where each control leads, a success or a failure that goes elsewhere tha
 one or shows something else, guards, confirmations and chains of actions. `bun run
 contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or
 derived, so a constraint added to the model shows on review as the codes it adds, and the lines
-of each screen's flow, descriptions aside, so a screen written shorter that loads to the same
+of each screen's flow, its states' addresses among them and every line of a flow added to or
+removed from a screen, descriptions aside, so a screen written shorter that loads to the same
 flow shows no change.
 
 ## Activities

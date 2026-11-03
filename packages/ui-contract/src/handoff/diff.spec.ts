@@ -550,6 +550,72 @@ describe('diffContracts and the order and the inputs of a flow', () => {
   })
 })
 
+describe('diffContracts and a whole flow, and the addresses of its states', () => {
+  const before = fixtureContract()
+  const LINES = [
+    'editing on sample.save-button -> saving',
+    'initial editing',
+    'saving invoke thing.updateThing {"title":"sample.title-input"}',
+    'saving onDone -> editing show sample.save-button: saved navigate /sample/$key',
+    'saving onError -> editing show sample.save-button: failed',
+  ]
+  /** The fixture contract with no flow on its sample screen. */
+  const flowless = (): Contract => {
+    const contract = structuredClone(before)
+    const [screen] = contract.screens.screens
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    delete screen.flow
+
+    return contract
+  }
+
+  it('lists every line of a flow removed from a screen both contracts hold', () => {
+    expect(diffContracts(before, flowless()).flows).toEqual({
+      sample: { added: [], removed: LINES },
+    })
+  })
+  it('lists every line of a flow added to a screen both contracts hold', () => {
+    const changes = diffContracts(flowless(), before)
+
+    expect(changes.flows).toEqual({ sample: { added: LINES, removed: [] } })
+    expect(formatChanges(changes)).not.toBe('contract changes: none')
+  })
+  it('reports a screen added or removed whole under screens only', () => {
+    expect(diffContracts(undefined, before).flows).toEqual({})
+    expect(diffContracts(before, undefined).flows).toEqual({})
+  })
+  it("lists a state's address whose path or search value changes", () => {
+    const addressed = (path: string, search?: Record<string, string>) =>
+      withFlow(before, (flow) => {
+        plainState(flow, 'editing').meta = {
+          address: { path, ...(search === undefined ? {} : { search }) },
+        }
+      })
+
+    expect(diffContracts(addressed('/sample/$key'), addressed('/sample/$key/edit')).flows).toEqual({
+      sample: {
+        added: ['editing address /sample/$key/edit'],
+        removed: ['editing address /sample/$key'],
+      },
+    })
+    expect(
+      diffContracts(
+        addressed('/sample/$key', { tab: 'a' }),
+        addressed('/sample/$key', { tab: 'b' }),
+      ).flows,
+    ).toEqual({
+      sample: {
+        added: ['editing address /sample/$key {"tab":"b"}'],
+        removed: ['editing address /sample/$key {"tab":"a"}'],
+      },
+    })
+  })
+})
+
 describe('diffContracts and the questions before destructive actions', () => {
   /** The fixture contract, `sample.save-button` asking with `code` when one is given. */
   const asking = (code?: string): Contract => {
