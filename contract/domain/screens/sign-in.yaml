@@ -84,7 +84,7 @@ flow:
   initial: sign-in
   meta:
     guards:
-      emailNotVerified: the sign-in was refused because the account's email is not verified yet
+      emailNotVerified: { codes: [ email-not-verified ] }
       passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
       passwordsDiffer: the password typed again is not the same as the password
       confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
@@ -187,10 +187,10 @@ flow:
             guard: emailNotVerified
             description: The resend button shows.
             actions:
-              - show: { user.sign-in.error: [ email-not-verified ] }
+              - show: user.sign-in.error
           - target: sign-in
             actions:
-              - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+              - show: user.sign-in.error
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
