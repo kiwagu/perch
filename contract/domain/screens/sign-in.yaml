@@ -19,7 +19,6 @@ anchors:
     codes: [ check-your-mail ]
   user.sign-in.error:
     kind: error
-    description: "Why the last attempt failed, under the password typed again when that one differs; the next attempt or a switch of mode clears it."
     fields:
       passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
@@ -39,7 +38,7 @@ anchors:
     kind: input
     secret: true
     composite: password-rules
-    description: The password of the account (type password).
+    description: The password of the account.
     binding:
       - action: platform.sign-in
         params:
@@ -51,7 +50,7 @@ anchors:
   user.sign-in.password-confirmation-input:
     kind: input
     secret: true
-    description: "The password typed again (type password); shown only in the mode sign-up, and never sent. As it is typed, the error says it differs once it stops being how the password begins, and the account is asked for only when the two are the same."
+    description: "The password typed again; shown only in the mode sign-up, and never sent. As it is typed, the error says it differs once it stops being how the password begins, and the account is asked for only when the two are the same."
     derived: [ visibility-button ]
   user.sign-in.name-input:
     kind: input

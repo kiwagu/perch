@@ -24,22 +24,18 @@ anchors:
     roles: [ identity, member, admin ]
   app-shell.nav.profile-link:
     kind: link
-    description: The link to the profile, shown to a signed-in account.
     binding: { route: /me }
     roles: [ identity, member, admin ]
   app-shell.nav.organisation-link:
     kind: link
-    description: The link to the organisation page, shown to a signed-in account.
     binding: { route: /org }
     roles: [ identity, member, admin ]
   app-shell.nav.devices-link:
     kind: link
-    description: The link to the devices of the account, shown to a signed-in account.
     binding: { route: /devices }
     roles: [ identity, member, admin ]
   app-shell.nav.settings-link:
     kind: link
-    description: The link to the settings, shown to a signed-in account.
     binding: { route: /settings }
     roles: [ identity, member, admin ]
   app-shell.theme-select:

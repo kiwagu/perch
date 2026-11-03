@@ -34,7 +34,6 @@ anchors:
     binding: { route: /sign-in }
   user.verify-email.error:
     kind: error
-    description: Why the link did not verify the email, or why a new link was not sent.
   user.verify-email.form:
     kind: form
     description: Sends a new verification link to the email typed; shown with the error, and again after a resend.

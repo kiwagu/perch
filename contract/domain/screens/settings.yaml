@@ -8,7 +8,6 @@ entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale
 anchors:
   user.settings.heading:
     kind: heading
-    description: Names the screen.
   user.settings.theme-select:
     kind: select
     description: "The theme of this device: a choice applies at once and stays on this device, the device's own setting followed live while it is system."
@@ -34,7 +33,7 @@ anchors:
   user.settings.password.current-password-input:
     kind: input
     secret: true
-    description: The password the account has now (type password).
+    description: The password the account has now.
     binding:
       action: platform.change-password
       params:
@@ -44,7 +43,7 @@ anchors:
     kind: input
     secret: true
     composite: password-rules
-    description: The new password (type password).
+    description: The new password.
     binding:
       action: platform.change-password
       params:
@@ -53,7 +52,7 @@ anchors:
   user.settings.password.password-confirmation-input:
     kind: input
     secret: true
-    description: "The new password typed again (type password); never sent: the password changes only when the two are the same."
+    description: "The new password typed again; never sent: the password changes only when the two are the same."
     derived: [ visibility-button ]
   user.settings.password.save-button:
     kind: button
@@ -61,7 +60,6 @@ anchors:
     binding: { action: platform.change-password }
   user.settings.password.error:
     kind: error
-    description: "Why the password did not change: under the current password a wrong one, under the new password one it refused, under the password typed again one that differs."
     fields:
       invalid-credentials: user.settings.password.current-password-input
       password-rejected: user.settings.password.new-password-input
@@ -79,7 +77,7 @@ anchors:
   user.settings.email.password-input:
     kind: input
     secret: true
-    description: The password the account has now (type password), which confirms the request.
+    description: The password the account has now, which confirms the request.
     binding:
       action: platform.change-email
       params:
@@ -95,7 +93,6 @@ anchors:
     codes: [ check-your-mail ]
   user.settings.email.error:
     kind: error
-    description: "Why the mail was not sent: under the password a wrong one, under the email one that is not an email."
     fields:
       invalid-credentials: user.settings.email.password-input
       email-invalid: user.settings.email.email-input
