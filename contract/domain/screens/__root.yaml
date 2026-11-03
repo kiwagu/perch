@@ -60,7 +60,7 @@ anchors:
     derived: [ option ]
   app-shell.sign-out-here-button:
     kind: button
-    description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
+    description: Signs the saved account out on this device when its data could not be opened, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
   app-shell.crash-message:
     kind: message
@@ -68,7 +68,7 @@ anchors:
     codes: [ screen-crashed ]
   app-shell.reload-button:
     kind: button
-    description: Loads the page again, shown with app-shell.crash-message.
+    description: Loads the page again.
     binding: { action: platform.reload }
   app-shell.update-message:
     kind: message
@@ -135,12 +135,14 @@ flow:
         app-shell.theme-select: {}
     opening-data:
       description: The signed-in account's frame and the open screen, while its local data is being opened.
+      meta: { renders: [ app-shell.nav ] }
       on:
         platform.opened: ready
         platform.open-failed: failed
         app-shell.theme-select: {}
     ready:
       description: The frame with the open screen.
+      meta: { renders: [ app-shell.nav ] }
       on:
         app-shell.locale-select:
           - target: ready
@@ -202,7 +204,8 @@ flow:
         app-shell.install-button: installing
         app-shell.install-later-button: postponing
     crashed:
-      description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
+      description: The open screen failed to render; the frame stays.
+      meta: { renders: [ app-shell.nav, app-shell.reload-button ] }
       entry:
         - show: { app-shell.crash-message: [ screen-crashed ] }
       exit:
@@ -257,6 +260,7 @@ flow:
             - show: { app-shell.sync-message: [ sync-stopped ] }
     reloading:
       description: The page loads again from the server.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -264,6 +268,7 @@ flow:
           description: Only while the page has not loaded again; the message stays.
     updating:
       description: The page loads again on the version the server serves.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -271,6 +276,7 @@ flow:
           description: Only while the page has not loaded again; the update message stays.
     installing:
       description: The browser's own window asks the user to install the app.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.prompt
         onDone:
@@ -285,6 +291,7 @@ flow:
             - clear: app-shell.install-message
     postponing:
       description: The reminder is put off for three days on this device.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.postpone
         onDone:
@@ -294,6 +301,7 @@ flow:
             - clear: app-shell.install-message
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
         app-shell.locale-select:
@@ -301,6 +309,7 @@ flow:
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
         app-shell.theme-select: {}
     signing-out:
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       invoke:
         src: platform.sign-out
         onDone:
