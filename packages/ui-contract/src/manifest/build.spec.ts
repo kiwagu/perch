@@ -109,6 +109,57 @@ describe('buildManifest', () => {
     })
     expect(manifestSchema.safeParse(built).success).toBe(true)
   })
+  it('writes the description the engine says where the file writes none, and keeps a written one', () => {
+    const withSecret = fixtureContract()
+    const screen = withSecret.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    screen.anchors['sample.title-input'] = {
+      kind: 'input',
+      binding: { model: 'thing.title' },
+      secret: true,
+    }
+
+    const built = buildManifest({ ...withSecret, product: PRODUCT, now: NOW })
+    const anchors = built.screens.find(({ id }) => id === 'sample')?.anchors
+
+    expect(anchors?.['sample.title-input']?.description).toBe(
+      'A secret the user types, never shown (type password).',
+    )
+    expect(anchors?.['sample.page']?.description).toBe('The root of the screen.')
+    expect(anchors?.['sample.save-button']).not.toHaveProperty('description')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("names in an error's description the actions its flow invokes against it", () => {
+    const withError = fixtureContract()
+    const screen = withError.screens.screens.find(({ id }) => id === 'sample')
+    const saving = screen?.flow?.states['saving']
+    const onError = saving?.type === 'parallel' ? undefined : saving?.invoke?.onError
+
+    if (screen === undefined || onError === undefined || Array.isArray(onError)) {
+      expect.unreachable('the fixture has a sample screen whose saving state fails')
+    }
+
+    screen.anchors['sample.form.error'] = { kind: 'error', codes: ['failed'] }
+    onError.actions = [{ type: 'show', params: { anchor: 'sample.form.error', codes: ['failed'] } }]
+
+    const built = buildManifest({ ...withError, product: PRODUCT, now: NOW })
+    const anchors = built.screens.find(({ id }) => id === 'sample')?.anchors
+
+    expect(anchors?.['sample.form.error']?.description).toMatch(
+      /^Why `thing\.updateThing` did not go through: `failed`/,
+    )
+  })
+  it('gives each derived part the meaning of its suffix', () => {
+    expect(manifest.contract.derivedParts['option']).toEqual({
+      kind: 'option',
+      description: 'one entry of a select',
+    })
+    expect(manifestSchema.safeParse(manifest).error?.issues).toBeUndefined()
+  })
   it('carries the screens, the platform, the activities, the scenarios and the model verbatim', () => {
     const withoutBindings = (screens: readonly { bindings: unknown }[]) =>
       screens.map(({ bindings: _bindings, ...screen }) => screen)
@@ -216,9 +267,13 @@ describe('the visibility-button of a password input', () => {
     expect(built.contract.instructions.screenMap).toContain('`secret`')
     expect(built.contract.derivedSuffixes['visibility-button']).toBe('the eye of a password input')
     expect(built.contract.derivedParts).toEqual({
-      'confirm-button': { kind: 'button' },
-      option: { kind: 'option' },
-      'visibility-button': { kind: 'button', values: VISIBILITY_VALUES },
+      'confirm-button': { kind: 'button', description: 'the primary action of a dialog' },
+      option: { kind: 'option', description: 'one entry of a select' },
+      'visibility-button': {
+        kind: 'button',
+        description: 'the eye of a password input',
+        values: VISIBILITY_VALUES,
+      },
     })
     expect(Object.keys(VISIBILITY_VALUES)).toEqual(['show', 'hide'])
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
@@ -259,5 +314,77 @@ describe('a field that starts with a search parameter', () => {
     expect(built.ids['sample.title-input']?.binding).toEqual(binding)
     expect(built.contract.instructions.bindings).toContain('`{ "search": "<name>" }` on a field')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
+describe('a composite a secret input opts into', () => {
+  it('carries the opt-in and the derived anchors in ids, and the composites in the contract', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    const description = 'the rules a new password keeps'
+
+    sample.anchors['sample.title-input'] = {
+      kind: 'input',
+      secret: true,
+      composite: 'password-rules',
+      binding: { model: 'thing.title' },
+    }
+    sample.anchors['sample.password-rule-list'] = {
+      kind: 'list',
+      description,
+      derivedFrom: { composite: 'password-rules' },
+    }
+    sample.anchors['sample.password-rule-list.length-item'] = {
+      kind: 'item',
+      description: 'at least eight characters',
+      states: ['met'],
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    }
+
+    const composites = { 'password-rules': description }
+    const built = buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, composites },
+      screens: {
+        ...base.screens,
+        platform: {
+          ...base.screens.platform,
+          composites: {
+            'password-rules': {
+              description,
+              list: 'password-rule-list',
+              itemState: 'met',
+              items: { length: 'at least eight characters' },
+            },
+          },
+        },
+      },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(built.ids['sample.title-input']?.composite).toBe('password-rules')
+    expect(built.ids['sample.password-rule-list']?.derivedFrom).toEqual({
+      composite: 'password-rules',
+    })
+    expect(built.ids['sample.password-rule-list.length-item']?.derivedFrom).toEqual({
+      composite: 'password-rules',
+      item: 'length',
+    })
+    expect(built.contract.composites).toEqual(composites)
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("publishes the vocabulary's composites and leaves an anchor that opts into none alone", () => {
+    const base = fixtureContract()
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.contract.composites).toEqual(base.vocabulary.composites)
+    expect(built.ids['sample.title-input']).not.toHaveProperty('composite')
+    expect(built.ids['sample.title-input']).not.toHaveProperty('derivedFrom')
   })
 })

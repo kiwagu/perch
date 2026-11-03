@@ -80,3 +80,9 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | Anchor | Meaning |
 |---|---|
 | `sample.status` | the readiness line |
+
+## Composites
+
+| Composite | Meaning |
+|---|---|
+| `password-rules` | the rules a new password keeps |

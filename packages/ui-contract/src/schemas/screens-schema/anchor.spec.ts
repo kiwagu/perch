@@ -97,3 +97,23 @@ describe('a secret field', () => {
     expect(anchorDefSchema.safeParse({ ...password, secret: false }).success).toBe(false)
   })
 })
+
+describe('a composite on an anchor', () => {
+  it('accepts the opt-in on both schemas, and derivedFrom on the canonical one only', () => {
+    const input = { kind: 'input', secret: true, composite: 'password-rules' }
+    const item = {
+      kind: 'item',
+      states: ['met'],
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    }
+    const list = { kind: 'list', derivedFrom: { composite: 'password-rules' } }
+
+    expect(anchorDefSchema.safeParse(input).success).toBe(true)
+    expect(authoredAnchorDefSchema.safeParse(input).success).toBe(true)
+    expect(anchorDefSchema.safeParse(item).success).toBe(true)
+    expect(anchorDefSchema.safeParse(list).success).toBe(true)
+    expect(authoredAnchorDefSchema.safeParse(item).success).toBe(false)
+    expect(authoredAnchorDefSchema.safeParse(list).success).toBe(false)
+    expect(anchorDefSchema.safeParse({ kind: 'input', composite: 'Password' }).success).toBe(false)
+  })
+})

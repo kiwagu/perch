@@ -118,6 +118,117 @@ describe('withDerivedErrors', () => {
     })
   })
 
+  it('adds the actions the flow invokes against the error and the codes it shows there, failed last', () => {
+    const screen = {
+      id: 'sample',
+      anchors: {
+        'sample.form.resend-button': {
+          kind: 'button',
+          binding: { action: 'platform.things.share' },
+        },
+        'sample.form.error': { kind: 'error' },
+      },
+      flow: {
+        initial: 'idle',
+        states: {
+          idle: {
+            entry: [{ show: { 'sample.form.error': ['passwords-differ'] } }],
+            on: { 'sample.form.resend-button': 'sharing' },
+          },
+          sharing: {
+            invoke: {
+              src: 'thing.createThing',
+              input: { title: 'sample.form.title-input' },
+              onDone: 'idle',
+              onError: { target: 'idle', actions: [{ show: 'sample.form.error' }] },
+            },
+          },
+        },
+      },
+    }
+
+    expect(
+      (withDerivedErrors(screen, failureOf) as typeof screen).anchors['sample.form.error'],
+    ).toEqual({
+      kind: 'error',
+      codes: [
+        'not-allowed',
+        'rate-limited',
+        'forbidden',
+        'title-required',
+        'title-too-long',
+        'passwords-differ',
+        'failed',
+      ],
+    })
+  })
+
+  it('maps a code of a field the flow passes to the action it invokes, and keeps written codes', () => {
+    const anchors = {
+      'sample.form.title-input': { kind: 'input' },
+      'sample.form.error': { kind: 'error' },
+    }
+    const flow = {
+      initial: 'idle',
+      states: {
+        idle: { on: { 'sample.form.title-input': 'adding' } },
+        adding: {
+          invoke: {
+            src: 'thing.createThing',
+            input: { title: 'sample.form.title-input' },
+            onDone: 'idle',
+          },
+        },
+      },
+    }
+    const errorWith = (error: Record<string, unknown>) =>
+      (
+        withDerivedErrors(
+          { id: 'sample', anchors: { ...anchors, 'sample.form.error': error }, flow },
+          failureOf,
+        ) as { anchors: Record<string, unknown> }
+      ).anchors['sample.form.error']
+
+    expect(errorWith({ kind: 'error' })).toEqual({
+      kind: 'error',
+      codes: ['forbidden', 'title-required', 'title-too-long', 'failed'],
+      fields: {
+        'title-required': 'sample.form.title-input',
+        'title-too-long': 'sample.form.title-input',
+      },
+    })
+    expect(errorWith({ kind: 'error', codes: ['failed'] })).toEqual({
+      kind: 'error',
+      codes: ['failed'],
+    })
+  })
+
+  it('derives the codes the flow shows under states and regions named entry, exit or actions', () => {
+    const show = (code: string) => [{ show: { 'sample.form.error': [code] } }]
+    const screen = {
+      id: 'sample',
+      anchors: { 'sample.form.error': { kind: 'error' } },
+      flow: {
+        initial: 'entry',
+        states: {
+          entry: { entry: show('a'), on: { 'sample.form.go-button': 'exit' } },
+          exit: { exit: show('b'), on: { 'sample.form.go-button': 'actions' } },
+          actions: {
+            type: 'parallel',
+            states: {
+              entry: { initial: 'exit', states: { exit: { entry: show('c') } } },
+              actions: { initial: 'actions', states: { actions: { exit: show('d') } } },
+            },
+          },
+        },
+      },
+    }
+
+    expect(
+      (withDerivedErrors(screen, failureOf) as typeof screen).anchors['sample.form.error'],
+    ).toEqual({ kind: 'error', codes: ['a', 'b', 'c', 'd'] })
+  })
+
   it('leaves an error whose part binds no action, and every other anchor, as written', () => {
     const anchors = {
       'sample.form.error': { kind: 'error', description: 'Nothing fails here.' },

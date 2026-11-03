@@ -49,6 +49,7 @@ const SCREEN_MAP = [
   'A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event (`snapshot.can`), and disabled otherwise: a Save disabled while it saves is the flow saying so, never a flag of its own.',
   `A \`visibility-button\` (\`<input>.visibility-button\`, the eye of a secret input, in \`contract.derivedParts\`) shows what the input holds as typed, or hides it again: presentation only, it is never an event of a flow and always enabled, and its \`${VALUE}\` names what a click does, \`show\` or \`hide\`.`,
   `\`ids\` holds the same anchors flat, each with its screen. On a development or e2e build, \`window.${PAGE_HELPER}.anchors()\` lists the anchors the page renders now, with their attributes and visibility.`,
+  "`composite` on a secret input names the platform composite it opts into (`platform.composites.<name>`): the screen's `anchors` then hold its list and items, each marked `derivedFrom` with the composite and, for an item, its name; they are declared anchors like any other.",
 ].join(' ')
 
 const BINDINGS = [
@@ -59,6 +60,7 @@ const BINDINGS = [
   '`{ "search": "<name>" }` on a field starts it with the value of that search parameter of the route the screen was opened at, which the user may change; it may sit in a list beside the action the field gives its value to.',
   'A list of bindings runs in its order, or one of them by the mode of the screen; the `flow` says which.',
   "An anchor with `asks` asks the frame's confirmation (`asks.dialog`, with `asks.code`) before its action runs: the app's platform gate opens it, confirm runs the action and cancel does not; a screen builds no dialog of its own for it.",
+  "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning; an error's `codes`, unless the screen writes them, are the failures of the actions bound beside it and invoked against it by the flow, plus the codes the flow shows on it, `failed` last; an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there (a start state, one several states enter, or one a platform or data event enters, writes its `onError`), and an `onError` written as its target alone still shows the failure on that error, on the screen's error when no control enters and the input names no field.",
 ].join(' ')
 
 const MODEL = [

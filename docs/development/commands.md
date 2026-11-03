@@ -18,8 +18,9 @@
   README of its workspace: [database](../../database/README.md), [seed](../../seed/README.md)
   and [apps/gateway](../../apps/gateway/README.md).
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
-  profile, waits for each of its apps and runs the Playwright specs through the front, one
-  worker; `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
+  profile, waits for each of its apps and runs the Playwright specs through the front on two
+  workers, every test on a phone and the `@smoke` ones on a desktop too, about 5 minutes in all;
+  `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
   front serves, so it leaves the dev stand's build alone. It holds a 4G memory lease for its
   build and browsers: when the host is short of memory it waits its turn (`mcproc leases` shows
   the queue). [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.

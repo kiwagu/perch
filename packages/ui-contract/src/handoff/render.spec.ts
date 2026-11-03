@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CoverageMeasure } from './coverage'
-import { listControls, renderCoverage } from './render'
+import { compositeNotes, listControls, renderCoverage } from './render'
 
 const MEASURE: CoverageMeasure = {
   model: [
@@ -36,6 +36,7 @@ const MEASURE: CoverageMeasure = {
     },
   ],
   activities: [],
+  unusedComposites: [],
   screens: [
     { id: 'sample', anchors: 6, scenarios: 1 },
     { id: 'other', anchors: 2, scenarios: 0 },
@@ -119,6 +120,22 @@ describe('renderCoverage', () => {
       '',
       '## Controls',
     ])
+  })
+  it('notes each composite declared and used by no screen after the totals, without failing', () => {
+    const lines = renderCoverage(
+      { ...MEASURE, unusedComposites: ['password-rules', 'pin-rules'] },
+      { anchors: 8, codes: 2, screens: 2 },
+    ).split('\n')
+
+    expect(lines.slice(2, 8)).toEqual([
+      'Totals: fields bound 1/2, actions bound 1/2; controls marked 2/4, ignored 1.',
+      '',
+      'Note: composite password-rules is declared and used by no screen.',
+      'Note: composite pin-rules is declared and used by no screen.',
+      '',
+      '## Model',
+    ])
+    expect(compositeNotes(MEASURE)).toEqual([])
   })
   it('says so when no control is left unmarked or declared off', () => {
     const block = renderCoverage(

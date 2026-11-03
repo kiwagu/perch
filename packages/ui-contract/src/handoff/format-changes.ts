@@ -7,8 +7,10 @@ const LISTS = [
   ['screens', 'screen', 'screens'],
   ['anchors', 'anchor', 'anchors'],
   ['derived', 'derived anchor', 'derived anchors'],
+  ['composites', 'composite', 'composites'],
   ['codes', 'code', 'codes'],
   ['anchorCodes', 'anchor code', 'anchor codes'],
+  ['anchorStates', 'anchor state', 'anchor states'],
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
@@ -43,11 +45,17 @@ function linesOf(
     }))
 }
 
-/** Each non-empty list (`anchors renamed`), then the transitions changed in each activity. */
+/**
+ * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, then
+ * the lines changed in each screen's flow.
+ */
 const listsOf = (changes: ContractChanges) => [
   ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
   ...Object.entries(changes.activities.transitions).flatMap(([id, change]) =>
     linesOf(change, 'transition', 'transitions', ` in ${id}`),
+  ),
+  ...Object.entries(changes.flows).flatMap(([id, change]) =>
+    linesOf(change, 'flow transition', 'flow transitions', ` in ${id}`),
   ),
 ]
 
