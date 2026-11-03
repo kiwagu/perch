@@ -317,7 +317,9 @@ describe('ShellContainer', () => {
     )
     await screen.findByText('home')
     act(() => {
-      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'en' }])
+      services.runner.set(settingsShape, [
+        { id: settingsIdFactory.create(), locale: 'en', theme: 'system' },
+      ])
     })
 
     expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
@@ -427,7 +429,9 @@ describe('ShellContainer', () => {
     await screen.findByText('home')
 
     act(() => {
-      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'es' }])
+      services.runner.set(settingsShape, [
+        { id: settingsIdFactory.create(), locale: 'es', theme: 'system' },
+      ])
     })
 
     await waitFor(() => expect(spoken).toEqual(['es']))

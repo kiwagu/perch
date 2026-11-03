@@ -14,6 +14,8 @@ import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
+import type { Theme } from '../platform/theme'
+
 import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
@@ -83,7 +85,8 @@ export interface BrowserStart extends AppStart {
   readonly warm: () => void
 }
 
-export function bootBrowser(): Result<BrowserStart, BootFailure> {
+/** Boots the app; `theme` is the theme this device shows now, as the page's start made it. */
+export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailure> {
   const store = siteStorage(window)
 
   // Without site storage nothing is kept: neither who is signed in nor the device's own id.
@@ -131,6 +134,7 @@ export function bootBrowser(): Result<BrowserStart, BootFailure> {
       deleteTenantLocal: (identity, key) => deleteLocalDb(tenantUrl(identity, key)),
       gatewayAuth: gatewayAuth(`${origin}/backend`),
       deviceLabel: deviceLabel(navigator),
+      theme,
       online: () => navigator.onLine,
       onOnlineChange: (listener) => {
         window.addEventListener('online', listener)

@@ -5,5 +5,5 @@ import type { ReplicaSchema } from '@workspace/replica'
 export const replicaSchema: ReplicaSchema = {
   note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, created_at: { kind: 'datetime' }, text: { kind: 'text' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },
   profile: { region: 'private', fields: { bio: { kind: 'text' }, created_at: { kind: 'datetime' }, email: { kind: 'plain' }, identity: { kind: 'record', table: 'identity' }, name: { kind: 'plain' } } },
-  settings: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, locale: { kind: 'plain' } } },
+  settings: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, locale: { kind: 'plain' }, theme: { kind: 'plain' } } },
 }

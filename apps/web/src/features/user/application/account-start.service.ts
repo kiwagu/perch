@@ -11,6 +11,8 @@ import {
   settingsIdFactory,
 } from '@workspace/ids'
 
+import type { Theme } from '../../../platform/theme'
+
 import type { ProfileService } from './profile.service'
 import { profileName } from './profile-name.policy'
 import type { SettingsService } from './settings/settings.service'
@@ -95,9 +97,10 @@ const profileIdOf = (identity: IdentityId): ProfileId =>
 
 /**
  * Makes a new account whole on the device that enters it first: its settings in the language it
- * signed up in, then its profile with the name it signed up with (the settings first: a later
- * commit of the region never arrives without the earlier ones). Each is created only where the
- * device holds none, under an id derived from the identity. The device its first verification
+ * signed up in and the theme this device shows as they are created, then its profile with the
+ * name it signed up with (the settings first: a later commit of the region never arrives without
+ * the earlier ones). Each is created only where the device holds none, under an id derived from
+ * the identity. The device its first verification
  * signed in starts it at once: the gateway signs only that device in at the first verification,
  * so nothing of the account exists elsewhere. A device whose sign-in answered that the account has
  * not started (a reset verified its email, or the device that verified it has not synced its start
@@ -115,6 +118,8 @@ export class AccountStartService {
     private readonly settings: Pick<SettingsService, 'read' | 'createSettings'>,
     private readonly kept: KeptStartPort,
     private readonly turns: StartTurns,
+    /** The theme this device shows now. */
+    private readonly theme: () => Theme,
   ) {}
 
   /**
@@ -195,6 +200,7 @@ export class AccountStartService {
           id: settingsIdOf(start.identity),
           identity: start.identity,
           locale: start.locale,
+          theme: this.theme(),
         }),
       projected,
     )

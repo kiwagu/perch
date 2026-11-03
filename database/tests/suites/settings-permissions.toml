@@ -5,13 +5,13 @@ tags = ["permissions", "settings"]
 # their private region, which the gateway checks and stores, so on the server an identity
 # may only read its own row and can neither create, change nor delete one. Refused writes
 # return no rows; root then confirms that nothing changed. The language is one the app
-# speaks, and an account has one row.
+# speaks, the theme one the app shows, and an account has one row.
 
 [[cases]]
 name = "root seeds the settings of alice and of bob"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE settings:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], locale = 'en'; CREATE settings:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'es';"
+sql = "CREATE settings:alice SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], locale = 'en', theme = 'system'; CREATE settings:bob SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'es', theme = 'dark';"
 allow = true
 
 [[cases]]
@@ -55,7 +55,7 @@ exists = false
 name = "alice cannot create settings"
 kind = "sql_expect"
 actor = "alice"
-sql = "CREATE settings:extra SET identity = $auth.id, locale = 'en';"
+sql = "CREATE settings:extra SET identity = $auth.id, locale = 'en', theme = 'system';"
 allow = true
 
 [[cases.assertions]]
@@ -82,10 +82,37 @@ allow = false
 error_contains = "must conform to: $value INSIDE ['en', 'es']"
 
 [[cases]]
+name = "alice cannot change her own theme"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE settings:alice SET theme = 'dark' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a theme the app does not show is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE settings:bob SET theme = 'sepia';"
+allow = false
+error_contains = "must conform to: $value INSIDE ['light', 'dark', 'system']"
+
+[[cases]]
+name = "settings without a theme are refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE settings:themeless SET identity = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], locale = 'en';"
+allow = false
+error_contains = "theme"
+
+[[cases]]
 name = "a second row for the same account is refused"
 kind = "sql_expect"
 actor = "root"
-sql = "CREATE settings:second SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'en';"
+sql = "CREATE settings:second SET identity = (SELECT VALUE id FROM identity WHERE email = 'bob@example.test')[0], locale = 'en', theme = 'system';"
 allow = false
 error_contains = "settings_identity"
 
@@ -103,6 +130,25 @@ equals = "en"
 [[cases.assertions]]
 path = "1"
 equals = "es"
+
+[[cases.assertions]]
+path = "2"
+exists = false
+
+[[cases]]
+name = "the seeded settings keep their themes"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE theme FROM settings ORDER BY theme;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "dark"
+
+[[cases.assertions]]
+path = "1"
+equals = "system"
 
 [[cases.assertions]]
 path = "2"

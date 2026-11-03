@@ -80,7 +80,8 @@
           "region": "private",
           "fields": [
             "id",
-            "locale"
+            "locale",
+            "theme"
           ]
         },
         {
@@ -117,6 +118,21 @@
         },
         {
           "id": "user.settings.updateLocale",
+          "file": "features/user/application/settings/settings.commands.surql",
+          "tables": [
+            "settings"
+          ],
+          "region": "private",
+          "ops": [
+            "set"
+          ],
+          "allow": [
+            "record"
+          ],
+          "deny": []
+        },
+        {
+          "id": "user.settings.updateTheme",
           "file": "features/user/application/settings/settings.commands.surql",
           "tables": [
             "settings"

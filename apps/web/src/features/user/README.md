@@ -5,8 +5,8 @@
 The platform's account module: signing in or creating an account, and the signed-in
 identity's own profile and settings. Both live in the identity's private region: they are
 read and written on the device and kept in step across devices through the gateway; the
-profile is the account's face, the settings what the app is like for it (today its language),
-never read by anyone else. Layers:
+profile is the account's face, the settings what the app is like for it (today its language and
+its theme), never read by anyone else. Layers:
 `domain/` holds the profile entity (schema and bounds) and one file per rule
 (`profile-name.rule.ts`, `profile-bio.rule.ts`, and `password-confirmation.rule.ts`: how the
 password typed again at sign-up stands to the password, the same, following while it is how the
@@ -14,8 +14,8 @@ password begins, or strayed); `application/` the `SignInService` over the
 session port, the `VerifyEmailService` over the session port and the account's start (it
 exchanges a verification link's token; the first verification, which signs this device in,
 starts the account there, and a link verified before starts nothing), the `AccountStartService`
-over the profile and settings services (the account's settings in the language it signed up in,
-then its profile with the name it signed up with, each created only where the device holds none,
+over the profile and settings services (the account's settings in the language it signed up in
+and the theme the device shows as it creates them, then its profile with the name it signed up with, each created only where the device holds none,
 under an id derived from the identity, so the account never has two; the start is kept on the
 browser until both exist and finished when the account's space opens there again, the browser's
 tabs taking their turns so that one tab never creates what another created; the composition
@@ -106,10 +106,11 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
-- Shape `settings.shape.surql`: the signed-in identity's settings (`id`, `locale`) from
+- Shape `settings.shape.surql`: the signed-in identity's settings (`id`, `locale`, `theme`) from
   `settings` in the private region, one row per account.
 - Commands `settings.commands.surql`: `createSettings` (where the account's email is first
-  verified, with the language it signed up in), `updateLocale`. Commands run on the device through the command bus and
+  verified, with the language it signed up in and the theme the device shows), `updateLocale`,
+  `updateTheme`. Commands run on the device through the command bus and
   replicate through the gateway like every command.
 - Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
   alone, `RouterLink` its container gives it) and `presentation/components/password-rule-list/`
@@ -160,7 +161,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
   the account's settings and profile are created where its link is first opened, from the name
-  and the language it signed up with; the verify page says the link is being checked
+  and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to
   sign in (`user.verify-email.message`, code `verified-before`), and for a link that does not
   verify says why (`user.verify-email.error`: `link-invalid`, `link-expired`, `other-account`,

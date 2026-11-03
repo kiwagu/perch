@@ -84,7 +84,7 @@ function bootOnce(): Promise<Boot> {
   // its WASM engines load only when a space opens, so nothing loads them until someone is signed in.
   booting ??= import('./composition/browser')
     .then(({ bootBrowser }) =>
-      bootBrowser().match<Boot>(
+      bootBrowser(() => theme.current()).match<Boot>(
         ({ services, opened, warm }) => ({
           status: 'started',
           services,
