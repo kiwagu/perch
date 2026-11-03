@@ -1,102 +1,47 @@
 /**
  * The routes of the modules are the bindings of the UI contract, one to one: the
  * same path, guard, history and retained parameters, and the same search schema
- * once both sides are reduced to what the router enforces. On a branch the pre-commit hook sets
- * `CONTRACT_AHEAD=1`: a business commit may add a binding before its route, so a binding may
- * wait for its route, while a route never lacks its binding; `bun run check` and `main` want
- * every binding routed.
+ * once both sides are reduced to what the router enforces (`__fixtures__/route-bindings.ts`).
+ * On a branch the pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may add or change
+ * a binding before its route, so a binding may wait for its route, and a route may still equal
+ * its binding as the contract had it at the branch's merge base with `main`
+ * (`CONTRACT_AHEAD_BASE`: the same screen, the same path); a route never lacks its binding, and
+ * one that equals its binding neither now nor at the base fails. `bun run check` and `main` want
+ * every binding routed as it is now.
  */
 
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { type Binding, flatJsonSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
+import { bindingSchema, flatJsonSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
 import { modules } from '../modules'
 
+import {
+  AHEAD,
+  bare,
+  bindingReading,
+  bindingsAtBase,
+  bindingsOf,
+  heldBindings,
+  heldTo,
+  routeReading,
+  routeSearch,
+} from './__fixtures__/route-bindings'
 import type { RouteDef } from './module'
 import { allModules } from './router'
 
 const ROOT = join(import.meta.dirname, '../../../..')
-const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
-/**
- * Schema keywords the comparison leaves out: prose for the contract's readers
- * (`description`, `title`), the fake values of its example links (`examples`), the
- * controls that set a parameter (`x-perch`), the dialect (`$schema`, written by
- * `z.toJSONSchema`, left out by a binding) and
- * `additionalProperties`: the contract pins it to `false` for its authors, while
- * the router's `z.object` is tolerant at runtime by design, an unknown search
- * parameter is not an error.
- */
-const META_KEYWORDS = new Set([
-  'description',
-  'title',
-  'examples',
-  'x-perch',
-  '$schema',
-  'additionalProperties',
-])
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
-/**
- * Zod writes the safe-integer limits on every `z.int()` for each bound the schema leaves
- * open (`z.int().min(1)` still writes `maximum: MAX_SAFE_INTEGER`); a contract writes only
- * the bounds it sets. On an integer, a bound equal to its safe limit is left out, each one
- * on its own.
- */
-const SAFE_LIMITS: Readonly<Record<string, number>> = {
-  minimum: Number.MIN_SAFE_INTEGER,
-  maximum: Number.MAX_SAFE_INTEGER,
-}
-
-const isSafeLimit = (schema: Record<string, unknown>, keyword: string): boolean =>
-  schema['type'] === 'integer' &&
-  Object.hasOwn(SAFE_LIMITS, keyword) &&
-  schema[keyword] === SAFE_LIMITS[keyword]
-
-/**
- * A JSON Schema without the keywords above. Only the values of `properties` are
- * schemas themselves: its keys are parameter names (a parameter may be called
- * `title`) and are never filtered; every other keyword's value is compared as it is.
- */
-function bare(schema: unknown): unknown {
-  if (!isRecord(schema)) {
-    return schema
-  }
-
-  return Object.fromEntries(
-    Object.entries(schema)
-      .filter(([keyword]) => !META_KEYWORDS.has(keyword))
-      .filter(([keyword]) => !isSafeLimit(schema, keyword))
-      .map(([keyword, value]) =>
-        keyword === 'properties' && isRecord(value)
-          ? [keyword, Object.fromEntries(Object.entries(value).map(([name, p]) => [name, bare(p)]))]
-          : [keyword, value],
-      ),
-  )
-}
-
-/**
- * The search a route enforces, on the input view: `required` lists what the URL
- * must carry, so a parameter with a default or an optional one is not in it.
- */
-const routeSearch = (search: RouteDef['search']): unknown =>
-  search ? bare(z.toJSONSchema(search, { target: 'draft-2020-12', io: 'input' })) : undefined
-
+const AT_BASE = bindingsAtBase(ROOT)
 const { screens, problems } = loadScreens(ROOT)
-const bindings: readonly { readonly screen: string; readonly binding: Binding }[] = (
-  screens?.screens ?? []
-)
-  .filter((screen) => screen.frame !== true)
-  .flatMap((screen) => screen.bindings.map((binding) => ({ screen: screen.id, binding })))
+const bindings = bindingsOf((screens?.screens ?? []).filter((screen) => screen.frame !== true))
 const routes: readonly RouteDef[] = [...new Set(allModules(modules))].flatMap(
   (module) => module.routes,
 )
+const held = heldBindings(bindings, routes, 'bindings' in AT_BASE ? AT_BASE.bindings : [])
 
 describe('the search comparison', () => {
   it('compares a parameter named like a dropped keyword', () => {
@@ -146,16 +91,74 @@ describe('the search comparison', () => {
   })
 })
 
+describe('the binding a route is held to', () => {
+  const page = 'Page'
+  const searchOf = (properties: Readonly<Record<string, unknown>>) => ({
+    type: 'object',
+    properties,
+    additionalProperties: false,
+  })
+  const was = {
+    screen: 'sample',
+    binding: bindingSchema.parse({ path: '/list', roles: ['identity'] }),
+  }
+  const now = {
+    screen: 'sample',
+    binding: bindingSchema.parse({
+      path: '/list',
+      roles: ['identity'],
+      guard: 'guest',
+      search: searchOf({ q: { type: 'string' } }),
+    }),
+  }
+
+  it('is the binding now when the route equals it', () => {
+    const route: RouteDef = {
+      path: '/list',
+      page,
+      guard: 'guest',
+      search: z.object({ q: z.string().optional() }),
+    }
+
+    expect(heldTo(route, now, [was])).toBe(now)
+  })
+
+  it('is the binding at the base when the route still equals that one', () => {
+    const route: RouteDef = { path: '/list', page }
+
+    expect(heldTo(route, now, [was])).toBe(was)
+    expect(heldTo(route, now, [{ ...was, screen: 'other' }])).toBe(now)
+    expect(
+      heldTo(route, now, [
+        { ...was, binding: bindingSchema.parse({ path: '/other', roles: ['identity'] }) },
+      ]),
+    ).toBe(now)
+    expect(heldTo(route, now, [])).toBe(now)
+  })
+
+  it('is the binding now, which it fails, when the route equals neither', () => {
+    const route: RouteDef = { path: '/list', page, guard: 'authenticated' }
+
+    expect(heldTo(route, now, [was])).toBe(now)
+    expect(bindingReading(now.binding)).not.toEqual(routeReading(route))
+  })
+})
+
 describe('the routes of the modules', () => {
   it('read a contract without problems', () => {
     expect(problems.map(formatProblem)).toEqual([])
     expect(routes.length).toBeGreaterThan(0)
   })
 
-  it.each(routes.map((route) => [route.path, route] as const))(
+  // A base that does not load fails here, once; the routes then wait for it.
+  it("the contract at the branch's base loads", () => {
+    expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
+  })
+
+  it.skipIf('problem' in AT_BASE).each(routes.map((route) => [route.path, route] as const))(
     '%s equals its binding in the contract',
     (path, route) => {
-      const matching = bindings.filter(({ binding }) => binding.path === path)
+      const matching = held.filter(({ binding }) => binding.path === path)
 
       expect(
         matching.map(({ screen }) => screen),
@@ -164,13 +167,13 @@ describe('the routes of the modules', () => {
 
       const [found] = matching
       const screen = found?.screen ?? '(no screen)'
+      const binding = found === undefined ? undefined : bindingReading(found.binding)
+      const app = routeReading(route)
 
-      expect(found?.binding.guard, `${screen}: guard of ${path}`).toBe(route.guard)
-      expect(found?.binding.history, `${screen}: history of ${path}`).toBe(route.history ?? 'push')
-      expect(found?.binding.retain, `${screen}: retain of ${path}`).toEqual(route.retain)
-      expect(bare(found?.binding.search), `${screen}: search of ${path}`).toEqual(
-        routeSearch(route.search),
-      )
+      expect(binding?.guard, `${screen}: guard of ${path}`).toBe(app.guard)
+      expect(binding?.history, `${screen}: history of ${path}`).toBe(app.history)
+      expect(binding?.retain, `${screen}: retain of ${path}`).toEqual(app.retain)
+      expect(binding?.search, `${screen}: search of ${path}`).toEqual(app.search)
     },
   )
 
