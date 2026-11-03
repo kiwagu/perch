@@ -47,8 +47,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 
 - Routes: `/sign-in` (guard `guest`; search `email`) renders `SignInPage`, its email field
   starting with the address's `email`, the one a page that moved there carried over
-  (`useSearchStart`); `/forgot-password` (no guard: a
-  signed-in device may ask too; search `email`) renders `ForgotPasswordPage`, which asks for the
+  (`useSearchStart`); `/forgot-password` (guard `guest`: a signed-in account changes its
+  password in its settings; search `email`) renders `ForgotPasswordPage`, which asks for the
   mail of a password reset (`application/forgot-password.machine.ts`, the flow of
   `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
   email field starts with the address's `email`, `useSearchStart`), the same answer for any email

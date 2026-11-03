@@ -66,10 +66,11 @@ export const UserModule = defineModule({
       guard: 'guest',
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
-    // Open to anyone: a signed-in device may ask for the mail too.
+    // A guest's: a signed-in account changes its password in its settings.
     {
       path: '/forgot-password',
       page: 'ForgotPasswordPage',
+      guard: 'guest',
       search: z.object({ email: z.string().max(254).optional() }),
     },
     // Open to anyone: a reset of the account signed in here signs this device out.
