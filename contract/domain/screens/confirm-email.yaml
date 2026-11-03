@@ -21,7 +21,7 @@ entry: [ user.confirm-email.status, user.confirm-email.message, user.confirm-ema
 anchors:
   user.confirm-email.status:
     kind: status
-    description: Says the link is being checked; the message or the error replaces it once it is.
+    description: Says the link is being checked.
     states: [ loading ]
   user.confirm-email.message:
     kind: message
@@ -29,18 +29,16 @@ anchors:
     codes: [ email-changed ]
   user.confirm-email.sign-in-link:
     kind: link
-    description: Leads to the sign-in page; shown with email-changed when nobody is signed in on this device.
+    description: Leads to the sign-in page.
     binding: { route: /sign-in }
     roles: [ guest ]
   user.confirm-email.profile-link:
     kind: link
-    description: Leads to the profile, which shows the new email; shown with email-changed when this device is signed in to the account whose email changed.
+    description: Leads to the profile, which shows the new email.
     binding: { route: /me }
     roles: [ identity ]
   user.confirm-email.error:
     kind: error
-    description: "Why the link did not change the email: unknown or used before, too old, or the new email has got an account meanwhile."
-    codes: [ link-invalid, link-expired, rate-limited, failed ]
 states:
   loading: "user.confirm-email.status in loading: the link is being checked."
   ready: "The message with its link, or the error."
@@ -53,34 +51,32 @@ flow:
   states:
     confirming:
       description: The token of the link is being exchanged.
+      meta: { renders: [ user.confirm-email.status ] }
       invoke:
         src: platform.confirm-email
         input: { token: { search: token } }
         onDone:
           - target: done-here
             guard: thisAccount
-            description: The message says the email is the new one, beside user.confirm-email.profile-link.
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
           - target: done
             guard: nobodyHere
-            description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
           - target: done-elsewhere
             description: "Another account is signed in on this device: the message says the email is the new one, with no link, since signing in needs that other account signed out first."
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
-        onError:
-          target: failed
-          actions:
-            - show: user.confirm-email.error
+        onError: failed
     done-here:
       description: The message says the email is the new one, beside user.confirm-email.profile-link.
       type: final
+      meta: { renders: [ user.confirm-email.profile-link ] }
     done:
       description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
       type: final
+      meta: { renders: [ user.confirm-email.sign-in-link ] }
     done-elsewhere:
       description: The message says the email is the new one; another account stays signed in on this device, and no link is offered.
       type: final

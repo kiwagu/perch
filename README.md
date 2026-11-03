@@ -123,14 +123,14 @@ mcproc.
 
 ## Current state
 
-The following works end to end, on a phone and on a desktop: sign-up with email verification
-and sign-in with device sessions; a profile kept in step across devices and while offline;
-settings with the theme and the language, English or Spanish; the devices page; organisations
-with members, invitations and shared notes under roles; and an app shell that shows the state
-of the sync, offers a reload when a new version is out, answers unknown addresses and crashes,
-and installs as an app that opens offline. Every scenario is paired with its Playwright test,
-production builds are held to size budgets for phones, and a load test drives simulated devices
-against the gateway.
+The following works end to end, on a phone, where every scenario runs, and on a desktop, where
+the `@smoke` ones run: sign-up with email verification and sign-in with device sessions; a
+profile kept in step across devices and while offline; settings with the theme and the language,
+English or Spanish; the devices page; organisations with members, invitations and shared notes
+under roles; and an app shell that shows the state of the sync, offers a reload when a new
+version is out, answers unknown addresses and crashes, and installs as an app that opens
+offline. Every scenario is paired with its Playwright test, production builds are held to size
+budgets for phones, and a load test drives simulated devices against the gateway.
 
 As a playground, any part of it may be replaced by a better design; that is intended.
 
@@ -138,13 +138,15 @@ As a playground, any part of it may be replaced by a better design; that is inte
 
 ```sh
 bun install
-mcproc start dev     # SurrealDB, the gateway, a mailbox and the front
+mcproc start dev     # SurrealDB, a mailbox, the gateway, the web app's watcher and the front
 bun run seed         # demo accounts and an organisation
 bun run check        # the gate for a change
 ```
 
-Then open https://localhost:5443. The prerequisites and a walk through the application are in
-[docs/development/getting-started.md](docs/development/getting-started.md).
+Then open https://localhost:5443. To keep the gateway and the web app's watcher in a terminal of
+your own instead, start only the dedicated services (SurrealDB, the mailbox and the front) with
+`mcproc start services` and run `bun run dev`. The prerequisites, the two ways and a walk through
+the application are in [docs/development/getting-started.md](docs/development/getting-started.md).
 
 ## Documentation
 

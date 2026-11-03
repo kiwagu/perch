@@ -17,29 +17,25 @@ anchors:
     codes: [ welcome, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
   app-shell.toast:
     kind: toast
-    description: "The outcome of a mutation, shown for a short while in the tab that acted: several may show at once, stacked with the newest at the top and the earlier ones moving down; a click dismisses one. It renders once per toast shown, each carrying data-code; its codes are derived, one per operation a flow runs: an action of the model, or a platform action the platform's toasts map lists."
+    description: The outcome of a mutation, shown for a short while in the tab that acted; a click dismisses one.
   app-shell.nav:
     kind: nav
     description: "The main navigation of a signed-in account: a bottom bar on small screens, a side rail on large ones; the link of the open route is marked current. A guest sees no navigation at all: the sign-in page and the page a mail's link opens lead on by their own links."
     roles: [ identity, member, admin ]
   app-shell.nav.profile-link:
     kind: link
-    description: The link to the profile, shown to a signed-in account.
     binding: { route: /me }
     roles: [ identity, member, admin ]
   app-shell.nav.organisation-link:
     kind: link
-    description: The link to the organisation page, shown to a signed-in account.
     binding: { route: /org }
     roles: [ identity, member, admin ]
   app-shell.nav.devices-link:
     kind: link
-    description: The link to the devices of the account, shown to a signed-in account.
     binding: { route: /devices }
     roles: [ identity, member, admin ]
   app-shell.nav.settings-link:
     kind: link
-    description: The link to the settings, shown to a signed-in account.
     binding: { route: /settings }
     roles: [ identity, member, admin ]
   app-shell.theme-select:
@@ -64,7 +60,7 @@ anchors:
     derived: [ option ]
   app-shell.sign-out-here-button:
     kind: button
-    description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
+    description: Signs the saved account out on this device when its data could not be opened, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
   app-shell.crash-message:
     kind: message
@@ -72,7 +68,7 @@ anchors:
     codes: [ screen-crashed ]
   app-shell.reload-button:
     kind: button
-    description: Loads the page again, shown with app-shell.crash-message.
+    description: Loads the page again.
     binding: { action: platform.reload }
   app-shell.update-message:
     kind: message
@@ -88,7 +84,7 @@ anchors:
     codes: [ synced, sending, connecting, offline, sync-stopped ]
   app-shell.install-message:
     kind: message
-    description: "The reminder to install the app, for anyone, a guest included, until it is installed: with app-shell.install-button where the browser can install it, or the steps that install it where only the user can; app-shell.install-later-button puts it off for three days on this device, and the installed app never shows it."
+    description: "The reminder to install the app, for anyone, a guest included, until it is installed: with app-shell.install-button where the browser can install it, or the steps that install it where only the user can."
     codes: [ install-available, install-by-steps ]
   app-shell.install-button:
     kind: button
@@ -100,11 +96,11 @@ anchors:
     binding: { action: platform.install.postpone }
   app-shell.confirmation:
     kind: confirmation
-    description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out. It carries data-code naming the action; its confirm-button lets the action run, its cancel-button stays with nothing changed. One for the whole app: the controls that ask and its codes are derived."
+    description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out."
     derived: [ confirm-button, cancel-button ]
   app-shell.leave-dialog:
     kind: dialog
-    description: "Asks whether to leave and lose what was typed but not saved, before a leave the user starts while a field holds unsaved input: another screen, a sign-out, a switch of organisation, a change of language; its confirm-button leaves, its cancel-button stays with the input kept. A reload or a closed tab gets the browser's own prompt instead."
+    description: "Asks whether to leave and lose what was typed but not saved: another screen, a sign-out, a switch of organisation, a change of language."
     codes: [ unsaved-input ]
     derived: [ confirm-button, cancel-button ]
 states:
@@ -136,38 +132,34 @@ flow:
         app-shell.locale-select:
           target: opening
           description: The app speaks the chosen language; no account's settings are open yet to store it.
-        app-shell.theme-select:
-          description: The app shows the chosen theme at once, and this device keeps it.
+        app-shell.theme-select: {}
     opening-data:
       description: The signed-in account's frame and the open screen, while its local data is being opened.
+      meta: { renders: [ app-shell.nav ] }
       on:
         platform.opened: ready
         platform.open-failed: failed
-        app-shell.theme-select:
-          description: The app shows the chosen theme at once, and this device keeps it.
+        app-shell.theme-select: {}
     ready:
       description: The frame with the open screen.
+      meta: { renders: [ app-shell.nav ] }
       on:
         app-shell.locale-select:
           - target: ready
             guard: signedOut
             description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
-        app-shell.theme-select:
-          description: The app shows the chosen theme at once, and this device keeps it.
+        app-shell.theme-select: {}
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
         platform.signed-out:
-          description: The notice and the state of the sync go with the account.
           actions:
             - clear: app-shell.notice-message
             - clear: app-shell.sync-message
         platform.change-rejected:
-          description: The notice says the server refused a change and this device undid it.
           actions:
             - show: { app-shell.notice-message: [ change-rejected ] }
         platform.changes-reloaded:
-          description: The notice says the server refused the undo too, and the later unsent changes were undone.
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
         platform.crashed:
@@ -175,121 +167,100 @@ flow:
           description: The open screen failed to render.
         platform.new-version:
           guard: protocolTaken
-          description: The message says a newer version is served, with the button that loads it; a refused protocol says more, so its message stays.
+          description: A refused protocol says more, so its message stays.
           actions:
             - show: { app-shell.update-message: [ new-version ] }
         platform.protocol-refused:
-          description: The message says the server no longer takes this version's protocol, so this device's changes stop syncing until the page loads again.
           actions:
             - show: { app-shell.update-message: [ protocol-outdated ] }
         app-shell.update-button: updating
         platform.tab-hidden:
           target: updating
           guard: quietReload
-          description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
         platform.synced:
-          description: The state of the sync says it is connected and nothing waits to be sent.
           actions:
             - show: { app-shell.sync-message: [ synced ] }
         platform.sending:
-          description: The state of the sync says changes made here are on their way.
           actions:
             - show: { app-shell.sync-message: [ sending ] }
         platform.connecting:
-          description: The state of the sync says it connects, or connects again.
           actions:
             - show: { app-shell.sync-message: [ connecting ] }
         platform.offline:
-          description: The state of the sync says the browser has no network and changes wait here.
           actions:
             - show: { app-shell.sync-message: [ offline ] }
         platform.sync-stopped:
-          description: The state of the sync says it stopped and does not resume in this page.
           actions:
             - show: { app-shell.sync-message: [ sync-stopped ] }
         platform.install-offered:
-          description: The reminder says the app can be installed, with the button that installs it.
           actions:
             - show: { app-shell.install-message: [ install-available ] }
         platform.install-by-steps:
-          description: The reminder shows the steps that install the app.
           actions:
             - show: { app-shell.install-message: [ install-by-steps ] }
         platform.installed:
-          description: The app is installed, so the reminder goes for good.
           actions:
             - clear: app-shell.install-message
         app-shell.install-button: installing
         app-shell.install-later-button: postponing
     crashed:
-      description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
+      description: The open screen failed to render; the frame stays.
+      meta: { renders: [ app-shell.nav, app-shell.reload-button ] }
       entry:
         - show: { app-shell.crash-message: [ screen-crashed ] }
       exit:
         - clear: app-shell.crash-message
       on:
         app-shell.reload-button: reloading
-        platform.navigated:
-          target: ready
-          description: Another screen opens in the place of the one that failed, by a link, Back, Forward or an address typed.
+        platform.navigated: ready
         app-shell.locale-select:
           - target: ready
             guard: signedOut
             description: The screen renders again in the guest's chosen language, with no settings to store it.
-        app-shell.theme-select:
-          description: The app shows the chosen theme at once, the message staying, and this device keeps it.
+        app-shell.theme-select: {}
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
         platform.signed-out:
-          description: The notice and the state of the sync go with the account.
           actions:
             - clear: app-shell.notice-message
             - clear: app-shell.sync-message
         platform.change-rejected:
-          description: The notice says the server refused a change and this device undid it.
           actions:
             - show: { app-shell.notice-message: [ change-rejected ] }
         platform.changes-reloaded:
-          description: The notice says the server refused the undo too, and the later unsent changes were undone.
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
         platform.new-version:
           guard: protocolTaken
-          description: The message says a newer version is served, the crash message staying; a refused protocol says more, so its message stays.
+          description: A refused protocol says more, so its message stays.
           actions:
             - show: { app-shell.update-message: [ new-version ] }
         platform.protocol-refused:
-          description: The message says the server no longer takes this version's protocol, the crash message staying.
           actions:
             - show: { app-shell.update-message: [ protocol-outdated ] }
         app-shell.update-button: reloading
         platform.tab-hidden:
           target: reloading
           guard: quietReload
-          description: The tab went to the background with an update waiting and nothing unsaved, so the page loads again by itself, once.
         platform.synced:
-          description: The state of the sync says it is connected and nothing waits to be sent, the crash message staying.
           actions:
             - show: { app-shell.sync-message: [ synced ] }
         platform.sending:
-          description: The state of the sync says changes made here are on their way, the crash message staying.
           actions:
             - show: { app-shell.sync-message: [ sending ] }
         platform.connecting:
-          description: The state of the sync says it connects, or connects again, the crash message staying.
           actions:
             - show: { app-shell.sync-message: [ connecting ] }
         platform.offline:
-          description: The state of the sync says the browser has no network and changes wait here, the crash message staying.
           actions:
             - show: { app-shell.sync-message: [ offline ] }
         platform.sync-stopped:
-          description: The state of the sync says it stopped and does not resume in this page, the crash message staying.
           actions:
             - show: { app-shell.sync-message: [ sync-stopped ] }
     reloading:
       description: The page loads again from the server.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -297,6 +268,7 @@ flow:
           description: Only while the page has not loaded again; the message stays.
     updating:
       description: The page loads again on the version the server serves.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -304,6 +276,7 @@ flow:
           description: Only while the page has not loaded again; the update message stays.
     installing:
       description: The browser's own window asks the user to install the app.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.prompt
         onDone:
@@ -318,6 +291,7 @@ flow:
             - clear: app-shell.install-message
     postponing:
       description: The reminder is put off for three days on this device.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.postpone
         onDone:
@@ -327,19 +301,19 @@ flow:
             - clear: app-shell.install-message
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
         app-shell.locale-select:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
-        app-shell.theme-select:
-          description: The app shows the chosen theme at once, and this device keeps it.
+        app-shell.theme-select: {}
     signing-out:
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       invoke:
         src: platform.sign-out
         onDone:
           target: signed-out
-          description: The page loads again on sign-in.
           actions:
             - navigate: /sign-in
         onError:

@@ -27,6 +27,13 @@ a composite renders on its own: `user.profile.sign-out-dialog.confirm-button`,
 its `derived`. A rendered anchor, base or derived, has up to 5 segments and matches
 `^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`.
 
+A composite's anchors are declared anchors the loader derives, not derived parts. A secret
+`input` that opts into a composite of the platform (`composite: password-rules`) declares on
+its screen `<screen>.<list>`, a `list`, and `<screen>.<list>.<item>-item`, an `item` per item
+of the composite: `user.settings.password-rule-list.digit-item` is screen `user.settings`,
+kind `item`. They follow the grammar above, no screen file writes them, and "Composites" names
+each composite.
+
 Every anchor is declared once, in one screen file. On a page it marks one element, except
 an `item`, `row` or `option`, which marks every entry of its list, table or select and
 tells them apart by `data-id` (an entity) or `data-value` (a choice). No declared anchor
@@ -144,7 +151,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
-| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item`, `user.reset-password.password-rule-list.length-item`, `user.reset-password.password-rule-list.characters-item`, `user.reset-password.password-rule-list.digit-item`, `user.reset-password.password-rule-list.uppercase-item`, `user.reset-password.password-rule-list.lowercase-item`, `user.reset-password.password-rule-list.symbol-item`, `user.settings.password-rule-list.length-item`, `user.settings.password-rule-list.characters-item`, `user.settings.password-rule-list.digit-item`, `user.settings.password-rule-list.uppercase-item`, `user.settings.password-rule-list.lowercase-item`, `user.settings.password-rule-list.symbol-item` | the password typed keeps this rule |
+| `met` | each item of the composite `password-rules` | the password typed keeps this rule |
 
 ## Codes
 
@@ -287,3 +294,13 @@ included.
 | `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
 | `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
+
+## Composites
+
+What the platform declares once and a screen derives by opting in (`platform.yaml`
+`composites`): the list with its items, their descriptions and their item state, so no screen
+repeats them. A row names the composite and what it is for.
+
+| Composite | Meaning |
+|---|---|
+| `password-rules` | the rules a new password keeps, listed under the field that takes it, each marked once the password typed keeps it |

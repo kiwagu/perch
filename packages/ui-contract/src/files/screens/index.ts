@@ -15,6 +15,7 @@ export type {
   FlowTransition,
   ParamValue,
   Platform,
+  PlatformComposite,
   PlatformFile,
   Screen,
   ScreensFile,

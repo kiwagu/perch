@@ -18,8 +18,9 @@
   README of its workspace: [database](../../database/README.md), [seed](../../seed/README.md)
   and [apps/gateway](../../apps/gateway/README.md).
 - `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
-  profile, waits for each of its apps and runs the Playwright specs through the front, one
-  worker; `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
+  profile, waits for each of its apps and runs the Playwright specs through the front on two
+  workers, every test on a phone and the `@smoke` ones on a desktop too, about 5 minutes in all;
+  `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
   front serves, so it leaves the dev stand's build alone. It holds a 4G memory lease for its
   build and browsers: when the host is short of memory it waits its turn (`mcproc leases` shows
   the queue). [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.
@@ -27,6 +28,23 @@
 `bun run test:db` and `CI=1 bun run test:e2e`, run without arguments, record a receipt for the
 tree they passed on in the gitignored `.gates/` folder (`scripts/gates/`; a run given a spec or a
 filter records none); a commit on `main` is refused without both receipts for exactly its tree.
+
+## The development stand
+
+- `mcproc start dev`: the whole development stand under pm2: SurrealDB, the mailbox, the gateway,
+  the web app's build watcher and the front. For a stand that just runs, an agent's or in the
+  background; `mcproc stop dev` stops it.
+- `mcproc start services`: the stand's dedicated services alone, SurrealDB, the mailbox and the
+  front, for `bun run dev`.
+- `bun run dev`: the Bun dev scripts in the foreground through turbo, the gateway (`bun --watch`)
+  and the web app's build watcher, with this checkout's development stand: it reads the stand
+  from `mcproc --json describe` (a worktree gets its own ports), defines the gateway's user on its
+  SurrealDB and gives the gateway the settings the manifest's `gateway` app starts with
+  (`scripts/stand-gateway/`). It stops before it starts when the dev SurrealDB or the mailbox
+  does not answer (`mcproc start services`), when the pm2 gateway or watcher of `mcproc start dev`
+  runs (`mcproc stop gateway && mcproc stop web`), or when another process holds the gateway's
+  port, and warns when the front does not answer. `--exclude <workspace>` (or `-x`, comma lists
+  too) leaves a workspace out; what follows `--` goes to turbo. Ctrl-C stops it.
 
 ## Commands of the root
 

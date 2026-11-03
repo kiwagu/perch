@@ -3,8 +3,8 @@
 ## Role in the architecture
 
 End-to-end tests of the web application in a real browser, on two Playwright projects:
-`mobile` (Pixel 7) first, then `desktop` (1280x800). Each test pairs with an
-instruction-style scenario, a Markdown file in `scenarios/` beside `src/`: the scenario
+`mobile` (Pixel 7) runs every test, `desktop` (1280x800) the `@smoke` ones. Each test pairs
+with an instruction-style scenario, a Markdown file in `scenarios/` beside `src/`: the scenario
 `scenarios/<entity>/<layer>/[<area>/]<slug>.md` with the test
 `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts`, whose first line names the scenario's
 id, its path without `.md` (`// scenario: user/base/sign-up`). A scenario opens with a YAML
@@ -40,20 +40,34 @@ gateway sent from the stand's MailDev at `MAILBOX_URL` (http://127.0.0.1:1090 in
 checkout), which `mcproc exec` sets too.
 
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
-(`{ tag: '@smoke' }`); nothing compares the two yet. `@smoke`: `user/base/` (one account on
-its own) and `contract/base/manifest`. `@full`: `user/flows/` (one account across devices,
+(`{ tag: '@smoke' }`); nothing compares the two yet. The tag decides where a test runs: the
+`mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
+goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
+`user/base/` (one account on its own) but the tests named below, `organisation/base/`,
+`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation` and
+`open-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
-`change-email-refused`), and `organisation/flows/` (two accounts, each in a browser of its
-own). `bun run test:e2e --grep @smoke` runs the first set.
+`change-email-refused`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
+a new version, offline, an outdated protocol, the sync status), and `organisation/flows/` (two
+accounts, each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set
+on both projects.
 
-The suite runs from the front's one client address, so it spends the gateway's per-address
-limits, which a launcher run starts afresh by restarting the gateway: the mails of sign-ups,
-resends, reset requests and email changes (200 per quarter hour), and the attempts at a reset
-link and at a confirmation link (20 each per ten minutes). A test uses fresh emails and as few
-of them as its scenario needs.
+The suite runs from the front's one client address, so its tests, on every worker, share the
+gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
+credential checks (sign-ups, sign-ins, verifications and changes of a password or an email, 20
+per ten seconds) set the number of workers: with two, a run makes at most 17 in any ten seconds;
+three reached 22 and four had a sign-in refused. The others the run spends as a whole, in one
+window of each, and stays under them in whatever order the workers take the tests: the mails
+of sign-ups, resends, reset requests and email changes (about 120 of 200 per quarter hour), the
+attempts at a reset link (10 of 20 per ten minutes) and at a confirmation link (7 of 20), the
+organisations created (16 of 30 an hour) and the invitations (7 of 60 per ten minutes). The
+limits a test runs into on purpose (`resend-limit`, `forgot-password-limit`) are an email's,
+and every test uses fresh emails. A test uses as few emails, sign-ins and links as its scenario
+needs; a new one that signs up, mails, opens a link or creates an organisation counts against
+these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
@@ -135,6 +149,13 @@ the organisation and its note on device B).
 
 None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tests, and
 `scenarios/` beside them holds their scenarios, one file each at the same path.
+`scripts/spec-reporter.ts`: the run's log, as two workers run the tests side by side: each spec
+file's tests printed together once the last of them ended, one line each (outcome, project,
+title, tags, time) with, under a failed run, its errors with their stack and cause and where its
+trace is, and under any run the output it wrote, each attempt of a retried test under a header
+of its own; then the tally, with the failed and the flaky tests again. A run stopped early
+prints every file it had not printed yet, a test that never started marked `not run`. The HTML
+report (`playwright-report/`) has the rest; `--list` prints Playwright's own listing.
 `src/support/fixtures.ts`: the `test` with the step
 check and its fixtures,
 `signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
@@ -208,7 +229,9 @@ seen there and holds it to its declaration). A failure prints no address, link o
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
-  `--update-snapshots=missing`). `CI=1` runs one worker.
+  `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
+  `playwright.config.ts`, measured against the credential limit above), and its log is
+  `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
   their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
@@ -221,4 +244,5 @@ seen there and holds it to its declaration). A failure prints no address, link o
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
+- `bun run test` (here): the reporter's unit tests (`bun test ./scripts`).
 - `bun run typecheck`, `bun run lint`.

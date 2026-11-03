@@ -108,6 +108,16 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain('`#<flow id>.<state>`')
   })
+  it("says which anchors a flow's state renders, those nested under a listed one with it", () => {
+    expect(instructions.screenMap).toContain(
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves.",
+    )
+  })
+  it('says a guard is a sentence or the failure codes it holds for, on an onError only', () => {
+    expect(instructions.screenMap).toContain(
+      'A guard of `meta.guards` is a sentence saying when it holds, or `{ "codes": [<code>, …] }`, which guards only a branch of an invoke\'s `onError` and holds when its action failed with one of those codes.',
+    )
+  })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')
     expect(instructions.activities).toContain('`meta.screen`')
@@ -124,6 +134,31 @@ describe('instructionsOf', () => {
     expect(instructions.gaps).toContain('`Emulation refused:`')
     expect(instructions.gaps).toContain('`Proposal:`')
     expect(instructions.gaps).toContain('Never hold it in the app or in a test instead')
+  })
+  it('says what a composite opt-in is and how the anchors it derives are marked', () => {
+    expect(instructions.screenMap).toContain(
+      '`composite` on a secret input names the platform composite it opts into (`platform.composites.<name>`)',
+    )
+    expect(instructions.screenMap).toContain(
+      'each marked `derivedFrom` with the composite and, for an item, its name',
+    )
+  })
+  it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {
+    expect(instructions.bindings).toContain(
+      "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning",
+    )
+    expect(instructions.bindings).toContain(
+      'the failures of the actions bound beside it and invoked against it by the flow, plus the codes the flow shows on it, `failed` last',
+    )
+    expect(instructions.bindings).toContain(
+      "an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there",
+    )
+    expect(instructions.bindings).toContain(
+      'a start state, one several states enter, or one a platform or data event enters, writes its `onError`',
+    )
+    expect(instructions.bindings).toContain(
+      "an `onError` written as its target alone still shows the failure on that error, on the screen's error when no control enters and the input names no field",
+    )
   })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {
