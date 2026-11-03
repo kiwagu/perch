@@ -14,7 +14,7 @@ anchors:
   app-shell.notice-message:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
-    codes: [ welcome, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
+    codes: [ welcome, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored, theme-not-stored ]
   app-shell.toast:
     kind: toast
     description: The outcome of a mutation, shown for a short while in the tab that acted; a click dismisses one.

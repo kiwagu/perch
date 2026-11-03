@@ -5,7 +5,7 @@ devices:
   A: identity
 data: {}
 ---
-# Choose the theme of this device and the language of the account
+# Choose the theme and the language of the account
 
 Where: [/settings] by [app-shell.nav.settings-link]
 

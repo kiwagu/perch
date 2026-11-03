@@ -166,6 +166,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `theme-not-stored` | `app-shell.notice-message` | the chosen theme applies on this device, but the account's settings could not store it |
 | `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
 | `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
@@ -229,9 +230,9 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.settings.locale-select.option` | `en` | the option makes the account speak English |
 | `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
-| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
-| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
-| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
+| `user.settings.theme-select.option` | `light` | the option shows the account light, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `dark` | the option shows the account dark, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `system` | the option shows the account as each device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -255,7 +256,7 @@ screen name of its own.
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account and of this device: the theme, the language, the password and the email (`/settings`) |
+| `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email (`/settings`) |
 
 ## Roles
 
