@@ -28,6 +28,7 @@ import {
   savedNotice,
   savedToken,
   saveIdentityEmail,
+  savePasswordReset,
 } from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
@@ -179,10 +180,12 @@ export class SessionService implements SessionPort {
 
   /**
    * Asks the gateway alone: it signs nothing in, and a device of the account it signs out, this one
-   * included, hears so on its channel (4002).
+   * included, hears so on its channel (4002). Once it did, the browser's other tabs hear of it.
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError> {
-    return this.#options.auth.resetPassword(token, password)
+    return this.#options.auth
+      .resetPassword(token, password)
+      .andTee(() => savePasswordReset(this.#options.storage))
   }
 
   /** Asks the gateway with this device's session; the other devices hear their sign-out (4002). */

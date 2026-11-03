@@ -91,7 +91,8 @@ export interface SessionPort {
   /**
    * Sets a new password with a reset link's `token`. Nothing is signed in; the gateway signs every
    * device of the account out, this one too when it is signed in to it, which its channel hears as
-   * a change of the password (4002). A password that breaks the rules fails as
+   * a change of the password (4002), and the other tabs of this browser hear that a new password
+   * was set here. A password that breaks the rules fails as
    * `data:PASSWORD_REJECTED`, a link past its hour as `data:LINK_EXPIRED`, another the gateway
    * refuses as `data:LINK_INVALID`.
    */

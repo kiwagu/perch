@@ -204,7 +204,9 @@ modeling stage.
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); a sign-in that finds another account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
-  another tab saved one meanwhile, whose new token is then left to sign out. The container's runner and write
+  another tab saved one meanwhile, whose new token is then left to sign out. A new password set
+  through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
+  time that names no account, so the browser's other tabs hear of it. The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). The root makes the app's domain event bus (`EventBus` of
