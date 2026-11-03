@@ -108,6 +108,16 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain('`#<flow id>.<state>`')
   })
+  it("says which anchors a flow's state renders, those nested under a listed one with it", () => {
+    expect(instructions.screenMap).toContain(
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves.",
+    )
+  })
+  it('says a guard is a sentence or the failure codes it holds for, on an onError only', () => {
+    expect(instructions.screenMap).toContain(
+      'A guard of `meta.guards` is a sentence saying when it holds, or `{ "codes": [<code>, …] }`, which guards only a branch of an invoke\'s `onError` and holds when its action failed with one of those codes.',
+    )
+  })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')
     expect(instructions.activities).toContain('`meta.screen`')

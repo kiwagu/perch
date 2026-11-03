@@ -10,7 +10,8 @@
  * schema judges it with its own messages.
  */
 
-import { isRecord } from '../../records'
+import { isRecord, recordOf } from '../../records'
+import { codeGuardSchema } from '../../schemas'
 
 import { controlRegionOf, withDerivedRegions } from './controls'
 import { effectsOf, transitionsOf } from './effects'
@@ -90,6 +91,22 @@ function regionOf(region: unknown, expansion: Expansion, at: readonly PropertyKe
 }
 
 /**
+ * The guards of the flow's `meta.guards` written by failure code, each with its codes; one the
+ * schema refuses is no such guard here, so the schema alone reports it.
+ */
+function codeGuardsOf(flow: Readonly<Record<string, unknown>>): Map<string, readonly string[]> {
+  const guards = Object.entries(recordOf(recordOf(flow['meta'])['guards']))
+
+  return new Map(
+    guards.flatMap(([name, guard]) => {
+      const parsed = codeGuardSchema.safeParse(guard)
+
+      return parsed.success ? [[name, parsed.data.codes] as const] : []
+    }),
+  )
+}
+
+/**
  * `flow` expanded, with the issues that kept a part of it from expanding (that part is left as
  * written), the toasts it derived and the codes it writes on the toast anchor itself. `lookups` give the codes an anchor carries and an action's
  * failure shows, for `show: <anchor>`, the screen's buttons bound to one action and the frame's
@@ -105,10 +122,16 @@ export function expandFlow(
   toasts: DerivedToast[]
   writtenToasts: string[]
 } {
-  const expansion: Expansion = { ...lookups, issues: [], toasts: [], writtenToasts: [] }
-
   if (!isRecord(flow) || !isRecord(flow['states'])) {
     return { flow, issues: [], toasts: [], writtenToasts: [] }
+  }
+
+  const expansion: Expansion = {
+    ...lookups,
+    codeGuards: codeGuardsOf(flow),
+    issues: [],
+    toasts: [],
+    writtenToasts: [],
   }
 
   const states = Object.fromEntries(

@@ -11,6 +11,7 @@ export {
   authoredScreenFileSchema,
   bindingRefSchema,
   bindingSchema,
+  codeGuardSchema,
   controlRegionSchema,
   derivedFromSchema,
   draftPatternSchema,

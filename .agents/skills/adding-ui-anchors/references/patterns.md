@@ -264,12 +264,13 @@ inside. Among JSX children the marker is the only content of a comment container
 ## 12. A machine from the flow
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
-that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
-195-215, the descriptions left out), the state that signs in, written in the shorter forms (a
-transition as its target, an effect by its name with the codes it shows; `signing-up` writes
-only `show: user.sign-in.error` and leaves its codes to the platform's `sign-up`; `bun run
-contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
-anchor, codes } }` and `{ target }`):
+that config with the implementations added. The state that signs in on the sign-in screen,
+`contract/domain/screens/sign-in.yaml`, in the shorter forms (the descriptions left out; a
+transition as its target, an effect by its name; `bun run contract:flow user.sign-in` prints
+the config they expand into, `{ type: show, params: { anchor, codes } }` and `{ target }`),
+with its guard `emailNotVerified: { codes: [ email-not-verified ] }` (pattern 16), so the
+first branch of its `onError` shows `email-not-verified` and the second `invalid-credentials`,
+`rate-limited`, `other-account` and `failed`, the rest of the failure of `platform.sign-in`:
 
 ```yaml
 signing-in:
@@ -287,10 +288,10 @@ signing-in:
       - target: unverified
         guard: emailNotVerified
         actions:
-          - show: { user.sign-in.error: [ email-not-verified ] }
+          - show: user.sign-in.error
       - target: sign-in
         actions:
-          - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+          - show: user.sign-in.error
 ```
 
 `clear: user.sign-in.error` takes the code off the form's error; a `clear` that names a
@@ -549,3 +550,77 @@ The link of a notice opens a screen whose every route needs no parameter, and ne
 ```markdown
 - [notice:confirm-email-change.email-changed] reaches the old address
 ```
+
+## 15. What a state renders
+
+An anchor that only some states of a screen render is listed in `meta.renders` of each state
+that renders it; an anchor no state lists is rendered in every state. The state decides, never
+the code an anchor shows. For the mode sign-up of the sign-in screen,
+`contract/domain/screens/sign-in.yaml` (the descriptions and the other states left out):
+
+```yaml
+sign-up:
+  meta:
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  on:
+    user.sign-in.password-confirmation-input:
+      target: passwords-differ
+      guard: confirmationStrays
+    # the toggle, the password and the submit as before
+signing-up:
+  meta:
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  invoke:
+    src: platform.sign-up
+    # input and onDone as before
+```
+
+`sign-up` handles the confirmation's event, so it lists it, or `contract:check` says it is
+handled here but not rendered. `signing-up` handles none of their events and lists them all
+the same: the fields stay on the page, disabled, and the rule list with them, while the
+account is created. A derived part goes with its base (list `user.sign-in.password-input`,
+never its `visibility-button`), and the anchors declared under a listed one
+(`<anchor>.<rest>`) come with it: the rule list brings its six items, so a state lists the
+list alone, never the list and an item in one list; an item is rendered where its list is, or
+where a state lists it itself, and an event on it is held through its list. A state of a
+region renders what it lists and what its parallel state lists; a region written by its
+pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
+full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
+
+## 16. A guard by failure code
+
+A guard that tells the failures of an invoke apart names the codes it takes instead of a
+sentence, and the bare `show` of its branch shows them. For the state `signing-in` of the
+sign-in screen (pattern 12), its `onError` in the shortest form; a screen may write the codes
+of a `show` out instead, and what it writes wins:
+
+```yaml
+flow:
+  meta:
+    guards:
+      emailNotVerified: { codes: [ email-not-verified ] }
+  states:
+    signing-in:
+      invoke:
+        src: platform.sign-in
+        # input and onDone as before
+        onError:
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
+```
+
+The first branch shows `email-not-verified`; the second, after it, the failure of
+`platform.sign-in` less the codes the guard took: `invalid-credentials`, `rate-limited`,
+`other-account` and `failed` (`bun run contract:flow user.sign-in` prints both). The error
+still carries every code of the failure. A guard may take several codes
+(`linkUnusable: { codes: [ link-invalid, link-expired ] }` on the reset-password screen). It
+guards only branches of an invoke's `onError`, a region written `by` its button included, and
+each code is one the action fails with, listed once; a guard that says anything else stays a
+sentence. The app implements it as any guard, by the failure the actor rejected with (pattern
+12's `emailNotVerified`). `contract:diff main` shows `guard emailNotVerified takes
+email-not-verified`.
