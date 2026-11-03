@@ -94,6 +94,9 @@ describe('collectFromTest', () => {
       { kind: 'state', value: 'current', line: 21 },
       { kind: 'code', value: 'lost', line: 22, of: 'sample.list' },
       { kind: 'value', value: 'a', line: 23, of: 'sample.mode-select.option' },
+      { kind: 'state', value: 'loading', line: 26, of: 'sample.list' },
+      { kind: 'state', value: 'current', line: 31, of: 'sample.list' },
+      { kind: 'code', value: 'saved', line: 34 },
     ])
   })
   it('passes over a data-id, a code, state or value from an expression, and a selector that is not an equality', () => {

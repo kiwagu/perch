@@ -81,6 +81,14 @@ describe('compareConsumers', () => {
       'consumers/paired.ts:15: sample.save-button never carries state current',
       'consumers/paired.ts:18: sample.thing-item never carries state loading',
       'consumers/paired.ts:22: "lost" is not a code of the vocabulary',
+      'consumers/paired.ts:31: sample.list never carries state current',
+    ])
+  })
+  it('holds an attribute after a :has(...) to the element before it, and one beside a :not([data-testid]) to no anchor', () => {
+    const problems = compareConsumers([collected('paired.ts')], sampleContract())
+
+    expect(problems.filter(({ line }) => (line ?? 0) > 23).map(formatProblem)).toEqual([
+      'consumers/paired.ts:31: sample.list never carries state current',
     ])
   })
   it('pairs through what the anchors under it carry, as the scenarios check does', () => {

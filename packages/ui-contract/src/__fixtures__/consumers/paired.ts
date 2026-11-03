@@ -1,6 +1,6 @@
-// A code, a state or a value asserted on an anchor: in a selector of the same element, or on the
-// last getByTestId of the receiver's chain; each one the anchor does not carry is a problem. The
-// forms that name no anchor (another element, a variable, a helper) are held to the contract only.
+// A code, a state or a value asserted on an anchor it may not carry: in a selector of its element
+// (after a :has(...) the element before it goes on, a data-testid in :not(...) names none), or on
+// the last getByTestId of the receiver's chain; another element, a variable, a helper name none.
 import { expect, type Locator, type Page } from '@playwright/test'
 
 const saveOf = (page: Page): Locator => page.getByTestId('sample.save-button')
@@ -21,4 +21,15 @@ export async function paired(page: Page): Promise<void> {
   await expect(saveOf(page)).toHaveAttribute('data-state', 'current')
   await expect(page.getByTestId('sample.list')).toHaveAttribute('data-code', 'lost')
   await expect(page.getByTestId('sample.mode-select.option')).toHaveAttribute('data-value', 'a')
+  await page
+    .locator(
+      '[data-testid="sample.list"]:has([data-testid="sample.thing-item"])[data-state="loading"]',
+    )
+    .count()
+  await page
+    .locator(
+      '[data-testid="sample.list"]:has([data-testid="sample.thing-item"])[data-state="current"]',
+    )
+    .count()
+  await page.locator('[data-code="saved"]:not([data-testid="sample.list"])').count()
 }

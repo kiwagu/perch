@@ -263,9 +263,13 @@ for Bun.
     `visibility-button`), as the scenarios check resolves its bracket references. A code, a
     state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor
     carries, as `anchorCarries` reads it: in a selector string, the `data-testid` selector of
-    the same element pairs with it, before or after it, with only other attribute selectors
-    or a `:not(` between them (a space, a combinator, a list, a `:has(` or an expression
-    leads to another element); a `toHaveAttribute` value pairs with the last
+    the same element pairs with it, before or after it (`elementAnchors` in `elements.ts`).
+    Attribute selectors written one after another are of one element; a `:not(`, `:is(` or
+    `:where(` of one compound is that element too, a `data-testid` in a `:not(` naming none;
+    a `:has(`, any other parenthesised argument, or a `:not(` holding a combinator or a list
+    speaks of elements of its own, which pair among themselves, and after its `)` the
+    element before it goes on; a space, a combinator, a list, an expression or other text
+    leads to another element. A `toHaveAttribute` value pairs with the last
     `getByTestId('<anchor>')` of the receiver of `expect(<receiver>)` (`assertedAnchor` in
     `receiver.ts`), through the steps that narrow what it found (`first`, `last`, `nth`,
     `filter`, `and`) and no other. A receiver held in a variable or built by a helper pairs

@@ -26,6 +26,7 @@ import { type CallExpression, type Expression, parseSync, Visitor } from 'oxc-pa
 import { filesUnder, type Problem } from '../files'
 import type { Reference } from '../scenarios'
 
+import { elementAnchors } from './elements'
 import { chainOf, EXPRESSION, foldedText, operandPieces, type Piece } from './pieces'
 import { assertedAnchor, calleeName } from './receiver'
 import { sourceOffset } from './source-offset'
@@ -52,13 +53,6 @@ export interface Consumed {
 /** An attribute selector the check reads; `\0` (`EXPRESSION`) in its value is an expression. */
 const SELECTOR = /\[data-(testid|code|state|value)=(["'])(.*?)\2\]/g
 
-/**
- * What may stand between two attribute selectors of one element: other attribute selectors, and
- * a `:not(` or its `)`. Anything else (a space, `>`, `+`, `~`, `,`, `:has(`, an expression) may
- * lead to another element.
- */
-const ONE_ELEMENT = /^(?:\[[^\]\0]*\]|:not\(|\))*$/
-
 /** A `data-testid` selector that an expression completes: its value, or its closing quote. */
 const OPEN_TEST_ID = /\[data-testid=["']?[^\]"'\0]*\0/g
 
@@ -72,45 +66,6 @@ const kindOf = (attribute: string): ConsumedLiteral['kind'] | undefined =>
     : attribute === 'code' || attribute === 'state' || attribute === 'value'
       ? attribute
       : undefined
-
-/** An attribute selector of a string: what it names, and where it starts and ends in the string. */
-interface SelectorMatch {
-  readonly kind: ConsumedLiteral['kind'] | undefined
-  readonly value: string | undefined
-  readonly at: number
-  readonly end: number
-}
-
-/**
- * For each selector of `joined`, the anchor of the element it selects when a `data-testid`
- * selector of the same element names one: the nearest before it, else the nearest after it. Two
- * selectors are of one element when only what `ONE_ELEMENT` allows stands between them.
- */
-function elementAnchors(
-  joined: string,
-  matches: readonly SelectorMatch[],
-): Array<string | undefined> {
-  const elements: number[] = []
-
-  matches.forEach(({ at }, index) => {
-    const before = matches[index - 1]
-    const element = elements[index - 1] ?? 0
-    const same = before === undefined || ONE_ELEMENT.test(joined.slice(before.end, at))
-
-    elements.push(same ? element : element + 1)
-  })
-
-  const testIds = matches.flatMap(({ kind, value }, index) =>
-    kind === 'anchor' ? [{ index, element: elements[index], value }] : [],
-  )
-
-  return matches.map((_, index) => {
-    const ofElement = testIds.filter(({ element }) => element === elements[index])
-    const before = ofElement.filter((testId) => testId.index < index).at(-1)
-
-    return (before ?? ofElement.find((testId) => testId.index > index))?.value
-  })
-}
 
 /**
  * What one file names of the contract. Every file is parsed: its raw text cannot show a name
