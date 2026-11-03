@@ -301,9 +301,12 @@ modeling stage.
   one lets it pass; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
-  `user.sign-in.notice-message`, from any screen, leaves its word for the next sign-in page
-  (`SessionPort.leaveNotice`: in place of a word on why a session ended, never of one on what
-  became of the device's data, `resend-after-sign-in` or `delete-pending`), one code each, while
+  `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
+  page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
+  browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
+  with the browser's word, `perch.session.notice`, and says the browser's word on the device's
+  data, `resend-after-sign-in` or `delete-pending`, first, then the tab's own, then the
+  browser's other words, and takes both), one code each, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).

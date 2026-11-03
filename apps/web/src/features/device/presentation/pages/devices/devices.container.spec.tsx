@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { okAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
@@ -27,6 +27,7 @@ import { DeviceModule } from '../../../device.module'
 import en from '../../i18n/device.en.json'
 
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
 let devices: FakeDevices
 
@@ -36,24 +37,29 @@ let signedOutHere = 0
 /** The words the page left for the sign-in page, oldest first. */
 let leftForSignIn: SessionNotice[] = []
 
-/** Whether Ann is still signed in, and who hears the account change. */
-let signedIn = true
+/** Who is signed in on the browser, and who hears the account change. */
+let account: typeof ann | undefined = ann
 const accountListeners = new Set<(user: typeof ann | undefined) => void>()
+
+/** The browser's account changes to `next`, as this tab or another one changes it. */
+function tell(next: typeof ann | undefined): void {
+  account = next
+
+  for (const listener of accountListeners) {
+    listener(next)
+  }
+}
 
 /** Ann's account goes away, as a sign-out here or from another device leaves it. */
 function signOut(): void {
-  signedIn = false
-
-  for (const listener of accountListeners) {
-    listener(undefined)
-  }
+  tell(undefined)
 }
 
 /** The devices page in the application's frame, for Ann signed in, over `devices`. */
 async function openPage(): Promise<void> {
   signedOutHere = 0
   leftForSignIn = []
-  signedIn = true
+  account = ann
   accountListeners.clear()
 
   const session = {
@@ -61,7 +67,7 @@ async function openPage(): Promise<void> {
     leaveNotice: (notice: SessionNotice) => {
       leftForSignIn.push(notice)
     },
-    current: () => (signedIn ? ann : undefined),
+    current: () => account,
     subscribe: (listener: (user: typeof ann | undefined) => void) => {
       accountListeners.add(listener)
 
@@ -214,6 +220,38 @@ describe('DevicesContainer', () => {
     expect(devices.calls).toEqual([['list'], ['everywhere']])
     // The session keeps a word it left on the device's data in place of this one.
     await waitFor(() => expect(leftForSignIn).toEqual(['signed-out-elsewhere']))
+  })
+
+  it('leaves the sign-in page no word when the account that asked to sign out everywhere signs out, and another signs in, before the gateway answers', async () => {
+    devices = new FakeDevices()
+
+    let answer: () => void = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+
+    devices.signOutEverywhere = () => {
+      devices.calls.push(['everywhere'])
+
+      return ResultAsync.fromSafePromise(answered)
+    }
+
+    await openPage()
+    await row(phone.label)
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
+    await waitFor(() => expect(devices.calls).toEqual([['list'], ['everywhere']]))
+
+    // Ann signs out and Bob signs in, in this tab or another, while the request is in flight.
+    act(() => signOut())
+    await waitFor(() => expect(screen.queryByTestId('device.everywhere.open-button')).toBeNull())
+    act(() => tell(bob))
+    await act(async () => answer())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // The page went with Ann's account: its flow ended there, and neither moved nor left a word.
+    expect(screen.queryByTestId('device.everywhere.open-button')).toBeNull()
+    expect(leftForSignIn).toEqual([])
   })
 
   it('neither reads the devices again nor says they could not be read once the account signs out', async () => {

@@ -155,13 +155,18 @@ export interface SessionPort {
   signingInHere(): boolean
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */
   flush(): ResultAsync<void, DataError>
-  /** The word the last session left for the sign-in page, until `clearNotice`. */
+  /**
+   * The word the sign-in page says, from two slots: the browser's, which a session left as it
+   * ended, and this tab's own (`leaveNotice`). A word on what became of the device's data
+   * (`resend-after-sign-in`, `delete-pending`) wins, then this tab's own, then the browser's.
+   */
   notice(): SessionNotice | undefined
+  /** Takes both words away: the sign-in page said them. */
   clearNotice(): void
   /**
-   * Leaves the next sign-in page `notice`, as a screen's flow shows it there, in place of a word on
-   * why a session ended; a word on what became of the device's data (`resend-after-sign-in`,
-   * `delete-pending`), which the session left as it ended, says more and stays.
+   * Leaves this tab's next sign-in page `notice`, as a screen's flow shows it there on its way: a
+   * fact of this tab's move, kept in this tab's memory for the page's lifetime, never the
+   * browser's; a sign-in of another account in this tab drops it.
    */
   leaveNotice(notice: SessionNotice): void
   /**

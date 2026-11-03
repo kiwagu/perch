@@ -55,7 +55,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   holds), the same answer for any email
   (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for); once
   it asked, a new password set in another tab of the browser (`platform.password-reset`, which the
-  page's machine hears with the email field's value) leaves the sign-in page
+  page's machine hears with the email field's value) leaves this tab's sign-in page
   `password-reset-elsewhere` and moves there with the email as typed (`reset-elsewhere`, final);
   `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
   link opens (`application/reset-password.machine.ts`, the flow of

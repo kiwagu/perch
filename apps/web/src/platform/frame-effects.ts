@@ -1,11 +1,11 @@
 /**
  * The frame's anchors as the effects of any machine: a `show` on the toast pushes a toast, a
  * `show` on the notice sets it, a `clear` of the notice takes it away. A `show` on the sign-in
- * page's notice, from any screen, leaves its word for the next sign-in page, which reads it as it
- * opens (`SessionPort.leaveNotice`). The hook of every screen's machine runs it, and the frame for
- * its own; a screen's own anchors (its errors) are its container's to read from the machine's
- * context. Such a `show` carries one code: a machine narrows a list before it emits, as it does
- * for its errors.
+ * page's notice, from any screen, leaves its word for this tab's next sign-in page, which reads
+ * it as it opens (`SessionPort.leaveNotice`). The hook of every screen's machine runs it, and the
+ * frame for its own; a screen's own anchors (its errors) are its container's to read from the
+ * machine's context. Such a `show` carries one code: a machine narrows a list before it emits, as
+ * it does for its errors.
  */
 
 import { useEffect } from 'react'
