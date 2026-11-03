@@ -292,8 +292,9 @@ for Bun.
     added and removed (a flow one side lacks has none, so a flow added or removed whole shows
     every line; a screen added or removed whole is a change of the screens alone),
     `flowLines(flow)` (an internal helper of the hand-over, `handoff/flow-lines.ts`, not
-    exported from the root): `initial <state>`, `<path> address <path> <search as JSON, keys
-    sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
+    exported from the root): `initial <state>`, `guard <name> takes <code>, <code>` (one per
+    guard by failure code, its codes as written; a guard's sentence is prose, no line),
+    `<path> address <path> <search as JSON, keys sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
     `meta.renders`), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded

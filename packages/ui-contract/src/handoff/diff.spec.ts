@@ -520,6 +520,26 @@ describe('diffContracts and the order and the inputs of a flow', () => {
       ),
     ).toEqual({ sample: { added: ['saving renders sample.title-input'], removed: [] } })
   })
+  it('lists a guard written by failure code, and the codes it takes as they change', () => {
+    const guarded = (guard: string | { codes: string[] }) => (flow: Flow) => {
+      flow.meta = { guards: { titleGiven: 'the title input holds a title', limited: guard } }
+    }
+
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded({ codes: ['failed'] })),
+    ).toEqual({ sample: { added: ['guard limited takes failed'], removed: [] } })
+    expect(
+      flowsBetween(guarded({ codes: ['failed'] }), guarded({ codes: ['rate-limited', 'failed'] })),
+    ).toEqual({
+      sample: {
+        added: ['guard limited takes rate-limited, failed'],
+        removed: ['guard limited takes failed'],
+      },
+    })
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded('it tried too often')),
+    ).toEqual({ sample: { added: [], removed: [] } })
+  })
   it('lists two entry effects swapped, as the last one decides what shows', () => {
     expect(
       flowsBetween(

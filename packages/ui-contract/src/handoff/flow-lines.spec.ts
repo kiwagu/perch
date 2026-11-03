@@ -167,6 +167,26 @@ describe('flowLines', () => {
     expect(lines).toContain('viewing.form.open renders sample.form.error')
     expect(lines).toContain('done renders sample.home-link')
   })
+  it('writes the codes each guard by failure code takes, as written, after the initial state', () => {
+    const flow = flowIn(sampleContract())
+
+    flow.meta = {
+      guards: {
+        titleGiven: 'the title input holds a title',
+        unusable: { codes: ['link-invalid', 'link-expired'] },
+        limited: { codes: ['rate-limited'] },
+      },
+    }
+
+    const lines = flowLines(flow)
+
+    expect(lines.slice(0, 3)).toEqual([
+      'initial editing',
+      'guard unusable takes link-invalid, link-expired',
+      'guard limited takes rate-limited',
+    ])
+    expect(lines.filter((line) => line.startsWith('guard '))).toHaveLength(2)
+  })
   it('writes an exit, and a transition without a target, guard or effect as its event alone', () => {
     const flow = flowIn(sampleContract())
 

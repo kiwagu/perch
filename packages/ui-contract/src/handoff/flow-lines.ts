@@ -1,7 +1,8 @@
 /**
  * A flow as lines for the hand-over diff, one per fact it says: its initial state and each
- * region's, each state's address (the path and the search a link or a reload restores it
- * by), each anchor a state lists in `meta.renders`, each entry and exit effect, each
+ * region's, each guard by failure code with the codes it takes (a guard's sentence is prose,
+ * as a description is), each state's address (the path and the search a link or a reload
+ * restores it by), each anchor a state lists in `meta.renders`, each entry and exit effect, each
  * transition on an event with its target, guard and effects, each invoke with its input and
  * its outcomes, each final state. A state is named by its path (`viewing.form.open`);
  * descriptions are left out, as they change nothing that runs. The diff compares lines as
@@ -65,10 +66,17 @@ const transitionLines = (
 ): string[] =>
   positioned(asList(transitions)).map(({ at, item }) => transitionLine(`${head}${at}`, item))
 
+/** A line per guard by failure code, its codes as written; a guard's sentence has none. */
+const guardLines = (flow: Flow): string[] =>
+  Object.entries(flow.meta?.guards ?? {}).flatMap(([name, guard]) =>
+    typeof guard === 'string' ? [] : [`guard ${name} takes ${guard.codes.join(', ')}`],
+  )
+
 /** The lines of `flow`, in the order of its file: a parallel state before its regions. */
 export function flowLines(flow: Flow): string[] {
   return [
     `initial ${flow.initial}`,
+    ...guardLines(flow),
     ...flowNodes(flow).flatMap(({ kind, path, state }) => {
       if (kind === 'region') {
         return [`${path} initial ${state.initial}`]
