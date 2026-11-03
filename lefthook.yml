@@ -20,7 +20,7 @@ pre-commit:
 
     - name: validate staged SurrealQL
       glob: '*.surql'
-      run: . scripts/ensure-path.sh && surreal db validate {staged_files}
+      run: . scripts/ensure-path.sh && surreal validate {staged_files}
 
     - name: regenerate models when SurrealQL is staged
       glob: '*.surql'

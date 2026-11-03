@@ -65,10 +65,10 @@ function validate(files: readonly string[]): string[] {
     return []
   }
 
-  const result = spawnSync('surreal', ['db', 'validate', ...files], { encoding: 'utf8' })
+  const result = spawnSync('surreal', ['validate', ...files], { encoding: 'utf8' })
 
   if (result.error) {
-    return [`surreal db validate could not run (${result.error.message}); install the surreal CLI`]
+    return [`surreal validate could not run (${result.error.message}); install the surreal CLI`]
   }
 
   const lines = `${result.stdout}\n${result.stderr}`.split('\n')
@@ -82,7 +82,7 @@ function validate(files: readonly string[]): string[] {
     }
   }
 
-  return result.status === 0 || problems.length > 0 ? problems : ['surreal db validate failed']
+  return result.status === 0 || problems.length > 0 ? problems : ['surreal validate failed']
 }
 
 function bundles(

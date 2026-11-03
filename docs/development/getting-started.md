@@ -4,6 +4,9 @@
 
 - Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root, which also
   installs the git hooks.
+- Node.js 24 or later as `node`: Vitest runs under it, and with Node 22's WebSocket a refused
+  connection never settles the SurrealDB SDK's `connect()`, so a test of an unreachable server
+  times out instead of failing fast.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB, MailDev and Caddy
   in containers.
 - mcproc 0.13.0 or later (`npm i -g mcproc`): it starts and stops the stands from
@@ -12,7 +15,8 @@
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
   self-signed certificate is made, and the browser asks to accept it once.
 - `bunx playwright install` for the browsers the e2e specs run in.
-- The SurrealDB CLI (`surreal`) for the git hooks that validate staged `.surql` files.
+- The SurrealDB CLI (`surreal`) 3.3.4, the stands' version, for `surreal validate`, which the git
+  hooks run on staged `.surql` files and `bun run model` on every one.
 - Screenshot baselines of the e2e specs are git-ignored and rebuilt per machine: the first run
   writes them. A machine that kept baselines from an older layout rebuilds them with
   `bun run test:e2e -- --update-snapshots=changed`.

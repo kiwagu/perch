@@ -10,7 +10,7 @@ TypeScript or React code.
 ## Key exports
 
 - CLI `model --root <dir> [--schema <dir>] [--suites <dir>] [--check]` (`main`, `runModel`):
-  validates every `.surql` with `surreal db validate`, applies the schema (every file under
+  validates every `.surql` with `surreal validate`, applies the schema (every file under
   the schema folder, all databases together) to an embedded database and reads its structure,
   cross-checks `-- @id` prefixes against the entity id registry, refuses a shape whose tables
   share no database (one shape reads one database; `tableDatabases` applies each database's
