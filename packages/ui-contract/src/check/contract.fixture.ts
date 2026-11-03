@@ -209,7 +209,8 @@ export function sampleContract(): Contract {
         devices: { A: 'member' },
         where: '[/sample/$key]',
         data: { Title: 'generate' },
-        scenario: 'A member picks [value:a] in [sample.mode-select.option] and [value:k12]',
+        scenario:
+          'A member picks [value:a] in [sample.mode-select.option], then [sample.key-select.option] carries [value:k12]',
         steps: ['Wait for [app-shell.status] to reach [state:ready]'],
         expected: ['[sample.save-button] carries [code:saved]'],
       },

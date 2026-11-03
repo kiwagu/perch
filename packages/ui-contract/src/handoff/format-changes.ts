@@ -55,7 +55,7 @@ const listsOf = (changes: ContractChanges) => [
     linesOf(change, 'transition', 'transitions', ` in ${id}`),
   ),
   ...Object.entries(changes.flows).flatMap(([id, change]) =>
-    linesOf(change, 'flow transition', 'flow transitions', ` in ${id}`),
+    linesOf(change, 'flow line', 'flow lines', ` in ${id}`),
   ),
 ]
 

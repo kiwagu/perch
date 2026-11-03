@@ -163,6 +163,41 @@ describe('withDerivedErrors', () => {
     })
   })
 
+  it('derives the same codes when a guard by failure code splits the failure across the branches', () => {
+    const flowWith = (guards: Record<string, unknown>, guard: string) => ({
+      initial: 'idle',
+      meta: { guards },
+      states: {
+        idle: { on: { 'sample.form.share-button': 'sharing' } },
+        sharing: {
+          invoke: {
+            src: 'platform.things.share',
+            onDone: 'idle',
+            onError: [
+              { target: 'idle', guard, actions: [{ show: 'sample.form.error' }] },
+              { target: 'idle', actions: [{ show: 'sample.form.error' }] },
+            ],
+          },
+        },
+      },
+    })
+    const errorOf = (flow: unknown) =>
+      (
+        withDerivedErrors(
+          { id: 'sample', anchors: { 'sample.form.error': { kind: 'error' } }, flow },
+          failureOf,
+        ) as { anchors: Record<string, unknown> }
+      ).anchors['sample.form.error']
+
+    expect(errorOf(flowWith({ limited: { codes: ['rate-limited'] } }, 'limited'))).toEqual({
+      kind: 'error',
+      codes: ['not-allowed', 'rate-limited', 'failed'],
+    })
+    expect(errorOf(flowWith({ limited: { codes: ['rate-limited'] } }, 'limited'))).toEqual(
+      errorOf(flowWith({ limited: 'the network address tried too often' }, 'limited')),
+    )
+  })
+
   it('maps a code of a field the flow passes to the action it invokes, and keeps written codes', () => {
     const anchors = {
       'sample.form.title-input': { kind: 'input' },

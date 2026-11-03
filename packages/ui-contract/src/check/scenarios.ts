@@ -4,7 +4,9 @@
  * lists in `derived`, the path of a binding, a code, a state, a choice value or a value a
  * pattern row matches, `show` or `hide` once an input renders a visibility-button, a mail
  * `[mail:<action>]` a platform action that declares one, a notice `[notice:<action>.<name>]` a
- * notice of that name the platform action declares), the
+ * notice of that name the platform action declares), a code, a state or a value is one the
+ * anchor named last before it in the same text carries (`anchorCarries`; a mail or a notice
+ * ends the pairing), the
  * activity a scenario names is one of `contract/domain/activities`, and every device acts as
  * a role of the vocabulary. Each problem is one of the scenario's file, named by its field and
  * at the line of that field (of the deepest part of its path the file holds); the ids are
@@ -14,6 +16,7 @@
 import { ACTIVITIES_DIR, jsonPath, lineAt, type Problem, scenarioFile } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 
+import { anchorCarries, type Carried } from './carries'
 import {
   bindingPaths,
   type Contract,
@@ -71,8 +74,54 @@ export function referenceResolver(
   }
 }
 
+const isCarried = (kind: Reference['kind']): kind is Carried =>
+  kind === 'code' || kind === 'state' || kind === 'value'
+
+/**
+ * Each reference of a text with the anchor named last before it in the same text, if any: the
+ * anchor a code, a state or a value pairs with. A route is no anchor and is read past; a mail or
+ * a notice is no anchor either, and what follows it speaks of the mail or the notice (its
+ * language, its link), so it pairs with no anchor until the text names one again.
+ */
+function pairedIn(
+  references: readonly Reference[],
+): Array<{ reference: Reference; anchor: string | undefined }> {
+  const paired: Array<{ reference: Reference; anchor: string | undefined }> = []
+  let anchor: string | undefined
+
+  for (const reference of references) {
+    paired.push({ reference, anchor })
+
+    if (reference.kind === 'anchor') {
+      anchor = reference.value
+    } else if (reference.kind === 'mail' || reference.kind === 'notice') {
+      anchor = undefined
+    }
+  }
+
+  return paired
+}
+
+/**
+ * Why a code, a state or a value does not pair with its anchor, or undefined when it does, when it
+ * has none, or when its anchor is unknown (a problem of its own). The consumers check pairs what
+ * the e2e tests assert on an anchor with it.
+ */
+export function pairingResolver(
+  contract: Contract,
+): (reference: Reference, anchor: string | undefined) => string | undefined {
+  const known = knownAnchors(contract)
+  const carries = anchorCarries(contract)
+
+  return ({ kind, value }, anchor) =>
+    anchor === undefined || !isCarried(kind) || !known(anchor) || carries(anchor, kind, value)
+      ? undefined
+      : `${anchor} never carries ${kind} ${value}`
+}
+
 export function scenariosProblems(contract: Contract): Problem[] {
   const resolve = referenceResolver(contract)
+  const pair = pairingResolver(contract)
   const activities = new Set(contract.activities.map(({ id }) => id))
 
   return contract.scenarios.flatMap((scenario) => {
@@ -95,8 +144,8 @@ export function scenariosProblems(contract: Contract): Problem[] {
         const { references, problems } = referencesIn(text)
 
         return [
-          ...references.flatMap((reference) => {
-            const unresolved = resolve(reference)
+          ...pairedIn(references).flatMap(({ reference, anchor }) => {
+            const unresolved = resolve(reference) ?? pair(reference, anchor)
 
             return unresolved === undefined ? [] : [problem(at, unresolved)]
           }),

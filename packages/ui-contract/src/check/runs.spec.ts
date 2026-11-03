@@ -2,12 +2,34 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
 
-import { activityIn, activityStateIn, flowStateIn, sampleContract } from './contract.fixture'
+import {
+  activityIn,
+  activityStateIn,
+  flowIn,
+  flowStateIn,
+  sampleContract,
+} from './contract.fixture'
 import { runsProblems } from './runs'
 
 describe('runsProblems', () => {
   it('finds nothing when every flow and activity runs in XState as written', () => {
     expect(runsProblems(sampleContract()).map(formatProblem)).toEqual([])
+  })
+
+  it('walks a flow with a guard by failure code beside an activity whose guards are sentences', () => {
+    const contract = sampleContract()
+    const { invoke } = flowStateIn(contract, 'saving')
+
+    if (invoke === undefined) {
+      throw new Error('the sample saves through an invoke')
+    }
+
+    flowIn(contract).meta = {
+      guards: { titleGiven: 'the title input holds a title', broke: { codes: ['failed'] } },
+    }
+    invoke.onError = [{ guard: 'broke', target: 'editing' }, { target: 'editing' }]
+
+    expect(runsProblems(contract).map(formatProblem)).toEqual([])
   })
 
   it('tells a flow XState will not build, in its screen file', () => {

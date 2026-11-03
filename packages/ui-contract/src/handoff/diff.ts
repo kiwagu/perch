@@ -54,8 +54,9 @@ export interface ContractChanges {
   activities: Change & { transitions: Record<string, Change> }
   /**
    * Per screen both contracts hold with a flow on either side, by its id, the lines of the flow
-   * (`flowLines`: initial states, addresses, entries, exits, transitions with their targets,
-   * guards and effects, invokes and their outcomes, final states; descriptions aside), a flow
+   * (`flowLines`: initial states, the codes each guard by failure code takes, addresses,
+   * entries, exits, transitions with their targets, guards and effects, invokes and their
+   * outcomes, final states; descriptions and guard sentences aside), a flow
    * one side lacks having none.
    */
   flows: Record<string, Change>

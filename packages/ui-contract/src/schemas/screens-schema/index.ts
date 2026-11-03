@@ -12,6 +12,7 @@ export { bindingSchema, routePathSchema } from './binding'
 export { authoredScreenFileSchema, platformFileSchema, screenFileSchema } from './file'
 export {
   authoredFlowSchema,
+  codeGuardSchema,
   controlRegionSchema,
   draftPatternSchema,
   effectSchema,
