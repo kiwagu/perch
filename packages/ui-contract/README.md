@@ -207,7 +207,9 @@ for Bun.
     items of a composite's list, the options of a select, the eye of an input). Codes are the
     loaded `codes`, the derived ones included; states the anchor's `states`; values the rows of
     its choice values and its options' (a pattern row matching), or `show` and `hide` on a
-    `visibility-button`. The scenarios check pairs its brackets through it.
+    `visibility-button`. The scenarios check pairs its brackets through it, and
+    `pairingResolver(contract)` says why a value does not pair with its anchor
+    (`<anchor> never carries code <x>`), for the scenarios and the consumers check alike.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each
@@ -256,7 +258,16 @@ for Bun.
     `compareConsumers(consumed, contract)` wants every anchor known (declared, or derived
     from a declared base with a suffix it lists in `derived`), every code, state and choice
     value in the vocabulary (and `show` or `hide` once an input renders a
-    `visibility-button`), as the scenarios check resolves its bracket references.
+    `visibility-button`), as the scenarios check resolves its bracket references. A code, a
+    state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor
+    carries, as `anchorCarries` reads it: in a selector string, the `data-testid` selector of
+    the same element pairs with it, before or after it, with only other attribute selectors
+    or a `:not(` between them (a space, a combinator, a list, a `:has(` or an expression
+    leads to another element); a `toHaveAttribute` value pairs with the last
+    `getByTestId('<anchor>')` of the receiver of `expect(<receiver>)` (`assertedAnchor` in
+    `receiver.ts`), through the steps that narrow what it found (`first`, `last`, `nth`,
+    `filter`, `and`) and no other. A receiver held in a variable or built by a helper pairs
+    with nothing and is held to the contract alone.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in

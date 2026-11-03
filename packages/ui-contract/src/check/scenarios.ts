@@ -104,9 +104,10 @@ function pairedIn(
 
 /**
  * Why a code, a state or a value does not pair with its anchor, or undefined when it does, when it
- * has none, or when its anchor is unknown (a problem of its own).
+ * has none, or when its anchor is unknown (a problem of its own). The consumers check pairs what
+ * the e2e tests assert on an anchor with it.
  */
-function pairingResolver(
+export function pairingResolver(
   contract: Contract,
 ): (reference: Reference, anchor: string | undefined) => string | undefined {
   const known = knownAnchors(contract)
