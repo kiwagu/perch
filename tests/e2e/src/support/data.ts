@@ -19,8 +19,18 @@ export const generate = {
       run: run(),
     }),
   email: (): string => generate.account().email,
+  /** Another fresh address, for an account's second email or another account. */
+  newEmail: (): string => generate.email(),
+  otherEmail: (): string => generate.email(),
   password: (): string => generate.account().password,
+  /** A password of its own for every call, unlike `password`, which every account shares. */
+  otherPassword: (): string => `Other-password-1-${run()}`,
+  /** A password of its own for every call that keeps the rules, for an account's next one. */
+  newPassword: (): string => `New-password-1-${run()}`,
+  /** A password of its own for every call that no account has. */
+  wrongPassword: (): string => `Wrong-password-1-${run()}`,
   name: (): string => `${preset?.name ?? 'E2E User'} ${run()}`,
+  otherName: (): string => generate.name(),
   newName: (): string => `Renamed ${run()}`,
   bio: (): string => `Bio written in run ${run()}`,
   /** An organisation key of its own for every call: `e2e_` and 8 lowercase hex digits. */

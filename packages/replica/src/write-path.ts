@@ -12,6 +12,7 @@ import {
 } from '@workspace/data'
 import { type ChangeSpec, resolveValue, type ValueRef } from '@workspace/kernel'
 
+import { documentValue, writeField } from './field-values'
 import { recordKey, splitRecordKey } from './keys'
 import type { RegionDoc } from './region-doc'
 import { fieldOf, type ReplicaSchema } from './schema'
@@ -213,33 +214,17 @@ export class LoroWritePath implements WritePathPort {
     ref: ValueRef,
     params: Readonly<Record<string, unknown>>,
   ): void {
-    const value = this.#value(ref, params)
-    const table = splitRecordKey(key)?.table ?? ''
-
-    if (fieldOf(this.schema, table, field)?.kind === 'text') {
-      record.ensureMergeableText(field).update(String(value ?? ''))
-
-      return
-    }
-
-    if (value === undefined) {
-      record.delete(field)
-
-      return
-    }
-
-    record.set(field, this.#encode(key, field, value) as never)
+    writeField(
+      this.schema,
+      splitRecordKey(key)?.table ?? '',
+      record,
+      field,
+      this.#value(ref, params),
+    )
   }
 
   /** Values as the document stores them: references as `table:key`, times as ISO strings. */
   #encode(key: string, field: string, value: unknown): unknown {
-    const table = splitRecordKey(key)?.table ?? ''
-    const kind = fieldOf(this.schema, table, field)
-
-    if (kind?.kind === 'record' && typeof value === 'string' && !value.includes(':')) {
-      return `${kind.table}:${value}`
-    }
-
-    return value instanceof Date ? value.toISOString() : value
+    return documentValue(this.schema, splitRecordKey(key)?.table ?? '', field, value)
   }
 }

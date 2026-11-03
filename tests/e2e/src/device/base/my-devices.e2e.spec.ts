@@ -20,11 +20,11 @@ const seenWithinAMinute = (page: Page): Promise<string[]> =>
     return [now, now - 60_000].map((time) => `Last seen ${format.format(time)}`)
   })
 
-/** The device is signed out: on "/sign-in", and the shell offers nothing but signing in. */
+/** The device is signed out: on "/sign-in", showing the sign-in form and no navigation. */
 async function expectSignedOut(device: Page): Promise<void> {
   await expect(device).toHaveURL(/\/sign-in$/)
-  await expect(device.getByTestId('app-shell.nav.sign-in-link')).toBeVisible()
-  await expect(device.getByTestId('app-shell.nav.devices-link')).toHaveCount(0)
+  await expect(device.getByTestId('user.sign-in.form')).toBeVisible()
+  await expect(device.getByTestId('app-shell.nav')).toHaveCount(0)
 }
 
 test.describe('Sign a device out from another one, and everywhere', { tag: '@full' }, () => {
@@ -43,7 +43,7 @@ test.describe('Sign a device out from another one, and everywhere', { tag: '@ful
       '[data-testid="device.list.session-item"]:not([data-state="current"])',
     )
 
-    await test.step('1. On device A, sign up and open [/devices]', async () => {
+    await test.step('1. On device A, sign up, open the link of [mail:sign-up] and open [/devices]', async () => {
       // The `signedIn` fixture has signed device A up through the sign-in page.
       await expect(page).toHaveURL(/\/me$/)
       await page.getByTestId('app-shell.nav.devices-link').click()

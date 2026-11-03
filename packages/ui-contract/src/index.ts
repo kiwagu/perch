@@ -13,6 +13,9 @@ export {
   screenOf,
   segmentsOf,
   testIdFor,
+  VISIBILITY_BASE_KIND,
+  VISIBILITY_BUTTON,
+  VISIBILITY_VALUES,
 } from './anchors'
 export {
   activitiesProblems,
@@ -28,6 +31,8 @@ export {
   type IdTarget,
   idTargetOf,
   loadContract,
+  mailsProblems,
+  noticesProblems,
   type ParallelNode,
   parameterSample,
   parseRoutePath,
@@ -43,6 +48,7 @@ export {
   scenariosProblems,
   screensProblems,
   searchProblems,
+  unknownNotice,
   versionProblems,
   vocabularyProblems,
 } from './check'
@@ -56,6 +62,7 @@ export {
   scanConsumers,
 } from './consumers'
 export {
+  ACCOUNT,
   ACTIVITIES_DIR,
   ACTIVITY_SCHEMA_FILE,
   type Activity,
@@ -92,6 +99,8 @@ export {
   PLATFORM_FILE,
   PLATFORM_SCHEMA_FILE,
   type Platform,
+  type PlatformMail,
+  type PlatformNotice,
   type Problem,
   parseVocabulary,
   SCENARIOS_DIR,
@@ -187,6 +196,8 @@ export {
   manifestSchema,
   paramValueSchema,
   platformFileSchema,
+  platformMailSchema,
+  platformNoticeSchema,
   platformSchema,
   screenFileSchema,
   screenSchema,

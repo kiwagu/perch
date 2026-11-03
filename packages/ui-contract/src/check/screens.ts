@@ -3,10 +3,11 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen; only a field says whether it holds input.
+ * fields of its own screen; only a field says whether it holds input; only an input renders a
+ * visibility-button.
  */
 
-import { FIELD_KINDS, kindOf, screenOf } from '../anchors'
+import { FIELD_KINDS, kindOf, screenOf, VISIBILITY_BASE_KIND, VISIBILITY_BUTTON } from '../anchors'
 import type { Problem } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
@@ -166,6 +167,45 @@ const holdsInputProblems = ({ screens }: Contract): Problem[] =>
       : [],
   )
 
+/** `secret` says a field holds a secret, which never leaves the page; only a field has it. */
+const secretProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.secret === true && !FIELD_KINDS.has(def.kind)
+      ? [locate(screens)([...at, 'secret'], 'only a field holds a secret')]
+      : [],
+  )
+
+/**
+ * The eye that shows or hides what a password input holds is derived by an input alone, and by a
+ * secret one: on any other field there is nothing hidden for it to show.
+ */
+const visibilityProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    (def.derived ?? []).flatMap((suffix, index) => {
+      if (suffix !== VISIBILITY_BUTTON) {
+        return []
+      }
+
+      if (def.kind !== VISIBILITY_BASE_KIND) {
+        return [
+          locate(screens)(
+            [...at, 'derived', index],
+            `only an ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}`,
+          ),
+        ]
+      }
+
+      return def.secret === true
+        ? []
+        : [
+            locate(screens)(
+              [...at, 'derived', index],
+              `only a secret ${VISIBILITY_BASE_KIND} renders a ${VISIBILITY_BUTTON}: declare it secret: true`,
+            ),
+          ]
+    }),
+  )
+
 export const screensProblems = (contract: Contract): Problem[] => [
   ...screenIdProblems(contract),
   ...duplicateProblems(contract),
@@ -175,4 +215,6 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...nameProblems(contract),
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
+  ...secretProblems(contract),
+  ...visibilityProblems(contract),
 ]

@@ -1,27 +1,18 @@
-import type { Result } from 'neverthrow'
 import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import type { Clock } from '@workspace/replica'
 import { CLOSE, deviceId } from '@workspace/replica/protocol'
-import { z } from '@workspace/zod'
 
-import type { RequestLimits } from '../limits/request-limits'
-import { tooMany } from '../limits/too-many'
-import { readBody } from '../read-body'
 import type { ConnectionRegistry } from '../sync/connections'
 
-import { bearerCaller, bearerRefused, DEVICE_HEADER } from './bearer-caller'
-import type { DeviceSessionRow, DeviceSessions, SignOutError } from './device-sessions'
-import { grantIdOf, type IdentitySessions, keysRefused } from './identity-sessions'
+import type { AuthSessions } from './auth-sessions'
+import { bearerCaller, bearerRefused, bearerToken, DEVICE_HEADER } from './bearer-caller'
+import { type DeviceSessionRow, endedAt } from './device-session-rows'
+import type { DeviceSessions } from './device-sessions'
 
-/**
- * What a device sends to have its pair revoked: the pair itself, which is the credential, so its
- * access token need not work any more.
- */
-const signOutBody = z.object({ access: z.string().min(1), refresh: z.string().min(1) })
-
-/** The paths of the device routes: every device of the caller, one of them, and the sign-outs. */
+/** The paths of the device routes: every device of the caller, and one of them. */
 const DEVICE_PATH = /^\/devices(?:\/([^/]+))?$/
 
 /** What a path names. */
@@ -31,24 +22,26 @@ type Target =
   | { readonly kind: 'everywhere' }
   | { readonly kind: 'sign-out' }
 
-/** Who a call with an access token comes from: the identity and its device, whose session is live. */
+/** Who a call with a session token comes from: the identity, and the device of its live session. */
 interface Caller {
   readonly identity: IdentityId
   readonly device: string
 }
 
-/** Answers a request of the caller. */
-type Handler = (caller: Caller, request: Request) => Promise<Response>
+/** Answers a call of the caller. */
+type Handler = (caller: Caller) => Promise<Response>
 
 /**
- * A device as the caller's list shows it. The grant it holds and the browser's own id stay on the
- * server: a hello binds by that id, so a live access token must not learn the other devices' ids.
+ * A device as the caller's list shows it. The session token it holds and the id it names itself
+ * with stay on the server: a token is the session itself, and a device's id is what its calls
+ * name it by.
  */
 interface ListedDevice {
   readonly id: string
   readonly label: string
   readonly createdAt: string
   readonly lastSeenAt: string
+  /** When the device's session ended; null while it is live. */
   readonly revokedAt: string | null
   /** The device the request came from. */
   readonly current: boolean
@@ -74,34 +67,23 @@ function targetOf(pathname: string): Target | undefined {
   return id === undefined ? { kind: 'devices' } : { kind: 'device', id }
 }
 
-function listed(row: DeviceSessionRow, current: string): ListedDevice {
+/** `row` as the list of `current`'s identity shows it at `now` (ms since the epoch). */
+function listed(row: DeviceSessionRow, current: string, now: number): ListedDevice {
   return {
     id: row.id,
     label: row.label,
     createdAt: row.createdAt.toISOString(),
     lastSeenAt: row.lastSeenAt.toISOString(),
-    revokedAt: row.revokedAt?.toISOString() ?? null,
+    revokedAt: endedAt(row, now)?.toISOString() ?? null,
     current: row.device === current,
   }
 }
 
 const noContent = (): Response => new Response(null, { status: 204 })
 
-const unauthorized = (): Response => Response.json({ code: 'unauthorized' }, { status: 401 })
-
 const noSuchDevice = (): Response => Response.json({ code: 'no-such-device' }, { status: 404 })
 
 const badRequest = (): Response => Response.json({ code: 'bad-request' }, { status: 400 })
-
-/** How many times a sign-out that renewed its pair tries to mark the device's row. */
-const MARK_ATTEMPTS = 3
-
-/** The pause before the first retry of that mark; each later one waits longer. */
-const MARK_BACKOFF_MS = 100
-
-function pause(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
 
 export interface DeviceRoutesOptions {
   /**
@@ -109,54 +91,44 @@ export interface DeviceRoutesOptions {
    * failure out, so this is where it is told.
    */
   readonly onFailure: (error: DataError) => void
-  /** Counts the renewal of a pair sign-out whose access token no longer works. */
-  readonly limits: Pick<RequestLimits, 'renewal'>
+  /** When a device's session reads as ended, for the list and the sign-out. */
+  readonly clock: Clock
 }
 
 /**
- * The device routes over HTTP, for the identity the device's access token signs in
- * (`Authorization: Bearer <access>`) on the device it names in `X-Perch-Device`, whose session
- * must be live.
+ * The device routes over HTTP, for the identity whose live session the device's token holds
+ * (`Authorization: Bearer <token>`, the raw session token) on the device it names in
+ * `X-Perch-Device`, which must be the device the session was opened on. They sit in front of
+ * Better Auth's handler, so the two sign-outs under `/auth/` are served here; a session is ended
+ * by the gateway's own update of its row, never deleted, so its device stays listed.
  *
- * - `GET /devices`: 200 `{ devices }`, the caller's devices the earliest first, those signed out
- *   within the last 30 days among them, each with `current` when it is the device the request
- *   came from; a device's own id (the one its header names) is never sent.
- * - `DELETE /devices/:id`: 204 once the device is signed out: its row and its grant revoked, a
- *   pair parked for it forgotten and its sockets closed with 4001; 404 `no-such-device` for an id
- *   that is not one of the caller's devices.
- * - `POST /auth/sign-out-everywhere`: 204 once every device of the caller, the asking one
- *   included, is signed out: the tokens issued before refused, every grant and row revoked, every
- *   parked pair forgotten and every socket closed with 4001.
- * - `POST /auth/sign-out` `{ access, refresh }` from the device named in `X-Perch-Device`, without
- *   `Authorization`: the pair itself is the credential, and its access token need not work any
- *   more. The pair must sign an identity in (renewed when its access token no longer works) and
- *   its refresh grant must be one of the identity's devices: that device's row is marked signed
- *   out (or stays so), a pair parked for it is forgotten, its sockets are closed with 4001, and
- *   the grant the pair holds (the renewed one when renewed) is revoked through the database: 204.
- *   A renewal counts against the device and the client address (`from`) before the refresh key
- *   is exchanged: one the limits refuse answers 429 `rate-limited` with `Retry-After`, nothing
- *   revoked and nothing spent.
- *   A failure answers 500 and may be asked again, a pair the database could not judge among
- *   them; a pair the database refused or that no device of the identity holds answers 401
- *   `unauthorized`, with nothing revoked but a grant the route renewed itself. A renewal spends
- *   the pair's refresh key, so that pair cannot be asked again: the row's mark is tried three
- *   times, and a mark that still fails closes the device the header names with 4001 (its parked
- *   pairs forgotten) and revokes the renewed grant before the 500.
+ * - `GET /devices`: 200 `{ devices }`, the latest session of each of the caller's devices, the
+ *   earliest device first, those signed out within the last 30 days among them, each with
+ *   `revokedAt` (when its session ended, or null) and `current` when it is the device the request
+ *   came from; neither a session token nor a device's own id is ever sent.
+ * - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's
+ *   sockets are closed with 4001; a session that ended already answers 204 with nothing closed,
+ *   so the device's later session keeps its sockets; 404 `no-such-device` for an id that is not
+ *   one of the caller's sessions.
+ * - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller, the asking
+ *   one included, has ended and every socket of the identity is closed with 4001.
+ * - `POST /auth/sign-out`, with the device's token and its `X-Perch-Device` and no body: the token
+ *   itself is the credential, so a session the device holds can be ended whatever state it is
+ *   in. 204 once the session that holds it has ended and that device's sockets are closed with
+ *   4001; a session that ended already answers 204, nothing closed again; a token no session
+ *   holds, or one whose session is of another device than the request names, answers 401
+ *   `unauthorized`. A failure answers 500 and the device keeps its token to ask again.
  *
- * A sign-out that failed after its first write still forgets the parked pairs and closes the
- * sockets of what it signed out before it answers 500. A method a path does not take answers 405
- * with the one it does in `Allow`; a request whose token the database refused or whose device has
- * no live session, 401 `unauthorized`; a request that names no device or a body that does not
- * follow its schema, 400 `bad-request`; a failure of the gateway or a token the database could not
- * judge, 500 `internal`, the failure itself handed to `onFailure`. A request for another path is
- * not answered here (`undefined`).
+ * A method a path does not take answers 405 with the one it does in `Allow`; a request whose
+ * token holds no live session, or one of another device, 401 `unauthorized` with
+ * `WWW-Authenticate: Bearer`; a request that names no valid device, 400 `bad-request`, before any
+ * token is read; a failure of the gateway or a session that could not be read, 500 `internal`,
+ * the failure itself handed to `onFailure` and nothing closed. A request for another path is not
+ * answered here (`undefined`).
  */
 export function deviceRoutes(
-  sessions: Pick<IdentitySessions, 'authenticate' | 'unpark'>,
-  devices: Pick<
-    DeviceSessions,
-    'bind' | 'list' | 'revoke' | 'revokeGrant' | 'revokeAll' | 'signedOut'
-  >,
+  sessions: Pick<AuthSessions, 'read' | 'signOut' | 'revoke' | 'revokeAll'>,
+  devices: Pick<DeviceSessions, 'list' | 'byToken'>,
   connections: Pick<ConnectionRegistry, 'close'>,
   options: DeviceRoutesOptions,
 ): (request: Request, from: string) => Promise<Response | undefined> {
@@ -167,186 +139,112 @@ export function deviceRoutes(
     return Response.json({ code: 'internal' }, { status: 500 })
   }
 
-  /** Forgets the pairs parked for what was signed out and closes its sockets with 4001. */
-  async function signedOut(identity: IdentityId, device: string | undefined): Promise<void> {
-    sessions.unpark(identity, device)
-    await connections.close(identity, device, CLOSE.revoked)
-  }
+  const list: Handler = async ({ identity, device }) => {
+    const now = options.clock.now()
 
-  /**
-   * Marks the device of `identity` that holds `grant` signed out, tried `attempts` times, with a
-   * short pause before each retry; the last answer stands.
-   */
-  async function mark(
-    identity: IdentityId,
-    grant: string,
-    attempts: number,
-  ): Promise<Result<DeviceSessionRow | undefined, DataError>> {
-    for (let attempt = 1; ; attempt += 1) {
-      const marked = await devices.signedOut({ identity, grant })
-
-      if (marked.isOk() || attempt >= attempts) {
-        return marked
-      }
-
-      await pause(MARK_BACKOFF_MS * attempt)
-    }
-  }
-
-  /** A sign-out that failed: before its first write, or after it (`partial`). */
-  function dataErrorOf(error: SignOutError): DataError {
-    return 'kind' in error ? error.error : error
-  }
-
-  const list: Handler = async ({ identity, device }) =>
-    (await devices.list(identity)).match(
-      (rows) => Response.json({ devices: rows.map((row) => listed(row, device)) }),
+    return (await devices.list(identity)).match(
+      (rows) => Response.json({ devices: rows.map((row) => listed(row, device, now)) }),
       failed,
     )
+  }
 
   const revoke =
     (id: string): Handler =>
     async ({ identity }) => {
       const parsed = idSchemas.device_session.schema.safeParse(id)
 
-      // An id of another form names no device.
+      // An id of another form names no session.
       if (!parsed.success) {
         return noSuchDevice()
       }
 
-      const revoked = await devices.revoke({ identity, id: parsed.data })
+      const revoked = await sessions.revoke(identity, parsed.data)
 
       if (revoked.isErr()) {
-        const failure = revoked.error
-
-        // The row was marked before the grant failed: the device is closed all the same.
-        if ('kind' in failure && failure.row) {
-          await signedOut(identity, failure.row.device)
-        }
-
-        return failed(dataErrorOf(failure))
+        return failed(revoked.error)
       }
 
-      const row = revoked.value
+      const ending = revoked.value
 
-      if (row === undefined) {
+      if (ending.kind === 'missing') {
         return noSuchDevice()
       }
 
-      await signedOut(identity, row.device)
+      // Only a session this call ended closes its device's sockets: once it had ended, the device
+      // may have signed in again, and its new session's sockets are not this one's.
+      if (ending.kind === 'ended') {
+        await connections.close(identity, ending.row.device, CLOSE.revoked)
+      }
 
       return noContent()
     }
 
   const everywhere: Handler = async ({ identity }) => {
-    const revoked = await devices.revokeAll(identity)
+    const revoked = await sessions.revokeAll(identity)
 
     if (revoked.isErr()) {
-      // The tokens were refused before the rest failed: every device is closed all the same.
-      if ('kind' in revoked.error) {
-        await signedOut(identity, undefined)
-      }
-
-      return failed(dataErrorOf(revoked.error))
+      return failed(revoked.error)
     }
 
-    await signedOut(identity, undefined)
+    await connections.close(identity, undefined, CLOSE.revoked)
 
     return noContent()
   }
 
   /**
-   * The pair is the credential: it signs the identity in (renewed when its access token no
-   * longer works), and its grant names the device. The row is marked first, then the grant the
-   * pair holds now is revoked through the database; both may be asked again. A renewal that ends
-   * in anything but 204 still has its grant revoked: nobody holds that pair. A renewal spent the
-   * pair's refresh key, so the pair asked again would be refused: the row's mark is tried three
-   * times, and when it still fails, the device the header names is closed before the 500.
+   * The token names the session to end, live or not: its row is looked up by the token, so a
+   * token no row holds, or one whose row is of another device than the request names, answers
+   * 401. The session is then ended by its token whatever its state, which marks an expired one
+   * ended at its expiry so no late extension of it takes hold, and answers 204. Only a session
+   * this call ended while it was live closes the device's sockets: one that had expired or ended
+   * already may have been followed by a new session of the device, whose sockets are not its own.
    */
-  const signOut = async (request: Request, from: string): Promise<Response> => {
+  const signOut = async (request: Request): Promise<Response> => {
     const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
-    const body = signOutBody.safeParse(await readBody(request))
 
-    if (!device.success || !body.success) {
+    if (!device.success) {
       return badRequest()
     }
 
-    const { access, refresh } = body.data
-    const sent = grantIdOf(refresh)
-    /** The renewal the limits refused, kept for its `Retry-After`. */
-    const limited: { refused?: { readonly retryAfterMs: number } } = {}
-    const authenticated = await sessions.authenticate({ access, refresh }, () => {
-      const allowance = options.limits.renewal(from, device.data)
+    const token = bearerToken(request)
 
-      if (!allowance.allowed) {
-        limited.refused = allowance
-      }
-
-      return allowance.allowed
-    })
-
-    // A renewal the limits refused asked the database nothing: the pair is as it was.
-    if (limited.refused) {
-      return tooMany(limited.refused)
+    if (token === undefined) {
+      return bearerRefused()
     }
 
-    // A pair the database could not judge was not refused: the device keeps it and asks again.
-    if (authenticated.isErr() && !keysRefused(authenticated.error)) {
-      return failed(authenticated.error)
+    const found = await devices.byToken(token)
+
+    if (found.isErr()) {
+      return failed(found.error)
     }
 
-    if (authenticated.isErr() || sent === undefined) {
-      return unauthorized()
+    const row = found.value
+
+    if (row === undefined || row.device !== device.data) {
+      return bearerRefused()
     }
 
-    const { identity } = authenticated.value
-    const renewed = authenticated.value.renewed
-      ? grantIdOf(authenticated.value.tokens.refresh)
-      : undefined
-    /** Answers, once a renewed grant that is not revoked yet has been. */
-    const answer = async (response: Response): Promise<Response> => {
-      if (renewed !== undefined && response.status !== 204) {
-        // A grant still live is reported as a failure of its own; the answer stands.
-        await devices
-          .revokeGrant({ identity: identity.id, grant: renewed })
-          .match(() => undefined, options.onFailure)
-      }
+    const ended = await sessions.signOut(token)
 
-      return response
-    }
-    const marked = await mark(identity.id, sent, renewed === undefined ? 1 : MARK_ATTEMPTS)
-
-    if (marked.isErr()) {
-      // The device cannot ask again after a renewal: what can be closed is closed now. Its row
-      // may stay unmarked; its grants are dead, the renewed one revoked as the route answers.
-      if (renewed !== undefined) {
-        await signedOut(identity.id, device.data)
-      }
-
-      return answer(failed(marked.error))
+    if (ended.isErr()) {
+      return failed(ended.error)
     }
 
-    // No device of the identity holds the pair's grant: nothing is revoked for it.
-    if (marked.value === undefined) {
-      return answer(unauthorized())
+    if (ended.value === 'ended') {
+      await connections.close(row.identity, row.device, CLOSE.revoked)
     }
 
-    await signedOut(identity.id, marked.value.device)
-
-    // The spent grant of a renewal is dead already: the renewed one is the pair's now.
-    const revoked = await devices.revokeGrant({ identity: identity.id, grant: renewed ?? sent })
-
-    return revoked.isOk() ? noContent() : answer(failed(revoked.error))
+    return noContent()
   }
 
-  /** Answers with the handler once the request's access token and device name a live session. */
+  /** Answers with the handler once the request's token and device name a live session. */
   const signedIn =
     (handler: Handler) =>
     async (request: Request): Promise<Response> => {
-      const caller = await bearerCaller(sessions, devices, request)
+      const caller = await bearerCaller(sessions, request)
 
       return match(caller)
-        .with({ kind: 'caller' }, ({ identity, device }) => handler({ identity, device }, request))
+        .with({ kind: 'caller' }, ({ identity, device }) => handler({ identity, device }))
         .with({ kind: 'unauthorized' }, async () => bearerRefused())
         .with({ kind: 'bad-request' }, async () => badRequest())
         .with({ kind: 'failed' }, async ({ error }) => failed(error))
@@ -354,9 +252,7 @@ export function deviceRoutes(
     }
 
   /** The one method the target takes, and its handler. */
-  function handlerOf(
-    target: Target,
-  ): readonly [string, (request: Request, from: string) => Promise<Response>] {
+  function handlerOf(target: Target): readonly [string, (request: Request) => Promise<Response>] {
     return match(target)
       .with({ kind: 'devices' }, () => ['GET', signedIn(list)] as const)
       .with({ kind: 'device' }, ({ id }) => ['DELETE', signedIn(revoke(id))] as const)
@@ -365,7 +261,7 @@ export function deviceRoutes(
       .exhaustive()
   }
 
-  return async (request, from) => {
+  return async (request) => {
     const target = targetOf(new URL(request.url).pathname)
 
     if (!target) {
@@ -381,6 +277,6 @@ export function deviceRoutes(
       )
     }
 
-    return handler(request, from)
+    return handler(request)
   }
 }

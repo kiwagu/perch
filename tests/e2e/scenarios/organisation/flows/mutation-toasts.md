@@ -19,7 +19,7 @@ Where: [/org] and [/me] on device A (user A)
 ## Scenario: An administrator sees a toast for each note added, edited and deleted, and one for a profile saved in two writes
 
 ### Steps
-1. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 2. On device A, enter the first note into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 3. On device A, enter the second note into [organisation.notes.new-textarea] and click [organisation.notes.add-button] at once
 4. On device A, wait ten seconds

@@ -98,6 +98,47 @@ describe('the walk of a flow', () => {
 
     expect(shadowed).toMatchObject({ expected: { state: 'c' }, actual: { state: 'b' } })
   })
+  it('carries a navigate whose search takes what a field holds, as written', () => {
+    const navigate = {
+      type: 'navigate',
+      params: { to: '/forgot', search: { email: { anchor: 'sample.email-input' } } },
+    } as const
+    const flow = flowOf({
+      initial: 'form',
+      states: {
+        form: { on: { 'sample.forgot-link': { target: 'gone', actions: [navigate] } } },
+        gone: { type: 'final' },
+      },
+    })
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([[navigate]])
+  })
+  it('carries a clear that empties a field, a secret one, as written', () => {
+    const emptied = { type: 'clear', params: { anchor: 'sample.password-input' } } as const
+    const flow = flowOf({
+      initial: 'form',
+      states: {
+        form: { on: { 'sample.save-button': { target: 'saving' } } },
+        saving: {
+          invoke: {
+            src: 'platform.change-password',
+            onDone: { target: 'form', actions: [emptied, show(['saved'])] },
+            onError: { target: 'form', actions: [show(['failed'])] },
+          },
+        },
+      },
+    })
+
+    for (const { label, expected, actual } of walk(flow).cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([
+      [],
+      [emptied, show(['saved'])],
+      [show(['failed'])],
+    ])
+  })
   it("expects the effects in XState's order: exit, the transition's, entry; none on staying, a clear among them", () => {
     const flow = flowOf({
       initial: 'a',

@@ -15,6 +15,12 @@ const read = (path: string): string => readFileSync(new URL(path, import.meta.ur
 
 const gatewayUser = read('./__fixtures__/operator-gateway-user.surql')
 
+/**
+ * A test on a database file opens it on disk two or three times; under the gate's parallel load
+ * that has taken longer than vitest's default 5 seconds.
+ */
+const ON_DISK_MS = 20_000
+
 describe('runAsOperator', () => {
   const dir = mkdtempSync(join(tmpdir(), 'perch-operator-'))
   const url = `surrealkv://${dir}`
@@ -40,25 +46,33 @@ describe('runAsOperator', () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('defines a namespace user that can then sign in, and closes its connection', async () => {
-    const ran = await runAsOperator({ engines: nodeEngines(), url }, gatewayUser)
+  it(
+    'defines a namespace user that can then sign in, and closes its connection',
+    async () => {
+      const ran = await runAsOperator({ engines: nodeEngines(), url }, gatewayUser)
 
-    expect(ran.isOk()).toBe(true)
+      expect(ran.isOk()).toBe(true)
 
-    // A refused sign-in first: an open connection would hold the file's lock.
-    const wrong = (await signIn('not-the-password'))._unsafeUnwrapErr()
+      // A refused sign-in first: an open connection would hold the file's lock.
+      const wrong = (await signIn('not-the-password'))._unsafeUnwrapErr()
 
-    expect(wrong.code).toBe('data:OPEN_FAILED')
-    expect(String(wrong.cause)).toMatch(/authentication/)
-    expect((await signIn('operator-test-password')).isOk()).toBe(true)
-  })
+      expect(wrong.code).toBe('data:OPEN_FAILED')
+      expect(String(wrong.cause)).toMatch(/authentication/)
+      expect((await signIn('operator-test-password')).isOk()).toBe(true)
+    },
+    ON_DISK_MS,
+  )
 
-  it('runs again on a stand that already holds what it defines', async () => {
-    const ran = await runAsOperator({ engines: nodeEngines(), url }, gatewayUser)
+  it(
+    'runs again on a stand that already holds what it defines',
+    async () => {
+      const ran = await runAsOperator({ engines: nodeEngines(), url }, gatewayUser)
 
-    expect(ran.isOk()).toBe(true)
-    expect((await signIn('operator-test-password')).isOk()).toBe(true)
-  })
+      expect(ran.isOk()).toBe(true)
+      expect((await signIn('operator-test-password')).isOk()).toBe(true)
+    },
+    ON_DISK_MS,
+  )
 
   it('reports a statement the database refuses', async () => {
     const ran = await runAsOperator({ engines: nodeEngines(), url: 'mem://' }, ')) unbalanced')

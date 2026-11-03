@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { formatProblem } from '../files'
 
 import { bindingsProblems } from './bindings'
-import { anchorIn, sampleContract } from './contract.fixture'
+import { anchorIn, sampleContract, screenIn } from './contract.fixture'
 
 const printed = (contract = sampleContract()): string[] =>
   bindingsProblems(contract).map(formatProblem)
@@ -56,6 +56,78 @@ describe('bindingsProblems', () => {
       `${AT}["sample.save-button"].binding.params.title: "sample.gone-input" is not a declared anchor`,
       `${AT}["sample.save-button"].binding.params.colour: "colour" is not a parameter of "thing.createThing"`,
       `${AT}["sample.sign-out-button"].binding.params.everywhere: "everywhere" is not a parameter of "platform.sign-out"`,
+    ])
+  })
+  it('wants a search param to be a search parameter of every route of the screen', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.updateThing',
+      params: { title: { search: 'tab' }, id: { search: 'token' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.id: "token" is not a search parameter of every route of the screen`,
+    ])
+  })
+  it('wants a search param on every route of the screen, not on one of them', () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').bindings.push({
+      path: '/sample',
+      roles: ['member'],
+      history: 'push',
+    })
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.updateThing',
+      params: { title: { search: 'tab' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.title: "tab" is not a search parameter of every route of the screen`,
+    ])
+  })
+  it('starts a field with a search parameter every route of the screen declares', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').binding = [
+      { search: 'tab' },
+      { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+    ]
+    anchorIn(contract, 'sample.mode-select').binding = { search: 'tab' }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('starts only a field with a search parameter, and only one every route declares', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').binding = { search: 'token' }
+    anchorIn(contract, 'sample.save-button').binding = { search: 'tab' }
+    anchorIn(contract, 'sample.list').binding = { search: 'tab' }
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.search-input': { kind: 'input', binding: { search: 'tab' } },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["app-shell.search-input"].binding.search: "tab" is not a search parameter of every route of the screen',
+      `${AT}["sample.title-input"].binding.search: "token" is not a search parameter of every route of the screen`,
+      `${AT}["sample.save-button"].binding.search: a button starts with no search parameter: only a field holds a value to start with`,
+      `${AT}["sample.list"].binding.search: a list starts with no search parameter: only a field holds a value to start with`,
+    ])
+  })
+  it('never starts a secret field with a search parameter: a secret never comes from a URL', () => {
+    const contract = sampleContract()
+
+    Object.assign(anchorIn(contract, 'sample.title-input'), {
+      secret: true,
+      binding: [
+        { search: 'tab' },
+        { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+      ],
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.title-input"].binding[0].search: a secret field starts with no search parameter: a secret never comes from a URL`,
     ])
   })
   it('reports a name of the object prototype as unknown, never as found or thrown', () => {
@@ -119,5 +191,25 @@ describe('bindingsProblems', () => {
     expect(printed(contract)).toEqual([
       `${AT}["sample.save-button"].binding.params.title: "sample.title-input.item" is not a declared anchor`,
     ])
+  })
+  it("refuses a visibility-button as a param's anchor, and keeps its input", () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.createThing',
+      params: { title: 'sample.title-input.visibility-button' },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].binding.params.title: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value an action takes`,
+    ])
+
+    anchorIn(contract, 'sample.save-button').binding = {
+      action: 'thing.createThing',
+      params: { title: 'sample.title-input' },
+    }
+
+    expect(printed(contract)).toEqual([])
   })
 })

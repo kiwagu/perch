@@ -1,6 +1,6 @@
 /**
- * What reaches the session from elsewhere: the channel of its space (memberships, keys the
- * gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
+ * What reaches the session from elsewhere: the channel of its space (memberships, a session token
+ * the gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
  * browser (a sign-in or a sign-out made there).
  */
 
@@ -15,7 +15,7 @@ import type { SessionHost } from './host'
 import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { SessionSignIn } from './sign-in'
-import type { SessionSignOut } from './sign-out'
+import type { ElsewhereNotice, SessionSignOut } from './sign-out'
 import { sessionTransportContext } from './transport-context'
 
 export interface SessionElsewhereOptions {
@@ -30,6 +30,7 @@ export class SessionElsewhere {
   readonly #organisations: SessionOrganisations
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
+  #protocolRefused = false
 
   constructor(options: SessionElsewhereOptions) {
     this.#host = options.host
@@ -49,19 +50,33 @@ export class SessionElsewhere {
       )
   }
 
+  /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
+  protocolRefused(): boolean {
+    return this.#protocolRefused
+  }
+
   transportContext(identity: IdentityId): TransportContext {
     return sessionTransportContext(identity, this.#host.options.storage, {
-      renewal: this.#organisations,
       memberships: (memberships) => {
         if (this.#host.open()?.space.identity.id === identity) {
           void this.#organisations.apply(memberships)
         }
       },
-      refused: () => {
-        this.#channelEnded(identity)
-        void this.#forced(() => this.#signingOut.refused(identity))
-      },
+      refused: () => void this.#forced(() => this.#signingOut.refused(identity)),
       revoked: () => void this.#outElsewhere(identity),
+      passwordChanged: () =>
+        void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
+      // The build is what the gateway refuses, whichever account's channel heard it, and while
+      // its space still opens too: kept for the frame that listens later, and published.
+      protocolRefused: () => {
+        this.#protocolRefused = true
+        this.#host.options.publish({
+          name: 'sync.protocol-refused',
+          payload: null,
+          actorId: identity,
+          occurredAt: new Date(),
+        })
+      },
     })
   }
 
@@ -94,23 +109,19 @@ export class SessionElsewhere {
       )
   }
 
-  /** The channel of `identity`, open on this tab, ended for good: its keys are renewed no more. */
-  #channelEnded(identity: IdentityId): void {
-    if (this.#host.open()?.space.identity.id === identity) {
-      this.#organisations.ended()
-    }
-  }
-
   /**
-   * Signed out from another device (4001), or everywhere at this device's request: as refused
-   * keys, and the sign-in page says why. Whichever of the two runs second changes nothing, and
-   * so does one whose session is no longer open (`still`) when its turn comes.
+   * Signed out from another device (4001), everywhere at this device's request, or by a change of
+   * the account's password (4002, whose `notice` says so): as a refused token, and the sign-in
+   * page says why. Whichever of two runs second changes nothing, and so does one whose session is
+   * no longer open (`still`) when its turn comes.
    */
-  #outElsewhere(identity: IdentityId, still = () => true): Promise<void> {
-    this.#channelEnded(identity)
-
+  #outElsewhere(
+    identity: IdentityId,
+    still = () => true,
+    notice: ElsewhereNotice = 'signed-out-elsewhere',
+  ): Promise<void> {
     return this.#forced(() =>
-      still() ? this.#signingOut.refused(identity, 'signed-out-elsewhere') : okAsync(undefined),
+      still() ? this.#signingOut.refused(identity, notice) : okAsync(undefined),
     )
   }
 

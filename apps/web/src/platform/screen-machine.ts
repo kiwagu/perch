@@ -1,12 +1,16 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
- * frame's guard (the action that used the input completed), asks the frame's confirmation before
+ * frame's guard (the action that used the input completed), its search taking the value of a field
+ * from what the moving event carries (`navigate-search.ts`), asks the frame's confirmation before
  * a destructive control's event and the guard before a leaving control's, in that order, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
  * It also runs the flow's effects on the frame (`frame-effects.ts`): a toast, the notice and its
- * clearing, so no container subscribes to them by hand.
+ * clearing, so no container subscribes to them by hand. And it brings the platform's events
+ * (`platform-events.port.ts`) to the machine while it runs, each carrying what the screen's fields
+ * hold as it comes (`fields`, by anchor, as the container gives them), for a move it makes; a
+ * state that does not handle one lets it pass.
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -25,6 +29,9 @@ import { questionOf } from './confirmations'
 import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
+import { useService } from './module'
+import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
+import { PLATFORM_EVENTS } from './platform-events.port'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -61,13 +68,17 @@ const childrenOf = (snapshot: unknown): Map<string, string> =>
     ),
   )
 
-/** A flow's `navigate` effect: where to go, with its search when it gives one. */
-const isNavigate = (
-  event: unknown,
-): event is { readonly to: string; readonly search?: Readonly<Record<string, unknown>> } =>
+/**
+ * A flow's `navigate` effect as a machine emits it: where to go, with its search when it gives one,
+ * and what the fields of the event that moves hold, for the values the search takes from them.
+ */
+const isNavigate = (event: unknown): event is NavigateParams & { readonly fields?: FieldValues } =>
   isRecord(event) &&
   typeof event['to'] === 'string' &&
-  (event['search'] === undefined || isRecord(event['search']))
+  (event['search'] === undefined || isSearch(event['search'])) &&
+  (event['fields'] === undefined ||
+    (isRecord(event['fields']) &&
+      Object.values(event['fields']).every((value) => typeof value === 'string')))
 
 const DONE = 'xstate.done.actor.'
 const FAILED = 'xstate.error.actor.'
@@ -84,8 +95,21 @@ const endedBy = (type: string): string | undefined =>
 const controlOf = (event: { readonly type: unknown }): string =>
   typeof event.type === 'string' ? event.type : ''
 
-export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
+/**
+ * Runs `machine` for a screen; `fields` is what the screen's fields hold now, by anchor, for the
+ * moves a platform event makes (a field the flow's move names and the container leaves out fails
+ * that move).
+ */
+export function useScreenMachine<TMachine extends AnyStateMachine>(
+  machine: TMachine,
+  fields?: FieldValues,
+) {
   const navigate = useNavigate()
+  const platform = useService(PLATFORM_EVENTS)
+  // Read when an event comes, so a render with new values subscribes nothing.
+  const held = useRef(fields)
+
+  held.current = fields
   const guard = useLeaveGuard()
   const confirmation = useConfirmGuard()
   const ask = useCallback(
@@ -178,7 +202,9 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
       if (isNavigate(event)) {
         void navigate({
           to: event.to,
-          ...(event.search === undefined ? {} : { search: event.search }),
+          ...(event.search === undefined
+            ? {}
+            : { search: searchOf(event.search, event.fields ?? {}) }),
           ignoreBlocker: true,
         })
       }
@@ -186,6 +212,19 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
 
     return () => moved.unsubscribe()
   }, [actor, navigate])
+
+  // A machine that ended takes no event any more.
+  useEffect(() => {
+    const target: Pick<AnyActorRef, 'send'> = actor
+
+    return platform.listen((event) => {
+      const now: AnyMachineSnapshot = actor.getSnapshot()
+
+      if (now.status === 'active') {
+        target.send(held.current === undefined ? event : { ...event, fields: held.current })
+      }
+    })
+  }, [actor, platform])
 
   /**
    * Sends `event` and resolves with the outcome of the actions it started, once the machine took

@@ -146,12 +146,14 @@ describe('loadSchemaModel', () => {
       '_replica_projected',
       '_replica_snapshot',
       '_replica_update',
+      'account',
       'device_session',
       'identity',
       'membership',
       'profile',
       'settings',
       'tenant',
+      'verification',
     ])
     expect(model.tables['profile']?.region).toBe('private')
     expect(model.tables['tenant']).toMatchObject({ replicate: 'none', idPrefix: 'tnt' })

@@ -1,3 +1,5 @@
+export { ACCOUNT, type PlatformMail, type PlatformNotice } from '../../schemas'
+
 export { loadScreens, loadScreensWith } from './load'
 export type {
   AnchorBinding,
@@ -13,6 +15,7 @@ export type {
   FlowTransition,
   ParamValue,
   Platform,
+  PlatformComposite,
   PlatformFile,
   Screen,
   ScreensFile,

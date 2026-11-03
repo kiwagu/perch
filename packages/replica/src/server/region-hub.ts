@@ -1,7 +1,7 @@
 import { type LoroDoc, VersionVector } from 'loro-crdt'
 import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
-import type { DataError } from '@workspace/data'
+import { type DataError, dataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
 import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
@@ -12,11 +12,13 @@ import type { ReplicaSchema } from '../schema'
 
 import { type BatchIntake, takeInBatch } from './batch-intake'
 import { HeldRegions } from './held-regions'
+import type { FieldValue, RecordWrite } from './record-write'
 import type { RegionDatabases } from './region-databases'
 import { storedHeads } from './stored-heads'
 import { type Actor, deliver, type Subscriber } from './subscription'
+import { takeInWrite } from './write-intake'
 
-export type { Actor, Subscriber }
+export type { Actor, FieldValue, RecordWrite, Subscriber }
 
 export interface RegionHubOptions {
   /** Where each region's log and projection live: held while the region is loaded. */
@@ -71,8 +73,9 @@ function snapshotAt(doc: LoroDoc, version: VersionVector | undefined): Uint8Arra
  * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
  * checked on a fork of the document against the identity of the device that pushed it, and its
  * peers against the identities they write as, accepted by the log with its projection, then imported and sent to the region's other
- * subscribers. A region nobody subscribes to any more is dropped from memory after an idle
- * time, and its database released.
+ * subscribers. The server's own change to a record takes the same way, as the server's peer. A
+ * region nobody subscribes to or writes any more is dropped from memory after an idle time, and
+ * its database released.
  */
 export class RegionHub {
   readonly #held: HeldRegions
@@ -217,6 +220,24 @@ export class RegionHub {
   ): ResultAsync<void, DataError> {
     return this.#held.subscribed(regionId, subscriber, (state, loaded, actor) =>
       takeInBatch(this.#intake, { regionId, subscriber, batch, updates }, state, loaded, actor),
+    )
+  }
+
+  /**
+   * Makes a change of the server's own to one record of a region, as the server's Loro peer,
+   * and resolves to its number in the region's log: it runs in the region's queue between the
+   * devices' batches, and is logged, projected and sent to every subscriber as theirs are. A
+   * region the hub does not hold is loaded for it and unloads after the idle time when nobody
+   * subscribes. The contract of the write itself is `takeInWrite`'s; once the hub is closed a
+   * write fails, holding nothing.
+   */
+  writeRecord(region: RegionRef, write: RecordWrite): ResultAsync<number, DataError> {
+    if (this.#held.closed) {
+      return errAsync(dataError('data:WRITE_FAILED', 'the hub is closed'))
+    }
+
+    return this.#held.write(region, (state, loaded) =>
+      takeInWrite(this.#intake, write, state, loaded),
     )
   }
 

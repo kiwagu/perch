@@ -1,23 +1,33 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 import { useLocale } from '@workspace/i18n'
 
+import { useFieldClears } from '../../../../../platform/field-clears'
 import { useSetLocale } from '../../../../../platform/i18n'
 import { trackedStore, useLanguageWrites } from '../../../../../platform/language-writes'
 import { useService, useShape } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import { useDeviceTheme } from '../../../../../platform/theme'
+import { settingsShape } from '../../../application/settings/settings.model.gen'
+import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
 import {
   createSettingsMachine,
   type SettingsValues,
-} from '../../../application/settings/settings.machine'
-import { settingsShape } from '../../../application/settings/settings.model.gen'
-import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
+} from '../../../application/settings/settings-machine'
 
+import { type EmailFormValues, EmailFormView } from './email-form.view'
+import { type PasswordFormValues, PasswordFormView } from './password-form.view'
 import { SettingsView } from './settings.view'
 
-/** The settings screen: its flow run as its machine over the device's theme and the account's settings. */
+const EMPTY_PASSWORDS: PasswordFormValues = { current: '', password: '', confirmation: '' }
+const EMPTY_EMAIL: EmailFormValues = { email: '', password: '' }
+
+/**
+ * The settings screen: its flow run as its machine over the device's theme, the account's settings
+ * and the account's password and email, whose forms' values the page holds so that the flow's
+ * `clear` empties them.
+ */
 export function SettingsContainer() {
   const session = useService(SESSION)
   const settings = useService(SETTINGS_SERVICE)
@@ -30,6 +40,8 @@ export function SettingsContainer() {
   const locale = useLocale()
   const setLocale = useSetLocale()
   const writes = useLanguageWrites()
+  const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
+  const [email, setEmail] = useState(EMPTY_EMAIL)
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
   const live = useRef<SettingsValues & { readonly store: typeof row }>({
     held: false,
@@ -53,10 +65,13 @@ export function SettingsContainer() {
 
           return settings.updateLocale({ id: stored?.id ?? never(), locale: chosen })
         }),
+        changePassword: (currentPassword, password) =>
+          session.changePassword(currentPassword, password),
+        changeEmail: (address, password) => session.changeEmail(address, password),
       }),
-    [device.set, settings, writes],
+    [device.set, settings, writes, session],
   )
-  const { state, send, actor } = useScreenMachine(machine)
+  const { state, send, submit, actor } = useScreenMachine(machine)
 
   // A chosen language is spoken at once, while its store runs.
   useEffect(() => {
@@ -65,15 +80,75 @@ export function SettingsContainer() {
     return () => spoken.unsubscribe()
   }, [actor, setLocale])
 
+  // A changed password empties its form, as the flow says.
+  useFieldClears(actor, {
+    'user.settings.password.current-password-input': () =>
+      setPasswords((now) => ({ ...now, current: '' })),
+    'user.settings.password.new-password-input': () =>
+      setPasswords((now) => ({ ...now, password: '' })),
+    'user.settings.password.password-confirmation-input': () =>
+      setPasswords((now) => ({ ...now, confirmation: '' })),
+  })
+
   return (
-    <SettingsView
-      theme={device.theme}
-      locale={locale}
-      canChooseTheme={state.can({ type: 'user.settings.theme-select', theme: 'light' })}
-      canChooseLocale={state.can({ type: 'user.settings.locale-select', locale: 'en' })}
-      onTheme={(theme) => send({ type: 'user.settings.theme-select', theme })}
-      onLocale={(chosen) => send({ type: 'user.settings.locale-select', locale: chosen })}
-    />
+    <div className="flex flex-col gap-4">
+      <SettingsView
+        theme={device.theme}
+        locale={locale}
+        canChooseTheme={state.can({ type: 'user.settings.theme-select', theme: 'light' })}
+        canChooseLocale={state.can({ type: 'user.settings.locale-select', locale: 'en' })}
+        onTheme={(theme) => send({ type: 'user.settings.theme-select', theme })}
+        onLocale={(chosen) => send({ type: 'user.settings.locale-select', locale: chosen })}
+      />
+      <PasswordFormView
+        values={passwords}
+        error={state.context.passwordError}
+        canSave={state.can({
+          type: 'user.settings.password.save-button',
+          currentPassword: '',
+          password: '',
+          confirmation: '',
+        })}
+        onChange={(field, next) => {
+          setPasswords(next)
+
+          const typed = { password: next.password, confirmation: next.confirmation }
+
+          if (field === 'password') {
+            send({ type: 'user.settings.password.new-password-input', ...typed })
+          } else if (field === 'confirmation') {
+            send({ type: 'user.settings.password.password-confirmation-input', ...typed })
+          }
+        }}
+        // A save that finds the two differing asks for nothing, so what was typed stays unsaved.
+        onSave={() =>
+          submit({
+            type: 'user.settings.password.save-button',
+            currentPassword: passwords.current,
+            password: passwords.password,
+            confirmation: passwords.confirmation,
+          }).then(
+            (saved) =>
+              saved && !actor.getSnapshot().matches({ viewing: { password: 'passwords-differ' } }),
+          )
+        }
+      />
+      <EmailFormView
+        values={email}
+        error={state.context.emailError}
+        message={state.context.emailMessage}
+        sentTo={state.context.sentTo}
+        canSend={state.can({ type: 'user.settings.email.send-button', email: '', password: '' })}
+        onChange={setEmail}
+        onSend={() =>
+          submit({
+            type: 'user.settings.email.send-button',
+            email: email.email,
+            password: email.password,
+          })
+        }
+      />
+    </div>
   )
 }
 

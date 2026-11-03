@@ -14,6 +14,11 @@ export type DataErrorCode =
   | 'data:REGION_STALE'
   | 'data:REGION_RELOADED'
   | 'data:OTHER_ACCOUNT'
+  | 'data:EMAIL_NOT_VERIFIED'
+  | 'data:LINK_INVALID'
+  | 'data:LINK_EXPIRED'
+  | 'data:PASSWORD_REJECTED'
+  | 'data:EMAIL_INVALID'
 
 export interface DataError {
   readonly code: DataErrorCode

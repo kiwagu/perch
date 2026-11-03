@@ -1,44 +1,48 @@
 import type { DataError } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
+import type { DeviceSessionId, IdentityId } from '@workspace/ids'
 import { deviceId } from '@workspace/replica/protocol'
 
-import type { DeviceSessions } from './device-sessions'
-import { type IdentitySessions, keysRefused } from './identity-sessions'
-import { issuedAtOf } from './token-claims'
+import type { AuthSessions } from './auth-sessions'
+import { DEVICE_HEADER } from './session-hooks'
 
-/** The access token in an `Authorization` header. */
+/** The header a device names itself in on every call with a session token. */
+export { DEVICE_HEADER }
+
+/** The session token in an `Authorization` header. */
 const BEARER = /^Bearer +(\S+)$/i
 
-/** The header a device names itself in on every call with an access token. */
-export const DEVICE_HEADER = 'X-Perch-Device'
-
 /**
- * Who a call with an access token comes from: the identity the token signs in and the device
- * it names, whose session is live; or why the call is refused.
+ * Who a call with a session token comes from: the identity whose live session the token holds,
+ * its email, the device it names, which the session was opened on, the session's row and the
+ * token; or why the call is refused.
  */
 export type BearerCaller =
-  | { readonly kind: 'caller'; readonly identity: IdentityId; readonly device: string }
+  | {
+      readonly kind: 'caller'
+      readonly identity: IdentityId
+      readonly email: string
+      readonly device: string
+      readonly session: DeviceSessionId
+      readonly token: string
+    }
   | { readonly kind: 'unauthorized' }
   | { readonly kind: 'bad-request' }
   | { readonly kind: 'failed'; readonly error: DataError }
 
-/** The access token the request carries as `Authorization: Bearer <access>`, if it does. */
+/** The session token the request carries as `Authorization: Bearer <token>`, if it does. */
 export function bearerToken(request: Request): string | undefined {
   return BEARER.exec(request.headers.get('Authorization') ?? '')?.[1]
 }
 
 /**
  * Who the request comes from: the device it names in `X-Perch-Device` must follow the protocol's
- * device id (checked first, before any call to the database), its access token must sign an
- * identity in (a refresh key is not taken), and that device of the identity must have a live
- * session the token belongs to. A device signed out from another one is refused at once, though
- * its access token still works, and so is a token issued before the device's session started
- * (one of an earlier session the device signed in again after). A token the database could not
- * judge is no refusal: the call failed.
+ * device id (checked first, before any session is read), its session token must hold a live
+ * session, and that session must have been opened on the device the request names: a token
+ * carried to another device is refused. A session that could not be read is no refusal: the call
+ * failed.
  */
 export async function bearerCaller(
-  sessions: Pick<IdentitySessions, 'authenticate'>,
-  devices: Pick<DeviceSessions, 'bind'>,
+  sessions: Pick<AuthSessions, 'read'>,
   request: Request,
 ): Promise<BearerCaller> {
   const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
@@ -47,41 +51,32 @@ export async function bearerCaller(
     return { kind: 'bad-request' }
   }
 
-  const access = bearerToken(request)
+  const token = bearerToken(request)
 
-  if (access === undefined) {
+  if (token === undefined) {
     return { kind: 'unauthorized' }
   }
 
-  const authenticated = await sessions.authenticate({ access })
+  const read = await sessions.read(token)
 
-  if (authenticated.isErr()) {
-    return keysRefused(authenticated.error)
-      ? { kind: 'unauthorized' }
-      : { kind: 'failed', error: authenticated.error }
+  if (read.kind === 'failed') {
+    return { kind: 'failed', error: read.error }
   }
 
-  const identity = authenticated.value.identity.id
-  // The database verified the token: what it says of when it was issued can be read as it is.
-  const issuedAt = issuedAtOf(access)
-
-  if (issuedAt === undefined) {
-    return { kind: 'unauthorized' }
-  }
-
-  const binding = await devices.bind({ identity, device: device.data, issuedAt })
-
-  if (binding.isErr()) {
-    return { kind: 'failed', error: binding.error }
-  }
-
-  return binding.value.kind === 'bound'
-    ? { kind: 'caller', identity, device: device.data }
+  return read.kind === 'session' && read.caller.device === device.data
+    ? {
+        kind: 'caller',
+        identity: read.caller.identity,
+        email: read.caller.email,
+        device: device.data,
+        session: read.caller.session,
+        token,
+      }
     : { kind: 'unauthorized' }
 }
 
 /**
- * The answer to a call whose access token signs nobody in, or whose device has no live session:
+ * The answer to a call whose session token holds no live session, or one of another device:
  * 401 `unauthorized`, naming the scheme the call must authenticate with.
  */
 export function bearerRefused(): Response {

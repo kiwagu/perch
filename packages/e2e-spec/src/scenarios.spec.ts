@@ -11,7 +11,7 @@ import { readScenarios } from './scenarios'
 afterEach(removeProjects)
 
 describe('readScenarios', () => {
-  it('returns the scenarios of the folder, sorted by their paths', () => {
+  it('returns the scenarios of the folder, sorted by their ids', () => {
     const edit = scenarioOf('sample/base/edit', 2)
     const remove = scenarioOf('sample/base/delete', 3)
     const { root } = project([edit, remove])

@@ -20,7 +20,7 @@ test.describe('Create a second organisation and switch between them', { tag: '@s
       .getByTestId('organisation.notes.list')
       .getByTestId('organisation.notes.text-cell')
 
-    await test.step('1. Sign up, open [/org], enter the first key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+    await test.step('1. Sign up, open the link of [mail:sign-up], open [/org], enter the first key and name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       await createOrganisation(page, { key: data.firstKey, name: data.firstName })

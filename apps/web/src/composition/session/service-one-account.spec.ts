@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
-import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
+import type { GatewayAuth } from '../gateway-auth'
 import {
+  type KeptDevice,
   type MemoryStorage,
   memoryStorage,
   pendingRevokes,
@@ -13,17 +14,14 @@ import {
   savedIdentity,
 } from '../storage'
 
-const ann: SignedInDevice = {
+const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  tokens: { access: 'access-ann', refresh: 'refresh-ann' },
+  token: 'token-ann',
   memberships: [],
 }
 
-const annSignUp = { email: 'ann@example.test', password: 'pass-word-1' }
-const bobSignUp = { email: 'bob@example.test', password: 'pass-word-2' }
-
-/** Another device, for accounts a test makes at the gateway before its session signs in. */
-const elsewhere = { id: 'elsewhere', label: 'Edge on Windows' }
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
+const bobSignUp = { email: 'bob@example.test', password: 'Pass-word-2', name: 'Bob', locale: 'en' }
 
 const worlds: TestWorld[] = []
 
@@ -46,14 +44,13 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
 }
 
 /** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: SignedInDevice): void {
+function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
   const other = memoryStorage()
 
   saveDevice(other, device)
 
   for (const key of [
     'perch.session.token',
-    'perch.session.refresh',
     'perch.session.identity',
     'perch.session.memberships',
   ]) {
@@ -76,15 +73,19 @@ describe('one account per browser', () => {
     expect(tab.opened()).toEqual([ann.identity.id])
   })
 
-  it('refuses a sign-up while another account is signed in on this browser, before it asks the gateway', async () => {
+  it('refuses a sign-in while another account is signed in on this browser, before it asks the gateway', async () => {
     const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
     const tab = await world({ online: false, auth })
 
     expect((await tab.session.restore()).isOk()).toBe(true)
     // Another tab signed Ann in; this one has not heard of it yet.
     saveDevice(tab.storage, ann)
 
-    const refused = await tab.session.signUp(bobSignUp)
+    const refused = await tab.session.signIn(bobSignUp)
 
     expect(refused._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
     expect(auth.requests).toEqual([])
@@ -92,14 +93,18 @@ describe('one account per browser', () => {
     expect(tab.opened()).toEqual([])
   })
 
-  it('refuses a sign-in whose answer comes after another tab signed someone else in, and has its new keys revoked', async () => {
+  it('refuses a sign-in whose answer comes after another tab signed someone else in, and has its new token signed out', async () => {
     const auth = fakeGatewayAuth()
     const storage = memoryStorage()
+
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
     // The gateway answers once another tab has signed Ann in.
     const late: GatewayAuth = {
       ...auth,
-      signUp: (input, device) =>
-        auth.signUp(input, device).map((answer) => {
+      signIn: (input, device) =>
+        auth.signIn(input, device).map((answer) => {
           saveDevice(storage, ann)
 
           return answer
@@ -107,25 +112,31 @@ describe('one account per browser', () => {
     }
     const tab = await world({ storage, auth: late })
 
-    const refused = await tab.session.signUp(bobSignUp)
+    const refused = await tab.session.signIn(bobSignUp)
 
     expect(refused._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
     expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
     expect(tab.opened()).toEqual([])
-    // Bob's new pair goes to the gateway to be revoked at once: the browser is online.
+    // Bob's new token goes to the gateway to be signed out at once: the browser is online.
     await vi.waitFor(() =>
-      expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-up', 'sign-out']),
+      expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-in', 'sign-out']),
     )
+    // The token of the link opened elsewhere was the first; this sign-in's is the second.
+    expect(auth.requests[1]).toMatchObject({ kind: 'sign-out', token: 'token-2' })
     expect(pendingRevokes(storage)).toEqual([])
   })
 
-  it('keeps the new keys of a refused sign-in to revoke later while offline', async () => {
+  it('keeps the new token of a refused sign-in to sign out later while offline', async () => {
     const auth = fakeGatewayAuth()
     const storage = memoryStorage()
+
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
     const late: GatewayAuth = {
       ...auth,
-      signUp: (input, device) =>
-        auth.signUp(input, device).map((answer) => {
+      signIn: (input, device) =>
+        auth.signIn(input, device).map((answer) => {
           saveDevice(storage, ann)
 
           return answer
@@ -133,19 +144,19 @@ describe('one account per browser', () => {
     }
     const tab = await world({ storage, auth: late, online: false })
 
-    expect((await tab.session.signUp(bobSignUp))._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
+    expect((await tab.session.signIn(bobSignUp))._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
     expect(pendingRevokes(storage)).toHaveLength(1)
-    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-up'])
+    expect(auth.requests.map(({ kind }) => kind)).toEqual(['sign-in'])
   })
 
   it('lets the account signed in on this browser sign in again', async () => {
     const auth = fakeGatewayAuth()
     const tab = await world({ online: false, auth })
-    const annAtGateway = (await auth.signUp(annSignUp, elsewhere))._unsafeUnwrap()
+    const annAtGateway = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
-    saveDevice(tab.storage, annAtGateway)
+    saveDevice(tab.storage, { identity: annAtGateway, token: 'token-ann', memberships: [] })
 
     expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
-    expect(tab.session.current()?.id).toBe(annAtGateway.identity.id)
+    expect(tab.session.current()?.id).toBe(annAtGateway.id)
   })
 })

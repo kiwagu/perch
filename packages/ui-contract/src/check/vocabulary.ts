@@ -2,13 +2,16 @@
  * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
  * words. Every kind, derived suffix, code, state, role and screen name the screens and the
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
- * permission to; every choice value belongs to an anchor that exists; every code listed is
+ * permission to; every choice value belongs to an anchor that exists and is no visibility-button,
+ * whose values its suffix defines; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
+ * The platform's composites and the vocabulary's "Composites" rows name each other both ways,
+ * and the item state of a composite is a row state.
  * A code the loader derived on the toast anchor needs no row: the rule row
  * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { screenOf } from '../anchors'
+import { screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
   jsonPath,
@@ -28,6 +31,7 @@ import {
   knownAnchors,
   locate,
   statesOf,
+  visibilityButtonsOf,
 } from './contract'
 
 const FRAME_SCREEN = 'app-shell'
@@ -111,8 +115,10 @@ const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
       })),
   )
 
+const inVocabulary = (message: string): Problem => ({ file: VOCABULARY_FILE, message })
+
 function platformProblems({ vocabulary, screens }: Contract): Problem[] {
-  const { actions, status, reserved } = screens.platform
+  const { actions, composites, status, reserved } = screens.platform
   const inScreens = locate(screens)
   const unlisted = unlistedIn(inScreens)
   const appStates = Object.keys(vocabulary.appStates)
@@ -157,10 +163,27 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
             ),
           ]),
     ]),
+    ...Object.entries(composites ?? {}).flatMap(([name, { itemState }]) => [
+      ...(has(vocabulary.composites, name)
+        ? []
+        : [
+            inScreens(
+              ['platform', 'composites', name],
+              `"${name}" is not a composite of the vocabulary`,
+            ),
+          ]),
+      ...unlisted(
+        [itemState],
+        ['platform', 'composites', name, 'itemState'],
+        new Set(Object.keys(vocabulary.rowStates)),
+        'a row state',
+      ),
+    ]),
+    ...Object.keys(vocabulary.composites)
+      .filter((name) => !has(composites ?? {}, name))
+      .map((name) => inVocabulary(`composite "${name}" is documented but undeclared`)),
   ]
 }
-
-const inVocabulary = (message: string): Problem => ({ file: VOCABULARY_FILE, message })
 
 function validPattern(pattern: string): boolean {
   try {
@@ -174,6 +197,7 @@ function validPattern(pattern: string): boolean {
 
 function choiceValueProblems(contract: Contract): Problem[] {
   const known = knownAnchors(contract)
+  const visibilityButtons = visibilityButtonsOf(contract.screens)
 
   return Object.entries(contract.vocabulary.choiceValues).flatMap(([anchor, rows]) => {
     const values = Object.keys(rows)
@@ -191,6 +215,13 @@ function choiceValueProblems(contract: Contract): Problem[] {
       ...(known(anchor)
         ? []
         : [inVocabulary(`choice values of "${anchor}": no such anchor in the screens`)]),
+      ...(visibilityButtons.has(anchor)
+        ? [
+            inVocabulary(
+              `choice values of "${anchor}": a ${VISIBILITY_BUTTON} carries show or hide, the values of its suffix, and takes no rows`,
+            ),
+          ]
+        : []),
     ]
   })
 }

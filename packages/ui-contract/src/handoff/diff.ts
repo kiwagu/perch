@@ -1,34 +1,22 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
- * it renames, the codes and the error fields it adds or removes on the anchors both hold
- * (written or derived, so a constraint added to the model shows as the code it gives), the
- * fields that start or stop holding input, the actions that leave what the user typed behind
- * and how each leave that would lose it asks, and the transitions it adds or removes in each
- * activity both contracts hold.
- * `contractAt` reads the contract files, the activities and the scenarios at a git ref.
+ * it renames, the derived parts (a password input's visibility-button among them), the
+ * composites the platform declares, the codes, the states and the error fields it adds or
+ * removes on the anchors both hold (written or derived, so a constraint added to the model
+ * shows as the code it gives), the fields that start or stop holding input, the actions that
+ * leave what the user typed behind and how each leave that would lose it asks, the notices the
+ * platform actions declare, the transitions it adds or removes in each activity both contracts
+ * hold, and the lines of the flow it adds or removes in each screen both hold (a flow added or
+ * removed whole, every line; so a contract written shorter that loads to the same flows shows no
+ * change).
  */
 
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-
-import { type Contract, codesOf, declaredAnchors, loadContract } from '../check'
-import {
-  ACTIVITIES_DIR,
-  type Activity,
-  type AnchorDef,
-  CONTRACT_DIR,
-  formatProblem,
-  MODEL_FILE,
-  PLATFORM_FILE,
-  SCENARIOS_DIR,
-  SCREENS_DIR,
-  VOCABULARY_FILE,
-} from '../files'
+import { type Contract, codesOf, declaredAnchors } from '../check'
+import type { Activity, AnchorDef, Flow } from '../files'
 
 import { branchesOf } from './activities'
+import { flowLines } from './flow-lines'
 
 export interface Change {
   added: string[]
@@ -37,9 +25,15 @@ export interface Change {
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
+  /** As `<anchor>.<suffix>`, the derived parts the anchors both contracts hold render. */
+  derived: Change
+  /** By name, the composites the platform declares. */
+  composites: Change
   codes: Change
   /** As `<anchor> <code>`, on the anchors both contracts hold (a renamed one by its new name). */
   anchorCodes: Change
+  /** As `<anchor> <state>`, the data-states of the anchors both contracts hold, renamed as above. */
+  anchorStates: Change
   /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
   errorFields: Change
   /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
@@ -50,81 +44,22 @@ export interface ContractChanges {
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
   unsavedInput: Change
+  /** As `<action>.<name>`, the notices the platform actions declare. */
+  notices: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
   fields: Change
   /** By id; per activity both hold, its transitions as `<state> on <anchor> -> <target>`. */
   activities: Change & { transitions: Record<string, Change> }
-}
-
-const FILES = [VOCABULARY_FILE, PLATFORM_FILE, MODEL_FILE] as const
-
-/** The folders whose every file belongs to the contract, at any depth. */
-const FOLDERS = [SCREENS_DIR, ACTIVITIES_DIR, SCENARIOS_DIR] as const
-
-const git = (root: string, args: readonly string[]): string =>
-  execFileSync('git', args, {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-
-/** Writes `file` as it is at `ref` into the folder `temp`. */
-function copyAt(root: string, ref: string, file: string, temp: string): void {
-  let text: string
-
-  try {
-    text = git(root, ['show', `${ref}:${file}`])
-  } catch {
-    throw new Error(`${ref} has no ${file}`)
-  }
-
-  mkdirSync(dirname(join(temp, file)), { recursive: true })
-  writeFileSync(join(temp, file), text)
-}
-
-/**
- * The contract at `ref` of the repository at `root`, or `missing` when that commit has no
- * `contract/` folder. A ref that names no commit, and a contract there that does not load,
- * are errors.
- */
-export function contractAt(ref: string, root: string): Contract | { missing: true } {
-  try {
-    git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
-  } catch {
-    throw new Error(`"${ref}" names no commit`)
-  }
-
-  if (git(root, ['ls-tree', '--name-only', ref, '--', `${CONTRACT_DIR}/`]).trim() === '') {
-    return { missing: true }
-  }
-
-  const temp = mkdtempSync(join(tmpdir(), 'ui-contract-diff-'))
-
-  try {
-    const folders = FOLDERS.map((dir) => `${dir}/`)
-    const listed = git(root, ['ls-tree', '-r', '--name-only', ref, '--', ...folders])
-      .split('\n')
-      .filter((file) => file !== '')
-
-    for (const file of [...FILES, ...listed]) {
-      copyAt(root, ref, file, temp)
-    }
-
-    const { contract, problems } = loadContract(temp)
-
-    if (contract === undefined) {
-      const printed = problems.map(formatProblem).join('; ')
-
-      throw new Error(`the contract at ${ref} does not load: ${printed}`)
-    }
-
-    return contract
-  } finally {
-    rmSync(temp, { recursive: true, force: true })
-  }
+  /**
+   * Per screen both contracts hold with a flow on either side, by its id, the lines of the flow
+   * (`flowLines`: initial states, the codes each guard by failure code takes, addresses,
+   * entries, exits, transitions with their targets, guards and effects, invokes and their
+   * outcomes, final states; descriptions and guard sentences aside), a flow
+   * one side lacks having none.
+   */
+  flows: Record<string, Change>
 }
 
 const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
@@ -133,6 +68,12 @@ const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
 const unsavedInputOf = (contract: Contract | undefined): string[] =>
   Object.entries(contract?.screens.platform.unsavedInput ?? {}).map(
     ([leave, how]) => `${leave}: ${how}`,
+  )
+
+/** The notices the platform actions declare, as `<action>.<name>`; none when undeclared. */
+const noticesOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.actions ?? {}).flatMap(([action, { notices }]) =>
+    (notices ?? []).map(({ name }) => `${action}.${name}`),
   )
 
 function changeOf(before: readonly string[], after: readonly string[]): Change {
@@ -208,21 +149,22 @@ const defsOf = (contract: Contract | undefined): Map<string, AnchorDef> =>
   )
 
 /**
- * What `entriesOf` lists of each anchor both contracts hold, as `<anchor> <entry>`, added and
- * removed; an anchor renamed is held by both under its new name.
+ * What `entriesOf` lists of each anchor both contracts hold, as `<anchor> <entry>` (or with
+ * another separator), added and removed; an anchor renamed is held by both under its new name.
  */
 function carriedChanges(
   before: Contract | undefined,
   after: Contract | undefined,
   renamed: ReadonlyArray<{ from: string; to: string }>,
   entriesOf: (def: AnchorDef) => readonly string[],
+  separator = ' ',
 ): Change {
   const to = new Map(renamed.map(({ from, to: name }) => [from, name]))
   const was = new Map([...defsOf(before)].map(([anchor, def]) => [to.get(anchor) ?? anchor, def]))
   const is = defsOf(after)
   const listed = (defs: Map<string, AnchorDef>, other: Map<string, AnchorDef>) =>
     [...defs].flatMap(([anchor, def]) =>
-      other.has(anchor) ? entriesOf(def).map((entry) => `${anchor} ${entry}`) : [],
+      other.has(anchor) ? entriesOf(def).map((entry) => `${anchor}${separator}${entry}`) : [],
     )
 
   return changeOf(listed(was, is), listed(is, was))
@@ -257,6 +199,35 @@ function activityChanges(
   }
 }
 
+/** Each screen's flow, by the screen's id, undefined for a screen without one. */
+const flowsOf = (contract: Contract | undefined): Map<string, Flow | undefined> =>
+  new Map((contract?.screens.screens ?? []).map(({ id, flow }) => [id, flow]))
+
+/** The lines of a flow, none for a screen without one. */
+const linesOf = (flow: Flow | undefined): string[] => (flow === undefined ? [] : flowLines(flow))
+
+/**
+ * Per screen both contracts hold, with a flow on either side, the lines of the flow added and
+ * removed: a flow one side lacks has no lines, so a flow added or removed whole shows every line.
+ * A screen added or removed whole is a change of `screens` alone.
+ */
+function flowChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['flows'] {
+  const was = flowsOf(before)
+
+  return Object.fromEntries(
+    [...flowsOf(after)].flatMap(([id, flow]) => {
+      const old = was.get(id)
+
+      return !was.has(id) || (old === undefined && flow === undefined)
+        ? []
+        : [[id, changeOf(linesOf(old), linesOf(flow))]]
+    }),
+  )
+}
+
 /** The changes from `before` to `after`; a contract left undefined is an empty one. */
 export function diffContracts(
   before: Contract | undefined,
@@ -266,11 +237,17 @@ export function diffContracts(
 
   return {
     anchors,
+    derived: carriedChanges(before, after, anchors.renamed, (def) => def.derived ?? [], '.'),
+    composites: changeOf(
+      Object.keys(before?.screens.platform.composites ?? {}),
+      Object.keys(after?.screens.platform.composites ?? {}),
+    ),
     codes: changeOf(
       before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
       after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
+    anchorStates: carriedChanges(before, after, anchors.renamed, (def) => def.states ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
       Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
     ),
@@ -285,6 +262,7 @@ export function diffContracts(
       after?.screens.platform.leaving ?? [],
     ),
     unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
+    notices: changeOf(noticesOf(before), noticesOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),
@@ -295,5 +273,6 @@ export function diffContracts(
     ),
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
+    flows: flowChanges(before, after),
   }
 }

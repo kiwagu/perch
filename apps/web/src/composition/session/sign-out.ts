@@ -1,8 +1,8 @@
 /**
  * Signing out: the sign-out the person asks for, through the gateway, and the one the gateway
- * forces on the device (refused keys, a sign-out from another device), without it. Either holds
- * every tab's writes back, then forgets the keys and deletes the identity's databases, or keeps
- * them for the next sign-in as the identity when they hold changes not sent yet.
+ * forces on the device (a refused token, a sign-out from another device), without it. Either
+ * holds every tab's writes back, then forgets the token and deletes the identity's databases, or
+ * keeps them for the next sign-in as the identity when they hold changes not sent yet.
  */
 
 import { okAsync, ResultAsync } from 'neverthrow'
@@ -19,6 +19,9 @@ import type { SpaceDeletion } from './space-deletion'
 import type { WriteBarrier } from './write-barrier'
 
 export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
+
+/** Why the gateway signed the device out, as the sign-in page says it. */
+export type ElsewhereNotice = 'signed-out-elsewhere' | 'password-changed-elsewhere'
 
 export interface SessionSignOutOptions {
   readonly host: SessionHost
@@ -67,7 +70,7 @@ export class SessionSignOut {
         ResultAsync.fromSafePromise(space.signOut({ online: this.#host.options.online() })),
       )
       // What is unsent is read, and the database deleted, only once no tab writes any more.
-      // Keys the gateway did not revoke are left to revoke, whichever way they are forgotten.
+      // A token the gateway did not sign out is left to sign out, whichever way it is forgotten.
       .andThen((outcome) =>
         this.#exclusively(
           open,
@@ -105,14 +108,15 @@ export class SessionSignOut {
   }
 
   /**
-   * The gateway refused the identity's keys, which will not work again, or signed the device
-   * out from another one: the device signs out here, without the gateway, behind the same write
-   * barrier as a sign-out, and leaves nothing to revoke. Its data for the identity goes with the
-   * keys only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
+   * The gateway refused the identity's token, which will not work again, or signed the device
+   * out from another one or because the account's password changed: the device signs out here,
+   * without the gateway, behind the same write
+   * barrier as a sign-out, and leaves nothing to sign out. Its data for the identity goes with the
+   * token only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
    * any; otherwise (or when that cannot be read) the database stays, and the sign-in page says
    * that signing in again as the identity sends the changes.
    */
-  refused(identity: IdentityId, notice?: 'signed-out-elsewhere'): ResultAsync<void, DataError> {
+  refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<void, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
 
@@ -169,7 +173,7 @@ export class SessionSignOut {
   /**
    * The engine could not have the gateway sign the device out: offline, or with changes it
    * could not send. With such changes it asks first; without them the device signs out here,
-   * leaving its keys to revoke once online.
+   * leaving its token to sign out once online.
    */
   #stillSignedIn(open: OpenSpace, forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
     return (forgetUnsent ? okAsync(false) : open.space.unsent()).andThen((asks) =>
@@ -182,8 +186,8 @@ export class SessionSignOut {
   /**
    * Runs `work` once every write a tab admitted is durable, holding the identity's write lock
    * exclusive (`WriteBarrier.exclusively`). A tab that never lets its write go deletes nothing:
-   * the keys are forgotten (`keys` says whether they still work) and the database is kept for
-   * the next sign-in, as when the gateway refuses the keys; that ends as `kept`.
+   * the token is forgotten (`keys` says whether it still works) and the database is kept for
+   * the next sign-in, as when the gateway refuses the token; that ends as `kept`.
    */
   #exclusively<T>(
     open: OpenSpace,
@@ -199,7 +203,7 @@ export class SessionSignOut {
   }
 
   /**
-   * Forgets the device's identity and keys, leaving live keys to revoke, then deletes the
+   * Forgets the device's identity and token, leaving a live token to sign out, then deletes the
    * identity's databases. The other tabs hear the identity go and close their own spaces, which
    * lets the stores be deleted. A delete another tab still holds up after a few seconds goes on
    * (`SpaceDeletion`), and the sign-in page says the data goes once the other tabs are closed;
@@ -236,7 +240,7 @@ export class SessionSignOut {
   }
 
   /**
-   * Forgets the keys, leaving live ones to revoke, and closes the space, keeping its database
+   * Forgets the token, leaving a live one to sign out, and closes the space, keeping its database
    * with the changes it holds: the sign-in page says that signing in again as the identity
    * sends them.
    */

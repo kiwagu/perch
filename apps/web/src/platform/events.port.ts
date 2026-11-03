@@ -17,9 +17,19 @@ export type CommandFailed = DomainEvent<
 export type ChangeRejected = DomainEvent<'sync.change-rejected', PushRejection>
 /** The server refused the undo too: the region loaded again, the later unsent changes lost. */
 export type ChangesReloaded = DomainEvent<'sync.changes-reloaded', PushRejection>
+/**
+ * The server no longer takes the sync protocol of the build this tab runs: the channel ended,
+ * and this device's changes stop syncing until the page loads again.
+ */
+export type ProtocolRefused = DomainEvent<'sync.protocol-refused', null>
 
 /** The facts of the app, after they happened. */
-export type AppEvent = CommandDone | CommandFailed | ChangeRejected | ChangesReloaded
+export type AppEvent =
+  | CommandDone
+  | CommandFailed
+  | ChangeRejected
+  | ChangesReloaded
+  | ProtocolRefused
 
 export type EventSubscriber<E extends AppEvent> = (event: E) => ResultAsync<unknown, BusError>
 

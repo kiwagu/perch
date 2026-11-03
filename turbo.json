@@ -11,7 +11,12 @@
     "GATEWAY_PORT",
     "GATEWAY_SURREAL_USER",
     "GATEWAY_SURREAL_PASS",
-    "GATEWAY_JWT_KEY",
+    "GATEWAY_AUTH_SECRET",
+    "GATEWAY_PUBLIC_URL",
+    "GATEWAY_SMTP_URL",
+    "GATEWAY_MAIL_FROM",
+    "MAILBOX_URL",
+    "MAILBOX_DEV_URL",
     "GATEWAY_URL",
     "LOG_LEVEL",
     "LOG_FORMAT"
@@ -32,7 +37,7 @@
     "lint": {},
     "test": {
       "dependsOn": ["^build"],
-      "env": ["CONTRACT_AHEAD"]
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE"]
     },
     "model": {
       "dependsOn": ["^build"],

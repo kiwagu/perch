@@ -1,6 +1,6 @@
 import type { ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import type { AuthUser, DataError, LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
@@ -12,23 +12,20 @@ import type {
   SyncTransport,
 } from '@workspace/replica/sync'
 
-import type { ChangeRejected, ChangesReloaded } from '../../platform/events.port'
-import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
+import type { ChangeRejected, ChangesReloaded, ProtocolRefused } from '../../platform/events.port'
+import type { AccountSignedUpAs, GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
 import type { KeyValueStorage } from '../storage'
 
 /**
- * What the channel of one identity needs: the device it names in its hello, its keys, where
- * renewed keys and memberships go, its end.
+ * What the channel of one identity needs: the device it names in its hello, the session token
+ * it presents, where memberships go, its end.
  */
 export interface TransportContext {
   readonly identity: IdentityId
   /** The browser's own id (`perch.device.id`). */
   readonly device: string
   readonly credentials: () => DeviceCredentials | undefined
-  readonly onTokens: (tokens: SignedInDevice['tokens']) => void
-  /** The gateway's limits refused a renewal the channel asked for. */
-  readonly onRenewalRefused: () => void
   readonly onMemberships: (memberships: readonly Membership[]) => void
   readonly onEnded: (reason: EndReason) => void
 }
@@ -41,9 +38,18 @@ export interface VisibilitySource {
 
 export interface SessionOptions {
   readonly auth: GatewayAuth
-  /** The label a sign-up or sign-in gives this browser, next to its own id: "Chrome on Linux". */
+  /**
+   * The memberships of the identity a sign-in just signed in, as the gateway lists them
+   * (`GET /organisations`), read with the session token it was given and the device it named:
+   * nothing of the sign-in is saved before the read answers.
+   */
+  readonly listMemberships: (
+    token: string,
+    device: string,
+  ) => ResultAsync<readonly Membership[], DataError>
+  /** The label a sign-in or verification gives this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
-  /** Whether the browser says it has a network: only then is a pair left to revoke sent unasked. */
+  /** Whether the browser says it has a network: only then is a token left to sign out sent unasked. */
   readonly online: () => boolean
   readonly openLocal: (identity: IdentityId) => ResultAsync<LocalDb, DataError>
   /** Deletes the database of one identity while it is not open. */
@@ -67,7 +73,16 @@ export interface SessionOptions {
   /** An identity's space starts to open (`open-db`) or is open (`ready`). */
   readonly onStep?: (step: 'open-db' | 'ready') => void
   readonly onSyncState: (state: SyncState) => void
+  /**
+   * A sign-in answered that the account has not started (no settings or profile of it reached
+   * the gateway yet): what it starts from, told before the device is saved, so the start is kept
+   * for this browser to finish once it has pulled what the account has.
+   */
+  readonly keepAccountStart: (user: AuthUser, from: AccountSignedUpAs) => void
   readonly onError: (error: DataError) => void
-  /** Tells the app a change the gateway refused, or refused again; the root publishes it on the bus. */
-  readonly publish: (event: ChangeRejected | ChangesReloaded) => void
+  /**
+   * Tells the app a change the gateway refused, or refused again, and a sync protocol it no longer
+   * takes; the root publishes it on the bus.
+   */
+  readonly publish: (event: ChangeRejected | ChangesReloaded | ProtocolRefused) => void
 }

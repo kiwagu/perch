@@ -157,7 +157,7 @@ export function sampleContract(): Contract {
     vocabulary: {
       version: 1,
       kinds: meaning(['button', 'link', 'input', 'list', 'item', 'select', 'page', 'status']),
-      suffixes: meaning(['option', 'item', 'confirm-button']),
+      suffixes: meaning(['option', 'item', 'confirm-button', 'visibility-button']),
       attributes: {},
       appStates: meaning(['opening', 'ready']),
       containerStates: meaning(['loading', 'ready', 'empty']),
@@ -170,6 +170,7 @@ export function sampleContract(): Contract {
       screenNames: meaning(['app-shell', 'sample']),
       roles: meaning(['guest', 'member']),
       reserved: meaning(['app-shell.status']),
+      composites: {},
     },
     screens: {
       version: 1,
@@ -208,7 +209,8 @@ export function sampleContract(): Contract {
         devices: { A: 'member' },
         where: '[/sample/$key]',
         data: { Title: 'generate' },
-        scenario: 'A member picks [value:a] in [sample.mode-select.option] and [value:k12]',
+        scenario:
+          'A member picks [value:a] in [sample.mode-select.option], then [sample.key-select.option] carries [value:k12]',
         steps: ['Wait for [app-shell.status] to reach [state:ready]'],
         expected: ['[sample.save-button] carries [code:saved]'],
       },

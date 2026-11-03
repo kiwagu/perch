@@ -14,6 +14,11 @@ export interface SpaceSource {
   current(): IdentitySpace | undefined
   onSwitch(listener: () => void): () => void
   /**
+   * The saved identity's space opens at the start, and settles once it is open or did not open;
+   * undefined otherwise. What is read or written meanwhile waits for it instead of refusing.
+   */
+  opening(): PromiseLike<unknown> | undefined
+  /**
    * A sign-out runs in this tab or another one of the browser: a write landing after its final
    * drain would be deleted with the database, so none is taken until it ends.
    */

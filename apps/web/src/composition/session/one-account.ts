@@ -2,7 +2,7 @@
  * One account per browser: while an identity is signed in on it, in any tab, no other one signs
  * in until that one signed out. The tabs follow the saved identity, so a tab left on the sign-in
  * page moves to the account another tab signed in; a sign-in that still finds another account
- * saved is refused, so the first one's keys and databases are never left behind unseen.
+ * saved is refused, so the first one's token and databases are never left behind unseen.
  */
 
 import { dataError } from '@workspace/data'

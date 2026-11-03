@@ -1,5 +1,6 @@
 /** What a load run holds while it runs: its devices, what they count, and how it fails. */
 
+import type { Mailbox } from '@workspace/mailbox'
 import type { RegionDoc } from '@workspace/replica'
 
 import type { SignedIn } from '../../smoke'
@@ -38,6 +39,8 @@ export interface Run {
   readonly id: string
   readonly args: LoadArgs
   readonly base: string
+  /** The stand's mailbox, where each sign-up's verification mail is read. */
+  readonly mailbox: Mailbox
   readonly password: string
   readonly book: LatencyBook
   readonly counters: Counters

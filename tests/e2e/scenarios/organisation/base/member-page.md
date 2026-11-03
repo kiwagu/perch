@@ -16,8 +16,8 @@ Where: [/org] on device A (user A, administrator) and [/org] on device B (user B
 ## Scenario: An administrator invites an account, which then sees the organisation as a member, without its members or the invitation
 
 ### Steps
-1. On device B, sign up as user B and wait for [/me]
-2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the unknown email into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, clear [organisation.invite.email-input], enter the email of user B into it and click [organisation.invite.submit-button]
 5. On device B, open [/org]

@@ -14,15 +14,15 @@ import {
 export type ChannelState = 'up' | 'down'
 
 /**
- * Why a channel ended for good: the gateway refused the keys, signed the device out at its own
- * request, refused the protocol this device speaks (an application older than the gateway), or
- * signed the device out from another device (`revoked`).
+ * Why a channel ended for good: the gateway refused the token, signed the device out at its own
+ * request, refused the protocol this device speaks (an application older than the gateway),
+ * signed the device out from another device (`revoked`), or ended its session because the
+ * account's password changed, through a reset link or on another device (`password-changed`).
  */
-export type EndReason = 'unauthorized' | 'signed-out' | 'protocol' | 'revoked'
+export type EndReason = 'unauthorized' | 'signed-out' | 'protocol' | 'revoked' | 'password-changed'
 
 export interface DeviceCredentials {
-  readonly access: string
-  readonly refresh?: string
+  readonly token: string
 }
 
 /** The channel between a device and the gateway that the sync engine talks through. */
@@ -30,10 +30,10 @@ export interface SyncTransport {
   start(): void
   stop(): void
   /**
-   * Gives up on the current connection, which stopped answering or must present the keys again,
+   * Gives up on the current connection, which stopped answering or must present the token again,
    * and connects again after the first delay of the backoff. Nothing happens unless the gateway
    * has welcomed the connection: one still opening or waiting for its welcome says hello with the
-   * keys anyway, and is given up as any other is: by its close, or by the welcome wait once open.
+   * token anyway, and is given up as any other is: by its close, or by the welcome wait once open.
    */
   reconnect(): void
   /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
@@ -52,13 +52,10 @@ export interface WebSocketTransportOptions {
   readonly credentials: () => DeviceCredentials | undefined
   /** The device's own id, named in every hello. */
   readonly device: string
-  readonly onTokens: (tokens: { readonly access: string; readonly refresh: string }) => void
-  /** Hears that the gateway's limits refused a renewal asked for over the channel (`renew`). */
-  readonly onRenewalRefused?: () => void
   /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
   readonly onMemberships?: (memberships: readonly Membership[]) => void
   /**
-   * The gateway refused the keys or the protocol, or signed the device out, at its own request
+   * The gateway refused the token or the protocol, or signed the device out, at its own request
    * or from another device: no reconnect follows.
    */
   readonly onEnded: (reason: EndReason) => void
@@ -97,6 +94,7 @@ const ENDINGS: ReadonlyMap<number, EndReason> = new Map([
   [CLOSE.protocol, 'protocol'],
   [CLOSE.signedOut, 'signed-out'],
   [CLOSE.revoked, 'revoked'],
+  [CLOSE.passwordChanged, 'password-changed'],
 ])
 
 /** Why a close with `code` ends the channel for good; `undefined` for a close a reconnect follows. */
@@ -111,17 +109,17 @@ type State =
   | { readonly kind: 'connected'; readonly socket: SocketLike; readonly up: boolean }
   /** Waiting to connect again. */
   | { readonly kind: 'waiting'; readonly cancel: () => void }
-  /** The gateway refused the keys or the protocol, or signed the device out. */
+  /** The gateway refused the token or the protocol, or signed the device out. */
   | { readonly kind: 'ended' }
 
 /**
- * The device's WebSocket to the gateway. On open it says hello with the stored keys and the
+ * The device's WebSocket to the gateway. On open it says hello with the stored token and the
  * device's id; the channel is up once the gateway welcomes it, and only then does it send.
- * Renewed keys go to `onTokens`, and the memberships of the welcome and of every later change to
- * `onMemberships`, before the listeners of messages hear the message. A socket that closes, or
- * is not welcomed within 10 seconds, is opened again after a growing delay, which starts over at
+ * The memberships of the welcome and of every later change go to `onMemberships`, before the
+ * listeners of messages hear the message. A socket that closes, or is not welcomed within 10
+ * seconds, is opened again after a growing delay, which starts over at
  * the next welcome or when the engine gives a welcomed connection up (`reconnect`). A close that
- * refuses the keys or the protocol, or signs the device out (at its own request or from another
+ * refuses the token or the protocol, or signs the device out (at its own request or from another
  * device), ends the channel for good. Text the protocol refuses closes the socket as a breach
  * and connects again.
  */
@@ -172,10 +170,8 @@ export class WebSocketTransport implements SyncTransport {
   reconnect(): void {
     const state = this.#state
 
-    // A socket not welcomed yet is left alone. Its hello presents the keys, so the gateway
-    // renews a pair whose access token no longer works: closing it with that hello out would
-    // spend the refresh key on a pair the gateway can no longer deliver, and the next hello would
-    // be refused. The engine's answer timeouts never land here: they are cancelled when the
+    // A socket not welcomed yet is left alone: its hello is out, and closing the socket now would
+    // only send another hello with the same token. The engine's answer timeouts never land here: they are cancelled when the
     // channel goes down, so they only fire on a welcomed connection. A socket left alone is given
     // up as any other: by its close, or by the welcome wait once it opened.
     if (state.kind !== 'connected' || !state.up) {
@@ -267,8 +263,7 @@ export class WebSocketTransport implements SyncTransport {
       encodeMessage(clientMessage, {
         type: 'hello',
         protocol: PROTOCOL_VERSION,
-        access: keys.access,
-        ...(keys.refresh === undefined ? {} : { refresh: keys.refresh }),
+        token: keys.token,
         device: this.#options.device,
       }),
     )
@@ -289,14 +284,6 @@ export class WebSocketTransport implements SyncTransport {
       this.#attempt = 0
       this.#endWelcomeWait()
       this.#state = { kind: 'connected', socket, up: true }
-    }
-
-    if (message.type === 'tokens') {
-      this.#options.onTokens({ access: message.access, refresh: message.refresh })
-    }
-
-    if (message.type === 'error' && message.code === 'rate-limited') {
-      this.#options.onRenewalRefused?.()
     }
 
     if (message.type === 'welcome' || message.type === 'memberships') {

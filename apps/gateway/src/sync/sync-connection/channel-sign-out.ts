@@ -1,15 +1,14 @@
 /**
- * A sign-out a device asks for over its open channel: its row is marked signed out, the pairs
- * parked for it are forgotten and its refresh grant is revoked through the database, as the
- * sign-out route does.
+ * A sign-out a device asks for over its open channel: the session its hello came with is ended,
+ * as the sign-out route ends it, and every socket of the device is closed through the registry.
  */
 
 import type { IdentityId } from '@workspace/ids'
 import type { Logger } from '@workspace/logger'
 import { CLOSE } from '@workspace/replica/protocol'
 
-import type { DeviceSessions } from '../../auth/device-sessions'
-import { grantIdOf, type IdentitySessions } from '../../auth/identity-sessions'
+import type { AuthSessions } from '../../auth/auth-sessions'
+import type { ConnectionRegistry } from '../connections'
 
 import { REASON, SERVER_ERROR } from './reasons'
 
@@ -20,61 +19,39 @@ export interface SignOutClose {
 }
 
 export interface ChannelSignOutDeps {
-  readonly sessions: Pick<IdentitySessions, 'unpark'>
-  readonly devices: Pick<DeviceSessions, 'signedOut' | 'revokeGrant'>
+  readonly sessions: Pick<AuthSessions, 'signOut'>
+  /** Closes the device's sockets once its session ended, the one that signed out among them. */
+  readonly connections: Pick<ConnectionRegistry, 'close'>
+  /** Hears a session that could not be ended, with the identity and the code; never a token. */
   readonly log: Logger
 }
 
 /**
- * Signs `device` of `identity`, holding refresh key `refresh`, out, and answers how its socket
- * closes: as signed out (4000) once the grant is revoked. A device without a refresh grant (it
- * came with an access token only) has none to revoke. A row that cannot be marked or a grant that
- * cannot be revoked is logged with its code, and the socket closes as a failed server (1011): the
- * device must not take the sign-out close for a revoked grant, and sends the sign-out again
- * through the route, which completes it.
+ * Ends the session that `token` of `device` of `identity` holds, and answers how its socket
+ * closes: as signed out (4000) once the session ended. Every socket of the device is closed with
+ * 4000 through the registry then, which moves the device's epoch: a hello of it that read the
+ * session before it ended is refused its registration. A session that cannot be ended is logged
+ * with the identity and the code, nothing is closed through the registry, and the socket closes
+ * as a failed server (1011): the device must not take the sign-out close for an ended session,
+ * and sends the sign-out again through the route, which completes it.
  */
 export async function signOutOnChannel(
   deps: ChannelSignOutDeps,
-  input: {
-    readonly identity: IdentityId
-    readonly device: string
-    readonly refresh: string | undefined
-  },
+  input: { readonly identity: IdentityId; readonly device: string; readonly token: string },
 ): Promise<SignOutClose> {
-  const { identity, device, refresh } = input
-  const grant = refresh === undefined ? undefined : grantIdOf(refresh)
-  const signedOut = { code: CLOSE.signedOut, reason: REASON.signedOut }
-  const failed = { code: SERVER_ERROR, reason: REASON.revokeFailed }
+  const { identity, device, token } = input
+  const ended = await deps.sessions.signOut(token)
 
-  if (grant === undefined) {
-    deps.log.info({ identity }, 'device signed out without a refresh grant: nothing to revoke')
-
-    return signedOut
-  }
-
-  const marked = await deps.devices.signedOut({ identity, grant })
-
-  if (marked.isErr()) {
+  if (ended.isErr()) {
     deps.log.warn(
-      { identity, code: marked.error.code },
-      'the row of a device that signed out could not be marked',
+      { identity, code: ended.error.code },
+      'the session of a device that signed out could not be ended',
     )
 
-    return failed
+    return { code: SERVER_ERROR, reason: REASON.revokeFailed }
   }
 
-  deps.sessions.unpark(identity, device)
+  await deps.connections.close(identity, device, CLOSE.signedOut)
 
-  const revoked = await deps.devices.revokeGrant({ identity, grant })
-
-  if (revoked.isErr()) {
-    deps.log.warn(
-      { identity, code: revoked.error.code },
-      'the refresh grant of a device that signed out could not be revoked',
-    )
-
-    return failed
-  }
-
-  return signedOut
+  return { code: CLOSE.signedOut, reason: REASON.signedOut }
 }

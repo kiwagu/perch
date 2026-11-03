@@ -88,4 +88,24 @@ describe('what a machine does beyond the flow subset', () => {
       `states.a.states.right: type parallel (a parallel state in a region) ${OUTSIDE}`,
     ])
   })
+  it('takes the anchors a state of a region renders, its meta beyond an address', () => {
+    const machine = createMachine({
+      initial: 'a',
+      states: {
+        a: {
+          type: 'parallel',
+          meta: { renders: ['sample.go-button'] },
+          states: {
+            left: {
+              initial: 'x',
+              states: { x: { meta: { renders: ['sample.go-button'] } } },
+            },
+            right: { initial: 'y', states: { y: {} } },
+          },
+        },
+      },
+    })
+
+    expect(beyondTheSubset(machine.config)).toEqual([])
+  })
 })

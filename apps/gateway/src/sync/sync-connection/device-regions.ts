@@ -47,7 +47,7 @@ export function regionsFor(
 /** The regions a message names. */
 export function regionsOf(message: ClientMessage): readonly string[] {
   return match(message)
-    .with({ type: P.union('hello', 'sign-out', 'renew') }, () => [])
+    .with({ type: P.union('hello', 'sign-out') }, () => [])
     .with({ type: 'probe' }, ({ regions }) => regions)
     .with({ type: P.union('subscribe', 'pull', 'push', 'compact') }, ({ region }) => [region])
     .exhaustive()
