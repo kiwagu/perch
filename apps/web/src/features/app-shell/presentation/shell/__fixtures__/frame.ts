@@ -9,6 +9,8 @@ import { type ShellFrame, type ShellLive, shellFrameMachine } from '../shell-fra
 export interface OpenedFrameOptions {
   /** Where a theme chosen in the frame goes. */
   readonly setTheme?: (theme: Theme) => void
+  /** What shows a theme another tab chose. */
+  readonly followTheme?: () => void
   /** What loads the page again; nothing by default. */
   readonly reload?: () => void
   /** The updates the tab loaded the page again for by itself; none by default, kept in memory. */
@@ -48,6 +50,7 @@ function startedFrame(account: string | undefined, options: OpenedFrameOptions):
   const actor = createActor(
     shellFrameMachine(live, {
       setTheme: options.setTheme ?? (() => {}),
+      followTheme: options.followTheme ?? (() => {}),
       reload: options.reload ?? (() => {}),
       selfReloads: options.selfReloads ?? memorySelfReloads(),
       install: options.install ?? {

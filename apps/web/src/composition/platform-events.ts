@@ -7,12 +7,14 @@
  */
 
 import type { PlatformEvent, PlatformEventsPort } from '../platform/platform-events.port'
+import { THEME_KEY } from '../platform/theme'
 
 import { type KeyValueStorage, PASSWORD_RESET_KEY } from './storage'
 
 /** The event each key of the storage tells when another tab sets it. */
-const EVENT_OF_KEY: ReadonlyMap<string, PlatformEvent> = new Map([
+const EVENT_OF_KEY: ReadonlyMap<string, PlatformEvent> = new Map<string, PlatformEvent>([
   [PASSWORD_RESET_KEY, { type: 'platform.password-reset' }],
+  [THEME_KEY, { type: 'platform.theme-set' }],
 ])
 
 export function platformEvents(storage: KeyValueStorage): PlatformEventsPort {

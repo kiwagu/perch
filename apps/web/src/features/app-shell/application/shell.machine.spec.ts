@@ -23,6 +23,7 @@ function frame(reloadedFor: string[] = []) {
   const signOutHere = vi.fn(() => okAsync(undefined))
   const reload = vi.fn()
   const setTheme = vi.fn<(theme: Theme) => void>()
+  const followTheme = vi.fn<() => void>()
   const selfReloads = {
     done: (update: string) => reloadedFor.includes(update),
     mark: (update: string) => void reloadedFor.push(update),
@@ -37,6 +38,7 @@ function frame(reloadedFor: string[] = []) {
       signOutHere,
       reload,
       setTheme,
+      followTheme,
       selfReloads,
       install,
     }),
@@ -52,6 +54,7 @@ function frame(reloadedFor: string[] = []) {
     signOutHere,
     reload,
     setTheme,
+    followTheme,
     install,
     spoken,
     emitted,
@@ -360,6 +363,45 @@ describe('shell machine', () => {
 
     expect(shell.setTheme).toHaveBeenCalledWith('dark')
     expect(shell.is('crashed')).toBe(true)
+  })
+
+  it("follows a theme another tab chose for a guest's device, around a crash too, and not a signed-in account's", () => {
+    const guest = frame()
+
+    guest.actor.send({ type: 'platform.theme-set' })
+
+    expect(guest.followTheme).not.toHaveBeenCalled()
+
+    guest.open()
+    guest.actor.send({ type: 'platform.theme-set' })
+    guest.actor.send({ type: 'platform.crashed' })
+    guest.actor.send({ type: 'platform.theme-set' })
+
+    expect(guest.followTheme).toHaveBeenCalledTimes(2)
+    expect(guest.is('crashed')).toBe(true)
+
+    // A signed-in tab shows its account's theme, which it keeps on the device itself.
+    const signedIn = frame()
+
+    signedIn.open()
+    signedIn.signIn()
+    signedIn.actor.send({ type: 'platform.theme-set' })
+    signedIn.actor.send({ type: 'platform.crashed' })
+    signedIn.actor.send({ type: 'platform.theme-set' })
+
+    expect(signedIn.followTheme).not.toHaveBeenCalled()
+  })
+
+  it("follows a theme another tab chose while the saved account's data failed to open", () => {
+    const failed = frame()
+
+    failed.signIn()
+    failed.actor.send({ type: 'platform.started' })
+    failed.actor.send({ type: 'platform.open-failed' })
+    failed.actor.send({ type: 'platform.theme-set' })
+
+    expect(failed.followTheme).toHaveBeenCalledTimes(1)
+    expect(failed.is('failed')).toBe(true)
   })
 
   it('applies a theme chosen around a crash, the message staying', () => {

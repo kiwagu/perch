@@ -92,6 +92,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       signOutHere: () => okAsync(undefined),
       reload: () => {},
       setTheme: () => {},
+      followTheme: () => {},
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
     }),

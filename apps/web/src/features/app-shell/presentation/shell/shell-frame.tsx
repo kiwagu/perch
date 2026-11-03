@@ -46,6 +46,8 @@ export function tabSelfReloads(storage: () => Pick<Storage, 'getItem' | 'setItem
 export interface ShellFrameDeps {
   /** Where a theme chosen goes: the device's. */
   readonly setTheme: (theme: Theme) => void
+  /** Shows the theme another tab of this browser chose for this device. */
+  readonly followTheme: () => void
   /** Installing the app on this device. */
   readonly install: Pick<DeviceInstall, 'prompt' | 'postpone'>
   /** Loads the page again; the browser's own reload by default. */
@@ -61,6 +63,7 @@ export function shellFrameMachine(live: ShellLive, deps: ShellFrameDeps) {
       live.signOutHere?.() ?? errAsync(new Error('no saved account to sign out here')),
     reload: deps.reload ?? (() => window.location.reload()),
     setTheme: deps.setTheme,
+    followTheme: deps.followTheme,
     selfReloads: deps.selfReloads ?? tabSelfReloads(() => window.sessionStorage),
     install: deps.install,
   })

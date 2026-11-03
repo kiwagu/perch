@@ -30,6 +30,8 @@ import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
 import { NoticeProvider } from './platform/notices'
+import { PLATFORM_EVENTS } from './platform/platform-events.port'
+import { sendPlatformEvents } from './platform/platform-events-input'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
 import { SettingsWritesContext } from './platform/settings-writes'
@@ -137,7 +139,12 @@ function App(props: { readonly reload: () => void }) {
 
     return {
       live,
-      machine: shellFrameMachine(live, { setTheme: device.set, install, reload: props.reload }),
+      machine: shellFrameMachine(live, {
+        setTheme: device.set,
+        followTheme: device.follow,
+        install,
+        reload: props.reload,
+      }),
     }
   })
   const [state, send, actor] = useMachine(made.machine)
@@ -200,6 +207,16 @@ function App(props: { readonly reload: () => void }) {
       mounted = false
     }
   }, [made, send])
+
+  // The facts another tab of this browser sets reach the frame's flow once the services exist,
+  // in every state, as they reach a screen's.
+  useEffect(
+    () =>
+      started === undefined
+        ? undefined
+        : sendPlatformEvents(started.services.container.get(PLATFORM_EVENTS), actor),
+    [started, actor],
+  )
 
   // A guest's sign-in opens the engines: they load once the frame and its page are up, so they
   // never compete with them.

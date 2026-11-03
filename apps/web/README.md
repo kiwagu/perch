@@ -228,8 +228,9 @@ modeling stage.
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
   away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
-  screens' machines, from the facts of this browser no account owns, each a key of its storage
-  another tab set (`perch.password.reset` tells `platform.password-reset`); the storage's own
+  screens' machines and the frame's, from the facts of this browser no account owns, each a key
+  of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
+  `perch.theme` tells `platform.theme-set`); the storage's own
   event keeps it from echoing (a tab never hears its own write, a write that changes nothing and a
   value kept before the tab opened tell nothing), and a key removed elsewhere tells nothing either.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
@@ -243,13 +244,16 @@ modeling stage.
   and the current organisation), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
-  platform's events that reach the screens (`platform-events.port.ts`),
+  platform's events that reach the screens and the frame (`platform-events.port.ts`, sent to a
+  running machine by `platform-events-input.ts`, `sendPlatformEvents`, the one way both hear them),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
-  kept in this browser under `perch.theme`, shown as the class `dark` on `<html>` and following
-  the device's setting under the system's; the start makes it before the first frame and gives it
-  to views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  kept in this browser under `perch.theme` as the theme this device showed last, shown as the
+  class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
+  and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
+  tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
+  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
   the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
   frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
   earlier write is not taken for a value another tab or device stored; the start provides them

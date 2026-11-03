@@ -46,6 +46,7 @@ export type ShellEvent =
   | { readonly type: 'platform.storage-blocked' }
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
   | { readonly type: 'app-shell.theme-select'; readonly theme: Theme }
+  | { readonly type: 'platform.theme-set' }
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'model.settings.theme' }
   | { readonly type: 'app-shell.sign-out-here-button' }
@@ -102,6 +103,8 @@ export interface ShellMachineDeps {
   readonly reload: () => void
   /** Shows a theme on this device and keeps it there. */
   readonly setTheme: (theme: Theme) => void
+  /** Shows the theme another tab of this browser chose for this device. */
+  readonly followTheme: () => void
   readonly selfReloads: SelfReloads
   /** Installing the app on this device: the browser's own window, or the reminder put off. */
   readonly install: { readonly prompt: () => Promise<void>; readonly postpone: () => void }
@@ -137,8 +140,9 @@ const CRASHED = {
   params: { anchor: 'app-shell.crash-message', codes: ['screen-crashed'] },
 } as const
 const CRASH_GONE = { type: 'clear', params: { anchor: 'app-shell.crash-message' } } as const
-/** A theme chosen applies at once, whatever the frame is doing. */
+/** A theme chosen applies at once, whatever the frame is doing; one another guest tab chose too. */
 const THEME_CHOSEN = { actions: 'applyTheme' } as const
+const THEME_SET = { guard: 'signedOut', actions: 'followTheme' } as const
 /** The settings store a language or a theme this tab has not seen yet: the app applies it. */
 const LOCALE_STORED = { guard: 'storedElsewhere', actions: 'speakStored' } as const
 const THEME_STORED = { guard: 'themeStoredElsewhere', actions: 'showStoredTheme' } as const
@@ -237,6 +241,10 @@ export function createShellMachine(deps: ShellMachineDeps) {
         assertEvent(event, 'app-shell.theme-select')
         deps.setTheme(event.theme)
       },
+      followTheme: ({ event }) => {
+        assertEvent(event, 'platform.theme-set')
+        deps.followTheme()
+      },
       noteVersion: assign({
         pending: ({ event }) => {
           assertEvent(event, 'platform.new-version')
@@ -296,6 +304,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'app-shell.theme-select': THEME_CHOSEN,
+          'platform.theme-set': THEME_SET,
           'model.settings.locale': LOCALE_STORED,
           'model.settings.theme': THEME_STORED,
           'platform.signed-out': SIGNED_OUT,
@@ -328,6 +337,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'app-shell.theme-select': THEME_CHOSEN,
+          'platform.theme-set': THEME_SET,
           'model.settings.locale': LOCALE_STORED,
           'model.settings.theme': THEME_STORED,
           'platform.signed-out': SIGNED_OUT,
@@ -368,6 +378,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
+          'platform.theme-set': { actions: 'followTheme' },
         },
       },
       'signing-out': {

@@ -6,8 +6,11 @@ The page frame every module renders into. It runs the frame's flow (`contract/do
 as its machine from the start of the page, before the local database finishes opening, and
 carries a signed-in account's navigation (the profile, the organisation page, My devices and
 the settings; a guest sees none, only the banner and the page), the theme and language switches
-for a guest (a signed-in account chooses its theme and its language on the settings screen),
-and follows a language and a theme another tab or device stores (`model.settings.locale`,
+for a guest (a signed-in account chooses its theme and its language on the settings screen;
+a guest's other tabs follow a theme it chooses, `platform.theme-set`, which the start sends the
+frame's machine from the moment the services exist, as every screen's machine hears the
+platform's events, and which a signed-in tab ignores), and follows a language and a theme another
+tab or device stores (`model.settings.locale`,
 `model.settings.theme`, once the account's data is open, the first read counting as one this tab
 has not seen; a theme it shows is kept on the device as the theme it showed last, which the next
 start and the guest pages after a sign-out show), the notice and the toasts the flows say, and the
