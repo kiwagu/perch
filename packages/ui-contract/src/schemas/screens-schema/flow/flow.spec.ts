@@ -488,3 +488,38 @@ describe('the anchors a state renders, `meta.renders`', () => {
     expect(authoredWith({ ...DRAFT, meta: { renders: ['sample.title-input'] } })).toBe(false)
   })
 })
+
+describe('the guards of `meta.guards`, by a sentence or by failure code', () => {
+  /** The sign-in config with the guards `guards`. */
+  const withGuards = (guards: Record<string, unknown>) =>
+    changed((config) => {
+      config['meta'] = { guards }
+    })
+
+  it('takes a sentence or the failure codes a guard holds for, in either flow', () => {
+    const guards = {
+      nameGiven: 'the name input holds a name',
+      refused: { codes: ['email-not-verified'] },
+      unusable: { codes: ['link-invalid', 'link-expired'] },
+    }
+
+    expect(withGuards(guards)).toBe(true)
+    expect(authoredFlowSchema.safeParse({ ...SIGN_IN, meta: { guards } }).success).toBe(true)
+  })
+  it('wants one code or more, each a code, under `codes` alone', () => {
+    for (const guard of [
+      { codes: [] },
+      { codes: ['Email not verified'] },
+      { codes: 'email-not-verified' },
+      { code: 'email-not-verified' },
+      { codes: ['email-not-verified'], description: 'the email is not verified' },
+      ['email-not-verified'],
+      true,
+    ]) {
+      expect(
+        withGuards({ nameGiven: 'the name input holds a name', refused: guard }),
+        JSON.stringify(guard),
+      ).toBe(false)
+    }
+  })
+})

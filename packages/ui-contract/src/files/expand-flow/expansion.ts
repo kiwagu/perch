@@ -34,6 +34,8 @@ export interface ExpansionIssue {
 }
 
 export interface Expansion extends FlowLookups {
+  /** The guards the flow's `meta.guards` writes by failure code, each with its codes. */
+  readonly codeGuards: ReadonlyMap<string, readonly string[]>
   readonly issues: ExpansionIssue[]
   readonly toasts: DerivedToast[]
   /** The codes the flow's own `show`s put on the toast anchor. */

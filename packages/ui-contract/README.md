@@ -38,7 +38,10 @@ for Bun.
     codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
     `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
     input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, the default outcome of each request
+    screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
+    that a guard by failure code guards shows that guard's codes, one on a later branch the
+    failure's codes but those of the code-guarded branches before it;
+    `files/expand-flow/effects.ts`), the default outcome of each request
     (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
     fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
     does, and goes back to the one state that entered it on a control, showing the failure on
@@ -107,7 +110,8 @@ for Bun.
     `meta.renders` the anchors it renders (an anchor no state lists is rendered in every
     state, one a state lists only in the states that list it, a region's state rendering its
     parallel state's too; never on a region an authored flow writes by its pattern or its
-    button), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
+    button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
+    failure codes it holds for), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
     value a field of the screen holds) and `transitionSchema`, with the types `Flow`,
     `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`),
@@ -155,8 +159,10 @@ for Bun.
     handles each event of a parallel state in one area, lists in `meta.renders` anchors its own
     screen declares (a derived part's base, never the part), each once, renders in a plain
     state of the root or a state of a region every anchor it handles that a state lists (a
-    derived part through its base), reaches every state, leaves every plain state that is not
-    final, and puts the one transition without a guard last) over
+    derived part through its base), guards by failure code only branches of an invoke's
+    `onError`, each code one its action fails with and listed once, reaches every state,
+    leaves every plain state that is not final, and puts the one transition without a guard
+    last) over
     the tree of its states, `flowNodes(flow)` (every state in the order of the file as a
     `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode` with its path
     of names and its place in the flow), with `deepTargetOf`, `idTargetOf`, `rootOf`,

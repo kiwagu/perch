@@ -13,7 +13,8 @@
  *   handles the button nowhere gets it, and `by: <button>` writes it with the outcomes the
  *   screen decides.
  * - In the `onError` of an invoke, `show: <anchor>` shows one of the codes the failure of its
- *   action shows.
+ *   action shows: on a branch a guard by failure code guards, one of that guard's codes; on a
+ *   later branch, one of those the code-guarded branches before it leave.
  * - An invoke, or a region written `by` its button, may say `toast: false`: the success of its
  *   action shows no derived toast.
  */

@@ -840,7 +840,7 @@
           "type": "object",
           "properties": {
             "guards": {
-              "description": "The guards by name, each with what it holds.",
+              "description": "The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.",
               "type": "object",
               "propertyNames": {
                 "type": "string",
@@ -848,7 +848,33 @@
                 "description": "A guard: a camelCase name of the flow `meta.guards`."
               },
               "additionalProperties": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "What the guard holds, in a sentence."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "codes": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                          "description": "A code of the vocabulary (data-code)."
+                        },
+                        "description": "The codes it holds for: the action failed with one of them."
+                      }
+                    },
+                    "required": [
+                      "codes"
+                    ],
+                    "additionalProperties": false,
+                    "description": "A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes."
+                  }
+                ],
+                "description": "What a guard holds: a sentence, or the failure codes it holds for."
               }
             }
           },
