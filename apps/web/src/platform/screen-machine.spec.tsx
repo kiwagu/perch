@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider, useBlocker } from '@tanstack/react-router'
 import { act, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { emit, fromPromise, setup } from 'xstate'
 
@@ -172,15 +173,15 @@ const watched = setup({
 type Screen = ReturnType<typeof useScreenMachine<typeof machine>>
 type Watched = ReturnType<typeof useScreenMachine<typeof watched>>
 
-const held: { screen?: Screen; watched?: Watched } = {}
+const held: { screen?: Screen; watched?: Watched; type?: (email: string) => void } = {}
 
-/** What the page's email field holds, which a platform event carries for its move. */
-const TYPED = { 'x.y.email-input': 'ann@example.test' }
-
+/** A page whose email field the test types into, which a platform event carries for its move. */
 function Page() {
-  const running = useScreenMachine(machine, TYPED)
+  const [email, setEmail] = useState('ann@example.test')
+  const running = useScreenMachine(machine, { 'x.y.email-input': email })
 
   held.screen = running
+  held.type = setEmail
 
   return <output data-testid="state">{String(running.state.value)}</output>
 }
@@ -418,6 +419,16 @@ describe('useScreenMachine', () => {
 
     await screen.findByText('there')
     expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
+  })
+
+  it('brings a platform event with what the field holds after the page rendered again', async () => {
+    const { router, services } = await open(passing())
+
+    act(() => held.type?.('bob@example.test'))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'bob@example.test' })
   })
 
   it('lets a platform event pass in a state that does not handle it', async () => {
