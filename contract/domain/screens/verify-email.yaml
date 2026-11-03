@@ -46,7 +46,7 @@ anchors:
         email: user.verify-email.email-input
   user.verify-email.resend-button:
     kind: button
-    description: Sends a new verification link to the email typed; disabled while it sends.
+    description: Sends a new verification link to the email typed.
     binding: { action: platform.resend-verification }
 states:
   loading: "user.verify-email.status in loading: the link is being checked."
@@ -92,7 +92,6 @@ flow:
             - show: { user.verify-email.message: [ check-your-mail ] }
         onError:
           target: resend-offered
-          description: The error says why the new link was not sent; a message of an earlier resend goes.
           actions:
             - clear: user.verify-email.message
             - show: user.verify-email.error
