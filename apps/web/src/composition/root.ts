@@ -35,6 +35,7 @@ import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { type AppEvent, EVENTS } from '../platform/events.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
+import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { SYNC_STATUS } from '../platform/sync-status.port'
@@ -46,6 +47,7 @@ import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
+import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
 import { syncStatus } from './sync-status'
@@ -242,6 +244,8 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)
+    // The facts another tab of the browser sets, which the screens' flows hear.
+    .singleton(PLATFORM_EVENTS, () => platformEvents(options.storage))
 
   step('restore-session')
 

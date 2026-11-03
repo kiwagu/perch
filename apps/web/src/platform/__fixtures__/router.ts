@@ -18,7 +18,7 @@ const SPLAT_ALIAS = '*'
 export function routerOf(of: readonly ModuleDef[]) {
   return createAppRouter({
     modules: of,
-    session: { current: () => undefined, subscribe: () => () => {} },
+    session: { current: () => undefined, subscribe: () => () => {}, signingInHere: () => false },
     layout: () => null,
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })

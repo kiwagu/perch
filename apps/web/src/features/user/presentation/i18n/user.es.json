@@ -22,6 +22,7 @@
   "user.sign-in.notice.resend-after-sign-in": "Algunos cambios hechos en este dispositivo no habían llegado al servidor cuando se cerró tu sesión. Inicia sesión de nuevo para enviarlos.",
   "user.sign-in.notice.signed-out-elsewhere": "Se cerró tu sesión desde otro dispositivo.",
   "user.sign-in.notice.password-changed-elsewhere": "Tu contraseña ha cambiado, así que se cerró tu sesión. Inicia sesión con la contraseña nueva.",
+  "user.sign-in.notice.password-reset-elsewhere": "Se estableció una contraseña nueva en otra pestaña. Inicia sesión con ella.",
   "user.sign-in.notice.delete-pending": "Has cerrado sesión. Tus datos se borrarán de este dispositivo en cuanto cierres las demás pestañas de Perch.",
   "user.sign-in.error.invalid-credentials": "Correo o contraseña incorrectos.",
   "user.sign-in.error.email-not-verified": "Primero confirma tu correo: abre el enlace del correo que te enviamos, o pide que se envíe de nuevo.",

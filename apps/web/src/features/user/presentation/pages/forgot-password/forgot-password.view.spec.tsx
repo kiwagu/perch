@@ -9,29 +9,39 @@ import { ForgotPasswordView, type ForgotPasswordViewProps } from './forgot-passw
 
 function renderView(props: Partial<ForgotPasswordViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const onSend = vi.fn((_email: string) => Promise.resolve(true))
+  const onEmailChange = vi.fn((_email: string) => {})
 
-  renderWithProviders(<ForgotPasswordView startEmail="" canSend onSend={onSend} {...props} />, {
-    locale,
-    es,
-  })
+  renderWithProviders(
+    <ForgotPasswordView
+      email=""
+      onEmailChange={onEmailChange}
+      canSend
+      onSend={onSend}
+      {...props}
+    />,
+    { locale, es },
+  )
 
-  return { onSend }
+  return { onSend, onEmailChange }
 }
 
 const input = (testId: string) => screen.getByTestId(testId) as HTMLInputElement
 
 describe('ForgotPasswordView', () => {
-  it('starts with the email the sign-in page carried, and asks for the mail with the email typed', () => {
-    const { onSend } = renderView({ startEmail: 'ann@example.test' })
+  it('shows the email the page holds, tells what is typed, and asks for the mail with the email it holds', () => {
+    const { onSend, onEmailChange } = renderView({ email: 'ann@example.test' })
 
     expect(input('user.forgot-password.email-input').value).toBe('ann@example.test')
 
     fireEvent.change(input('user.forgot-password.email-input'), {
       target: { value: 'bob@example.test' },
     })
+
+    expect(onEmailChange).toHaveBeenCalledWith('bob@example.test')
+
     fireEvent.submit(screen.getByTestId('user.forgot-password.form'))
 
-    expect(onSend).toHaveBeenCalledWith('bob@example.test')
+    expect(onSend).toHaveBeenCalledWith('ann@example.test')
     expect(screen.getByTestId('user.forgot-password.sign-in-link').getAttribute('href')).toBe(
       '/sign-in',
     )
