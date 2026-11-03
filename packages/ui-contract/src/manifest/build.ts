@@ -24,6 +24,7 @@ import {
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
+  failuresOf,
   type Model,
   type Screen,
   type ScreensFile,
@@ -215,6 +216,7 @@ export function buildManifest({
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
+      failureOf: failuresOf(model, screens.platform.actions),
     }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens.screens),

@@ -10,6 +10,7 @@ export {
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
+  failuresOf,
   isBare,
   type Request,
   requestsOf,

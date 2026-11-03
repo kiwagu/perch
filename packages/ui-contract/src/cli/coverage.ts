@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import { COVERAGE_FILE } from '../files'
 import {
+  compositeNotes,
   listControls,
   listDescriptions,
   measureCoverage,
@@ -60,6 +61,10 @@ export function coverage(argv: readonly string[]): number {
 
   writeFileSync(path, replaceCoverageBlock(readFileSync(path, 'utf8'), block))
   console.log(`ui-contract: wrote ${COVERAGE_FILE}`)
+
+  for (const note of compositeNotes(measure)) {
+    console.log(`ui-contract: ${note}`)
+  }
 
   return 0
 }

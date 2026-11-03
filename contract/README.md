@@ -636,11 +636,13 @@ out, and the loader derives it, the same way every time:
   `derivedFrom` a screen file writes are problems. The vocabulary's "Composites" table names
   each composite with what it is for; the manifest lists them in `contract.composites`, the
   declarations under `platform.composites`, and `contract:diff` reports a composite added or
-  removed.
+  removed. A composite declared and used by no screen is no problem: `contract:coverage`
+  notes it (`composite <name> is declared and used by no screen`).
 - **A description the engine can say.** An anchor's `description` may be left out where the
   engine says it: a `heading` names its screen by its title; a `link` whose one binding is a
-  route to a screen's path leads to that screen; a secret `input` holds a secret the action
-  takes and never shows; an `error` says why the actions bound beside it did not go through,
+  route to a screen's path leads to that screen; a secret `input` holds a secret the user
+  types and never shows; an `error` says why the actions bound beside it, then those its flow
+  invokes against it, did not go through,
   each of its codes with its meaning from the vocabulary's "Codes" table, the one place a
   code's meaning lives; and a composite's anchors carry the platform's descriptions. The
   manifest carries the written description, a secret input's with `(type password)` appended
@@ -1123,6 +1125,9 @@ block into `COVERAGE.md`. It is a report, not a gate.
 2. **The controls**, the secondary measure: per feature module and for the UI kit, how many
    controls carry an anchor, which are left unmarked and which are declared off the
    coverage. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`.
+
+After the totals, a note names each composite the platform declares and no screen opts into,
+which fails nothing.
 
 A control that is not a test target is declared off the coverage by a marker right before
 its element, with only white space between, and its reason on the marker line itself, at

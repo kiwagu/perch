@@ -127,11 +127,31 @@ describe('buildManifest', () => {
     const anchors = built.screens.find(({ id }) => id === 'sample')?.anchors
 
     expect(anchors?.['sample.title-input']?.description).toBe(
-      'A secret the action takes, never shown (type password).',
+      'A secret the user types, never shown (type password).',
     )
     expect(anchors?.['sample.page']?.description).toBe('The root of the screen.')
     expect(anchors?.['sample.save-button']).not.toHaveProperty('description')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it("names in an error's description the actions its flow invokes against it", () => {
+    const withError = fixtureContract()
+    const screen = withError.screens.screens.find(({ id }) => id === 'sample')
+    const saving = screen?.flow?.states['saving']
+    const onError = saving?.type === 'parallel' ? undefined : saving?.invoke?.onError
+
+    if (screen === undefined || onError === undefined || Array.isArray(onError)) {
+      expect.unreachable('the fixture has a sample screen whose saving state fails')
+    }
+
+    screen.anchors['sample.form.error'] = { kind: 'error', codes: ['failed'] }
+    onError.actions = [{ type: 'show', params: { anchor: 'sample.form.error', codes: ['failed'] } }]
+
+    const built = buildManifest({ ...withError, product: PRODUCT, now: NOW })
+    const anchors = built.screens.find(({ id }) => id === 'sample')?.anchors
+
+    expect(anchors?.['sample.form.error']?.description).toMatch(
+      /^Why `thing\.updateThing` did not go through: `failed`/,
+    )
   })
   it('gives each derived part the meaning of its suffix', () => {
     expect(manifest.contract.derivedParts['option']).toEqual({

@@ -244,8 +244,9 @@ for Bun.
     each binding's `example` link (`exampleOf`) and each anchor's description, the written one
     (a secret input's with `(type password)` appended once) or else the one the engine says
     (`files/derive/descriptions.ts`: a heading names its screen, a link with one route binding
-    leads to the screen at that path, a secret input holds a secret, an error says why the
-    actions beside it did not go through, each code with its meaning from the vocabulary), the
+    leads to the screen at that path, a secret input holds a secret the user types, an error
+    says why the actions beside it, then those its screen's flow invokes against it, did not go
+    through, each code with its meaning from the vocabulary), the
     platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
     with its kind, its screen and its attributes, `holdsInput` of a field among them, a secret
@@ -301,11 +302,15 @@ for Bun.
     (whatever they carry), and as problems the markers it cannot apply and the ones that
     ignore no control; `measureCoverage(root)` returns the model's measure, the activities', the
     controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
-    `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
-    screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`
+    `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), per
+    screen its anchors and the scenarios that reach it, and the composites the platform
+    declares that no anchor opts into (`unusedComposites`); `renderCoverage(measure, totals)`
     (`totalsOf`) prints the block, its totals line `fields bound x/y, actions bound x/y` (then
     `activities n, transitions walked x/y` when the contract has any, with a table of them
-    after the model) before the controls marked and ignored, `listControls(measure)` the two
+    after the model) before the controls marked and ignored, then a line `Note: composite
+    <name> is declared and used by no screen.` for each unused composite, a note that fails
+    nothing (`compositeNotes(measure)`, internal to the coverage command, which also prints
+    them after `--write`), `listControls(measure)` the two
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
     between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
