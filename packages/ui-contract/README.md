@@ -109,8 +109,9 @@ for Bun.
     leaving for a state of the root by `#<flow id>.<state>`, a state of any kind saying in
     `meta.renders` the anchors it renders (an anchor no state lists is rendered in every
     state, one a state lists only in the states that list it, a region's state rendering its
-    parallel state's too; never on a region an authored flow writes by its pattern or its
-    button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
+    parallel state's too, and a listed anchor the anchors declared under it,
+    `<anchor>.<rest>`, which are rendered where it is or where they are listed themselves;
+    never on a region an authored flow writes by its pattern or its button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
     failure codes it holds for), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
     value a field of the screen holds) and `transitionSchema`, with the types `Flow`,
     `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
@@ -157,9 +158,10 @@ for Bun.
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
     which the app gives its machine, in a region),
     handles each event of a parallel state in one area, lists in `meta.renders` anchors its own
-    screen declares (a derived part's base, never the part), each once, renders in a plain
-    state of the root or a state of a region every anchor it handles that a state lists (a
-    derived part through its base), guards by failure code only branches of an invoke's
+    screen declares (a derived part's base, never the part), each once and never beside an
+    anchor it is declared under, renders in a plain state of the root or a state of a region
+    every anchor it handles that a state lists (a derived part, or an anchor declared under a
+    listed one, through the anchor it is under), guards by failure code only branches of an invoke's
     `onError`, each code one its action fails with and listed once, reaches every state,
     leaves every plain state that is not final, and puts the one transition without a guard
     last) over

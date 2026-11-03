@@ -100,13 +100,14 @@ code and the tests follow; the checks hold them to the contract.
    name, a region by its pattern or by its button, and read the expansion with `bun run
    contract:flow <screen>`) and the element to the `wireframe`. An anchor that only some
    states render goes into `meta.renders` of each state that renders it; one no state lists
-   is rendered in every state, and a state that handles its event must list it, or its
-   parallel state must (`references/patterns.md`, "What a state renders"). A guard that tells
-   the failures of an invoke apart takes their codes, `{ codes: [ … ] }`, guards only branches
-   of that invoke's `onError`, and a bare `show` on its branch shows them
-   (`references/patterns.md`, "A guard by failure code"). A
-   new code, state or choice value goes into its table of the vocabulary in the same change:
-   those tables are business, like the screen file. The toast codes the contract derives for
+   is rendered in every state, a listed anchor brings the anchors declared under it
+   (`<anchor>.<rest>`, a list's items), and a state that handles its event must list it or an
+   anchor it is under, or its parallel state must (`references/patterns.md`, "What a state
+   renders"). A guard that tells the failures of an invoke apart takes their codes,
+   `{ codes: [ … ] }`, guards only branches of that invoke's `onError`, and a bare `show` on
+   its branch shows them (`references/patterns.md`, "A guard by failure code"). A new code,
+   state or choice value goes into its table of the vocabulary in the same change: those
+   tables are business, like the screen file. The toast codes the contract derives for
    mutations' successes (an action of the model, or a platform action the platform's `toasts`
    lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
    words are written, in the frame's map. A field holds input by itself; only a

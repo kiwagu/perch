@@ -424,17 +424,20 @@ as it holds its router to the bindings.
   listed: in a plain state of the root that lists it, and in a state of a region that lists it
   or whose parallel state does. A name is an anchor its screen declares, listed once; a
   derived part is rendered with its base, so a state lists the base
-  (`user.sign-in.password-input`, never its `visibility-button`), while the list and the items
-  a composite of the platform derives are declared anchors, each listed on its own. A plain
-  state of the root or a state of a region that handles an event on an anchor only some
-  states render renders that anchor (for an event on a derived part, its base), since a
+  (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also
+  renders the anchors declared under it (`<anchor>.<rest>`, as a scenario's codes and states
+  speak of them): `user.sign-in.password-rule-list` brings the six items of the composite with
+  it, so a state lists the list alone, never the list and one of its items in one list, and an
+  anchor declared under a listed one is rendered only where its container is, or where a
+  state lists it itself. A plain state of the root or a state of a region that handles an
+  event on an anchor only some states render renders that anchor (for an event on a derived
+  part or on an anchor declared under another, through the anchor it is under), since a
   control the user acts on is on the page; a state may render a control it does not handle,
   which is then disabled. The events of a parallel state's own `on` are not held to this, and
   neither are the effects: a `show` or a `clear` may name an anchor its state does not render.
   The states of a region written by its pattern or by its button, or derived by the loader,
   list nothing: an area that renders something in some of its states only is written in full.
-  The sign-in screen may say which anchors its modes render (the password rule list left out
-  here), the rest of its flow as it is:
+  The sign-in screen may say which anchors its modes render, the rest of its flow as it is:
 
   ```yaml
   flow:
@@ -445,7 +448,7 @@ as it holds its router to the bindings.
           renders: [ user.sign-in.forgot-link ]
       sign-up:
         meta:
-          renders: [ user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+          renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
       check-mail:
         meta:
           renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ]
@@ -455,10 +458,11 @@ as it holds its router to the bindings.
 
   The form, the email and password inputs and the submit and toggle buttons are listed by no
   state, so every state renders them; the forgot link is rendered only in the states that
-  list it. `passwords-differ` handles `user.sign-in.password-confirmation-input`; without its
-  list, `contract:check` would say `"user.sign-in.password-confirmation-input" is handled
-  here but not rendered: only the states that list it in meta.renders render it`. A state
-  that runs an action lists what stays on the page while it runs: `signing-up` lists the
+  list it, and the password rule list with its items only in the states of the mode sign-up.
+  `passwords-differ` handles `user.sign-in.password-confirmation-input`; without its list,
+  `contract:check` would say `"user.sign-in.password-confirmation-input" is handled here but
+  not rendered: only the states that list it in meta.renders render it`. A state that runs an
+  action lists what stays on the page while it runs: `signing-up` lists the rule list, the
   confirmation and the name input, or they would go while the account is created.
   `contract:diff` lists each entry as a line `<state path> renders <anchor>`.
 
@@ -1103,9 +1107,10 @@ gap is fixed in the contract files first, never worked around in a test.
   that holds no secret),
   reaches each of its states
   and leaves each one that is not final, lists in a state's `meta.renders` anchors its own
-  screen declares (a derived part's base, never the part), each once, renders in a plain
-  state of the root or a state of a region every anchor only some states render that it
-  handles, guards by failure code only branches of an invoke's `onError`, each code of such a
+  screen declares (a derived part's base, never the part), each once and never beside an
+  anchor it is declared under, renders in a plain state of the root or a state of a region
+  every anchor only some states render that it handles (one declared under a listed anchor
+  through that anchor), guards by failure code only branches of an invoke's `onError`, each code of such a
   guard one its action fails with and listed once, and every invoke whose action fails with
   codes writes its `onError` in full or has what the request pattern needs: the one way back
   and an error when it writes none, an error when it writes its target alone; every action of `leaving`

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { formatProblem } from '../../files'
 import { parallelIn, regionStateIn, withAreas } from '../areas.fixture'
 import type { Contract } from '../contract'
-import { flowStateIn, sampleContract } from '../contract.fixture'
+import { flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
 import { flowProblems } from './problems'
 
@@ -14,6 +14,15 @@ const AT = 'contract/domain/screens/sample/$key.yaml:1: flow'
 const IN = `${AT}.states.editing.states`
 
 const ONLY_LISTED = 'only the states that list it in meta.renders render it'
+
+/** The sample contract with a button declared under its list, `sample.list.add-button`. */
+function withNested(): Contract {
+  const contract = sampleContract()
+
+  screenIn(contract, 'sample').anchors['sample.list.add-button'] = { kind: 'button' }
+
+  return contract
+}
 
 describe('flowProblems and the anchors a state renders', () => {
   it('takes anchors of the screen, each rendered by the states that handle it', () => {
@@ -57,7 +66,7 @@ describe('flowProblems and the anchors a state renders', () => {
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.on["sample.save-button"]: "sample.save-button" is handled here but not rendered: ${ONLY_LISTED}`,
-      `${AT}.states.editing.on["sample.mode-select.option"]: "sample.mode-select.option" is handled here but its base "sample.mode-select" is not rendered: ${ONLY_LISTED}`,
+      `${AT}.states.editing.on["sample.mode-select.option"]: "sample.mode-select.option" is handled here but not rendered: only the states that list "sample.mode-select" in meta.renders render it`,
     ])
   })
   it('leaves an anchor no state lists, or a name the screen does not declare, to every state', () => {
@@ -105,5 +114,65 @@ describe('flowProblems and the anchors a parallel state and its regions render',
       `${AT}.states.editing.meta.renders[0]: "sample.save-button.confirm-button" is not a declared anchor of the screen`,
       `${IN}.form.states.open.meta.renders[1]: "sample.list" is already listed`,
     ])
+  })
+})
+
+describe('flowProblems and the anchors nested under a listed one', () => {
+  it('renders the anchors nested under a listed anchor with it', () => {
+    const contract = withNested()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.meta = { renders: ['sample.list'] }
+    Object.assign(editing.on ?? {}, { 'sample.list.add-button': { target: 'saving' } })
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('makes a nested anchor rendered only where its container is', () => {
+    const contract = withNested()
+
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'sample.list.add-button': { target: 'saving' },
+    })
+    flowStateIn(contract, 'saving').meta = { renders: ['sample.list'] }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.list.add-button"]: "sample.list.add-button" is handled here but not rendered: only the states that list "sample.list" in meta.renders render it`,
+    ])
+  })
+  it('renders a nested anchor where it is listed itself, too', () => {
+    const contract = withNested()
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.meta = { renders: ['sample.list.add-button'] }
+    Object.assign(editing.on ?? {}, {
+      'sample.list.add-button': { target: 'saving' },
+      'sample.a-button': { target: 'viewing' },
+    })
+    flowStateIn(contract, 'saving').meta = { renders: ['sample.list'] }
+    flowIn(contract).states['viewing'] = {
+      on: { 'sample.list.add-button': { target: 'editing' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.viewing.on["sample.list.add-button"]: "sample.list.add-button" is handled here but not rendered: only the states that list "sample.list" or "sample.list.add-button" in meta.renders render it`,
+    ])
+  })
+  it('refuses a container and an anchor nested under it in one list, not in two', () => {
+    const contract = withNested()
+
+    flowStateIn(contract, 'editing').meta = { renders: ['sample.list.add-button', 'sample.list'] }
+    flowStateIn(contract, 'saving').meta = { renders: ['sample.list'] }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.meta.renders[0]: "sample.list.add-button" is nested under "sample.list", listed here too, which renders it already`,
+    ])
+
+    const areas = withAreas()
+
+    screenIn(areas, 'sample').anchors['sample.list.add-button'] = { kind: 'button' }
+    parallelIn(areas).meta = { renders: ['sample.list'] }
+    regionStateIn(areas, 'form', 'open').meta = { renders: ['sample.list.add-button'] }
+
+    expect(printed(areas)).toEqual([])
   })
 })

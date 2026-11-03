@@ -15,8 +15,11 @@ import { type Contract, declaredAnchors, has, isValueOf, visibilityButtonsOf } f
 /** What an anchor carries a value of: its `data-code`, its `data-state` or its `data-value`. */
 export type Carried = 'code' | 'state' | 'value'
 
-/** Whether `other` is `anchor` itself or an anchor under it. */
-const isUnder = (anchor: string, other: string): boolean =>
+/**
+ * Whether `other` is `anchor` itself or an anchor under it (`<anchor>.<rest>`): a declared
+ * anchor nested in it, such as a composite's item under its list, or a part derived from it.
+ */
+export const isUnder = (anchor: string, other: string): boolean =>
   other === anchor || other.startsWith(`${anchor}.`)
 
 /**

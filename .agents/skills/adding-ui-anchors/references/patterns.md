@@ -560,7 +560,7 @@ may write its mode sign-up this way, where its descriptions say it today:
 ```yaml
 sign-up:
   meta:
-    renders: [ user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
   on:
     user.sign-in.password-confirmation-input:
       target: passwords-differ
@@ -568,7 +568,7 @@ sign-up:
     # the toggle, the password and the submit as before
 signing-up:
   meta:
-    renders: [ user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
   invoke:
     src: platform.sign-up
     # input and onDone as before
@@ -576,9 +576,13 @@ signing-up:
 
 `sign-up` handles the confirmation's event, so it lists it, or `contract:check` says it is
 handled here but not rendered. `signing-up` handles none of their events and lists them all
-the same: the fields stay on the page, disabled, while the account is created. A derived part
-goes with its base (list `user.sign-in.password-input`, never its `visibility-button`). A state
-of a region renders what it lists and what its parallel state lists; a region written by its
+the same: the fields stay on the page, disabled, and the rule list with them, while the
+account is created. A derived part goes with its base (list `user.sign-in.password-input`,
+never its `visibility-button`), and the anchors declared under a listed one
+(`<anchor>.<rest>`) come with it: the rule list brings its six items, so a state lists the
+list alone, never the list and an item in one list; an item is rendered where its list is, or
+where a state lists it itself, and an event on it is held through its list. A state of a
+region renders what it lists and what its parallel state lists; a region written by its
 pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
 full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
 

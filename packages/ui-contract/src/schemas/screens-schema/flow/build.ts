@@ -84,7 +84,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     .min(1)
     .exactOptional()
     .describe(
-      'Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it; a state of a region also renders what its parallel state lists.',
+      'Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.',
     )
   const meta = z
     .strictObject({
