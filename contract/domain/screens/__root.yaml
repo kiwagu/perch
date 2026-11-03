@@ -151,6 +151,9 @@ flow:
             guard: signedOut
             description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
         app-shell.theme-select: {}
+        platform.theme-set:
+          guard: signedOut
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
@@ -223,6 +226,9 @@ flow:
             guard: signedOut
             description: The screen renders again in the guest's chosen language, with no settings to store it.
         app-shell.theme-select: {}
+        platform.theme-set:
+          guard: signedOut
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
           description: Another device stored a language; the app speaks it at once.
@@ -316,6 +322,8 @@ flow:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
         app-shell.theme-select: {}
+        platform.theme-set:
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
     signing-out:
       meta: { renders: [ app-shell.sign-out-here-button ] }
       invoke:
